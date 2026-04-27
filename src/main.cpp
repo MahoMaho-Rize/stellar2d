@@ -27,7 +27,7 @@ struct SimConfig {
     double cfl = 0.4;
     double t_end = 1.0;
     int output_interval = 100;
-    double G = 1.0; // dimensionless
+    double G = 1.0;
     std::string test_case = "lane_emden";
     std::string amgx_config = "config/amgx.json";
     Limiter limiter = Limiter::MINMOD;
@@ -39,6 +39,17 @@ static void extract_density(const Grid& grid, const State& state, std::vector<do
     for (int i = 0; i < nr; ++i)
         for (int j = 0; j < nt; ++j)
             rho_cells[i * nt + j] = state.rho[grid.idx(i, j)];
+}
+
+static double compute_lane_emden_R_outer(double n_poly, double K_poly, double rho_c, double G) {
+    auto sol = solve_lane_emden(n_poly);
+    // Eq. (9.2): alpha^2 = (n+1)*K*rho_c^(1/n-1) / (4*pi*G)
+    double alpha2 = (n_poly + 1.0) * K_poly
+                    * std::pow(rho_c, 1.0 / n_poly - 1.0)
+                    / (4.0 * M_PI * G);
+    double alpha = std::sqrt(alpha2);
+    double R_star = alpha * sol.xi_1; // Eq. (9.3)
+    return R_star * 1.1; // 10% padding beyond stellar surface
 }
 
 int main(int argc, char** argv) {
@@ -61,9 +72,15 @@ int main(int argc, char** argv) {
             cfg.amgx_config = argv[++i];
     }
 
+    // Bug 1 fix: compute R_outer from Lane-Emden solution before grid init
+    // Eq. (9.3): R_star = alpha * xi_1
+    if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed") {
+        cfg.R_outer = compute_lane_emden_R_outer(1.5, 1.0, 1.0, cfg.G);
+    }
+
     std::printf("stellar2d POC - 2D Axisymmetric Euler + Self-Gravity\n");
     std::printf("Test case: %s\n", cfg.test_case.c_str());
-    std::printf("Grid: %d x %d, R_outer = %.4f\n", cfg.nr, cfg.ntheta, cfg.R_outer);
+    std::printf("Grid: %d x %d, R_outer = %.6f\n", cfg.nr, cfg.ntheta, cfg.R_outer);
 
     Grid grid;
     grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
@@ -74,7 +91,6 @@ int main(int argc, char** argv) {
     state.allocate(grid);
     state_tmp.allocate(grid);
 
-    // Initialize based on test case
     if (cfg.test_case == "lane_emden") {
         LaneEmdenParams lep;
         lep.n_poly = 1.5;
@@ -115,7 +131,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Setup Poisson solver
     PoissonMatrix poisson_mat;
     poisson_mat.assemble(grid, cfg.G);
 
@@ -123,7 +138,6 @@ int main(int argc, char** argv) {
     poisson_solver.init(cfg.amgx_config);
     poisson_solver.setup(poisson_mat);
 
-    // Allocate work arrays
     FluxAccumulator acc;
     acc.allocate(grid.total_cells());
 
@@ -132,49 +146,43 @@ int main(int argc, char** argv) {
     double t = 0.0;
     int step = 0;
 
-    // Initial output
     write_vtk("output_0000.vtk", grid, state, cfg.gamma);
 
     std::printf("Starting time integration...\n");
 
     while (t < cfg.t_end) {
-        fill_ghost_cells(grid, state, cfg.gamma);
+        fill_ghost_cells(grid, state, cfg.gamma);                   // Eq. (8.1)-(8.3)
 
-        double dt = compute_cfl_dt(grid, state, eos, cfg.cfl);
+        double dt = compute_cfl_dt(grid, state, eos, cfg.cfl);     // Eq. (7.4)
         if (t + dt > cfg.t_end) dt = cfg.t_end - t;
 
-        // === RK2 Stage 1 ===
+        // === Eq. (7.1): RK2 Stage 1 — U* = U^n + dt * R(U^n) ===
         state_tmp.copy_from(state);
 
-        // Hydro RHS (flux divergence + geometric source)
-        compute_rhs(grid, state, eos, acc, cfg.limiter);
-
-        // Poisson solve for gravity
-        extract_density(grid, state, rho_cells);
-        poisson_mat.set_rhs(grid, rho_cells, cfg.G);
-        poisson_solver.solve(poisson_mat.rhs.data(), state.phi.data());
-
-        // Add gravity source
-        add_gravity_source(grid, state, acc);
-
-        // Update: U* = U^n + dt * R(U^n)
-        rk2_substep(grid, state, acc, dt);
-
-        // === RK2 Stage 2 ===
-        fill_ghost_cells(grid, state, cfg.gamma);
-
-        compute_rhs(grid, state, eos, acc, cfg.limiter);
+        compute_rhs(grid, state, eos, acc, cfg.limiter);            // Eq. (2.5), (5.1)-(5.4)
 
         extract_density(grid, state, rho_cells);
-        poisson_mat.set_rhs(grid, rho_cells, cfg.G);
+        poisson_mat.set_rhs(grid, rho_cells, cfg.G);               // Eq. (1.8), (6.6)
         poisson_solver.solve(poisson_mat.rhs.data(), state.phi.data());
 
-        add_gravity_source(grid, state, acc);
+        add_gravity_source(grid, state, acc);                       // Eq. (6.1)-(6.3)
 
-        // U^{n+1} = 0.5 * U^n + 0.5 * (U* + dt * R(U*))
-        rk2_substep(grid, state, acc, dt);
+        rk2_substep(grid, state, acc, dt);                          // Eq. (7.1)
 
-        // Average: U^{n+1} = 0.5*(U^n + U*_updated)
+        // === Eq. (7.2): RK2 Stage 2 — U** = U* + dt * R(U*) ===
+        fill_ghost_cells(grid, state, cfg.gamma);                   // Eq. (8.1)-(8.3)
+
+        compute_rhs(grid, state, eos, acc, cfg.limiter);            // Eq. (2.5), (5.1)-(5.4)
+
+        extract_density(grid, state, rho_cells);
+        poisson_mat.set_rhs(grid, rho_cells, cfg.G);               // Eq. (1.8), (6.6)
+        poisson_solver.solve(poisson_mat.rhs.data(), state.phi.data());
+
+        add_gravity_source(grid, state, acc);                       // Eq. (6.1)-(6.3)
+
+        rk2_substep(grid, state, acc, dt);                          // Eq. (7.2)
+
+        // Eq. (7.3): U^{n+1} = 0.5 * (U^n + U**)
         int nr = grid.nr, nt = grid.ntheta;
         for (int i = 0; i < nr; ++i) {
             for (int j = 0; j < nt; ++j) {

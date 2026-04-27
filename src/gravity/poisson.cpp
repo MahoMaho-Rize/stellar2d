@@ -25,14 +25,10 @@ void PoissonMatrix::assemble(const Grid& grid, double G) {
 
             std::vector<std::pair<int, double>> entries;
 
-            // Radial part: 1/r^2 * d/dr(r^2 dPhi/dr)
-            if (i > 0) {
+            // Eq. (6.4): radial part of discrete Laplacian
+            if (i > 0) { // Eq. (6.7): i==0 implies Neumann dPhi/dr=0
                 double r_lo = grid.r_face[i];
-                double dr_lo = grid.r_center[i] - grid.r_center[i - 1];
-                double coeff = r_lo * r_lo / (ri2 * dr_lo * grid.dr[i]);
-                // corrected: use average dr for the cell
-                double coeff_corr = r_lo * r_lo / (ri2 * dr_lo);
-                // Laplacian factor: coefficient for Phi_{i-1,j}
+                double dr_lo = grid.r_center[i] - grid.r_center[i - 1]; // delta_r^-
                 double c = r_lo * r_lo / (ri2 * grid.dr[i] * dr_lo);
                 entries.push_back({(i - 1) * nt + j, c});
                 diag -= c;
@@ -40,45 +36,38 @@ void PoissonMatrix::assemble(const Grid& grid, double G) {
 
             if (i < nr - 1) {
                 double r_hi = grid.r_face[i + 1];
-                double dr_hi = grid.r_center[i + 1] - grid.r_center[i];
+                double dr_hi = grid.r_center[i + 1] - grid.r_center[i]; // delta_r^+
                 double c = r_hi * r_hi / (ri2 * grid.dr[i] * dr_hi);
                 entries.push_back({(i + 1) * nt + j, c});
                 diag -= c;
             }
 
-            // Theta part: 1/(r^2 sin(theta)) * d/dtheta(sin(theta) dPhi/dtheta)
+            // Eq. (6.5): theta part of discrete Laplacian
             double sin_j = std::sin(grid.theta_center[j]);
             double dtheta = grid.dtheta[j];
 
-            if (j > 0) {
+            if (j > 0) { // Eq. (6.8): j==0 implies Neumann dPhi/dtheta=0
                 double sin_lo = std::sin(grid.theta_face[j]);
-                double dtheta_lo = grid.theta_center[j] - grid.theta_center[j - 1];
+                double dtheta_lo = grid.theta_center[j] - grid.theta_center[j - 1]; // delta_theta^-
                 double c = sin_lo / (ri2 * sin_j * dtheta * dtheta_lo);
                 entries.push_back({i * nt + (j - 1), c});
                 diag -= c;
             }
 
-            if (j < nt - 1) {
+            if (j < nt - 1) { // Eq. (6.8): j==nt-1 implies Neumann dPhi/dtheta=0
                 double sin_hi = std::sin(grid.theta_face[j + 1]);
-                double dtheta_hi = grid.theta_center[j + 1] - grid.theta_center[j];
+                double dtheta_hi = grid.theta_center[j + 1] - grid.theta_center[j]; // delta_theta^+
                 double c = sin_hi / (ri2 * sin_j * dtheta * dtheta_hi);
                 entries.push_back({i * nt + (j + 1), c});
                 diag -= c;
             }
 
-            // Boundary modifications:
-            // r=0 (i==0): Neumann dPhi/dr=0 => Phi_{-1} = Phi_0, already handled by skip
-            // r=R (i==nr-1): Dirichlet Phi = -GM/r => handled in RHS, row is already correct
-            //   Actually we enforce Dirichlet by modifying this row to set Phi directly.
+            // Eq. (6.6): Dirichlet at outer boundary — replace row with identity
             if (i == nr - 1) {
-                // Dirichlet at outer boundary: replace row with identity
                 entries.clear();
                 diag = 1.0;
             }
 
-            // theta=0 and theta=pi: Neumann dPhi/dtheta=0, handled by skip above
-
-            // Sort entries by column index for CSR
             entries.push_back({row, diag});
             std::sort(entries.begin(), entries.end());
 
@@ -98,22 +87,20 @@ void PoissonMatrix::set_rhs(const Grid& grid, const std::vector<double>& rho_cel
                              double G) {
     int nr = grid.nr, nt = grid.ntheta;
 
+    // Eq. (6.6): compute M_total once for Dirichlet BC
+    double M_total = 0.0;
+    for (int ii = 0; ii < nr; ++ii)
+        for (int jj = 0; jj < nt; ++jj)
+            M_total += rho_cells[ii * nt + jj] * grid.cell_volume[ii * nt + jj];
+
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int flat = i * nt + j;
 
             if (i == nr - 1) {
-                // Dirichlet BC: Phi = -G * M_total / r
-                // Approximate M_total from density integration
-                double M_total = 0.0;
-                for (int ii = 0; ii < nr; ++ii) {
-                    for (int jj = 0; jj < nt; ++jj) {
-                        M_total += rho_cells[ii * nt + jj] * grid.cell_volume[ii * nt + jj];
-                    }
-                }
-                rhs[flat] = -G * M_total / grid.r_center[i];
+                rhs[flat] = -G * M_total / grid.r_center[i]; // Eq. (6.6)
             } else {
-                rhs[flat] = 4.0 * M_PI * G * rho_cells[flat];
+                rhs[flat] = 4.0 * M_PI * G * rho_cells[flat]; // Eq. (1.8)
             }
         }
     }

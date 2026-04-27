@@ -28,42 +28,47 @@ void compute_flux_divergence(
         return state.to_primitive(k, gamma);
     };
 
-    // Radial fluxes: faces i+1/2 for i = 0..nr
+    // Radial fluxes at faces i+1/2, for i = 0..nr
     std::vector<Flux4> flux_r((nr + 1) * nt);
 
     for (int i = 0; i <= nr; ++i) {
         for (int j = 0; j < nt; ++j) {
+            // Eq. (3.4), (3.5): MUSCL reconstruction at face i+1/2
             auto rp = muscl_reconstruct_r(W(i - 2, j), W(i - 1, j), W(i, j), W(i + 1, j), lim);
+            // Eq. (4.7): HLLC numerical flux
             flux_r[i * nt + j] = hllc_flux_r(rp.left, rp.right, gamma);
         }
     }
 
-    // Theta fluxes: faces j+1/2 for j = 0..ntheta
+    // Theta fluxes at faces j+1/2, for j = 0..ntheta
     std::vector<Flux4> flux_t(nr * (nt + 1));
 
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j <= nt; ++j) {
+            // Eq. (3.4), (3.5): MUSCL reconstruction at face j+1/2
             auto rp = muscl_reconstruct_theta(W(i, j - 2), W(i, j - 1), W(i, j), W(i, j + 1), lim);
+            // Eq. (4.7): HLLC numerical flux
             flux_t[i * (nt + 1) + j] = hllc_flux_theta(rp.left, rp.right, gamma);
         }
     }
 
-    // Accumulate -div(F)/V
+    // Eq. (2.5): accumulate -div(F)/V
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int flat = i * nt + j;
-            double invV = 1.0 / grid.cell_volume[flat];
+            double invV = 1.0 / grid.cell_volume[flat]; // Eq. (2.2)
 
-            double Ar_hi = grid.area_r[(i + 1) * nt + j];
-            double Ar_lo = grid.area_r[i * nt + j];
+            double Ar_hi = grid.area_r[(i + 1) * nt + j]; // Eq. (2.3)
+            double Ar_lo = grid.area_r[i * nt + j];       // Eq. (2.3)
             const Flux4& fr_hi = flux_r[(i + 1) * nt + j];
             const Flux4& fr_lo = flux_r[i * nt + j];
 
-            double At_hi = grid.area_theta[i * (nt + 1) + j + 1];
-            double At_lo = grid.area_theta[i * (nt + 1) + j];
+            double At_hi = grid.area_theta[i * (nt + 1) + j + 1]; // Eq. (2.4)
+            double At_lo = grid.area_theta[i * (nt + 1) + j];     // Eq. (2.4)
             const Flux4& ft_hi = flux_t[i * (nt + 1) + j + 1];
             const Flux4& ft_lo = flux_t[i * (nt + 1) + j];
 
+            // Eq. (2.5): dU/dt = -(1/V) * sum(A * F_hat)
             acc.dU_rho[flat] = -invV * (Ar_hi * fr_hi.f_rho - Ar_lo * fr_lo.f_rho
                                        + At_hi * ft_hi.f_rho - At_lo * ft_lo.f_rho);
             acc.dU_mr[flat] = -invV * (Ar_hi * fr_hi.f_mr - Ar_lo * fr_lo.f_mr
@@ -86,17 +91,29 @@ void add_geometric_source(
     for (int i = 0; i < nr; ++i) {
         double r = grid.r_center[i];
         double inv_r = 1.0 / r;
+        double r2_hi = grid.r_face[i + 1] * grid.r_face[i + 1];
+        double r2_lo = grid.r_face[i] * grid.r_face[i];
+
         for (int j = 0; j < nt; ++j) {
             int k = grid.idx(i, j);
             int flat = i * nt + j;
             PrimitiveVars w = state.to_primitive(k, gamma);
+            double vol = grid.cell_volume[flat]; // Eq. (2.2)
 
-            double cot_theta = std::cos(grid.theta_center[j]) / std::sin(grid.theta_center[j]);
+            // Eq. (5.3): volume-consistent 2P/r source (well-balanced)
+            double dcos = std::cos(grid.theta_face[j]) - std::cos(grid.theta_face[j + 1]);
+            double P_geom_r = w.P * (r2_hi - r2_lo) * dcos / vol;
 
-            // S_mr = rho*vtheta^2/r + 2P/r
-            acc.dU_mr[flat] += w.rho * w.vtheta * w.vtheta * inv_r + 2.0 * w.P * inv_r;
-            // S_mtheta = P*cot(theta)/r - rho*vr*vtheta/r
-            acc.dU_mtheta[flat] += w.P * cot_theta * inv_r - w.rho * w.vr * w.vtheta * inv_r;
+            // Eq. (5.1): S_mr = rho*vtheta^2/r + <2P/r>
+            acc.dU_mr[flat] += w.rho * w.vtheta * w.vtheta * inv_r + P_geom_r;
+
+            // Eq. (5.4): volume-consistent P*cot(theta)/r source (well-balanced)
+            double r2_diff_half = (r2_hi - r2_lo) * 0.5;
+            double dsin = std::sin(grid.theta_face[j]) - std::sin(grid.theta_face[j + 1]);
+            double P_geom_theta = w.P * r2_diff_half * dsin / vol;
+
+            // Eq. (5.2): S_mtheta = <P*cot(theta)/r> - rho*vr*vtheta/r
+            acc.dU_mtheta[flat] += P_geom_theta - w.rho * w.vr * w.vtheta * inv_r;
         }
     }
 }
@@ -112,42 +129,56 @@ void add_gravity_source(
             int k = grid.idx(i, j);
             int flat = i * nt + j;
 
-            // Gradient of phi via central differences on cell-centered phi
-            double dphi_dr, dphi_dtheta;
-
-            if (i > 0 && i < nr - 1) {
-                dphi_dr = (state.phi[(i + 1) * nt + j] - state.phi[(i - 1) * nt + j])
-                          / (grid.r_center[i + 1] - grid.r_center[i - 1]);
-            } else if (i == 0) {
-                dphi_dr = (state.phi[1 * nt + j] - state.phi[0 * nt + j])
-                          / (grid.r_center[1] - grid.r_center[0]);
+            // Eq. (6.9a), (6.9b): face-based gravity gradient, radial
+            double g_lo_r = 0.0; // Eq. (6.7): Neumann dPhi/dr=0 at r=0
+            if (i > 0) {
+                g_lo_r = (state.phi[i * nt + j] - state.phi[(i - 1) * nt + j])
+                         / (grid.r_center[i] - grid.r_center[i - 1]); // Eq. (6.9a)
+            }
+            double g_hi_r = 0.0;
+            if (i < nr - 1) {
+                g_hi_r = (state.phi[(i + 1) * nt + j] - state.phi[i * nt + j])
+                         / (grid.r_center[i + 1] - grid.r_center[i]); // Eq. (6.9a)
             } else {
-                dphi_dr = (state.phi[(nr - 1) * nt + j] - state.phi[(nr - 2) * nt + j])
-                          / (grid.r_center[nr - 1] - grid.r_center[nr - 2]);
+                // At outer boundary: use Dirichlet Phi = -G*M/R, Eq. (6.6)
+                // phi at i=nr-1 is already the Dirichlet value from Poisson solve
+                // one-sided: use interior gradient
+                if (nr >= 2) {
+                    g_hi_r = (state.phi[(nr - 1) * nt + j] - state.phi[(nr - 2) * nt + j])
+                             / (grid.r_center[nr - 1] - grid.r_center[nr - 2]);
+                }
             }
 
-            if (j > 0 && j < nt - 1) {
-                dphi_dtheta = (state.phi[i * nt + j + 1] - state.phi[i * nt + j - 1])
-                              / (grid.theta_center[j + 1] - grid.theta_center[j - 1]);
-            } else if (j == 0) {
-                dphi_dtheta = (state.phi[i * nt + 1] - state.phi[i * nt + 0])
-                              / (grid.theta_center[1] - grid.theta_center[0]);
-            } else {
-                dphi_dtheta = (state.phi[i * nt + nt - 1] - state.phi[i * nt + nt - 2])
-                              / (grid.theta_center[nt - 1] - grid.theta_center[nt - 2]);
+            // Eq. (6.9b): weighted average to cell center
+            double dr_lo = (i > 0) ? (grid.r_center[i] - grid.r_center[i - 1]) : 1.0;
+            double dr_hi = (i < nr - 1) ? (grid.r_center[i + 1] - grid.r_center[i]) : dr_lo;
+            double dphi_dr = (dr_hi * g_lo_r + dr_lo * g_hi_r) / (dr_lo + dr_hi);
+
+            // Eq. (6.10a), (6.10b): face-based gravity gradient, theta
+            double g_lo_t = 0.0; // Eq. (6.8): Neumann dPhi/dtheta=0 at theta=0
+            if (j > 0) {
+                g_lo_t = (state.phi[i * nt + j] - state.phi[i * nt + j - 1])
+                         / (grid.theta_center[j] - grid.theta_center[j - 1]); // Eq. (6.10a)
             }
+            double g_hi_t = 0.0; // Eq. (6.8): Neumann dPhi/dtheta=0 at theta=pi
+            if (j < nt - 1) {
+                g_hi_t = (state.phi[i * nt + j + 1] - state.phi[i * nt + j])
+                         / (grid.theta_center[j + 1] - grid.theta_center[j]); // Eq. (6.10a)
+            }
+
+            // Eq. (6.10b): weighted average to cell center
+            double dt_lo = (j > 0) ? (grid.theta_center[j] - grid.theta_center[j - 1]) : 1.0;
+            double dt_hi = (j < nt - 1) ? (grid.theta_center[j + 1] - grid.theta_center[j]) : dt_lo;
+            double dphi_dtheta = (dt_hi * g_lo_t + dt_lo * g_hi_t) / (dt_lo + dt_hi);
 
             double rho_val = state.rho[k];
             double r = grid.r_center[i];
 
-            // -rho * dPhi/dr
-            acc.dU_mr[flat] -= rho_val * dphi_dr;
-            // -rho/r * dPhi/dtheta
-            acc.dU_mtheta[flat] -= rho_val / r * dphi_dtheta;
-            // -rho * v . grad(Phi)
+            acc.dU_mr[flat] -= rho_val * dphi_dr;                                // Eq. (6.1)
+            acc.dU_mtheta[flat] -= rho_val / r * dphi_dtheta;                    // Eq. (6.2)
             double vr = state.mr[k] / rho_val;
             double vt = state.mtheta[k] / rho_val;
-            acc.dU_E[flat] -= rho_val * (vr * dphi_dr + vt / r * dphi_dtheta);
+            acc.dU_E[flat] -= rho_val * (vr * dphi_dr + vt / r * dphi_dtheta);  // Eq. (6.3)
         }
     }
 }

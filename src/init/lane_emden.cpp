@@ -13,17 +13,13 @@ LaneEmdenSolution solve_lane_emden(double n_poly, int npoints) {
     sol.xi.push_back(0.0);
     sol.theta_le.push_back(1.0);
 
+    // Eq. (9.1): integrate Lane-Emden ODE via RK4
+    // dy1/dxi = y2,  dy2/dxi = -Theta^n - 2*y2/xi
     while (theta > 0.0 && xi < 100.0) {
-        // RK4 for the Lane-Emden ODE:
-        // d/dxi(xi^2 dtheta/dxi) = -xi^2 theta^n
-        // Let y1 = theta, y2 = dtheta/dxi
-        // dy1/dxi = y2
-        // dy2/dxi = -theta^n - 2*y2/xi
-
-        auto f2 = [&](double x, double t, double dt) -> double {
+        auto f2 = [&](double x, double t, double dt_val) -> double {
             if (x < 1e-10) return -t / 3.0; // L'Hopital at origin
             double tn = (t > 0) ? std::pow(t, n_poly) : 0.0;
-            return -tn - 2.0 * dt / x;
+            return -tn - 2.0 * dt_val / x; // Eq. (9.1) rewritten as first-order system
         };
 
         double k1_y1 = dtheta;
@@ -58,7 +54,6 @@ static double interp_le(const LaneEmdenSolution& sol, double xi_val) {
     if (xi_val <= 0.0) return 1.0;
     if (xi_val >= sol.xi_1) return 0.0;
 
-    // Binary search
     auto it = std::lower_bound(sol.xi.begin(), sol.xi.end(), xi_val);
     int idx = static_cast<int>(it - sol.xi.begin());
     if (idx == 0) idx = 1;
@@ -74,18 +69,18 @@ void init_lane_emden(const Grid& grid, State& state,
                      const LaneEmdenParams& params, double gamma) {
     auto sol = solve_lane_emden(params.n_poly);
 
+    // Eq. (9.2): Lane-Emden length scale
     double alpha2 = (params.n_poly + 1.0) * params.K_poly
                     * std::pow(params.rho_c, 1.0 / params.n_poly - 1.0)
                     / (4.0 * M_PI * params.G);
     double alpha = std::sqrt(alpha2);
-    double R_star = alpha * sol.xi_1;
 
     for (int i = 0; i < grid.nr; ++i) {
         double r = grid.r_center[i];
         double xi_val = r / alpha;
         double theta_val = interp_le(sol, xi_val);
-        double rho = params.rho_c * std::pow(std::max(theta_val, 1e-15), params.n_poly);
-        double P = params.K_poly * std::pow(rho, 1.0 + 1.0 / params.n_poly);
+        double rho = params.rho_c * std::pow(std::max(theta_val, 1e-15), params.n_poly); // Eq. (9.4)
+        double P = params.K_poly * std::pow(rho, 1.0 + 1.0 / params.n_poly);             // Eq. (9.5)
 
         for (int j = 0; j < grid.ntheta; ++j) {
             int k = grid.idx(i, j);
@@ -104,7 +99,6 @@ void init_lane_emden_perturbed(const Grid& grid, State& state,
                                 double amplitude) {
     init_lane_emden(grid, state, params, gamma);
 
-    // Add radial density perturbation for oscillation test
     for (int i = 0; i < grid.nr; ++i) {
         double r = grid.r_center[i];
         for (int j = 0; j < grid.ntheta; ++j) {
@@ -112,7 +106,7 @@ void init_lane_emden_perturbed(const Grid& grid, State& state,
             PrimitiveVars w = state.to_primitive(k, gamma);
             double delta = amplitude * std::sin(M_PI * r / grid.R_outer);
             w.rho *= (1.0 + delta);
-            w.P *= (1.0 + gamma * delta);
+            w.P *= (1.0 + gamma * delta); // adiabatic perturbation
             state.from_primitive(k, w, gamma);
         }
     }

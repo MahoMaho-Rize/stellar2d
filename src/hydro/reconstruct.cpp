@@ -2,12 +2,12 @@
 #include <algorithm>
 #include <cmath>
 
-double minmod(double a, double b) {
+double minmod(double a, double b) { // Eq. (3.1)
     if (a * b <= 0.0) return 0.0;
     return (std::abs(a) < std::abs(b)) ? a : b;
 }
 
-double van_leer(double a, double b) {
+double van_leer(double a, double b) { // Eq. (3.2)
     if (a * b <= 0.0) return 0.0;
     return 2.0 * a * b / (a + b);
 }
@@ -19,34 +19,17 @@ double apply_limiter(double a, double b, Limiter lim) {
     }
 }
 
-static double reconstruct_value(double vm1, double v0, double vp1, double vp2, Limiter lim) {
-    double slope_l = v0 - vm1;
-    double slope_r = vp1 - v0;
-    double slope = apply_limiter(slope_l, slope_r, lim);
-
-    double slope_l2 = vp1 - v0;
-    double slope_r2 = vp2 - vp1;
-    double slope2 = apply_limiter(slope_l2, slope_r2, lim);
-
-    // left state at i+1/2 face: extrapolated from cell i
-    // right state at i+1/2 face: extrapolated from cell i+1
-    // We return (left_at_face, right_at_face) via the pair
-    (void)slope2; // used in the pair version below
-    (void)slope;
-    return 0.0; // placeholder, real work in pair function
-}
-
 static void reconstruct_component(double vm1, double v0, double vp1, double vp2,
                                   Limiter lim, double& left, double& right) {
     double slope_l = v0 - vm1;
     double slope_r = vp1 - v0;
-    double slope0 = apply_limiter(slope_l, slope_r, lim);
-    left = v0 + 0.5 * slope0;
+    double slope0 = apply_limiter(slope_l, slope_r, lim); // Eq. (3.3)
+    left = v0 + 0.5 * slope0;                             // Eq. (3.4)
 
     double slope_l2 = vp1 - v0;
     double slope_r2 = vp2 - vp1;
-    double slope1 = apply_limiter(slope_l2, slope_r2, lim);
-    right = vp1 - 0.5 * slope1;
+    double slope1 = apply_limiter(slope_l2, slope_r2, lim); // Eq. (3.3)
+    right = vp1 - 0.5 * slope1;                             // Eq. (3.5)
 }
 
 ReconstructedPair muscl_reconstruct_r(
