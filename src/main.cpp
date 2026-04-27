@@ -13,10 +13,15 @@
 #include "init/jeans.h"
 #include "init/evrard.h"
 
+#ifdef USE_AMGX
+#include "gpu/gpu_solver.h"
+#endif
+
 #include <cstdio>
 #include <cmath>
 #include <string>
 #include <cstring>
+#include <ctime>
 
 struct SimConfig {
     int nr = 128;
@@ -30,6 +35,7 @@ struct SimConfig {
     double G = 1.0;
     std::string test_case = "lane_emden";
     std::string amgx_config = "config/amgx.json";
+    std::string mesh_type = "log";
     Limiter limiter = Limiter::MINMOD;
 };
 
@@ -43,13 +49,36 @@ static void extract_density(const Grid& grid, const State& state, std::vector<do
 
 static double compute_lane_emden_R_outer(double n_poly, double K_poly, double rho_c, double G) {
     auto sol = solve_lane_emden(n_poly);
-    // Eq. (9.2): alpha^2 = (n+1)*K*rho_c^(1/n-1) / (4*pi*G)
     double alpha2 = (n_poly + 1.0) * K_poly
                     * std::pow(rho_c, 1.0 / n_poly - 1.0)
                     / (4.0 * M_PI * G);
     double alpha = std::sqrt(alpha2);
-    double R_star = alpha * sol.xi_1; // Eq. (9.3)
-    return R_star * 1.1; // 10% padding beyond stellar surface
+    double R_star = alpha * sol.xi_1;
+    return R_star * 1.1;
+}
+
+static void print_progress(double t, double t_end, int step, double dt,
+                           std::timespec& t_start) {
+    double frac = t / t_end;
+    int pct = static_cast<int>(frac * 100.0);
+    if (pct > 100) pct = 100;
+
+    int bar_width = 30;
+    int filled = static_cast<int>(frac * bar_width);
+
+    std::timespec t_now;
+    clock_gettime(CLOCK_MONOTONIC, &t_now);
+    double elapsed = (t_now.tv_sec - t_start.tv_sec)
+                   + (t_now.tv_nsec - t_start.tv_nsec) * 1e-9;
+
+    double eta = (frac > 1e-6) ? elapsed / frac * (1.0 - frac) : 0.0;
+
+    std::fprintf(stderr, "\r  [");
+    for (int i = 0; i < bar_width; ++i)
+        std::fputc(i < filled ? '#' : '.', stderr);
+    std::fprintf(stderr, "] %3d%%  step %-8d  t=%.3e  dt=%.2e  elapsed %.0fs  ETA %.0fs  ",
+                 pct, step, t, dt, elapsed, eta);
+    std::fflush(stderr);
 }
 
 int main(int argc, char** argv) {
@@ -70,66 +99,124 @@ int main(int argc, char** argv) {
             cfg.output_interval = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--amgx-config") == 0 && i + 1 < argc)
             cfg.amgx_config = argv[++i];
+        else if (std::strcmp(argv[i], "--mesh") == 0 && i + 1 < argc)
+            cfg.mesh_type = argv[++i];
     }
 
-    // Bug 1 fix: compute R_outer from Lane-Emden solution before grid init
-    // Eq. (9.3): R_star = alpha * xi_1
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed") {
         cfg.R_outer = compute_lane_emden_R_outer(1.5, 1.0, 1.0, cfg.G);
     }
 
-    std::printf("stellar2d POC - 2D Axisymmetric Euler + Self-Gravity\n");
-    std::printf("Test case: %s\n", cfg.test_case.c_str());
+    std::printf("stellar2d - 2D Axisymmetric Euler + Self-Gravity\n");
+    std::printf("Test case: %s, mesh: %s\n", cfg.test_case.c_str(), cfg.mesh_type.c_str());
     std::printf("Grid: %d x %d, R_outer = %.6f\n", cfg.nr, cfg.ntheta, cfg.R_outer);
 
     Grid grid;
-    grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
+    if (cfg.mesh_type == "equimass" &&
+        (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed")) {
+        double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
+        auto le_sol = solve_lane_emden(n_poly);
+        double alpha2 = (n_poly + 1.0) * K_poly
+                        * std::pow(rho_c, 1.0 / n_poly - 1.0) / (4.0 * M_PI * G);
+        double alpha = std::sqrt(alpha2);
+
+        auto rho_func = [&](double r) -> double {
+            double xi = r / alpha;
+            if (xi >= le_sol.xi_1) return 1e-20;
+            // Interpolate Lane-Emden solution
+            auto it = std::lower_bound(le_sol.xi.begin(), le_sol.xi.end(), xi);
+            int idx = static_cast<int>(it - le_sol.xi.begin());
+            if (idx <= 0) return rho_c;
+            if (idx >= static_cast<int>(le_sol.xi.size())) return 1e-20;
+            double x0 = le_sol.xi[idx - 1], x1 = le_sol.xi[idx];
+            double t0 = le_sol.theta_le[idx - 1], t1 = le_sol.theta_le[idx];
+            double frac = (xi - x0) / (x1 - x0);
+            double theta_val = t0 + frac * (t1 - t0);
+            return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
+        };
+
+        grid.init_equimass(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func);
+        std::printf("Using equimass radial mesh based on Lane-Emden density\n");
+    } else {
+        grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
+    }
 
     EOS eos(cfg.gamma);
 
-    State state, state_tmp;
+    State state;
     state.allocate(grid);
-    state_tmp.allocate(grid);
 
     if (cfg.test_case == "lane_emden") {
         LaneEmdenParams lep;
-        lep.n_poly = 1.5;
-        lep.rho_c = 1.0;
-        lep.K_poly = 1.0;
-        lep.G = cfg.G;
+        lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
         init_lane_emden(grid, state, lep, cfg.gamma);
     } else if (cfg.test_case == "lane_emden_perturbed") {
         LaneEmdenParams lep;
-        lep.n_poly = 1.5;
-        lep.rho_c = 1.0;
-        lep.K_poly = 1.0;
-        lep.G = cfg.G;
+        lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
         init_lane_emden_perturbed(grid, state, lep, cfg.gamma, 1e-3);
     } else if (cfg.test_case == "sedov") {
         SedovParams sp;
-        sp.rho_0 = 1.0;
-        sp.E_blast = 1.0;
-        sp.r_blast = 0.05;
+        sp.rho_0 = 1.0; sp.E_blast = 1.0; sp.r_blast = 0.05;
         init_sedov(grid, state, sp, cfg.gamma);
     } else if (cfg.test_case == "jeans") {
         JeansParams jp;
-        jp.rho_0 = 1.0;
-        jp.cs = 1.0;
-        jp.G = cfg.G;
-        jp.epsilon = 1e-3;
-        jp.k_r = 2.0 * M_PI / cfg.R_outer;
-        jp.k_theta = 2.0;
+        jp.rho_0 = 1.0; jp.cs = 1.0; jp.G = cfg.G; jp.epsilon = 1e-3;
+        jp.k_r = 2.0 * M_PI / cfg.R_outer; jp.k_theta = 2.0;
         init_jeans(grid, state, jp, cfg.gamma);
     } else if (cfg.test_case == "evrard") {
         EvrardParams ep;
-        ep.M = 1.0;
-        ep.R = 1.0;
-        ep.G = cfg.G;
+        ep.M = 1.0; ep.R = 1.0; ep.G = cfg.G;
         init_evrard(grid, state, ep, cfg.gamma);
     } else {
         std::fprintf(stderr, "Unknown test case: %s\n", cfg.test_case.c_str());
         return 1;
     }
+
+    write_vtk("output_0000.vtk", grid, state, cfg.gamma);
+
+    double t = 0.0;
+    int step = 0;
+
+    std::printf("Starting time integration...\n");
+
+#ifdef USE_AMGX
+    // ===== GPU path: entire time loop on device =====
+    GpuSolver gpu;
+    gpu.init(grid, eos, cfg.G, cfg.cfl, cfg.limiter, cfg.amgx_config);
+    gpu.upload_state(grid, state);
+
+    std::timespec wall_start;
+    clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+    while (t < cfg.t_end) {
+        double dt = gpu.step(t, cfg.t_end);
+        t += dt;
+        step++;
+
+        if (step % 200 == 0)
+            print_progress(t, cfg.t_end, step, dt, wall_start);
+
+        if (step % cfg.output_interval == 0) {
+            gpu.download_state(grid, state);
+            Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+            std::fprintf(stderr, "\n");
+            std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                        step, t, dt, diag.total_mass, diag.total_energy);
+
+            char fname[256];
+            std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
+            write_vtk(fname, grid, state, cfg.gamma);
+        }
+    }
+    std::fprintf(stderr, "\n");
+
+    gpu.download_state(grid, state);
+    gpu.destroy();
+
+#else
+    // ===== CPU fallback path =====
+    State state_tmp;
+    state_tmp.allocate(grid);
 
     PoissonMatrix poisson_mat;
     poisson_mat.assemble(grid, cfg.G);
@@ -143,46 +230,32 @@ int main(int argc, char** argv) {
 
     std::vector<double> rho_cells;
 
-    double t = 0.0;
-    int step = 0;
-
-    write_vtk("output_0000.vtk", grid, state, cfg.gamma);
-
-    std::printf("Starting time integration...\n");
+    std::timespec wall_start;
+    clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
     while (t < cfg.t_end) {
-        fill_ghost_cells(grid, state, cfg.gamma);                   // Eq. (8.1)-(8.3)
+        fill_ghost_cells(grid, state, cfg.gamma);
 
-        double dt = compute_cfl_dt(grid, state, eos, cfg.cfl);     // Eq. (7.4)
+        double dt = compute_cfl_dt(grid, state, eos, cfg.cfl);
         if (t + dt > cfg.t_end) dt = cfg.t_end - t;
 
-        // === Eq. (7.1): RK2 Stage 1 — U* = U^n + dt * R(U^n) ===
         state_tmp.copy_from(state);
 
-        compute_rhs(grid, state, eos, acc, cfg.limiter);            // Eq. (2.5), (5.1)-(5.4)
-
+        compute_rhs(grid, state, eos, acc, cfg.limiter);
         extract_density(grid, state, rho_cells);
-        poisson_mat.set_rhs(grid, rho_cells, cfg.G);               // Eq. (1.8), (6.6)
+        poisson_mat.set_rhs(grid, rho_cells, cfg.G);
         poisson_solver.solve(poisson_mat.rhs.data(), state.phi.data());
+        add_gravity_source(grid, state, acc);
+        rk2_substep(grid, state, acc, dt);
 
-        add_gravity_source(grid, state, acc);                       // Eq. (6.1)-(6.3)
-
-        rk2_substep(grid, state, acc, dt);                          // Eq. (7.1)
-
-        // === Eq. (7.2): RK2 Stage 2 — U** = U* + dt * R(U*) ===
-        fill_ghost_cells(grid, state, cfg.gamma);                   // Eq. (8.1)-(8.3)
-
-        compute_rhs(grid, state, eos, acc, cfg.limiter);            // Eq. (2.5), (5.1)-(5.4)
-
+        fill_ghost_cells(grid, state, cfg.gamma);
+        compute_rhs(grid, state, eos, acc, cfg.limiter);
         extract_density(grid, state, rho_cells);
-        poisson_mat.set_rhs(grid, rho_cells, cfg.G);               // Eq. (1.8), (6.6)
+        poisson_mat.set_rhs(grid, rho_cells, cfg.G);
         poisson_solver.solve(poisson_mat.rhs.data(), state.phi.data());
+        add_gravity_source(grid, state, acc);
+        rk2_substep(grid, state, acc, dt);
 
-        add_gravity_source(grid, state, acc);                       // Eq. (6.1)-(6.3)
-
-        rk2_substep(grid, state, acc, dt);                          // Eq. (7.2)
-
-        // Eq. (7.3): U^{n+1} = 0.5 * (U^n + U**)
         int nr = grid.nr, nt = grid.ntheta;
         for (int i = 0; i < nr; ++i) {
             for (int j = 0; j < nt; ++j) {
@@ -197,7 +270,11 @@ int main(int argc, char** argv) {
         t += dt;
         step++;
 
+        if (step % 200 == 0)
+            print_progress(t, cfg.t_end, step, dt, wall_start);
+
         if (step % cfg.output_interval == 0) {
+            std::fprintf(stderr, "\n");
             Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
             std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
                         step, t, dt, diag.total_mass, diag.total_energy);
@@ -207,13 +284,16 @@ int main(int argc, char** argv) {
             write_vtk(fname, grid, state, cfg.gamma);
         }
     }
+    std::fprintf(stderr, "\n");
+
+    poisson_solver.destroy();
+#endif
 
     Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
     std::printf("Final: step %d  t = %.6e  M = %.10e  E = %.10e\n",
                 step, t, diag.total_mass, diag.total_energy);
     write_vtk("output_final.vtk", grid, state, cfg.gamma);
 
-    poisson_solver.destroy();
     std::printf("Done.\n");
     return 0;
 }
