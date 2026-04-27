@@ -2,6 +2,9 @@
 
 #include <vector>
 #include <cmath>
+#include <functional>
+
+enum class MeshType { LOG, EQUIMASS };
 
 struct Grid {
     int nr, ntheta;
@@ -9,6 +12,7 @@ struct Grid {
 
     double R_outer;
     double log_alpha; // radial stretch exponent
+    MeshType mesh_type = MeshType::LOG;
 
     // Cell interface positions (size nr+1, ntheta+1 for physical cells)
     std::vector<double> r_face;     // r_{i+1/2}, i = 0..nr
@@ -37,8 +41,13 @@ struct Grid {
 
     void init(int nr_, int ntheta_, double R_outer_, double alpha_, int ng_ = 2);
 
+    // Equimass mesh: rho_func(r) returns density at radius r
+    void init_equimass(int nr_, int ntheta_, double R_outer_,
+                       std::function<double(double)> rho_func, int ng_ = 2);
+
 private:
     void build_radial_mesh();
+    void build_equimass_radial_mesh(std::function<double(double)> rho_func);
     void build_theta_mesh();
     void compute_geometry();
 };

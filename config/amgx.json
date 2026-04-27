@@ -2,28 +2,16 @@
   "config_version": 2,
   "determinism_flag": 0,
   "solver": {
-    "solver": "CG",
+    "solver": "FGMRES",
+    "gmres_n_restart": 20,
     "max_iters": 200,
     "tolerance": 1e-10,
     "norm": "L2",
-    "print_solve_stats": 1,
+    "print_solve_stats": 0,
     "monitor_residual": 1,
     "preconditioner": {
-      "solver": "AMG",
-      "algorithm": "AGGREGATION",
-      "selector": "SIZE_2",
-      "max_levels": 20,
-      "cycle": "V",
-      "smoother": {
-        "solver": "CHEBYSHEV",
-        "preconditioner": {
-          "solver": "JACOBI_L1"
-        },
-        "max_iters": 2
-      },
-      "coarse_solver": {
-        "solver": "DENSE_LU_SOLVER"
-      }
+      "solver": "BLOCK_JACOBI",
+      "max_iters": 3
     }
   }
 }

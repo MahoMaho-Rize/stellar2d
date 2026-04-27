@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 3.18)
-project(stellar2d LANGUAGES CXX)
+
+if(USE_AMGX)
+    project(stellar2d LANGUAGES CXX CUDA)
+else()
+    project(stellar2d LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(USE_AMGX "Enable NVIDIA AmgX Poisson solver" OFF)
+option(USE_AMGX "Enable NVIDIA AmgX GPU solver (full GPU pipeline)" OFF)
 set(AMGX_DIR "" CACHE PATH "Path to AmgX installation")
 
 set(SOURCES
@@ -25,6 +30,10 @@ set(SOURCES
     src/main.cpp
 )
 
+if(USE_AMGX)
+    list(APPEND SOURCES src/gpu/gpu_solver.cu)
+endif()
+
 add_executable(stellar2d ${SOURCES})
 
 target_include_directories(stellar2d PRIVATE src)
@@ -33,16 +42,31 @@ if(USE_AMGX)
     find_package(CUDAToolkit REQUIRED)
     target_compile_definitions(stellar2d PRIVATE USE_AMGX)
 
+    set_target_properties(stellar2d PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+
+    # Set CUDA architecture — detect from GPU or default to 89 (Ada)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES 89)
+    endif()
+
     if(AMGX_DIR)
         target_include_directories(stellar2d PRIVATE ${AMGX_DIR}/include)
         target_link_directories(stellar2d PRIVATE ${AMGX_DIR}/lib)
     else()
-        # Try to find AmgX from the adjacent directory
         target_include_directories(stellar2d PRIVATE ${CMAKE_SOURCE_DIR}/../AmgX/include)
         target_link_directories(stellar2d PRIVATE ${CMAKE_SOURCE_DIR}/../AmgX/build)
     endif()
 
-    target_link_libraries(stellar2d PRIVATE amgx CUDA::cudart)
+    target_link_libraries(stellar2d PRIVATE
+        amgx
+        CUDA::cudart
+        CUDA::cublas
+        CUDA::cusparse
+        CUDA::cusolver
+    )
 endif()
 
 # Release build by default
@@ -51,8 +75,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 target_compile_options(stellar2d PRIVATE
-    $<$<CONFIG:Release>:-O3 -march=native>
-    $<$<CONFIG:Debug>:-g -O0 -fsanitize=address>
+    $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:Release>:-O3 -march=native>>
+    $<$<COMPILE_LANGUAGE:CXX>:$<$<CONFIG:Debug>:-g -O0 -fsanitize=address>>
 )
 
 target_link_options(stellar2d PRIVATE

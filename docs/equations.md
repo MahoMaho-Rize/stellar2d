@@ -74,11 +74,11 @@ Geometric + gravity source:
 
 $$
 \mathbf{S} = \begin{pmatrix}
-0 \\[4pt]
+0 \\
 \displaystyle\frac{\rho v_\theta^2}{r} + \frac{2P}{r}
-  - \rho\frac{\partial\Phi}{\partial r} \\[8pt]
+  - \rho\frac{\partial\Phi}{\partial r} \\
 \displaystyle\frac{P\cot\theta}{r} - \frac{\rho v_r v_\theta}{r}
-  - \frac{\rho}{r}\frac{\partial\Phi}{\partial\theta} \\[8pt]
+  - \frac{\rho}{r}\frac{\partial\Phi}{\partial\theta} \\
 -\rho\,\mathbf{v}\cdot\nabla\Phi
 \end{pmatrix}
 \tag{1.7}
