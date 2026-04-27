@@ -1,0 +1,8 @@
+build/
+*.vtk
+*.o
+*.d
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile

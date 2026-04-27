@@ -1,0 +1,25 @@
+#include "jeans.h"
+#include <cmath>
+
+void init_jeans(const Grid& grid, State& state,
+                const JeansParams& params, double gamma) {
+    double P_0 = params.rho_0 * params.cs * params.cs / gamma;
+
+    for (int i = 0; i < grid.nr; ++i) {
+        double r = grid.r_center[i];
+        for (int j = 0; j < grid.ntheta; ++j) {
+            double theta = grid.theta_center[j];
+            int k = grid.idx(i, j);
+
+            double pert = params.epsilon * std::cos(params.k_r * r) * std::cos(params.k_theta * theta);
+
+            PrimitiveVars w;
+            w.rho = params.rho_0 * (1.0 + pert);
+            w.vr = 0.0;
+            w.vtheta = 0.0;
+            w.P = P_0 * (1.0 + gamma * pert);
+
+            state.from_primitive(k, w, gamma);
+        }
+    }
+}
