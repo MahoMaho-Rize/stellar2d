@@ -1,5 +1,4 @@
 build/
-*.vtk
 *.o
 *.d
 CMakeCache.txt
