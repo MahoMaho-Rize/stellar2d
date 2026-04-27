@@ -11,10 +11,11 @@ void init_jeans(const Grid& grid, State& state,
             double theta = grid.theta_center[j];
             int k = grid.idx(i, j);
 
+            // Eq. (9.8)
             double pert = params.epsilon * std::cos(params.k_r * r) * std::cos(params.k_theta * theta);
 
             PrimitiveVars w;
-            w.rho = params.rho_0 * (1.0 + pert);
+            w.rho = params.rho_0 * (1.0 + pert);       // Eq. (9.8)
             w.vr = 0.0;
             w.vtheta = 0.0;
             w.P = P_0 * (1.0 + gamma * pert);

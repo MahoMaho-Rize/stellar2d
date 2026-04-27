@@ -19,7 +19,7 @@ void Grid::build_radial_mesh() {
 
     for (int i = 0; i <= nr; ++i) {
         double xi = static_cast<double>(i) / nr;
-        r_face[i] = R_outer * std::pow(xi, log_alpha);
+        r_face[i] = R_outer * std::pow(xi, log_alpha); // Eq. (2.1)
     }
 
     for (int i = 0; i < nr; ++i) {
@@ -53,7 +53,7 @@ void Grid::compute_geometry() {
         double r3_lo = r_face[i] * r_face[i] * r_face[i];
         for (int j = 0; j < ntheta; ++j) {
             double dcos = std::cos(theta_face[j]) - std::cos(theta_face[j + 1]);
-            cell_volume[i * ntheta + j] = (r3_hi - r3_lo) / 3.0 * dcos;
+            cell_volume[i * ntheta + j] = (r3_hi - r3_lo) / 3.0 * dcos; // Eq. (2.2)
         }
     }
 
@@ -61,14 +61,14 @@ void Grid::compute_geometry() {
         double r2 = r_face[i] * r_face[i];
         for (int j = 0; j < ntheta; ++j) {
             double dcos = std::cos(theta_face[j]) - std::cos(theta_face[j + 1]);
-            area_r[i * ntheta + j] = r2 * dcos;
+            area_r[i * ntheta + j] = r2 * dcos; // Eq. (2.3)
         }
     }
 
     for (int i = 0; i < nr; ++i) {
         double r2_diff = (r_face[i + 1] * r_face[i + 1] - r_face[i] * r_face[i]) * 0.5;
         for (int j = 0; j <= ntheta; ++j) {
-            area_theta[i * (ntheta + 1) + j] = std::sin(theta_face[j]) * r2_diff;
+            area_theta[i * (ntheta + 1) + j] = std::sin(theta_face[j]) * r2_diff; // Eq. (2.4)
         }
     }
 }

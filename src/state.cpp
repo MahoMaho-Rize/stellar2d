@@ -13,21 +13,21 @@ PrimitiveVars State::to_primitive(int k, double gamma) const {
     PrimitiveVars w;
     w.rho = rho[k];
     double inv_rho = 1.0 / w.rho;
-    w.vr = mr[k] * inv_rho;
-    w.vtheta = mtheta[k] * inv_rho;
-    double ke = 0.5 * (w.vr * w.vr + w.vtheta * w.vtheta);
-    double e_int = E[k] * inv_rho - ke;
-    w.P = (gamma - 1.0) * w.rho * e_int;
+    w.vr = mr[k] * inv_rho;                              // Eq. (1.1): m_r = rho * v_r
+    w.vtheta = mtheta[k] * inv_rho;                      // Eq. (1.1): m_theta = rho * v_theta
+    double ke = 0.5 * (w.vr * w.vr + w.vtheta * w.vtheta); // Eq. (1.1): kinetic energy
+    double e_int = E[k] * inv_rho - ke;                  // Eq. (1.1): E = e + ke
+    w.P = (gamma - 1.0) * w.rho * e_int;                 // Eq. (1.2)
     return w;
 }
 
 void State::from_primitive(int k, const PrimitiveVars& w, double gamma) {
     rho[k] = w.rho;
-    mr[k] = w.rho * w.vr;
-    mtheta[k] = w.rho * w.vtheta;
-    double ke = 0.5 * (w.vr * w.vr + w.vtheta * w.vtheta);
-    double e_int = w.P / ((gamma - 1.0) * w.rho);
-    E[k] = w.rho * (e_int + ke);
+    mr[k] = w.rho * w.vr;                                // Eq. (1.1)
+    mtheta[k] = w.rho * w.vtheta;                        // Eq. (1.1)
+    double ke = 0.5 * (w.vr * w.vr + w.vtheta * w.vtheta); // Eq. (1.1)
+    double e_int = w.P / ((gamma - 1.0) * w.rho);        // Eq. (1.2) inverted
+    E[k] = w.rho * (e_int + ke);                          // Eq. (1.1): rho * E
 }
 
 ConservedVars State::get_conserved(int k) const {
