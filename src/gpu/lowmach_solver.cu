@@ -316,6 +316,8 @@ __global__ void k_lm_zero(double* x, int n) {
 
 // ========================= Dot product ============================
 
+__global__ void k_lm_reduce_sum(const double* in, double* out, int n);
+
 __global__ void k_lm_dot(const double* a, const double* b, double* out, int n) {
     extern __shared__ double s[];
     int tid = threadIdx.x, idx = blockIdx.x*blockDim.x+tid;
@@ -328,14 +330,21 @@ __global__ void k_lm_dot(const double* a, const double* b, double* out, int n) {
     if (tid == 0) out[blockIdx.x] = s[0];
 }
 
-static double gpu_dot(const double* a, const double* b, double* wa, int n) {
+static double gpu_dot(const double* a, const double* b, double* wa, double* wb, int n) {
     int B = 256, nb = (n+B-1)/B;
     k_lm_dot<<<nb,B,B*sizeof(double)>>>(a, b, wa, n);
-    std::vector<double> h(nb);
-    CUDA_CHECK(cudaMemcpy(h.data(), wa, nb*sizeof(double), cudaMemcpyDeviceToHost));
-    double sum = 0.0;
-    for (int i = 0; i < nb; ++i) sum += h[i];
-    return sum;
+    // Multi-pass GPU reduction: keep reducing on device until 1 element remains.
+    // Eliminates the old pattern of copying nb partial sums to host.
+    double *src = wa, *dst = wb;
+    int cur = nb;
+    while (cur > 1) {
+        int nb2 = (cur+B-1)/B;
+        k_lm_reduce_sum<<<nb2,B,B*sizeof(double)>>>(src, dst, cur);
+        cur = nb2; double* t = src; src = dst; dst = t;
+    }
+    double val;
+    CUDA_CHECK(cudaMemcpy(&val, src, sizeof(double), cudaMemcpyDeviceToHost));
+    return val;
 }
 
 // ========================= Floor ==================================
@@ -1950,10 +1959,10 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
 void LowMachSolver::jfnk_matvec(const double* d_v, double* d_Jv, double dt) {
     int n = nr*nt, N4 = 4*n, B = 256;
 
-    double norm_v = sqrt(gpu_dot(d_v, d_v, d_work_a, N4));
+    double norm_v = sqrt(gpu_dot(d_v, d_v, d_work_a, d_work_b, N4));
     if (norm_v < 1e-30) { k_lm_zero<<<(N4+B-1)/B,B>>>(d_Jv, N4); return; }
 
-    double norm_U = sqrt(gpu_dot(d_Un, d_Un, d_work_a, N4));
+    double norm_U = sqrt(gpu_dot(d_Un, d_Un, d_work_a, d_work_b, N4));
     double eps_fd = sqrt(1e-15) * (1.0 + norm_U) / norm_v;
 
     k_lm_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
@@ -1990,7 +1999,7 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
     k_lm_scale<<<(N+B-1)/B,B>>>(d_gmres_V[0], -1.0, N);
     k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_V[0] + N, n);
 
-    double beta = sqrt(gpu_dot(d_gmres_V[0], d_gmres_V[0], d_work_a, N));
+    double beta = sqrt(gpu_dot(d_gmres_V[0], d_gmres_V[0], d_work_a, d_work_b, N));
     if (beta < 1e-30) return 0;
     k_lm_scale<<<(N+B-1)/B,B>>>(d_gmres_V[0], 1.0/beta, N);
     g[0] = beta;
@@ -2004,10 +2013,10 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
         k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_w + N, n);
 
         for (int i = 0; i <= j; ++i) {
-            H[i*m+j] = gpu_dot(d_gmres_w, d_gmres_V[i], d_work_a, N);
+            H[i*m+j] = gpu_dot(d_gmres_w, d_gmres_V[i], d_work_a, d_work_b, N);
             k_lm_axpy<<<(N+B-1)/B,B>>>(d_gmres_w, -H[i*m+j], d_gmres_V[i], N);
         }
-        H[(j+1)*m+j] = sqrt(gpu_dot(d_gmres_w, d_gmres_w, d_work_a, N));
+        H[(j+1)*m+j] = sqrt(gpu_dot(d_gmres_w, d_gmres_w, d_work_a, d_work_b, N));
 
         if (H[(j+1)*m+j] < 1e-30) { j++; break; }
         k_lm_copy<<<(N+B-1)/B,B>>>(d_gmres_V[j+1], d_gmres_w, N);
@@ -2175,7 +2184,7 @@ double LowMachSolver::step(double t, double t_end) {
             // Scaled merit: ||L⁻¹·F||. Use d_residual_ls as scratch.
             k_lm_copy<<<(N4+B-1)/B,B>>>(d_residual_ls, d_Fk, N4);
             k_lm_ediv<<<(N4+B-1)/B,B>>>(d_residual_ls, d_scale_L, N4);
-            double Fnorm = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, N4));
+            double Fnorm = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, d_work_b, N4));
 
             if (newton == 0) {
                 Fnorm0 = Fnorm;
@@ -2222,7 +2231,7 @@ double LowMachSolver::step(double t, double t_end) {
                 apply_floor();
                 compute_F(d_residual_ls, dt);
                 k_lm_ediv<<<(N4+B-1)/B,B>>>(d_residual_ls, d_scale_L, N4);
-                Fnorm_new = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, N4));
+                Fnorm_new = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, d_work_b, N4));
                 if (Fnorm_new < Fnorm) break;
                 alpha *= 0.5;
             }
