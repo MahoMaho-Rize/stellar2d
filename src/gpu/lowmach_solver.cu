@@ -1638,14 +1638,16 @@ void k_lm_mom_line_solve(
 }
 
 // ========================= PBP assembly kernel =======================
-// Assemble full 4-DOF output from PBP components:
-// out[ρ]  = r_ρ / A_ρ  (point Jacobi on continuity)
-// out[mr] = ρ·(ṽr - (1/Ap)·∂δp/∂r)
-// out[mt] = ρ·(ṽt - (1/Ap)·(1/r)·∂δp/∂θ)
-// out[E]  = r_E / A_E  (point Jacobi on energy)
+// Assemble full 4-DOF output from PBP components.
+// Momentum: corrected velocity from line solve + pressure Poisson.
+// ρ: point Jacobi (no off-diagonal coupling to momentum in row 0).
+// Energy: forward substitution using predicted momentum:
+//   δE = (r_E - J_Em_r·δmr - J_Em_t·δmt) / J_EE
+// This makes the energy output consistent with the velocity prediction,
+// eliminating the main source of GMRES iterations at large dt.
 __global__
 void k_lm_pbp_assemble(
-    const double* rho_state, const double* blk_diag,
+    const double* rho_state, const double* blk_diag, const double* blk_J,
     const double* v_in,      // original 4n RHS
     const double* vr_pred, const double* vt_pred,  // predicted velocities
     const double* dp, const double* Ap,
@@ -1660,11 +1662,11 @@ void k_lm_pbp_assemble(
     double rho_c = fmax(rho_state[k], 1e-20);
     double r = r_center[i];
 
-    // ρ: point Jacobi — use (0,0) element of block inverse
-    const double* B = &blk_diag[flat*16];
-    Mv_out[flat] = B[0] * v_in[flat];
+    // ρ: point Jacobi (row 0 has no coupling to mr,mt)
+    const double* Binv = &blk_diag[flat*16];
+    Mv_out[flat] = Binv[0] * v_in[flat];
 
-    // Pressure gradient correction
+    // Pressure gradient of δp
     double dp_dr = 0.0;
     if (i > 0 && i < nr-1) {
         double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
@@ -1686,12 +1688,21 @@ void k_lm_pbp_assemble(
     double dvr = vr_pred[flat] - inv_ap * dp_dr;
     double dvt = vt_pred[flat] - inv_ap * dp_dt_r;
 
-    // Convert corrected velocity back to momentum
-    Mv_out[n + flat]   = rho_c * dvr;
-    Mv_out[2*n + flat] = rho_c * dvt;
+    // Momentum output = ρ · corrected velocity
+    double dmr = rho_c * dvr;
+    double dmt = rho_c * dvt;
+    Mv_out[n + flat]   = dmr;
+    Mv_out[2*n + flat] = dmt;
 
-    // Energy: point Jacobi — use (3,3) element of block inverse
-    Mv_out[3*n + flat] = B[15] * v_in[3*n + flat];
+    // Energy: forward substitution with J's compression work coupling
+    // J[3,1] = -P·∂(div v)/∂(mr),  J[3,2] = -P·∂(div v)/∂(mt)
+    // δE = (r_E - J[3,1]·δmr - J[3,2]·δmt) / J[3,3]
+    const double* J = &blk_J[flat*16];
+    double J_E_mr = J[3*4+1];
+    double J_E_mt = J[3*4+2];
+    double J_EE   = J[3*4+3];
+    if (fabs(J_EE) < 1e-30) J_EE = -1e-30;
+    Mv_out[3*n + flat] = (v_in[3*n + flat] - J_E_mr * dmr - J_E_mt * dmt) / J_EE;
 }
 
 // Velocity-only pressure correction: vr -= (1/Ap)*∂δp/∂r, vt -= (1/Ap)*(1/r)*∂δp/∂θ
@@ -1903,9 +1914,9 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
         CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
         gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 3, 1e-2);
 
-        // Step 3: Assemble all 4 DOFs
+        // Step 3: Assemble all 4 DOFs with forward substitution on energy
         k_lm_pbp_assemble<<<(n+B-1)/B,B>>>(
-            d_rho, d_blk_diag,
+            d_rho, d_blk_diag, d_blk_J,
             d_v,
             d_simple_vr_s, d_simple_vt_s,
             d_simple_p, d_Ap,
