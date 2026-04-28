@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { VTKSnapshot, FieldName, ColormapName, StepDiagnostics } from './lib/types';
 import { FIELD_LABELS, COLORMAPS } from './lib/types';
 import { parseVTK, parseDiagnostics } from './lib/vtk-parser';
 import Heatmap2D from './components/Heatmap2D';
 import RadialProfile from './components/RadialProfile';
 import Star3D from './components/Star3D';
+import Colorbar from './components/Colorbar';
 
 type ViewMode = 'heatmap' | 'profile' | 'star3d';
 
@@ -38,6 +39,17 @@ export default function App() {
   }, []);
 
   const snap = snapshots[frameIdx];
+
+  const fieldRange: [number, number] = useMemo(() => {
+    if (!snap) return [0, 1];
+    const data = snap[field];
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] < lo) lo = data[i];
+      if (data[i] > hi) hi = data[i];
+    }
+    return [lo, hi];
+  }, [snap, field]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui, sans-serif', background: '#0a0a0a', color: '#e0e0e0' }}>
@@ -94,7 +106,10 @@ export default function App() {
             <p>Drop or load VTK output files to begin</p>
           </div>
         ) : view === 'heatmap' ? (
-          <Heatmap2D snapshot={snap} field={field} colormap={colormap} logScale={logScale} />
+          <>
+            <Heatmap2D snapshot={snap} field={field} colormap={colormap} logScale={logScale} />
+            <Colorbar field={field} colormap={colormap} vmin={fieldRange[0]} vmax={fieldRange[1]} logScale={logScale} />
+          </>
         ) : view === 'profile' ? (
           <div style={{ padding: 16 }}>
             <div style={{ marginBottom: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -112,7 +127,10 @@ export default function App() {
             <RadialProfile snapshot={snap} fields={profileFields} logY={logScale} />
           </div>
         ) : (
-          <Star3D snapshot={snap} field={field} colormap={colormap} logScale={logScale} />
+          <>
+            <Star3D snapshot={snap} field={field} colormap={colormap} logScale={logScale} />
+            <Colorbar field={field} colormap={colormap} vmin={fieldRange[0]} vmax={fieldRange[1]} logScale={logScale} />
+          </>
         )}
       </main>
 
