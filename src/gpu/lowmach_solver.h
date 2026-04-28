@@ -24,8 +24,11 @@
 // Linear solver: GMRES with block-diagonal scaling preconditioner.
 // Gravity: GMG constant-coefficient Poisson.
 
+enum class PrecondType { NONE, BLOCK_JACOBI };
+
 struct LowMachSolver {
-    void init(const Grid& grid, const EOS& eos, double G, double cfl);
+    void init(const Grid& grid, const EOS& eos, double G, double cfl,
+              PrecondType pc = PrecondType::BLOCK_JACOBI);
     void upload_state(const Grid& grid, const State& state);
     void download_state(const Grid& grid, State& state);
     double step(double t, double t_end);
@@ -74,6 +77,11 @@ struct LowMachSolver {
     double *d_residual_ls; // line search F output
     double *d_scale;   // variable scaling: max(1, |U|) per DOF (4*n)
 
+    // Block-diagonal Jacobi preconditioner: 4×4 block inverse per cell
+    // d_blk_diag: n * 16 doubles (row-major 4×4 blocks)
+    double *d_blk_diag;
+    PrecondType precond_type;
+
     // GMG for gravity
     GmgGpu gmg;
 
@@ -95,6 +103,8 @@ struct LowMachSolver {
     double compute_cfl_dt();
     void compute_scaling();
     void clamp_correction(double* d_delta, double max_rel_change);
+    void assemble_block_jacobi(double dt);
+    void apply_preconditioner(const double* d_v, double* d_Mv);
 
     // Snapshot current state as HSE reference (call before adding perturbations)
     void snapshot_hse();

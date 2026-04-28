@@ -529,6 +529,77 @@ void LowMachSolver::clamp_correction(double* d_delta, double max_rel_change) {
     k_lm_clamp<<<(N+B-1)/B,B>>>(d_delta, d_scale, max_rel_change, N);
 }
 
+// ========================= Block-diagonal Jacobi preconditioner ====
+// Approximate diagonal of J = dF/dU ≈ diag(-1/dt·I + dR/dU_diag).
+// For each cell, the 4×4 diagonal block is:
+//   J_ii ≈ -1/dt·I + diag(upwind_coeff)
+// We store and invert these 4×4 blocks analytically (diagonal-dominant).
+
+__global__
+void k_lm_assemble_blkjac(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* dr, const double* rc, const double* dtheta, const double* vol,
+    double* blk, int nr, int nt, int ng, double gamma, double inv_dt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    int k = d_idx(i,j,nt,ng);
+
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k] / rho_c);
+    double vt = fabs(mt[k] / rho_c);
+
+    // Upwind advection spectral radius per direction
+    double sr_r = vr / dr[i];
+    double sr_t = vt / (rc[i] * dtheta[j]);
+    double sr = sr_r + sr_t;
+
+    // Diagonal dominance: 1/dt + advection rate
+    double d0 = inv_dt + sr;              // ρ equation
+    double d1 = inv_dt + sr;              // ρvr equation
+    double d2 = inv_dt + sr;              // ρvθ equation
+    double d3 = inv_dt + sr;              // ρe equation
+
+    // Store inverse of diagonal 4×4 block (since it's diagonal, inv = 1/d)
+    double* B = &blk[flat * 16];
+    for (int q = 0; q < 16; ++q) B[q] = 0.0;
+    B[0]  = 1.0 / d0;
+    B[5]  = 1.0 / d1;
+    B[10] = 1.0 / d2;
+    B[15] = 1.0 / d3;
+}
+
+// Apply block-diagonal preconditioner: Mv[cell] = B[cell] * v[cell]
+__global__
+void k_lm_apply_blkjac(const double* blk, const double* v, double* Mv,
+                        int n) {
+    int cell = blockIdx.x * blockDim.x + threadIdx.x;
+    if (cell >= n) return;
+    const double* B = &blk[cell * 16];
+    double v0 = v[cell], v1 = v[n+cell], v2 = v[2*n+cell], v3 = v[3*n+cell];
+    Mv[cell]     = B[0]*v0 + B[1]*v1 + B[2]*v2 + B[3]*v3;
+    Mv[n+cell]   = B[4]*v0 + B[5]*v1 + B[6]*v2 + B[7]*v3;
+    Mv[2*n+cell] = B[8]*v0 + B[9]*v1 + B[10]*v2 + B[11]*v3;
+    Mv[3*n+cell] = B[12]*v0 + B[13]*v1 + B[14]*v2 + B[15]*v3;
+}
+
+void LowMachSolver::assemble_block_jacobi(double dt) {
+    int n = nr*nt, B = 256;
+    k_lm_assemble_blkjac<<<(n+B-1)/B,B>>>(
+        d_rho, d_mr, d_mtheta, d_rhoE,
+        d_dr, d_r_center, d_dtheta, d_cell_volume,
+        d_blk_diag, nr, nt, ng, gamma, 1.0/dt);
+}
+
+void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv) {
+    int n = nr*nt, N = 4*n, B = 256;
+    if (precond_type == PrecondType::BLOCK_JACOBI) {
+        k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
+    } else {
+        k_lm_copy<<<(N+B-1)/B,B>>>(d_Mv, d_v, N);
+    }
+}
+
 // ========================= JFNK matvec ============================
 // J·v ≈ [F(U+εv) - F(U)] / ε, gravity frozen.
 
@@ -560,9 +631,9 @@ void LowMachSolver::jfnk_matvec(const double* d_v, double* d_Jv, double dt) {
     k_lm_unpack_set<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_gmres_Uk, nr,nt,ng);
 }
 
-// ========================= GMRES =================================
-// Unpreconditioned GMRES for Phase 1. Preconditioner = identity.
-// (Phase 2 will add block-diagonal or GMG-based Schur complement.)
+// ========================= FGMRES ================================
+// Flexible GMRES: Z[j] = M⁻¹·V[j], solution built from Z vectors.
+// This allows the preconditioner to vary (needed for future SIMPLE/GMG).
 
 int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
                                 double tol, int max_iter) {
@@ -583,8 +654,11 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
 
     int j;
     for (j = 0; j < m; ++j) {
-        // w = J · V[j]  (no preconditioner for now)
-        jfnk_matvec(d_gmres_V[j], d_gmres_w, dt);
+        // Z[j] = M⁻¹ · V[j]
+        apply_preconditioner(d_gmres_V[j], d_gmres_Z[j]);
+
+        // w = J · Z[j]
+        jfnk_matvec(d_gmres_Z[j], d_gmres_w, dt);
 
         // Arnoldi
         for (int i = 0; i <= j; ++i) {
@@ -612,7 +686,7 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
         if (fabs(g[j+1]) < tol * beta) { j++; break; }
     }
 
-    // Back-substitution
+    // Back-substitution: x = Σ y[i] · Z[i]  (Z, not V!)
     std::vector<double> y(j);
     for (int i = j-1; i >= 0; --i) {
         y[i] = g[i];
@@ -623,7 +697,7 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
 
     k_lm_zero<<<(N+B-1)/B,B>>>(d_x, N);
     for (int i = 0; i < j; ++i)
-        k_lm_axpy<<<(N+B-1)/B,B>>>(d_x, y[i], d_gmres_V[i], N);
+        k_lm_axpy<<<(N+B-1)/B,B>>>(d_x, y[i], d_gmres_Z[i], N);
 
     return j;
 }
@@ -730,6 +804,9 @@ double LowMachSolver::step(double t, double t_end) {
                 std::fprintf(stderr, "  step %d: Newton failed, cutting dt -> %.3e\n",
                             step_count, dt);
         }
+
+        if (precond_type == PrecondType::BLOCK_JACOBI)
+            assemble_block_jacobi(dt);
 
         double Fnorm0 = 0.0;
         bool diverged = false;
@@ -849,7 +926,9 @@ void LowMachSolver::diagnose_hse_residual() {
 
 // ========================= Init ===================================
 
-void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
+void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
+                         PrecondType pc) {
+    precond_type = pc;
     nr = grid.nr; nt = grid.ntheta; ng = grid.ng;
     gamma = eos.gamma; G_const = G; cfl_num = cfl;
     total_phys = nr*nt;
@@ -920,12 +999,19 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl)
     CUDA_CHECK(cudaMalloc(&d_inv_rho, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_scale, 4*n*sizeof(double)));
 
+    // Block-diagonal Jacobi preconditioner
+    d_blk_diag = nullptr;
+    if (precond_type == PrecondType::BLOCK_JACOBI) {
+        CUDA_CHECK(cudaMalloc(&d_blk_diag, n*16*sizeof(double)));
+    }
+
     // GMG for gravity
     gmg.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
 
     initialized = true;
-    std::printf("Low-Mach GPU solver (JFNK+GMRES+GMG): %dx%d (%d cells), %d MG levels\n",
-                nr, nt, n, gmg.n_levels);
+    const char* pc_name = (precond_type == PrecondType::BLOCK_JACOBI) ? "BlockJacobi" : "None";
+    std::printf("Low-Mach GPU solver (JFNK+FGMRES+GMG, PC=%s): %dx%d (%d cells), %d MG levels\n",
+                pc_name, nr, nt, n, gmg.n_levels);
     std::fflush(stdout);
 }
 
@@ -984,5 +1070,6 @@ void LowMachSolver::destroy() {
     cudaFree(d_gmres_w); cudaFree(d_gmres_Uk);
     cudaFree(d_work_a); cudaFree(d_work_b);
     cudaFree(d_rhs_poisson); cudaFree(d_inv_rho); cudaFree(d_scale);
+    if (d_blk_diag) cudaFree(d_blk_diag);
     initialized = false;
 }
