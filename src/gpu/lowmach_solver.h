@@ -69,7 +69,7 @@ struct LowMachSolver {
     double *d_residual; // scratch for residual computation
 
     // GMRES arrays
-    static constexpr int GMRES_RESTART = 60;
+    static constexpr int GMRES_RESTART = 120;
     double *d_gmres_V[GMRES_RESTART + 1];
     double *d_gmres_Z[GMRES_RESTART + 1]; // preconditioned
     double *d_gmres_w;
@@ -86,6 +86,8 @@ struct LowMachSolver {
 
     // Block-diagonal Jacobi preconditioner: 4×4 block inverse per cell
     double *d_blk_diag;
+    // Un-inverted 4×4 block diagonal (for ADI middle step: D·v)
+    double *d_blk_J;
 
     // SIMPLE preconditioner scratch (n = nr*nt each)
     double *d_Ap;           // momentum diagonal: 1/dt + upwind_coeff (per cell)
@@ -109,8 +111,11 @@ struct LowMachSolver {
 
     // Adaptive dt
     double dt_current;
-    double dt_good = 0.0;   // best dt that recently converged (for fast recovery)
+    double dt_good = 0.0;
     int step_count = 0;
+
+    // Atmosphere threshold: cells with ρ₀ < atm_rho_thresh are frozen
+    double atm_rho_thresh = 0.0;
 
     // Internal methods
     void compute_residual(double* d_res);
