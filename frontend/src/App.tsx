@@ -19,6 +19,9 @@ export default function App() {
   const [view, setView] = useState<ViewMode>('heatmap');
   const [profileFields, setProfileFields] = useState<FieldName[]>(['density', 'pressure']);
 
+  const [dirPath, setDirPath] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const handleFiles = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     const vtkFiles = files.filter(f => f.name.endsWith('.vtk')).sort((a, b) => a.name.localeCompare(b.name));
@@ -37,6 +40,26 @@ export default function App() {
       setDiagnostics(parseDiagnostics(text));
     }
   }, []);
+
+  const loadFromDir = useCallback(async () => {
+    if (!dirPath) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/list?dir=${encodeURIComponent(dirPath)}`);
+      const files: string[] = await res.json();
+      const snaps: VTKSnapshot[] = [];
+      for (const f of files) {
+        const r = await fetch(`/api/vtk?path=${encodeURIComponent(dirPath + '/' + f)}`);
+        const text = await r.text();
+        snaps.push(parseVTK(text));
+      }
+      setSnapshots(snaps);
+      if (snaps.length > 0) setFrameIdx(0);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  }, [dirPath]);
 
   const snap = snapshots[frameIdx];
 
@@ -61,6 +84,15 @@ export default function App() {
           Load VTK files
           <input type="file" multiple accept=".vtk,.log,.txt" onChange={handleFiles} style={{ display: 'none' }} />
         </label>
+
+        <input type="text" placeholder="Server path: /home/.../runs/xxx" value={dirPath}
+          onChange={e => setDirPath(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && loadFromDir()}
+          style={{ background: '#222', color: '#ddd', border: '1px solid #444', borderRadius: 3, padding: '4px 8px', fontSize: 12, width: 360 }} />
+        <button onClick={loadFromDir} disabled={loading}
+          style={{ padding: '4px 12px', background: '#059669', borderRadius: 4, fontSize: 13, border: 'none', color: '#fff', cursor: 'pointer' }}>
+          {loading ? `Loading...` : 'Load Dir'}
+        </button>
 
         {snap && (
           <>
