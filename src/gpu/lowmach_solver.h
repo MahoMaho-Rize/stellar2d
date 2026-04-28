@@ -24,7 +24,7 @@
 // Linear solver: GMRES with block-diagonal scaling preconditioner.
 // Gravity: GMG constant-coefficient Poisson.
 
-enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE, COMBINED, LINE_JACOBI };
+enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE, COMBINED, LINE_JACOBI, BLOCK_SCHUR };
 
 struct LowMachSolver {
     void init(const Grid& grid, const EOS& eos, double G, double cfl,
@@ -57,6 +57,11 @@ struct LowMachSolver {
 
     // Background hydrostatic equilibrium
     double *d_rho0, *d_P0, *d_phi0;
+
+    // 1D radial gravity: g_r(i) = -G·M(<r_i)/r_i², angle-averaged
+    double *d_gr;       // current gravity (size nr)
+    double *d_gr0;      // reference gravity at HSE (size nr)
+    double *d_shell_mass; // scratch for shell mass computation (size nr)
 
     // Packed state vectors for Newton (5*n: ρ, ρvr, ρvθ, ρe, Φ)
     double *d_Un;      // U^n saved state
@@ -92,6 +97,8 @@ struct LowMachSolver {
     // Third GMG instance for Schur complement Helmholtz (∇² - σ)
     GmgGpu gmg_schur;
     double *d_sigma_schur; // σ(x) = 4πGρ/Ap per cell
+    double *d_poisson_scale; // S(x) = max(|cC|, 1) per cell — Poisson residual scaling
+    double *d_schur_rhs; // scratch for Schur RHS assembly
 
     PrecondType precond_type;
 
@@ -112,6 +119,7 @@ struct LowMachSolver {
     void unpack_delta(const double* d_delta, double alpha);
     void apply_floor();
     void solve_gravity();
+    void compute_gravity_1d();
     void launch_ghost();
     double compute_cfl_dt();
     void compute_scaling();
@@ -121,6 +129,8 @@ struct LowMachSolver {
     void apply_preconditioner(const double* d_v, double* d_Mv, double dt);
     void apply_simple(const double* d_v, double* d_Mv, double dt);
     void apply_line_jacobi(const double* d_v, double* d_Mv, double dt);
+    void apply_block_schur(const double* d_v, double* d_Mv, double dt);
+    void assemble_schur_sigma(double dt);
 
     // Snapshot current state as HSE reference (call before adding perturbations)
     void snapshot_hse();

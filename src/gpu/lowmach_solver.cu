@@ -116,8 +116,8 @@ void k_lm_residual(
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face,
     const double* theta_face, const double* dr, const double* dtheta,
-    const double* phi,
-    const double* P0, const double* rho0, const double* phi0,
+    const double* gr, const double* gr0,
+    const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, double gamma) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -169,81 +169,58 @@ void k_lm_residual(
     }
 
     // ===== Well-balanced pressure + gravity (reference-state subtraction) =====
-    // Compute ∇P', ∇Φ' using same central-diff stencil as the reference state.
-    // The reference state P₀,ρ₀,Φ₀ is built to satisfy the SAME discrete stencil,
-    // so the difference exactly cancels at HSE to machine precision.
+    // 1D radial gravity: g(r) from cumulative mass integral (no Poisson, no GMG noise).
+    // Reference state satisfies: -∇P₀ + ρ₀·g₀(r) + geom(P₀) = 0 exactly.
+    // Perturbation form:
+    //   force_r = -(∇P - ∇P₀) + (ρ - ρ₀)·g₀(r) + ρ·(g(r) - g₀(r))
+    //   force_θ = -(1/r)(∂P'/∂θ)  (no θ gravity component — 1D gravity is radial)
 
     double Pp_c = P_c - P0[flat];
     double rhop_c = rho_c - rho0[flat];
-    double phip_c = phi[flat] - phi0[flat];
 
-    // Radial perturbation gradients
-    double dPp_dr=0, dphip_dr=0, dphi0_dr=0;
+    // Radial pressure perturbation gradient
+    double dPp_dr = 0;
     if (i > 0 && i < nr-1) {
         double Pp_m = fmax((gamma-1.0)*rhoE[d_idx(i-1,j,nt,ng)],1e-30) - P0[(i-1)*nt+j];
         double Pp_p = fmax((gamma-1.0)*rhoE[d_idx(i+1,j,nt,ng)],1e-30) - P0[(i+1)*nt+j];
         double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
-        double gl, gr;
-        gl = (Pp_c-Pp_m)/dl; gr = (Pp_p-Pp_c)/dh;
-        dPp_dr = (dh*gl+dl*gr)/(dl+dh);
-
-        double ph_m = phi[(i-1)*nt+j]-phi0[(i-1)*nt+j];
-        double ph_p = phi[(i+1)*nt+j]-phi0[(i+1)*nt+j];
-        gl = (phip_c-ph_m)/dl; gr = (ph_p-phip_c)/dh;
-        dphip_dr = (dh*gl+dl*gr)/(dl+dh);
-
-        gl = (phi0[flat]-phi0[(i-1)*nt+j])/dl;
-        gr = (phi0[(i+1)*nt+j]-phi0[flat])/dh;
-        dphi0_dr = (dh*gl+dl*gr)/(dl+dh);
+        dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh) / (dl+dh);
     } else if (i == 0 && nr > 1) {
         double dh = r_center[1]-r_center[0];
         dPp_dr = (fmax((gamma-1.0)*rhoE[d_idx(1,j,nt,ng)],1e-30)-P0[1*nt+j] - Pp_c)/dh;
-        dphip_dr = (phi[1*nt+j]-phi0[1*nt+j] - phip_c)/dh;
-        dphi0_dr = (phi0[1*nt+j]-phi0[0*nt+j])/dh;
     } else if (i == nr-1 && nr >= 2) {
         double dl = r_center[nr-1]-r_center[nr-2];
         dPp_dr = (Pp_c - (fmax((gamma-1.0)*rhoE[d_idx(nr-2,j,nt,ng)],1e-30)-P0[(nr-2)*nt+j]))/dl;
-        dphip_dr = (phip_c - (phi[(nr-2)*nt+j]-phi0[(nr-2)*nt+j]))/dl;
-        dphi0_dr = (phi0[(nr-1)*nt+j]-phi0[(nr-2)*nt+j])/dl;
     }
 
-    // Theta perturbation gradients (divided by r)
-    double dPp_dt_r=0, dphip_dt_r=0, dphi0_dt_r=0;
+    // Theta pressure perturbation gradient (divided by r)
+    double dPp_dt_r = 0;
     if (j > 0 && j < nt-1) {
         double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
         double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
         double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
         double dl=tc_c-tc_m, dh=tc_p-tc_c;
-
         double Pp_m = fmax((gamma-1.0)*rhoE[d_idx(i,j-1,nt,ng)],1e-30) - P0[i*nt+j-1];
         double Pp_p = fmax((gamma-1.0)*rhoE[d_idx(i,j+1,nt,ng)],1e-30) - P0[i*nt+j+1];
         dPp_dt_r = ((dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh))/(r*(dl+dh));
-
-        double ph_m = phi[i*nt+j-1]-phi0[i*nt+j-1];
-        double ph_p = phi[i*nt+j+1]-phi0[i*nt+j+1];
-        dphip_dt_r = ((dh*(phip_c-ph_m)/dl + dl*(ph_p-phip_c)/dh))/(r*(dl+dh));
-
-        dphi0_dt_r = ((dh*(phi0[flat]-phi0[i*nt+j-1])/dl +
-                        dl*(phi0[i*nt+j+1]-phi0[flat])/dh))/(r*(dl+dh));
     }
+
+    // 1D gravity: g_r(i) is radial only, same for all θ cells at this radius
+    double g0_r = gr0[i];
+    double gp_r = gr[i] - g0_r;
 
     // ===== Geometric source =====
     double inv_r = 1.0 / r;
-
-    // Velocity-dependent geometric terms
     double S_mr = rho_c * vt_c * vt_c * inv_r;
     double S_mt = -rho_c * vr_c * vt_c * inv_r;
 
-    // Well-balanced momentum force (perturbation only):
-    //   -∇P' - ρ'∇Φ₀ - ρ∇Φ'
-    // NO FV geometric source on P' — the central-diff ∇P' is the complete
-    // spherical gradient. FV geom source on P₀ cancels exactly with
-    // ∇P₀ + ρ₀∇Φ₀ by construction of the reference state.
-    double force_r = -dPp_dr - rhop_c*dphi0_dr - rho_c*dphip_dr;
-    double force_t = -dPp_dt_r - rhop_c*dphi0_dt_r - rho_c*dphip_dt_r;
+    // Well-balanced radial force: -∇P' + ρ'·g₀ + ρ·g'
+    double force_r = -dPp_dr + rhop_c*g0_r + rho_c*gp_r;
+    // Theta: only pressure (no gravity component)
+    double force_t = -dPp_dt_r;
 
-    // Gravity work on energy (full, not perturbation — v=0 at HSE so this is zero)
-    double S_E = -rho_c * (vr_c*(dphi0_dr+dphip_dr) + vt_c*(dphi0_dt_r+dphip_dt_r));
+    // Gravity work on energy: ρ·v·g  (v=0 at HSE → zero, well-balanced)
+    double S_E = rho_c * vr_c * (g0_r + gp_r);
 
     // ===== P∇·v (compression work in internal energy equation) =====
     auto vr_face_f = [&](int il, int ir, int jj) -> double {
@@ -442,6 +419,52 @@ void LowMachSolver::solve_gravity() {
     gmg.solve(d_rhs_poisson, d_phi);
 }
 
+// ========================= 1D radial gravity ========================
+// g_r(i) = -G·M(<r_face[i+1]) / r_center[i]²
+// M(<r) = 2π ∫ Σ_j [ρ(i,j) · volume(i,j)] over shells.
+// Computed via prefix sum over radial shells.
+
+// Step 1: compute shell mass = 2π · Σ_j ρ(i,j)·vol(i,j) for each i
+__global__
+void k_lm_shell_mass(const double* rho, const double* vol,
+                     double* shell, int nr, int nt, int ng) {
+    int i = blockIdx.x;
+    if (i >= nr) return;
+    extern __shared__ double smem[];
+    int tid = threadIdx.x;
+    double s = 0.0;
+    for (int j = tid; j < nt; j += blockDim.x)
+        s += rho[d_idx(i,j,nt,ng)] * vol[i*nt+j];
+    smem[tid] = s;
+    __syncthreads();
+    for (int st = blockDim.x/2; st > 0; st >>= 1) {
+        if (tid < st) smem[tid] += smem[tid+st];
+        __syncthreads();
+    }
+    if (tid == 0) shell[i] = smem[0] * 2.0 * M_PI;
+}
+
+// Step 2: prefix sum + g_r computation (single thread — nr is small)
+__global__
+void k_lm_gravity_from_shells(const double* shell_mass, const double* rc,
+                               double* gr, int nr, double G) {
+    if (threadIdx.x != 0) return;
+    double M_enc = 0.0;
+    for (int i = 0; i < nr; ++i) {
+        M_enc += shell_mass[i];
+        double r = rc[i];
+        gr[i] = -G * M_enc / (r * r);
+    }
+}
+
+void LowMachSolver::compute_gravity_1d() {
+    int B = std::min(nt, 256);
+    k_lm_shell_mass<<<nr, B, B*sizeof(double)>>>(
+        d_rho, d_cell_volume, d_shell_mass, nr, nt, ng);
+    k_lm_gravity_from_shells<<<1, 1>>>(
+        d_shell_mass, d_r_center, d_gr, nr, G_const);
+}
+
 // ========================= Poisson residual (5th equation) ========
 // F₅ = ∇²Φ - 4πGρ = 0
 // Uses EXACTLY the same spherical Laplacian stencil as GMG to ensure
@@ -499,10 +522,6 @@ void k_lm_poisson_residual(
 
     double rho_c = fmax(rho[d_idx(i,j,nt,ng)], 1e-20);
     double raw = Lphi - 4.0 * M_PI * G * rho_c;
-    // Scale by 1/|cC| to make the Poisson residual dimensionless.
-    // On log meshes, |cC| can be ~1e8 near the center, so the raw
-    // absolute residual would dominate ||F|| even when the Poisson
-    // solve is converged to O(1e-6) relative.
     double scale = fmax(fabs(cC), 1.0);
     res5[flat] = raw / scale;
 }
@@ -531,11 +550,12 @@ void k_lm_compute_F(double* F, const double* R,
 void LowMachSolver::compute_residual(double* d_res) {
     int n = nr*nt, B = 256;
     launch_ghost();
+    compute_gravity_1d();
     k_lm_residual<<<(n+B-1)/B,B>>>(
         d_rho,d_mr,d_mtheta,d_rhoE,
         d_cell_volume,d_area_r,d_area_theta,
         d_r_center,d_r_face,d_theta_face,d_dr,d_dtheta,
-        d_phi, d_P0, d_rho0, d_phi0,
+        d_gr, d_gr0, d_P0, d_rho0,
         d_residual,
         nr,nt,ng,gamma);
 }
@@ -545,15 +565,6 @@ void LowMachSolver::compute_F(double* d_F, double dt) {
     compute_residual(d_residual);
     k_lm_compute_F<<<(n+B-1)/B,B>>>(d_F, d_residual,
         d_rho, d_mr, d_mtheta, d_rhoE, d_Un, 1.0/dt, nr, nt, ng);
-    // F₅ = ∇²Φ - 4πGρ (Poisson constraint)
-    // Compute M_total for Dirichlet BC
-    k_lm_rhovol<<<(n+B-1)/B,B>>>(d_rho, d_cell_volume, d_work_a, nr, nt, ng);
-    double M = gpu_reduce_sum(d_work_a, d_work_b, n) * 2.0 * M_PI;
-    k_lm_poisson_residual<<<(n+B-1)/B,B>>>(
-        d_phi, d_rho, d_r_face, d_r_center, d_dr,
-        d_dtheta, d_sin_theta_face, d_sin_theta_center,
-        d_F + 4*n,
-        nr, nt, ng, G_const, M);
 }
 
 void LowMachSolver::pack_state(double* d_packed) {
@@ -632,7 +643,7 @@ void k_lm_assemble_blkjac(
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face, const double* theta_face,
     const double* dr, const double* dtheta,
-    const double* phi, const double* P0, const double* rho0, const double* phi0,
+    const double* gr0,
     double* blk,
     int nr, int nt, int ng, double gamma, double inv_dt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -679,21 +690,8 @@ void k_lm_assemble_blkjac(
     // dP/d(rhoE) = (γ-1)  (since P = (γ-1)*rhoE for our state variable)
     double dP_drhoE = gamma - 1.0;
 
-    // Gravity coupling: d(ρ∇Φ₀)/dρ = ∇Φ₀ (known from reference state)
-    double dphi0_dr = 0.0;
-    if (i > 0 && i < nr-1) {
-        double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
-        dphi0_dr=(dh*(phi0[flat]-phi0[(i-1)*nt+j])/dl+dl*(phi0[(i+1)*nt+j]-phi0[flat])/dh)/(dl+dh);
-    } else if (i==0&&nr>1) dphi0_dr=(phi0[1*nt+j]-phi0[0])/( r_center[1]-r_center[0]);
-    else if (i==nr-1&&nr>=2) dphi0_dr=(phi0[(nr-1)*nt+j]-phi0[(nr-2)*nt+j])/(r_center[nr-1]-r_center[nr-2]);
-
-    double dphi0_dt_r = 0.0;
-    if (j > 0 && j < nt-1) {
-        double tc_m=0.5*(theta_face[j-1]+theta_face[j]), tc_c=0.5*(theta_face[j]+theta_face[j+1]);
-        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-        double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        dphi0_dt_r=(dh*(phi0[flat]-phi0[i*nt+j-1])/dl+dl*(phi0[i*nt+j+1]-phi0[flat])/dh)/(r*(dl+dh));
-    }
+    // 1D gravity coupling: dF_mr/d(rho) += g₀(r) (from ρ'·g₀ term)
+    double g0_val = gr0[i];
 
     // div_v diagonal contribution: d(div_v)/d(mr_c) and d(div_v)/d(mt_c)
     // From FV divergence: div_v = (1/V)(Ar_hi*vr_hi - Ar_lo*vr_lo + ...)
@@ -719,9 +717,9 @@ void k_lm_assemble_blkjac(
     J[1*4+3] = -dPdr_coeff * dP_drhoE;  // dF_mr/d(rhoE)
     J[2*4+3] = -dPdt_coeff * dP_drhoE;  // dF_mt/d(rhoE)
 
-    // Gravity-density coupling: dF_mr/d(rho) += -∇Φ₀ (from -ρ'∇Φ₀ term)
-    J[1*4+0] += -dphi0_dr;   // dF_mr/d(rho)
-    J[2*4+0] += -dphi0_dt_r; // dF_mt/d(rho)
+    // 1D gravity-density coupling: dF_mr/d(rho) += g₀(r) (from +ρ'·g₀ term)
+    J[1*4+0] += g0_val;   // dF_mr/d(rho)
+    // No θ gravity component with 1D gravity
 
     // Compression work coupling: dF_rhoE/d(mr) = -P * d(div_v)/d(mr)
     J[3*4+1] = -P_c * ddivv_dmr;  // dF_rhoE/d(mr)
@@ -779,7 +777,7 @@ void LowMachSolver::assemble_block_jacobi(double dt) {
         d_cell_volume, d_area_r, d_area_theta,
         d_r_center, d_r_face, d_theta_face,
         d_dr, d_dtheta,
-        d_phi, d_P0, d_rho0, d_phi0,
+        d_gr0,
         d_blk_diag, nr, nt, ng, gamma, 1.0/dt);
 }
 
@@ -926,7 +924,7 @@ void k_lm_line_solve(
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face, const double* theta_face,
     const double* dr, const double* dtheta,
-    const double* phi0,
+    const double* gr0,
     const double* v_in, double* Mv_out,
     int nr, int nt, int ng, double gamma, double inv_dt) {
     int j = blockIdx.x;  // one block per θ-line
@@ -1030,14 +1028,8 @@ void k_lm_line_solve(
             Db[1*4+3] = -(gamma-1.0) / (r_center[nr-1]-r_center[nr-2]);
         }
 
-        // Gravity-density coupling
-        double dphi0_dr = 0.0;
-        if (i>0&&i<nr-1) {
-            double dl=r_center[i]-r_center[i-1],dh=r_center[i+1]-r_center[i];
-            dphi0_dr=(dh*(phi0[flat]-phi0[(i-1)*nt+j])/dl+dl*(phi0[(i+1)*nt+j]-phi0[flat])/dh)/(dl+dh);
-        } else if (i==0&&nr>1) dphi0_dr=(phi0[1*nt+j]-phi0[0])/(r_center[1]-r_center[0]);
-        else if (i==nr-1&&nr>=2) dphi0_dr=(phi0[(nr-1)*nt+j]-phi0[(nr-2)*nt+j])/(r_center[nr-1]-r_center[nr-2]);
-        Db[1*4+0] += -dphi0_dr;
+        // 1D gravity-density coupling: dF_mr/d(rho) += g₀(r)
+        Db[1*4+0] += gr0[i];
 
         // Lower block pressure coupling to i-1
         if (i > 0) {
@@ -1298,18 +1290,95 @@ void k_lm_assemble_sigma(const double* rho, const double* blk_diag,
     sigma[flat] = 4.0 * M_PI * G * rho_c / Ap;
 }
 
-// Preconditioner for FLUID-ONLY 4N system (Φ handled by Poisson solve outside GMRES)
+// Precompute S(x) = max(|cC|, 1) for Poisson residual scaling.
+// Matches the stencil in k_lm_poisson_residual exactly.
+__global__
+void k_lm_poisson_scale(
+    const double* r_face, const double* r_center, const double* dr,
+    const double* dtheta,
+    const double* sin_tf, const double* sin_tc,
+    double* scale_out,
+    int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+
+    if (i == nr-1) { scale_out[flat] = 1.0; return; }
+
+    double ri = r_center[i], ri2 = ri*ri, dri = dr[i];
+    double cC = 0.0;
+    if (i > 0) {
+        double rl = r_face[i];
+        cC -= rl*rl / (ri2 * dri * (r_center[i] - r_center[i-1]));
+    }
+    if (i < nr-1) {
+        double rh = r_face[i+1];
+        cC -= rh*rh / (ri2 * dri * (r_center[i+1] - r_center[i]));
+    }
+    double sj = sin_tc[j], dtj = dtheta[j];
+    if (j > 0) cC -= sin_tf[j] / (ri2 * sj * dtj * 0.5 * (dtheta[j] + dtheta[j-1]));
+    if (j < nt-1) cC -= sin_tf[j+1] / (ri2 * sj * dtj * 0.5 * (dtheta[j] + dtheta[j+1]));
+
+    scale_out[flat] = fmax(fabs(cC), 1.0);
+}
+
+// Elementwise: out[i] = a[i] * b[i]
+__global__
+void k_lm_mul(const double* a, const double* b, double* out, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = a[i] * b[i];
+}
+
+// Elementwise: out[i] = a[i] / b[i]
+__global__
+void k_lm_div(const double* a, const double* b, double* out, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = a[i] / b[i];
+}
+
+void LowMachSolver::assemble_schur_sigma(double dt) {
+    int n = nr*nt, B = 256;
+    k_lm_assemble_sigma<<<(n+B-1)/B,B>>>(
+        d_rho, d_blk_diag, d_sigma_schur, n, ng, nt, G_const);
+    k_lm_poisson_scale<<<(n+B-1)/B,B>>>(
+        d_r_face, d_r_center, d_dr, d_dtheta,
+        d_sin_theta_face, d_sin_theta_center,
+        d_poisson_scale, nr, nt);
+}
+
+void LowMachSolver::apply_block_schur(const double* d_v, double* d_Mv, double dt) {
+    int n = nr*nt, B = 256;
+
+    // Step 1: Fluid part — block Jacobi on first 4N
+    k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
+
+    // Step 2: Build Schur RHS in physical (unscaled) space.
+    // v₅ is scaled: v₅_scaled = (∇²Φ - 4πGρ)/S
+    // Need physical: v₅_phys = v₅_scaled * S
+    // J_Φρ = -4πG, so coupling term = (-4πG)·δρ
+    // But δρ comes from block Jacobi applied to *scaled* input, so it's physical.
+    // RHS = v₅_phys - J_Φρ·δρ = S·v₅ + 4πG·δρ
+    k_lm_mul<<<(n+B-1)/B,B>>>(d_v + 4*n, d_poisson_scale, d_schur_rhs, n);
+    k_lm_axpy<<<(n+B-1)/B,B>>>(d_schur_rhs, 4.0*M_PI*G_const, d_Mv, n);
+
+    // Step 3: Solve (∇² - σ)δΦ = RHS with Helmholtz GMG
+    CUDA_CHECK(cudaMemset(d_Mv + 4*n, 0, n*sizeof(double)));
+    gmg_schur.solve_helmholtz(d_sigma_schur, d_schur_rhs, d_Mv + 4*n, 10, 1e-4);
+}
+
 void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double dt) {
     int n = nr*nt, B = 256;
 
-    if (precond_type == PrecondType::LINE_JACOBI) {
+    if (precond_type == PrecondType::BLOCK_SCHUR) {
+        apply_block_schur(d_v, d_Mv, dt);
+    } else if (precond_type == PrecondType::LINE_JACOBI) {
         int smem = nr * (3*16 + 2*4) * sizeof(double);
         int threads = std::min(nr, 256);
         k_lm_line_solve<<<nt, threads, smem>>>(
             d_rho, d_mr, d_mtheta, d_rhoE,
             d_cell_volume, d_area_r, d_area_theta,
             d_r_center, d_r_face, d_theta_face,
-            d_dr, d_dtheta, d_phi0,
+            d_dr, d_dtheta, d_gr0,
             d_v, d_Mv,
             nr, nt, ng, gamma, 1.0/dt);
     } else if (precond_type == PrecondType::SIMPLE) {
@@ -1322,19 +1391,9 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
 }
 
 // ========================= JFNK matvec ============================
-// Hybrid approach: GMRES operates on the FLUID-ONLY 4N DOFs.
-// Gravity Φ is updated via Poisson solve after each Newton correction,
-// not during GMRES. This avoids diluting the Krylov basis with the
-// Poisson component (which has a noise floor from GMG discretization).
-//
-// The full 5-DOF coupling is maintained at the Newton outer level:
-//   1. GMRES solves J_fluid · δU = -F_fluid (4N, Φ frozen)
-//   2. Apply δU to fluid state
-//   3. solve_gravity() to update Φ consistent with new ρ
-//   4. Line search evaluates full F(U,Φ) including Poisson residual
-//
-// This is equivalent to a Schur complement elimination of Φ:
-// the Poisson solve exactly inverts the Φ-Φ block of the Jacobian.
+// Pure 4-DOF: GMRES on fluid (ρ, ρvr, ρvθ, ρe).
+// Gravity g(r) is recomputed from ρ in compute_residual, so the
+// Jacobian-vector product J·v naturally includes ∂g/∂ρ coupling.
 
 void LowMachSolver::jfnk_matvec(const double* d_v, double* d_Jv, double dt) {
     int n = nr*nt, N4 = 4*n, B = 256;
@@ -1345,62 +1404,50 @@ void LowMachSolver::jfnk_matvec(const double* d_v, double* d_Jv, double dt) {
     double norm_U = sqrt(gpu_dot(d_Un, d_Un, d_work_a, N4));
     double eps_fd = sqrt(1e-15) * (1.0 + norm_U) / norm_v;
 
-    // Save current fluid state (Φ not saved — it's frozen during GMRES)
     k_lm_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
 
-    // Perturb fluid only: U += ε·v (first 4n components)
     k_lm_unpack_add<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_v, eps_fd, nr,nt,ng);
     apply_floor();
 
-    // F_fluid(U+εv, Φ_frozen) — only the first 4n components
+    // compute_residual recomputes g(r) from perturbed ρ, so ∂g/∂ρ is captured
     compute_residual(d_residual);
     k_lm_compute_F<<<(n+B-1)/B,B>>>(d_Jv, d_residual,
         d_rho, d_mr, d_mtheta, d_rhoE, d_Un, 1.0/dt, nr, nt, ng);
 
-    // Jv = (F_fluid(U+εv) - F_fluid(U)) / ε
     k_lm_axpy<<<(N4+B-1)/B,B>>>(d_Jv, -1.0, d_Fk, N4);
     k_lm_scale<<<(N4+B-1)/B,B>>>(d_Jv, 1.0/eps_fd, N4);
 
-    // Restore state
     k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
 }
 
 // ========================= FGMRES ================================
 // Flexible GMRES: Z[j] = M⁻¹·V[j], solution built from Z vectors.
-// This allows the preconditioner to vary (needed for future SIMPLE/GMG).
+// Pure 4-DOF fluid system.
 
 int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
                                 double tol, int max_iter) {
-    int N = 4*nr*nt, B = 256;
+    int n = nr*nt, N = 4*n, B = 256;
     int m = std::min(max_iter, (int)GMRES_RESTART);
 
     std::vector<double> H((m+1)*m, 0.0);
     std::vector<double> cs(m), sn(m), g(m+1, 0.0);
 
-    int n_phys0 = nr * nt;
-
-    // r0 = -F (solve J·x = -F)
     k_lm_copy<<<(N+B-1)/B,B>>>(d_gmres_V[0], d_b, N);
     k_lm_scale<<<(N+B-1)/B,B>>>(d_gmres_V[0], -1.0, N);
-    // Zero 5th component — V vectors are 4N fluid only
-    k_lm_zero<<<(n_phys0+B-1)/B,B>>>(d_gmres_V[0] + N, n_phys0);
+    k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_V[0] + N, n);
 
     double beta = sqrt(gpu_dot(d_gmres_V[0], d_gmres_V[0], d_work_a, N));
     if (beta < 1e-30) return 0;
     k_lm_scale<<<(N+B-1)/B,B>>>(d_gmres_V[0], 1.0/beta, N);
     g[0] = beta;
 
-    int n_phys = nr * nt;
     int j;
     for (j = 0; j < m; ++j) {
-        // Z[j] = M⁻¹ · V[j]  (4N fluid components only)
         apply_preconditioner(d_gmres_V[j], d_gmres_Z[j], dt);
-        // Zero the 5th component so jfnk_matvec doesn't corrupt Φ
-        k_lm_zero<<<(n_phys+B-1)/B,B>>>(d_gmres_Z[j] + N, n_phys);
+        k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_Z[j] + N, n);
 
-        // w = J · Z[j]  (writes 4N components)
         jfnk_matvec(d_gmres_Z[j], d_gmres_w, dt);
-        k_lm_zero<<<(n_phys+B-1)/B,B>>>(d_gmres_w + N, n_phys);
+        k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_w + N, n);
 
         // Arnoldi
         for (int i = 0; i <= j; ++i) {
@@ -1494,11 +1541,10 @@ double LowMachSolver::compute_cfl_dt() {
 // ========================= Time step (Newton) =====================
 
 double LowMachSolver::step(double t, double t_end) {
-    int n = nr*nt, B = 256, N = 5*n;
+    int n = nr*nt, B = 256, N4 = 4*n;
 
     static int step_count = 0;
 
-    // HSE snapshot on first call.
     static bool hse_init = false;
     if (!hse_init) {
         if (!hse_set_externally)
@@ -1507,15 +1553,6 @@ double LowMachSolver::step(double t, double t_end) {
     }
 
     apply_floor();
-
-    // Do NOT call solve_gravity() here. Φ is part of the state vector
-    // and Newton handles Poisson convergence as F₅ = 0.
-    // Calling solve_gravity would introduce GMG noise into Φ,
-    // breaking well-balancedness for the unperturbed HSE case.
-    // For step 0 with perturbed IC: Φ = Φ₀ but ρ ≠ ρ₀, so the
-    // Poisson residual is non-zero. Newton handles this naturally
-    // because the scaled Poisson residual is small relative to the
-    // fluid perturbation forces.
 
     if (step_count == 0)
         diagnose_hse_residual();
@@ -1548,7 +1585,6 @@ double LowMachSolver::step(double t, double t_end) {
                             step_count, dt);
         }
 
-        // Always assemble block Jacobi (needed for Schur σ even with other preconditioners)
         assemble_block_jacobi(dt);
         if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED)
             assemble_simple(dt);
@@ -1559,77 +1595,65 @@ double LowMachSolver::step(double t, double t_end) {
         for (int newton = 0; newton < max_newton; ++newton) {
             apply_floor();
 
-            // No explicit solve_gravity — Φ is now part of the state vector.
-            // The Newton update naturally adjusts Φ through the 5th equation.
-
+            // Gravity is recomputed inside compute_F → compute_residual → compute_gravity_1d.
+            // g(r) is always consistent with current ρ — no frozen-Φ issue.
             compute_F(d_Fk, dt);
-            // Use FLUID-only norm (first 4n components) for convergence.
-            // The Poisson component (5th) has a noise floor from GMG
-            // that can't be reduced, so including it would prevent convergence.
-            double Fnorm_fluid = sqrt(gpu_dot(d_Fk, d_Fk, d_work_a, 4*n));
-            double Fnorm = sqrt(gpu_dot(d_Fk, d_Fk, d_work_a, N));
+            double Fnorm = sqrt(gpu_dot(d_Fk, d_Fk, d_work_a, N4));
 
             if (newton == 0) {
-                Fnorm0 = Fnorm_fluid;
-                if (Fnorm_fluid < 1e-30) { converged = true; break; }
+                Fnorm0 = Fnorm;
+                if (Fnorm < 1e-30) { converged = true; break; }
             }
 
-            double Fnorm_per_cell = Fnorm_fluid / sqrt((double)(4*n));
-            if (Fnorm_fluid < 1e-3 * Fnorm0 || Fnorm_per_cell < 1e-4) {
+            double Fnorm_per_cell = Fnorm / sqrt((double)N4);
+            if (Fnorm < 1e-3 * Fnorm0 || Fnorm_per_cell < 1e-4) {
                 converged = true;
                 if (step_count < 30)
                     std::fprintf(stderr, "  step %d converged at newton %d: ||F||=%.3e per-cell=%.3e (dt=%.3e)\n",
                                 step_count, newton, Fnorm, Fnorm_per_cell, dt);
                 break;
             }
-            if (Fnorm_fluid > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
+            if (Fnorm > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
 
-            // GMRES solves 4N fluid system; zero 5th component to avoid corrupting Φ
             k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_w + 4*n, n);
             int gmres_iters = gmres_solve(d_gmres_w, d_Fk, dt, 1e-3, GMRES_RESTART);
 
             clamp_correction(d_gmres_w, 0.1);
 
-            // Line search with Φ FROZEN (consistent with JFNK matvec).
-            // GMRES solved J·δU = -F where J = dR/dU|_{Φ fixed} - I/dt.
-            // If line search updates Φ via solve_gravity, the merit function
-            // F(U+αδU, Φ_new) ≠ F(U) + α·J·δU because Φ changed.
-            // This inconsistency causes ||F'|| >> ||F|| (P20/diagnostic).
-            // Fix: evaluate F at (U+αδU, Φ_frozen) during line search.
-            // Φ is updated once after Newton converges.
+            // Line search. g(r) is automatically recomputed in compute_F
+            // for each trial α, so the merit function is fully consistent.
             k_lm_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
             double alpha = 1.0;
-            double Fnorm_fluid_new = Fnorm_fluid;
+            double Fnorm_new = Fnorm;
             for (int ls = 0; ls < 8; ++ls) {
                 k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
                 k_lm_unpack_add<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_w, alpha, nr,nt,ng);
                 apply_floor();
-                // Φ stays frozen — no solve_gravity here
                 compute_F(d_residual_ls, dt);
-                Fnorm_fluid_new = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, 4*n));
-                if (Fnorm_fluid_new < Fnorm_fluid) break;
+                Fnorm_new = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, N4));
+                if (Fnorm_new < Fnorm) break;
                 alpha *= 0.5;
             }
 
-            if (Fnorm_fluid_new >= Fnorm_fluid) {
+            if (Fnorm_new >= Fnorm) {
                 k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
                 diverged = true;
                 if (step_count < 30)
-                    std::fprintf(stderr, "  step %d newton %d: line search failed, ||F_fluid||=%.3e\n",
-                                step_count, newton, Fnorm_fluid);
+                    std::fprintf(stderr, "  step %d newton %d: line search failed, ||F||=%.3e\n",
+                                step_count, newton, Fnorm);
                 break;
             }
 
             if (step_count < 20)
-                std::fprintf(stderr, "  step %d newton %d: ||F_fluid|| %.3e -> %.3e  a=%.2f  GMRES %d  dt=%.3e\n",
-                            step_count, newton, Fnorm_fluid, Fnorm_fluid_new, alpha, gmres_iters, dt);
+                std::fprintf(stderr, "  step %d newton %d: ||F|| %.3e -> %.3e  a=%.2f  GMRES %d  dt=%.3e\n",
+                            step_count, newton, Fnorm, Fnorm_new, alpha, gmres_iters, dt);
         }
 
         if (diverged)
             unpack_set(d_Un);
     }
 
-    // Update Φ once after Newton converges (was frozen during GMRES+line search)
+    // Update Φ for output/diagnostics (not used in Newton)
     if (converged)
         solve_gravity();
 
@@ -1647,6 +1671,8 @@ double LowMachSolver::step(double t, double t_end) {
 void LowMachSolver::snapshot_hse() {
     int n = nr*nt, B = 256;
     apply_floor();
+    compute_gravity_1d();
+    CUDA_CHECK(cudaMemcpy(d_gr0, d_gr, nr*sizeof(double), cudaMemcpyDeviceToDevice));
     solve_gravity();
     k_lm_snapshot_hse<<<(n+B-1)/B,B>>>(d_rho,d_rhoE,d_phi,
         d_rho0,d_P0,d_phi0, nr,nt,ng,gamma);
@@ -1654,43 +1680,33 @@ void LowMachSolver::snapshot_hse() {
 }
 
 void LowMachSolver::diagnose_hse_residual() {
-    int n = nr*nt, N = 5*n, B = 256;
+    int n = nr*nt, N4 = 4*n;
 
     compute_residual(d_residual);
-    // Also compute Poisson residual
-    k_lm_rhovol<<<(n+B-1)/B,B>>>(d_rho, d_cell_volume, d_work_a, nr, nt, ng);
-    double M = gpu_reduce_sum(d_work_a, d_work_b, n) * 2.0 * M_PI;
-    k_lm_poisson_residual<<<(n+B-1)/B,B>>>(
-        d_phi, d_rho, d_r_face, d_r_center, d_dr,
-        d_dtheta, d_sin_theta_face, d_sin_theta_center,
-        d_residual + 4*n,
-        nr, nt, ng, G_const, M);
 
-    std::vector<double> h_res(N);
-    CUDA_CHECK(cudaMemcpy(h_res.data(), d_residual, N*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_res(N4);
+    CUDA_CHECK(cudaMemcpy(h_res.data(), d_residual, N4*sizeof(double), cudaMemcpyDeviceToHost));
 
-    double max_rho=0, max_mr=0, max_mt=0, max_rhoE=0, max_phi=0;
+    double max_rho=0, max_mr=0, max_mt=0, max_rhoE=0;
     for (int i = 0; i < n; ++i) {
         max_rho  = std::max(max_rho,  std::abs(h_res[i]));
         max_mr   = std::max(max_mr,   std::abs(h_res[n+i]));
         max_mt   = std::max(max_mt,   std::abs(h_res[2*n+i]));
         max_rhoE = std::max(max_rhoE, std::abs(h_res[3*n+i]));
-        max_phi  = std::max(max_phi,  std::abs(h_res[4*n+i]));
     }
 
     double l2 = 0;
-    for (int i = 0; i < N; ++i) l2 += h_res[i]*h_res[i];
+    for (int i = 0; i < N4; ++i) l2 += h_res[i]*h_res[i];
     l2 = std::sqrt(l2);
 
-    std::fprintf(stderr, "=== HSE Diagnostic (initial residual R(W₀), 5-DOF) ===\n");
+    std::fprintf(stderr, "=== HSE Diagnostic (initial residual, 4-DOF + 1D gravity) ===\n");
     std::fprintf(stderr, "  max|R_ρ|    = %.6e\n", max_rho);
     std::fprintf(stderr, "  max|R_ρvr|  = %.6e\n", max_mr);
     std::fprintf(stderr, "  max|R_ρvθ|  = %.6e\n", max_mt);
     std::fprintf(stderr, "  max|R_ρe|   = %.6e\n", max_rhoE);
-    std::fprintf(stderr, "  max|R_Φ|    = %.6e  (Poisson residual)\n", max_phi);
     std::fprintf(stderr, "  ||R||₂      = %.6e\n", l2);
-    std::fprintf(stderr, "  Target: fluid < 1e-10, Poisson < 1e-4\n");
-    std::fprintf(stderr, "=====================================================\n");
+    std::fprintf(stderr, "  Target: all < 1e-10\n");
+    std::fprintf(stderr, "=============================================================\n");
 }
 
 // ========================= Init ===================================
@@ -1758,6 +1774,13 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     CUDA_CHECK(cudaMalloc(&d_P0, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_phi0, n*sizeof(double)));
 
+    // 1D radial gravity
+    CUDA_CHECK(cudaMalloc(&d_gr, nr*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_gr0, nr*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_shell_mass, nr*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_gr, 0, nr*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_gr0, 0, nr*sizeof(double)));
+
     // Newton vectors (5*n packed: ρ, mr, mt, ρe, Φ)
     CUDA_CHECK(cudaMalloc(&d_Un, 5*n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_Fk, 5*n*sizeof(double)));
@@ -1781,6 +1804,8 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
 
     // Schur complement Helmholtz GMG
     CUDA_CHECK(cudaMalloc(&d_sigma_schur, n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_poisson_scale, n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_schur_rhs, n*sizeof(double)));
     gmg_schur.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
 
     // Block-diagonal Jacobi preconditioner (always needed for Schur σ assembly)
@@ -1802,7 +1827,8 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     gmg.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
 
     initialized = true;
-    const char* pc_name = (precond_type == PrecondType::LINE_JACOBI) ? "LineJacobi" :
+    const char* pc_name = (precond_type == PrecondType::BLOCK_SCHUR) ? "BlockSchur" :
+                          (precond_type == PrecondType::LINE_JACOBI) ? "LineJacobi" :
                           (precond_type == PrecondType::COMBINED) ? "Combined" :
                           (precond_type == PrecondType::SIMPLE) ? "SIMPLE" :
                           (precond_type == PrecondType::BLOCK_JACOBI) ? "BlockJacobi" : "None";
@@ -1854,6 +1880,8 @@ void LowMachSolver::destroy() {
     gmg.destroy();
     gmg_schur.destroy();
     cudaFree(d_sigma_schur);
+    cudaFree(d_poisson_scale);
+    cudaFree(d_schur_rhs);
     cudaFree(d_r_face); cudaFree(d_r_center); cudaFree(d_dr);
     cudaFree(d_theta_face); cudaFree(d_theta_center); cudaFree(d_dtheta);
     cudaFree(d_sin_theta_face); cudaFree(d_sin_theta_center);
@@ -1861,6 +1889,7 @@ void LowMachSolver::destroy() {
     cudaFree(d_rho); cudaFree(d_mr); cudaFree(d_mtheta); cudaFree(d_rhoE);
     cudaFree(d_phi); cudaFree(d_pi);
     cudaFree(d_rho0); cudaFree(d_P0); cudaFree(d_phi0);
+    cudaFree(d_gr); cudaFree(d_gr0); cudaFree(d_shell_mass);
     cudaFree(d_Un); cudaFree(d_Fk); cudaFree(d_residual); cudaFree(d_residual_ls);
     for (int i = 0; i <= GMRES_RESTART; ++i) {
         cudaFree(d_gmres_V[i]);

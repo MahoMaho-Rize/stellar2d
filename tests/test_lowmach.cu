@@ -188,39 +188,41 @@ static void test_a2_perturbation_visible() {
     lm.destroy();
 }
 
-// ── A3: Poisson residual consistency after solve_gravity ──────────
-// P18: The scaled Poisson residual should be small after solve_gravity.
+// ── A3: 1D gravity consistency ────────────────────────────────────
+// g(r) computed from angle-averaged ρ should match reference g₀(r) at HSE.
 
-static void test_a3_poisson_consistency() {
+static void test_a3_1d_gravity_consistency() {
     TestFixture f;
-    int n = f.nr * f.nt;
 
     LowMachSolver lm;
     lm.init(f.grid, f.eos, f.lep.G, 0.4);
     lm.upload_state(f.grid, f.state_hse);
-    lm.solve_gravity();
+    lm.snapshot_hse();
 
-    // compute_F writes the scaled Poisson residual at offset 4*n
-    // We need to set up d_Un first for compute_F
-    lm.pack_state(lm.d_Un);
-    lm.compute_F(lm.d_Fk, 1.0);  // dt=1.0 (arbitrary, doesn't affect F5)
+    // Recompute gravity from current (HSE) density
+    lm.compute_gravity_1d();
 
-    auto fk = download(lm.d_Fk, 5 * n);
-    double max_poisson = linf_sub(fk, 4 * n, n);
+    // Compare g(r) with g₀(r) — should match exactly
+    std::vector<double> gr(f.nr), gr0(f.nr);
+    cudaMemcpy(gr.data(), lm.d_gr, f.nr*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(gr0.data(), lm.d_gr0, f.nr*sizeof(double), cudaMemcpyDeviceToHost);
 
-    std::fprintf(stderr, "  A3: max|F_Phi_scaled| = %.3e after solve_gravity\n", max_poisson);
+    double max_diff = 0;
+    for (int i = 0; i < f.nr; ++i)
+        max_diff = std::max(max_diff, std::abs(gr[i] - gr0[i]));
 
-    // Scaled Poisson residual should be < 0.1 (GMG converges to ~1e-6 relative)
-    CHECK_TRUE(max_poisson < 0.1, "A3: scaled Poisson residual < 0.1");
+    std::fprintf(stderr, "  A3: max|g(r)-g0(r)| = %.3e after solve_gravity\n", max_diff);
+
+    CHECK_TRUE(max_diff < 1e-20, "A3: 1D gravity g(r) == g0(r) at HSE");
 
     lm.destroy();
 }
 
 // ── A4: solve_gravity at step start destroys well-balanced ────────
-// P19: Calling solve_gravity after snapshot_hse introduces GMG noise
-// into Phi, breaking the exact cancellation.
+// 1D gravity is noise-free: compute_gravity_1d from HSE density gives
+// the same g(r) as g₀(r), so R_mr stays zero after recomputation.
 
-static void test_a4_gravity_destroys_wellbalanced() {
+static void test_a4_1d_gravity_noisefree() {
     TestFixture f;
     int n = f.nr * f.nt;
 
@@ -229,22 +231,15 @@ static void test_a4_gravity_destroys_wellbalanced() {
     lm.upload_state(f.grid, f.state_hse);
     lm.snapshot_hse();
 
-    // Before solve_gravity: residual should be zero
+    // Residual should be zero even after recomputing gravity
+    lm.compute_gravity_1d();
     lm.compute_residual(lm.d_residual);
-    auto res_before = download(lm.d_residual, 4 * n);
-    double mr_before = linf_sub(res_before, n, n);
+    auto res = download(lm.d_residual, 4 * n);
+    double mr = linf_sub(res, n, n);
 
-    // After solve_gravity: GMG noise pollutes Phi
-    lm.solve_gravity();
-    lm.compute_residual(lm.d_residual);
-    auto res_after = download(lm.d_residual, 4 * n);
-    double mr_after = linf_sub(res_after, n, n);
+    std::fprintf(stderr, "  A4: |R_mr| after gravity recompute=%.3e (should be ~0)\n", mr);
 
-    std::fprintf(stderr, "  A4: |R_mr| before gravity=%.3e  after=%.3e\n",
-                 mr_before, mr_after);
-
-    CHECK_TRUE(mr_before < 1e-20, "A4: R_mr = 0 before solve_gravity");
-    CHECK_TRUE(mr_after > 1e-5,   "A4: R_mr > 1e-5 after solve_gravity (GMG noise)");
+    CHECK_TRUE(mr < 1e-20, "A4: 1D gravity is noise-free at HSE");
 
     lm.destroy();
 }
@@ -466,8 +461,8 @@ int main() {
 
     test_a1_hse_zero_residual();
     test_a2_perturbation_visible();
-    test_a3_poisson_consistency();
-    test_a4_gravity_destroys_wellbalanced();
+    test_a3_1d_gravity_consistency();
+    test_a4_1d_gravity_noisefree();
     test_a5_newton_small_dt();
     test_a6_jfnk_matvec();
     test_a7_hse_step_trivial();
