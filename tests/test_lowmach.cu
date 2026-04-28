@@ -411,6 +411,7 @@ static void test_a8_block_jacobi_sanity() {
     double dt = 1e-6;
     lm.pack_state(lm.d_Un);
     lm.assemble_block_jacobi(dt);
+    lm.assemble_simple(dt);  // needed: LINE_JACOBI now runs PBP which uses d_Ap
     lm.compute_F(lm.d_Fk, dt);
 
     // Use the actual Newton residual as the RHS (realistic input)
