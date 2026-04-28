@@ -126,9 +126,15 @@ struct LowMachSolver {
     // Atmosphere threshold: cells with ρ₀ < atm_rho_thresh are frozen
     double atm_rho_thresh = 0.0;
 
+    // Sponge layer: smooth velocity damping near outer boundary
+    double sponge_r_start = 0.0;  // inner edge (auto-set from ρ₀)
+    double sponge_r_top = 0.0;    // outer edge (= R_outer)
+    double sponge_kappa = 10.0;   // damping strength
+
     // Internal methods
     void compute_residual(double* d_res);
     void compute_F(double* d_F, double dt);
+    void apply_sponge(double dt);
     void jfnk_matvec(const double* d_v, double* d_Jv, double dt);
     int gmres_solve(double* d_x, const double* d_b, double dt,
                     double tol, int max_iter);
