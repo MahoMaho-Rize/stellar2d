@@ -833,6 +833,299 @@ void k_lm_simple_correct(
     out[3*n + flat] = -dt * r_rhoE[flat];
 }
 
+// ========================= Line-Jacobi preconditioner ==============
+// For each θ-line (fixed j), solve the block-tridiagonal system along r.
+// Each cell has a 4×4 diagonal block (same as block Jacobi) plus
+// 4×4 off-diagonal blocks from the radial upwind + pressure stencil.
+// One GPU block per θ-line; sequential Thomas algorithm within the block.
+
+__global__
+void k_lm_line_solve(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face, const double* theta_face,
+    const double* dr, const double* dtheta,
+    const double* phi0,
+    const double* v_in, double* Mv_out,
+    int nr, int nt, int ng, double gamma, double inv_dt) {
+    int j = blockIdx.x;  // one block per θ-line
+    if (j >= nt) return;
+
+    // Shared memory for the Thomas algorithm: L[nr], D[nr], U[nr], rhs[nr]
+    // Each is a 4×4 matrix stored as 16 doubles (row-major).
+    extern __shared__ double smem[];
+    double* L = smem;                      // nr * 16
+    double* D = L + nr * 16;              // nr * 16
+    double* U = D + nr * 16;              // nr * 16
+    double* rhs_s = U + nr * 16;          // nr * 4
+    double* x_s = rhs_s + nr * 4;         // nr * 4
+
+    int tid = threadIdx.x;
+    int n = nr * nt;
+
+    // Step 1: Each thread assembles its row's L, D, U blocks
+    for (int i = tid; i < nr; i += blockDim.x) {
+        int flat = i * nt + j;
+        int k = d_idx(i, j, nt, ng);
+
+        double rho_c = fmax(rho[k], 1e-20);
+        double vr_c = mr[k] / rho_c;
+        double vt_c = mt[k] / rho_c;
+        double P_c = fmax((gamma - 1.0) * rhoE[k], 1e-30);
+        double r = r_center[i];
+        double invV = 1.0 / vol[flat];
+        double sr_t = fabs(vt_c) / (r * dtheta[j]);
+
+        double Ar_hi = ar[(i+1)*nt+j], Ar_lo = ar[i*nt+j];
+
+        // Diagonal: -(1/dt + sr) with sr including theta part
+        double sr = fabs(vr_c)/dr[i] + sr_t;
+        double diag_val = -(inv_dt + sr);
+
+        // Off-diagonal from upwind advection in r:
+        // Flux at face (i-1,i): vr_face * q_upwind. If vr>0, q comes from i-1.
+        // dF/d(q_{i-1}) = vr_face * A_lo / V when upwinding from left.
+        // dF/d(q_i) = -vr_face * A_hi / V when upwinding from right.
+        double vf_lo = 0.0, vf_hi = 0.0;
+        if (i > 0) {
+            double rl = fmax(rho[d_idx(i-1,j,nt,ng)], 1e-20);
+            vf_lo = 0.5 * (mr[d_idx(i-1,j,nt,ng)] / rl + vr_c);
+        }
+        if (i < nr - 1) {
+            double rr = fmax(rho[d_idx(i+1,j,nt,ng)], 1e-20);
+            vf_hi = 0.5 * (vr_c + mr[d_idx(i+1,j,nt,ng)] / rr);
+        }
+
+        // Lower block (coupling to i-1): from upwind flux at face (i-1,i)
+        double* Lb = &L[i * 16];
+        for (int q = 0; q < 16; q++) Lb[q] = 0.0;
+        if (i > 0) {
+            double coeff = (vf_lo >= 0.0 ? vf_lo : 0.0) * Ar_lo * invV;
+            // Advection: dR_c/dU_{i-1} contributes +coeff to diagonal entries
+            // (upwind from left means flux carries q_{i-1})
+            Lb[0] = coeff;   // dR_rho/d(rho_{i-1})
+            Lb[5] = coeff;   // dR_mr/d(mr_{i-1})
+            Lb[10] = coeff;  // dR_mt/d(mt_{i-1})
+            Lb[15] = coeff;  // dR_rhoE/d(rhoE_{i-1})
+        }
+
+        // Upper block (coupling to i+1)
+        double* Ub = &U[i * 16];
+        for (int q = 0; q < 16; q++) Ub[q] = 0.0;
+        if (i < nr - 1) {
+            double coeff = (vf_hi < 0.0 ? -vf_hi : 0.0) * Ar_hi * invV;
+            Ub[0] = coeff;
+            Ub[5] = coeff;
+            Ub[10] = coeff;
+            Ub[15] = coeff;
+
+            // Pressure coupling to i+1: dR_mr/d(rhoE_{i+1}) from ∇P
+            double dh = r_center[i+1] - r_center[i];
+            double dl = (i > 0) ? r_center[i] - r_center[i-1] : dh;
+            double pcoeff = -(gamma - 1.0) * dl / (dh * (dl + dh));
+            Ub[1*4+3] += pcoeff;  // dF_mr/d(rhoE_{i+1})
+        }
+
+        // Diagonal block: full 4×4 from block Jacobi + corrections
+        double* Db = &D[i * 16];
+        // Start from the block Jacobi diagonal already computed in d_blk_diag
+        // BUT d_blk_diag stores J⁻¹, not J. We need J itself here.
+        // Recompute J diagonal inline (same as k_lm_assemble_blkjac but not inverted).
+
+        for (int q = 0; q < 16; q++) Db[q] = 0.0;
+        Db[0] = diag_val;   // dF_rho/d(rho)
+        Db[5] = diag_val;   // dF_mr/d(mr)
+        Db[10] = diag_val;  // dF_mt/d(mt)
+        Db[15] = diag_val;  // dF_rhoE/d(rhoE)
+
+        // Pressure-energy coupling
+        if (i > 0 && i < nr-1) {
+            double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
+            double pcoeff = -(gamma-1.0) * (-(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh))));
+            Db[1*4+3] = pcoeff;
+        } else if (i == 0 && nr > 1) {
+            Db[1*4+3] = (gamma-1.0) / (r_center[1]-r_center[0]);
+        } else if (i == nr-1 && nr >= 2) {
+            Db[1*4+3] = -(gamma-1.0) / (r_center[nr-1]-r_center[nr-2]);
+        }
+
+        // Gravity-density coupling
+        double dphi0_dr = 0.0;
+        if (i>0&&i<nr-1) {
+            double dl=r_center[i]-r_center[i-1],dh=r_center[i+1]-r_center[i];
+            dphi0_dr=(dh*(phi0[flat]-phi0[(i-1)*nt+j])/dl+dl*(phi0[(i+1)*nt+j]-phi0[flat])/dh)/(dl+dh);
+        } else if (i==0&&nr>1) dphi0_dr=(phi0[1*nt+j]-phi0[0])/(r_center[1]-r_center[0]);
+        else if (i==nr-1&&nr>=2) dphi0_dr=(phi0[(nr-1)*nt+j]-phi0[(nr-2)*nt+j])/(r_center[nr-1]-r_center[nr-2]);
+        Db[1*4+0] += -dphi0_dr;
+
+        // Lower block pressure coupling to i-1
+        if (i > 0) {
+            double dl = r_center[i] - r_center[i-1];
+            double dh = (i < nr-1) ? r_center[i+1] - r_center[i] : dl;
+            double pcoeff = -(gamma - 1.0) * dh / (dl * (dl + dh));
+            Lb[1*4+3] += pcoeff;  // dF_mr/d(rhoE_{i-1})
+        }
+
+        // Advection correction to diagonal from self-flux
+        double coeff_lo_self = (vf_lo < 0.0 ? -vf_lo : 0.0) * Ar_lo * invV;
+        double coeff_hi_self = (vf_hi >= 0.0 ? vf_hi : 0.0) * Ar_hi * invV;
+        double adv_self = -(coeff_lo_self + coeff_hi_self);
+        Db[0] += adv_self;
+        Db[5] += adv_self;
+        Db[10] += adv_self;
+        Db[15] += adv_self;
+
+        // Compression work coupling: dF_rhoE/d(mr), dF_rhoE/d(mt)
+        double ddivv_dmr = invV * 0.5/rho_c * (Ar_hi + Ar_lo);
+        double At_hi_l = at[i*(nt+1)+j+1], At_lo_l = at[i*(nt+1)+j];
+        double ddivv_dmt = invV * 0.5/rho_c * (At_hi_l + At_lo_l);
+        Db[3*4+1] = -P_c * ddivv_dmr;
+        Db[3*4+2] = -P_c * ddivv_dmt;
+
+        // RHS: input vector
+        rhs_s[i*4+0] = v_in[flat];
+        rhs_s[i*4+1] = v_in[n + flat];
+        rhs_s[i*4+2] = v_in[2*n + flat];
+        rhs_s[i*4+3] = v_in[3*n + flat];
+    }
+    __syncthreads();
+
+    // Step 2: Block Thomas forward sweep (sequential, thread 0 only)
+    if (tid == 0) {
+        // Forward elimination
+        for (int i = 0; i < nr; i++) {
+            double* Db = &D[i*16];
+            double* rb = &rhs_s[i*4];
+
+            if (i > 0) {
+                double* Lb = &L[i*16];
+                double* Dp = &D[(i-1)*16]; // D_{i-1} after elimination = upper triangular
+
+                // Compute multiplier M = L_i * D_{i-1}^{-1}
+                // Then D_i -= M * U_{i-1}, rhs_i -= M * rhs_{i-1}
+                // For simplicity, solve D_{i-1} * X = L_i^T column by column
+                // This is expensive but nr is small (~64)
+
+                double* Up = &U[(i-1)*16];
+
+                // M = L_i * inv(D_{i-1}) — compute row by row
+                // Since D_{i-1} has been modified by forward elim, it's upper triangular
+                // Use back-substitution to get inv(D)*L^T columns
+
+                // Actually for a 4×4 system, just do the standard block Thomas:
+                // Solve D_{i-1} * tmp = U_{i-1} for each column → already done
+                // Instead, compute M = L_i * D_{i-1}^{-1} by solving D_{i-1}^T * M^T = L_i^T
+
+                // Simplest approach: invert D_{i-1} explicitly (4×4 Gauss-Jordan)
+                double inv_D[16];
+                {
+                    double A[16];
+                    for(int q=0;q<16;q++) A[q]=Dp[q];
+                    for(int q=0;q<16;q++) inv_D[q]=(q/4==q%4)?1.0:0.0;
+                    for(int col=0;col<4;col++){
+                        double mx=fabs(A[col*4+col]); int mi=col;
+                        for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
+                        if(mi!=col){
+                            for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
+                            for(int q=0;q<4;q++){double t=inv_D[col*4+q];inv_D[col*4+q]=inv_D[mi*4+q];inv_D[mi*4+q]=t;}
+                        }
+                        double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
+                        for(int row=col+1;row<4;row++){
+                            double m=A[row*4+col]/d;
+                            for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
+                            for(int q=0;q<4;q++) inv_D[row*4+q]-=m*inv_D[col*4+q];
+                        }
+                    }
+                    for(int c=0;c<4;c++){
+                        for(int row=3;row>=0;row--){
+                            double s=inv_D[row*4+c];
+                            for(int q=row+1;q<4;q++) s-=A[row*4+q]*inv_D[q*4+c];
+                            inv_D[row*4+c]=s/A[row*4+row];
+                        }
+                    }
+                }
+
+                // M = L_i * inv(D_{i-1})
+                double M[16];
+                for(int r=0;r<4;r++)
+                    for(int c=0;c<4;c++){
+                        double s=0;
+                        for(int q=0;q<4;q++) s+=Lb[r*4+q]*inv_D[q*4+c];
+                        M[r*4+c]=s;
+                    }
+
+                // D_i -= M * U_{i-1}
+                for(int r=0;r<4;r++)
+                    for(int c=0;c<4;c++){
+                        double s=0;
+                        for(int q=0;q<4;q++) s+=M[r*4+q]*Up[q*4+c];
+                        Db[r*4+c]-=s;
+                    }
+
+                // rhs_i -= M * rhs_{i-1}
+                double* rp = &rhs_s[(i-1)*4];
+                for(int r=0;r<4;r++){
+                    double s=0;
+                    for(int q=0;q<4;q++) s+=M[r*4+q]*rp[q];
+                    rb[r]-=s;
+                }
+            }
+        }
+
+        // Back-substitution
+        for (int i = nr-1; i >= 0; i--) {
+            double* Db = &D[i*16];
+            double* rb = &rhs_s[i*4];
+            double* xb = &x_s[i*4];
+
+            // rb -= U_i * x_{i+1}
+            if (i < nr-1) {
+                double* Ub = &U[i*16];
+                double* xp = &x_s[(i+1)*4];
+                for(int r=0;r<4;r++){
+                    double s=0;
+                    for(int q=0;q<4;q++) s+=Ub[r*4+q]*xp[q];
+                    rb[r]-=s;
+                }
+            }
+
+            // Solve D_i * x_i = rb (D_i is modified from forward sweep)
+            // Inline 4×4 solve
+            double A[16]; for(int q=0;q<16;q++) A[q]=Db[q];
+            double b4[4]; for(int q=0;q<4;q++) b4[q]=rb[q];
+            for(int col=0;col<4;col++){
+                double mx=fabs(A[col*4+col]); int mi=col;
+                for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
+                if(mi!=col){
+                    for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
+                    {double t=b4[col];b4[col]=b4[mi];b4[mi]=t;}
+                }
+                double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
+                for(int row=col+1;row<4;row++){
+                    double m=A[row*4+col]/d;
+                    for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
+                    b4[row]-=m*b4[col];
+                }
+            }
+            for(int row=3;row>=0;row--){
+                double s=b4[row];
+                for(int q=row+1;q<4;q++) s-=A[row*4+q]*b4[q];
+                xb[row]=s/A[row*4+row];
+            }
+        }
+    }
+    __syncthreads();
+
+    // Step 3: Write output
+    for (int i = tid; i < nr; i += blockDim.x) {
+        int flat = i * nt + j;
+        Mv_out[flat]       = x_s[i*4+0];
+        Mv_out[n + flat]   = x_s[i*4+1];
+        Mv_out[2*n + flat] = x_s[i*4+2];
+        Mv_out[3*n + flat] = x_s[i*4+3];
+    }
+}
+
 // Velocity-only pressure correction: vr -= (1/Ap)*∂δp/∂r, vt -= (1/Ap)*(1/r)*∂δp/∂θ
 __global__
 void k_lm_simple_vcorr(double* vr_io, double* vt_io,
@@ -908,7 +1201,18 @@ void LowMachSolver::apply_simple(const double* d_v, double* d_Mv, double dt) {
 
 void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double dt) {
     int n = nr*nt, N = 4*n, B = 256;
-    if (precond_type == PrecondType::COMBINED) {
+    if (precond_type == PrecondType::LINE_JACOBI) {
+        // Shared memory: 3 block matrices (L,D,U) * nr * 16 + 2 vectors * nr * 4
+        int smem = nr * (3*16 + 2*4) * sizeof(double);
+        int threads = std::min(nr, 256);
+        k_lm_line_solve<<<nt, threads, smem>>>(
+            d_rho, d_mr, d_mtheta, d_rhoE,
+            d_cell_volume, d_area_r, d_area_theta,
+            d_r_center, d_r_face, d_theta_face,
+            d_dr, d_dtheta, d_phi0,
+            d_v, d_Mv,
+            nr, nt, ng, gamma, 1.0/dt);
+    } else if (precond_type == PrecondType::COMBINED) {
         // Step 1: Block Jacobi for full intra-cell coupling
         k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
 
@@ -1136,7 +1440,7 @@ double LowMachSolver::step(double t, double t_end) {
     int max_dt_cuts = 8;
     bool converged = false;
 
-    double dt_min = 1e-8 * dt;
+    double dt_min = 1e-4 * dt;  // Don't drop more than 4 orders below initial
 
     for (int cut = 0; cut < max_dt_cuts && !converged; ++cut) {
         if (cut > 0) {
@@ -1222,7 +1526,7 @@ double LowMachSolver::step(double t, double t_end) {
     }
 
     if (converged)
-        dt_current = std::min(2.0 * dt, std::min(dt_cfl, dt_cap));
+        dt_current = std::min(1.2 * dt, std::min(dt_cfl, dt_cap));
     else
         dt_current = 0.5 * dt;
 
@@ -1369,7 +1673,8 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     gmg.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
 
     initialized = true;
-    const char* pc_name = (precond_type == PrecondType::COMBINED) ? "Combined" :
+    const char* pc_name = (precond_type == PrecondType::LINE_JACOBI) ? "LineJacobi" :
+                          (precond_type == PrecondType::COMBINED) ? "Combined" :
                           (precond_type == PrecondType::SIMPLE) ? "SIMPLE" :
                           (precond_type == PrecondType::BLOCK_JACOBI) ? "BlockJacobi" : "None";
     std::printf("Low-Mach GPU solver (JFNK+FGMRES+GMG, PC=%s): %dx%d (%d cells), %d MG levels\n",
