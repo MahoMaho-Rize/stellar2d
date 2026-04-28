@@ -44,12 +44,12 @@ struct LowMachSolver {
     double *d_r_face, *d_r_center, *d_dr;
     double *d_theta_face, *d_theta_center, *d_dtheta;
     double *d_cell_volume, *d_area_r, *d_area_theta;
-    double *d_sin_theta_face;
+    double *d_sin_theta_face, *d_sin_theta_center;
 
     // State: ρ, ρvr, ρvθ, ρe (with ghost cells)
     double *d_rho, *d_mr, *d_mtheta, *d_rhoE;
 
-    // Gravity potential (physical cells only)
+    // Gravity potential Φ (physical cells only) — part of state vector for 5-DOF
     double *d_phi;
 
     // Perturbation pressure π (physical cells only)
@@ -58,7 +58,7 @@ struct LowMachSolver {
     // Background hydrostatic equilibrium
     double *d_rho0, *d_P0, *d_phi0;
 
-    // Packed state vectors for Newton (4*n)
+    // Packed state vectors for Newton (5*n: ρ, ρvr, ρvθ, ρe, Φ)
     double *d_Un;      // U^n saved state
     double *d_Fk;      // F(U^k) residual
     double *d_residual; // scratch for residual computation
@@ -88,6 +88,10 @@ struct LowMachSolver {
 
     // Second GMG instance for pressure Poisson (separate from gravity)
     GmgGpu gmg_pressure;
+
+    // Third GMG instance for Schur complement Helmholtz (∇² - σ)
+    GmgGpu gmg_schur;
+    double *d_sigma_schur; // σ(x) = 4πGρ/Ap per cell
 
     PrecondType precond_type;
 
