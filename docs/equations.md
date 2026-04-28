@@ -584,3 +584,155 @@ $$
 \rho = \rho_0\bigl[1 + \epsilon\cos(k_r r)\cos(k_\theta\theta)\bigr]
 \tag{9.8}
 $$
+
+---
+
+## §10 Low-Mach Implicit Solver (JFNK)
+
+The low-Mach solver uses Backward Euler with Jacobian-Free Newton-Krylov
+(JFNK) to take time steps unconstrained by the acoustic CFL.
+
+### Backward Euler nonlinear system
+
+$$
+F(U^{n+1}) = \frac{U^{n+1} - U^n}{\Delta t} - R(U^{n+1}) = 0
+\tag{10.1}
+$$
+
+where $R(U)$ is the spatial residual (§1, §5, §6) using 1st-order upwind
+advection and central-difference pressure/gravity gradients.
+
+### Newton iteration
+
+$$
+J_k\,\delta U = -F(U^k), \qquad U^{k+1} = U^k + \alpha\,\delta U
+\tag{10.2}
+$$
+
+with backtracking line search on the scaled merit function $\|L^{-1}F\|_2$.
+
+### Jacobian-free matrix-vector product
+
+$$
+J\,v \approx \frac{F(U^k + \varepsilon v) - F(U^k)}{\varepsilon},
+\qquad \varepsilon = \sqrt{\epsilon_{\mathrm{mach}}}\,\frac{1 + \|U\|}{\|v\|}
+\tag{10.3}
+$$
+
+### FGMRES linear solver
+
+Right-preconditioned FGMRES(120) with Eisenstat-Walker adaptive forcing
+(initial $\eta = 10^{-2}$, EW Choice 2).
+
+### 1D radial gravity
+
+Gravity is computed from angle-averaged density via cumulative mass integral
+(no Poisson solve, no GMG noise):
+
+$$
+g_r(r_i) = -\frac{G\,M(<r_i)}{r_i^2}, \qquad
+M(<r_i) = \sum_{k<i} \bar{\rho}_k\,V_k
+\tag{10.4}
+$$
+
+where $\bar{\rho}_k$ is the $\theta$-averaged density at shell $k$.
+
+### Well-balanced residual (reference-state subtraction)
+
+The momentum residual uses perturbation form to achieve $R(U_{\mathrm{HSE}}) = 0$
+to machine precision:
+
+$$
+F_r = -\nabla P' + \rho'\,g_0(r) + \rho\,g'(r) + S_{\mathrm{geom}}
+\tag{10.5}
+$$
+
+where primed quantities are deviations from the HSE reference state.
+
+### Atmosphere treatment
+
+Cells with $\rho_0 < 10^{-6}\,\rho_{\max}$ are treated as atmosphere:
+$R = 0$ in the residual kernel, so Newton does not evolve them.
+
+---
+
+## §11 Physics-Based Preconditioner (PBP)
+
+The JFNK preconditioner $M \approx J$ uses the block structure of the
+Jacobian to incorporate a pressure Poisson solve, enabling GMRES convergence
+in $O(10)$ iterations regardless of $\Delta t$.
+
+### Jacobian block structure
+
+The 4-DOF Jacobian has the block form:
+
+$$
+J = \begin{pmatrix}
+A_\rho & 0 & 0 & 0 \\
+g_0 & A_{vr} & 0 & B_r \\
+0 & 0 & A_{v\theta} & B_\theta \\
+0 & C_r & C_\theta & A_E
+\end{pmatrix}
+\tag{11.1}
+$$
+
+where $A_v = -(1/\Delta t + \text{advection rate})$ (diagonal-dominant),
+$B = -(\gamma-1)\nabla$ (pressure gradient), and $C = -P\,\nabla\cdot(1/\rho)$
+(compression work).
+
+### Schur complement
+
+Eliminating velocity from the energy equation gives the pressure Schur
+complement:
+
+$$
+S = A_E - C\,A_v^{-1}\,B \approx \nabla\cdot\!\left(\frac{\gamma-1}{A_p}\nabla\right)
+\tag{11.2}
+$$
+
+which is a variable-coefficient Poisson operator, solved by geometric
+multigrid (GMG).
+
+### PBP preconditioner application ($y = M^{-1}x$)
+
+Given input $x = (x_\rho, x_{mr}, x_{m\theta}, x_E)$:
+
+**Step 1 — Momentum predict** (2-DOF block-tridiagonal r-line solve):
+
+$$
+\tilde{v}_r, \tilde{v}_\theta = A_v^{-1}\,(x_{mr}, x_{m\theta}) / \rho
+\tag{11.3}
+$$
+
+**Step 2 — Pressure Poisson** (GMG, 3 V-cycles):
+
+$$
+\nabla\cdot\!\left(\frac{1}{A_p}\nabla\,\delta p\right) = \nabla\cdot\tilde{v}
+\tag{11.4}
+$$
+
+**Step 3 — Velocity correct and assemble**:
+
+$$
+y_{mr} = \rho\left(\tilde{v}_r - \frac{1}{A_p}\frac{\partial\,\delta p}{\partial r}\right),
+\qquad
+y_{m\theta} = \rho\left(\tilde{v}_\theta - \frac{1}{A_p}\frac{1}{r}\frac{\partial\,\delta p}{\partial\theta}\right)
+\tag{11.5}
+$$
+
+$$
+y_\rho = (J^{-1})_{00}\,x_\rho, \qquad y_E = (J^{-1})_{33}\,x_E
+\tag{11.6}
+$$
+
+where $(J^{-1})_{00}$ and $(J^{-1})_{33}$ are diagonal elements of the
+block-Jacobi inverse (point Jacobi on $\rho$ and energy).
+
+### Why this works
+
+The preconditioner runs one cycle of the projection method *inside* the
+Krylov solver. The GMG pressure Poisson directly resolves the global
+pressure coupling that GMRES alone would need $O(N)$ iterations to discover.
+Because this is only a preconditioner, approximation errors do not affect
+the final solution — the outer JFNK iteration converges to the exact
+Backward Euler solution regardless of preconditioner quality.
