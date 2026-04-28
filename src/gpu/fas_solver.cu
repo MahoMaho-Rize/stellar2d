@@ -429,6 +429,120 @@ void k_fas_assemble_blkjac(
     for(int q=0;q<16;q++) B[q]=inv_m[q];
 }
 
+// ========================= SIMPLE smoother kernels ========================
+
+// Ap = 1/dt + (|v|+cs)/Δx
+__global__
+void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
+                    const double* rhoE,
+                    const double* dr, const double* rc, const double* dtheta,
+                    double* Ap, int nr, int nt, int ng,
+                    double inv_dt, double gam) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    int k = fas_idx(i,j,nt,ng);
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
+    double P = fmax((gam - 1.0) * rhoE[k], 1e-30);
+    double cs = sqrt(gam * P / rho_c);
+    Ap[flat] = inv_dt + (vr + cs)/dr[i] + (vt + cs)/(rc[i]*dtheta[j]);
+}
+
+// δv* = -F_momentum / Ap
+__global__
+void k_fas_vstar(const double* F, const double* Ap,
+                 double* vr_s, double* vt_s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    double inv_ap = 1.0 / Ap[i];
+    vr_s[i] = -F[n + i] * inv_ap;
+    vt_s[i] = -F[2*n + i] * inv_ap;
+}
+
+// div(v*) using FV divergence theorem
+__global__
+void k_fas_div(const double* vr_s, const double* vt_s,
+               const double* vol, const double* ar, const double* at,
+               double* div_out, int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    double invV = 1.0 / vol[flat];
+    double vr_lo = (i>0)     ? 0.5*(vr_s[flat]+vr_s[(i-1)*nt+j]) : 0.0;
+    double vr_hi = (i<nr-1)  ? 0.5*(vr_s[flat]+vr_s[(i+1)*nt+j]) : 0.0;
+    double vt_lo = (j>0)     ? 0.5*(vt_s[flat]+vt_s[i*nt+j-1])   : 0.0;
+    double vt_hi = (j<nt-1)  ? 0.5*(vt_s[flat]+vt_s[i*nt+j+1])   : 0.0;
+    div_out[flat] = invV*(ar[(i+1)*nt+j]*vr_hi - ar[i*nt+j]*vr_lo
+                         + at[i*(nt+1)+j+1]*vt_hi - at[i*(nt+1)+j]*vt_lo);
+}
+
+// Poisson RHS with Dirichlet δp=0 at outer boundary
+__global__
+void k_fas_prhs(const double* div_v, double* rhs, int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt;
+    rhs[flat] = (i == nr-1) ? 0.0 : div_v[flat];
+}
+
+// α = 1/Ap for variable-coefficient Poisson
+__global__
+void k_fas_alpha(const double* Ap, double* alpha, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) alpha[i] = 1.0 / Ap[i];
+}
+
+// SIMPLE assembly: correct momentum with ∇δp, ρ/E via block-inverse
+__global__
+void k_fas_simple_correct(
+    double* rho, double* mr, double* mt, double* rhoE,
+    const double* F, const double* blk_inv,
+    const double* vr_s, const double* vt_s,
+    const double* dp, const double* Ap,
+    const double* r_center, const double* theta_face,
+    int nr, int nt, int ng, double gam) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int n = nr*nt;
+    int i = flat/nt, j = flat%nt;
+    int k = fas_idx(i,j,nt,ng);
+    double rho_c = fmax(rho[k], 1e-20);
+
+    // Pressure gradient correction (central difference)
+    int im = flat - nt*(int)(i>0), ip = flat + nt*(int)(i<nr-1);
+    double dp_dr = 0.0;
+    if (i > 0 && i < nr-1) {
+        double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
+        dp_dr = (dh*(dp[flat]-dp[im])/dl + dl*(dp[ip]-dp[flat])/dh)/(dl+dh);
+    } else if (i==0 && nr>1) dp_dr = (dp[ip]-dp[flat])/(r_center[1]-r_center[0]);
+    else if (i==nr-1 && nr>=2) dp_dr = (dp[flat]-dp[im])/(r_center[nr-1]-r_center[nr-2]);
+
+    double dp_dt_r = 0.0;
+    if (j > 0 && j < nt-1) {
+        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
+        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
+        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
+        double dl=tc_c-tc_m, dh=tc_p-tc_c;
+        dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)
+                  / (r_center[i]*(dl+dh));
+    }
+
+    double inv_ap = 1.0 / Ap[flat];
+    double dvr = vr_s[flat] - inv_ap * dp_dr;
+    double dvt = vt_s[flat] - inv_ap * dp_dt_r;
+
+    // Momentum: U -= ρ·δv (Newton correction, F>0 means we need to decrease)
+    mr[k]  -= rho_c * dvr;
+    mt[k]  -= rho_c * dvt;
+
+    // ρ, E: full block-inverse row (Newton: U -= J⁻¹·F)
+    const double* B = &blk_inv[flat*16];
+    double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
+    rho[k]  -= B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3;
+    rhoE[k] -= B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3;
+}
+
 void FasSolver::assemble_smoother(int l, double dt) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
@@ -440,31 +554,10 @@ void FasSolver::assemble_smoother(int l, double dt) {
         lev.d_gr0,
         lev.d_blk_inv,
         lev.nr, lev.nt, lev.ng, gamma, 1.0/dt);
-}
-
-// Damped block Jacobi smooth: U ← U + ω · J⁻¹_diag · F(U)
-__global__
-void k_fas_smooth_apply(
-    double* rho, double* mr, double* mt, double* rhoE,
-    const double* F, const double* blk_inv,
-    double omega, int nr, int nt, int ng) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-    int n = nr*nt;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
-
-    const double* B = &blk_inv[flat*16];
-    double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
-
-    double d0 = B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3;
-    double d1 = B[4]*f0 + B[5]*f1 + B[6]*f2 + B[7]*f3;
-    double d2 = B[8]*f0 + B[9]*f1 + B[10]*f2 + B[11]*f3;
-    double d3 = B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3;
-
-    rho[k]  += omega * d0;
-    mr[k]   += omega * d1;
-    mt[k]   += omega * d2;
-    rhoE[k] += omega * d3;
+    k_fas_mom_diag<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_dr, lev.d_r_center, lev.d_dtheta,
+        lev.d_Ap, lev.nr, lev.nt, lev.ng, 1.0/dt, gamma);
 }
 
 void FasSolver::smooth(int l, double dt, int n_iters) {
@@ -472,11 +565,29 @@ void FasSolver::smooth(int l, double dt, int n_iters) {
     int n = lev.nr * lev.nt, B = 256;
 
     for (int it = 0; it < n_iters; ++it) {
+        // 1. Compute Newton residual F(U)
         compute_F(l, dt);
-        k_fas_smooth_apply<<<(n+B-1)/B,B>>>(
+
+        // 2. Momentum prediction: δv* = -F_mom / Ap
+        k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap, lev.d_vr_s, lev.d_vt_s, n);
+
+        // 3. Pressure Poisson: ∇·((1/Ap)∇δp) = div(δv*)
+        k_fas_div<<<(n+B-1)/B,B>>>(lev.d_vr_s, lev.d_vt_s,
+            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+            lev.d_div, lev.nr, lev.nt);
+        k_fas_alpha<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
+        k_fas_prhs<<<(n+B-1)/B,B>>>(lev.d_div, lev.d_rhs_poisson, lev.nr, lev.nt);
+        CUDA_CHECK(cudaMemset(lev.d_dp, 0, n*sizeof(double)));
+        lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_rhs_poisson, lev.d_dp, 3, 1e-2);
+
+        // 4. Correct state
+        k_fas_simple_correct<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_res, lev.d_blk_inv,
-            OMEGA, lev.nr, lev.nt, lev.ng);
+            lev.d_vr_s, lev.d_vt_s,
+            lev.d_dp, lev.d_Ap,
+            lev.d_r_center, lev.d_theta_face,
+            lev.nr, lev.nt, lev.ng, gamma);
         apply_floor(l);
     }
 }
@@ -673,38 +784,9 @@ void FasSolver::prolongate_correct(int coarse, int fine) {
 // ========================= FAS V-cycle ========================
 
 void FasSolver::fas_vcycle(int l, double dt) {
-    if (l == n_levels - 1) {
-        assemble_smoother(l, dt);
-        smooth(l, dt, 50);
-        return;
-    }
-
-    // Pre-smooth
+    // Phase 1: pure smoothing only (no coarse correction) to validate smoother
     assemble_smoother(l, dt);
-    smooth(l, dt, NU1);
-
-    FasLevel& cl = levels[l + 1];
-    int cn = cl.nr * cl.nt, B = 256;
-
-    // Restrict defect and state: fine → coarse
-    // (This sets cl.d_rho/mr/mt/rhoE = Î·u_h and cl.d_fas_rhs with τ-correction)
-    restrict_defect(l, l + 1, dt);
-
-    // Save restricted state BEFORE coarse solve (for prolongation correction)
-    // d_Un stores flat packed [ρ, mr, mt, ρe] each cn doubles
-    k_fas_pack_flat<<<(cn+B-1)/B,B>>>(
-        cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
-        cl.d_Un, cl.nr, cl.nt, cl.ng);
-
-    // Recurse
-    fas_vcycle(l + 1, dt);
-
-    // Prolongate: u_h += P·(u_H_new - u_H_old)
-    prolongate_correct(l + 1, l);
-
-    // Post-smooth
-    assemble_smoother(l, dt);
-    smooth(l, dt, NU2);
+    smooth(l, dt, NU1 + NU2);
 }
 
 // ========================= Residual norm ========================
@@ -764,6 +846,15 @@ static void alloc_fas_level(FasLevel& lev) {
 
     // Block Jacobi
     CUDA_CHECK(cudaMalloc(&lev.d_blk_inv, 16*phys*sizeof(double)));
+
+    // SIMPLE scratch
+    CUDA_CHECK(cudaMalloc(&lev.d_Ap, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_vr_s, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_vt_s, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_div, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_dp, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_rhs_poisson, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_inv_Ap, phys*sizeof(double)));
 
     // Zero everything
     CUDA_CHECK(cudaMemset(lev.d_rho, 0, total*sizeof(double)));
@@ -831,6 +922,9 @@ void FasSolver::build_level(int l, int nr, int nt, int ng,
     }
     CUDA_CHECK(cudaMemcpy(lev.d_area_r, ar.data(), (nr+1)*nt*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_area_theta, at.data(), nr*(nt+1)*sizeof(double), cudaMemcpyHostToDevice));
+
+    // Init per-level pressure GMG
+    lev.pressure_gmg.init(nr, nt, h_rf, h_tf);
 }
 
 void FasSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
@@ -860,8 +954,8 @@ void FasSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
         rf = crf; tf = ctf;
     }
 
-    std::fprintf(stderr, "FAS nonlinear multigrid: %dx%d, %d levels, ω=%.1f\n",
-                 nr, nt, n_levels, OMEGA);
+    std::fprintf(stderr, "FAS nonlinear multigrid (SIMPLE smoother): %dx%d, %d levels\n",
+                 nr, nt, n_levels);
 }
 
 // ========================= Upload/Download ========================
@@ -1043,6 +1137,10 @@ void FasSolver::destroy() {
         cudaFree(lev.d_rho0); cudaFree(lev.d_P0);
         cudaFree(lev.d_gr); cudaFree(lev.d_gr0); cudaFree(lev.d_shell_mass);
         cudaFree(lev.d_blk_inv);
+        cudaFree(lev.d_Ap); cudaFree(lev.d_vr_s); cudaFree(lev.d_vt_s);
+        cudaFree(lev.d_div); cudaFree(lev.d_dp);
+        cudaFree(lev.d_rhs_poisson); cudaFree(lev.d_inv_Ap);
+        lev.pressure_gmg.destroy();
     }
     n_levels = 0;
 }
