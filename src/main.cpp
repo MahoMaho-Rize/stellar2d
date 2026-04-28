@@ -212,9 +212,19 @@ int main(int argc, char** argv) {
             if (step % cfg.output_interval == 0) {
                 lm.download_state(grid, state);
                 Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+
+                double max_vr = 0, max_vt = 0;
+                for (int i = 0; i < grid.nr; i++)
+                    for (int j = 0; j < grid.ntheta; j++) {
+                        int k = grid.idx(i, j);
+                        double rho = std::fmax(state.rho[k], 1e-20);
+                        max_vr = std::max(max_vr, std::fabs(state.mr[k] / rho));
+                        max_vt = std::max(max_vt, std::fabs(state.mtheta[k] / rho));
+                    }
+
                 std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy);
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e  |vr|=%.3e |vt|=%.3e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy, max_vr, max_vt);
 
                 char fname[256];
                 std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
