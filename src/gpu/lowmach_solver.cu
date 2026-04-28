@@ -227,11 +227,8 @@ void k_lm_residual(
                         dl*(phi0[i*nt+j+1]-phi0[flat])/dh))/(r*(dl+dh));
     }
 
-    // ===== Geometric source (Eq. 5.1-5.4) =====
+    // ===== Geometric source =====
     double inv_r = 1.0 / r;
-    double r2h = r_face[i+1]*r_face[i+1], r2l = r_face[i]*r_face[i];
-    double dcos = cos(theta_face[j]) - cos(theta_face[j+1]);
-    double dsin = sin(theta_face[j]) - sin(theta_face[j+1]);
 
     // Velocity-dependent geometric terms
     double S_mr = rho_c * vt_c * vt_c * inv_r;
@@ -560,13 +557,13 @@ void k_lm_assemble_blkjac(
     double d2 = inv_dt + sr;              // ρvθ equation
     double d3 = inv_dt + sr;              // ρe equation
 
-    // Store inverse of diagonal 4×4 block (since it's diagonal, inv = 1/d)
+    // J_diag = -(1/dt + sr), so J_diag^{-1} = -1/(1/dt + sr)
     double* B = &blk[flat * 16];
     for (int q = 0; q < 16; ++q) B[q] = 0.0;
-    B[0]  = 1.0 / d0;
-    B[5]  = 1.0 / d1;
-    B[10] = 1.0 / d2;
-    B[15] = 1.0 / d3;
+    B[0]  = -1.0 / d0;
+    B[5]  = -1.0 / d1;
+    B[10] = -1.0 / d2;
+    B[15] = -1.0 / d3;
 }
 
 // Apply block-diagonal preconditioner: Mv[cell] = B[cell] * v[cell]
@@ -591,9 +588,183 @@ void LowMachSolver::assemble_block_jacobi(double dt) {
         d_blk_diag, nr, nt, ng, gamma, 1.0/dt);
 }
 
-void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv) {
+// ========================= SIMPLE preconditioner ===================
+// Given residual vector r = (r_ρ, r_mr, r_mt, r_ρe):
+//
+// Step 1: Approximate momentum solve (diagonal):
+//   δvr* = r_mr / Ap,  δvt* = r_mt / Ap
+//   where Ap = 1/dt + upwind_rate (per cell)
+//
+// Step 2: Pressure Poisson (GMG):
+//   ∇·(dt/ρ · ∇δp) = ∇·(δv*)    [constant-coeff approx: dt/ρ ≈ dt/ρ₀]
+//   Actually use: ∇²δp = (ρ/dt) · ∇·(δv*)  with same Laplacian as gravity
+//
+// Step 3: Velocity correction:
+//   δvr = δvr* - (dt/ρ) ∂δp/∂r
+//   δvt = δvt* - (dt/ρ) (1/r)∂δp/∂θ
+//
+// Step 4: Pass through density and energy:
+//   δρ  = r_ρ / (1/dt)  = dt * r_ρ
+//   δρe = r_ρe / (1/dt) = dt * r_ρe
+
+__global__
+void k_lm_simple_mom_diag(const double* rho, const double* mr, const double* mt,
+                          const double* dr, const double* rc, const double* dtheta,
+                          double* Ap, int nr, int nt, int ng, double inv_dt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    int k = d_idx(i,j,nt,ng);
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
+    Ap[flat] = inv_dt + vr/dr[i] + vt/(rc[i]*dtheta[j]);
+}
+
+// Step 1: δv* = -r_momentum / Ap  (negative because J_diag = -Ap)
+__global__
+void k_lm_simple_vstar(const double* r_mr, const double* r_mt,
+                       const double* Ap, double* vr_s, double* vt_s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    double inv_ap = -1.0 / Ap[i];
+    vr_s[i] = r_mr[i] * inv_ap;
+    vt_s[i] = r_mt[i] * inv_ap;
+}
+
+// Step 2: compute divergence of δv* using FV divergence theorem
+// div = (1/V) Σ(A_face · v_face), where v_face = average of neighbors
+__global__
+void k_lm_simple_div(const double* vr_s, const double* vt_s,
+                     const double* vol, const double* ar, const double* at,
+                     double* div_out, int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    double invV = 1.0 / vol[flat];
+
+    // Radial face velocities (average of neighbors, zero at boundaries)
+    double vr_lo = (i > 0)    ? 0.5*(vr_s[(i-1)*nt+j] + vr_s[i*nt+j]) : 0.0;
+    double vr_hi = (i < nr-1) ? 0.5*(vr_s[i*nt+j] + vr_s[(i+1)*nt+j]) : 0.0;
+
+    // Theta face velocities
+    double vt_lo = (j > 0)    ? 0.5*(vt_s[i*nt+j-1] + vt_s[i*nt+j]) : 0.0;
+    double vt_hi = (j < nt-1) ? 0.5*(vt_s[i*nt+j] + vt_s[i*nt+j+1]) : 0.0;
+
+    double Ar_hi = ar[(i+1)*nt+j], Ar_lo = ar[i*nt+j];
+    double At_hi = at[i*(nt+1)+j+1], At_lo = at[i*(nt+1)+j];
+
+    div_out[flat] = invV*(Ar_hi*vr_hi - Ar_lo*vr_lo + At_hi*vt_hi - At_lo*vt_lo);
+}
+
+// Step 2b: compute α = 1/Ap for variable-coefficient Poisson
+__global__
+void k_lm_simple_alpha(const double* Ap, double* alpha, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) alpha[i] = 1.0 / Ap[i];
+}
+
+// Poisson RHS = div(v*), with Dirichlet δp=0 at outer boundary
+__global__
+void k_lm_simple_prhs(const double* div_v, double* rhs, int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    rhs[flat] = div_v[flat];
+    if (flat/nt == nr-1) rhs[flat] = 0.0;
+}
+
+// Step 3: correct velocity and assemble output
+// out_ρ  = -dt * r_ρ
+// out_mr = δvr* - (1/Ap) * ∂δp/∂r
+// out_mt = δvt* - (1/Ap) * (1/r)∂δp/∂θ
+// out_ρe = -dt * r_ρe
+__global__
+void k_lm_simple_correct(
+    const double* r_rho, const double* r_mr, const double* r_mt, const double* r_rhoE,
+    const double* Ap,
+    const double* vr_s, const double* vt_s,
+    const double* dp,
+    const double* rc, const double* theta_face,
+    double* out,
+    int nr, int nt, double dt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt, n = nr*nt;
+
+    // Pressure gradient of correction δp
+    double dp_dr = 0.0;
+    if (i > 0 && i < nr-1) {
+        double dl = rc[i]-rc[i-1], dh = rc[i+1]-rc[i];
+        double gl = (dp[flat]-dp[(i-1)*nt+j])/dl;
+        double gr = (dp[(i+1)*nt+j]-dp[flat])/dh;
+        dp_dr = (dh*gl+dl*gr)/(dl+dh);
+    } else if (i == 0 && nr > 1)
+        dp_dr = (dp[1*nt+j]-dp[0])/( rc[1]-rc[0]);
+    else if (i == nr-1 && nr >= 2)
+        dp_dr = (dp[(nr-1)*nt+j]-dp[(nr-2)*nt+j])/(rc[nr-1]-rc[nr-2]);
+
+    double dp_dt_r = 0.0;
+    if (j > 0 && j < nt-1) {
+        double tc_m = 0.5*(theta_face[j-1]+theta_face[j]);
+        double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
+        double tc_p = 0.5*(theta_face[j+1]+theta_face[j+2]);
+        double dl = tc_c-tc_m, dh = tc_p-tc_c;
+        dp_dt_r = ((dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh))
+                  / (rc[i]*(dl+dh));
+    }
+
+    double inv_ap = 1.0 / Ap[flat];
+    out[flat]       = -dt * r_rho[flat];
+    out[n + flat]   = vr_s[flat] - inv_ap * dp_dr;
+    out[2*n + flat] = vt_s[flat] - inv_ap * dp_dt_r;
+    out[3*n + flat] = -dt * r_rhoE[flat];
+}
+
+void LowMachSolver::assemble_simple(double dt) {
+    int n = nr*nt, B = 256;
+    k_lm_simple_mom_diag<<<(n+B-1)/B,B>>>(
+        d_rho, d_mr, d_mtheta, d_dr, d_r_center, d_dtheta,
+        d_Ap, nr, nt, ng, 1.0/dt);
+}
+
+void LowMachSolver::apply_simple(const double* d_v, double* d_Mv, double dt) {
+    int n = nr*nt, B = 256;
+
+    // Step 1: v* = r_momentum / Ap
+    k_lm_simple_vstar<<<(n+B-1)/B,B>>>(
+        d_v + n, d_v + 2*n, d_Ap, d_simple_vr_s, d_simple_vt_s, n);
+
+    // Step 2: div(v*)
+    k_lm_simple_div<<<(n+B-1)/B,B>>>(
+        d_simple_vr_s, d_simple_vt_s,
+        d_cell_volume, d_area_r, d_area_theta,
+        d_simple_div, nr, nt);
+
+    // Compute α = 1/Ap for variable-coefficient Poisson
+    k_lm_simple_alpha<<<(n+B-1)/B,B>>>(d_Ap, d_inv_rho, n);
+
+    // Poisson RHS = div(v*), Dirichlet δp=0 at boundary
+    k_lm_simple_prhs<<<(n+B-1)/B,B>>>(d_simple_div, d_rhs_poisson, nr, nt);
+
+    // Solve ∇·(α∇δp) = div(v*), where α = 1/Ap
+    CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
+    gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 10, 1e-3);
+
+    // Step 3: correct velocities with (1/Ap)∇δp, assemble full output
+    k_lm_simple_correct<<<(n+B-1)/B,B>>>(
+        d_v, d_v + n, d_v + 2*n, d_v + 3*n,
+        d_Ap,
+        d_simple_vr_s, d_simple_vt_s,
+        d_simple_p,
+        d_r_center, d_theta_face,
+        d_Mv,
+        nr, nt, dt);
+}
+
+void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double dt) {
     int n = nr*nt, N = 4*n, B = 256;
-    if (precond_type == PrecondType::BLOCK_JACOBI) {
+    if (precond_type == PrecondType::SIMPLE) {
+        apply_simple(d_v, d_Mv, dt);
+    } else if (precond_type == PrecondType::BLOCK_JACOBI) {
         k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
     } else {
         k_lm_copy<<<(N+B-1)/B,B>>>(d_Mv, d_v, N);
@@ -655,7 +826,7 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
     int j;
     for (j = 0; j < m; ++j) {
         // Z[j] = M⁻¹ · V[j]
-        apply_preconditioner(d_gmres_V[j], d_gmres_Z[j]);
+        apply_preconditioner(d_gmres_V[j], d_gmres_Z[j], dt);
 
         // w = J · Z[j]
         jfnk_matvec(d_gmres_Z[j], d_gmres_w, dt);
@@ -769,11 +940,14 @@ double LowMachSolver::step(double t, double t_end) {
     }
 
     // Ensure clean state before packing Un.
-    // Do NOT re-solve gravity here — Φ is already consistent with ρ
-    // from the previous step (or from diagnose_hse_residual at init).
-    // Re-solving would introduce O(tol) Φ perturbation that breaks
-    // the well-balanced reference state.
     apply_floor();
+    // Must solve gravity so Φ matches the current ρ.
+    // - Step 0, unperturbed: snapshot_hse already set Φ=Φ₀, ρ=ρ₀ → skip
+    //   to preserve Φ=Φ₀ exactly (re-solving introduces O(tol) noise).
+    // - Step 0, perturbed: ρ ≠ ρ₀ so Φ must be updated for correct Φ'.
+    // - Step > 0: ρ changed from Newton updates, Φ needs refresh.
+    if (step_count > 0 || hse_set_externally)
+        solve_gravity();
 
     // Advection CFL (no sound speed!)
     double dt_cfl = compute_cfl_dt();
@@ -807,6 +981,8 @@ double LowMachSolver::step(double t, double t_end) {
 
         if (precond_type == PrecondType::BLOCK_JACOBI)
             assemble_block_jacobi(dt);
+        else if (precond_type == PrecondType::SIMPLE)
+            assemble_simple(dt);
 
         double Fnorm0 = 0.0;
         bool diverged = false;
@@ -1005,11 +1181,24 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
         CUDA_CHECK(cudaMalloc(&d_blk_diag, n*16*sizeof(double)));
     }
 
+    // SIMPLE preconditioner
+    d_Ap = nullptr; d_simple_p = nullptr; d_simple_div = nullptr;
+    d_simple_vr_s = nullptr; d_simple_vt_s = nullptr;
+    if (precond_type == PrecondType::SIMPLE) {
+        CUDA_CHECK(cudaMalloc(&d_Ap, n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_simple_p, n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_simple_div, n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_simple_vr_s, n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_simple_vt_s, n*sizeof(double)));
+        gmg_pressure.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
+    }
+
     // GMG for gravity
     gmg.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
 
     initialized = true;
-    const char* pc_name = (precond_type == PrecondType::BLOCK_JACOBI) ? "BlockJacobi" : "None";
+    const char* pc_name = (precond_type == PrecondType::SIMPLE) ? "SIMPLE" :
+                          (precond_type == PrecondType::BLOCK_JACOBI) ? "BlockJacobi" : "None";
     std::printf("Low-Mach GPU solver (JFNK+FGMRES+GMG, PC=%s): %dx%d (%d cells), %d MG levels\n",
                 pc_name, nr, nt, n, gmg.n_levels);
     std::fflush(stdout);
@@ -1071,5 +1260,11 @@ void LowMachSolver::destroy() {
     cudaFree(d_work_a); cudaFree(d_work_b);
     cudaFree(d_rhs_poisson); cudaFree(d_inv_rho); cudaFree(d_scale);
     if (d_blk_diag) cudaFree(d_blk_diag);
+    if (d_Ap) cudaFree(d_Ap);
+    if (d_simple_p) cudaFree(d_simple_p);
+    if (d_simple_div) cudaFree(d_simple_div);
+    if (d_simple_vr_s) cudaFree(d_simple_vr_s);
+    if (d_simple_vt_s) cudaFree(d_simple_vt_s);
+    if (precond_type == PrecondType::SIMPLE) gmg_pressure.destroy();
     initialized = false;
 }
