@@ -18,8 +18,9 @@ static Flux4 hllc_solve(const PrimitiveVars& wl, const PrimitiveVars& wr,
     double sr = std::max(ul + cl, ur + cr);            // Eq. (4.1)
 
     // Eq. (4.2)
-    double s_star = (pr - pl + rhol * ul * (sl - ul) - rhor * ur * (sr - ur))
-                    / (rhol * (sl - ul) - rhor * (sr - ur));
+    double denom = rhol * (sl - ul) - rhor * (sr - ur);
+    if (std::fabs(denom) < 1e-300) denom = -1e-300;
+    double s_star = (pr - pl + rhol * ul * (sl - ul) - rhor * ur * (sr - ur)) / denom;
 
     auto compute_flux = [&](double rho, double u, double vt, double p,
                             double ke) -> Flux4 {

@@ -13,8 +13,8 @@ void init_sedov(const Grid& grid, State& state,
         }
     }
 
-    // Eq. (9.6): no 2pi factor — cell_volume omits it consistently
-    double e_blast = params.E_blast / vol_blast / (gamma - 1.0);
+    // Eq. (9.6): specific internal energy in blast region
+    double e_blast = params.E_blast / vol_blast / params.rho_0;
 
     for (int i = 0; i < grid.nr; ++i) {
         for (int j = 0; j < grid.ntheta; ++j) {

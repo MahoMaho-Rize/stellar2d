@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.18)
 
-if(USE_AMGX)
+option(USE_GPU "Enable CUDA GPU solver (geometric multigrid on device)" OFF)
+
+if(USE_GPU)
     project(stellar2d LANGUAGES CXX CUDA)
 else()
     project(stellar2d LANGUAGES CXX)
@@ -9,9 +11,6 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(USE_AMGX "Enable NVIDIA AmgX GPU solver (full GPU pipeline)" OFF)
-set(AMGX_DIR "" CACHE PATH "Path to AmgX installation")
-
 set(SOURCES
     src/grid.cpp
     src/state.cpp
@@ -19,8 +18,7 @@ set(SOURCES
     src/hydro/riemann.cpp
     src/hydro/flux.cpp
     src/hydro/integrate.cpp
-    src/gravity/poisson.cpp
-    src/gravity/amgx_solver.cpp
+    src/gravity/gmg.cpp
     src/bc/boundary.cpp
     src/io/output.cpp
     src/init/lane_emden.cpp
@@ -30,24 +28,29 @@ set(SOURCES
     src/main.cpp
 )
 
-if(USE_AMGX)
-    list(APPEND SOURCES src/gpu/gpu_solver.cu)
+if(USE_GPU)
+    list(APPEND SOURCES
+        src/gpu/gpu_solver.cu
+        src/gpu/lowmach_solver.cu
+        src/gpu/gmg_gpu.cu
+    )
 endif()
 
 add_executable(stellar2d ${SOURCES})
 
 target_include_directories(stellar2d PRIVATE src)
 
-if(USE_AMGX)
+set(AMGX_DIR "" CACHE PATH "Path to AmgX installation")
+
+if(USE_GPU)
     find_package(CUDAToolkit REQUIRED)
-    target_compile_definitions(stellar2d PRIVATE USE_AMGX)
+    target_compile_definitions(stellar2d PRIVATE USE_GPU)
 
     set_target_properties(stellar2d PROPERTIES
         CUDA_STANDARD 17
         CUDA_SEPARABLE_COMPILATION ON
     )
 
-    # Set CUDA architecture — detect from GPU or default to 89 (Ada)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES 89)
     endif()

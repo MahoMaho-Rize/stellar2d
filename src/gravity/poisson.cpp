@@ -88,10 +88,13 @@ void PoissonMatrix::set_rhs(const Grid& grid, const std::vector<double>& rho_cel
     int nr = grid.nr, nt = grid.ntheta;
 
     // Eq. (6.6): compute M_total once for Dirichlet BC
+    // cell_volume omits the 2π azimuthal factor (Eq. 2.2), so multiply
+    // to get the physical mass for the monopole BC.
     double M_total = 0.0;
     for (int ii = 0; ii < nr; ++ii)
         for (int jj = 0; jj < nt; ++jj)
             M_total += rho_cells[ii * nt + jj] * grid.cell_volume[ii * nt + jj];
+    M_total *= 2.0 * M_PI;
 
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
