@@ -1667,16 +1667,16 @@ double LowMachSolver::step(double t, double t_end) {
             }
             if (Fnorm > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
 
-            // Eisenstat-Walker forcing: adapt GMRES tolerance based on Newton progress
+            // Eisenstat-Walker forcing: loose at start, tighten as Newton converges.
+            // Tuning sweep shows tol=1e-1 is optimal for large dt acceptance.
             double eta_gmres;
             if (newton == 0 || Fnorm_prev < 1e-30) {
-                eta_gmres = 5e-2;  // first iteration: moderately loose
+                eta_gmres = 1e-1;
             } else {
-                // EW Choice 2: η_k = γ·(||F_k||/||F_{k-1}||)^α
                 double ratio = Fnorm / Fnorm_prev;
-                eta_gmres = 0.9 * ratio * ratio;   // γ=0.9, α=2
+                eta_gmres = 0.9 * ratio * ratio;
                 eta_gmres = std::max(eta_gmres, 1e-4);
-                eta_gmres = std::min(eta_gmres, 5e-2);
+                eta_gmres = std::min(eta_gmres, 1e-1);
             }
             Fnorm_prev = Fnorm;
 

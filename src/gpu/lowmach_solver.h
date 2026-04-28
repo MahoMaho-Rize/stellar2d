@@ -28,7 +28,7 @@ enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE, COMBINED, LINE_JACOBI, BLOC
 
 struct LowMachSolver {
     void init(const Grid& grid, const EOS& eos, double G, double cfl,
-              PrecondType pc = PrecondType::BLOCK_JACOBI);
+              PrecondType pc = PrecondType::LINE_JACOBI);
     void upload_state(const Grid& grid, const State& state);
     void download_state(const Grid& grid, State& state);
     double step(double t, double t_end);
