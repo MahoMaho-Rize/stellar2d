@@ -1,0 +1,23 @@
+{
+  "config_version": 2,
+  "determinism_flag": 0,
+  "solver": {
+    "solver": "AMG",
+    "algorithm": "AGGREGATION",
+    "selector": "SIZE_2",
+    "max_levels": 20,
+    "cycle": "V",
+    "max_iters": 1,
+    "convergence": "ABSOLUTE",
+    "tolerance": 0.0,
+    "print_solve_stats": 0,
+    "monitor_residual": 0,
+    "smoother": {
+      "solver": "MULTICOLOR_DILU",
+      "max_iters": 2
+    },
+    "coarse_solver": {
+      "solver": "DENSE_LU_SOLVER"
+    }
+  }
+}
