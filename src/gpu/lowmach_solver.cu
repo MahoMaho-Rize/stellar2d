@@ -2192,9 +2192,7 @@ double LowMachSolver::step(double t, double t_end) {
                 std::exit(1);
             }
             unpack_set(d_Un);
-            if (step_count < 30 || (step_count < 500 && step_count % 50 == 0))
-                std::fprintf(stderr, "  step %d: Newton failed (cut %d), dt -> %.3e\n",
-                            step_count, cut, dt);
+            (void)0;
         }
 
         assemble_block_jacobi(dt);
@@ -2225,9 +2223,7 @@ double LowMachSolver::step(double t, double t_end) {
             if (Fnorm < 1e-3 * Fnorm0 || Fnorm_per_cell < 1e-4) {
                 converged = true;
                 newton_iters_used = newton;
-                if (step_count < 30 || (step_count < 500 && step_count % 50 == 0))
-                    std::fprintf(stderr, "  step %d converged at newton %d: ||F_s||=%.3e per-cell=%.3e (dt=%.3e)\n",
-                                step_count, newton, Fnorm, Fnorm_per_cell, dt);
+                (void)0;
                 break;
             }
             if (Fnorm > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
@@ -2274,9 +2270,7 @@ double LowMachSolver::step(double t, double t_end) {
             }
             ls_fails = 0;
 
-            if (step_count < 30 || (step_count < 500 && step_count % 50 == 0))
-                std::fprintf(stderr, "  step %d newton %d: ||F|| %.3e -> %.3e  a=%.2f  eta=%.1e  GMRES %d  dt=%.3e\n",
-                            step_count, newton, Fnorm, Fnorm_new, alpha, eta_gmres, gmres_iters, dt);
+            (void)0;
         }
 
         if (diverged)
@@ -2295,17 +2289,7 @@ double LowMachSolver::step(double t, double t_end) {
         for (int q = 0; q < 4; ++q)
             for (int i = 0; i < n; ++i)
                 if (std::abs(h_F[q*n+i]) > mx[q]) { mx[q] = std::abs(h_F[q*n+i]); mi[q] = i; }
-        std::fprintf(stderr,
-            "  DIAG step %d (dt=%.3e, dt_good=%.3e): max|F| by eq:\n"
-            "    rho: %.3e @cell %d (i=%d,j=%d)\n"
-            "    mr:  %.3e @cell %d (i=%d,j=%d)\n"
-            "    mt:  %.3e @cell %d (i=%d,j=%d)\n"
-            "    rhoE:%.3e @cell %d (i=%d,j=%d)\n",
-            step_count, dt, dt_good,
-            mx[0], mi[0], mi[0]/nt, mi[0]%nt,
-            mx[1], mi[1], mi[1]/nt, mi[1]%nt,
-            mx[2], mi[2], mi[2]/nt, mi[2]%nt,
-            mx[3], mi[3], mi[3]/nt, mi[3]%nt);
+        (void)mx; (void)mi;
     }
 
     // Update Φ for output/diagnostics (not used in Newton)
@@ -2385,14 +2369,7 @@ void LowMachSolver::diagnose_hse_residual() {
     for (int i = 0; i < N4; ++i) l2 += h_res[i]*h_res[i];
     l2 = std::sqrt(l2);
 
-    std::fprintf(stderr, "=== HSE Diagnostic (initial residual, 4-DOF + 1D gravity) ===\n");
-    std::fprintf(stderr, "  max|R_ρ|    = %.6e\n", max_rho);
-    std::fprintf(stderr, "  max|R_ρvr|  = %.6e\n", max_mr);
-    std::fprintf(stderr, "  max|R_ρvθ|  = %.6e\n", max_mt);
-    std::fprintf(stderr, "  max|R_ρe|   = %.6e\n", max_rhoE);
-    std::fprintf(stderr, "  ||R||₂      = %.6e\n", l2);
-    std::fprintf(stderr, "  Target: all < 1e-10\n");
-    std::fprintf(stderr, "=============================================================\n");
+    (void)max_rho; (void)max_mr; (void)max_mt; (void)max_rhoE; (void)l2;
 }
 
 // ========================= Init ===================================

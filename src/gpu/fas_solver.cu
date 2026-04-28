@@ -1284,26 +1284,17 @@ double FasSolver::step(double t, double t_end) {
             CUDA_CHECK(cudaMemcpy(finest.d_rhoE, h_rhoE.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
             apply_floor(0);
 
-            if (step_count < 10 || step_count % 100 == 0)
-                std::fprintf(stderr, "  step %d: FAS cut %d, dt -> %.3e\n", step_count, cut, dt);
         }
 
         int cycles = solve(dt, max_cycles, tol);
         if (cycles < max_cycles) {
             converged = true;
-            if (step_count < 10 || step_count % 100 == 0)
-                std::fprintf(stderr, "  step %d: %d FAS V-cycles (dt=%.3e)\n",
-                             step_count, cycles, dt);
             break;
         }
-        // Check final residual — if close to tol, accept anyway
         compute_F(0, dt);
         double norm = residual_norm(0);
         if (norm < 10.0 * tol) {
             converged = true;
-            if (step_count < 10 || step_count % 100 == 0)
-                std::fprintf(stderr, "  step %d: %d FAS V-cycles (dt=%.3e) ||F||=%.2e (accepted)\n",
-                             step_count, cycles, dt, norm);
             break;
         }
     }
