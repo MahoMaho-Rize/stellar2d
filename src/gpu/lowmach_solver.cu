@@ -1728,31 +1728,12 @@ double LowMachSolver::step(double t, double t_end) {
     if (converged)
         solve_gravity();
 
-    // ===== SER-style dt adaptation with dt_good memory =====
+    // ===== dt adaptation =====
+    // Simple and robust: grow 1.2x on success, dt was already halved on failure.
+    // 'dt' here is the actually accepted dt (after any cuts inside the loop).
     if (converged) {
-        // Track the best dt that worked
-        if (dt > dt_good) dt_good = dt;
-
-        // Growth factor based on Newton iteration count (SER-like)
-        double growth;
-        if (newton_iters_used <= 3)       growth = 2.0;   // easy → aggressive growth
-        else if (newton_iters_used <= 7)  growth = 1.5;   // moderate
-        else if (newton_iters_used <= 12) growth = 1.2;   // hard → cautious
-        else                              growth = 1.05;  // barely converged → near-flat
-
-        double dt_next = growth * dt;
-
-        // Fast recovery toward dt_good: if we're well below dt_good
-        // (e.g. after a transient failure), allow a larger jump
-        if (dt_good > 0.0 && dt < 0.5 * dt_good) {
-            // Geometric mean between growth*dt and dt_good for faster recovery
-            double dt_recover = sqrt(dt_next * dt_good);
-            dt_next = std::max(dt_next, dt_recover);
-        }
-
-        dt_current = std::min(dt_next, std::min(dt_cfl, dt_cap));
+        dt_current = std::min(1.2 * dt, std::min(dt_cfl, dt_cap));
     } else {
-        // Failure: shrink but keep dt_good memory intact for recovery
         dt_current = 0.5 * dt;
     }
 
