@@ -141,6 +141,19 @@ if(USE_GPU)
         CUDA_SEPARABLE_COMPILATION ON
     )
     target_link_libraries(test_precond_quality PRIVATE CUDA::cudart)
+
+    add_executable(test_newton_tuning tests/test_newton_tuning.cu
+        ${TEST_COMMON_SOURCES}
+        src/gpu/lowmach_solver.cu
+        src/gpu/gmg_gpu.cu
+    )
+    target_include_directories(test_newton_tuning PRIVATE src)
+    target_compile_definitions(test_newton_tuning PRIVATE USE_GPU)
+    set_target_properties(test_newton_tuning PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+    target_link_libraries(test_newton_tuning PRIVATE CUDA::cudart)
 endif()
 
 # Python integration tests (if pytest is available)
