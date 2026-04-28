@@ -587,14 +587,61 @@ void LowMachSolver::apply_floor() {
     k_lm_floor<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, nr,nt,ng,gamma, 1e-15, 1e-15);
 }
 
-// ========================= Variable scaling (MESA-inspired) ========
-// scale[i] = max(1, |Un[i]|) — normalizes Newton corrections so that
-// GMRES works in a space where all components have comparable magnitude.
-
+// ========================= Variable scaling =============================
+// Two separate scaling systems:
+//
+// 1. Clamp scale (MESA): max(1, |U|) — limits Newton correction magnitude
 __global__
 void k_lm_compute_scale(const double* Un, double* scale, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) scale[i] = fmax(1.0, fabs(Un[i]));
+}
+
+// 2. MUSIC L/R scaling (Viallet 2016): balances GMRES residual/unknown norms
+//    R (unknowns): what "1 unit" of correction means
+//    L (residuals): what "1 unit" of residual means
+//    GMRES solves (L⁻¹·J·R)·x̃ = -L⁻¹·F, then δU = R·x̃
+__global__
+void k_lm_compute_music_scale(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    double* scR, double* scL,
+    int nr, int nt, int ng, double gamma) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int n = nr*nt;
+    int i = flat/nt, j = flat%nt;
+    int k = (i + ng) * (nt + 2*ng) + (j + ng);
+
+    double rho_c = fmax(rho[k], 1e-20);
+    double e_c = rhoE[k] / rho_c;
+    double P = fmax((gamma - 1.0) * rho_c * e_c, 1e-30);
+    double cs = sqrt(gamma * P / rho_c);
+    double vr = mr[k] / rho_c, vt = mt[k] / rho_c;
+
+    double a1 = 1e-5, a2 = 1.0;
+
+    // Right scaling (unknowns)
+    scR[flat]       = fmax(rho_c, 1.0);
+    scR[n + flat]   = fmax(fabs(mr[k]),  rho_c * a1 * cs);
+    scR[2*n + flat] = fmax(fabs(mt[k]),  rho_c * a1 * cs);
+    scR[3*n + flat] = fmax(fabs(rhoE[k]), 1.0);
+
+    // Left scaling (residuals) — floor at 1.0 to avoid division by tiny atmosphere values
+    scL[flat]       = fmax(rho_c, 1.0);
+    scL[n + flat]   = fmax(rho_c * fmax(fabs(vr), a2 * cs), 1.0);
+    scL[2*n + flat] = fmax(rho_c * fmax(fabs(vt), a2 * cs), 1.0);
+    scL[3*n + flat] = fmax(fabs(rhoE[k]), 1.0);
+}
+
+// Elementwise v[i] *= s[i]
+__global__ void k_lm_emul(double* v, const double* s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) v[i] *= s[i];
+}
+// Elementwise v[i] /= s[i]
+__global__ void k_lm_ediv(double* v, const double* s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) v[i] /= s[i];
 }
 
 // Clamp correction: |delta[i]| <= max_rel * scale[i]
@@ -608,8 +655,11 @@ void k_lm_clamp(double* delta, const double* scale, double max_rel, int N) {
 }
 
 void LowMachSolver::compute_scaling() {
-    int N = 5*nr*nt, B = 256;
-    k_lm_compute_scale<<<(N+B-1)/B,B>>>(d_Un, d_scale, N);
+    int N4 = 4*nr*nt, n = nr*nt, B = 256;
+    k_lm_compute_scale<<<(N4+B-1)/B,B>>>(d_Un, d_scale, N4);
+    k_lm_compute_music_scale<<<(n+B-1)/B,B>>>(
+        d_rho, d_mr, d_mtheta, d_rhoE,
+        d_scale_R, d_scale_L, nr, nt, ng, gamma);
 }
 
 void LowMachSolver::clamp_correction(double* d_delta, double max_rel_change) {
@@ -1421,8 +1471,10 @@ void LowMachSolver::jfnk_matvec(const double* d_v, double* d_Jv, double dt) {
 }
 
 // ========================= FGMRES ================================
-// Flexible GMRES: Z[j] = M⁻¹·V[j], solution built from Z vectors.
-// Pure 4-DOF fluid system.
+// Right-preconditioned FGMRES in physical space.
+// GMRES minimizes ||F + J·δU||₂ directly.
+// L scaling is used only for convergence check and Newton merit function,
+// not inside the Krylov basis — this keeps the preconditioner consistent.
 
 int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
                                 double tol, int max_iter) {
@@ -1449,7 +1501,6 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
         jfnk_matvec(d_gmres_Z[j], d_gmres_w, dt);
         k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_w + N, n);
 
-        // Arnoldi
         for (int i = 0; i <= j; ++i) {
             H[i*m+j] = gpu_dot(d_gmres_w, d_gmres_V[i], d_work_a, N);
             k_lm_axpy<<<(N+B-1)/B,B>>>(d_gmres_w, -H[i*m+j], d_gmres_V[i], N);
@@ -1460,7 +1511,6 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
         k_lm_copy<<<(N+B-1)/B,B>>>(d_gmres_V[j+1], d_gmres_w, N);
         k_lm_scale<<<(N+B-1)/B,B>>>(d_gmres_V[j+1], 1.0/H[(j+1)*m+j], N);
 
-        // Givens rotations
         for (int i = 0; i < j; ++i) {
             double h1 = H[i*m+j], h2 = H[(i+1)*m+j];
             H[i*m+j]     =  cs[i]*h1 + sn[i]*h2;
@@ -1475,7 +1525,6 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
         if (fabs(g[j+1]) < tol * beta) { j++; break; }
     }
 
-    // Back-substitution: x = Σ y[i] · Z[i]  (Z, not V!)
     std::vector<double> y(j);
     for (int i = j-1; i >= 0; --i) {
         y[i] = g[i];
@@ -1595,10 +1644,11 @@ double LowMachSolver::step(double t, double t_end) {
         for (int newton = 0; newton < max_newton; ++newton) {
             apply_floor();
 
-            // Gravity is recomputed inside compute_F → compute_residual → compute_gravity_1d.
-            // g(r) is always consistent with current ρ — no frozen-Φ issue.
             compute_F(d_Fk, dt);
-            double Fnorm = sqrt(gpu_dot(d_Fk, d_Fk, d_work_a, N4));
+            // Scaled merit: ||L⁻¹·F||. Use d_residual_ls as scratch.
+            k_lm_copy<<<(N4+B-1)/B,B>>>(d_residual_ls, d_Fk, N4);
+            k_lm_ediv<<<(N4+B-1)/B,B>>>(d_residual_ls, d_scale_L, N4);
+            double Fnorm = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, N4));
 
             if (newton == 0) {
                 Fnorm0 = Fnorm;
@@ -1609,27 +1659,28 @@ double LowMachSolver::step(double t, double t_end) {
             if (Fnorm < 1e-3 * Fnorm0 || Fnorm_per_cell < 1e-4) {
                 converged = true;
                 if (step_count < 30)
-                    std::fprintf(stderr, "  step %d converged at newton %d: ||F||=%.3e per-cell=%.3e (dt=%.3e)\n",
+                    std::fprintf(stderr, "  step %d converged at newton %d: ||F_s||=%.3e per-cell=%.3e (dt=%.3e)\n",
                                 step_count, newton, Fnorm, Fnorm_per_cell, dt);
                 break;
             }
             if (Fnorm > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
 
+            // GMRES in physical space (d_Fk is unscaled)
             k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_w + 4*n, n);
             int gmres_iters = gmres_solve(d_gmres_w, d_Fk, dt, 1e-3, GMRES_RESTART);
 
             clamp_correction(d_gmres_w, 0.1);
 
-            // Line search. g(r) is automatically recomputed in compute_F
-            // for each trial α, so the merit function is fully consistent.
             k_lm_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
             double alpha = 1.0;
             double Fnorm_new = Fnorm;
+
             for (int ls = 0; ls < 8; ++ls) {
                 k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
                 k_lm_unpack_add<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_w, alpha, nr,nt,ng);
                 apply_floor();
                 compute_F(d_residual_ls, dt);
+                k_lm_ediv<<<(N4+B-1)/B,B>>>(d_residual_ls, d_scale_L, N4);
                 Fnorm_new = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, N4));
                 if (Fnorm_new < Fnorm) break;
                 alpha *= 0.5;
@@ -1639,7 +1690,7 @@ double LowMachSolver::step(double t, double t_end) {
                 k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
                 diverged = true;
                 if (step_count < 30)
-                    std::fprintf(stderr, "  step %d newton %d: line search failed, ||F||=%.3e\n",
+                    std::fprintf(stderr, "  step %d newton %d: line search failed, ||F_s||=%.3e\n",
                                 step_count, newton, Fnorm);
                 break;
             }
@@ -1800,7 +1851,9 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     CUDA_CHECK(cudaMalloc(&d_work_b, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_rhs_poisson, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_inv_rho, n*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_scale, 5*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_scale, 4*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_scale_R, 4*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_scale_L, 4*n*sizeof(double)));
 
     // Schur complement Helmholtz GMG
     CUDA_CHECK(cudaMalloc(&d_sigma_schur, n*sizeof(double)));
@@ -1898,6 +1951,7 @@ void LowMachSolver::destroy() {
     cudaFree(d_gmres_w); cudaFree(d_gmres_Uk);
     cudaFree(d_work_a); cudaFree(d_work_b);
     cudaFree(d_rhs_poisson); cudaFree(d_inv_rho); cudaFree(d_scale);
+    cudaFree(d_scale_R); cudaFree(d_scale_L);
     cudaFree(d_blk_diag);
     if (d_Ap) cudaFree(d_Ap);
     if (d_simple_p) cudaFree(d_simple_p);

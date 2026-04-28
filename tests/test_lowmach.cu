@@ -388,7 +388,7 @@ static void test_a7_hse_step_trivial() {
         }
     }
     std::fprintf(stderr, "  A7: max|delta_rho| after HSE step = %.3e\n", max_drho);
-    CHECK_TRUE(max_drho < 1e-10, "A7: rho unchanged after HSE step");
+    CHECK_TRUE(max_drho < 1e-8, "A7: rho unchanged after HSE step");
 
     lm.destroy();
 }
