@@ -17,6 +17,7 @@
 #include "gpu/gpu_solver.h"
 #endif
 #include "gpu/lowmach_solver.h"
+#include "gpu/fas_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -185,7 +186,39 @@ int main(int argc, char** argv) {
     std::printf("Starting time integration...\n");
 
 #ifdef USE_GPU
-    if (cfg.solver_type == "lowmach") {
+    if (cfg.solver_type == "fas") {
+        // ===== GPU FAS nonlinear multigrid path =====
+        FasSolver fas;
+        fas.init(grid, eos, cfg.G, cfg.cfl);
+
+        if (cfg.test_case == "lane_emden_perturbed") {
+            State state_hse;
+            state_hse.allocate(grid);
+            LaneEmdenParams lep;
+            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
+            init_lane_emden(grid, state_hse, lep, cfg.gamma);
+            fas.upload_state(grid, state_hse);
+            fas.snapshot_hse();
+        }
+
+        fas.upload_state(grid, state);
+
+        while (t < cfg.t_end) {
+            double dt = fas.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % cfg.output_interval == 0) {
+                fas.download_state(grid, state);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy);
+            }
+        }
+        fas.download_state(grid, state);
+        fas.destroy();
+    } else if (cfg.solver_type == "lowmach") {
         // ===== GPU low-Mach path =====
         PrecondType pc = PrecondType::LINE_JACOBI;
         if (cfg.precond == "none")          pc = PrecondType::NONE;
