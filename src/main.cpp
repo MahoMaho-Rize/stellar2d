@@ -184,6 +184,18 @@ int main(int argc, char** argv) {
         // ===== GPU low-Mach path =====
         LowMachSolver lm;
         lm.init(grid, eos, cfg.G, cfg.cfl);
+
+        // For perturbed ICs: snapshot unperturbed HSE first, then load perturbation.
+        if (cfg.test_case == "lane_emden_perturbed") {
+            State state_hse;
+            state_hse.allocate(grid);
+            LaneEmdenParams lep;
+            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
+            init_lane_emden(grid, state_hse, lep, cfg.gamma);
+            lm.upload_state(grid, state_hse);
+            lm.snapshot_hse();
+        }
+
         lm.upload_state(grid, state);
 
         std::timespec wall_start;

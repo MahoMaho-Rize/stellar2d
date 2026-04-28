@@ -35,6 +35,7 @@ struct LowMachSolver {
     double gamma, G_const, cfl_num;
     int total_phys, total_ghost;
     bool initialized = false;
+    bool hse_set_externally = false;
 
     // Device grid arrays
     double *d_r_face, *d_r_center, *d_dr;
@@ -71,6 +72,7 @@ struct LowMachSolver {
     double *d_rhs_poisson;
     double *d_inv_rho; // 1/ρ for variable-coefficient Poisson (future)
     double *d_residual_ls; // line search F output
+    double *d_scale;   // variable scaling: max(1, |U|) per DOF (4*n)
 
     // GMG for gravity
     GmgGpu gmg;
@@ -91,7 +93,11 @@ struct LowMachSolver {
     void solve_gravity();
     void launch_ghost();
     double compute_cfl_dt();
+    void compute_scaling();
+    void clamp_correction(double* d_delta, double max_rel_change);
 
+    // Snapshot current state as HSE reference (call before adding perturbations)
+    void snapshot_hse();
     // Diagnostics: compute R(U) on initial state, print max residual per equation
     void diagnose_hse_residual();
 };
