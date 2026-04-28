@@ -80,7 +80,9 @@ struct LowMachSolver {
     double *d_rhs_poisson;
     double *d_inv_rho; // 1/ρ for variable-coefficient Poisson (future)
     double *d_residual_ls; // line search F output
-    double *d_scale;   // variable scaling: max(1, |U|) per DOF (4*n)
+    double *d_scale;   // clamp scaling: max(1, |U|) per DOF (4*n)
+    double *d_scale_R; // MUSIC right scaling (unknowns), 4*n
+    double *d_scale_L; // MUSIC left scaling (residuals), 4*n
 
     // Block-diagonal Jacobi preconditioner: 4×4 block inverse per cell
     double *d_blk_diag;
