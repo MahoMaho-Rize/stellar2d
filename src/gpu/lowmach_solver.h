@@ -139,7 +139,6 @@ struct LowMachSolver {
     void assemble_simple(double dt);
     void apply_preconditioner(const double* d_v, double* d_Mv, double dt);
     void apply_simple(const double* d_v, double* d_Mv, double dt);
-    void apply_line_jacobi(const double* d_v, double* d_Mv, double dt);
     void apply_block_schur(const double* d_v, double* d_Mv, double dt);
     void assemble_schur_sigma(double dt);
 
