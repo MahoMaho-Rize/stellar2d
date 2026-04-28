@@ -72,6 +72,85 @@ if(USE_GPU)
     )
 endif()
 
+# ── Tests ────────────────────────────────────────────────────────────
+enable_testing()
+
+set(TEST_COMMON_SOURCES
+    src/grid.cpp
+    src/state.cpp
+    src/hydro/reconstruct.cpp
+    src/hydro/riemann.cpp
+    src/hydro/flux.cpp
+    src/hydro/integrate.cpp
+    src/gravity/gmg.cpp
+    src/bc/boundary.cpp
+    src/init/lane_emden.cpp
+)
+
+add_executable(test_unit tests/test_unit.cpp ${TEST_COMMON_SOURCES})
+target_include_directories(test_unit PRIVATE src)
+add_test(NAME unit COMMAND test_unit)
+
+add_executable(test_exact tests/test_exact.cpp ${TEST_COMMON_SOURCES})
+target_include_directories(test_exact PRIVATE src)
+add_test(NAME exact COMMAND test_exact)
+
+add_executable(test_pitfalls tests/test_pitfalls.cpp ${TEST_COMMON_SOURCES}
+    src/init/sedov.cpp)
+target_include_directories(test_pitfalls PRIVATE src)
+add_test(NAME pitfalls COMMAND test_pitfalls)
+
+# GPU lowmach solver tests (no AmgX dependency)
+if(USE_GPU)
+    add_executable(test_lowmach tests/test_lowmach.cu
+        ${TEST_COMMON_SOURCES}
+        src/gpu/lowmach_solver.cu
+        src/gpu/gmg_gpu.cu
+    )
+    target_include_directories(test_lowmach PRIVATE src)
+    target_compile_definitions(test_lowmach PRIVATE USE_GPU)
+    set_target_properties(test_lowmach PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+    target_link_libraries(test_lowmach PRIVATE CUDA::cudart)
+    add_test(NAME lowmach COMMAND test_lowmach)
+
+    add_executable(test_solver_diagnosis tests/test_solver_diagnosis.cu
+        ${TEST_COMMON_SOURCES}
+        src/gpu/lowmach_solver.cu
+        src/gpu/gmg_gpu.cu
+    )
+    target_include_directories(test_solver_diagnosis PRIVATE src)
+    target_compile_definitions(test_solver_diagnosis PRIVATE USE_GPU)
+    set_target_properties(test_solver_diagnosis PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+    target_link_libraries(test_solver_diagnosis PRIVATE CUDA::cudart)
+
+    add_executable(test_precond_quality tests/test_precond_quality.cu
+        ${TEST_COMMON_SOURCES}
+        src/gpu/lowmach_solver.cu
+        src/gpu/gmg_gpu.cu
+    )
+    target_include_directories(test_precond_quality PRIVATE src)
+    target_compile_definitions(test_precond_quality PRIVATE USE_GPU)
+    set_target_properties(test_precond_quality PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+    target_link_libraries(test_precond_quality PRIVATE CUDA::cudart)
+endif()
+
+# Python integration tests (if pytest is available)
+find_program(PYTEST_EXECUTABLE pytest)
+if(PYTEST_EXECUTABLE)
+    add_test(NAME pytest_fast
+        COMMAND ${PYTEST_EXECUTABLE} -m "not slow" --tb=short -q
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endif()
+
 # Release build by default
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

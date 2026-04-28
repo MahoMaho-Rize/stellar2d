@@ -1,0 +1,438 @@
+# stellar2d Low-Mach Solver Pitfall Log
+
+This document records every bug, misdesign, and subtle numerical issue encountered during the development of the fully-implicit Low-Mach solver (`lowmach_solver.cu`). Each entry describes the symptom, root cause, fix, and how to write a regression test.
+
+---
+
+## Table of Contents
+
+1. [P01: 2pi factor missing in gravity mass integral](#p01)
+2. [P02: Theta gravity gradient missing 1/r](#p02)
+3. [P03: HLLC denominator sign catastrophe](#p03)
+4. [P04: Sedov blast energy deposition wrong formula](#p04)
+5. [P05: Density/pressure floor absent in to_primitive](#p05)
+6. [P06: AmgX re-setup crash on persistent handle](#p06)
+7. [P07: Well-balanced residual — full P vs perturbation P mismatch](#p07)
+8. [P08: FV geometric source on P' creates false theta force](#p08)
+9. [P09: GMG noise destroying well-balanced property](#p09)
+10. [P10: Perturbed IC — HSE snapshot absorbed perturbation](#p10)
+11. [P11: Block Jacobi numerical FD race condition on GPU](#p11)
+12. [P12: SIMPLE preconditioner sign error (J_diag is negative)](#p12)
+13. [P13: SIMPLE dt mismatch — member vs local variable](#p13)
+14. [P14: SIMPLE Poisson coefficient degeneracy at small dt](#p14)
+15. [P15: Newton convergence tolerance too tight for truncation error](#p15)
+16. [P16: dt penalty too aggressive after Newton failure](#p16)
+17. [P17: Line Jacobi Thomas sweep numerical instability](#p17)
+18. [P18: Poisson residual scale mismatch on log mesh (5-DOF)](#p18)
+19. [P19: solve_gravity at step start destroys well-balanced HSE](#p19)
+20. [P20: GMRES Krylov basis polluted by Poisson noise floor (5-DOF)](#p20)
+
+---
+
+<a id="p01"></a>
+## P01: 2pi factor missing in gravity mass integral
+
+**Symptom**: Gravitational potential Phi too weak by factor 2pi. Star expands instead of holding equilibrium.
+
+**Root cause**: The Poisson equation is `nabla^2 Phi = 4 pi G rho`. The mass integral for the outer Dirichlet BC is `M = integral(rho dV)` over the 3D sphere. Our FV volumes omit the 2pi azimuthal factor (Eq. 2.2), so the volumetric integral gives M/(2pi). Must multiply by 2pi.
+
+**Fix**: `M_total = gpu_reduce_sum(rho * vol) * 2 * pi` in `solve_gravity()` and `k_lm_grav_rhs`.
+
+**Files**: `lowmach_solver.cu:solve_gravity`, `gravity/gmg.cpp`, `gravity/poisson.cpp`
+
+**Test strategy**: Compute M_total from known Lane-Emden analytic mass. Assert `|M_numerical - M_analytic| / M_analytic < 1e-6`. Verify Phi(R_outer) = -G*M/R_outer after gravity solve.
+
+---
+
+<a id="p02"></a>
+## P02: Theta gravity gradient missing 1/r
+
+**Symptom**: Spurious theta-direction acceleration at large r. Star deforms oblately.
+
+**Root cause**: Gravity source in theta direction is `S_mt = -(rho/r) * dPhi/dtheta` (Eq. 6.2). The `/r` was missing, so `dPhi/dtheta` was applied as a force rather than `(1/r)*dPhi/dtheta`.
+
+**Fix**: Divide theta gravity gradient by `r_center[i]` in the residual kernel.
+
+**Files**: `gpu_solver.cu` (compressible path), `lowmach_solver.cu:k_lm_residual`
+
+**Test strategy**: For a spherically symmetric Lane-Emden star (no theta perturbation), assert `max|S_mt_gravity| < epsilon` over all cells. The theta gravity force should be zero by symmetry.
+
+---
+
+<a id="p03"></a>
+## P03: HLLC denominator sign catastrophe
+
+**Symptom**: NaN in HLLC flux at near-zero velocity. Crash on first time step.
+
+**Root cause**: HLLC contact wave speed `S* = (P_R - P_L + rho_L*u_L*(S_L-u_L) - rho_R*u_R*(S_R-u_R)) / (rho_L*(S_L-u_L) - rho_R*(S_R-u_R))` (Eq. 4.2). When left and right states are nearly identical, denominator approaches zero. Division by zero gives NaN.
+
+**Fix**: Add sign guard: `denom = max(|denom|, 1e-300) * sign(denom)`.
+
+**Files**: `hydro/riemann.cpp`
+
+**Test strategy**: Call HLLC flux with `rho_L = rho_R, P_L = P_R, u_L = u_R = 1e-20`. Assert result is finite (no NaN/Inf). Flux should equal the common-state physical flux.
+
+---
+
+<a id="p04"></a>
+## P04: Sedov blast energy deposition wrong formula
+
+**Symptom**: Blast energy too high. Sedov shock propagates faster than analytic solution.
+
+**Root cause**: Sedov pressure should be `P_blast = (gamma-1) * E_blast / V_blast` (Eq. 9.6). Code had `P_blast = (gamma-1) * rho_0 * E_blast / V_blast`, an extra factor of `rho_0`. Internal energy density `rho*e = P/(gamma-1) = E_blast/V_blast`, so `e = E_blast/(rho_0*V_blast)`, and total energy `E = rho*e + 0 = E_blast/V_blast`. But code was setting `E = rho_0 * E_blast / V_blast`, doubling the energy.
+
+**Fix**: Remove the extra `rho_0` factor.
+
+**Files**: `init/sedov.cpp`
+
+**Test strategy**: Sum total energy `integral(rho*E * dV)` over the grid after init. Assert `|E_total - E_blast| / E_blast < 0.01` (1% from discretization).
+
+---
+
+<a id="p05"></a>
+## P05: Density/pressure floor absent in to_primitive
+
+**Symptom**: Negative density or pressure in low-density cells (stellar atmosphere). Crash in sqrt(P/rho) for sound speed.
+
+**Root cause**: No floor on rho or P when converting conservative to primitive variables. Numerical diffusion can drive rho slightly negative in vacuum regions.
+
+**Fix**: Apply `rho = max(rho, 1e-15)`, `P = max(P, 1e-15)` in `to_primitive` and `k_lm_floor`.
+
+**Files**: `state.cpp:to_primitive`, `lowmach_solver.cu:k_lm_floor`
+
+**Test strategy**: Initialize a state with `rho = 1e-20` in one cell. Run one time step. Assert `rho >= floor_value` and `P >= floor_value` everywhere after the step. Assert no NaN in any state variable.
+
+---
+
+<a id="p06"></a>
+## P06: AmgX re-setup crash on persistent handle
+
+**Symptom**: `AMGX solver_setup (re) failed: 15` error at second time step.
+
+**Root cause**: AmgX solver_setup was called repeatedly with a stale matrix handle. AmgX requires explicit destruction and re-creation when the matrix sparsity pattern doesn't change but you want to re-factor.
+
+**Fix**: Removed AmgX re-setup; switched to GMG which is stateless and re-entrant.
+
+**Files**: `gpu_solver.cu` (historical; AmgX code later removed from lowmach path)
+
+**Test strategy**: N/A (AmgX removed from lowmach path). If re-introduced, test that 2 consecutive solves with same sparsity don't crash.
+
+---
+
+<a id="p07"></a>
+## P07: Well-balanced residual — full P vs perturbation P mismatch
+
+**Symptom**: `||R(U_HSE)||` = 2.234e+05 instead of near-zero. Unperturbed star immediately starts moving.
+
+**Root cause**: The HLLC flux used full pressure P in the Riemann solve, but gravity used perturbation Phi' = Phi - Phi_0. At HSE, the HLLC flux generates a nonzero pressure gradient (because FV divergence of full P != continuous dP/dr on a non-uniform mesh), but the gravity term using Phi' = 0 produces zero force. The mismatch creates a net force at every cell.
+
+**Fix**: Complete rewrite to reference-state subtraction form. Momentum force is:
+```
+force = -nabla(P') - rho'*nabla(Phi_0) - rho*nabla(Phi')
+```
+where primed quantities are perturbations from the HSE reference state. At HSE, all primes are zero, so force = 0 exactly (to machine precision).
+
+**Files**: `lowmach_solver.cu:k_lm_residual`
+
+**Test strategy**: Upload unperturbed Lane-Emden state, snapshot HSE, compute residual. Assert `||R||_2 < 1e-20`. This is the most critical regression test.
+
+---
+
+<a id="p08"></a>
+## P08: FV geometric source on P' creates false theta force
+
+**Symptom**: `max|R_mt|` nonzero at HSE. Spurious theta acceleration in an otherwise spherically-symmetric equilibrium.
+
+**Root cause**: The FV geometric source term `P * (r_hi^2 - r_lo^2) * (cos_lo - cos_hi) / V` is the volume-consistent discretization of `2P/r` (Eq. 5.3). When applied to the perturbation P', it double-counts: the central-difference `nabla(P')` already gives the complete spherical gradient. The FV geometric source on P' adds an extra term.
+
+The reference state P_0's geometric source exactly cancels with `nabla(P_0) + rho_0*nabla(Phi_0)` by construction of the well-balanced scheme. But P' should NOT have a FV geometric source — only the central-diff gradient.
+
+**Fix**: FV geometric source applied only to P_0 (cancels by well-balanced construction). Perturbation P' uses central-difference gradient only.
+
+**Files**: `lowmach_solver.cu:k_lm_residual`
+
+**Test strategy**: Subsumes P07 test. Additionally: apply a theta-independent pressure perturbation `P' = P'(r)`. Assert `R_mt = 0` everywhere (no theta force from a radial-only perturbation).
+
+---
+
+<a id="p09"></a>
+## P09: GMG noise destroying well-balanced property
+
+**Symptom**: `||F_0|| = 2199` vs `||R|| = 63` at step start. The Newton function value is much larger than the spatial residual, meaning the `(U-Un)/dt` term isn't the issue — the gravity solve is.
+
+**Root cause**: Each call to `solve_gravity()` via GMG gives `Phi ≈ Phi_0 ± O(GMG_tol)`. On a log mesh with `dr ~ 1e-4`, the numerical gradient `nabla(Phi - Phi_0) ~ O(GMG_tol / dr) ~ O(1e-6 / 1e-4) = O(1e-2)`. Multiplied by `rho ~ O(1)` and summed over `N ~ 2000` cells, this gives `||noise|| ~ O(10-100)`.
+
+**Fix**: Do NOT re-solve gravity at the start of each step. Phi from the previous step (or from `snapshot_hse`) is already consistent. Gravity is updated inside Newton only after fluid state changes (via `solve_gravity` in the line search).
+
+**Files**: `lowmach_solver.cu:step()`
+
+**Test strategy**: Run unperturbed HSE for 10 steps. Assert `||R_fluid||_2 < 1e-20` at every step (not just step 0). If solve_gravity is called at step start, this will fail.
+
+---
+
+<a id="p10"></a>
+## P10: Perturbed IC — HSE snapshot absorbed perturbation
+
+**Symptom**: Perturbed test shows zero perturbation response. Star sits perfectly still despite perturbation.
+
+**Root cause**: The code uploaded the perturbed state, then called `snapshot_hse()`. This snapshots the PERTURBED state as the reference (rho_0, P_0, Phi_0). Since `rho' = rho - rho_0 = 0`, the well-balanced residual sees no perturbation.
+
+**Fix**: Snapshot HSE on the UNPERTURBED state BEFORE uploading the perturbed state. In main.cpp:
+```cpp
+upload_state(grid, state_hse);  // unperturbed
+snapshot_hse();                  // captures rho_0, P_0, Phi_0
+upload_state(grid, state);       // perturbed
+```
+Flag `hse_set_externally = true` to prevent automatic re-snapshot.
+
+**Files**: `main.cpp` (lowmach path), `lowmach_solver.cu:step()`
+
+**Test strategy**: Upload perturbed state with `epsilon = 1e-3`. Compute residual. Assert `||R_mr|| > epsilon * reference_scale` (the perturbation creates a measurable force imbalance).
+
+---
+
+<a id="p11"></a>
+## P11: Block Jacobi numerical FD race condition on GPU
+
+**Symptom**: Preconditioner output is garbage. GMRES diverges immediately.
+
+**Root cause**: The initial block Jacobi implementation used numerical finite-differencing: perturb `rho[k] += eps`, compute residual, restore `rho[k]`. On GPU, this is a **race condition** — neighboring threads read `rho[k]` while the owning thread has modified it. The upwind stencil reads from neighbors, so cell k's FD contaminates cells k-1, k+1, k-nt, k+nt.
+
+**Fix**: Rewrote as analytical 4x4 Jacobian computation (`k_lm_assemble_blkjac`). Each cell's Jacobian block is computed from local quantities only, without modifying global arrays:
+- Diagonal: `-(1/dt + advection_rate)`
+- Pressure-energy coupling: `-(gamma-1) * stencil_coeff`
+- Gravity-density coupling: `-nabla(Phi_0)`
+- Compression work: `-P * d(div_v)/d(momentum)`
+
+Then LU-inverted with partial pivoting per cell.
+
+**Files**: `lowmach_solver.cu:k_lm_assemble_blkjac`
+
+**Test strategy**: For a known state, compute `J_analytical * v` and compare to `(F(U+eps*v) - F(U)) / eps` (single-threaded reference). Assert `||J_analytical*v - J_FD*v|| / ||J_FD*v|| < 0.01`. The FD reference must be serial (no race condition).
+
+---
+
+<a id="p12"></a>
+## P12: SIMPLE preconditioner sign error (J_diag is negative)
+
+**Symptom**: SIMPLE gives correction in wrong direction. Newton diverges on first iteration.
+
+**Root cause**: The Jacobian diagonal for Backward Euler is `J_ii = -(1/dt + advection_rate)`, which is **negative**. So `J_ii^{-1} = -1/Ap`. The SIMPLE vstar computation `vstar = r_momentum / Ap` was missing the negative sign: should be `vstar = -r_momentum / Ap`.
+
+Same sign error in the density/energy pass-through: `delta_rho = r_rho / (1/dt)` should be `delta_rho = -dt * r_rho`.
+
+**Fix**: Added negative signs to `k_lm_simple_vstar` (`inv_ap = -1.0 / Ap`) and `k_lm_simple_correct` (`out_rho = -dt * r_rho`).
+
+**Files**: `lowmach_solver.cu:k_lm_simple_vstar`, `k_lm_simple_correct`
+
+**Test strategy**: Apply preconditioner to a known residual vector. Check that `M^{-1} * J * v ≈ v` (the preconditioner approximately inverts J). The sign test: for a residual with `r_mr > 0` (positive momentum deficit), the velocity correction `delta_vr` should be negative (J is negative-definite, so J^{-1}*r has opposite sign).
+
+---
+
+<a id="p13"></a>
+## P13: SIMPLE dt mismatch — member vs local variable
+
+**Symptom**: SIMPLE works at initial dt but fails after dt is halved. Preconditioner output becomes inconsistent.
+
+**Root cause**: `apply_simple()` used `dt_current` (the struct member variable) instead of the local `dt` passed through the Newton loop. When Newton fails and dt is halved, the local `dt` is 0.5x but `dt_current` still holds the old value. The SIMPLE Ap was assembled with old dt but the correction used new dt.
+
+**Fix**: Pass `dt` as parameter through `apply_preconditioner() -> apply_simple()`.
+
+**Files**: `lowmach_solver.cu:apply_simple`, `apply_preconditioner`
+
+**Test strategy**: Run 2 steps where the second step's dt differs from the first. Assert that the preconditioner output is consistent with the actual dt used. Specifically: `Ap = 1/dt + advection_rate` should use the current dt, not the previous one.
+
+---
+
+<a id="p14"></a>
+## P14: SIMPLE Poisson coefficient degeneracy at small dt
+
+**Symptom**: SIMPLE gives worse dt than BLOCK_JACOBI (1.5e-8 vs 1.25e-7).
+
+**Root cause**: The SIMPLE pressure Poisson uses coefficient `alpha = 1/Ap` where `Ap = 1/dt + advection_rate`. At small dt (1e-7), `Ap ≈ 1/dt = 1e7`, so `alpha ≈ dt = 1e-7`. The Poisson equation `nabla·(alpha*nabla(dp)) = div(v*)` becomes `dt * nabla^2(dp) = div(v*)`, meaning `dp ≈ div(v*) / (dt * k^2)`. As dt→0, dp→infinity, which is unphysical.
+
+The velocity correction `delta_v = -(1/Ap)*nabla(dp)` then has `delta_v ≈ -dt * nabla(dp) ≈ -div(v*)/k^2`, which loses all dt-scaling information.
+
+**Fix**: Kept the variable-coefficient formulation `nabla·((1/Ap)*nabla(dp)) = div(v*)` which is self-consistent, but the fundamental issue is that SIMPLE is designed for incompressible flow where dt is large. For compressible low-Mach at small dt, the pressure-velocity coupling through SIMPLE degenerates.
+
+**Files**: `lowmach_solver.cu:apply_simple`
+
+**Test strategy**: Compare `||M^{-1}*F||` for BLOCK_JACOBI vs SIMPLE at dt=1e-7. SIMPLE should not be significantly worse. If it is, the coefficient assembly is suspect.
+
+---
+
+<a id="p15"></a>
+## P15: Newton convergence tolerance too tight for truncation error
+
+**Symptom**: Newton oscillates between `||F|| = 0.1` and `||F|| = 0.11`, never reaching convergence. dt keeps getting cut.
+
+**Root cause**: The convergence tolerance was `||F||_per-cell < 1e-6`. But the spatial discretization error (1st-order upwind) creates a truncation error floor of `O(h) ≈ O(1e-2)` in the residual. Newton cannot drive ||F|| below this floor because any correction that reduces F below truncation error gets amplified by the discrete operator.
+
+**Fix**: Relaxed to per-cell < 1e-4 (fluid-only norm). Also added relative criterion: `||F|| < 1e-3 * ||F_0||`. Newton stops when either is satisfied.
+
+**Files**: `lowmach_solver.cu:step()`
+
+**Test strategy**: Run one step with very small dt (1e-10). Newton should converge in 0-1 iterations because `(U-Un)/dt → 0` implies `F ≈ R(Un) ≈ 0`. If it takes many iterations, the tolerance is too tight relative to the residual floor.
+
+---
+
+<a id="p16"></a>
+## P16: dt penalty too aggressive after Newton failure
+
+**Symptom**: dt drops from 1e-7 to 1e-15 in 8 cuts (0.5^8 = 1/256), then hits dt_min and aborts.
+
+**Root cause**: Original settings: `dt_min = 1e-8 * dt`, growth factor 2.0x, 8 cuts allowed. A single Newton failure chain (e.g., from a bad initial guess) would destroy dt and take many steps to recover at 2x growth.
+
+**Fix**: `dt_min = 1e-4 * dt` (only 4 orders below initial), growth factor 1.2x (conservative). The slower growth prevents dt from overshooting the stability limit, reducing the frequency of Newton failures.
+
+**Files**: `lowmach_solver.cu:step()`
+
+**Test strategy**: Inject a single Newton failure (e.g., by corrupting the preconditioner for one step). Assert that dt recovers to within 50% of pre-failure value within 20 steps.
+
+---
+
+<a id="p17"></a>
+## P17: Line Jacobi Thomas sweep numerical instability
+
+**Symptom**: NaN after ~13 steps. GMRES converges in 3-5 iterations (good), then output goes to infinity.
+
+**Root cause**: The Thomas algorithm (block-tridiagonal forward sweep) for 64 radial cells accumulates errors. Three bugs in the off-diagonal block assembly:
+
+1. **r-advection double-counted in diagonal**: `sr` included `sr_r = |vr|/dr`, then `adv_self = -(coeff_lo_self + coeff_hi_self)` added the same contribution again. The diagonal was too large by roughly `|vr|/dr`.
+
+2. **Lower block pressure coupling wrong sign**: The central-diff stencil coefficient for `dP/d(rhoE_{i-1})` should be `+(gamma-1)*dh/(dl*(dl+dh))` (positive, because increasing P at i-1 reduces the gradient at i). Code had negative sign.
+
+3. **Diagonal pressure coupling formula wrong**: Used `-(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh)))` without the outer negative from `dF_mr/d(rhoE)` being `- dPdr_coeff * (gamma-1)`. The double negation produced the wrong coefficient.
+
+**Status**: Identified but not fully fixed. Reverted to BLOCK_JACOBI as default.
+
+**Files**: `lowmach_solver.cu:k_lm_line_solve`
+
+**Test strategy**: For each theta-line j, extract the block-tridiagonal system (L, D, U matrices). Verify:
+- D[i] is diagonally dominant: `||D[i]|| > ||L[i]|| + ||U[i]||` for stability
+- The product `L*D^{-1}*U` has spectral radius < 1 (Thomas stability condition)
+- Compare Thomas solution vs dense direct solve (LAPACK) for the same system. Assert `||x_thomas - x_dense|| / ||x_dense|| < 1e-6`.
+
+---
+
+<a id="p18"></a>
+## P18: Poisson residual scale mismatch on log mesh (5-DOF)
+
+**Symptom**: After upgrading to 5-DOF (Phi as state variable), `max|F_Phi| = 3e+4` even after a converged GMG gravity solve.
+
+**Root cause**: The Laplacian stencil coefficients grow as `1/(r^2 * dr^2)` near the origin. On a log mesh with `r_center[0] ~ 1e-3` and `dr[0] ~ 1e-4`, the diagonal coefficient `|cC| ~ 1e8`. The GMG converges to relative residual `~1e-6`, but the absolute residual at cell (0,j) is `1e-6 * 1e8 = 100`. Summed over cells, `||F_Phi|| ~ 3e4`.
+
+This is not a bug in GMG — it converged correctly. The issue is that the raw Poisson residual has a different magnitude scale than the fluid residual.
+
+**Fix**: Scale the Poisson residual by `1/max(|cC|, 1.0)` per cell. This makes `F_Phi` dimensionless (relative residual), comparable in scale to the fluid equations.
+
+**Files**: `lowmach_solver.cu:k_lm_poisson_residual`
+
+**Test strategy**: After `solve_gravity()`, compute scaled Poisson residual. Assert `max|F_Phi_scaled| < 0.1` (much less than fluid perturbation forces). Without scaling, this test would fail with max ~ 3e4.
+
+---
+
+<a id="p19"></a>
+## P19: solve_gravity at step start destroys well-balanced HSE
+
+**Symptom**: `max|R_ρvr|` jumps from `4e-30` (perfect HSE) to `2.4` when `solve_gravity()` is called before the first Newton iteration.
+
+**Root cause**: The well-balanced property relies on `Phi = Phi_0` exactly (bit-for-bit). Calling `solve_gravity()` gives `Phi_new ≈ Phi_0 ± O(GMG_noise)`. The perturbation `Phi' = Phi_new - Phi_0 ≠ 0` creates a spurious force `-rho * nabla(Phi')` that breaks equilibrium.
+
+For the perturbed case, this is not a problem because the physical perturbation forces (~100) dominate over GMG noise (~1). But for the unperturbed case, any noise is unacceptable.
+
+**Fix**: Do NOT call `solve_gravity()` at step start. Instead:
+- Step 0: Phi = Phi_0 from `snapshot_hse()` (exact, by construction)
+- Step > 0: Phi from last accepted Newton iterate (updated by `solve_gravity()` inside the line search)
+- Inside Newton: `solve_gravity()` called after fluid correction in line search, not before
+
+**Files**: `lowmach_solver.cu:step()`
+
+**Test strategy**: Run unperturbed HSE for 100 steps. Assert `max|R_ρvr| < 1e-20` at every step. This test is extremely sensitive — any gravity re-solve at step start will cause failure.
+
+---
+
+<a id="p20"></a>
+## P20: GMRES Krylov basis polluted by Poisson noise floor (5-DOF)
+
+**Symptom**: With 5-DOF JFNK (perturbing all of ρ, ρvr, ρvθ, ρe, Phi simultaneously), GMRES converges in 2-3 iterations but Newton stalls after step 12. Line search accepts only alpha = 0.01.
+
+**Root cause**: The JFNK matvec `J*v = (F(W+eps*v) - F(W))/eps` includes the Poisson residual response `delta(nabla^2 Phi - 4*pi*G*rho)`. This component has a noise floor from GMG discretization (~0.01 per cell after scaling). The Krylov basis vectors V[j] include this noise, so GMRES optimizes over a subspace that tries to minimize both the fluid residual AND the Poisson noise. The Poisson noise is irreducible, so GMRES wastes degrees of freedom on it.
+
+With the Poisson component consuming Krylov subspace dimensions, the effective GMRES approximation for the fluid equations is degraded. The search direction quality drops, line search accepts only tiny steps, and dt collapses.
+
+**Fix**: Hybrid JFNK — GMRES operates on 4N fluid DOFs only (Phi frozen during GMRES). After GMRES correction, `solve_gravity()` updates Phi in the line search. This is equivalent to exact Schur complement elimination: the Poisson solve exactly inverts the Phi-Phi block, and GMRES only sees the Schur complement system for the fluid.
+
+Convergence/line-search use fluid-only norm `||F_fluid||` (first 4n components). The Poisson residual is monitored but not used for Newton convergence decisions.
+
+**Files**: `lowmach_solver.cu:jfnk_matvec`, `gmres_solve`, `step()`
+
+**Test strategy**: Run perturbed test for 20 steps. Assert dt does not drop below `dt_initial * 1e-2` (no catastrophic collapse). With the polluted 5-DOF GMRES, dt would drop to ~1e-12 by step 13.
+
+---
+
+---
+
+<a id="p21"></a>
+## P21: Line search solve_gravity inconsistent with JFNK frozen-Φ
+
+**Symptom**: Newton line search accepts only tiny α (0.01-0.06). `||F(U+αδU)|| >> ||F(U)||` even at α→0. First step requires dt=7.8e-9 despite block Jacobi being accurate at dt=1e-7.
+
+**Root cause**: JFNK matvec freezes Φ during `J·v = (F(U+εv,Φ) - F(U,Φ))/ε`. But line search called `solve_gravity()` after applying the correction, evaluating `F(U+αδU, Φ_new)`. Since Φ_new ≠ Φ, the merit function `||F(U+αδU, Φ_new)||` is inconsistent with the linear model `F ≈ F₀ + α·J·δU` that GMRES optimized. For near-equilibrium stars, ρ→Φ coupling via Poisson is strong: a small δρ changes Φ significantly, which feeds back through ρ∇Φ to create large spurious forces that overwhelm the correction.
+
+**Fix**: Remove `solve_gravity()` from line search. Evaluate `F(U+αδU, Φ_frozen)` consistently with the JFNK model. Update Φ once after Newton converges, before the next time step.
+
+**Files**: `lowmach_solver.cu:step()` (line search loop and post-convergence gravity update)
+
+**Test strategy**: Run `test_precond_quality` sweep. At dt=1e-7, `dt_accepted/dt_target` should be 1.0 (not 0.01). `test_lowmach` A5 should show first-step dt ≥ 1e-7.
+
+**Impact**: First-step dt improved 16× (7.8e-9 → 1.25e-7).
+
+---
+
+<a id="p22"></a>
+## P22: GMRES Krylov vectors have uninitialized 5th component (Φ garbage)
+
+**Symptom**: Diagnosed by `test_solver_diagnosis` D2: `||J·x + F|| / ||F|| = 3.5e7` — GMRES claims to converge but the actual linear residual is 7 orders of magnitude off.
+
+**Root cause**: GMRES allocates V[j] and Z[j] vectors at 5N (to match the 5-DOF state), but only operates on the first 4N (fluid) components. The 5th component (Φ, entries 4n to 5n-1) is uninitialized heap garbage. When JFNK matvec calls `unpack_add(Z[j], ε)`, it adds `ε × garbage` to Φ, corrupting the gravity potential during every Arnoldi step. The matvec then evaluates `F(U+εv, Φ+ε·garbage)` — the resulting J·v includes `∂F/∂Φ × garbage`, making the entire Krylov basis vectors wrong.
+
+The JFNK matvec saves/restores state via `d_gmres_Uk`, so the state after each matvec is correct. But the J·v product stored in the Arnoldi basis is corrupted. GMRES converges in its internal (corrupted) norm but the actual solution `x = Σ y_i Z[i]` is a linear combination of vectors with garbage Φ components.
+
+**Fix**: Zero the 5th component of Z[j] after preconditioner application and before matvec. Also zero the 5th component of V[0] (initial residual) and w (Arnoldi work vector) after each matvec.
+
+**Files**: `lowmach_solver.cu:gmres_solve()` — three `k_lm_zero` calls added
+
+**Test strategy**: `test_solver_diagnosis` D2 should show `||J·x + F|| / ||F|| < 0.01` (GMRES actually converged). D1 line search profile should show `||F(U+αδU)|| / ||F₀||` decreasing for α > 0 (descent direction).
+
+---
+
+## Summary: Regression Test Priority
+
+### Tier 1 — Correctness fundamentals (must pass for any commit)
+
+| Test | Validates | Key assertion |
+|------|-----------|---------------|
+| HSE zero residual | P07, P08, P09, P19 | `||R_fluid(U_HSE)||_2 < 1e-20` |
+| Mass conservation | P01 | `|M_numerical - M_analytic| < 1e-6` |
+| Floor enforcement | P05 | `rho >= floor`, `P >= floor`, no NaN |
+| Gravity Phi(R) | P01, P02 | `|Phi(R) + GM/R| < tol` |
+
+### Tier 2 — Solver convergence (must pass for lowmach solver)
+
+| Test | Validates | Key assertion |
+|------|-----------|---------------|
+| Unperturbed HSE long run | P09, P15, P19 | 100 steps, `per-cell < 1e-4`, dt grows monotonically |
+| Perturbed first step | P10, P07 | `||R_mr|| > 0` (perturbation visible) |
+| Newton convergence at small dt | P15 | dt=1e-10: converge in 0-1 Newton iterations |
+| dt recovery after failure | P16 | dt recovers within 20 steps |
+
+### Tier 3 — Component tests (preconditioner, matvec, stencil)
+
+| Test | Validates | Key assertion |
+|------|-----------|---------------|
+| Analytical vs FD Jacobian | P11 | `||J_analytic*v - J_FD*v|| / ||J_FD*v|| < 0.01` |
+| Preconditioner sign | P12 | `sign(M^{-1}*r) = sign(-J^{-1}*r)` for diagonal-dominant system |
+| Poisson residual scaling | P18 | `max|F_Phi_scaled| < 0.1` after converged GMG |
+| Helmholtz GMG | new | `||(nabla^2 - sigma)*u_solved - rhs|| < tol` for known sigma |
+| Theta symmetry | P02 | `S_mt_gravity = 0` for spherically symmetric state |

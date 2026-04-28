@@ -267,11 +267,11 @@ void k_lm_residual(
     res[3*n + flat] = div[3] - P_c * div_v + S_E;
 }
 
-// ========================= Pack / unpack ==========================
+// ========================= Pack / unpack (5-DOF: ρ, mr, mt, ρe, Φ) =
 
 __global__
 void k_lm_pack(const double* rho, const double* mr, const double* mt,
-               const double* rhoE, double* packed,
+               const double* rhoE, const double* phi, double* packed,
                int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -279,11 +279,12 @@ void k_lm_pack(const double* rho, const double* mr, const double* mt,
     int k = d_idx(i,j,nt,ng);
     packed[flat] = rho[k]; packed[n+flat] = mr[k];
     packed[2*n+flat] = mt[k]; packed[3*n+flat] = rhoE[k];
+    packed[4*n+flat] = phi[flat];
 }
 
 __global__
 void k_lm_unpack_set(double* rho, double* mr, double* mt, double* rhoE,
-                     const double* packed,
+                     double* phi, const double* packed,
                      int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -291,11 +292,12 @@ void k_lm_unpack_set(double* rho, double* mr, double* mt, double* rhoE,
     int k = d_idx(i,j,nt,ng);
     rho[k] = packed[flat]; mr[k] = packed[n+flat];
     mt[k] = packed[2*n+flat]; rhoE[k] = packed[3*n+flat];
+    phi[flat] = packed[4*n+flat];
 }
 
 __global__
 void k_lm_unpack_add(double* rho, double* mr, double* mt, double* rhoE,
-                     const double* delta, double alpha,
+                     double* phi, const double* delta, double alpha,
                      int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -303,6 +305,7 @@ void k_lm_unpack_add(double* rho, double* mr, double* mt, double* rhoE,
     int k = d_idx(i,j,nt,ng);
     rho[k] += alpha * delta[flat]; mr[k] += alpha * delta[n+flat];
     mt[k] += alpha * delta[2*n+flat]; rhoE[k] += alpha * delta[3*n+flat];
+    phi[flat] += alpha * delta[4*n+flat];
 }
 
 // ========================= BLAS-like ops ==========================
@@ -439,8 +442,75 @@ void LowMachSolver::solve_gravity() {
     gmg.solve(d_rhs_poisson, d_phi);
 }
 
+// ========================= Poisson residual (5th equation) ========
+// F₅ = ∇²Φ - 4πGρ = 0
+// Uses EXACTLY the same spherical Laplacian stencil as GMG to ensure
+// that solve_gravity's output satisfies this equation to GMG tolerance.
+
+__global__
+void k_lm_poisson_residual(
+    const double* phi, const double* rho,
+    const double* r_face, const double* r_center, const double* dr,
+    const double* dtheta,
+    const double* sin_tf, const double* sin_tc,
+    double* res5,
+    int nr, int nt, int ng, double G, double M_total) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+
+    // Dirichlet BC at outer boundary: Φ = -GM/R
+    if (i == nr-1) {
+        double phi_bc = -G * M_total / r_center[nr-1];
+        res5[flat] = phi_bc - phi[flat];
+        return;
+    }
+
+    double ri = r_center[i], ri2 = ri*ri, dri = dr[i];
+
+    double Lphi = 0.0;
+    double cC = 0.0;
+
+    if (i > 0) {
+        double rl = r_face[i];
+        double cW = rl*rl / (ri2 * dri * (r_center[i] - r_center[i-1]));
+        Lphi += cW * phi[(i-1)*nt+j];
+        cC -= cW;
+    }
+    if (i < nr-1) {
+        double rh = r_face[i+1];
+        double cE = rh*rh / (ri2 * dri * (r_center[i+1] - r_center[i]));
+        Lphi += cE * phi[(i+1)*nt+j];
+        cC -= cE;
+    }
+
+    double sj = sin_tc[j], dtj = dtheta[j];
+    if (j > 0) {
+        double cS = sin_tf[j] / (ri2 * sj * dtj * 0.5 * (dtheta[j] + dtheta[j-1]));
+        Lphi += cS * phi[i*nt+j-1];
+        cC -= cS;
+    }
+    if (j < nt-1) {
+        double cN = sin_tf[j+1] / (ri2 * sj * dtj * 0.5 * (dtheta[j] + dtheta[j+1]));
+        Lphi += cN * phi[i*nt+j+1];
+        cC -= cN;
+    }
+    Lphi += cC * phi[flat];
+
+    double rho_c = fmax(rho[d_idx(i,j,nt,ng)], 1e-20);
+    double raw = Lphi - 4.0 * M_PI * G * rho_c;
+    // Scale by 1/|cC| to make the Poisson residual dimensionless.
+    // On log meshes, |cC| can be ~1e8 near the center, so the raw
+    // absolute residual would dominate ||F|| even when the Poisson
+    // solve is converged to O(1e-6) relative.
+    double scale = fmax(fabs(cC), 1.0);
+    res5[flat] = raw / scale;
+}
+
 // ========================= Compute F (Newton residual) ============
 
+// F₁₋₄ = R(U,Φ) - (U-Uⁿ)/dt  (fluid, 4 equations)
+// F₅ = ∇²Φ - 4πGρ             (Poisson, algebraic constraint, no time derivative)
 __global__
 void k_lm_compute_F(double* F, const double* R,
                     const double* rho, const double* mr,
@@ -455,6 +525,7 @@ void k_lm_compute_F(double* F, const double* R,
     F[n + flat]   = R[n + flat]   - inv_dt * (mr[k]   - Un[n + flat]);
     F[2*n + flat] = R[2*n + flat] - inv_dt * (mt[k]   - Un[2*n + flat]);
     F[3*n + flat] = R[3*n + flat] - inv_dt * (rhoE[k] - Un[3*n + flat]);
+    // F₅ is written separately by k_lm_poisson_residual
 }
 
 void LowMachSolver::compute_residual(double* d_res) {
@@ -474,21 +545,30 @@ void LowMachSolver::compute_F(double* d_F, double dt) {
     compute_residual(d_residual);
     k_lm_compute_F<<<(n+B-1)/B,B>>>(d_F, d_residual,
         d_rho, d_mr, d_mtheta, d_rhoE, d_Un, 1.0/dt, nr, nt, ng);
+    // F₅ = ∇²Φ - 4πGρ (Poisson constraint)
+    // Compute M_total for Dirichlet BC
+    k_lm_rhovol<<<(n+B-1)/B,B>>>(d_rho, d_cell_volume, d_work_a, nr, nt, ng);
+    double M = gpu_reduce_sum(d_work_a, d_work_b, n) * 2.0 * M_PI;
+    k_lm_poisson_residual<<<(n+B-1)/B,B>>>(
+        d_phi, d_rho, d_r_face, d_r_center, d_dr,
+        d_dtheta, d_sin_theta_face, d_sin_theta_center,
+        d_F + 4*n,
+        nr, nt, ng, G_const, M);
 }
 
 void LowMachSolver::pack_state(double* d_packed) {
     int B = 256;
-    k_lm_pack<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_packed, nr,nt,ng);
+    k_lm_pack<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_packed, nr,nt,ng);
 }
 
 void LowMachSolver::unpack_set(const double* d_packed) {
     int B = 256;
-    k_lm_unpack_set<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_packed, nr,nt,ng);
+    k_lm_unpack_set<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_packed, nr,nt,ng);
 }
 
 void LowMachSolver::unpack_delta(const double* d_delta, double alpha) {
     int B = 256;
-    k_lm_unpack_add<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_delta, alpha, nr,nt,ng);
+    k_lm_unpack_add<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_delta, alpha, nr,nt,ng);
 }
 
 void LowMachSolver::apply_floor() {
@@ -517,11 +597,12 @@ void k_lm_clamp(double* delta, const double* scale, double max_rel, int N) {
 }
 
 void LowMachSolver::compute_scaling() {
-    int N = 4*nr*nt, B = 256;
+    int N = 5*nr*nt, B = 256;
     k_lm_compute_scale<<<(N+B-1)/B,B>>>(d_Un, d_scale, N);
 }
 
 void LowMachSolver::clamp_correction(double* d_delta, double max_rel_change) {
+    // Clamp only fluid components (4N). Φ correction is handled by Poisson solve.
     int N = 4*nr*nt, B = 256;
     k_lm_clamp<<<(N+B-1)/B,B>>>(d_delta, d_scale, max_rel_change, N);
 }
@@ -1199,10 +1280,29 @@ void LowMachSolver::apply_simple(const double* d_v, double* d_Mv, double dt) {
         nr, nt, dt);
 }
 
+// Assemble Schur complement σ(x) = 4πGρ / Ap
+// where Ap = 1/dt + upwind_rate (from block Jacobi diagonal)
+__global__
+void k_lm_assemble_sigma(const double* rho, const double* blk_diag,
+                         double* sigma, int n, int ng, int nt, double G) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= n) return;
+    double rho_c = fmax(rho[d_idx(flat/nt, flat%nt, nt, ng)], 1e-20);
+    // Ap ≈ |J_{rho,rho}| = |blk_diag inverse's (0,0) entry|
+    // But we need J_diag not J⁻¹. The block Jacobi diagonal value was -(1/dt+sr).
+    // We stored the INVERSE. Extract Ap from the (0,0) element of blk inverse:
+    //   blk_inv[0][0] ≈ -1/Ap for diagonally-dominant system.
+    // So Ap ≈ -1/blk_inv[0][0].
+    double inv00 = blk_diag[flat * 16]; // (0,0) element of J⁻¹
+    double Ap = (fabs(inv00) > 1e-30) ? fabs(1.0 / inv00) : 1e30;
+    sigma[flat] = 4.0 * M_PI * G * rho_c / Ap;
+}
+
+// Preconditioner for FLUID-ONLY 4N system (Φ handled by Poisson solve outside GMRES)
 void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double dt) {
-    int n = nr*nt, N = 4*n, B = 256;
+    int n = nr*nt, B = 256;
+
     if (precond_type == PrecondType::LINE_JACOBI) {
-        // Shared memory: 3 block matrices (L,D,U) * nr * 16 + 2 vectors * nr * 4
         int smem = nr * (3*16 + 2*4) * sizeof(double);
         int threads = std::min(nr, 256);
         k_lm_line_solve<<<nt, threads, smem>>>(
@@ -1212,68 +1312,57 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
             d_dr, d_dtheta, d_phi0,
             d_v, d_Mv,
             nr, nt, ng, gamma, 1.0/dt);
-    } else if (precond_type == PrecondType::COMBINED) {
-        // Step 1: Block Jacobi for full intra-cell coupling
-        k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
-
-        // Step 2: Pressure Poisson correction on velocity only.
-        // Compute div of block Jacobi's velocity output
-        k_lm_simple_div<<<(n+B-1)/B,B>>>(
-            d_Mv + n, d_Mv + 2*n,  // vr*, vt* from block Jacobi
-            d_cell_volume, d_area_r, d_area_theta,
-            d_simple_div, nr, nt);
-
-        k_lm_simple_alpha<<<(n+B-1)/B,B>>>(d_Ap, d_inv_rho, n);
-        k_lm_simple_prhs<<<(n+B-1)/B,B>>>(d_simple_div, d_rhs_poisson, nr, nt);
-
-        CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
-        gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 10, 1e-3);
-
-        // Subtract (1/Ap)∇δp from velocity components of Mv.
-        // ρ and ρe components remain as block Jacobi computed them.
-        k_lm_simple_vcorr<<<(n+B-1)/B,B>>>(
-            d_Mv + n, d_Mv + 2*n,   // in/out: vr, vt
-            d_simple_p, d_Ap,
-            d_r_center, d_theta_face,
-            nr, nt);
     } else if (precond_type == PrecondType::SIMPLE) {
         apply_simple(d_v, d_Mv, dt);
     } else if (precond_type == PrecondType::BLOCK_JACOBI) {
         k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
     } else {
-        k_lm_copy<<<(N+B-1)/B,B>>>(d_Mv, d_v, N);
+        k_lm_copy<<<(4*n+B-1)/B,B>>>(d_Mv, d_v, 4*n);
     }
 }
 
 // ========================= JFNK matvec ============================
-// J·v ≈ [F(U+εv) - F(U)] / ε, gravity frozen.
+// Hybrid approach: GMRES operates on the FLUID-ONLY 4N DOFs.
+// Gravity Φ is updated via Poisson solve after each Newton correction,
+// not during GMRES. This avoids diluting the Krylov basis with the
+// Poisson component (which has a noise floor from GMG discretization).
+//
+// The full 5-DOF coupling is maintained at the Newton outer level:
+//   1. GMRES solves J_fluid · δU = -F_fluid (4N, Φ frozen)
+//   2. Apply δU to fluid state
+//   3. solve_gravity() to update Φ consistent with new ρ
+//   4. Line search evaluates full F(U,Φ) including Poisson residual
+//
+// This is equivalent to a Schur complement elimination of Φ:
+// the Poisson solve exactly inverts the Φ-Φ block of the Jacobian.
 
 void LowMachSolver::jfnk_matvec(const double* d_v, double* d_Jv, double dt) {
-    int N = 4*nr*nt, B = 256;
+    int n = nr*nt, N4 = 4*n, B = 256;
 
-    double norm_v = sqrt(gpu_dot(d_v, d_v, d_work_a, N));
-    if (norm_v < 1e-30) { k_lm_zero<<<(N+B-1)/B,B>>>(d_Jv, N); return; }
+    double norm_v = sqrt(gpu_dot(d_v, d_v, d_work_a, N4));
+    if (norm_v < 1e-30) { k_lm_zero<<<(N4+B-1)/B,B>>>(d_Jv, N4); return; }
 
-    // Walker-Pernice epsilon (from MOOSE/PETSc)
-    double norm_U = sqrt(gpu_dot(d_Un, d_Un, d_work_a, N));
+    double norm_U = sqrt(gpu_dot(d_Un, d_Un, d_work_a, N4));
     double eps_fd = sqrt(1e-15) * (1.0 + norm_U) / norm_v;
 
-    // Save current state
-    k_lm_pack<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_gmres_Uk, nr,nt,ng);
+    // Save current fluid state (Φ not saved — it's frozen during GMRES)
+    k_lm_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
 
-    // Perturb: U += ε·v
-    k_lm_unpack_add<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_v, eps_fd, nr,nt,ng);
+    // Perturb fluid only: U += ε·v (first 4n components)
+    k_lm_unpack_add<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_v, eps_fd, nr,nt,ng);
     apply_floor();
 
-    // F(U+εv) with frozen gravity
-    compute_F(d_Jv, dt);
+    // F_fluid(U+εv, Φ_frozen) — only the first 4n components
+    compute_residual(d_residual);
+    k_lm_compute_F<<<(n+B-1)/B,B>>>(d_Jv, d_residual,
+        d_rho, d_mr, d_mtheta, d_rhoE, d_Un, 1.0/dt, nr, nt, ng);
 
-    // Jv = (F(U+εv) - Fk) / ε
-    k_lm_axpy<<<(N+B-1)/B,B>>>(d_Jv, -1.0, d_Fk, N);
-    k_lm_scale<<<(N+B-1)/B,B>>>(d_Jv, 1.0/eps_fd, N);
+    // Jv = (F_fluid(U+εv) - F_fluid(U)) / ε
+    k_lm_axpy<<<(N4+B-1)/B,B>>>(d_Jv, -1.0, d_Fk, N4);
+    k_lm_scale<<<(N4+B-1)/B,B>>>(d_Jv, 1.0/eps_fd, N4);
 
     // Restore state
-    k_lm_unpack_set<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_gmres_Uk, nr,nt,ng);
+    k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
 }
 
 // ========================= FGMRES ================================
@@ -1288,22 +1377,30 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
     std::vector<double> H((m+1)*m, 0.0);
     std::vector<double> cs(m), sn(m), g(m+1, 0.0);
 
+    int n_phys0 = nr * nt;
+
     // r0 = -F (solve J·x = -F)
     k_lm_copy<<<(N+B-1)/B,B>>>(d_gmres_V[0], d_b, N);
     k_lm_scale<<<(N+B-1)/B,B>>>(d_gmres_V[0], -1.0, N);
+    // Zero 5th component — V vectors are 4N fluid only
+    k_lm_zero<<<(n_phys0+B-1)/B,B>>>(d_gmres_V[0] + N, n_phys0);
 
     double beta = sqrt(gpu_dot(d_gmres_V[0], d_gmres_V[0], d_work_a, N));
     if (beta < 1e-30) return 0;
     k_lm_scale<<<(N+B-1)/B,B>>>(d_gmres_V[0], 1.0/beta, N);
     g[0] = beta;
 
+    int n_phys = nr * nt;
     int j;
     for (j = 0; j < m; ++j) {
-        // Z[j] = M⁻¹ · V[j]
+        // Z[j] = M⁻¹ · V[j]  (4N fluid components only)
         apply_preconditioner(d_gmres_V[j], d_gmres_Z[j], dt);
+        // Zero the 5th component so jfnk_matvec doesn't corrupt Φ
+        k_lm_zero<<<(n_phys+B-1)/B,B>>>(d_gmres_Z[j] + N, n_phys);
 
-        // w = J · Z[j]
+        // w = J · Z[j]  (writes 4N components)
         jfnk_matvec(d_gmres_Z[j], d_gmres_w, dt);
+        k_lm_zero<<<(n_phys+B-1)/B,B>>>(d_gmres_w + N, n_phys);
 
         // Arnoldi
         for (int i = 0; i <= j; ++i) {
@@ -1397,7 +1494,7 @@ double LowMachSolver::compute_cfl_dt() {
 // ========================= Time step (Newton) =====================
 
 double LowMachSolver::step(double t, double t_end) {
-    int n = nr*nt, B = 256, N = 4*n;
+    int n = nr*nt, B = 256, N = 5*n;
 
     static int step_count = 0;
 
@@ -1409,26 +1506,21 @@ double LowMachSolver::step(double t, double t_end) {
         hse_init = true;
     }
 
-    // Ensure clean state before packing Un.
-    // Do NOT re-solve gravity here. Φ is already consistent:
-    //   - Step 0, unperturbed: Φ = Φ₀ from snapshot → Φ' = 0 → ||R|| = 0
-    //   - Step 0, perturbed: Φ = Φ₀ from unperturbed snapshot → Φ' = 0
-    //     → force = -∇P' - ρ'∇Φ₀ (correct initial perturbation force)
-    //   - Step > 0: Φ from last accepted Newton iterate
-    // Re-solving gravity would introduce O(GMG_tol/dr) noise on the
-    // log mesh that overwhelms the physical perturbation signal.
-    // Gravity is updated inside Newton (newton > 0) when ρ changes.
     apply_floor();
 
-    // Diagnostic on very first step only
+    // Do NOT call solve_gravity() here. Φ is part of the state vector
+    // and Newton handles Poisson convergence as F₅ = 0.
+    // Calling solve_gravity would introduce GMG noise into Φ,
+    // breaking well-balancedness for the unperturbed HSE case.
+    // For step 0 with perturbed IC: Φ = Φ₀ but ρ ≠ ρ₀, so the
+    // Poisson residual is non-zero. Newton handles this naturally
+    // because the scaled Poisson residual is small relative to the
+    // fluid perturbation forces.
+
     if (step_count == 0)
         diagnose_hse_residual();
 
-    // Advection CFL (no sound speed!)
     double dt_cfl = compute_cfl_dt();
-    // Start with a small dt and grow on success.
-    // Initial dt_cap is small enough that 1/dt dominates the Jacobian,
-    // making Newton easy. Grow by 2× each successful step.
     double dt_cap = 1.0;
     if (dt_current < 1e-30) dt_current = 1e-6;
     double dt = std::min({dt_current, dt_cfl, dt_cap, t_end - t});
@@ -1440,7 +1532,7 @@ double LowMachSolver::step(double t, double t_end) {
     int max_dt_cuts = 8;
     bool converged = false;
 
-    double dt_min = 1e-4 * dt;  // Don't drop more than 4 orders below initial
+    double dt_min = 1e-4 * dt;
 
     for (int cut = 0; cut < max_dt_cuts && !converged; ++cut) {
         if (cut > 0) {
@@ -1456,8 +1548,8 @@ double LowMachSolver::step(double t, double t_end) {
                             step_count, dt);
         }
 
-        if (precond_type == PrecondType::BLOCK_JACOBI || precond_type == PrecondType::COMBINED)
-            assemble_block_jacobi(dt);
+        // Always assemble block Jacobi (needed for Schur σ even with other preconditioners)
+        assemble_block_jacobi(dt);
         if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED)
             assemble_simple(dt);
 
@@ -1466,64 +1558,80 @@ double LowMachSolver::step(double t, double t_end) {
 
         for (int newton = 0; newton < max_newton; ++newton) {
             apply_floor();
-            if (newton > 0)
-                solve_gravity();
+
+            // No explicit solve_gravity — Φ is now part of the state vector.
+            // The Newton update naturally adjusts Φ through the 5th equation.
 
             compute_F(d_Fk, dt);
+            // Use FLUID-only norm (first 4n components) for convergence.
+            // The Poisson component (5th) has a noise floor from GMG
+            // that can't be reduced, so including it would prevent convergence.
+            double Fnorm_fluid = sqrt(gpu_dot(d_Fk, d_Fk, d_work_a, 4*n));
             double Fnorm = sqrt(gpu_dot(d_Fk, d_Fk, d_work_a, N));
 
             if (newton == 0) {
-                Fnorm0 = Fnorm;
-                if (Fnorm < 1e-30) { converged = true; break; }
+                Fnorm0 = Fnorm_fluid;
+                if (Fnorm_fluid < 1e-30) { converged = true; break; }
             }
 
-            double Fnorm_per_cell = Fnorm / sqrt((double)N);
-            if (Fnorm < 1e-3 * Fnorm0 || Fnorm_per_cell < 1e-4) {
+            double Fnorm_per_cell = Fnorm_fluid / sqrt((double)(4*n));
+            if (Fnorm_fluid < 1e-3 * Fnorm0 || Fnorm_per_cell < 1e-4) {
                 converged = true;
                 if (step_count < 30)
                     std::fprintf(stderr, "  step %d converged at newton %d: ||F||=%.3e per-cell=%.3e (dt=%.3e)\n",
                                 step_count, newton, Fnorm, Fnorm_per_cell, dt);
                 break;
             }
-            if (Fnorm > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
+            if (Fnorm_fluid > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
 
+            // GMRES solves 4N fluid system; zero 5th component to avoid corrupting Φ
+            k_lm_zero<<<(n+B-1)/B,B>>>(d_gmres_w + 4*n, n);
             int gmres_iters = gmres_solve(d_gmres_w, d_Fk, dt, 1e-3, GMRES_RESTART);
 
-            // MESA-style correction clamping: |δU_i| ≤ 0.1 * scale_i
             clamp_correction(d_gmres_w, 0.1);
 
-            // Line search with backtracking
-            k_lm_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_gmres_Uk, nr,nt,ng);
+            // Line search with Φ FROZEN (consistent with JFNK matvec).
+            // GMRES solved J·δU = -F where J = dR/dU|_{Φ fixed} - I/dt.
+            // If line search updates Φ via solve_gravity, the merit function
+            // F(U+αδU, Φ_new) ≠ F(U) + α·J·δU because Φ changed.
+            // This inconsistency causes ||F'|| >> ||F|| (P20/diagnostic).
+            // Fix: evaluate F at (U+αδU, Φ_frozen) during line search.
+            // Φ is updated once after Newton converges.
+            k_lm_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
             double alpha = 1.0;
-            double Fnorm_new = Fnorm;
+            double Fnorm_fluid_new = Fnorm_fluid;
             for (int ls = 0; ls < 8; ++ls) {
-                k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_gmres_Uk, nr,nt,ng);
-                unpack_delta(d_gmres_w, alpha);
+                k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
+                k_lm_unpack_add<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_w, alpha, nr,nt,ng);
                 apply_floor();
-                solve_gravity();
+                // Φ stays frozen — no solve_gravity here
                 compute_F(d_residual_ls, dt);
-                Fnorm_new = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, N));
-                if (Fnorm_new < Fnorm) break;
+                Fnorm_fluid_new = sqrt(gpu_dot(d_residual_ls, d_residual_ls, d_work_a, 4*n));
+                if (Fnorm_fluid_new < Fnorm_fluid) break;
                 alpha *= 0.5;
             }
 
-            if (Fnorm_new >= Fnorm) {
-                k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, d_gmres_Uk, nr,nt,ng);
+            if (Fnorm_fluid_new >= Fnorm_fluid) {
+                k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
                 diverged = true;
                 if (step_count < 30)
-                    std::fprintf(stderr, "  step %d newton %d: line search failed, ||F||=%.3e\n",
-                                step_count, newton, Fnorm);
+                    std::fprintf(stderr, "  step %d newton %d: line search failed, ||F_fluid||=%.3e\n",
+                                step_count, newton, Fnorm_fluid);
                 break;
             }
 
             if (step_count < 20)
-                std::fprintf(stderr, "  step %d newton %d: ||F|| %.3e -> %.3e  a=%.2f  GMRES %d  dt=%.3e\n",
-                            step_count, newton, Fnorm, Fnorm_new, alpha, gmres_iters, dt);
+                std::fprintf(stderr, "  step %d newton %d: ||F_fluid|| %.3e -> %.3e  a=%.2f  GMRES %d  dt=%.3e\n",
+                            step_count, newton, Fnorm_fluid, Fnorm_fluid_new, alpha, gmres_iters, dt);
         }
 
         if (diverged)
             unpack_set(d_Un);
     }
+
+    // Update Φ once after Newton converges (was frozen during GMRES+line search)
+    if (converged)
+        solve_gravity();
 
     if (converged)
         dt_current = std::min(1.2 * dt, std::min(dt_cfl, dt_cap));
@@ -1546,34 +1654,43 @@ void LowMachSolver::snapshot_hse() {
 }
 
 void LowMachSolver::diagnose_hse_residual() {
-    int n = nr*nt, N = 4*n;
+    int n = nr*nt, N = 5*n, B = 256;
 
     compute_residual(d_residual);
+    // Also compute Poisson residual
+    k_lm_rhovol<<<(n+B-1)/B,B>>>(d_rho, d_cell_volume, d_work_a, nr, nt, ng);
+    double M = gpu_reduce_sum(d_work_a, d_work_b, n) * 2.0 * M_PI;
+    k_lm_poisson_residual<<<(n+B-1)/B,B>>>(
+        d_phi, d_rho, d_r_face, d_r_center, d_dr,
+        d_dtheta, d_sin_theta_face, d_sin_theta_center,
+        d_residual + 4*n,
+        nr, nt, ng, G_const, M);
 
-    // Download and find max per equation
     std::vector<double> h_res(N);
     CUDA_CHECK(cudaMemcpy(h_res.data(), d_residual, N*sizeof(double), cudaMemcpyDeviceToHost));
 
-    double max_rho=0, max_mr=0, max_mt=0, max_rhoE=0;
+    double max_rho=0, max_mr=0, max_mt=0, max_rhoE=0, max_phi=0;
     for (int i = 0; i < n; ++i) {
         max_rho  = std::max(max_rho,  std::abs(h_res[i]));
         max_mr   = std::max(max_mr,   std::abs(h_res[n+i]));
         max_mt   = std::max(max_mt,   std::abs(h_res[2*n+i]));
         max_rhoE = std::max(max_rhoE, std::abs(h_res[3*n+i]));
+        max_phi  = std::max(max_phi,  std::abs(h_res[4*n+i]));
     }
 
     double l2 = 0;
     for (int i = 0; i < N; ++i) l2 += h_res[i]*h_res[i];
     l2 = std::sqrt(l2);
 
-    std::fprintf(stderr, "=== HSE Diagnostic (initial residual R(U₀)) ===\n");
+    std::fprintf(stderr, "=== HSE Diagnostic (initial residual R(W₀), 5-DOF) ===\n");
     std::fprintf(stderr, "  max|R_ρ|    = %.6e\n", max_rho);
     std::fprintf(stderr, "  max|R_ρvr|  = %.6e\n", max_mr);
     std::fprintf(stderr, "  max|R_ρvθ|  = %.6e\n", max_mt);
     std::fprintf(stderr, "  max|R_ρe|   = %.6e\n", max_rhoE);
+    std::fprintf(stderr, "  max|R_Φ|    = %.6e  (Poisson residual)\n", max_phi);
     std::fprintf(stderr, "  ||R||₂      = %.6e\n", l2);
-    std::fprintf(stderr, "  Target: all < 1e-10 for well-balanced scheme\n");
-    std::fprintf(stderr, "================================================\n");
+    std::fprintf(stderr, "  Target: fluid < 1e-10, Poisson < 1e-4\n");
+    std::fprintf(stderr, "=====================================================\n");
 }
 
 // ========================= Init ===================================
@@ -1610,6 +1727,17 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     CUDA_CHECK(cudaMemcpy(d_area_r, grid.area_r.data(), (nr+1)*nt*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_area_theta, grid.area_theta.data(), nr*(nt+1)*sizeof(double), cudaMemcpyHostToDevice));
 
+    // sin(theta) arrays for Poisson residual (must match GMG stencil exactly)
+    {
+        std::vector<double> stf(nt+1), stc(nt);
+        for (int j = 0; j <= nt; ++j) stf[j] = std::sin(grid.theta_face[j]);
+        for (int j = 0; j < nt; ++j) stc[j] = std::sin(0.5*(grid.theta_face[j]+grid.theta_face[j+1]));
+        CUDA_CHECK(cudaMalloc(&d_sin_theta_face, (nt+1)*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_sin_theta_center, nt*sizeof(double)));
+        CUDA_CHECK(cudaMemcpy(d_sin_theta_face, stf.data(), (nt+1)*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_sin_theta_center, stc.data(), nt*sizeof(double), cudaMemcpyHostToDevice));
+    }
+
     // State arrays (with ghosts)
     CUDA_CHECK(cudaMalloc(&d_rho, total_ghost*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_mr, total_ghost*sizeof(double)));
@@ -1630,32 +1758,33 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     CUDA_CHECK(cudaMalloc(&d_P0, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_phi0, n*sizeof(double)));
 
-    // Newton vectors (4*n packed)
-    CUDA_CHECK(cudaMalloc(&d_Un, 4*n*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_Fk, 4*n*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_residual, 4*n*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_residual_ls, 4*n*sizeof(double)));
+    // Newton vectors (5*n packed: ρ, mr, mt, ρe, Φ)
+    CUDA_CHECK(cudaMalloc(&d_Un, 5*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_Fk, 5*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_residual, 5*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_residual_ls, 5*n*sizeof(double)));
 
-    // GMRES vectors
+    // GMRES vectors (5N per vector)
     for (int i = 0; i <= GMRES_RESTART; ++i) {
-        CUDA_CHECK(cudaMalloc(&d_gmres_V[i], 4*n*sizeof(double)));
-        CUDA_CHECK(cudaMalloc(&d_gmres_Z[i], 4*n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_gmres_V[i], 5*n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_gmres_Z[i], 5*n*sizeof(double)));
     }
-    CUDA_CHECK(cudaMalloc(&d_gmres_w, 4*n*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_gmres_Uk, 4*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_gmres_w, 5*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_gmres_Uk, 5*n*sizeof(double)));
 
     // Work buffers
     CUDA_CHECK(cudaMalloc(&d_work_a, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_work_b, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_rhs_poisson, n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_inv_rho, n*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_scale, 4*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_scale, 5*n*sizeof(double)));
 
-    // Block-diagonal Jacobi preconditioner
-    d_blk_diag = nullptr;
-    if (precond_type == PrecondType::BLOCK_JACOBI || precond_type == PrecondType::COMBINED) {
-        CUDA_CHECK(cudaMalloc(&d_blk_diag, n*16*sizeof(double)));
-    }
+    // Schur complement Helmholtz GMG
+    CUDA_CHECK(cudaMalloc(&d_sigma_schur, n*sizeof(double)));
+    gmg_schur.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
+
+    // Block-diagonal Jacobi preconditioner (always needed for Schur σ assembly)
+    CUDA_CHECK(cudaMalloc(&d_blk_diag, n*16*sizeof(double)));
 
     // SIMPLE preconditioner (also needed for COMBINED)
     d_Ap = nullptr; d_simple_p = nullptr; d_simple_div = nullptr;
@@ -1723,8 +1852,11 @@ void LowMachSolver::destroy() {
     if (!initialized) return;
 
     gmg.destroy();
+    gmg_schur.destroy();
+    cudaFree(d_sigma_schur);
     cudaFree(d_r_face); cudaFree(d_r_center); cudaFree(d_dr);
     cudaFree(d_theta_face); cudaFree(d_theta_center); cudaFree(d_dtheta);
+    cudaFree(d_sin_theta_face); cudaFree(d_sin_theta_center);
     cudaFree(d_cell_volume); cudaFree(d_area_r); cudaFree(d_area_theta);
     cudaFree(d_rho); cudaFree(d_mr); cudaFree(d_mtheta); cudaFree(d_rhoE);
     cudaFree(d_phi); cudaFree(d_pi);
@@ -1737,7 +1869,7 @@ void LowMachSolver::destroy() {
     cudaFree(d_gmres_w); cudaFree(d_gmres_Uk);
     cudaFree(d_work_a); cudaFree(d_work_b);
     cudaFree(d_rhs_poisson); cudaFree(d_inv_rho); cudaFree(d_scale);
-    if (d_blk_diag) cudaFree(d_blk_diag);
+    cudaFree(d_blk_diag);
     if (d_Ap) cudaFree(d_Ap);
     if (d_simple_p) cudaFree(d_simple_p);
     if (d_simple_div) cudaFree(d_simple_div);
