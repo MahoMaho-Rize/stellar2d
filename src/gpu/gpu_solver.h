@@ -31,6 +31,9 @@ struct GpuSolver {
     Limiter limiter;
     int total_phys, total_ghost;
     double dt_max;
+    double dt_good = 0.0;   // best dt that recently converged (for fast recovery)
+    int step_count = 0;
+    double dt_adapt = 0.0;
     bool initialized = false;
 
     // Device grid arrays
