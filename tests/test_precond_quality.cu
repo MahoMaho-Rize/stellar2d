@@ -272,18 +272,22 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "Grid: %dx%d, Lane-Emden perturbed (eps=1e-3)\n\n", nr, nt);
 
     if (all) {
-        sweep_preconditioner(PrecondType::NONE, "NONE",
-                             grid, eos, state_hse, state_perturbed, G);
         sweep_preconditioner(PrecondType::BLOCK_JACOBI, "BLOCK_JACOBI",
+                             grid, eos, state_hse, state_perturbed, G);
+        sweep_preconditioner(PrecondType::LINE_JACOBI, "LINE_JACOBI",
                              grid, eos, state_hse, state_perturbed, G);
 
         std::fprintf(stderr, "\n=== dt stability over 20 steps ===\n");
         test_dt_stability(PrecondType::BLOCK_JACOBI, "BLOCK_JACOBI",
                           grid, eos, state_hse, state_perturbed, G, 20);
+        test_dt_stability(PrecondType::LINE_JACOBI, "LINE_JACOBI",
+                          grid, eos, state_hse, state_perturbed, G, 20);
     } else {
         sweep_preconditioner(PrecondType::BLOCK_JACOBI, "BLOCK_JACOBI",
                              grid, eos, state_hse, state_perturbed, G);
-        test_dt_stability(PrecondType::BLOCK_JACOBI, "BLOCK_JACOBI",
+        sweep_preconditioner(PrecondType::LINE_JACOBI, "LINE_JACOBI",
+                             grid, eos, state_hse, state_perturbed, G);
+        test_dt_stability(PrecondType::LINE_JACOBI, "LINE_JACOBI",
                           grid, eos, state_hse, state_perturbed, G, 20);
     }
 
