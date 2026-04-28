@@ -65,6 +65,8 @@ struct LowMachSolver {
 
     // Packed state vectors for Newton (5*n: ρ, ρvr, ρvθ, ρe, Φ)
     double *d_Un;      // U^n saved state
+    double *d_Un_prev; // U^{n-1} for extrapolation initial guess
+    double dt_prev = 0.0;  // dt from previous step (for extrapolation ratio)
     double *d_Fk;      // F(U^k) residual
     double *d_residual; // scratch for residual computation
 

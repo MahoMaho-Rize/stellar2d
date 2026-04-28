@@ -1495,6 +1495,205 @@ void k_lm_line_solve_theta(
     }
 }
 
+// ========================= 2-DOF momentum-only r-line solve ===========
+// Solves only the (mr, mt) block along r, WITHOUT pressure coupling.
+// 2×2 blocks: diagonal = -(1/dt + sr), off-diagonal = upwind advection.
+// Pressure gradient is excluded — it enters through the Schur complement.
+// One GPU block per θ-line.
+__global__
+void k_lm_mom_line_solve(
+    const double* rho, const double* mr, const double* mt,
+    const double* vol, const double* ar,
+    const double* r_center, const double* dr, const double* dtheta,
+    const double* v_in_mr, const double* v_in_mt,
+    double* out_vr, double* out_vt,
+    int nr, int nt, int ng, double inv_dt) {
+    int j = blockIdx.x;
+    if (j >= nt) return;
+
+    extern __shared__ double smem[];
+    // 2×2 blocks: L[nr*4], D[nr*4], U[nr*4], rhs[nr*2], x[nr*2]
+    double* L = smem;
+    double* D = L + nr * 4;
+    double* U = D + nr * 4;
+    double* rhs_s = U + nr * 4;
+    double* x_s = rhs_s + nr * 2;
+
+    int tid = threadIdx.x;
+    int n = nr * nt;
+
+    for (int i = tid; i < nr; i += blockDim.x) {
+        int flat = i * nt + j;
+        int k = d_idx(i, j, nt, ng);
+        double rho_c = fmax(rho[k], 1e-20);
+        double vr_c = mr[k] / rho_c;
+        double vt_c = mt[k] / rho_c;
+        double r = r_center[i];
+        double invV = 1.0 / vol[flat];
+
+        double sr = fabs(vr_c)/dr[i] + fabs(vt_c)/(r*dtheta[j]);
+        double Ar_hi = ar[(i+1)*nt+j], Ar_lo = ar[i*nt+j];
+
+        double vf_lo = 0.0, vf_hi = 0.0;
+        if (i > 0) {
+            double rl = fmax(rho[d_idx(i-1,j,nt,ng)], 1e-20);
+            vf_lo = 0.5 * (mr[d_idx(i-1,j,nt,ng)] / rl + vr_c);
+        }
+        if (i < nr - 1) {
+            double rr = fmax(rho[d_idx(i+1,j,nt,ng)], 1e-20);
+            vf_hi = 0.5 * (vr_c + mr[d_idx(i+1,j,nt,ng)] / rr);
+        }
+
+        // Lower 2×2
+        double* Lb = &L[i * 4];
+        Lb[0] = Lb[1] = Lb[2] = Lb[3] = 0.0;
+        if (i > 0) {
+            double coeff = (vf_lo >= 0.0 ? vf_lo : 0.0) * Ar_lo * invV;
+            Lb[0] = coeff; Lb[3] = coeff;
+        }
+
+        // Upper 2×2
+        double* Ub = &U[i * 4];
+        Ub[0] = Ub[1] = Ub[2] = Ub[3] = 0.0;
+        if (i < nr - 1) {
+            double coeff = (vf_hi < 0.0 ? -vf_hi : 0.0) * Ar_hi * invV;
+            Ub[0] = coeff; Ub[3] = coeff;
+        }
+
+        // Diagonal 2×2
+        double* Db = &D[i * 4];
+        double diag_val = -(inv_dt + sr);
+        double coeff_lo_self = (vf_lo < 0.0 ? -vf_lo : 0.0) * Ar_lo * invV;
+        double coeff_hi_self = (vf_hi >= 0.0 ? vf_hi : 0.0) * Ar_hi * invV;
+        double adv_self = -(coeff_lo_self + coeff_hi_self);
+        Db[0] = diag_val + adv_self;
+        Db[1] = 0.0;
+        Db[2] = 0.0;
+        Db[3] = diag_val + adv_self;
+
+        // RHS: input residual for mr, mt
+        rhs_s[i*2+0] = v_in_mr[flat];
+        rhs_s[i*2+1] = v_in_mt[flat];
+    }
+    __syncthreads();
+
+    // 2×2 block Thomas (thread 0)
+    if (tid == 0) {
+        for (int i = 0; i < nr; i++) {
+            double* Db = &D[i*4];
+            double* rb = &rhs_s[i*2];
+            if (i > 0) {
+                double* Lb = &L[i*4];
+                double* Dp = &D[(i-1)*4];
+                double* Up = &U[(i-1)*4];
+                // inv(D_{i-1}) for 2×2
+                double det = Dp[0]*Dp[3] - Dp[1]*Dp[2];
+                if (fabs(det) < 1e-30) det = 1e-30;
+                double id = 1.0/det;
+                double inv_D[4] = {Dp[3]*id, -Dp[1]*id, -Dp[2]*id, Dp[0]*id};
+                // M = L * inv(D)
+                double M[4];
+                M[0] = Lb[0]*inv_D[0] + Lb[1]*inv_D[2];
+                M[1] = Lb[0]*inv_D[1] + Lb[1]*inv_D[3];
+                M[2] = Lb[2]*inv_D[0] + Lb[3]*inv_D[2];
+                M[3] = Lb[2]*inv_D[1] + Lb[3]*inv_D[3];
+                // D -= M * U
+                Db[0] -= M[0]*Up[0] + M[1]*Up[2];
+                Db[1] -= M[0]*Up[1] + M[1]*Up[3];
+                Db[2] -= M[2]*Up[0] + M[3]*Up[2];
+                Db[3] -= M[2]*Up[1] + M[3]*Up[3];
+                // rhs -= M * rhs_{i-1}
+                double* rp = &rhs_s[(i-1)*2];
+                rb[0] -= M[0]*rp[0] + M[1]*rp[1];
+                rb[1] -= M[2]*rp[0] + M[3]*rp[1];
+            }
+        }
+        for (int i = nr-1; i >= 0; i--) {
+            double* Db = &D[i*4];
+            double* rb = &rhs_s[i*2];
+            double* xb = &x_s[i*2];
+            if (i < nr-1) {
+                double* Ub = &U[i*4];
+                double* xp = &x_s[(i+1)*2];
+                rb[0] -= Ub[0]*xp[0] + Ub[1]*xp[1];
+                rb[1] -= Ub[2]*xp[0] + Ub[3]*xp[1];
+            }
+            double det = Db[0]*Db[3] - Db[1]*Db[2];
+            if (fabs(det) < 1e-30) det = 1e-30;
+            double id = 1.0/det;
+            xb[0] = (Db[3]*rb[0] - Db[1]*rb[1]) * id;
+            xb[1] = (Db[0]*rb[1] - Db[2]*rb[0]) * id;
+        }
+    }
+    __syncthreads();
+
+    // Output: predicted velocity δvr, δvt (divide momentum correction by ρ)
+    for (int i = tid; i < nr; i += blockDim.x) {
+        int flat = i * nt + j;
+        int k = d_idx(i, j, nt, ng);
+        double rho_c = fmax(rho[k], 1e-20);
+        out_vr[flat] = x_s[i*2+0] / rho_c;
+        out_vt[flat] = x_s[i*2+1] / rho_c;
+    }
+}
+
+// ========================= PBP assembly kernel =======================
+// Assemble full 4-DOF output from PBP components:
+// out[ρ]  = r_ρ / A_ρ  (point Jacobi on continuity)
+// out[mr] = ρ·(ṽr - (1/Ap)·∂δp/∂r)
+// out[mt] = ρ·(ṽt - (1/Ap)·(1/r)·∂δp/∂θ)
+// out[E]  = r_E / A_E  (point Jacobi on energy)
+__global__
+void k_lm_pbp_assemble(
+    const double* rho_state, const double* blk_diag,
+    const double* v_in,      // original 4n RHS
+    const double* vr_pred, const double* vt_pred,  // predicted velocities
+    const double* dp, const double* Ap,
+    const double* r_center, const double* theta_face,
+    double* Mv_out,
+    int nr, int nt, int ng, double gamma) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int n = nr*nt;
+    int i = flat/nt, j = flat%nt;
+    int k = d_idx(i, j, nt, ng);
+    double rho_c = fmax(rho_state[k], 1e-20);
+    double r = r_center[i];
+
+    // ρ: point Jacobi — use (0,0) element of block inverse
+    const double* B = &blk_diag[flat*16];
+    Mv_out[flat] = B[0] * v_in[flat];
+
+    // Pressure gradient correction
+    double dp_dr = 0.0;
+    if (i > 0 && i < nr-1) {
+        double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
+        dp_dr = (dh*(dp[flat]-dp[(i-1)*nt+j])/dl + dl*(dp[(i+1)*nt+j]-dp[flat])/dh)/(dl+dh);
+    } else if (i==0 && nr>1)
+        dp_dr = (dp[1*nt+j]-dp[0])/(r_center[1]-r_center[0]);
+    else if (i==nr-1 && nr>=2)
+        dp_dr = (dp[(nr-1)*nt+j]-dp[(nr-2)*nt+j])/(r_center[nr-1]-r_center[nr-2]);
+
+    double dp_dt_r = 0.0;
+    if (j > 0 && j < nt-1) {
+        double tc_m=0.5*(theta_face[j-1]+theta_face[j]), tc_c=0.5*(theta_face[j]+theta_face[j+1]);
+        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
+        double dl=tc_c-tc_m, dh=tc_p-tc_c;
+        dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)/(r*(dl+dh));
+    }
+
+    double inv_ap = 1.0 / Ap[flat];
+    double dvr = vr_pred[flat] - inv_ap * dp_dr;
+    double dvt = vt_pred[flat] - inv_ap * dp_dt_r;
+
+    // Convert corrected velocity back to momentum
+    Mv_out[n + flat]   = rho_c * dvr;
+    Mv_out[2*n + flat] = rho_c * dvt;
+
+    // Energy: point Jacobi — use (3,3) element of block inverse
+    Mv_out[3*n + flat] = B[15] * v_in[3*n + flat];
+}
+
 // Velocity-only pressure correction: vr -= (1/Ap)*∂δp/∂r, vt -= (1/Ap)*(1/r)*∂δp/∂θ
 __global__
 void k_lm_simple_vcorr(double* vr_io, double* vt_io,
@@ -1752,15 +1951,51 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
     } else if (precond_type == PrecondType::BLOCK_SCHUR) {
         apply_block_schur(d_v, d_Mv, dt);
     } else if (precond_type == PrecondType::LINE_JACOBI) {
-        int smem = nr * (3*16 + 2*4) * sizeof(double);
-        int threads = std::min(nr, 256);
-        k_lm_line_solve<<<nt, threads, smem>>>(
-            d_rho, d_mr, d_mtheta, d_rhoE,
+        // Physics-Based Preconditioning (PBP):
+        //   1. Momentum predict: 2-DOF r-line solve (no pressure) → ṽr, ṽt
+        //   2. Pressure Poisson: ∇·(α∇δp) = div(ṽ), α=(γ-1)/Ap, via GMG
+        //   3. Velocity correct + assemble all 4 DOFs
+        double inv_dt = 1.0 / dt;
+
+        // Step 1: Solve A_v · δv = r_v (momentum-only, 2-DOF per cell)
+        // Input: d_v[n..2n] = r_mr, d_v[2n..3n] = r_mt (momentum residual)
+        // Output: d_simple_vr_s, d_simple_vt_s = predicted velocity corrections
+        {
+            int smem = nr * (3*4 + 2*2) * sizeof(double);
+            int threads = std::min(nr, 256);
+            k_lm_mom_line_solve<<<nt, threads, smem>>>(
+                d_rho, d_mr, d_mtheta,
+                d_cell_volume, d_area_r,
+                d_r_center, d_dr, d_dtheta,
+                d_v + n, d_v + 2*n,
+                d_simple_vr_s, d_simple_vt_s,
+                nr, nt, ng, inv_dt);
+        }
+
+        // Step 2: Divergence of predicted velocity
+        k_lm_simple_div<<<(n+B-1)/B,B>>>(
+            d_simple_vr_s, d_simple_vt_s,
             d_cell_volume, d_area_r, d_area_theta,
-            d_r_center, d_r_face, d_theta_face,
-            d_dr, d_dtheta, d_gr0,
-            d_v, d_Mv,
-            nr, nt, ng, gamma, 1.0/dt);
+            d_simple_div, nr, nt);
+
+        // α = (γ-1)/Ap for Schur complement ≈ ∇·(α∇)
+        k_lm_simple_alpha<<<(n+B-1)/B,B>>>(d_Ap, d_inv_rho, n);
+
+        k_lm_simple_prhs<<<(n+B-1)/B,B>>>(d_simple_div, d_rhs_poisson, nr, nt);
+
+        // Solve pressure Poisson (3 V-cycles, approximate is fine for preconditioner)
+        CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
+        gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 3, 1e-2);
+
+        // Step 3: Assemble all 4 DOFs
+        k_lm_pbp_assemble<<<(n+B-1)/B,B>>>(
+            d_rho, d_blk_diag,
+            d_v,
+            d_simple_vr_s, d_simple_vt_s,
+            d_simple_p, d_Ap,
+            d_r_center, d_theta_face,
+            d_Mv,
+            nr, nt, ng, gamma);
     } else if (precond_type == PrecondType::SIMPLE) {
         apply_simple(d_v, d_Mv, dt);
     } else if (precond_type == PrecondType::BLOCK_JACOBI) {
@@ -1941,8 +2176,29 @@ double LowMachSolver::step(double t, double t_end) {
     if (dt_current < 1e-30) dt_current = 1e-6;
     double dt = std::min({dt_current, dt_cap, t_end - t});
 
+    // Save U^{n-1} before overwriting d_Un
+    int n5 = 5*nr*nt;
+    CUDA_CHECK(cudaMemcpy(d_Un_prev, d_Un, n5*sizeof(double), cudaMemcpyDeviceToDevice));
+
     pack_state(d_Un);
     compute_scaling();
+
+    // ===== Linear extrapolation initial guess =====
+    // U⁰ = Uⁿ + (dt/dt_prev)·(Uⁿ - Uⁿ⁻¹)
+    // This gives O(dt²) initial error instead of O(dt), dramatically
+    // reducing Newton iterations at large dt.
+    // Only activate after step 1 (need two states) and when dt_prev > 0.
+    if (step_count > 0 && dt_prev > 1e-30) {
+        double ratio = dt / dt_prev;
+        // Cap extrapolation ratio to avoid overshooting when dt changes dramatically
+        ratio = std::min(ratio, 2.0);
+        // Compute delta = Uⁿ - Uⁿ⁻¹ in d_Fk (scratch), then unpack_add to live state
+        k_lm_copy<<<(n5+B-1)/B,B>>>(d_Fk, d_Un, n5);
+        k_lm_axpy<<<(n5+B-1)/B,B>>>(d_Fk, -1.0, d_Un_prev, n5);
+        // Apply: state += ratio * delta
+        k_lm_unpack_add<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_Fk, ratio, nr,nt,ng);
+        apply_floor();
+    }
 
     int max_newton = 25;      // was 20 — more room before giving up
     int max_dt_cuts = 8;
@@ -2087,6 +2343,7 @@ double LowMachSolver::step(double t, double t_end) {
         dt_current = 0.5 * dt;
     }
 
+    dt_prev = dt;
     step_count++;
     return dt;
 }
@@ -2217,6 +2474,8 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
 
     // Newton vectors (5*n packed: ρ, mr, mt, ρe, Φ)
     CUDA_CHECK(cudaMalloc(&d_Un, 5*n*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_Un_prev, 5*n*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_Un_prev, 0, 5*n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_Fk, 5*n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_residual, 5*n*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_residual_ls, 5*n*sizeof(double)));
@@ -2329,7 +2588,7 @@ void LowMachSolver::destroy() {
     cudaFree(d_phi); cudaFree(d_pi);
     cudaFree(d_rho0); cudaFree(d_P0); cudaFree(d_phi0);
     cudaFree(d_gr); cudaFree(d_gr0); cudaFree(d_shell_mass);
-    cudaFree(d_Un); cudaFree(d_Fk); cudaFree(d_residual); cudaFree(d_residual_ls);
+    cudaFree(d_Un); cudaFree(d_Un_prev); cudaFree(d_Fk); cudaFree(d_residual); cudaFree(d_residual_ls);
     for (int i = 0; i <= GMRES_RESTART; ++i) {
         cudaFree(d_gmres_V[i]);
         cudaFree(d_gmres_Z[i]);
