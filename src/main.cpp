@@ -5,16 +5,16 @@
 #include "hydro/flux.h"
 #include "hydro/integrate.h"
 #include "hydro/reconstruct.h"
-#include "gravity/poisson.h"
-#include "gravity/amgx_solver.h"
+#include "gravity/gmg.h"
 #include "io/output.h"
 #include "init/lane_emden.h"
 #include "init/sedov.h"
 #include "init/jeans.h"
 #include "init/evrard.h"
 
-#ifdef USE_AMGX
+#ifdef USE_GPU
 #include "gpu/gpu_solver.h"
+#include "gpu/lowmach_solver.h"
 #endif
 
 #include <cstdio>
@@ -34,8 +34,8 @@ struct SimConfig {
     int output_interval = 100;
     double G = 1.0;
     std::string test_case = "lane_emden";
-    std::string amgx_config = "config/amgx.json";
     std::string mesh_type = "log";
+    std::string solver_type = "compressible"; // "compressible" or "lowmach"
     Limiter limiter = Limiter::MINMOD;
 };
 
@@ -97,10 +97,10 @@ int main(int argc, char** argv) {
             cfg.cfl = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--output-interval") == 0 && i + 1 < argc)
             cfg.output_interval = std::atoi(argv[++i]);
-        else if (std::strcmp(argv[i], "--amgx-config") == 0 && i + 1 < argc)
-            cfg.amgx_config = argv[++i];
         else if (std::strcmp(argv[i], "--mesh") == 0 && i + 1 < argc)
             cfg.mesh_type = argv[++i];
+        else if (std::strcmp(argv[i], "--solver") == 0 && i + 1 < argc)
+            cfg.solver_type = argv[++i];
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed") {
@@ -179,56 +179,88 @@ int main(int argc, char** argv) {
 
     std::printf("Starting time integration...\n");
 
-#ifdef USE_AMGX
-    // ===== GPU path: entire time loop on device =====
-    GpuSolver gpu;
-    gpu.init(grid, eos, cfg.G, cfg.cfl, cfg.limiter, cfg.amgx_config);
-    gpu.upload_state(grid, state);
+#ifdef USE_GPU
+    if (cfg.solver_type == "lowmach") {
+        // ===== GPU low-Mach path =====
+        LowMachSolver lm;
+        lm.init(grid, eos, cfg.G, cfg.cfl);
+        lm.upload_state(grid, state);
 
-    std::timespec wall_start;
-    clock_gettime(CLOCK_MONOTONIC, &wall_start);
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
-    while (t < cfg.t_end) {
-        double dt = gpu.step(t, cfg.t_end);
-        t += dt;
-        step++;
+        while (t < cfg.t_end) {
+            double dt = lm.step(t, cfg.t_end);
+            t += dt;
+            step++;
 
-        if (step % 200 == 0)
-            print_progress(t, cfg.t_end, step, dt, wall_start);
+            if (step % 200 == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
 
-        if (step % cfg.output_interval == 0) {
-            gpu.download_state(grid, state);
-            Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-            std::fprintf(stderr, "\n");
-            std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                        step, t, dt, diag.total_mass, diag.total_energy);
+            if (step % cfg.output_interval == 0) {
+                lm.download_state(grid, state);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy);
 
-            char fname[256];
-            std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
-            write_vtk(fname, grid, state, cfg.gamma);
+                char fname[256];
+                std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
         }
-    }
-    std::fprintf(stderr, "\n");
+        std::fprintf(stderr, "\n");
 
-    gpu.download_state(grid, state);
-    gpu.destroy();
+        lm.download_state(grid, state);
+        lm.destroy();
+    } else {
+        // ===== GPU compressible path (HLLC + JFNK) =====
+        GpuSolver gpu;
+        gpu.init(grid, eos, cfg.G, cfg.cfl, cfg.limiter);
+        gpu.upload_state(grid, state);
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        while (t < cfg.t_end) {
+            double dt = gpu.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                gpu.download_state(grid, state);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy);
+
+                char fname[256];
+                std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
+        }
+        std::fprintf(stderr, "\n");
+
+        gpu.download_state(grid, state);
+        gpu.destroy();
+    }
 
 #else
-    // ===== CPU fallback path =====
+    // ===== CPU path =====
     State state_tmp;
     state_tmp.allocate(grid);
 
-    PoissonMatrix poisson_mat;
-    poisson_mat.assemble(grid, cfg.G);
-
-    AmgxPoissonSolver poisson_solver;
-    poisson_solver.init(cfg.amgx_config);
-    poisson_solver.setup(poisson_mat);
+    PoissonGMG poisson_solver;
+    poisson_solver.init(grid);
 
     FluxAccumulator acc;
     acc.allocate(grid.total_cells());
 
     std::vector<double> rho_cells;
+    std::vector<double> poisson_rhs;
 
     std::timespec wall_start;
     clock_gettime(CLOCK_MONOTONIC, &wall_start);
@@ -243,16 +275,16 @@ int main(int argc, char** argv) {
 
         compute_rhs(grid, state, eos, acc, cfg.limiter);
         extract_density(grid, state, rho_cells);
-        poisson_mat.set_rhs(grid, rho_cells, cfg.G);
-        poisson_solver.solve(poisson_mat.rhs.data(), state.phi.data());
+        compute_poisson_rhs(grid, rho_cells, cfg.G, poisson_rhs);
+        poisson_solver.solve(poisson_rhs.data(), state.phi.data());
         add_gravity_source(grid, state, acc);
         rk2_substep(grid, state, acc, dt);
 
         fill_ghost_cells(grid, state, cfg.gamma);
         compute_rhs(grid, state, eos, acc, cfg.limiter);
         extract_density(grid, state, rho_cells);
-        poisson_mat.set_rhs(grid, rho_cells, cfg.G);
-        poisson_solver.solve(poisson_mat.rhs.data(), state.phi.data());
+        compute_poisson_rhs(grid, rho_cells, cfg.G, poisson_rhs);
+        poisson_solver.solve(poisson_rhs.data(), state.phi.data());
         add_gravity_source(grid, state, acc);
         rk2_substep(grid, state, acc, dt);
 
@@ -285,8 +317,6 @@ int main(int argc, char** argv) {
         }
     }
     std::fprintf(stderr, "\n");
-
-    poisson_solver.destroy();
 #endif
 
     Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);

@@ -1,4 +1,5 @@
 #include "state.h"
+#include <cmath>
 
 void State::allocate(const Grid& grid) {
     size = grid.total_with_ghost();
@@ -11,13 +12,13 @@ void State::allocate(const Grid& grid) {
 
 PrimitiveVars State::to_primitive(int k, double gamma) const {
     PrimitiveVars w;
-    w.rho = rho[k];
+    w.rho = std::fmax(rho[k], 1e-20);
     double inv_rho = 1.0 / w.rho;
     w.vr = mr[k] * inv_rho;                              // Eq. (1.1): m_r = rho * v_r
     w.vtheta = mtheta[k] * inv_rho;                      // Eq. (1.1): m_theta = rho * v_theta
     double ke = 0.5 * (w.vr * w.vr + w.vtheta * w.vtheta); // Eq. (1.1): kinetic energy
     double e_int = E[k] * inv_rho - ke;                  // Eq. (1.1): E = e + ke
-    w.P = (gamma - 1.0) * w.rho * e_int;                 // Eq. (1.2)
+    w.P = std::fmax((gamma - 1.0) * w.rho * e_int, 1e-30); // Eq. (1.2)
     return w;
 }
 
