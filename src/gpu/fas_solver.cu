@@ -289,6 +289,33 @@ void FasSolver::compute_F(int l, double dt) {
         lev.d_fas_rhs, 1.0/dt, lev.nr, lev.nt, lev.ng);
 }
 
+// ========================= BLAS-like helpers ========================
+
+__global__
+void k_fas_scale(double* x, double a, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) x[i] *= a;
+}
+
+__global__
+void k_fas_copy(double* dst, const double* src, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) dst[i] = src[i];
+}
+
+// Pack physical cells from ghost-cell arrays into flat array
+__global__
+void k_fas_pack_flat(const double* rho, const double* mr,
+                     const double* mt, const double* rhoE,
+                     double* out, int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int n = nr*nt;
+    out[flat] = rho[k]; out[n+flat] = mr[k];
+    out[2*n+flat] = mt[k]; out[3*n+flat] = rhoE[k];
+}
+
 // ========================= Floor ========================
 
 __global__
@@ -516,23 +543,25 @@ __global__
 void k_fas_restrict_defect(
     const double* f_res, const double* f_vol,
     double* c_defect,
-    int cnr, int cnt, int fnt) {
+    int cnr, int cnt, int fnr, int fnt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= cnr*cnt) return;
     int ic = flat/cnt, jc = flat%cnt;
     int if0 = 2*ic, jf0 = 2*jc;
-    int fn = (fnt/cnt)*cnr*cnt; // = fnr*fnt
+    int fn = fnr*fnt;
     int cn = cnr*cnt;
 
     for (int eq = 0; eq < 4; ++eq) {
         double ws=0, vs=0;
         for (int di = 0; di < 2; ++di) {
             int fi = if0 + di;
+            if (fi >= fnr) continue;
             for (int dj = 0; dj < 2; ++dj) {
                 int fj = jf0 + dj;
+                if (fj >= fnt) continue;
                 int ff = fi*fnt + fj;
                 double v = f_vol[ff];
-                ws += f_res[eq*(fnt*(fnt/cnt)*cnr) + ff] * v;
+                ws += f_res[eq*fn + ff] * v;
                 vs += v;
             }
         }
@@ -571,11 +600,10 @@ void FasSolver::restrict_defect(int fine, int coarse, double dt) {
     compute_F(fine, dt);
 
     // 2. Restrict fine defect F(u_h) → temporary in cl.d_Un (4*cn scratch)
-    // Use cl.d_Un as scratch for restricted defect
     k_fas_restrict_defect<<<(cn+B-1)/B,B>>>(
         fl.d_res, fl.d_cell_volume,
-        cl.d_Un,  // scratch for restricted defect
-        cl.nr, cl.nt, fl.nt);
+        cl.d_Un,
+        cl.nr, cl.nt, fl.nr, fl.nt);
 
     // 3. Restrict state u_h → u_H
     restrict_state(fine, coarse);
@@ -645,11 +673,7 @@ void FasSolver::prolongate_correct(int coarse, int fine) {
 // ========================= FAS V-cycle ========================
 
 void FasSolver::fas_vcycle(int l, double dt) {
-    FasLevel& lev = levels[l];
-    int n = lev.nr * lev.nt;
-
     if (l == n_levels - 1) {
-        // Coarsest level: many smooth iterations
         assemble_smoother(l, dt);
         smooth(l, dt, 50);
         return;
@@ -659,56 +683,23 @@ void FasSolver::fas_vcycle(int l, double dt) {
     assemble_smoother(l, dt);
     smooth(l, dt, NU1);
 
-    // Save coarse state before restrict overwrites it
     FasLevel& cl = levels[l + 1];
-    int cn = cl.nr * cl.nt;
+    int cn = cl.nr * cl.nt, B = 256;
 
-    // Restrict defect and state to coarse level
+    // Restrict defect and state: fine → coarse
+    // (This sets cl.d_rho/mr/mt/rhoE = Î·u_h and cl.d_fas_rhs with τ-correction)
     restrict_defect(l, l + 1, dt);
 
-    // Save restricted state (u_H = Î·u_h) for prolongation correction
-    // Store in cl.d_Un: [rho, mr, mt, rhoE]
-    {
-        int B = 256;
-        // d_Un already used for defect scratch, now overwrite with current coarse state
-        // Need to re-save since restrict_defect already set cl state
-        __global__ void k_pack_flat(const double* rho, const double* mr,
-                                     const double* mt, const double* rhoE,
-                                     double* out, int nr, int nt, int ng);
-        // Inline: just copy from ghost-cell arrays to flat
-    }
-    // Actually, let's use a simpler approach: save before coarse solve
-    CUDA_CHECK(cudaMemcpy(cl.d_Un, cl.d_rho,
-        cl.total * sizeof(double), cudaMemcpyDeviceToDevice));
-    // Hmm, d_Un is 4*cn but d_rho has ghost cells (total size).
-    // Need to pack physical cells. Let me use a kernel.
+    // Save restricted state BEFORE coarse solve (for prolongation correction)
+    // d_Un stores flat packed [ρ, mr, mt, ρe] each cn doubles
+    k_fas_pack_flat<<<(cn+B-1)/B,B>>>(
+        cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
+        cl.d_Un, cl.nr, cl.nt, cl.ng);
 
-    // Wait — I need to rethink d_Un storage. Let me save the coarse ghost-cell
-    // arrays before the recursive solve. d_Un has 4*cn doubles.
-    // But I need the ghost-cell indexed values for prolongation.
-    // Simpler: save as flat arrays from the ghost-cell arrays.
-
-    // Actually the prolongation kernel reads c_rho[ck] with ghost indexing,
-    // and save_rho[flat] with flat indexing. Let me fix that.
-
-    // For now: abort and restructure. The save needs ghost-cell layout too.
-    // Easiest fix: make d_Un = 4 * total doubles, save full ghost arrays.
-    // But that's wasteful. Better: pack physical cells only in flat layout,
-    // and in prolongation read save[flat] not save[ck].
-
-    // The prolongation kernel already does this correctly — save_rho[flat]
-    // and c_rho[ck]. So d_Un stores FLAT physical cells.
-    // Pack coarse physical cells into d_Un before recursive solve.
-
-    // OK this is getting messy with inline kernels. Let me just write it properly.
-    // I'll abort this approach and use a cleaner method.
-
-    // DECISION: I'll come back and fix the save/restore properly.
-    // For now, placeholder.
-
+    // Recurse
     fas_vcycle(l + 1, dt);
 
-    // Prolongate correction
+    // Prolongate: u_h += P·(u_H_new - u_H_old)
     prolongate_correct(l + 1, l);
 
     // Post-smooth
@@ -875,18 +866,6 @@ void FasSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
 
 // ========================= Upload/Download ========================
 
-__global__
-void k_fas_pack_phys(const double* rho, const double* mr, const double* mt,
-                     const double* rhoE, double* out,
-                     int nr, int nt, int ng) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
-    int n = nr*nt;
-    out[flat] = rho[k]; out[n+flat] = mr[k];
-    out[2*n+flat] = mt[k]; out[3*n+flat] = rhoE[k];
-}
-
 void FasSolver::upload_state(const Grid& grid, const State& state) {
     FasLevel& lev = levels[0];
     int nr = lev.nr, nt = lev.nt, ng = lev.ng;
@@ -900,7 +879,7 @@ void FasSolver::upload_state(const Grid& grid, const State& state) {
             int sk = grid.idx(i,j);
             h_rho[k] = state.rho[sk];
             h_mr[k] = state.mr[sk];
-            h_mt[k] = state.mt[sk];
+            h_mt[k] = state.mtheta[sk];
             h_rhoE[k] = state.E[sk];
         }
     CUDA_CHECK(cudaMemcpy(lev.d_rho, h_rho.data(), total*sizeof(double), cudaMemcpyHostToDevice));
@@ -926,7 +905,7 @@ void FasSolver::download_state(const Grid& grid, State& state) {
             int sk = grid.idx(i,j);
             state.rho[sk] = h_rho[k];
             state.mr[sk] = h_mr[k];
-            state.mt[sk] = h_mt[k];
+            state.mtheta[sk] = h_mt[k];
             state.E[sk] = h_rhoE[k];
         }
 }
@@ -1010,45 +989,11 @@ int FasSolver::solve(double dt, int max_cycles, double tol) {
     FasLevel& finest = levels[0];
     int n = finest.nr * finest.nt, B = 256;
 
-    // Set up finest-level fas_rhs = Uⁿ/dt (save current state as Uⁿ)
-    k_fas_pack_phys<<<(n+B-1)/B,B>>>(
+    // Save Uⁿ and set fas_rhs = Uⁿ/dt on finest level
+    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
-        finest.d_Un, finest.nr, finest.nt, finest.ng);
-
-    // fas_rhs = Uⁿ/dt (no τ-correction on finest level)
-    double inv_dt = 1.0 / dt;
-    CUDA_CHECK(cudaMemcpy(finest.d_fas_rhs, finest.d_Un,
-                          4*n*sizeof(double), cudaMemcpyDeviceToDevice));
-    // Scale by 1/dt
-    // Need a scale kernel
-    auto scale = [&](double* ptr, double a, int nn) {
-        // inline kernel launch
-        // For simplicity, do on host... no, use existing
-    };
-    // Just use a kernel:
-    // TODO: use a proper scale kernel. For now, launch a simple one.
-    // Actually, k_fas_compute_F already handles this — fas_rhs stores Uⁿ/dt
-    // so we need: fas_rhs[i] *= inv_dt after the memcpy
-    // Let me add a scale kernel inline.
-
-    // Scale fas_rhs by inv_dt
-    {
-        // Simple: recompute fas_rhs = Uⁿ/dt on device
-        // d_Un already has packed Uⁿ. fas_rhs = d_Un * inv_dt.
-        // Need: k_scale(fas_rhs, inv_dt, 4*n)
-        // Reuse any existing scale kernel... let me just write one.
-    }
-
-    // Actually: I'll just incorporate the scale into compute_F.
-    // fas_rhs stores Uⁿ (unscaled). compute_F does:
-    //   F = R(U) - inv_dt*U + fas_rhs
-    // So if fas_rhs = inv_dt*Uⁿ, then F = R(U) - (U-Uⁿ)/dt.
-    // I need fas_rhs = inv_dt * Uⁿ.
-    // Do this via a kernel.
-
-    // PLACEHOLDER: For now, handle scaling properly
-    // This file has compilation issues I need to clean up.
-    // Let me just get the structure right and fix details in a second pass.
+        finest.d_fas_rhs, finest.nr, finest.nt, finest.ng);
+    k_fas_scale<<<(4*n+B-1)/B,B>>>(finest.d_fas_rhs, 1.0/dt, 4*n);
 
     for (int cyc = 0; cyc < max_cycles; ++cyc) {
         fas_vcycle(0, dt);
@@ -1060,6 +1005,28 @@ int FasSolver::solve(double dt, int max_cycles, double tol) {
         if (norm < tol) return cyc + 1;
     }
     return max_cycles;
+}
+
+// ========================= Time step ========================
+
+double FasSolver::step(double t, double t_end) {
+    if (!hse_set) { snapshot_hse(); }
+
+    apply_floor(0);
+
+    double dt_cap = 1.0;
+    if (dt_current < 1e-30) dt_current = 1e-6;
+    double dt = std::min({dt_current, dt_cap, t_end - t});
+
+    int cycles = solve(dt, 20, 1e-4);
+
+    if (step_count < 30 || step_count % 10 == 0)
+        std::fprintf(stderr, "  step %d: %d FAS V-cycles (dt=%.3e)\n",
+                     step_count, cycles, dt);
+
+    dt_current = std::min(1.2 * dt, dt_cap);
+    step_count++;
+    return dt;
 }
 
 // ========================= Destroy ========================

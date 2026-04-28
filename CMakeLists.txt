@@ -32,6 +32,7 @@ if(USE_GPU)
     list(APPEND SOURCES
         src/gpu/lowmach_solver.cu
         src/gpu/gmg_gpu.cu
+        src/gpu/fas_solver.cu
     )
     if(AMGX_DIR)
         list(APPEND SOURCES src/gpu/gpu_solver.cu)
