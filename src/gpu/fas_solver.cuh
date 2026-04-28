@@ -3,6 +3,7 @@
 #include "../grid.h"
 #include "../state.h"
 #include "../eos.h"
+#include "gmg_gpu.cuh"
 
 // FAS (Full Approximation Scheme) nonlinear multigrid for the low-Mach
 // 4-DOF Euler system: (ρ, ρvr, ρvθ, ρe).
@@ -52,6 +53,15 @@ struct FasLevel {
 
     // Block Jacobian diagonal (4×4 per cell, 16*phys)
     double *d_blk_inv;
+
+    // SIMPLE smoother scratch (per level)
+    double *d_Ap;           // momentum diagonal (phys)
+    double *d_vr_s, *d_vt_s; // predicted velocity (phys each)
+    double *d_div_s;        // divergence scratch (phys)
+    double *d_dp;           // pressure correction (phys)
+    double *d_poisson_rhs;  // Poisson RHS (phys)
+    double *d_inv_Ap;       // 1/Ap (phys)
+    GmgGpu pressure_gmg;   // per-level pressure Poisson solver
 };
 
 struct FasSolver {

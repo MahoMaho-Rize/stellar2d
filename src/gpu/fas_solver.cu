@@ -446,6 +446,119 @@ void k_fas_assemble_blkjac(
     for(int q=0;q<16;q++) B[q]=inv_m[q];
 }
 
+// ========================= SIMPLE smoother kernels ========================
+
+__global__
+void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
+                    const double* rhoE,
+                    const double* dr, const double* rc, const double* dtheta,
+                    double* Ap, int nr, int nt, int ng,
+                    double inv_dt, double gam) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    int k = fas_idx(i,j,nt,ng);
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
+    double P = fmax((gam - 1.0) * rhoE[k], 1e-30);
+    double cs = sqrt(gam * P / rho_c);
+    Ap[flat] = inv_dt + (vr + cs)/dr[i] + (vt + cs)/(rc[i]*dtheta[j]);
+}
+
+__global__
+void k_fas_vstar(const double* F, const double* Ap, const double* rho0,
+                 double atm_thresh, double* vr_s, double* vt_s, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    if (rho0[i] < atm_thresh) { vr_s[i] = 0; vt_s[i] = 0; return; }
+    double inv_ap = 1.0 / Ap[i];
+    vr_s[i] = -F[n + i] * inv_ap;
+    vt_s[i] = -F[2*n + i] * inv_ap;
+}
+
+__global__
+void k_fas_div(const double* vr_s, const double* vt_s,
+               const double* vol, const double* ar, const double* at,
+               double* div_out, int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    double invV = 1.0 / vol[flat];
+    double vr_lo = (i>0)    ? 0.5*(vr_s[flat]+vr_s[(i-1)*nt+j]) : 0.0;
+    double vr_hi = (i<nr-1) ? 0.5*(vr_s[flat]+vr_s[(i+1)*nt+j]) : 0.0;
+    double vt_lo = (j>0)    ? 0.5*(vt_s[flat]+vt_s[i*nt+j-1])   : 0.0;
+    double vt_hi = (j<nt-1) ? 0.5*(vt_s[flat]+vt_s[i*nt+j+1])   : 0.0;
+    div_out[flat] = invV*(ar[(i+1)*nt+j]*vr_hi - ar[i*nt+j]*vr_lo
+                         + at[i*(nt+1)+j+1]*vt_hi - at[i*(nt+1)+j]*vt_lo);
+}
+
+__global__
+void k_fas_prhs(const double* div_v, double* rhs, int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    rhs[flat] = (flat/nt == nr-1) ? 0.0 : div_v[flat];
+}
+
+__global__
+void k_fas_inv_ap(const double* Ap, double* alpha, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) alpha[i] = 1.0 / Ap[i];
+}
+
+// SIMPLE correction: momentum via Poisson-corrected velocity, ρ/E via block-inverse
+__global__
+void k_fas_simple_correct(
+    double* rho, double* mr, double* mt, double* rhoE,
+    const double* F, const double* blk_inv,
+    const double* vr_s, const double* vt_s,
+    const double* dp, const double* Ap,
+    const double* r_center, const double* theta_face,
+    const double* rho0, double atm_thresh,
+    int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;
+    int n = nr*nt;
+    int i = flat/nt, j = flat%nt;
+    int k = fas_idx(i,j,nt,ng);
+    double rho_c = fmax(rho[k], 1e-20);
+
+    // Pressure gradient of δp
+    int im = flat - nt*(int)(i>0), ip = flat + nt*(int)(i<nr-1);
+    double dp_dr = 0.0;
+    if (i > 0 && i < nr-1) {
+        double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
+        dp_dr = (dh*(dp[flat]-dp[im])/dl + dl*(dp[ip]-dp[flat])/dh)/(dl+dh);
+    } else if (i==0 && nr>1) dp_dr = (dp[ip]-dp[flat])/(r_center[1]-r_center[0]);
+    else if (i==nr-1 && nr>=2) dp_dr = (dp[flat]-dp[im])/(r_center[nr-1]-r_center[nr-2]);
+
+    double dp_dt_r = 0.0;
+    if (j > 0 && j < nt-1) {
+        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
+        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
+        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
+        double dl=tc_c-tc_m, dh=tc_p-tc_c;
+        dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)
+                  / (r_center[i]*(dl+dh));
+    }
+
+    double inv_ap = 1.0 / Ap[flat];
+    double dvr = vr_s[flat] - inv_ap * dp_dr;
+    double dvt = vt_s[flat] - inv_ap * dp_dt_r;
+
+    // Momentum correction
+    mr[k]  -= rho_c * dvr;
+    mt[k]  -= rho_c * dvt;
+
+    // ρ and E: block-inverse rows
+    const double* B = &blk_inv[flat*16];
+    double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
+    rho[k]  -= B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3;
+    rhoE[k] -= B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3;
+}
+
+// ========================= SIMPLE smoother ========================
+
 void FasSolver::assemble_smoother(int l, double dt) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
@@ -457,41 +570,10 @@ void FasSolver::assemble_smoother(int l, double dt) {
         lev.d_gr0,
         lev.d_blk_inv,
         lev.nr, lev.nt, lev.ng, gamma, 1.0/dt);
-}
-
-// Damped block Jacobi smooth: U ← U - ω · J⁻¹_diag · F(U)
-// (Newton direction: δU = -J⁻¹·F, damped by ω)
-// Use diagonal-only for ρ and ρe (prevents off-diagonal spurious coupling).
-// Freeze atmosphere cells where rho0 < atm_thresh.
-__global__
-void k_fas_smooth_apply(
-    double* rho, double* mr, double* mt, double* rhoE,
-    const double* F, const double* blk_inv,
-    const double* rho0, double atm_thresh,
-    double omega, int nr, int nt, int ng) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-
-    // Freeze atmosphere cells
-    if (rho0[flat] < atm_thresh) return;
-
-    int n = nr*nt;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
-
-    const double* B = &blk_inv[flat*16];
-    double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
-
-    // Full 4×4 block-inverse Newton update: δU = -ω·J⁻¹·F
-    double d0 = omega * (B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3);
-    double d1 = omega * (B[4]*f0 + B[5]*f1 + B[6]*f2 + B[7]*f3);
-    double d2 = omega * (B[8]*f0 + B[9]*f1 + B[10]*f2 + B[11]*f3);
-    double d3 = omega * (B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3);
-
-    // Newton direction: U -= J⁻¹·F
-    rho[k]  -= d0;
-    mr[k]   -= d1;
-    mt[k]   -= d2;
-    rhoE[k] -= d3;
+    k_fas_mom_diag<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_dr, lev.d_r_center, lev.d_dtheta,
+        lev.d_Ap, lev.nr, lev.nt, lev.ng, 1.0/dt, gamma);
 }
 
 void FasSolver::smooth(int l, double dt, int n_iters) {
@@ -500,11 +582,30 @@ void FasSolver::smooth(int l, double dt, int n_iters) {
 
     for (int it = 0; it < n_iters; ++it) {
         compute_F(l, dt);
-        k_fas_smooth_apply<<<(n+B-1)/B,B>>>(
+
+        // 1. Momentum prediction: δv* = -F_mom / Ap
+        k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
+            lev.d_rho0, atm_rho_thresh,
+            lev.d_vr_s, lev.d_vt_s, n);
+
+        // 2. Pressure Poisson: ∇·((1/Ap)∇δp) = div(δv*)
+        k_fas_div<<<(n+B-1)/B,B>>>(lev.d_vr_s, lev.d_vt_s,
+            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+            lev.d_div_s, lev.nr, lev.nt);
+        k_fas_inv_ap<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
+        k_fas_prhs<<<(n+B-1)/B,B>>>(lev.d_div_s, lev.d_poisson_rhs, lev.nr, lev.nt);
+        CUDA_CHECK(cudaMemset(lev.d_dp, 0, n*sizeof(double)));
+        lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_poisson_rhs, lev.d_dp, 3, 1e-2);
+
+        // 3. Correct state
+        k_fas_simple_correct<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_res, lev.d_blk_inv,
+            lev.d_vr_s, lev.d_vt_s,
+            lev.d_dp, lev.d_Ap,
+            lev.d_r_center, lev.d_theta_face,
             lev.d_rho0, atm_rho_thresh,
-            OMEGA, lev.nr, lev.nt, lev.ng);
+            lev.nr, lev.nt, lev.ng);
         apply_floor(l);
     }
 }
@@ -813,6 +914,15 @@ static void alloc_fas_level(FasLevel& lev) {
     // Block Jacobi
     CUDA_CHECK(cudaMalloc(&lev.d_blk_inv, 16*phys*sizeof(double)));
 
+    // SIMPLE scratch
+    CUDA_CHECK(cudaMalloc(&lev.d_Ap, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_vr_s, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_vt_s, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_div_s, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_dp, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_poisson_rhs, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_inv_Ap, phys*sizeof(double)));
+
     // Zero everything
     CUDA_CHECK(cudaMemset(lev.d_rho, 0, total*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_mr, 0, total*sizeof(double)));
@@ -880,6 +990,8 @@ void FasSolver::build_level(int l, int nr, int nt, int ng,
     }
     CUDA_CHECK(cudaMemcpy(lev.d_area_r, ar.data(), (nr+1)*nt*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_area_theta, at.data(), nr*(nt+1)*sizeof(double), cudaMemcpyHostToDevice));
+
+    lev.pressure_gmg.init(nr, nt, h_rf, h_tf);
 }
 
 void FasSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
@@ -1123,7 +1235,7 @@ double FasSolver::step(double t, double t_end) {
 
     apply_floor(0);
 
-    double dt_cap = 1e-4;  // conservative cap: block-Jacobi smooth-only limit
+    double dt_cap = 1.0;  // SIMPLE smoother handles pressure stiffness
     if (dt_current < 1e-30) dt_current = 1e-8;
 
     int max_dt_cuts = 6;
@@ -1219,6 +1331,10 @@ void FasSolver::destroy() {
         cudaFree(lev.d_rho0); cudaFree(lev.d_P0);
         cudaFree(lev.d_gr); cudaFree(lev.d_gr0); cudaFree(lev.d_shell_mass);
         cudaFree(lev.d_blk_inv);
+        cudaFree(lev.d_Ap); cudaFree(lev.d_vr_s); cudaFree(lev.d_vt_s);
+        cudaFree(lev.d_div_s); cudaFree(lev.d_dp);
+        cudaFree(lev.d_poisson_rhs); cudaFree(lev.d_inv_Ap);
+        lev.pressure_gmg.destroy();
     }
     n_levels = 0;
 }
