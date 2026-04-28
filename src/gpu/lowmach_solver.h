@@ -24,11 +24,11 @@
 // Linear solver: GMRES with block-diagonal scaling preconditioner.
 // Gravity: GMG constant-coefficient Poisson.
 
-enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE };
+enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE, COMBINED };
 
 struct LowMachSolver {
     void init(const Grid& grid, const EOS& eos, double G, double cfl,
-              PrecondType pc = PrecondType::SIMPLE);
+              PrecondType pc = PrecondType::BLOCK_JACOBI);
     void upload_state(const Grid& grid, const State& state);
     void download_state(const Grid& grid, State& state);
     double step(double t, double t_end);
@@ -64,7 +64,7 @@ struct LowMachSolver {
     double *d_residual; // scratch for residual computation
 
     // GMRES arrays
-    static constexpr int GMRES_RESTART = 30;
+    static constexpr int GMRES_RESTART = 60;
     double *d_gmres_V[GMRES_RESTART + 1];
     double *d_gmres_Z[GMRES_RESTART + 1]; // preconditioned
     double *d_gmres_w;
