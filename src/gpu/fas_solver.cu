@@ -576,6 +576,26 @@ void FasSolver::assemble_smoother(int l, double dt) {
         lev.d_Ap, lev.nr, lev.nt, lev.ng, 1.0/dt, gamma);
 }
 
+// Block Jacobi smooth: U ← U - ω · J⁻¹_diag · F(U)
+__global__
+void k_fas_smooth_blkjac(
+    double* rho, double* mr, double* mt, double* rhoE,
+    const double* F, const double* blk_inv,
+    const double* rho0, double atm_thresh,
+    double omega, int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;
+    int n = nr*nt;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    const double* B = &blk_inv[flat*16];
+    double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
+    rho[k]  -= omega * (B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3);
+    mr[k]   -= omega * (B[4]*f0 + B[5]*f1 + B[6]*f2 + B[7]*f3);
+    mt[k]   -= omega * (B[8]*f0 + B[9]*f1 + B[10]*f2 + B[11]*f3);
+    rhoE[k] -= omega * (B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3);
+}
+
 void FasSolver::smooth(int l, double dt, int n_iters) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
@@ -583,29 +603,32 @@ void FasSolver::smooth(int l, double dt, int n_iters) {
     for (int it = 0; it < n_iters; ++it) {
         compute_F(l, dt);
 
-        // 1. Momentum prediction: δv* = -F_mom / Ap
-        k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
-            lev.d_rho0, atm_rho_thresh,
-            lev.d_vr_s, lev.d_vt_s, n);
-
-        // 2. Pressure Poisson: ∇·((1/Ap)∇δp) = div(δv*)
-        k_fas_div<<<(n+B-1)/B,B>>>(lev.d_vr_s, lev.d_vt_s,
-            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
-            lev.d_div_s, lev.nr, lev.nt);
-        k_fas_inv_ap<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
-        k_fas_prhs<<<(n+B-1)/B,B>>>(lev.d_div_s, lev.d_poisson_rhs, lev.nr, lev.nt);
-        CUDA_CHECK(cudaMemset(lev.d_dp, 0, n*sizeof(double)));
-        lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_poisson_rhs, lev.d_dp, 3, 1e-2);
-
-        // 3. Correct state
-        k_fas_simple_correct<<<(n+B-1)/B,B>>>(
-            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-            lev.d_res, lev.d_blk_inv,
-            lev.d_vr_s, lev.d_vt_s,
-            lev.d_dp, lev.d_Ap,
-            lev.d_r_center, lev.d_theta_face,
-            lev.d_rho0, atm_rho_thresh,
-            lev.nr, lev.nt, lev.ng);
+        if (use_simple_smoother) {
+            k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
+                lev.d_rho0, atm_rho_thresh,
+                lev.d_vr_s, lev.d_vt_s, n);
+            k_fas_div<<<(n+B-1)/B,B>>>(lev.d_vr_s, lev.d_vt_s,
+                lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+                lev.d_div_s, lev.nr, lev.nt);
+            k_fas_inv_ap<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
+            k_fas_prhs<<<(n+B-1)/B,B>>>(lev.d_div_s, lev.d_poisson_rhs, lev.nr, lev.nt);
+            CUDA_CHECK(cudaMemset(lev.d_dp, 0, n*sizeof(double)));
+            lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_poisson_rhs, lev.d_dp, 3, 1e-2);
+            k_fas_simple_correct<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_res, lev.d_blk_inv,
+                lev.d_vr_s, lev.d_vt_s,
+                lev.d_dp, lev.d_Ap,
+                lev.d_r_center, lev.d_theta_face,
+                lev.d_rho0, atm_rho_thresh,
+                lev.nr, lev.nt, lev.ng);
+        } else {
+            k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_res, lev.d_blk_inv,
+                lev.d_rho0, atm_rho_thresh,
+                OMEGA, lev.nr, lev.nt, lev.ng);
+        }
         apply_floor(l);
     }
 }
@@ -1235,7 +1258,7 @@ double FasSolver::step(double t, double t_end) {
 
     apply_floor(0);
 
-    double dt_cap = 1.0;  // SIMPLE smoother handles pressure stiffness
+    double dt_cap = use_simple_smoother ? 1.0 : 1e-4;
     if (dt_current < 1e-30) dt_current = 1e-8;
 
     int max_dt_cuts = 6;
