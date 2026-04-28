@@ -25,6 +25,7 @@
 #include <string>
 #include <cstring>
 #include <ctime>
+#include <sys/stat.h>
 
 struct SimConfig {
     int nr = 128;
@@ -83,6 +84,24 @@ static void print_progress(double t, double t_end, int step, double dt,
     std::fprintf(stderr, "] %3d%%  step %-8d  t=%.3e  dt=%.2e  elapsed %.0fs  ETA %.0fs  ",
                  pct, step, t, dt, elapsed, eta);
     std::fflush(stderr);
+}
+
+// Build a traceable run directory: runs/<test>_<nr>x<nt>_<timestamp>/
+// Returns the path string (e.g. "runs/lane_emden_64x32_20260428_153012/").
+static std::string make_run_dir(const SimConfig& cfg) {
+    std::time_t now = std::time(nullptr);
+    std::tm* lt = std::localtime(&now);
+    char ts[32];
+    std::strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", lt);
+
+    char dirname[512];
+    std::snprintf(dirname, sizeof(dirname), "runs/%s_%dx%d_%s",
+                  cfg.test_case.c_str(), cfg.nr, cfg.ntheta, ts);
+
+    // mkdir -p runs/ and runs/<subdir>/
+    mkdir("runs", 0755);
+    mkdir(dirname, 0755);
+    return std::string(dirname);
 }
 
 int main(int argc, char** argv) {
@@ -178,7 +197,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    write_vtk("output_0000.vtk", grid, state, cfg.gamma);
+    std::string run_dir = make_run_dir(cfg);
+    std::printf("Output directory: %s/\n", run_dir.c_str());
+
+    {
+        char path[512];
+        std::snprintf(path, sizeof(path), "%s/output_0000.vtk", run_dir.c_str());
+        write_vtk(path, grid, state, cfg.gamma);
+    }
 
     double t = 0.0;
     int step = 0;
@@ -275,8 +301,8 @@ int main(int argc, char** argv) {
                 std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e  |vr|=%.3e |vt|=%.3e\n",
                             step, t, dt, diag.total_mass, diag.total_energy, max_vr, max_vt);
 
-                char fname[256];
-                std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
                 write_vtk(fname, grid, state, cfg.gamma);
             }
         }
@@ -309,8 +335,8 @@ int main(int argc, char** argv) {
                 std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
                             step, t, dt, diag.total_mass, diag.total_energy);
 
-                char fname[256];
-                std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
                 write_vtk(fname, grid, state, cfg.gamma);
             }
         }
@@ -388,8 +414,8 @@ int main(int argc, char** argv) {
             std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
                         step, t, dt, diag.total_mass, diag.total_energy);
 
-            char fname[256];
-            std::snprintf(fname, sizeof(fname), "output_%04d.vtk", step / cfg.output_interval);
+            char fname[512];
+            std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
             write_vtk(fname, grid, state, cfg.gamma);
         }
     }
@@ -399,7 +425,11 @@ int main(int argc, char** argv) {
     Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
     std::printf("Final: step %d  t = %.6e  M = %.10e  E = %.10e\n",
                 step, t, diag.total_mass, diag.total_energy);
-    write_vtk("output_final.vtk", grid, state, cfg.gamma);
+    {
+        char path[512];
+        std::snprintf(path, sizeof(path), "%s/output_final.vtk", run_dir.c_str());
+        write_vtk(path, grid, state, cfg.gamma);
+    }
 
     std::printf("Done.\n");
     return 0;
