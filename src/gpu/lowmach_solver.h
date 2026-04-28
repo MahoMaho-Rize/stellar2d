@@ -24,7 +24,7 @@
 // Linear solver: GMRES with block-diagonal scaling preconditioner.
 // Gravity: GMG constant-coefficient Poisson.
 
-enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE, COMBINED, LINE_JACOBI, BLOCK_SCHUR };
+enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE, COMBINED, LINE_JACOBI, BLOCK_SCHUR, PBP };
 
 struct LowMachSolver {
     void init(const Grid& grid, const EOS& eos, double G, double cfl,
@@ -139,6 +139,7 @@ struct LowMachSolver {
     void apply_simple(const double* d_v, double* d_Mv, double dt);
     void apply_line_jacobi(const double* d_v, double* d_Mv, double dt);
     void apply_block_schur(const double* d_v, double* d_Mv, double dt);
+    void apply_pbp(const double* d_v, double* d_Mv, double dt);
     void assemble_schur_sigma(double dt);
 
     // Snapshot current state as HSE reference (call before adding perturbations)

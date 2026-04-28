@@ -276,18 +276,24 @@ int main(int argc, char** argv) {
                              grid, eos, state_hse, state_perturbed, G);
         sweep_preconditioner(PrecondType::LINE_JACOBI, "LINE_JACOBI",
                              grid, eos, state_hse, state_perturbed, G);
+        sweep_preconditioner(PrecondType::PBP, "PBP",
+                             grid, eos, state_hse, state_perturbed, G);
 
         std::fprintf(stderr, "\n=== dt stability over 20 steps ===\n");
         test_dt_stability(PrecondType::BLOCK_JACOBI, "BLOCK_JACOBI",
                           grid, eos, state_hse, state_perturbed, G, 20);
         test_dt_stability(PrecondType::LINE_JACOBI, "LINE_JACOBI",
                           grid, eos, state_hse, state_perturbed, G, 20);
+        test_dt_stability(PrecondType::PBP, "PBP",
+                          grid, eos, state_hse, state_perturbed, G, 20);
     } else {
         sweep_preconditioner(PrecondType::BLOCK_JACOBI, "BLOCK_JACOBI",
                              grid, eos, state_hse, state_perturbed, G);
         sweep_preconditioner(PrecondType::LINE_JACOBI, "LINE_JACOBI",
                              grid, eos, state_hse, state_perturbed, G);
-        test_dt_stability(PrecondType::LINE_JACOBI, "LINE_JACOBI",
+        sweep_preconditioner(PrecondType::PBP, "PBP",
+                             grid, eos, state_hse, state_perturbed, G);
+        test_dt_stability(PrecondType::PBP, "PBP",
                           grid, eos, state_hse, state_perturbed, G, 20);
     }
 
