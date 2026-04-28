@@ -12,18 +12,26 @@ Diagnostics compute_diagnostics(const Grid& grid, const State& state, double gam
             int k = grid.idx(i, j);
             int flat = i * nt + j;
             double vol = grid.cell_volume[flat];
-            double rho = state.rho[k];
+            double rho = std::fmax(state.rho[k], 1e-30);
 
             diag.total_mass += rho * vol;
 
             double vr = state.mr[k] / rho;
             double vt = state.mtheta[k] / rho;
+            double speed = std::sqrt(vr * vr + vt * vt);
             double ke = 0.5 * rho * (vr * vr + vt * vt);
             diag.kinetic_energy += ke * vol;
 
             double e_total = state.E[k];
-            double e_int = e_total - ke;
+            double e_int = std::fmax(e_total - ke, 1e-30);
             diag.thermal_energy += e_int * vol;
+
+            double P = (gamma - 1.0) * e_int;
+            double cs = std::sqrt(gamma * P / rho);
+            double mach = speed / std::fmax(cs, 1e-30);
+            if (mach > diag.max_mach) diag.max_mach = mach;
+            if (std::fabs(vr) > diag.max_vr) diag.max_vr = std::fabs(vr);
+            if (std::fabs(vt) > diag.max_vtheta) diag.max_vtheta = std::fabs(vt);
 
             diag.gravitational_energy += 0.5 * rho * state.phi[flat] * vol;
         }
@@ -95,4 +103,36 @@ void write_vtk(const std::string& filename, const Grid& grid, const State& state
             out << vx << " " << 0.0 << " " << vz << "\n";
         }
     }
+
+    out << "SCALARS mach double 1\nLOOKUP_TABLE default\n";
+    for (int i = 0; i < nr; ++i) {
+        for (int j = 0; j < nt; ++j) {
+            int k = grid.idx(i, j);
+            double rho = std::fmax(state.rho[k], 1e-30);
+            double vr = state.mr[k] / rho;
+            double vt = state.mtheta[k] / rho;
+            double speed = std::sqrt(vr * vr + vt * vt);
+            double ke = 0.5 * (vr * vr + vt * vt);
+            double e_int = std::fmax(state.E[k] / rho - ke, 1e-30);
+            double P = (gamma - 1.0) * rho * e_int;
+            double cs = std::sqrt(gamma * P / rho);
+            out << speed / std::fmax(cs, 1e-30) << "\n";
+        }
+    }
+}
+
+void write_diagnostics_csv(const std::string& filename, int step, double t, double dt,
+                           const Diagnostics& diag, int newton_iters, int gmres_iters) {
+    bool is_new = (step <= 1);
+    std::FILE* f = std::fopen(filename.c_str(), is_new ? "w" : "a");
+    if (!f) return;
+    if (is_new)
+        std::fprintf(f, "step,t,dt,mass,total_energy,kinetic_energy,thermal_energy,"
+                        "grav_energy,max_mach,max_vr,max_vtheta,newton,gmres\n");
+    std::fprintf(f, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%d,%d\n",
+                 step, t, dt, diag.total_mass, diag.total_energy,
+                 diag.kinetic_energy, diag.thermal_energy, diag.gravitational_energy,
+                 diag.max_mach, diag.max_vr, diag.max_vtheta,
+                 newton_iters, gmres_iters);
+    std::fclose(f);
 }
