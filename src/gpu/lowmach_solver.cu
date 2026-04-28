@@ -118,6 +118,8 @@ void k_lm_residual(
     const double* theta_face, const double* dr, const double* dtheta,
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
+    const double* grad_r_wm, const double* grad_r_wp,
+    const double* grad_t_wm, const double* grad_t_wp,
     double* res,
     int nr, int nt, int ng, double gamma, double atm_thresh) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -182,35 +184,23 @@ void k_lm_residual(
     //   force_r = -(∇P - ∇P₀) + (ρ - ρ₀)·g₀(r) + ρ·(g(r) - g₀(r))
     //   force_θ = -(1/r)(∂P'/∂θ)  (no θ gravity component — 1D gravity is radial)
 
+    // ===== Branchless pressure gradient using precomputed stencil weights =====
+    // Clamped indices: at boundaries weight=0, so the clamped read is harmless.
     double Pp_c = P_c - P0[flat];
+
+    int im = flat - nt * (int)(i > 0);
+    int ip = flat + nt * (int)(i < nr-1);
+    double Pp_m = fmax((gamma-1.0)*rhoE[d_idx(max(i-1,0),j,nt,ng)],1e-30) - P0[im];
+    double Pp_p = fmax((gamma-1.0)*rhoE[d_idx(min(i+1,nr-1),j,nt,ng)],1e-30) - P0[ip];
+    double dPp_dr = grad_r_wm[flat]*(Pp_m - Pp_c) + grad_r_wp[flat]*(Pp_p - Pp_c);
+
+    int jm = flat - (int)(j > 0);
+    int jp = flat + (int)(j < nt-1);
+    double Pp_jm = fmax((gamma-1.0)*rhoE[d_idx(i,max(j-1,0),nt,ng)],1e-30) - P0[jm];
+    double Pp_jp = fmax((gamma-1.0)*rhoE[d_idx(i,min(j+1,nt-1),nt,ng)],1e-30) - P0[jp];
+    double dPp_dt_r = grad_t_wm[flat]*(Pp_jm - Pp_c) + grad_t_wp[flat]*(Pp_jp - Pp_c);
+
     double rhop_c = rho_c - rho0[flat];
-
-    // Radial pressure perturbation gradient
-    double dPp_dr = 0;
-    if (i > 0 && i < nr-1) {
-        double Pp_m = fmax((gamma-1.0)*rhoE[d_idx(i-1,j,nt,ng)],1e-30) - P0[(i-1)*nt+j];
-        double Pp_p = fmax((gamma-1.0)*rhoE[d_idx(i+1,j,nt,ng)],1e-30) - P0[(i+1)*nt+j];
-        double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
-        dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh) / (dl+dh);
-    } else if (i == 0 && nr > 1) {
-        double dh = r_center[1]-r_center[0];
-        dPp_dr = (fmax((gamma-1.0)*rhoE[d_idx(1,j,nt,ng)],1e-30)-P0[1*nt+j] - Pp_c)/dh;
-    } else if (i == nr-1 && nr >= 2) {
-        double dl = r_center[nr-1]-r_center[nr-2];
-        dPp_dr = (Pp_c - (fmax((gamma-1.0)*rhoE[d_idx(nr-2,j,nt,ng)],1e-30)-P0[(nr-2)*nt+j]))/dl;
-    }
-
-    // Theta pressure perturbation gradient (divided by r)
-    double dPp_dt_r = 0;
-    if (j > 0 && j < nt-1) {
-        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
-        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
-        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-        double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        double Pp_m = fmax((gamma-1.0)*rhoE[d_idx(i,j-1,nt,ng)],1e-30) - P0[i*nt+j-1];
-        double Pp_p = fmax((gamma-1.0)*rhoE[d_idx(i,j+1,nt,ng)],1e-30) - P0[i*nt+j+1];
-        dPp_dt_r = ((dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh))/(r*(dl+dh));
-    }
 
     // 1D gravity: g_r(i) is radial only, same for all θ cells at this radius
     double g0_r = gr0[i];
@@ -589,6 +579,7 @@ void LowMachSolver::compute_residual(double* d_res) {
         d_cell_volume,d_area_r,d_area_theta,
         d_r_center,d_r_face,d_theta_face,d_dr,d_dtheta,
         d_gr, d_gr0, d_P0, d_rho0,
+        d_grad_r_wm, d_grad_r_wp, d_grad_t_wm, d_grad_t_wp,
         d_residual,
         nr,nt,ng,gamma, atm_rho_thresh);
 }
@@ -683,8 +674,7 @@ void k_lm_clamp(double* delta, const double* scale, double max_rel, int N) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
     double lim = max_rel * scale[i];
-    if (delta[i] > lim) delta[i] = lim;
-    else if (delta[i] < -lim) delta[i] = -lim;
+    delta[i] = fmax(-lim, fmin(delta[i], lim));
 }
 
 void LowMachSolver::compute_scaling() {
@@ -947,8 +937,7 @@ __global__
 void k_lm_simple_prhs(const double* div_v, double* rhs, int nr, int nt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    rhs[flat] = div_v[flat];
-    if (flat/nt == nr-1) rhs[flat] = 0.0;
+    rhs[flat] = div_v[flat] * (double)(flat/nt < nr-1);
 }
 
 // Step 3: correct velocity and assemble output
@@ -1660,7 +1649,8 @@ void k_lm_pbp_assemble(
     const double* v_in,      // original 4n RHS
     const double* vr_pred, const double* vt_pred,  // predicted velocities
     const double* dp, const double* Ap,
-    const double* r_center, const double* theta_face,
+    const double* grad_r_wm, const double* grad_r_wp,
+    const double* grad_t_wm, const double* grad_t_wp,
     double* Mv_out,
     int nr, int nt, int ng, double gamma) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1669,29 +1659,19 @@ void k_lm_pbp_assemble(
     int i = flat/nt, j = flat%nt;
     int k = d_idx(i, j, nt, ng);
     double rho_c = fmax(rho_state[k], 1e-20);
-    double r = r_center[i];
 
     // ρ: point Jacobi (row 0 has no coupling to mr,mt)
     const double* Binv = &blk_diag[flat*16];
     Mv_out[flat] = Binv[0] * v_in[flat];
 
-    // Pressure gradient of δp
-    double dp_dr = 0.0;
-    if (i > 0 && i < nr-1) {
-        double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
-        dp_dr = (dh*(dp[flat]-dp[(i-1)*nt+j])/dl + dl*(dp[(i+1)*nt+j]-dp[flat])/dh)/(dl+dh);
-    } else if (i==0 && nr>1)
-        dp_dr = (dp[1*nt+j]-dp[0])/(r_center[1]-r_center[0]);
-    else if (i==nr-1 && nr>=2)
-        dp_dr = (dp[(nr-1)*nt+j]-dp[(nr-2)*nt+j])/(r_center[nr-1]-r_center[nr-2]);
+    // Branchless pressure gradient using precomputed stencil weights
+    int im = flat - nt * (int)(i > 0);
+    int ip = flat + nt * (int)(i < nr-1);
+    double dp_dr = grad_r_wm[flat]*(dp[im] - dp[flat]) + grad_r_wp[flat]*(dp[ip] - dp[flat]);
 
-    double dp_dt_r = 0.0;
-    if (j > 0 && j < nt-1) {
-        double tc_m=0.5*(theta_face[j-1]+theta_face[j]), tc_c=0.5*(theta_face[j]+theta_face[j+1]);
-        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-        double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)/(r*(dl+dh));
-    }
+    int jm = flat - (int)(j > 0);
+    int jp = flat + (int)(j < nt-1);
+    double dp_dt_r = grad_t_wm[flat]*(dp[jm] - dp[flat]) + grad_t_wp[flat]*(dp[jp] - dp[flat]);
 
     double inv_ap = 1.0 / Ap[flat];
     double dvr = vr_pred[flat] - inv_ap * dp_dr;
@@ -1704,8 +1684,6 @@ void k_lm_pbp_assemble(
     Mv_out[2*n + flat] = dmt;
 
     // Energy: forward substitution with J's compression work coupling
-    // J[3,1] = -P·∂(div v)/∂(mr),  J[3,2] = -P·∂(div v)/∂(mt)
-    // δE = (r_E - J[3,1]·δmr - J[3,2]·δmt) / J[3,3]
     const double* J = &blk_J[flat*16];
     double J_E_mr = J[3*4+1];
     double J_E_mt = J[3*4+2];
@@ -1715,31 +1693,24 @@ void k_lm_pbp_assemble(
 }
 
 // Velocity-only pressure correction: vr -= (1/Ap)*∂δp/∂r, vt -= (1/Ap)*(1/r)*∂δp/∂θ
+// Branchless: uses precomputed gradient stencil weights.
 __global__
 void k_lm_simple_vcorr(double* vr_io, double* vt_io,
                        const double* dp, const double* Ap,
-                       const double* rc, const double* theta_face,
+                       const double* grad_r_wm, const double* grad_r_wp,
+                       const double* grad_t_wm, const double* grad_t_wp,
                        int nr, int nt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
 
-    double dp_dr = 0.0;
-    if (i > 0 && i < nr-1) {
-        double dl=rc[i]-rc[i-1], dh=rc[i+1]-rc[i];
-        dp_dr = (dh*(dp[flat]-dp[(i-1)*nt+j])/dl + dl*(dp[(i+1)*nt+j]-dp[flat])/dh)/(dl+dh);
-    } else if (i==0 && nr>1)
-        dp_dr = (dp[1*nt+j]-dp[0])/(rc[1]-rc[0]);
-    else if (i==nr-1 && nr>=2)
-        dp_dr = (dp[(nr-1)*nt+j]-dp[(nr-2)*nt+j])/(rc[nr-1]-rc[nr-2]);
+    int im = flat - nt * (int)(i > 0);
+    int ip = flat + nt * (int)(i < nr-1);
+    double dp_dr = grad_r_wm[flat]*(dp[im] - dp[flat]) + grad_r_wp[flat]*(dp[ip] - dp[flat]);
 
-    double dp_dt_r = 0.0;
-    if (j > 0 && j < nt-1) {
-        double tc_m=0.5*(theta_face[j-1]+theta_face[j]), tc_c=0.5*(theta_face[j]+theta_face[j+1]);
-        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-        double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)/(rc[i]*(dl+dh));
-    }
+    int jm = flat - (int)(j > 0);
+    int jp = flat + (int)(j < nt-1);
+    double dp_dt_r = grad_t_wm[flat]*(dp[jm] - dp[flat]) + grad_t_wp[flat]*(dp[jp] - dp[flat]);
 
     double inv_ap = 1.0 / Ap[flat];
     vr_io[flat] -= inv_ap * dp_dr;
@@ -1927,7 +1898,7 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
             d_v,
             d_simple_vr_s, d_simple_vt_s,
             d_simple_p, d_Ap,
-            d_r_center, d_theta_face,
+            d_grad_r_wm, d_grad_r_wp, d_grad_t_wm, d_grad_t_wp,
             d_Mv,
             nr, nt, ng, gamma);
     } else if (precond_type == PrecondType::BLOCK_SCHUR) {
@@ -2391,6 +2362,50 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
         CUDA_CHECK(cudaMemcpy(d_sin_theta_center, stc.data(), nt*sizeof(double), cudaMemcpyHostToDevice));
     }
 
+    // Precompute gradient stencil weights (eliminates branching in hot kernels)
+    {
+        std::vector<double> wr_m(n), wr_p(n), wt_m(n), wt_p(n);
+        for (int i = 0; i < nr; ++i) {
+            for (int j = 0; j < nt; ++j) {
+                int flat = i*nt + j;
+                double r = grid.r_center[i];
+                // Radial gradient: dP/dr = wm*(P_{i-1}-Pc) + wp*(P_{i+1}-Pc)
+                if (i > 0 && i < nr-1) {
+                    double dl = grid.r_center[i] - grid.r_center[i-1];
+                    double dh = grid.r_center[i+1] - grid.r_center[i];
+                    wr_m[flat] = -dh / (dl*(dl+dh));
+                    wr_p[flat] = dl / (dh*(dl+dh));
+                } else if (i == 0 && nr > 1) {
+                    wr_m[flat] = 0.0;
+                    wr_p[flat] = 1.0 / (grid.r_center[1] - grid.r_center[0]);
+                } else { // i == nr-1
+                    wr_m[flat] = -1.0 / (grid.r_center[nr-1] - grid.r_center[nr-2]);
+                    wr_p[flat] = 0.0;
+                }
+                // Theta gradient / r: (1/r)dP/dθ = wm*(P_{j-1}-Pc) + wp*(P_{j+1}-Pc)
+                if (j > 0 && j < nt-1) {
+                    double tc_m = 0.5*(grid.theta_face[j-1] + grid.theta_face[j]);
+                    double tc_c = 0.5*(grid.theta_face[j] + grid.theta_face[j+1]);
+                    double tc_p = 0.5*(grid.theta_face[j+1] + grid.theta_face[j+2]);
+                    double dl = tc_c - tc_m, dh = tc_p - tc_c;
+                    wt_m[flat] = -dh / (r * dl * (dl+dh));
+                    wt_p[flat] = dl / (r * dh * (dl+dh));
+                } else {
+                    wt_m[flat] = 0.0;
+                    wt_p[flat] = 0.0;
+                }
+            }
+        }
+        CUDA_CHECK(cudaMalloc(&d_grad_r_wm, n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_grad_r_wp, n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_grad_t_wm, n*sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_grad_t_wp, n*sizeof(double)));
+        CUDA_CHECK(cudaMemcpy(d_grad_r_wm, wr_m.data(), n*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_grad_r_wp, wr_p.data(), n*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_grad_t_wm, wt_m.data(), n*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_grad_t_wp, wt_p.data(), n*sizeof(double), cudaMemcpyHostToDevice));
+    }
+
     // State arrays (with ghosts)
     CUDA_CHECK(cudaMalloc(&d_rho, total_ghost*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_mr, total_ghost*sizeof(double)));
@@ -2529,6 +2544,8 @@ void LowMachSolver::destroy() {
     cudaFree(d_r_face); cudaFree(d_r_center); cudaFree(d_dr);
     cudaFree(d_theta_face); cudaFree(d_theta_center); cudaFree(d_dtheta);
     cudaFree(d_sin_theta_face); cudaFree(d_sin_theta_center);
+    cudaFree(d_grad_r_wm); cudaFree(d_grad_r_wp);
+    cudaFree(d_grad_t_wm); cudaFree(d_grad_t_wp);
     cudaFree(d_cell_volume); cudaFree(d_area_r); cudaFree(d_area_theta);
     cudaFree(d_rho); cudaFree(d_mr); cudaFree(d_mtheta); cudaFree(d_rhoE);
     cudaFree(d_phi); cudaFree(d_pi);
