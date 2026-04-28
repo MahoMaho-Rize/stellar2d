@@ -42,6 +42,7 @@ struct SimConfig {
     std::string solver_type = "compressible"; // "compressible" or "lowmach"
     std::string precond = "line_jacobi";         // preconditioner for lowmach solver
     Limiter limiter = Limiter::MINMOD;
+    double perturb_amplitude = 1e-3;  // density perturbation for lane_emden_perturbed
 };
 
 static void extract_density(const Grid& grid, const State& state, std::vector<double>& rho_cells) {
@@ -126,6 +127,8 @@ int main(int argc, char** argv) {
             cfg.solver_type = argv[++i];
         else if (std::strcmp(argv[i], "--precond") == 0 && i + 1 < argc)
             cfg.precond = argv[++i];
+        else if (std::strcmp(argv[i], "--perturb") == 0 && i + 1 < argc)
+            cfg.perturb_amplitude = std::atof(argv[++i]);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed") {
@@ -178,7 +181,7 @@ int main(int argc, char** argv) {
     } else if (cfg.test_case == "lane_emden_perturbed") {
         LaneEmdenParams lep;
         lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-        init_lane_emden_perturbed(grid, state, lep, cfg.gamma, 1e-3);
+        init_lane_emden_perturbed(grid, state, lep, cfg.gamma, cfg.perturb_amplitude);
     } else if (cfg.test_case == "sedov") {
         SedovParams sp;
         sp.rho_0 = 1.0; sp.E_blast = 1.0; sp.r_blast = 0.05;
