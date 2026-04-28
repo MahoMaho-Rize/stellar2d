@@ -241,6 +241,10 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "\n");
                 std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
                             step, t, dt, diag.total_mass, diag.total_energy);
+
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
             }
         }
         fas.download_state(grid, state);
