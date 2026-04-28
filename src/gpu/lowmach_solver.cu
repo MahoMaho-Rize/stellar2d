@@ -833,6 +833,38 @@ void k_lm_simple_correct(
     out[3*n + flat] = -dt * r_rhoE[flat];
 }
 
+// Velocity-only pressure correction: vr -= (1/Ap)*∂δp/∂r, vt -= (1/Ap)*(1/r)*∂δp/∂θ
+__global__
+void k_lm_simple_vcorr(double* vr_io, double* vt_io,
+                       const double* dp, const double* Ap,
+                       const double* rc, const double* theta_face,
+                       int nr, int nt) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+
+    double dp_dr = 0.0;
+    if (i > 0 && i < nr-1) {
+        double dl=rc[i]-rc[i-1], dh=rc[i+1]-rc[i];
+        dp_dr = (dh*(dp[flat]-dp[(i-1)*nt+j])/dl + dl*(dp[(i+1)*nt+j]-dp[flat])/dh)/(dl+dh);
+    } else if (i==0 && nr>1)
+        dp_dr = (dp[1*nt+j]-dp[0])/(rc[1]-rc[0]);
+    else if (i==nr-1 && nr>=2)
+        dp_dr = (dp[(nr-1)*nt+j]-dp[(nr-2)*nt+j])/(rc[nr-1]-rc[nr-2]);
+
+    double dp_dt_r = 0.0;
+    if (j > 0 && j < nt-1) {
+        double tc_m=0.5*(theta_face[j-1]+theta_face[j]), tc_c=0.5*(theta_face[j]+theta_face[j+1]);
+        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
+        double dl=tc_c-tc_m, dh=tc_p-tc_c;
+        dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)/(rc[i]*(dl+dh));
+    }
+
+    double inv_ap = 1.0 / Ap[flat];
+    vr_io[flat] -= inv_ap * dp_dr;
+    vt_io[flat] -= inv_ap * dp_dt_r;
+}
+
 void LowMachSolver::assemble_simple(double dt) {
     int n = nr*nt, B = 256;
     k_lm_simple_mom_diag<<<(n+B-1)/B,B>>>(
@@ -876,7 +908,31 @@ void LowMachSolver::apply_simple(const double* d_v, double* d_Mv, double dt) {
 
 void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double dt) {
     int n = nr*nt, N = 4*n, B = 256;
-    if (precond_type == PrecondType::SIMPLE) {
+    if (precond_type == PrecondType::COMBINED) {
+        // Step 1: Block Jacobi for full intra-cell coupling
+        k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
+
+        // Step 2: Pressure Poisson correction on velocity only.
+        // Compute div of block Jacobi's velocity output
+        k_lm_simple_div<<<(n+B-1)/B,B>>>(
+            d_Mv + n, d_Mv + 2*n,  // vr*, vt* from block Jacobi
+            d_cell_volume, d_area_r, d_area_theta,
+            d_simple_div, nr, nt);
+
+        k_lm_simple_alpha<<<(n+B-1)/B,B>>>(d_Ap, d_inv_rho, n);
+        k_lm_simple_prhs<<<(n+B-1)/B,B>>>(d_simple_div, d_rhs_poisson, nr, nt);
+
+        CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
+        gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 10, 1e-3);
+
+        // Subtract (1/Ap)∇δp from velocity components of Mv.
+        // ρ and ρe components remain as block Jacobi computed them.
+        k_lm_simple_vcorr<<<(n+B-1)/B,B>>>(
+            d_Mv + n, d_Mv + 2*n,   // in/out: vr, vt
+            d_simple_p, d_Ap,
+            d_r_center, d_theta_face,
+            nr, nt);
+    } else if (precond_type == PrecondType::SIMPLE) {
         apply_simple(d_v, d_Mv, dt);
     } else if (precond_type == PrecondType::BLOCK_JACOBI) {
         k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_diag, d_v, d_Mv, n);
@@ -1041,34 +1097,37 @@ double LowMachSolver::step(double t, double t_end) {
 
     static int step_count = 0;
 
-    // HSE snapshot + diagnostic on first call.
-    // If snapshot_hse() was already called externally (e.g. for perturbed IC),
-    // skip re-snapshotting to preserve the unperturbed reference.
+    // HSE snapshot on first call.
     static bool hse_init = false;
     if (!hse_init) {
-        if (!hse_set_externally) {
+        if (!hse_set_externally)
             snapshot_hse();
-        }
-        diagnose_hse_residual();
         hse_init = true;
     }
 
     // Ensure clean state before packing Un.
+    // Do NOT re-solve gravity here. Φ is already consistent:
+    //   - Step 0, unperturbed: Φ = Φ₀ from snapshot → Φ' = 0 → ||R|| = 0
+    //   - Step 0, perturbed: Φ = Φ₀ from unperturbed snapshot → Φ' = 0
+    //     → force = -∇P' - ρ'∇Φ₀ (correct initial perturbation force)
+    //   - Step > 0: Φ from last accepted Newton iterate
+    // Re-solving gravity would introduce O(GMG_tol/dr) noise on the
+    // log mesh that overwhelms the physical perturbation signal.
+    // Gravity is updated inside Newton (newton > 0) when ρ changes.
     apply_floor();
-    // Must solve gravity so Φ matches the current ρ.
-    // - Step 0, unperturbed: snapshot_hse already set Φ=Φ₀, ρ=ρ₀ → skip
-    //   to preserve Φ=Φ₀ exactly (re-solving introduces O(tol) noise).
-    // - Step 0, perturbed: ρ ≠ ρ₀ so Φ must be updated for correct Φ'.
-    // - Step > 0: ρ changed from Newton updates, Φ needs refresh.
-    if (step_count > 0 || hse_set_externally)
-        solve_gravity();
+
+    // Diagnostic on very first step only
+    if (step_count == 0)
+        diagnose_hse_residual();
 
     // Advection CFL (no sound speed!)
     double dt_cfl = compute_cfl_dt();
-    // For near-static initial conditions, dt_cfl can be huge — cap it
-    double dt_cap = 0.1;
-    if (dt_current < 1e-30) dt_current = std::min(dt_cfl, dt_cap);
-    double dt = std::min({dt_current, dt_cfl, t_end - t});
+    // Start with a small dt and grow on success.
+    // Initial dt_cap is small enough that 1/dt dominates the Jacobian,
+    // making Newton easy. Grow by 2× each successful step.
+    double dt_cap = 1.0;
+    if (dt_current < 1e-30) dt_current = 1e-6;
+    double dt = std::min({dt_current, dt_cfl, dt_cap, t_end - t});
 
     pack_state(d_Un);
     compute_scaling();
@@ -1093,9 +1152,9 @@ double LowMachSolver::step(double t, double t_end) {
                             step_count, dt);
         }
 
-        if (precond_type == PrecondType::BLOCK_JACOBI)
+        if (precond_type == PrecondType::BLOCK_JACOBI || precond_type == PrecondType::COMBINED)
             assemble_block_jacobi(dt);
-        else if (precond_type == PrecondType::SIMPLE)
+        if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED)
             assemble_simple(dt);
 
         double Fnorm0 = 0.0;
@@ -1163,9 +1222,9 @@ double LowMachSolver::step(double t, double t_end) {
     }
 
     if (converged)
-        dt_current = std::min(1.5 * dt, std::min(dt_cfl, dt_cap));
+        dt_current = std::min(2.0 * dt, std::min(dt_cfl, dt_cap));
     else
-        dt_current = 0.25 * dt;
+        dt_current = 0.5 * dt;
 
     step_count++;
     return dt;
@@ -1290,14 +1349,14 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
 
     // Block-diagonal Jacobi preconditioner
     d_blk_diag = nullptr;
-    if (precond_type == PrecondType::BLOCK_JACOBI) {
+    if (precond_type == PrecondType::BLOCK_JACOBI || precond_type == PrecondType::COMBINED) {
         CUDA_CHECK(cudaMalloc(&d_blk_diag, n*16*sizeof(double)));
     }
 
-    // SIMPLE preconditioner
+    // SIMPLE preconditioner (also needed for COMBINED)
     d_Ap = nullptr; d_simple_p = nullptr; d_simple_div = nullptr;
     d_simple_vr_s = nullptr; d_simple_vt_s = nullptr;
-    if (precond_type == PrecondType::SIMPLE) {
+    if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED) {
         CUDA_CHECK(cudaMalloc(&d_Ap, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_p, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_div, n*sizeof(double)));
@@ -1310,7 +1369,8 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     gmg.init(nr, nt, grid.r_face.data(), grid.theta_face.data());
 
     initialized = true;
-    const char* pc_name = (precond_type == PrecondType::SIMPLE) ? "SIMPLE" :
+    const char* pc_name = (precond_type == PrecondType::COMBINED) ? "Combined" :
+                          (precond_type == PrecondType::SIMPLE) ? "SIMPLE" :
                           (precond_type == PrecondType::BLOCK_JACOBI) ? "BlockJacobi" : "None";
     std::printf("Low-Mach GPU solver (JFNK+FGMRES+GMG, PC=%s): %dx%d (%d cells), %d MG levels\n",
                 pc_name, nr, nt, n, gmg.n_levels);
@@ -1378,6 +1438,7 @@ void LowMachSolver::destroy() {
     if (d_simple_div) cudaFree(d_simple_div);
     if (d_simple_vr_s) cudaFree(d_simple_vr_s);
     if (d_simple_vt_s) cudaFree(d_simple_vt_s);
-    if (precond_type == PrecondType::SIMPLE) gmg_pressure.destroy();
+    if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED)
+        gmg_pressure.destroy();
     initialized = false;
 }
