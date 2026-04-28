@@ -192,6 +192,7 @@ int main(int argc, char** argv) {
         else if (cfg.precond == "line_jacobi") pc = PrecondType::LINE_JACOBI;
         else if (cfg.precond == "block_schur") pc = PrecondType::BLOCK_SCHUR;
         else if (cfg.precond == "combined") pc = PrecondType::COMBINED;
+        else if (cfg.precond == "pbp")      pc = PrecondType::PBP;
 
         LowMachSolver lm;
         lm.init(grid, eos, cfg.G, cfg.cfl, pc);
