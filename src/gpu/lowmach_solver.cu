@@ -611,6 +611,17 @@ void LowMachSolver::apply_floor() {
     k_lm_floor<<<(nr*nt+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE, nr,nt,ng,gamma, 1e-15, 1e-15);
 }
 
+void LowMachSolver::apply_sponge(double dt) {
+    if (sponge_r_start <= 0 || sponge_r_start >= sponge_r_top) return;
+    int n = nr*nt, B = 256;
+    extern __global__ void k_lm_sponge(double*, double*, const double*, const double*,
+                                        double, double, double, double, int, int, int);
+    k_lm_sponge<<<(n+B-1)/B,B>>>(
+        d_mr, d_mtheta, d_r_center, d_rho,
+        sponge_r_start, sponge_r_top, sponge_kappa, dt,
+        nr, nt, ng);
+}
+
 // ========================= Variable scaling =============================
 // Two separate scaling systems:
 //
@@ -675,6 +686,39 @@ void k_lm_clamp(double* delta, const double* scale, double max_rel, int N) {
     if (i >= N) return;
     double lim = max_rel * scale[i];
     delta[i] = fmax(-lim, fmin(delta[i], lim));
+}
+
+// ========================= Sponge layer ============================
+// Smooth velocity damping near the outer boundary to prevent acoustic
+// reflections from corrupting the interior during long-time simulations.
+//
+// Profile: κ(r) = κ_max · ½(1 - cos(π·(r-r_sp)/(r_tp-r_sp)))
+//   where r_sp = sponge start, r_tp = sponge top (outer boundary)
+//   κ = 0 inside r_sp, ramps to κ_max at r_tp
+//
+// Damping: v *= 1/(1 + dt·κ)   (implicit damping, unconditionally stable)
+//
+// Ref: MAESTROeX (Almgren+2020), Eq. 41
+
+__global__
+void k_lm_sponge(double* mr, double* mt,
+                 const double* r_center, const double* rho,
+                 double r_sp, double r_tp, double kappa_max, double dt_sponge,
+                 int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    double r = r_center[i];
+
+    if (r <= r_sp) return;
+
+    double xi = fmin((r - r_sp) / fmax(r_tp - r_sp, 1e-30), 1.0);
+    double kappa = kappa_max * 0.5 * (1.0 - cos(M_PI * xi));
+    double damp = 1.0 / (1.0 + dt_sponge * kappa);
+
+    int k = (i + ng) * (nt + 2*ng) + (j + ng);
+    mr[k] *= damp;
+    mt[k] *= damp;
 }
 
 void LowMachSolver::compute_scaling() {
@@ -2250,8 +2294,10 @@ double LowMachSolver::step(double t, double t_end) {
     }
 
     // Update Φ for output/diagnostics (not used in Newton)
-    if (converged)
+    if (converged) {
+        apply_sponge(dt);
         solve_gravity();
+    }
 
     // Simple dt adaptation: grow 1.2x on success, halved on failure (inside loop).
     if (converged) {
@@ -2282,7 +2328,24 @@ void LowMachSolver::snapshot_hse() {
     double rho_max = 0;
     for (int i = 0; i < n; ++i) rho_max = std::max(rho_max, h_rho0[i]);
     atm_rho_thresh = 1e-6 * rho_max;
-    std::fprintf(stderr, "  HSE snapshot: ρ_max=%.3e, atm_thresh=%.3e\n", rho_max, atm_rho_thresh);
+
+    // Sponge layer: start where ρ₀ drops below 1% of max, end at outer boundary
+    double sponge_density = 0.01 * rho_max;
+    std::vector<double> h_rc(nr), h_rf(nr + 1);
+    CUDA_CHECK(cudaMemcpy(h_rc.data(), d_r_center, nr*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_rf.data(), d_r_face, (nr+1)*sizeof(double), cudaMemcpyDeviceToHost));
+    sponge_r_top = h_rf[nr];
+    sponge_r_start = sponge_r_top;  // default: no sponge
+    for (int i = nr - 1; i >= 0; --i) {
+        double rho_eq = h_rho0[i * nt + nt / 2];  // equatorial value
+        if (rho_eq > sponge_density) {
+            sponge_r_start = h_rc[i];
+            break;
+        }
+    }
+
+    std::fprintf(stderr, "  HSE snapshot: ρ_max=%.3e, atm_thresh=%.3e, sponge [%.3f, %.3f]\n",
+                 rho_max, atm_rho_thresh, sponge_r_start, sponge_r_top);
 
     hse_set_externally = true;
 }
