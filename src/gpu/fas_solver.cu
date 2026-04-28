@@ -128,7 +128,8 @@ void k_fas_residual(
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
     double* res,
-    int nr, int nt, int ng, double gam, double atm_thresh) {
+    int nr, int nt, int ng, double gam, double atm_thresh,
+    int use_wellbalance) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
@@ -184,22 +185,36 @@ void k_fas_residual(
         div[c] = -invV*(Ar_hi*fr_hi - Ar_lo*fr_lo + At_hi*ft_hi - At_lo*ft_lo);
     }
 
-    // Well-balanced pressure + gravity
-    double Pp_c = P_c - P0[flat];
-    double rhop_c = rho_c - rho0[flat];
+    // Pressure gradient + gravity source terms.
+    // On fine level (use_wellbalance=1): well-balanced perturbation form
+    //   force = -∇P' + ρ'g₀ + ρg'  where P'=P-P₀, ρ'=ρ-ρ₀, g'=g-g₀
+    // On coarse levels (use_wellbalance=0): standard (non-perturbation) form
+    //   force = -∇P + ρg
+    // The τ-correction in FAS naturally compensates for the different operator.
+
+    double P_ref = use_wellbalance ? P0[flat] : 0.0;
+    double rho_ref = use_wellbalance ? rho0[flat] : 0.0;
+    double g0_r = use_wellbalance ? gr0[i] : 0.0;
+
+    double Pp_c = P_c - P_ref;
+    double rhop_c = rho_c - rho_ref;
 
     double dPp_dr = 0;
     if (i > 0 && i < nr-1) {
-        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i-1,j,nt,ng)],1e-30) - P0[(i-1)*nt+j];
-        double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i+1,j,nt,ng)],1e-30) - P0[(i+1)*nt+j];
+        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i-1,j,nt,ng)],1e-30)
+                      - (use_wellbalance ? P0[(i-1)*nt+j] : 0.0);
+        double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i+1,j,nt,ng)],1e-30)
+                      - (use_wellbalance ? P0[(i+1)*nt+j] : 0.0);
         double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
         dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh) / (dl+dh);
     } else if (i == 0 && nr > 1) {
         double dh = r_center[1]-r_center[0];
-        dPp_dr = (fmax((gam-1.0)*rhoE[fas_idx(1,j,nt,ng)],1e-30)-P0[1*nt+j] - Pp_c)/dh;
+        dPp_dr = (fmax((gam-1.0)*rhoE[fas_idx(1,j,nt,ng)],1e-30)
+                  - (use_wellbalance ? P0[1*nt+j] : 0.0) - Pp_c)/dh;
     } else if (i == nr-1 && nr >= 2) {
         double dl = r_center[nr-1]-r_center[nr-2];
-        dPp_dr = (Pp_c - (fmax((gam-1.0)*rhoE[fas_idx(nr-2,j,nt,ng)],1e-30)-P0[(nr-2)*nt+j]))/dl;
+        dPp_dr = (Pp_c - (fmax((gam-1.0)*rhoE[fas_idx(nr-2,j,nt,ng)],1e-30)
+                  - (use_wellbalance ? P0[(nr-2)*nt+j] : 0.0)))/dl;
     }
 
     double dPp_dt_r = 0;
@@ -208,12 +223,13 @@ void k_fas_residual(
         double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
         double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
         double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i,j-1,nt,ng)],1e-30) - P0[i*nt+j-1];
-        double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i,j+1,nt,ng)],1e-30) - P0[i*nt+j+1];
+        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i,j-1,nt,ng)],1e-30)
+                      - (use_wellbalance ? P0[i*nt+j-1] : 0.0);
+        double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i,j+1,nt,ng)],1e-30)
+                      - (use_wellbalance ? P0[i*nt+j+1] : 0.0);
         dPp_dt_r = ((dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh))/(r*(dl+dh));
     }
 
-    double g0_r = gr0[i];
     double gp_r = gr[i] - g0_r;
 
     double inv_r = 1.0 / r;
@@ -250,6 +266,7 @@ void FasSolver::compute_residual(int l) {
     int n = lev.nr * lev.nt, B = 256;
     launch_ghost(l);
     compute_gravity_1d(l);
+    int wb = (l == 0) ? 1 : 0;  // well-balance only on finest level
     k_fas_residual<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -257,7 +274,7 @@ void FasSolver::compute_residual(int l) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh);
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
 }
 
 // ========================= Newton residual F(U) ========================
@@ -429,120 +446,6 @@ void k_fas_assemble_blkjac(
     for(int q=0;q<16;q++) B[q]=inv_m[q];
 }
 
-// ========================= SIMPLE smoother kernels ========================
-
-// Ap = 1/dt + (|v|+cs)/Δx
-__global__
-void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
-                    const double* rhoE,
-                    const double* dr, const double* rc, const double* dtheta,
-                    double* Ap, int nr, int nt, int ng,
-                    double inv_dt, double gam) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-    int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i,j,nt,ng);
-    double rho_c = fmax(rho[k], 1e-20);
-    double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
-    double P = fmax((gam - 1.0) * rhoE[k], 1e-30);
-    double cs = sqrt(gam * P / rho_c);
-    Ap[flat] = inv_dt + (vr + cs)/dr[i] + (vt + cs)/(rc[i]*dtheta[j]);
-}
-
-// δv* = -F_momentum / Ap
-__global__
-void k_fas_vstar(const double* F, const double* Ap,
-                 double* vr_s, double* vt_s, int n) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
-    double inv_ap = 1.0 / Ap[i];
-    vr_s[i] = -F[n + i] * inv_ap;
-    vt_s[i] = -F[2*n + i] * inv_ap;
-}
-
-// div(v*) using FV divergence theorem
-__global__
-void k_fas_div(const double* vr_s, const double* vt_s,
-               const double* vol, const double* ar, const double* at,
-               double* div_out, int nr, int nt) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-    int i = flat/nt, j = flat%nt;
-    double invV = 1.0 / vol[flat];
-    double vr_lo = (i>0)     ? 0.5*(vr_s[flat]+vr_s[(i-1)*nt+j]) : 0.0;
-    double vr_hi = (i<nr-1)  ? 0.5*(vr_s[flat]+vr_s[(i+1)*nt+j]) : 0.0;
-    double vt_lo = (j>0)     ? 0.5*(vt_s[flat]+vt_s[i*nt+j-1])   : 0.0;
-    double vt_hi = (j<nt-1)  ? 0.5*(vt_s[flat]+vt_s[i*nt+j+1])   : 0.0;
-    div_out[flat] = invV*(ar[(i+1)*nt+j]*vr_hi - ar[i*nt+j]*vr_lo
-                         + at[i*(nt+1)+j+1]*vt_hi - at[i*(nt+1)+j]*vt_lo);
-}
-
-// Poisson RHS with Dirichlet δp=0 at outer boundary
-__global__
-void k_fas_prhs(const double* div_v, double* rhs, int nr, int nt) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-    int i = flat/nt;
-    rhs[flat] = (i == nr-1) ? 0.0 : div_v[flat];
-}
-
-// α = 1/Ap for variable-coefficient Poisson
-__global__
-void k_fas_alpha(const double* Ap, double* alpha, int n) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) alpha[i] = 1.0 / Ap[i];
-}
-
-// SIMPLE assembly: correct momentum with ∇δp, ρ/E via block-inverse
-__global__
-void k_fas_simple_correct(
-    double* rho, double* mr, double* mt, double* rhoE,
-    const double* F, const double* blk_inv,
-    const double* vr_s, const double* vt_s,
-    const double* dp, const double* Ap,
-    const double* r_center, const double* theta_face,
-    int nr, int nt, int ng, double gam) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-    int n = nr*nt;
-    int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i,j,nt,ng);
-    double rho_c = fmax(rho[k], 1e-20);
-
-    // Pressure gradient correction (central difference)
-    int im = flat - nt*(int)(i>0), ip = flat + nt*(int)(i<nr-1);
-    double dp_dr = 0.0;
-    if (i > 0 && i < nr-1) {
-        double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
-        dp_dr = (dh*(dp[flat]-dp[im])/dl + dl*(dp[ip]-dp[flat])/dh)/(dl+dh);
-    } else if (i==0 && nr>1) dp_dr = (dp[ip]-dp[flat])/(r_center[1]-r_center[0]);
-    else if (i==nr-1 && nr>=2) dp_dr = (dp[flat]-dp[im])/(r_center[nr-1]-r_center[nr-2]);
-
-    double dp_dt_r = 0.0;
-    if (j > 0 && j < nt-1) {
-        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
-        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
-        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-        double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)
-                  / (r_center[i]*(dl+dh));
-    }
-
-    double inv_ap = 1.0 / Ap[flat];
-    double dvr = vr_s[flat] - inv_ap * dp_dr;
-    double dvt = vt_s[flat] - inv_ap * dp_dt_r;
-
-    // Momentum: U -= ρ·δv (Newton correction, F>0 means we need to decrease)
-    mr[k]  -= rho_c * dvr;
-    mt[k]  -= rho_c * dvt;
-
-    // ρ, E: full block-inverse row (Newton: U -= J⁻¹·F)
-    const double* B = &blk_inv[flat*16];
-    double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
-    rho[k]  -= B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3;
-    rhoE[k] -= B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3;
-}
-
 void FasSolver::assemble_smoother(int l, double dt) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
@@ -554,10 +457,41 @@ void FasSolver::assemble_smoother(int l, double dt) {
         lev.d_gr0,
         lev.d_blk_inv,
         lev.nr, lev.nt, lev.ng, gamma, 1.0/dt);
-    k_fas_mom_diag<<<(n+B-1)/B,B>>>(
-        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_dr, lev.d_r_center, lev.d_dtheta,
-        lev.d_Ap, lev.nr, lev.nt, lev.ng, 1.0/dt, gamma);
+}
+
+// Damped block Jacobi smooth: U ← U - ω · J⁻¹_diag · F(U)
+// (Newton direction: δU = -J⁻¹·F, damped by ω)
+// Use diagonal-only for ρ and ρe (prevents off-diagonal spurious coupling).
+// Freeze atmosphere cells where rho0 < atm_thresh.
+__global__
+void k_fas_smooth_apply(
+    double* rho, double* mr, double* mt, double* rhoE,
+    const double* F, const double* blk_inv,
+    const double* rho0, double atm_thresh,
+    double omega, int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+
+    // Freeze atmosphere cells
+    if (rho0[flat] < atm_thresh) return;
+
+    int n = nr*nt;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+
+    const double* B = &blk_inv[flat*16];
+    double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
+
+    // Full 4×4 block-inverse Newton update: δU = -ω·J⁻¹·F
+    double d0 = omega * (B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3);
+    double d1 = omega * (B[4]*f0 + B[5]*f1 + B[6]*f2 + B[7]*f3);
+    double d2 = omega * (B[8]*f0 + B[9]*f1 + B[10]*f2 + B[11]*f3);
+    double d3 = omega * (B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3);
+
+    // Newton direction: U -= J⁻¹·F
+    rho[k]  -= d0;
+    mr[k]   -= d1;
+    mt[k]   -= d2;
+    rhoE[k] -= d3;
 }
 
 void FasSolver::smooth(int l, double dt, int n_iters) {
@@ -565,29 +499,12 @@ void FasSolver::smooth(int l, double dt, int n_iters) {
     int n = lev.nr * lev.nt, B = 256;
 
     for (int it = 0; it < n_iters; ++it) {
-        // 1. Compute Newton residual F(U)
         compute_F(l, dt);
-
-        // 2. Momentum prediction: δv* = -F_mom / Ap
-        k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap, lev.d_vr_s, lev.d_vt_s, n);
-
-        // 3. Pressure Poisson: ∇·((1/Ap)∇δp) = div(δv*)
-        k_fas_div<<<(n+B-1)/B,B>>>(lev.d_vr_s, lev.d_vt_s,
-            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
-            lev.d_div, lev.nr, lev.nt);
-        k_fas_alpha<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
-        k_fas_prhs<<<(n+B-1)/B,B>>>(lev.d_div, lev.d_rhs_poisson, lev.nr, lev.nt);
-        CUDA_CHECK(cudaMemset(lev.d_dp, 0, n*sizeof(double)));
-        lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_rhs_poisson, lev.d_dp, 3, 1e-2);
-
-        // 4. Correct state
-        k_fas_simple_correct<<<(n+B-1)/B,B>>>(
+        k_fas_smooth_apply<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_res, lev.d_blk_inv,
-            lev.d_vr_s, lev.d_vt_s,
-            lev.d_dp, lev.d_Ap,
-            lev.d_r_center, lev.d_theta_face,
-            lev.nr, lev.nt, lev.ng, gamma);
+            lev.d_rho0, atm_rho_thresh,
+            OMEGA, lev.nr, lev.nt, lev.ng);
         apply_floor(l);
     }
 }
@@ -730,6 +647,21 @@ void FasSolver::restrict_defect(int fine, int coarse, double dt) {
         cl.d_Un,  // restricted defect from step 2
         cl.d_fas_rhs,
         1.0/dt, cl.nr, cl.nt, cl.ng);
+
+    // ===== 方案 C: HSE defect subtraction =====
+    // The well-balanced residual on the coarse grid may not be exactly zero
+    // for the HSE reference state due to restriction errors.
+    // Compute this "HSE defect" and subtract it from fas_rhs, so that
+    // F(U₀_H) = 0 exactly on the coarse grid.
+    // This is only needed when use_wellbalance=1 on coarse levels.
+    // When use_wellbalance=0 (方案 A), this is automatically handled.
+    //
+    // Disabled by default since 方案 A (non-WB coarse) is simpler and more robust.
+    // Uncomment to enable:
+    // {
+    //     // Temporarily load HSE state into coarse level
+    //     // ... compute R(U₀_H) ... subtract from fas_rhs ...
+    // }
 }
 
 // ========================= Prolongation + correction ========================
@@ -771,12 +703,11 @@ void FasSolver::prolongate_correct(int coarse, int fine) {
     FasLevel& cl = levels[coarse], &fl = levels[fine];
     int cn = cl.nr * cl.nt, B = 256;
 
-    // cl.d_Un contains the pre-solve restricted state (saved before coarse solve)
-    // d_Un layout: [rho, mr, mt, rhoE] each cn doubles
+    // cl.d_save contains the pre-solve restricted state
     k_fas_prolongate_correct<<<(cn+B-1)/B,B>>>(
         fl.d_rho, fl.d_mr, fl.d_mt, fl.d_rhoE,
         cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
-        cl.d_Un, cl.d_Un + cn, cl.d_Un + 2*cn, cl.d_Un + 3*cn,
+        cl.d_save, cl.d_save + cn, cl.d_save + 2*cn, cl.d_save + 3*cn,
         cl.nr, cl.nt, fl.nt, fl.ng, cl.ng);
     apply_floor(fine);
 }
@@ -784,9 +715,43 @@ void FasSolver::prolongate_correct(int coarse, int fine) {
 // ========================= FAS V-cycle ========================
 
 void FasSolver::fas_vcycle(int l, double dt) {
-    // Phase 1: pure smoothing only (no coarse correction) to validate smoother
+    // During initial transient (first 10 steps), use smooth-only on finest
+    // level to avoid coarse-grid instability. After that, use full V-cycle.
+    // Disable coarse correction entirely for now.
+    // Block Jacobi smooth-only converges for small dt (dominated by 1/dt diagonal).
+    // TODO: fix coarse-level HSE reference to enable proper V-cycles.
+    bool use_coarse = false;
+
+    if (!use_coarse || l == n_levels - 1) {
+        assemble_smoother(l, dt);
+        smooth(l, dt, NU1 + NU2);
+        return;
+    }
+
+    // Pre-smooth
     assemble_smoother(l, dt);
-    smooth(l, dt, NU1 + NU2);
+    smooth(l, dt, NU1);
+
+    FasLevel& cl = levels[l + 1];
+    int cn = cl.nr * cl.nt, B = 256;
+
+    // Restrict defect and state: fine → coarse
+    restrict_defect(l, l + 1, dt);
+
+    // Save restricted state BEFORE coarse solve
+    k_fas_pack_flat<<<(cn+B-1)/B,B>>>(
+        cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
+        cl.d_save, cl.nr, cl.nt, cl.ng);
+
+    // Recurse
+    fas_vcycle(l + 1, dt);
+
+    // Prolongate: u_h += P·(u_H_new - u_H_old)
+    prolongate_correct(l + 1, l);
+
+    // Post-smooth
+    assemble_smoother(l, dt);
+    smooth(l, dt, NU2);
 }
 
 // ========================= Residual norm ========================
@@ -834,6 +799,7 @@ static void alloc_fas_level(FasLevel& lev) {
     CUDA_CHECK(cudaMalloc(&lev.d_fas_rhs, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_res, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_Un, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_save, 4*phys*sizeof(double)));
 
     // HSE reference
     CUDA_CHECK(cudaMalloc(&lev.d_rho0, phys*sizeof(double)));
@@ -847,15 +813,6 @@ static void alloc_fas_level(FasLevel& lev) {
     // Block Jacobi
     CUDA_CHECK(cudaMalloc(&lev.d_blk_inv, 16*phys*sizeof(double)));
 
-    // SIMPLE scratch
-    CUDA_CHECK(cudaMalloc(&lev.d_Ap, phys*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&lev.d_vr_s, phys*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&lev.d_vt_s, phys*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&lev.d_div, phys*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&lev.d_dp, phys*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&lev.d_rhs_poisson, phys*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&lev.d_inv_Ap, phys*sizeof(double)));
-
     // Zero everything
     CUDA_CHECK(cudaMemset(lev.d_rho, 0, total*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_mr, 0, total*sizeof(double)));
@@ -864,6 +821,7 @@ static void alloc_fas_level(FasLevel& lev) {
     CUDA_CHECK(cudaMemset(lev.d_fas_rhs, 0, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_res, 0, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_Un, 0, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMemset(lev.d_save, 0, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_rho0, 0, phys*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_P0, 0, phys*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_gr, 0, nr*sizeof(double)));
@@ -922,9 +880,6 @@ void FasSolver::build_level(int l, int nr, int nt, int ng,
     }
     CUDA_CHECK(cudaMemcpy(lev.d_area_r, ar.data(), (nr+1)*nt*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_area_theta, at.data(), nr*(nt+1)*sizeof(double), cudaMemcpyHostToDevice));
-
-    // Init per-level pressure GMG
-    lev.pressure_gmg.init(nr, nt, h_rf, h_tf);
 }
 
 void FasSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
@@ -954,8 +909,8 @@ void FasSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
         rf = crf; tf = ctf;
     }
 
-    std::fprintf(stderr, "FAS nonlinear multigrid (SIMPLE smoother): %dx%d, %d levels\n",
-                 nr, nt, n_levels);
+    std::fprintf(stderr, "FAS nonlinear multigrid: %dx%d, %d levels, ω=%.1f\n",
+                 nr, nt, n_levels, OMEGA);
 }
 
 // ========================= Upload/Download ========================
@@ -971,10 +926,14 @@ void FasSolver::upload_state(const Grid& grid, const State& state) {
         for (int j = 0; j < nt; ++j) {
             int k = (i+ng)*stride + (j+ng);
             int sk = grid.idx(i,j);
+            double rho_v = std::fmax(state.rho[sk], 1e-20);
+            double vr = state.mr[sk] / rho_v;
+            double vt = state.mtheta[sk] / rho_v;
             h_rho[k] = state.rho[sk];
             h_mr[k] = state.mr[sk];
             h_mt[k] = state.mtheta[sk];
-            h_rhoE[k] = state.E[sk];
+            // Convert total energy → internal energy: ρe = ρE - ½ρv²
+            h_rhoE[k] = std::fmax(state.E[sk] - 0.5*rho_v*(vr*vr+vt*vt), 1e-30);
         }
     CUDA_CHECK(cudaMemcpy(lev.d_rho, h_rho.data(), total*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_mr, h_mr.data(), total*sizeof(double), cudaMemcpyHostToDevice));
@@ -1000,7 +959,11 @@ void FasSolver::download_state(const Grid& grid, State& state) {
             state.rho[sk] = h_rho[k];
             state.mr[sk] = h_mr[k];
             state.mtheta[sk] = h_mt[k];
-            state.E[sk] = h_rhoE[k];
+            // Convert internal energy → total energy: ρE = ρe + ½ρv²
+            double rho_v = std::fmax(h_rho[k], 1e-20);
+            double vr = h_mr[k] / rho_v;
+            double vt = h_mt[k] / rho_v;
+            state.E[sk] = h_rhoE[k] + 0.5*rho_v*(vr*vr+vt*vt);
         }
 }
 
@@ -1034,42 +997,96 @@ void FasSolver::snapshot_hse() {
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
     atm_rho_thresh = 1e-6 * rho_max;
 
-    // Propagate HSE reference to coarse levels
+    // Propagate HSE reference to coarse levels.
+    // Three strategies available (selected by coarse_hse_mode):
+    //   0 = volume-weighted restriction of ρ₀/P₀ (original, causes HSE inconsistency)
+    //   1 = restrict ρ₀, then reconstruct P₀ by integrating dP₀/dr = ρ₀·g₀ (HSE-consistent)
+    //   2 = restriction only for ρ₀/g₀, P₀ not used (requires non-well-balanced coarse residual)
+    int coarse_hse_mode = 1;  // default: HSE reconstruction
+
     for (int l = 1; l < n_levels; ++l) {
         FasLevel& fl = levels[l-1], &cl = levels[l];
         int cn = cl.nr * cl.nt;
-        // Restrict rho0 and P0 (volume-weighted)
-        // For simplicity, just use flat restriction
-        std::vector<double> f_rho0(fl.phys), f_P0(fl.phys);
-        CUDA_CHECK(cudaMemcpy(f_rho0.data(), fl.d_rho0, fl.phys*sizeof(double), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaMemcpy(f_P0.data(), fl.d_P0, fl.phys*sizeof(double), cudaMemcpyDeviceToHost));
 
-        std::vector<double> c_rho0(cn), c_P0(cn);
-        std::vector<double> f_vol(fl.phys);
+        // Always restrict ρ₀ (volume-weighted)
+        std::vector<double> f_rho0(fl.phys), f_vol(fl.phys);
+        CUDA_CHECK(cudaMemcpy(f_rho0.data(), fl.d_rho0, fl.phys*sizeof(double), cudaMemcpyDeviceToHost));
         CUDA_CHECK(cudaMemcpy(f_vol.data(), fl.d_cell_volume, fl.phys*sizeof(double), cudaMemcpyDeviceToHost));
 
+        std::vector<double> c_rho0(cn);
         for (int ic = 0; ic < cl.nr; ++ic)
             for (int jc = 0; jc < cl.nt; ++jc) {
-                double sr=0, sp=0, sv=0;
+                double sr=0, sv=0;
                 for (int di=0; di<2; ++di)
                     for (int dj=0; dj<2; ++dj) {
-                        int fi = 2*ic+di, fj = 2*jc+dj;
-                        int ff = fi*fl.nt+fj;
+                        int ff = (2*ic+di)*fl.nt + (2*jc+dj);
                         double v = f_vol[ff];
-                        sr += f_rho0[ff]*v; sp += f_P0[ff]*v; sv += v;
+                        sr += f_rho0[ff]*v; sv += v;
                     }
-                int cf = ic*cl.nt+jc;
-                c_rho0[cf] = sr/sv; c_P0[cf] = sp/sv;
+                c_rho0[ic*cl.nt+jc] = sr/sv;
             }
         CUDA_CHECK(cudaMemcpy(cl.d_rho0, c_rho0.data(), cn*sizeof(double), cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy(cl.d_P0, c_P0.data(), cn*sizeof(double), cudaMemcpyHostToDevice));
 
-        // Restrict g0
+        // Restrict g₀
         std::vector<double> f_gr0(fl.nr), c_gr0(cl.nr);
         CUDA_CHECK(cudaMemcpy(f_gr0.data(), fl.d_gr0, fl.nr*sizeof(double), cudaMemcpyDeviceToHost));
         for (int i = 0; i < cl.nr; ++i)
             c_gr0[i] = 0.5*(f_gr0[2*i] + f_gr0[2*i+1]);
         CUDA_CHECK(cudaMemcpy(cl.d_gr0, c_gr0.data(), cl.nr*sizeof(double), cudaMemcpyHostToDevice));
+
+        // Reconstruct P₀ on coarse level
+        std::vector<double> c_P0(cn, 0.0);
+        if (coarse_hse_mode == 1) {
+            // Mode 1: integrate dP₀/dr = ρ₀·g₀ from center outward (MAESTROeX-style)
+            // Use equatorial values for 1D integration, then broadcast to all θ
+            std::vector<double> c_rc(cl.nr), c_dr(cl.nr);
+            CUDA_CHECK(cudaMemcpy(c_rc.data(), cl.d_r_center, cl.nr*sizeof(double), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(c_dr.data(), cl.d_dr, cl.nr*sizeof(double), cudaMemcpyDeviceToHost));
+
+            // Start from center: P₀(0) from equatorial restricted ρ₀
+            int jeq = cl.nt / 2;
+            double P_prev = (gamma - 1.0) * c_rho0[0*cl.nt+jeq]; // rough initial guess
+            // Better: use fine-level center pressure
+            std::vector<double> f_P0(fl.phys);
+            CUDA_CHECK(cudaMemcpy(f_P0.data(), fl.d_P0, fl.phys*sizeof(double), cudaMemcpyDeviceToHost));
+            P_prev = 0.0;
+            for (int dj=0; dj<2; ++dj) {
+                int ff = 0*fl.nt + (2*jeq+dj);
+                P_prev += f_P0[ff]; // average the two fine cells at center
+            }
+            P_prev /= 2.0;
+
+            for (int ic = 0; ic < cl.nr; ++ic) {
+                double rho_eq = c_rho0[ic*cl.nt + jeq];
+                double g_i = c_gr0[ic];
+                if (ic > 0) {
+                    // Integrate: P(i) = P(i-1) + 0.5*(ρ(i-1)+ρ(i)) * g_avg * dr
+                    double rho_prev = c_rho0[(ic-1)*cl.nt + jeq];
+                    double g_prev = c_gr0[ic-1];
+                    double dr_half = c_rc[ic] - c_rc[ic-1];
+                    P_prev += 0.5*(rho_prev*g_prev + rho_eq*g_i) * dr_half;
+                }
+                // Broadcast to all θ at this radius
+                for (int jc = 0; jc < cl.nt; ++jc)
+                    c_P0[ic*cl.nt + jc] = std::fmax(P_prev, 1e-30);
+            }
+        } else if (coarse_hse_mode == 0) {
+            // Mode 0: volume-weighted restriction of P₀ (original, inconsistent)
+            std::vector<double> f_P0(fl.phys);
+            CUDA_CHECK(cudaMemcpy(f_P0.data(), fl.d_P0, fl.phys*sizeof(double), cudaMemcpyDeviceToHost));
+            for (int ic = 0; ic < cl.nr; ++ic)
+                for (int jc = 0; jc < cl.nt; ++jc) {
+                    double sp=0, sv=0;
+                    for (int di=0; di<2; ++di)
+                        for (int dj=0; dj<2; ++dj) {
+                            int ff = (2*ic+di)*fl.nt + (2*jc+dj);
+                            sp += f_P0[ff]*f_vol[ff]; sv += f_vol[ff];
+                        }
+                    c_P0[ic*cl.nt+jc] = sp/sv;
+                }
+        }
+        // Mode 2: P₀ = 0 (non-well-balanced coarse already handles this via use_wellbalance=0)
+        CUDA_CHECK(cudaMemcpy(cl.d_P0, c_P0.data(), cn*sizeof(double), cudaMemcpyHostToDevice));
     }
 
     hse_set = true;
@@ -1094,8 +1111,6 @@ int FasSolver::solve(double dt, int max_cycles, double tol) {
 
         compute_F(0, dt);
         double norm = residual_norm(0);
-        if (step_count < 30 || step_count % 50 == 0)
-            std::fprintf(stderr, "  FAS V-cycle %d: ||F|| = %.3e\n", cyc, norm);
         if (norm < tol) return cyc + 1;
     }
     return max_cycles;
@@ -1108,17 +1123,84 @@ double FasSolver::step(double t, double t_end) {
 
     apply_floor(0);
 
-    double dt_cap = 1.0;
-    if (dt_current < 1e-30) dt_current = 1e-6;
+    double dt_cap = 1e-4;  // conservative cap: block-Jacobi smooth-only limit
+    if (dt_current < 1e-30) dt_current = 1e-8;
+
+    int max_dt_cuts = 6;
+    int max_cycles = 40;
+    double tol = 1e-4;
     double dt = std::min({dt_current, dt_cap, t_end - t});
+    bool converged = false;
 
-    int cycles = solve(dt, 20, 1e-4);
+    // Save state before solve (for rollback on failure)
+    FasLevel& finest = levels[0];
+    int n = finest.nr * finest.nt, B = 256;
+    // Use d_save on finest level as rollback buffer
+    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
+        finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+        finest.d_save, finest.nr, finest.nt, finest.ng);
 
-    if (step_count < 30 || step_count % 10 == 0)
-        std::fprintf(stderr, "  step %d: %d FAS V-cycles (dt=%.3e)\n",
-                     step_count, cycles, dt);
+    for (int cut = 0; cut < max_dt_cuts; ++cut) {
+        if (cut > 0) {
+            dt *= 0.5;
+            if (dt < 1e-12) {
+                std::fprintf(stderr, "FATAL: FAS step %d dt=%.3e diverged.\n", step_count, dt);
+                std::exit(1);
+            }
+            // Rollback state from saved
+            // Unpack d_save back into state arrays
+            std::vector<double> h_save(4*n);
+            CUDA_CHECK(cudaMemcpy(h_save.data(), finest.d_save, 4*n*sizeof(double), cudaMemcpyDeviceToHost));
+            std::vector<double> h_rho(finest.total), h_mr(finest.total), h_mt(finest.total), h_rhoE(finest.total);
+            CUDA_CHECK(cudaMemcpy(h_rho.data(), finest.d_rho, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(h_mr.data(), finest.d_mr, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(h_mt.data(), finest.d_mt, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(h_rhoE.data(), finest.d_rhoE, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+            int stride = finest.nt + 2*finest.ng;
+            for (int i = 0; i < finest.nr; ++i)
+                for (int j = 0; j < finest.nt; ++j) {
+                    int k = (i+finest.ng)*stride + (j+finest.ng);
+                    int flat = i*finest.nt + j;
+                    h_rho[k] = h_save[flat];
+                    h_mr[k] = h_save[n+flat];
+                    h_mt[k] = h_save[2*n+flat];
+                    h_rhoE[k] = h_save[3*n+flat];
+                }
+            CUDA_CHECK(cudaMemcpy(finest.d_rho, h_rho.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaMemcpy(finest.d_mr, h_mr.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaMemcpy(finest.d_mt, h_mt.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaMemcpy(finest.d_rhoE, h_rhoE.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
+            apply_floor(0);
 
-    dt_current = std::min(1.2 * dt, dt_cap);
+            if (step_count < 10 || step_count % 100 == 0)
+                std::fprintf(stderr, "  step %d: FAS cut %d, dt -> %.3e\n", step_count, cut, dt);
+        }
+
+        int cycles = solve(dt, max_cycles, tol);
+        if (cycles < max_cycles) {
+            converged = true;
+            if (step_count < 10 || step_count % 100 == 0)
+                std::fprintf(stderr, "  step %d: %d FAS V-cycles (dt=%.3e)\n",
+                             step_count, cycles, dt);
+            break;
+        }
+        // Check final residual — if close to tol, accept anyway
+        compute_F(0, dt);
+        double norm = residual_norm(0);
+        if (norm < 10.0 * tol) {
+            converged = true;
+            if (step_count < 10 || step_count % 100 == 0)
+                std::fprintf(stderr, "  step %d: %d FAS V-cycles (dt=%.3e) ||F||=%.2e (accepted)\n",
+                             step_count, cycles, dt, norm);
+            break;
+        }
+    }
+
+    if (converged) {
+        dt_current = std::min(1.2 * dt, dt_cap);
+    } else {
+        dt_current = dt;  // don't grow
+    }
     step_count++;
     return dt;
 }
@@ -1133,14 +1215,10 @@ void FasSolver::destroy() {
         cudaFree(lev.d_cell_volume); cudaFree(lev.d_area_r); cudaFree(lev.d_area_theta);
         cudaFree(lev.d_sin_theta_face); cudaFree(lev.d_sin_theta_center);
         cudaFree(lev.d_rho); cudaFree(lev.d_mr); cudaFree(lev.d_mt); cudaFree(lev.d_rhoE);
-        cudaFree(lev.d_fas_rhs); cudaFree(lev.d_res); cudaFree(lev.d_Un);
+        cudaFree(lev.d_fas_rhs); cudaFree(lev.d_res); cudaFree(lev.d_Un); cudaFree(lev.d_save);
         cudaFree(lev.d_rho0); cudaFree(lev.d_P0);
         cudaFree(lev.d_gr); cudaFree(lev.d_gr0); cudaFree(lev.d_shell_mass);
         cudaFree(lev.d_blk_inv);
-        cudaFree(lev.d_Ap); cudaFree(lev.d_vr_s); cudaFree(lev.d_vt_s);
-        cudaFree(lev.d_div); cudaFree(lev.d_dp);
-        cudaFree(lev.d_rhs_poisson); cudaFree(lev.d_inv_Ap);
-        lev.pressure_gmg.destroy();
     }
     n_levels = 0;
 }

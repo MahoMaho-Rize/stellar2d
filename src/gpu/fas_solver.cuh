@@ -3,13 +3,19 @@
 #include "../grid.h"
 #include "../state.h"
 #include "../eos.h"
-#include "gmg_gpu.cuh"
 
 // FAS (Full Approximation Scheme) nonlinear multigrid for the low-Mach
 // 4-DOF Euler system: (ρ, ρvr, ρvθ, ρe).
 //
-// Smoother: SIMPLE (momentum predict → pressure Poisson → correct)
-// Each FAS level has its own pressure GMG for the SIMPLE smoother.
+// Backward Euler: F(U) = (U - Uⁿ)/dt - R(U) = 0
+//
+// FAS V-cycle:
+//   1. Pre-smooth: damped block Jacobi on F(u) = 0
+//   2. Restrict: u_H = Î·u_h, f_H = R(Î·u_h) + Î·(f_h - R(u_h))
+//      where f_h = Uⁿ/dt (source from time derivative)
+//   3. Recurse on coarse level
+//   4. Prolongate: u_h += P·(u_H - Î·u_h)
+//   5. Post-smooth
 
 struct FasLevel {
     int nr, nt, ng;
@@ -34,6 +40,9 @@ struct FasLevel {
     // Saved Uⁿ for time derivative: size 4*phys
     double *d_Un;
 
+    // Saved restricted state before coarse solve (for prolongation correction): size 4*phys
+    double *d_save;
+
     // HSE reference for well-balanced residual
     double *d_rho0, *d_P0;
 
@@ -43,15 +52,6 @@ struct FasLevel {
 
     // Block Jacobian diagonal (4×4 per cell, 16*phys)
     double *d_blk_inv;
-
-    // SIMPLE smoother scratch (per level)
-    double *d_Ap;           // momentum diagonal coefficient (phys)
-    double *d_vr_s, *d_vt_s; // predicted velocity (phys each)
-    double *d_div;          // divergence (phys)
-    double *d_dp;           // pressure correction (phys)
-    double *d_rhs_poisson;  // Poisson RHS (phys)
-    double *d_inv_Ap;       // 1/Ap for variable-coefficient Poisson (phys)
-    GmgGpu pressure_gmg;   // per-level pressure Poisson solver
 };
 
 struct FasSolver {
@@ -82,8 +82,9 @@ struct FasSolver {
     int step_count = 0;
     bool hse_set = false;
 
-    static constexpr int NU1 = 2;     // pre-smooth SIMPLE iterations
-    static constexpr int NU2 = 2;     // post-smooth SIMPLE iterations
+    static constexpr int NU1 = 3;     // pre-smooth iterations
+    static constexpr int NU2 = 3;     // post-smooth iterations
+    static constexpr double OMEGA = 0.7;  // damping factor
 
 private:
     void build_level(int l, int nr, int nt, int ng,
