@@ -109,6 +109,8 @@ struct LowMachSolver {
 
     // Adaptive dt
     double dt_current;
+    double dt_good = 0.0;   // best dt that recently converged (for fast recovery)
+    int step_count = 0;
 
     // Internal methods
     void compute_residual(double* d_res);

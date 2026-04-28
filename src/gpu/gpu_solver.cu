@@ -958,9 +958,6 @@ double GpuSolver::compute_cfl_dt() {
 double GpuSolver::step(double t, double t_end) {
     int n = nr*nt, B = 256, N = 4*n;
 
-    static int step_count = 0;
-    static double dt_adapt = 0.0;
-
     // Snapshot HSE on first call
     static bool hse_init = false;
     if (!hse_init) {
@@ -978,9 +975,11 @@ double GpuSolver::step(double t, double t_end) {
     // Save U^n
     pack_state(d_Un);
 
-    int max_newton = 15;
+    int max_newton = 20;      // was 15 — allow more iterations before giving up
     int max_dt_cuts = 6;
     bool converged = false;
+    int newton_iters_used = 0;
+    int ls_fails_total = 0;   // track consecutive line search failures
 
     for (int cut = 0; cut < max_dt_cuts && !converged; ++cut) {
         if (cut > 0) {
@@ -995,7 +994,9 @@ double GpuSolver::step(double t, double t_end) {
         assemble_jacobian(dt);
 
         double Fnorm0 = 0.0;
+        double Fnorm_prev = 0.0;
         bool diverged = false;
+        ls_fails_total = 0;
 
         for (int newton = 0; newton < max_newton; ++newton) {
             solve_gravity();
@@ -1008,22 +1009,38 @@ double GpuSolver::step(double t, double t_end) {
                 Fnorm0 = Fnorm;
                 if (Fnorm < 1e-30) { converged = true; break; }
             }
-            if (Fnorm < 1e-4 * Fnorm0) {
+            // Convergence: relative OR absolute per-cell tolerance
+            double Fnorm_per_cell = Fnorm / sqrt((double)N);
+            if (Fnorm < 1e-4 * Fnorm0 || Fnorm_per_cell < 1e-6) {
                 converged = true;
+                newton_iters_used = newton;
                 if (step_count < 20)
-                    std::fprintf(stderr, "  step %d converged at newton %d: ||F||=%.3e (dt=%.3e)\n",
-                                step_count, newton, Fnorm, dt);
+                    std::fprintf(stderr, "  step %d converged at newton %d: ||F||=%.3e per-cell=%.3e (dt=%.3e)\n",
+                                step_count, newton, Fnorm, Fnorm_per_cell, dt);
                 break;
             }
             if (Fnorm > 1e6 * Fnorm0 || std::isnan(Fnorm)) { diverged = true; break; }
 
-            int fgmres_iters = fgmres_solve(d_gmres_w, d_Fk, dt, 1e-2, GMRES_RESTART);
+            // Eisenstat-Walker forcing: adapt GMRES tolerance based on Newton progress
+            double eta_gmres;
+            if (newton == 0 || Fnorm_prev < 1e-30) {
+                eta_gmres = 1e-1;  // loose on first Newton iteration
+            } else {
+                // EW Choice 2: η_k = γ·(||F_k||/||F_{k-1}||)^α
+                double ratio = Fnorm / Fnorm_prev;
+                eta_gmres = 0.9 * ratio * ratio;   // γ=0.9, α=2
+                eta_gmres = std::max(eta_gmres, 1e-4);  // don't over-solve
+                eta_gmres = std::min(eta_gmres, 1e-1);  // don't under-solve
+            }
+            Fnorm_prev = Fnorm;
 
-            // Line search
+            int fgmres_iters = fgmres_solve(d_gmres_w, d_Fk, dt, eta_gmres, GMRES_RESTART);
+
+            // Line search with softer failure handling
             k_pack<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_E, d_gmres_Uk, nr,nt,ng);
             double alpha = 1.0;
             double Fnorm_new = Fnorm;
-            for (int ls = 0; ls < 5; ++ls) {
+            for (int ls = 0; ls < 6; ++ls) {
                 k_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_E, d_gmres_Uk, nr,nt,ng);
                 unpack_delta(d_gmres_w, alpha);
                 apply_floor();
@@ -1033,18 +1050,24 @@ double GpuSolver::step(double t, double t_end) {
                 if (Fnorm_new < Fnorm) break;
                 alpha *= 0.5;
             }
+
             if (Fnorm_new >= Fnorm) {
+                // Soft failure: restore state but DON'T immediately break.
+                // Allow a few consecutive line search failures before declaring divergence.
                 k_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_E, d_gmres_Uk, nr,nt,ng);
-                diverged = true;
+                ls_fails_total++;
                 if (step_count < 20)
-                    std::fprintf(stderr, "  step %d newton %d: line search failed, ||F||=%.3e\n",
-                                step_count, newton, Fnorm);
-                break;
+                    std::fprintf(stderr, "  step %d newton %d: line search stalled (fail %d), ||F||=%.3e\n",
+                                step_count, newton, ls_fails_total, Fnorm);
+                // Diverge only after 3 consecutive line search failures
+                if (ls_fails_total >= 3) { diverged = true; break; }
+                continue;
             }
+            ls_fails_total = 0;  // reset on success
 
             if (step_count < 10)
-                std::fprintf(stderr, "  step %d newton %d: ||F|| %.3e -> %.3e  a=%.2f  FGMRES %d  dt=%.3e\n",
-                            step_count, newton, Fnorm, Fnorm_new, alpha, fgmres_iters, dt);
+                std::fprintf(stderr, "  step %d newton %d: ||F|| %.3e -> %.3e  a=%.2f  eta=%.1e  FGMRES %d  dt=%.3e\n",
+                            step_count, newton, Fnorm, Fnorm_new, alpha, eta_gmres, fgmres_iters, dt);
         }
 
         if (diverged) {
@@ -1052,10 +1075,33 @@ double GpuSolver::step(double t, double t_end) {
         }
     }
 
-    if (converged)
-        dt_adapt = std::min(1.5 * dt, dt_cfl);
-    else
-        dt_adapt = 0.25 * dt;
+    // ===== SER-style dt adaptation with dt_good memory =====
+    if (converged) {
+        // Track the best dt that worked
+        if (dt > dt_good) dt_good = dt;
+
+        // Growth factor based on Newton iteration count (SER-like)
+        double growth;
+        if (newton_iters_used <= 3)       growth = 2.0;   // easy convergence → aggressive growth
+        else if (newton_iters_used <= 6)  growth = 1.5;   // moderate
+        else if (newton_iters_used <= 10) growth = 1.2;   // hard convergence → cautious
+        else                              growth = 1.05;  // barely converged → almost flat
+
+        double dt_next = growth * dt;
+
+        // Fast recovery toward dt_good: if we're well below dt_good
+        // (e.g. after a transient failure), allow a larger jump
+        if (dt_good > 0.0 && dt < 0.5 * dt_good) {
+            // Geometric mean between growth*dt and dt_good for faster recovery
+            double dt_recover = sqrt(dt_next * dt_good);
+            dt_next = std::max(dt_next, dt_recover);
+        }
+
+        dt_adapt = std::min(dt_next, dt_cfl);
+    } else {
+        // Failure: shrink but keep dt_good memory intact for recovery
+        dt_adapt = 0.5 * dt;
+    }
 
     step_count++;
     return dt;

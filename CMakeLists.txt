@@ -154,6 +154,19 @@ if(USE_GPU)
         CUDA_SEPARABLE_COMPILATION ON
     )
     target_link_libraries(test_newton_tuning PRIVATE CUDA::cudart)
+
+    add_executable(test_eps_sweep tests/test_eps_sweep.cu
+        ${TEST_COMMON_SOURCES}
+        src/gpu/lowmach_solver.cu
+        src/gpu/gmg_gpu.cu
+    )
+    target_include_directories(test_eps_sweep PRIVATE src)
+    target_compile_definitions(test_eps_sweep PRIVATE USE_GPU)
+    set_target_properties(test_eps_sweep PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+    target_link_libraries(test_eps_sweep PRIVATE CUDA::cudart)
 endif()
 
 # Python integration tests (if pytest is available)
@@ -177,3 +190,11 @@ target_compile_options(stellar2d PRIVATE
 target_link_options(stellar2d PRIVATE
     $<$<CONFIG:Debug>:-fsanitize=address>
 )
+
+if(USE_GPU)
+    add_executable(test_mini tests/test_mini.cu ${TEST_COMMON_SOURCES} src/gpu/lowmach_solver.cu src/gpu/gmg_gpu.cu)
+    target_include_directories(test_mini PRIVATE src)
+    target_compile_definitions(test_mini PRIVATE USE_GPU)
+    set_target_properties(test_mini PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_mini PRIVATE CUDA::cudart)
+endif()
