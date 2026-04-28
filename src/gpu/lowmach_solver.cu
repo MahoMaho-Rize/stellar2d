@@ -879,15 +879,19 @@ void LowMachSolver::assemble_block_jacobi(double dt) {
 
 __global__
 void k_lm_simple_mom_diag(const double* rho, const double* mr, const double* mt,
+                          const double* rhoE,
                           const double* dr, const double* rc, const double* dtheta,
-                          double* Ap, int nr, int nt, int ng, double inv_dt) {
+                          double* Ap, int nr, int nt, int ng,
+                          double inv_dt, double gamma) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
     int k = d_idx(i,j,nt,ng);
     double rho_c = fmax(rho[k], 1e-20);
     double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
-    Ap[flat] = inv_dt + vr/dr[i] + vt/(rc[i]*dtheta[j]);
+    double P = fmax((gamma - 1.0) * rhoE[k], 1e-30);
+    double cs = sqrt(gamma * P / rho_c);
+    Ap[flat] = inv_dt + (vr + cs)/dr[i] + (vt + cs)/(rc[i]*dtheta[j]);
 }
 
 // Step 1: δv* = -r_momentum / Ap  (negative because J_diag = -Ap)
@@ -1032,10 +1036,11 @@ void k_lm_line_solve(
         double invV = 1.0 / vol[flat];
         double sr_t = fabs(vt_c) / (r * dtheta[j]);
 
+        double cs = sqrt(gamma * P_c / rho_c);
         double Ar_hi = ar[(i+1)*nt+j], Ar_lo = ar[i*nt+j];
 
-        // Diagonal: -(1/dt + sr) with sr including theta part
-        double sr = fabs(vr_c)/dr[i] + sr_t;
+        // Diagonal: -(1/dt + sr) with acoustic stiffness cs/Δx
+        double sr = (fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]);
         double diag_val = -(inv_dt + sr);
 
         // Off-diagonal from upwind advection in r:
@@ -1284,6 +1289,7 @@ void k_lm_line_solve_theta(
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face, const double* theta_face,
     const double* dr, const double* dtheta,
+    const double* gr0,
     const double* v_in, double* Mv_out,
     int nr, int nt, int ng, double gamma, double inv_dt) {
     int i = blockIdx.x;  // one block per r-line
@@ -1309,11 +1315,11 @@ void k_lm_line_solve_theta(
         double vt_c = mt[k] / rho_c;
         double P_c = fmax((gamma - 1.0) * rhoE[k], 1e-30);
         double invV = 1.0 / vol[flat];
-        double sr_r = fabs(vr_c) / dr[i];
+        double cs = sqrt(gamma * P_c / rho_c);
 
         double At_hi = at[i*(nt+1)+j+1], At_lo = at[i*(nt+1)+j];
 
-        double sr = sr_r + fabs(vt_c) / (r * dtheta[j]);
+        double sr = (fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]);
         double diag_val = -(inv_dt + sr);
 
         // θ-direction face velocities for upwind
@@ -1378,6 +1384,21 @@ void k_lm_line_solve_theta(
         double coeff_hi_self = (vf_hi >= 0.0 ? vf_hi : 0.0) * At_hi * invV;
         double adv_self = -(coeff_lo_self + coeff_hi_self);
         Db[0] += adv_self; Db[5] += adv_self; Db[10] += adv_self; Db[15] += adv_self;
+
+        // 1D gravity-density coupling: dF_mr/d(rho) += g₀(r)
+        Db[1*4+0] += gr0[i];
+
+        // r-direction pressure gradient diagonal (same as r-line)
+        double dPdr_coeff = 0.0;
+        if (i > 0 && i < nr-1) {
+            double dl_r = r_center[i]-r_center[i-1], dh_r = r_center[i+1]-r_center[i];
+            dPdr_coeff = -(dh_r/(dl_r*(dl_r+dh_r)) + dl_r/(dh_r*(dl_r+dh_r)));
+        } else if (i == 0 && nr > 1) {
+            dPdr_coeff = -1.0/(r_center[1]-r_center[0]);
+        } else if (i == nr-1 && nr >= 2) {
+            dPdr_coeff = 1.0/(r_center[nr-1]-r_center[nr-2]);
+        }
+        Db[1*4+3] += -dPdr_coeff * (gamma - 1.0);
 
         // Compression work coupling
         double Ar_hi_l = ar[(i+1)*nt+j], Ar_lo_l = ar[i*nt+j];
@@ -1502,12 +1523,12 @@ void k_lm_line_solve_theta(
 // One GPU block per θ-line.
 __global__
 void k_lm_mom_line_solve(
-    const double* rho, const double* mr, const double* mt,
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* vol, const double* ar,
     const double* r_center, const double* dr, const double* dtheta,
     const double* v_in_mr, const double* v_in_mt,
     double* out_vr, double* out_vt,
-    int nr, int nt, int ng, double inv_dt) {
+    int nr, int nt, int ng, double inv_dt, double gamma) {
     int j = blockIdx.x;
     if (j >= nt) return;
 
@@ -1531,7 +1552,9 @@ void k_lm_mom_line_solve(
         double r = r_center[i];
         double invV = 1.0 / vol[flat];
 
-        double sr = fabs(vr_c)/dr[i] + fabs(vt_c)/(r*dtheta[j]);
+        double P = fmax((gamma - 1.0) * rhoE[k], 1e-30);
+        double cs = sqrt(gamma * P / rho_c);
+        double sr = (fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]);
         double Ar_hi = ar[(i+1)*nt+j], Ar_lo = ar[i*nt+j];
 
         double vf_lo = 0.0, vf_hi = 0.0;
@@ -1660,9 +1683,10 @@ void k_lm_pbp_assemble(
     double rho_c = fmax(rho_state[k], 1e-20);
     double r = r_center[i];
 
-    // ρ: point Jacobi — use (0,0) element of block inverse
+    // ρ: full block-inverse row 0: B[0]*r_ρ + B[1]*r_mr + B[2]*r_mt + B[3]*r_E
     const double* B = &blk_diag[flat*16];
-    Mv_out[flat] = B[0] * v_in[flat];
+    double r0 = v_in[flat], r1 = v_in[n+flat], r2 = v_in[2*n+flat], r3 = v_in[3*n+flat];
+    Mv_out[flat] = B[0]*r0 + B[1]*r1 + B[2]*r2 + B[3]*r3;
 
     // Pressure gradient correction
     double dp_dr = 0.0;
@@ -1690,8 +1714,34 @@ void k_lm_pbp_assemble(
     Mv_out[n + flat]   = rho_c * dvr;
     Mv_out[2*n + flat] = rho_c * dvt;
 
-    // Energy: point Jacobi — use (3,3) element of block inverse
-    Mv_out[3*n + flat] = B[15] * v_in[3*n + flat];
+    // Energy: full block-inverse row 3: B[12]*r_ρ + B[13]*r_mr + B[14]*r_mt + B[15]*r_E
+    Mv_out[3*n + flat] = B[12]*r0 + B[13]*r1 + B[14]*r2 + B[15]*r3;
+}
+
+// Extract velocity from momentum: δvr = δmr/ρ, δvt = δmt/ρ
+__global__
+void k_lm_extract_vel(const double* dmr, const double* dmt, const double* rho,
+                      double* vr_out, double* vt_out,
+                      int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int k = d_idx(flat/nt, flat%nt, nt, ng);
+    double inv_rho = 1.0 / fmax(rho[k], 1e-20);
+    vr_out[flat] = dmr[flat] * inv_rho;
+    vt_out[flat] = dmt[flat] * inv_rho;
+}
+
+// Convert velocity to momentum: δmr = ρ·δvr, δmt = ρ·δvt
+__global__
+void k_lm_vel_to_mom(const double* vr_in, const double* vt_in, const double* rho,
+                     double* mr_out, double* mt_out,
+                     int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int k = d_idx(flat/nt, flat%nt, nt, ng);
+    double rho_c = fmax(rho[k], 1e-20);
+    mr_out[flat] = rho_c * vr_in[flat];
+    mt_out[flat] = rho_c * vt_in[flat];
 }
 
 // Velocity-only pressure correction: vr -= (1/Ap)*∂δp/∂r, vt -= (1/Ap)*(1/r)*∂δp/∂θ
@@ -1729,8 +1779,9 @@ void k_lm_simple_vcorr(double* vr_io, double* vt_io,
 void LowMachSolver::assemble_simple(double dt) {
     int n = nr*nt, B = 256;
     k_lm_simple_mom_diag<<<(n+B-1)/B,B>>>(
-        d_rho, d_mr, d_mtheta, d_dr, d_r_center, d_dtheta,
-        d_Ap, nr, nt, ng, 1.0/dt);
+        d_rho, d_mr, d_mtheta, d_rhoE,
+        d_dr, d_r_center, d_dtheta,
+        d_Ap, nr, nt, ng, 1.0/dt, gamma);
 }
 
 void LowMachSolver::apply_simple(const double* d_v, double* d_Mv, double dt) {
@@ -1865,51 +1916,37 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
     int n = nr*nt, B = 256;
 
     if (precond_type == PrecondType::PBP) {
-        // Physics-Based Preconditioning (PBP):
-        //   1. Momentum predict: 2-DOF r-line solve (no pressure) → ṽr, ṽt
-        //   2. Pressure Poisson: ∇·(α∇δp) = div(ṽ), α=(γ-1)/Ap, via GMG
-        //   3. Velocity correct + assemble all 4 DOFs
-        double inv_dt = 1.0 / dt;
+        // Multiplicative ADI: M = (D+Lr+Ur)·D⁻¹·(D+Lθ+Uθ)
+        // Applied as: x* = r-line⁻¹·r, y = D·x*, x = θ-line⁻¹·y
 
-        // Step 1: Solve A_v · δv = r_v (momentum-only, 2-DOF per cell)
-        // Input: d_v[n..2n] = r_mr, d_v[2n..3n] = r_mt (momentum residual)
-        // Output: d_simple_vr_s, d_simple_vt_s = predicted velocity corrections
+        // Step 1: 4-DOF r-line solve → d_Mv
         {
-            int smem = nr * (3*4 + 2*2) * sizeof(double);
+            int smem = nr * (3*16 + 2*4) * sizeof(double);
             int threads = std::min(nr, 256);
-            k_lm_mom_line_solve<<<nt, threads, smem>>>(
-                d_rho, d_mr, d_mtheta,
-                d_cell_volume, d_area_r,
-                d_r_center, d_dr, d_dtheta,
-                d_v + n, d_v + 2*n,
-                d_simple_vr_s, d_simple_vt_s,
-                nr, nt, ng, inv_dt);
+            k_lm_line_solve<<<nt, threads, smem>>>(
+                d_rho, d_mr, d_mtheta, d_rhoE,
+                d_cell_volume, d_area_r, d_area_theta,
+                d_r_center, d_r_face, d_theta_face,
+                d_dr, d_dtheta, d_gr0,
+                d_v, d_Mv,
+                nr, nt, ng, gamma, 1.0/dt);
         }
 
-        // Step 2: Divergence of predicted velocity
-        k_lm_simple_div<<<(n+B-1)/B,B>>>(
-            d_simple_vr_s, d_simple_vt_s,
-            d_cell_volume, d_area_r, d_area_theta,
-            d_simple_div, nr, nt);
+        // Step 2: Apply block diagonal D (un-inverted) → d_residual_ls
+        k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_J, d_Mv, d_residual_ls, n);
 
-        // α = (γ-1)/Ap for Schur complement ≈ ∇·(α∇)
-        k_lm_simple_alpha<<<(n+B-1)/B,B>>>(d_Ap, d_inv_rho, n);
-
-        k_lm_simple_prhs<<<(n+B-1)/B,B>>>(d_simple_div, d_rhs_poisson, nr, nt);
-
-        // Solve pressure Poisson (3 V-cycles, approximate is fine for preconditioner)
-        CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
-        gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 3, 1e-2);
-
-        // Step 3: Assemble all 4 DOFs
-        k_lm_pbp_assemble<<<(n+B-1)/B,B>>>(
-            d_rho, d_blk_diag,
-            d_v,
-            d_simple_vr_s, d_simple_vt_s,
-            d_simple_p, d_Ap,
-            d_r_center, d_theta_face,
-            d_Mv,
-            nr, nt, ng, gamma);
+        // Step 3: 4-DOF θ-line solve → d_Mv
+        {
+            int smem = nt * (3*16 + 2*4) * sizeof(double);
+            int threads = std::min(nt, 256);
+            k_lm_line_solve_theta<<<nr, threads, smem>>>(
+                d_rho, d_mr, d_mtheta, d_rhoE,
+                d_cell_volume, d_area_r, d_area_theta,
+                d_r_center, d_r_face, d_theta_face,
+                d_dr, d_dtheta, d_gr0,
+                d_residual_ls, d_Mv,
+                nr, nt, ng, gamma, 1.0/dt);
+        }
     } else if (precond_type == PrecondType::BLOCK_SCHUR) {
         apply_block_schur(d_v, d_Mv, dt);
     } else if (precond_type == PrecondType::LINE_JACOBI) {
@@ -2149,7 +2186,7 @@ double LowMachSolver::step(double t, double t_end) {
 
         assemble_block_jacobi(dt);
         if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
-            || precond_type == PrecondType::LINE_JACOBI || precond_type == PrecondType::PBP)
+            || precond_type == PrecondType::LINE_JACOBI)
             assemble_simple(dt);
 
         double Fnorm0 = 0.0;
@@ -2437,7 +2474,7 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     d_Ap = nullptr; d_simple_p = nullptr; d_simple_div = nullptr;
     d_simple_vr_s = nullptr; d_simple_vt_s = nullptr;
     if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
-        || precond_type == PrecondType::LINE_JACOBI || precond_type == PrecondType::PBP) {
+        || precond_type == PrecondType::LINE_JACOBI) {
         CUDA_CHECK(cudaMalloc(&d_Ap, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_p, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_div, n*sizeof(double)));
@@ -2531,7 +2568,7 @@ void LowMachSolver::destroy() {
     if (d_simple_vr_s) cudaFree(d_simple_vr_s);
     if (d_simple_vt_s) cudaFree(d_simple_vt_s);
     if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
-        || precond_type == PrecondType::LINE_JACOBI || precond_type == PrecondType::PBP)
+        || precond_type == PrecondType::LINE_JACOBI)
         gmg_pressure.destroy();
     initialized = false;
 }
