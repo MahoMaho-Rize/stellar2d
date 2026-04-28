@@ -46,6 +46,13 @@ struct LowMachSolver {
     double *d_cell_volume, *d_area_r, *d_area_theta;
     double *d_sin_theta_face, *d_sin_theta_center;
 
+    // Precomputed gradient stencil weights (branchless pressure gradient).
+    // dP/dr = wr_m*(P_{i-1}-P_c) + wr_p*(P_{i+1}-P_c)
+    // (1/r)dP/dθ = wt_m*(P_{j-1}-P_c) + wt_p*(P_{j+1}-P_c)
+    // Boundary cells have zero weights → clamped neighbor reads are harmless.
+    double *d_grad_r_wm, *d_grad_r_wp;
+    double *d_grad_t_wm, *d_grad_t_wp;
+
     // State: ρ, ρvr, ρvθ, ρe (with ghost cells)
     double *d_rho, *d_mr, *d_mtheta, *d_rhoE;
 
@@ -139,7 +146,6 @@ struct LowMachSolver {
     void assemble_simple(double dt);
     void apply_preconditioner(const double* d_v, double* d_Mv, double dt);
     void apply_simple(const double* d_v, double* d_Mv, double dt);
-    void apply_line_jacobi(const double* d_v, double* d_Mv, double dt);
     void apply_block_schur(const double* d_v, double* d_Mv, double dt);
     void assemble_schur_sigma(double dt);
 
