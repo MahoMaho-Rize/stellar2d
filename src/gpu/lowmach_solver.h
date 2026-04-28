@@ -24,11 +24,11 @@
 // Linear solver: GMRES with block-diagonal scaling preconditioner.
 // Gravity: GMG constant-coefficient Poisson.
 
-enum class PrecondType { NONE, BLOCK_JACOBI };
+enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE };
 
 struct LowMachSolver {
     void init(const Grid& grid, const EOS& eos, double G, double cfl,
-              PrecondType pc = PrecondType::BLOCK_JACOBI);
+              PrecondType pc = PrecondType::SIMPLE);
     void upload_state(const Grid& grid, const State& state);
     void download_state(const Grid& grid, State& state);
     double step(double t, double t_end);
@@ -78,8 +78,17 @@ struct LowMachSolver {
     double *d_scale;   // variable scaling: max(1, |U|) per DOF (4*n)
 
     // Block-diagonal Jacobi preconditioner: 4×4 block inverse per cell
-    // d_blk_diag: n * 16 doubles (row-major 4×4 blocks)
     double *d_blk_diag;
+
+    // SIMPLE preconditioner scratch (n = nr*nt each)
+    double *d_Ap;           // momentum diagonal: 1/dt + upwind_coeff (per cell)
+    double *d_simple_p;     // pressure correction from GMG
+    double *d_simple_div;   // divergence RHS for pressure Poisson
+    double *d_simple_vr_s, *d_simple_vt_s; // intermediate velocity (star)
+
+    // Second GMG instance for pressure Poisson (separate from gravity)
+    GmgGpu gmg_pressure;
+
     PrecondType precond_type;
 
     // GMG for gravity
@@ -104,7 +113,9 @@ struct LowMachSolver {
     void compute_scaling();
     void clamp_correction(double* d_delta, double max_rel_change);
     void assemble_block_jacobi(double dt);
-    void apply_preconditioner(const double* d_v, double* d_Mv);
+    void assemble_simple(double dt);
+    void apply_preconditioner(const double* d_v, double* d_Mv, double dt);
+    void apply_simple(const double* d_v, double* d_Mv, double dt);
 
     // Snapshot current state as HSE reference (call before adding perturbations)
     void snapshot_hse();
