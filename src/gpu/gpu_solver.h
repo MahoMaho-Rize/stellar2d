@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef USE_AMGX
+
 #include "../grid.h"
 #include "../state.h"
 #include "../eos.h"
@@ -108,3 +110,5 @@ struct GpuSolver {
     void assemble_jacobian(double dt);
     void apply_preconditioner(const double* d_v, double* d_Mv);
 };
+
+#endif // USE_AMGX

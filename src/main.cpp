@@ -13,7 +13,9 @@
 #include "init/evrard.h"
 
 #ifdef USE_GPU
+#ifdef USE_AMGX
 #include "gpu/gpu_solver.h"
+#endif
 #include "gpu/lowmach_solver.h"
 #endif
 
@@ -250,6 +252,7 @@ int main(int argc, char** argv) {
         lm.download_state(grid, state);
         lm.destroy();
     } else {
+#ifdef USE_AMGX
         // ===== GPU compressible path (HLLC + JFNK) =====
         GpuSolver gpu;
         gpu.init(grid, eos, cfg.G, cfg.cfl, cfg.limiter);
@@ -282,6 +285,11 @@ int main(int argc, char** argv) {
 
         gpu.download_state(grid, state);
         gpu.destroy();
+#else
+        std::fprintf(stderr, "ERROR: --solver compressible requires AmgX. "
+                     "Rebuild with -DAMGX_DIR=/path/to/amgx, or use --solver lowmach.\n");
+        return 1;
+#endif
     }
 
 #else
