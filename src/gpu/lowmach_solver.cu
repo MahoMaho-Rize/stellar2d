@@ -1861,96 +1861,10 @@ void LowMachSolver::apply_block_schur(const double* d_v, double* d_Mv, double dt
     gmg_schur.solve_helmholtz(d_sigma_schur, d_schur_rhs, d_Mv + 4*n, 10, 1e-4);
 }
 
-// ========================= PBP: Physics-Based Block Preconditioner ==
-// Combines two complementary solvers to capture ALL length scales:
-//
-// 1. Radial Line Jacobi — exact block-tridiagonal solve along each θ-line.
-//    Captures: r-direction advection, pressure gradient, gravity-density coupling.
-//    Misses: θ-direction pressure coupling (each θ-line is independent).
-//
-// 2. Global pressure Poisson via GMG — variable-coefficient ∇·(α∇δp) = div(δm*).
-//    Captures: the 2D pressure field, especially the θ-direction coupling.
-//    This is the Schur complement S = D - C·A⁻¹·B of the block Jacobian,
-//    which reduces to a pressure Poisson equation ∇·(1/Ap · ∇δP) in the
-//    low-Mach limit (Knoll & Keyes 2004, Viallet et al. 2016).
-//
-// 3. Velocity correction — project momentum to be consistent with the global
-//    pressure field: δmr -= (1/Ap)·∂δp/∂r, δmt -= (1/Ap)·(1/r)∂δp/∂θ.
-//
-// Philosophy (JFNK "cheating"):
-//   The preconditioner M⁻¹ ≈ J⁻¹ only needs to be approximate.
-//   The outer FGMRES + matrix-free J·v product guarantees convergence to
-//   the exact fully-coupled solution regardless of preconditioner accuracy.
-//   Even 2-3 GMG V-cycles suffice — FGMRES mops up the residual.
-//   Result: GMRES converges in 5-10 iterations even at large dt.
-
-void LowMachSolver::apply_pbp(const double* d_v, double* d_Mv, double dt) {
-    int n = nr*nt, B = 256;
-
-    // ===== Step 1: Radial Line Jacobi (approximate solve along r) =====
-    // Solves the block-tridiagonal system J_r · δU = x for each θ-line.
-    // The 4×4 blocks capture: advection, pressure gradient (∂P/∂r),
-    // gravity-density coupling (ρ'·g₀), and compression work (P∇·v).
-    // Cost: O(nr) per θ-line, O(nr·nt) total. GPU-parallel over θ-lines.
-    {
-        int smem_r = nr * (3*16 + 2*4) * (int)sizeof(double);
-        int threads_r = std::min(nr, 256);
-        k_lm_line_solve<<<nt, threads_r, smem_r>>>(
-            d_rho, d_mr, d_mtheta, d_rhoE,
-            d_cell_volume, d_area_r, d_area_theta,
-            d_r_center, d_r_face, d_theta_face,
-            d_dr, d_dtheta, d_gr0,
-            d_v, d_Mv,
-            nr, nt, ng, gamma, 1.0/dt);
-    }
-
-    // ===== Step 2: Global pressure Poisson via GMG =====
-    // The Schur complement S = D - C·A⁻¹·B represents the pressure-velocity
-    // coupling. In the low-Mach limit: S ≈ ∇·((1/Ap)·∇P), a variable-
-    // coefficient Poisson equation. GMG resolves this globally, capturing
-    // the θ-direction pressure coupling that Line Jacobi (per-θ-line) cannot see.
-    //
-    // 2a: Compute FV divergence of momentum correction from Step 1.
-    //     The momentum correction δm* acts as "pseudo-velocity" for the
-    //     divergence computation — same approach as in SIMPLE.
-    k_lm_simple_div<<<(n+B-1)/B, B>>>(
-        d_Mv + n, d_Mv + 2*n,       // δmr*, δmt* from Line Jacobi
-        d_cell_volume, d_area_r, d_area_theta,
-        d_simple_div, nr, nt);
-
-    // 2b: α = 1/Ap for variable-coefficient Poisson operator.
-    k_lm_simple_alpha<<<(n+B-1)/B, B>>>(d_Ap, d_inv_rho, n);
-
-    // 2c: Poisson RHS = div(δm*), with Dirichlet δp=0 at outer boundary.
-    k_lm_simple_prhs<<<(n+B-1)/B, B>>>(d_simple_div, d_rhs_poisson, nr, nt);
-
-    // 2d: Solve ∇·(α∇δp) = div(δm*).
-    //     Only 3 V-cycles with loose tolerance — rough solve is fine!
-    //     The JFNK philosophy: the preconditioner can "cheat" aggressively;
-    //     FGMRES + matrix-free Jv product corrects any remaining error.
-    CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
-    gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 3, 1e-2);
-
-    // ===== Step 3: Velocity correction from pressure gradient =====
-    // Update momentum to be consistent with the global pressure field:
-    //   δmr ← δmr* - (1/Ap)·∂δp/∂r
-    //   δmt ← δmt* - (1/Ap)·(1/r)·∂δp/∂θ
-    // The scalar corrections (δρ, δρe) from Line Jacobi are kept unchanged.
-    // FGMRES handles any density-energy-momentum inconsistency.
-    k_lm_simple_vcorr<<<(n+B-1)/B, B>>>(
-        d_Mv + n, d_Mv + 2*n,       // in-place momentum correction
-        d_simple_p, d_Ap,
-        d_r_center, d_theta_face, nr, nt);
-}
-
 void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double dt) {
     int n = nr*nt, B = 256;
 
     if (precond_type == PrecondType::PBP) {
-        apply_pbp(d_v, d_Mv, dt);
-    } else if (precond_type == PrecondType::BLOCK_SCHUR) {
-        apply_block_schur(d_v, d_Mv, dt);
-    } else if (precond_type == PrecondType::LINE_JACOBI) {
         // Physics-Based Preconditioning (PBP):
         //   1. Momentum predict: 2-DOF r-line solve (no pressure) → ṽr, ṽt
         //   2. Pressure Poisson: ∇·(α∇δp) = div(ṽ), α=(γ-1)/Ap, via GMG
@@ -1996,6 +1910,18 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
             d_r_center, d_theta_face,
             d_Mv,
             nr, nt, ng, gamma);
+    } else if (precond_type == PrecondType::BLOCK_SCHUR) {
+        apply_block_schur(d_v, d_Mv, dt);
+    } else if (precond_type == PrecondType::LINE_JACOBI) {
+        int smem = nr * (3*16 + 2*4) * sizeof(double);
+        int threads = std::min(nr, 256);
+        k_lm_line_solve<<<nt, threads, smem>>>(
+            d_rho, d_mr, d_mtheta, d_rhoE,
+            d_cell_volume, d_area_r, d_area_theta,
+            d_r_center, d_r_face, d_theta_face,
+            d_dr, d_dtheta, d_gr0,
+            d_v, d_Mv,
+            nr, nt, ng, gamma, 1.0/dt);
     } else if (precond_type == PrecondType::SIMPLE) {
         apply_simple(d_v, d_Mv, dt);
     } else if (precond_type == PrecondType::BLOCK_JACOBI) {
