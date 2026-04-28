@@ -1,7 +1,10 @@
 build/
 build_*/
+build-cpu/
+runs/
 *.o
 *.d
+*.vtk
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
