@@ -1876,37 +1876,46 @@ void LowMachSolver::apply_preconditioner(const double* d_v, double* d_Mv, double
     int n = nr*nt, B = 256;
 
     if (precond_type == PrecondType::PBP) {
-        // Multiplicative ADI: M = (D+Lr+Ur)·D⁻¹·(D+Lθ+Uθ)
-        // Applied as: x* = r-line⁻¹·r, y = D·x*, x = θ-line⁻¹·y
+        // Hybrid PBP: 2-DOF momentum line solve + GMG Poisson + 4×4 block-inverse
+        //   1. 2-DOF momentum r-line solve → ṽr, ṽt
+        //   2. GMG Poisson: ∇·(α∇δp) = div(ṽ), global pressure correction
+        //   3. Assembly: ρ,E via full block-inverse rows; momentum via Poisson correction
+        double inv_dt = 1.0 / dt;
 
-        // Step 1: 4-DOF r-line solve → d_Mv
+        // Step 1: 2-DOF momentum-only r-line solve
         {
-            int smem = nr * (3*16 + 2*4) * sizeof(double);
+            int smem = nr * (3*4 + 2*2) * sizeof(double);
             int threads = std::min(nr, 256);
-            k_lm_line_solve<<<nt, threads, smem>>>(
+            k_lm_mom_line_solve<<<nt, threads, smem>>>(
                 d_rho, d_mr, d_mtheta, d_rhoE,
-                d_cell_volume, d_area_r, d_area_theta,
-                d_r_center, d_r_face, d_theta_face,
-                d_dr, d_dtheta, d_gr0,
-                d_v, d_Mv,
-                nr, nt, ng, gamma, 1.0/dt);
+                d_cell_volume, d_area_r,
+                d_r_center, d_dr, d_dtheta,
+                d_v + n, d_v + 2*n,
+                d_simple_vr_s, d_simple_vt_s,
+                nr, nt, ng, inv_dt, gamma);
         }
 
-        // Step 2: Apply block diagonal D (un-inverted) → d_residual_ls
-        k_lm_apply_blkjac<<<(n+B-1)/B,B>>>(d_blk_J, d_Mv, d_residual_ls, n);
+        // Step 2: Pressure Poisson
+        k_lm_simple_div<<<(n+B-1)/B,B>>>(
+            d_simple_vr_s, d_simple_vt_s,
+            d_cell_volume, d_area_r, d_area_theta,
+            d_simple_div, nr, nt);
 
-        // Step 3: 4-DOF θ-line solve → d_Mv
-        {
-            int smem = nt * (3*16 + 2*4) * sizeof(double);
-            int threads = std::min(nt, 256);
-            k_lm_line_solve_theta<<<nr, threads, smem>>>(
-                d_rho, d_mr, d_mtheta, d_rhoE,
-                d_cell_volume, d_area_r, d_area_theta,
-                d_r_center, d_r_face, d_theta_face,
-                d_dr, d_dtheta, d_gr0,
-                d_residual_ls, d_Mv,
-                nr, nt, ng, gamma, 1.0/dt);
-        }
+        k_lm_simple_alpha<<<(n+B-1)/B,B>>>(d_Ap, d_inv_rho, n);
+        k_lm_simple_prhs<<<(n+B-1)/B,B>>>(d_simple_div, d_rhs_poisson, nr, nt);
+
+        CUDA_CHECK(cudaMemset(d_simple_p, 0, n*sizeof(double)));
+        gmg_pressure.solve_varcoeff(d_inv_rho, d_rhs_poisson, d_simple_p, 3, 1e-2);
+
+        // Step 3: Assemble (full block-inverse for ρ,E; Poisson-corrected momentum)
+        k_lm_pbp_assemble<<<(n+B-1)/B,B>>>(
+            d_rho, d_blk_diag, d_blk_J,
+            d_v,
+            d_simple_vr_s, d_simple_vt_s,
+            d_simple_p, d_Ap,
+            d_grad_r_wm, d_grad_r_wp, d_grad_t_wm, d_grad_t_wp,
+            d_Mv,
+            nr, nt, ng, gamma);
     } else if (precond_type == PrecondType::BLOCK_SCHUR) {
         apply_block_schur(d_v, d_Mv, dt);
     } else if (precond_type == PrecondType::LINE_JACOBI) {
@@ -2146,7 +2155,7 @@ double LowMachSolver::step(double t, double t_end) {
 
         assemble_block_jacobi(dt);
         if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
-            || precond_type == PrecondType::LINE_JACOBI)
+            || precond_type == PrecondType::LINE_JACOBI || precond_type == PrecondType::PBP)
             assemble_simple(dt);
 
         double Fnorm0 = 0.0;
@@ -2478,7 +2487,7 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
     d_Ap = nullptr; d_simple_p = nullptr; d_simple_div = nullptr;
     d_simple_vr_s = nullptr; d_simple_vt_s = nullptr;
     if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
-        || precond_type == PrecondType::LINE_JACOBI) {
+        || precond_type == PrecondType::LINE_JACOBI || precond_type == PrecondType::PBP) {
         CUDA_CHECK(cudaMalloc(&d_Ap, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_p, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_div, n*sizeof(double)));
@@ -2574,7 +2583,7 @@ void LowMachSolver::destroy() {
     if (d_simple_vr_s) cudaFree(d_simple_vr_s);
     if (d_simple_vt_s) cudaFree(d_simple_vt_s);
     if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
-        || precond_type == PrecondType::LINE_JACOBI)
+        || precond_type == PrecondType::LINE_JACOBI || precond_type == PrecondType::PBP)
         gmg_pressure.destroy();
     initialized = false;
 }
