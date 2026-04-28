@@ -1089,9 +1089,9 @@ double GpuSolver::step(double t, double t_end) {
 
         double dt_next = growth * dt;
 
-        // Fast recovery toward dt_good: if we're well below dt_good
-        // (e.g. after a transient failure), allow a larger jump
-        if (dt_good > 0.0 && dt < 0.5 * dt_good) {
+        // Fast recovery: if we're well below dt_good, jump toward it.
+        // Use conservative threshold (4x gap) to avoid overaggressive recovery.
+        if (dt_good > 0.0 && dt < 0.25 * dt_good) {
             // Geometric mean between growth*dt and dt_good for faster recovery
             double dt_recover = sqrt(dt_next * dt_good);
             dt_next = std::max(dt_next, dt_recover);
@@ -1099,8 +1099,12 @@ double GpuSolver::step(double t, double t_end) {
 
         dt_adapt = std::min(dt_next, dt_cfl);
     } else {
-        // Failure: shrink but keep dt_good memory intact for recovery
+        // Failure: shrink dt AND decay dt_good toward current reality.
+        // Without decay, dt_good becomes stale after physics changes and
+        // the recovery mechanism creates a destructive propose-fail-crash cycle.
         dt_adapt = 0.5 * dt;
+        if (dt_good > 0.0)
+            dt_good = std::max(dt, 0.5 * dt_good);
     }
 
     step_count++;

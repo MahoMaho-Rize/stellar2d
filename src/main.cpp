@@ -36,6 +36,7 @@ struct SimConfig {
     std::string test_case = "lane_emden";
     std::string mesh_type = "log";
     std::string solver_type = "compressible"; // "compressible" or "lowmach"
+    std::string precond = "line_jacobi";         // preconditioner for lowmach solver
     Limiter limiter = Limiter::MINMOD;
 };
 
@@ -101,6 +102,8 @@ int main(int argc, char** argv) {
             cfg.mesh_type = argv[++i];
         else if (std::strcmp(argv[i], "--solver") == 0 && i + 1 < argc)
             cfg.solver_type = argv[++i];
+        else if (std::strcmp(argv[i], "--precond") == 0 && i + 1 < argc)
+            cfg.precond = argv[++i];
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed") {
@@ -182,8 +185,16 @@ int main(int argc, char** argv) {
 #ifdef USE_GPU
     if (cfg.solver_type == "lowmach") {
         // ===== GPU low-Mach path =====
+        PrecondType pc = PrecondType::LINE_JACOBI;
+        if (cfg.precond == "none")          pc = PrecondType::NONE;
+        else if (cfg.precond == "block_jacobi") pc = PrecondType::BLOCK_JACOBI;
+        else if (cfg.precond == "simple")   pc = PrecondType::SIMPLE;
+        else if (cfg.precond == "line_jacobi") pc = PrecondType::LINE_JACOBI;
+        else if (cfg.precond == "block_schur") pc = PrecondType::BLOCK_SCHUR;
+        else if (cfg.precond == "combined") pc = PrecondType::COMBINED;
+
         LowMachSolver lm;
-        lm.init(grid, eos, cfg.G, cfg.cfl);
+        lm.init(grid, eos, cfg.G, cfg.cfl, pc);
 
         // For perturbed ICs: snapshot unperturbed HSE first, then load perturbation.
         if (cfg.test_case == "lane_emden_perturbed") {
@@ -214,10 +225,12 @@ int main(int argc, char** argv) {
                 Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
 
                 double max_vr = 0, max_vt = 0;
+                double rho_thresh = lm.atm_rho_thresh;
                 for (int i = 0; i < grid.nr; i++)
                     for (int j = 0; j < grid.ntheta; j++) {
                         int k = grid.idx(i, j);
-                        double rho = std::fmax(state.rho[k], 1e-20);
+                        if (state.rho[k] < rho_thresh) continue;
+                        double rho = state.rho[k];
                         max_vr = std::max(max_vr, std::fabs(state.mr[k] / rho));
                         max_vt = std::max(max_vt, std::fabs(state.mtheta[k] / rho));
                     }

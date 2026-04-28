@@ -119,11 +119,18 @@ void k_lm_residual(
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
     double* res,
-    int nr, int nt, int ng, double gamma) {
+    int nr, int nt, int ng, double gamma, double atm_thresh) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
     int n = nr*nt;
+
+    if (rho0[flat] < atm_thresh) {
+        res[flat] = 0.0; res[n+flat] = 0.0;
+        res[2*n+flat] = 0.0; res[3*n+flat] = 0.0;
+        return;
+    }
+
     int k = d_idx(i,j,nt,ng);
     double invV = 1.0 / vol[flat];
 
@@ -349,6 +356,23 @@ void k_lm_floor(double* rho, double* mr, double* mt, double* rhoE,
         rhoE[k] = P_fl / (gamma - 1.0);
 }
 
+// Freeze atmosphere cells to HSE reference state.
+// Cells where rho0 < atm_thresh are vacuum — Newton corrections
+// create spurious momentum (vr = mr/rho_floor → huge), crashing CFL.
+__global__
+void k_lm_freeze_atm(double* rho, double* mr, double* mt, double* rhoE,
+                      const double* rho0, const double* P0,
+                      int nr, int nt, int ng, double gamma, double atm_thresh) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] >= atm_thresh) return;
+    int k = d_idx(flat/nt, flat%nt, nt, ng);
+    rho[k] = rho0[flat];
+    mr[k] = 0.0;
+    mt[k] = 0.0;
+    rhoE[k] = P0[flat] / (gamma - 1.0);
+}
+
 // ========================= HSE snapshot ===========================
 
 __global__
@@ -557,7 +581,7 @@ void LowMachSolver::compute_residual(double* d_res) {
         d_r_center,d_r_face,d_theta_face,d_dr,d_dtheta,
         d_gr, d_gr0, d_P0, d_rho0,
         d_residual,
-        nr,nt,ng,gamma);
+        nr,nt,ng,gamma, atm_rho_thresh);
 }
 
 void LowMachSolver::compute_F(double* d_F, double dt) {
@@ -694,7 +718,7 @@ void k_lm_assemble_blkjac(
     const double* r_center, const double* r_face, const double* theta_face,
     const double* dr, const double* dtheta,
     const double* gr0,
-    double* blk,
+    double* blk, double* blk_J,
     int nr, int nt, int ng, double gamma, double inv_dt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -802,6 +826,9 @@ void k_lm_assemble_blkjac(
         }
     }
 
+    double* BJ = &blk_J[flat*16];
+    for(int q=0;q<16;q++) BJ[q]=J[q];
+
     double* B = &blk[flat*16];
     for(int q=0;q<16;q++) B[q]=inv_m[q];
 }
@@ -828,7 +855,7 @@ void LowMachSolver::assemble_block_jacobi(double dt) {
         d_r_center, d_r_face, d_theta_face,
         d_dr, d_dtheta,
         d_gr0,
-        d_blk_diag, nr, nt, ng, gamma, 1.0/dt);
+        d_blk_diag, d_blk_J, nr, nt, ng, gamma, 1.0/dt);
 }
 
 // ========================= SIMPLE preconditioner ===================
@@ -1249,6 +1276,225 @@ void k_lm_line_solve(
     }
 }
 
+// θ-direction block-tridiagonal line solve: one block per radial line.
+// Mirror of k_lm_line_solve but sweeps along θ at fixed r.
+__global__
+void k_lm_line_solve_theta(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face, const double* theta_face,
+    const double* dr, const double* dtheta,
+    const double* v_in, double* Mv_out,
+    int nr, int nt, int ng, double gamma, double inv_dt) {
+    int i = blockIdx.x;  // one block per r-line
+    if (i >= nr) return;
+
+    extern __shared__ double smem[];
+    double* L = smem;                 // nt * 16
+    double* D = L + nt * 16;         // nt * 16
+    double* U = D + nt * 16;         // nt * 16
+    double* rhs_s = U + nt * 16;     // nt * 4
+    double* x_s = rhs_s + nt * 4;    // nt * 4
+
+    int tid = threadIdx.x;
+    int n = nr * nt;
+    double r = r_center[i];
+
+    for (int j = tid; j < nt; j += blockDim.x) {
+        int flat = i * nt + j;
+        int k = d_idx(i, j, nt, ng);
+
+        double rho_c = fmax(rho[k], 1e-20);
+        double vr_c = mr[k] / rho_c;
+        double vt_c = mt[k] / rho_c;
+        double P_c = fmax((gamma - 1.0) * rhoE[k], 1e-30);
+        double invV = 1.0 / vol[flat];
+        double sr_r = fabs(vr_c) / dr[i];
+
+        double At_hi = at[i*(nt+1)+j+1], At_lo = at[i*(nt+1)+j];
+
+        double sr = sr_r + fabs(vt_c) / (r * dtheta[j]);
+        double diag_val = -(inv_dt + sr);
+
+        // θ-direction face velocities for upwind
+        double vf_lo = 0.0, vf_hi = 0.0;
+        if (j > 0) {
+            double rl = fmax(rho[d_idx(i,j-1,nt,ng)], 1e-20);
+            vf_lo = 0.5 * (mt[d_idx(i,j-1,nt,ng)] / rl + vt_c);
+        }
+        if (j < nt - 1) {
+            double rr = fmax(rho[d_idx(i,j+1,nt,ng)], 1e-20);
+            vf_hi = 0.5 * (vt_c + mt[d_idx(i,j+1,nt,ng)] / rr);
+        }
+
+        // Lower block (j-1)
+        double* Lb = &L[j * 16];
+        for (int q = 0; q < 16; q++) Lb[q] = 0.0;
+        if (j > 0) {
+            double coeff = (vf_lo >= 0.0 ? vf_lo : 0.0) * At_lo * invV;
+            Lb[0] = coeff; Lb[5] = coeff; Lb[10] = coeff; Lb[15] = coeff;
+
+            // Pressure coupling: dF_mt/d(rhoE_{j-1}) from (1/r)∂P'/∂θ
+            double tc_m = 0.5*(theta_face[j-1]+theta_face[j]);
+            double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
+            double dl = tc_c - tc_m;
+            double dh = (j < nt-1) ? 0.5*(theta_face[j+1]+theta_face[j+2]) - tc_c : dl;
+            double pcoeff = -(gamma - 1.0) * dh / (r * dl * (dl + dh));
+            Lb[2*4+3] += pcoeff;
+        }
+
+        // Upper block (j+1)
+        double* Ub = &U[j * 16];
+        for (int q = 0; q < 16; q++) Ub[q] = 0.0;
+        if (j < nt - 1) {
+            double coeff = (vf_hi < 0.0 ? -vf_hi : 0.0) * At_hi * invV;
+            Ub[0] = coeff; Ub[5] = coeff; Ub[10] = coeff; Ub[15] = coeff;
+
+            double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
+            double tc_p = 0.5*(theta_face[j+1]+theta_face[j+2]);
+            double dh = tc_p - tc_c;
+            double dl = (j > 0) ? tc_c - 0.5*(theta_face[j-1]+theta_face[j]) : dh;
+            double pcoeff = -(gamma - 1.0) * dl / (r * dh * (dl + dh));
+            Ub[2*4+3] += pcoeff;
+        }
+
+        // Diagonal block
+        double* Db = &D[j * 16];
+        for (int q = 0; q < 16; q++) Db[q] = 0.0;
+        Db[0] = diag_val; Db[5] = diag_val; Db[10] = diag_val; Db[15] = diag_val;
+
+        // θ pressure gradient diagonal: d(∂P/∂θ)/dP_j
+        if (j > 0 && j < nt-1) {
+            double tc_m = 0.5*(theta_face[j-1]+theta_face[j]);
+            double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
+            double tc_p = 0.5*(theta_face[j+1]+theta_face[j+2]);
+            double dl = tc_c-tc_m, dh = tc_p-tc_c;
+            double pcoeff = -(gamma-1.0) * (-(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh)))) / r;
+            Db[2*4+3] = pcoeff;
+        }
+
+        // Advection self-coupling
+        double coeff_lo_self = (vf_lo < 0.0 ? -vf_lo : 0.0) * At_lo * invV;
+        double coeff_hi_self = (vf_hi >= 0.0 ? vf_hi : 0.0) * At_hi * invV;
+        double adv_self = -(coeff_lo_self + coeff_hi_self);
+        Db[0] += adv_self; Db[5] += adv_self; Db[10] += adv_self; Db[15] += adv_self;
+
+        // Compression work coupling
+        double Ar_hi_l = ar[(i+1)*nt+j], Ar_lo_l = ar[i*nt+j];
+        double ddivv_dmr = invV * 0.5/rho_c * (Ar_hi_l + Ar_lo_l);
+        double ddivv_dmt = invV * 0.5/rho_c * (At_hi + At_lo);
+        Db[3*4+1] = -P_c * ddivv_dmr;
+        Db[3*4+2] = -P_c * ddivv_dmt;
+
+        rhs_s[j*4+0] = v_in[flat];
+        rhs_s[j*4+1] = v_in[n + flat];
+        rhs_s[j*4+2] = v_in[2*n + flat];
+        rhs_s[j*4+3] = v_in[3*n + flat];
+    }
+    __syncthreads();
+
+    // Block Thomas: forward sweep + back-substitution (thread 0)
+    if (tid == 0) {
+        for (int j = 0; j < nt; j++) {
+            double* Db = &D[j*16];
+            double* rb = &rhs_s[j*4];
+            if (j > 0) {
+                double* Lb = &L[j*16];
+                double* Dp = &D[(j-1)*16];
+                double* Up = &U[(j-1)*16];
+                // inv(D_{j-1})
+                double inv_D[16], A[16];
+                for(int q=0;q<16;q++) A[q]=Dp[q];
+                for(int q=0;q<16;q++) inv_D[q]=(q/4==q%4)?1.0:0.0;
+                for(int col=0;col<4;col++){
+                    double mx=fabs(A[col*4+col]); int mi=col;
+                    for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
+                    if(mi!=col){
+                        for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
+                        for(int q=0;q<4;q++){double t=inv_D[col*4+q];inv_D[col*4+q]=inv_D[mi*4+q];inv_D[mi*4+q]=t;}
+                    }
+                    double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
+                    for(int row=col+1;row<4;row++){
+                        double m=A[row*4+col]/d;
+                        for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
+                        for(int q=0;q<4;q++) inv_D[row*4+q]-=m*inv_D[col*4+q];
+                    }
+                }
+                for(int c=0;c<4;c++){
+                    for(int row=3;row>=0;row--){
+                        double s=inv_D[row*4+c];
+                        for(int q=row+1;q<4;q++) s-=A[row*4+q]*inv_D[q*4+c];
+                        inv_D[row*4+c]=s/A[row*4+row];
+                    }
+                }
+                double M[16];
+                for(int rr=0;rr<4;rr++)
+                    for(int c=0;c<4;c++){
+                        double s=0;
+                        for(int q=0;q<4;q++) s+=Lb[rr*4+q]*inv_D[q*4+c];
+                        M[rr*4+c]=s;
+                    }
+                for(int rr=0;rr<4;rr++)
+                    for(int c=0;c<4;c++){
+                        double s=0;
+                        for(int q=0;q<4;q++) s+=M[rr*4+q]*Up[q*4+c];
+                        Db[rr*4+c]-=s;
+                    }
+                double* rp = &rhs_s[(j-1)*4];
+                for(int rr=0;rr<4;rr++){
+                    double s=0;
+                    for(int q=0;q<4;q++) s+=M[rr*4+q]*rp[q];
+                    rb[rr]-=s;
+                }
+            }
+        }
+        for (int j = nt-1; j >= 0; j--) {
+            double* Db = &D[j*16];
+            double* rb = &rhs_s[j*4];
+            double* xb = &x_s[j*4];
+            if (j < nt-1) {
+                double* Ub = &U[j*16];
+                double* xp = &x_s[(j+1)*4];
+                for(int rr=0;rr<4;rr++){
+                    double s=0;
+                    for(int q=0;q<4;q++) s+=Ub[rr*4+q]*xp[q];
+                    rb[rr]-=s;
+                }
+            }
+            double AA[16]; for(int q=0;q<16;q++) AA[q]=Db[q];
+            double b4[4]; for(int q=0;q<4;q++) b4[q]=rb[q];
+            for(int col=0;col<4;col++){
+                double mx=fabs(AA[col*4+col]); int mi=col;
+                for(int row=col+1;row<4;row++){if(fabs(AA[row*4+col])>mx){mx=fabs(AA[row*4+col]);mi=row;}}
+                if(mi!=col){
+                    for(int q=0;q<4;q++){double t=AA[col*4+q];AA[col*4+q]=AA[mi*4+q];AA[mi*4+q]=t;}
+                    {double t=b4[col];b4[col]=b4[mi];b4[mi]=t;}
+                }
+                double d=AA[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
+                for(int row=col+1;row<4;row++){
+                    double m=AA[row*4+col]/d;
+                    for(int q=col;q<4;q++) AA[row*4+q]-=m*AA[col*4+q];
+                    b4[row]-=m*b4[col];
+                }
+            }
+            for(int row=3;row>=0;row--){
+                double s=b4[row];
+                for(int q=row+1;q<4;q++) s-=AA[row*4+q]*b4[q];
+                xb[row]=s/AA[row*4+row];
+            }
+        }
+    }
+    __syncthreads();
+
+    for (int j = tid; j < nt; j += blockDim.x) {
+        int flat = i * nt + j;
+        Mv_out[flat]       = x_s[j*4+0];
+        Mv_out[n + flat]   = x_s[j*4+1];
+        Mv_out[2*n + flat] = x_s[j*4+2];
+        Mv_out[3*n + flat] = x_s[j*4+3];
+    }
+}
+
 // Velocity-only pressure correction: vr -= (1/Ap)*∂δp/∂r, vt -= (1/Ap)*(1/r)*∂δp/∂θ
 __global__
 void k_lm_simple_vcorr(double* vr_io, double* vt_io,
@@ -1545,9 +1791,12 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
 __global__
 void k_lm_cfl(const double* rho, const double* mr, const double* mt,
               const double* dr, const double* rc, const double* dtheta,
-              double* out, int nr, int nt, int ng) {
+              const double* rho0, double* out,
+              int nr, int nt, int ng, double atm_thresh) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
+    // Skip atmosphere cells — they're frozen, their velocity is meaningless
+    if (rho0[flat] < atm_thresh) { out[flat] = 1e30; return; }
     int i = flat/nt, j = flat%nt;
     int k = d_idx(i,j,nt,ng);
     double r = fmax(rho[k], 1e-20);
@@ -1574,7 +1823,7 @@ void k_lm_reduce_min(const double* in, double* out, int n) {
 double LowMachSolver::compute_cfl_dt() {
     int n = nr*nt, B = 256;
     k_lm_cfl<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta, d_dr,d_r_center,d_dtheta,
-                                d_work_a, nr,nt,ng);
+                                d_rho0, d_work_a, nr,nt,ng, atm_rho_thresh);
     int cur = n;
     double *src = d_work_a, *dst = d_work_b;
     while (cur > 1) {
@@ -1604,10 +1853,9 @@ double LowMachSolver::step(double t, double t_end) {
     if (step_count == 0)
         diagnose_hse_residual();
 
-    double dt_cfl = compute_cfl_dt();
     double dt_cap = 1.0;
     if (dt_current < 1e-30) dt_current = 1e-6;
-    double dt = std::min({dt_current, dt_cfl, dt_cap, t_end - t});
+    double dt = std::min({dt_current, dt_cap, t_end - t});
 
     pack_state(d_Un);
     compute_scaling();
@@ -1628,13 +1876,14 @@ double LowMachSolver::step(double t, double t_end) {
                 std::exit(1);
             }
             unpack_set(d_Un);
-            if (step_count < 30)
-                std::fprintf(stderr, "  step %d: Newton failed, cutting dt -> %.3e\n",
-                            step_count, dt);
+            if (step_count < 30 || (step_count < 500 && step_count % 50 == 0))
+                std::fprintf(stderr, "  step %d: Newton failed (cut %d), dt -> %.3e\n",
+                            step_count, cut, dt);
         }
 
         assemble_block_jacobi(dt);
-        if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED)
+        if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
+            || precond_type == PrecondType::LINE_JACOBI)
             assemble_simple(dt);
 
         double Fnorm0 = 0.0;
@@ -1660,7 +1909,7 @@ double LowMachSolver::step(double t, double t_end) {
             if (Fnorm < 1e-3 * Fnorm0 || Fnorm_per_cell < 1e-4) {
                 converged = true;
                 newton_iters_used = newton;
-                if (step_count < 30)
+                if (step_count < 30 || (step_count < 500 && step_count % 50 == 0))
                     std::fprintf(stderr, "  step %d converged at newton %d: ||F_s||=%.3e per-cell=%.3e (dt=%.3e)\n",
                                 step_count, newton, Fnorm, Fnorm_per_cell, dt);
                 break;
@@ -1671,12 +1920,12 @@ double LowMachSolver::step(double t, double t_end) {
             // Tuning sweep shows tol=1e-1 is optimal for large dt acceptance.
             double eta_gmres;
             if (newton == 0 || Fnorm_prev < 1e-30) {
-                eta_gmres = 1e-1;
+                eta_gmres = 1e-2;
             } else {
                 double ratio = Fnorm / Fnorm_prev;
                 eta_gmres = 0.9 * ratio * ratio;
                 eta_gmres = std::max(eta_gmres, 1e-4);
-                eta_gmres = std::min(eta_gmres, 1e-1);
+                eta_gmres = std::min(eta_gmres, 1e-2);
             }
             Fnorm_prev = Fnorm;
 
@@ -1702,20 +1951,14 @@ double LowMachSolver::step(double t, double t_end) {
             }
 
             if (Fnorm_new >= Fnorm) {
-                // Soft failure: restore state but allow a few consecutive failures
-                // before declaring divergence.
                 k_lm_unpack_set<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,d_phi, d_gmres_Uk, nr,nt,ng);
                 ls_fails++;
-                if (step_count < 30)
-                    std::fprintf(stderr, "  step %d newton %d: line search stalled (fail %d), ||F_s||=%.3e\n",
-                                step_count, newton, ls_fails, Fnorm);
-                // Tolerate up to 3 consecutive line search failures
                 if (ls_fails >= 3) { diverged = true; break; }
                 continue;
             }
-            ls_fails = 0;  // reset on success
+            ls_fails = 0;
 
-            if (step_count < 20)
+            if (step_count < 30 || (step_count < 500 && step_count % 50 == 0))
                 std::fprintf(stderr, "  step %d newton %d: ||F|| %.3e -> %.3e  a=%.2f  eta=%.1e  GMRES %d  dt=%.3e\n",
                             step_count, newton, Fnorm, Fnorm_new, alpha, eta_gmres, gmres_iters, dt);
         }
@@ -1724,15 +1967,38 @@ double LowMachSolver::step(double t, double t_end) {
             unpack_set(d_Un);
     }
 
+    // Diagnostic: on failure, identify WHERE the residual is largest
+    if (!converged && step_count < 50) {
+        unpack_set(d_Un);       // restore clean state for diagnostic
+        apply_floor();
+        compute_F(d_Fk, dt);
+        std::vector<double> h_F(N4);
+        CUDA_CHECK(cudaMemcpy(h_F.data(), d_Fk, N4*sizeof(double), cudaMemcpyDeviceToHost));
+        // Find max |F| per equation
+        double mx[4] = {}; int mi[4] = {};
+        for (int q = 0; q < 4; ++q)
+            for (int i = 0; i < n; ++i)
+                if (std::abs(h_F[q*n+i]) > mx[q]) { mx[q] = std::abs(h_F[q*n+i]); mi[q] = i; }
+        std::fprintf(stderr,
+            "  DIAG step %d (dt=%.3e, dt_good=%.3e): max|F| by eq:\n"
+            "    rho: %.3e @cell %d (i=%d,j=%d)\n"
+            "    mr:  %.3e @cell %d (i=%d,j=%d)\n"
+            "    mt:  %.3e @cell %d (i=%d,j=%d)\n"
+            "    rhoE:%.3e @cell %d (i=%d,j=%d)\n",
+            step_count, dt, dt_good,
+            mx[0], mi[0], mi[0]/nt, mi[0]%nt,
+            mx[1], mi[1], mi[1]/nt, mi[1]%nt,
+            mx[2], mi[2], mi[2]/nt, mi[2]%nt,
+            mx[3], mi[3], mi[3]/nt, mi[3]%nt);
+    }
+
     // Update Φ for output/diagnostics (not used in Newton)
     if (converged)
         solve_gravity();
 
-    // ===== dt adaptation =====
-    // Simple and robust: grow 1.2x on success, dt was already halved on failure.
-    // 'dt' here is the actually accepted dt (after any cuts inside the loop).
+    // Simple dt adaptation: grow 1.2x on success, halved on failure (inside loop).
     if (converged) {
-        dt_current = std::min(1.2 * dt, std::min(dt_cfl, dt_cap));
+        dt_current = std::min(1.2 * dt, dt_cap);
     } else {
         dt_current = 0.5 * dt;
     }
@@ -1751,6 +2017,15 @@ void LowMachSolver::snapshot_hse() {
     solve_gravity();
     k_lm_snapshot_hse<<<(n+B-1)/B,B>>>(d_rho,d_rhoE,d_phi,
         d_rho0,d_P0,d_phi0, nr,nt,ng,gamma);
+
+    // Compute atmosphere threshold: 1e-6 * max(ρ₀)
+    std::vector<double> h_rho0(n);
+    CUDA_CHECK(cudaMemcpy(h_rho0.data(), d_rho0, n*sizeof(double), cudaMemcpyDeviceToHost));
+    double rho_max = 0;
+    for (int i = 0; i < n; ++i) rho_max = std::max(rho_max, h_rho0[i]);
+    atm_rho_thresh = 1e-6 * rho_max;
+    std::fprintf(stderr, "  HSE snapshot: ρ_max=%.3e, atm_thresh=%.3e\n", rho_max, atm_rho_thresh);
+
     hse_set_externally = true;
 }
 
@@ -1887,11 +2162,13 @@ void LowMachSolver::init(const Grid& grid, const EOS& eos, double G, double cfl,
 
     // Block-diagonal Jacobi preconditioner (always needed for Schur σ assembly)
     CUDA_CHECK(cudaMalloc(&d_blk_diag, n*16*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_blk_J, n*16*sizeof(double)));
 
     // SIMPLE preconditioner (also needed for COMBINED)
     d_Ap = nullptr; d_simple_p = nullptr; d_simple_div = nullptr;
     d_simple_vr_s = nullptr; d_simple_vt_s = nullptr;
-    if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED) {
+    if (precond_type == PrecondType::SIMPLE || precond_type == PrecondType::COMBINED
+        || precond_type == PrecondType::LINE_JACOBI) {
         CUDA_CHECK(cudaMalloc(&d_Ap, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_p, n*sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_simple_div, n*sizeof(double)));
@@ -1977,6 +2254,7 @@ void LowMachSolver::destroy() {
     cudaFree(d_rhs_poisson); cudaFree(d_inv_rho); cudaFree(d_scale);
     cudaFree(d_scale_R); cudaFree(d_scale_L);
     cudaFree(d_blk_diag);
+    cudaFree(d_blk_J);
     if (d_Ap) cudaFree(d_Ap);
     if (d_simple_p) cudaFree(d_simple_p);
     if (d_simple_div) cudaFree(d_simple_div);
