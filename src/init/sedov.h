@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../eos.h"
 #include "../grid.h"
 #include "../state.h"
 
@@ -10,4 +11,4 @@ struct SedovParams {
 };
 
 void init_sedov(const Grid& grid, State& state,
-                const SedovParams& params, double gamma);
+                const SedovParams& params, const EOS& eos);

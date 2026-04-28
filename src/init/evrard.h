@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../eos.h"
 #include "../grid.h"
 #include "../state.h"
 
@@ -10,4 +11,4 @@ struct EvrardParams {
 };
 
 void init_evrard(const Grid& grid, State& state,
-                 const EvrardParams& params, double gamma);
+                 const EvrardParams& params, const EOS& eos);

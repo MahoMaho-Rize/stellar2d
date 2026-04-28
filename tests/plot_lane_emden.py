@@ -3,10 +3,12 @@ Lane-Emden hydrostatic equilibrium verification plot.
 Reads VTK output from stellar2d and compares against the analytic solution.
 Naming convention: see docs/provenance.md
 """
+import argparse
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import re, glob, os
 from provenance import build_filename, add_provenance_footer
 
@@ -88,15 +90,37 @@ def solve_lane_emden(n_poly, dxi=0.001):
     return np.array(xi_arr), np.array(theta_arr), xi
 
 # ── Main ─────────────────────────────────────────────────────────────
-build_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build')
+repo_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+
+def find_output_dir():
+    candidates = [
+        os.path.join(repo_root, 'build'),
+        os.path.join(repo_root, 'build-mac'),
+        repo_root,
+    ]
+    for candidate in candidates:
+        if os.path.exists(os.path.join(candidate, 'output_0000.vtk')):
+            return candidate
+    return candidates[0]
+
+parser = argparse.ArgumentParser(description='Plot Lane-Emden verification diagnostics.')
+parser.add_argument('--input-dir', default=None,
+                    help='Directory containing output_*.vtk and optional run.log')
+args = parser.parse_args()
+
+build_dir = args.input_dir or find_output_dir()
 
 vtk_init = os.path.join(build_dir, 'output_0000.vtk')
 vtk_files = sorted(glob.glob(os.path.join(build_dir, 'output_*.vtk')))
-vtk_final = [f for f in vtk_files if 'final' in f]
-vtk_last = vtk_final[0] if vtk_final else (vtk_files[-1] if vtk_files else vtk_init)
+vtk_last = max(vtk_files, key=os.path.getmtime) if vtk_files else vtk_init
 
 nr, nt, r_init, data_init, coords_init = read_vtk(vtk_init)
-_, _, r_final, data_final, coords_final = read_vtk(vtk_last)
+nr_final, nt_final, r_final, data_final, coords_final = read_vtk(vtk_last)
+if nt_final != nt:
+    raise RuntimeError(
+        f"Mismatched outputs: init has nt={nt}, latest file '{os.path.basename(vtk_last)}' has nt={nt_final}. "
+        "Clean old VTK files or rerun in a fresh output directory."
+    )
 
 # analytic
 n_poly, rho_c, K, G = 1.5, 1.0, 1.0, 1.0
@@ -110,6 +134,21 @@ j_eq = nt // 2
 rho_init_1d = data_init['density'][:, j_eq]
 rho_final_1d = data_final['density'][:, j_eq]
 r_1d = r_init[:, j_eq]
+
+density_final = data_final['density']
+pole_mean = 0.5 * (density_final[:, 0] + density_final[:, -1])
+equator = density_final[:, j_eq]
+pole_to_eq = pole_mean / np.maximum(equator, 1e-30)
+theta_cv = np.std(density_final, axis=1) / np.maximum(np.mean(density_final, axis=1), 1e-30)
+
+flat_max = np.argmax(density_final)
+i_max, j_max = np.unravel_index(flat_max, density_final.shape)
+rho_max = density_final[i_max, j_max]
+r_spike = r_final[i_max, j_max]
+pole_ratio_max = np.max(pole_to_eq)
+pole_ratio_r = r_1d[np.argmax(pole_to_eq)]
+theta_cv_max = np.max(theta_cv)
+theta_cv_r = r_1d[np.argmax(theta_cv)]
 
 # ── Figure ───────────────────────────────────────────────────────────
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
@@ -140,13 +179,27 @@ ax.legend(); ax.set_xlim(0, R_star * 1.1)
 ax = axes[1, 0]
 x_n = coords_final[:, :, 0]
 z_n = coords_final[:, :, 2]
-pcm = ax.pcolormesh(x_n, z_n, data_final['density'], shading='flat', cmap='inferno')
-fig.colorbar(pcm, ax=ax, label=r'$\rho$')
+positive = density_final[density_final > 0]
+vmin = max(np.min(positive), np.percentile(positive, 1.0))
+vmax = np.percentile(positive, 99.5)
+if vmax <= vmin:
+    vmax = np.max(positive)
+pcm = ax.pcolormesh(
+    x_n, z_n, density_final, shading='flat', cmap='inferno',
+    norm=LogNorm(vmin=vmin, vmax=vmax)
+)
+fig.colorbar(pcm, ax=ax, label=r'$\rho$ (log scale, clipped)')
+spike_theta = 0.5 * (np.arctan2(x_n[i_max, j_max], z_n[i_max, j_max]) + np.arctan2(x_n[i_max + 1, j_max + 1], z_n[i_max + 1, j_max + 1]))
+ax.plot(
+    r_spike * np.sin(spike_theta),
+    r_spike * np.cos(spike_theta),
+    marker='o', ms=5, mec='cyan', mfc='none', mew=1.2
+)
 ax.set_xlabel('x (= r sin \u03b8)'); ax.set_ylabel('z (= r cos \u03b8)')
-ax.set_title('(c) 2D density map (final)')
+ax.set_title(f'(c) 2D density map (final, true max = {rho_max:.2e})')
 ax.set_aspect('equal')
 
-# (d) mass conservation from log
+# (d) polar spike metrics
 ax = axes[1, 1]
 log_path = os.path.join(build_dir, 'run.log')
 times, masses = [], []
@@ -157,18 +210,22 @@ if os.path.exists(log_path):
             if m:
                 times.append(float(m.group(1)))
                 masses.append(float(m.group(2)))
+ax.semilogy(r_1d, pole_to_eq, color='tab:purple', lw=1.6, label='pole/equator')
+ax.semilogy(r_1d, theta_cv, color='tab:green', lw=1.6, ls='--', label=r'$\sigma_\theta/\bar{\rho}$')
+ax.set_xlabel('r')
+ax.set_ylabel('asymmetry metric')
+ax.set_title('(d) Polar spike metrics (final)')
+ax.axhline(1.0, color='k', ls=':', lw=0.5)
+ax.legend(fontsize=9)
 if len(masses) >= 2:
     M0 = masses[0]
     dM = np.array([(m - M0) / M0 for m in masses])
-    ax.plot(times, dM, 'b-', lw=1.5)
-    ax.set_xlabel('t'); ax.set_ylabel(r'$\Delta M / M_0$')
-    ax.set_title(f'(d) Relative mass drift (M\u2080 = {M0:.6e})')
-    ax.axhline(0, color='k', ls=':', lw=0.5)
-    ax.ticklabel_format(axis='y', style='scientific', scilimits=(-6, -6))
-else:
-    ax.text(0.5, 0.5, 'Re-run with: ./stellar2d ... 2>&1 | tee run.log',
-            ha='center', va='center', transform=ax.transAxes, fontsize=10)
-    ax.set_title('(d) Mass conservation (no log data)')
+    ax.text(
+        0.03, 0.03,
+        f'max |ΔM/M0| = {np.max(np.abs(dM)):.2e}',
+        transform=ax.transAxes, fontsize=9,
+        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none')
+    )
 
 # ── Provenance ───────────────────────────────────────────────────────
 tend = times[-1] if times else 0.05
@@ -182,3 +239,8 @@ os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, fname)
 fig.savefig(out_path, dpi=150, bbox_inches='tight')
 print(f'Saved: {out_path}')
+print(f'Output dir: {build_dir}')
+print(f'Latest file: {os.path.basename(vtk_last)}')
+print(f'Max density: {rho_max:.6e} at (i={i_max}, j={j_max}, r={r_spike:.6e})')
+print(f'Max pole/equator ratio: {pole_ratio_max:.6e} at r={pole_ratio_r:.6e}')
+print(f'Max theta std/mean: {theta_cv_max:.6e} at r={theta_cv_r:.6e}')

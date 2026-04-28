@@ -1,4 +1,5 @@
 #include "gmg.h"
+#include "../parallel.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -10,10 +11,16 @@ void compute_poisson_rhs(const Grid& grid, const std::vector<double>& rho_cells,
     rhs.resize(nr * nt);
 
     double M_total = 0.0;
+#ifdef _OPENMP
+    #pragma omp parallel for reduction(+:M_total)
+#endif
     for (int k = 0; k < nr * nt; ++k)
         M_total += rho_cells[k] * grid.cell_volume[k];
     M_total *= 2.0 * M_PI;
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int flat = i * nt + j;
@@ -202,6 +209,9 @@ void PoissonGMG::compute_residual(int l) {
     Level& lev = levels_[l];
     int nr = lev.nr, nt = lev.nt;
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int k = i * nt + j;
@@ -231,6 +241,9 @@ void PoissonGMG::restrict_level(int fine, int coarse) {
     Level& cl = levels_[coarse];
     int cnt = cl.nt, fnt = fl.nt;
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int ic = 0; ic < cl.nr; ++ic) {
         for (int jc = 0; jc < cl.nt; ++jc) {
             if (ic == cl.nr - 1) {
@@ -264,6 +277,9 @@ void PoissonGMG::prolongate_and_correct(int coarse, int fine) {
     Level& fl = levels_[fine];
     int fnt = fl.nt;
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int ic = 0; ic < cl.nr; ++ic) {
         for (int jc = 0; jc < cl.nt; ++jc) {
             double e = cl.phi[ic * cl.nt + jc];
@@ -305,6 +321,9 @@ void PoissonGMG::solve(const double* rhs, double* phi, int max_cycles, double to
 
         compute_residual(0);
         double norm = 0.0;
+#ifdef _OPENMP
+        #pragma omp parallel for reduction(max:norm)
+#endif
         for (int i = 0; i < n; ++i)
             norm = std::max(norm, std::abs(finest.res[i]));
 

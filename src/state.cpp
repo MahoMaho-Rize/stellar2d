@@ -10,24 +10,24 @@ void State::allocate(const Grid& grid) {
     phi.assign(grid.total_cells(), 0.0);
 }
 
-PrimitiveVars State::to_primitive(int k, double gamma) const {
+PrimitiveVars State::to_primitive(int k, const EOS& eos) const {
     PrimitiveVars w;
     w.rho = std::fmax(rho[k], 1e-20);
     double inv_rho = 1.0 / w.rho;
     w.vr = mr[k] * inv_rho;                              // Eq. (1.1): m_r = rho * v_r
     w.vtheta = mtheta[k] * inv_rho;                      // Eq. (1.1): m_theta = rho * v_theta
     double ke = 0.5 * (w.vr * w.vr + w.vtheta * w.vtheta); // Eq. (1.1): kinetic energy
-    double e_int = E[k] * inv_rho - ke;                  // Eq. (1.1): E = e + ke
-    w.P = std::fmax((gamma - 1.0) * w.rho * e_int, 1e-30); // Eq. (1.2)
+    double e_int = std::fmax(E[k] * inv_rho - ke, 1e-30);  // Eq. (1.1): E = e + ke
+    w.P = std::fmax(eos.pressure_from_rho_e(w.rho, e_int), 1e-30);
     return w;
 }
 
-void State::from_primitive(int k, const PrimitiveVars& w, double gamma) {
+void State::from_primitive(int k, const PrimitiveVars& w, const EOS& eos) {
     rho[k] = w.rho;
     mr[k] = w.rho * w.vr;                                // Eq. (1.1)
     mtheta[k] = w.rho * w.vtheta;                        // Eq. (1.1)
     double ke = 0.5 * (w.vr * w.vr + w.vtheta * w.vtheta); // Eq. (1.1)
-    double e_int = w.P / ((gamma - 1.0) * w.rho);        // Eq. (1.2) inverted
+    double e_int = eos.internal_energy_from_rho_p(w.rho, w.P);
     E[k] = w.rho * (e_int + ke);                          // Eq. (1.1): rho * E
 }
 

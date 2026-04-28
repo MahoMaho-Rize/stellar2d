@@ -1,5 +1,6 @@
 #include "flux.h"
 #include "reconstruct.h"
+#include "../parallel.h"
 #include <cmath>
 
 void FluxAccumulator::allocate(int n) {
@@ -21,38 +22,59 @@ void compute_flux_divergence(
     FluxAccumulator& acc, Limiter lim)
 {
     int nr = grid.nr, nt = grid.ntheta;
-    double gamma = eos.gamma;
 
     auto W = [&](int i, int j) -> PrimitiveVars {
         int k = grid.idx(i, j);
-        return state.to_primitive(k, gamma);
+        return state.to_primitive(k, eos);
     };
 
     // Radial fluxes at faces i+1/2, for i = 0..nr
     std::vector<Flux4> flux_r((nr + 1) * nt);
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int i = 0; i <= nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             // Eq. (3.4), (3.5): MUSCL reconstruction at face i+1/2
             auto rp = muscl_reconstruct_r(W(i - 2, j), W(i - 1, j), W(i, j), W(i + 1, j), lim);
             // Eq. (4.7): HLLC numerical flux
-            flux_r[i * nt + j] = hllc_flux_r(rp.left, rp.right, gamma);
+            flux_r[i * nt + j] = hllc_flux_r(rp.left, rp.right, eos);
         }
     }
 
     // Theta fluxes at faces j+1/2, for j = 0..ntheta
     std::vector<Flux4> flux_t(nr * (nt + 1));
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j <= nt; ++j) {
-            // Eq. (3.4), (3.5): MUSCL reconstruction at face j+1/2
-            auto rp = muscl_reconstruct_theta(W(i, j - 2), W(i, j - 1), W(i, j), W(i, j + 1), lim);
-            // Eq. (4.7): HLLC numerical flux
-            flux_t[i * (nt + 1) + j] = hllc_flux_theta(rp.left, rp.right, gamma);
+            ReconstructedPair rp;
+            bool polar_cap = (j <= 1 || j >= nt - 1);
+            if (polar_cap) {
+                // Near the polar axis, fall back to first-order theta reconstruction.
+                // This sacrifices local accuracy in a tiny cap region to suppress
+                // axis-aligned overshoots from high-order reconstruction.
+                rp.left = W(i, j - 1);
+                rp.right = W(i, j);
+            } else {
+                // Eq. (3.4), (3.5): MUSCL reconstruction at face j+1/2
+                rp = muscl_reconstruct_theta(W(i, j - 2), W(i, j - 1), W(i, j), W(i, j + 1), lim);
+            }
+            // Near the polar axis, use a more diffusive theta flux to damp
+            // coordinate-singularity-driven spikes.
+            flux_t[i * (nt + 1) + j] = polar_cap
+                ? rusanov_flux_theta(rp.left, rp.right, eos)
+                : hllc_flux_theta(rp.left, rp.right, eos);
         }
     }
 
     // Eq. (2.5): accumulate -div(F)/V
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int flat = i * nt + j;
@@ -81,13 +103,35 @@ void compute_flux_divergence(
     }
 }
 
+namespace {
+
+double compute_p_geom_theta_for_row(
+    const Grid& grid, const State& state, const EOS& eos,
+    int i, int j_eval)
+{
+    int k_eval = grid.idx(i, j_eval);
+    int flat_eval = i * grid.ntheta + j_eval;
+    PrimitiveVars w_eval = state.to_primitive(k_eval, eos);
+
+    double r2_hi = grid.r_face[i + 1] * grid.r_face[i + 1];
+    double r2_lo = grid.r_face[i] * grid.r_face[i];
+    double r2_diff_half = 0.5 * (r2_hi - r2_lo);
+    double dsin = std::sin(grid.theta_face[j_eval]) - std::sin(grid.theta_face[j_eval + 1]);
+    double vol = grid.cell_volume[flat_eval];
+    return w_eval.P * r2_diff_half * dsin / vol;
+}
+
+} // namespace
+
 void add_geometric_source(
     const Grid& grid, const State& state, const EOS& eos,
-    FluxAccumulator& acc)
+    FluxAccumulator& acc, PolarThetaGeomMode polar_theta_geom_mode)
 {
     int nr = grid.nr, nt = grid.ntheta;
-    double gamma = eos.gamma;
 
+#ifdef _OPENMP
+    #pragma omp parallel for
+#endif
     for (int i = 0; i < nr; ++i) {
         double r = grid.r_center[i];
         double inv_r = 1.0 / r;
@@ -97,7 +141,7 @@ void add_geometric_source(
         for (int j = 0; j < nt; ++j) {
             int k = grid.idx(i, j);
             int flat = i * nt + j;
-            PrimitiveVars w = state.to_primitive(k, gamma);
+            PrimitiveVars w = state.to_primitive(k, eos);
             double vol = grid.cell_volume[flat]; // Eq. (2.2)
 
             // Eq. (5.3): volume-consistent 2P/r source (well-balanced)
@@ -108,9 +152,21 @@ void add_geometric_source(
             acc.dU_mr[flat] += w.rho * w.vtheta * w.vtheta * inv_r + P_geom_r;
 
             // Eq. (5.4): volume-consistent P*cot(theta)/r source (well-balanced)
-            double r2_diff_half = (r2_hi - r2_lo) * 0.5;
-            double dsin = std::sin(grid.theta_face[j]) - std::sin(grid.theta_face[j + 1]);
-            double P_geom_theta = w.P * r2_diff_half * dsin / vol;
+            double P_geom_theta = 0.0;
+            bool use_adjacent_source =
+                (polar_theta_geom_mode == PolarThetaGeomMode::ADJACENT && nt >= 3);
+            if (polar_theta_geom_mode == PolarThetaGeomMode::ZERO &&
+                (j == 0 || j == nt - 1)) {
+                P_geom_theta = 0.0;
+            } else if (use_adjacent_source && j == 0) {
+                P_geom_theta = compute_p_geom_theta_for_row(grid, state, eos, i, 1);
+            } else if (use_adjacent_source && j == nt - 1) {
+                P_geom_theta = compute_p_geom_theta_for_row(grid, state, eos, i, nt - 2);
+            } else {
+                double r2_diff_half = (r2_hi - r2_lo) * 0.5;
+                double dsin = std::sin(grid.theta_face[j]) - std::sin(grid.theta_face[j + 1]);
+                P_geom_theta = w.P * r2_diff_half * dsin / vol;
+            }
 
             // Eq. (5.2): S_mtheta = <P*cot(theta)/r> - rho*vr*vtheta/r
             acc.dU_mtheta[flat] += P_geom_theta - w.rho * w.vr * w.vtheta * inv_r;
@@ -124,6 +180,9 @@ void add_gravity_source(
 {
     int nr = grid.nr, nt = grid.ntheta;
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2)
+#endif
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int k = grid.idx(i, j);

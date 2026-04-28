@@ -2,8 +2,8 @@
 #include <cmath>
 
 void init_jeans(const Grid& grid, State& state,
-                const JeansParams& params, double gamma) {
-    double P_0 = params.rho_0 * params.cs * params.cs / gamma;
+                const JeansParams& params, const EOS& eos) {
+    double P_0 = params.rho_0 * params.cs * params.cs / eos.gamma;
 
     for (int i = 0; i < grid.nr; ++i) {
         double r = grid.r_center[i];
@@ -18,9 +18,9 @@ void init_jeans(const Grid& grid, State& state,
             w.rho = params.rho_0 * (1.0 + pert);       // Eq. (9.8)
             w.vr = 0.0;
             w.vtheta = 0.0;
-            w.P = P_0 * (1.0 + gamma * pert);
+            w.P = P_0 * (1.0 + eos.gamma * pert);
 
-            state.from_primitive(k, w, gamma);
+            state.from_primitive(k, w, eos);
         }
     }
 }

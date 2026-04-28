@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../eos.h"
 #include "../grid.h"
 #include "../state.h"
 #include <string>
@@ -12,6 +13,6 @@ struct Diagnostics {
     double gravitational_energy;
 };
 
-Diagnostics compute_diagnostics(const Grid& grid, const State& state, double gamma);
+Diagnostics compute_diagnostics(const Grid& grid, const State& state);
 
-void write_vtk(const std::string& filename, const Grid& grid, const State& state, double gamma);
+void write_vtk(const std::string& filename, const Grid& grid, const State& state, const EOS& eos);

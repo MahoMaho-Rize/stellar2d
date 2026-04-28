@@ -22,19 +22,41 @@ $$
 where total specific energy $E = e + \tfrac{1}{2}(v_r^2 + v_\theta^2)$ and $e$
 is specific internal energy.
 
-### Ideal gas equation of state
+### Equation of state interface
 
 $$
-P = (\gamma - 1)\,\rho\,e
+P = P(\rho, e)
 \tag{1.2}
+$$
+
+The current CPU default is the ideal-gas-plus-radiation closure
+
+$$
+P = \rho R T + \frac{a_{\mathrm{rad}}}{3}T^4,
+\qquad
+e = c_v T + \frac{a_{\mathrm{rad}} T^4}{\rho},
+\qquad
+c_v = \frac{R}{\gamma - 1}.
+\tag{1.2a}
+$$
+
+For `--eos ideal`, Eq. (1.2a) reduces to the gamma-law ideal gas
+
+$$
+P = (\gamma - 1)\,\rho\,e.
+\tag{1.2b}
 $$
 
 ### Sound speed
 
 $$
-c_s = \sqrt{\gamma\,P / \rho}
+c_s^2 = \Gamma_1 \frac{P}{\rho}
 \tag{1.3}
 $$
+
+where $\Gamma_1 = (\partial \ln P / \partial \ln \rho)_s$ is supplied by the
+active EOS. For `--eos ideal`, Eq. (1.3) reduces to
+$c_s = \sqrt{\gamma P / \rho}$.
 
 ### Euler equations in conservative form (spherical, axisymmetric)
 
@@ -229,7 +251,7 @@ $$
 ### Total energy density
 
 $$
-\mathcal{E} = \frac{P}{\gamma - 1} + \frac{1}{2}\rho(u^2 + v_t^2)
+\mathcal{E} = \rho e(\rho, P) + \frac{1}{2}\rho(u^2 + v_t^2)
 \tag{4.3}
 $$
 

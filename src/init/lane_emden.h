@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../eos.h"
 #include "../grid.h"
 #include "../state.h"
 
@@ -20,8 +21,8 @@ struct LaneEmdenSolution {
 LaneEmdenSolution solve_lane_emden(double n_poly, int npoints = 10000);
 
 void init_lane_emden(const Grid& grid, State& state,
-                     const LaneEmdenParams& params, double gamma);
+                     const LaneEmdenParams& params, const EOS& eos);
 
 void init_lane_emden_perturbed(const Grid& grid, State& state,
-                                const LaneEmdenParams& params, double gamma,
+                                const LaneEmdenParams& params, const EOS& eos,
                                 double amplitude);

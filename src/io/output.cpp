@@ -1,12 +1,20 @@
 #include "output.h"
+#include "../parallel.h"
 #include <fstream>
 #include <cmath>
 #include <cstdio>
 
-Diagnostics compute_diagnostics(const Grid& grid, const State& state, double gamma) {
+Diagnostics compute_diagnostics(const Grid& grid, const State& state) {
     Diagnostics diag = {};
     int nr = grid.nr, nt = grid.ntheta;
+    double total_mass = 0.0;
+    double kinetic_energy = 0.0;
+    double thermal_energy = 0.0;
+    double gravitational_energy = 0.0;
 
+#ifdef _OPENMP
+    #pragma omp parallel for collapse(2) reduction(+:total_mass,kinetic_energy,thermal_energy,gravitational_energy)
+#endif
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int k = grid.idx(i, j);
@@ -14,26 +22,30 @@ Diagnostics compute_diagnostics(const Grid& grid, const State& state, double gam
             double vol = grid.cell_volume[flat];
             double rho = state.rho[k];
 
-            diag.total_mass += rho * vol;
+            total_mass += rho * vol;
 
             double vr = state.mr[k] / rho;
             double vt = state.mtheta[k] / rho;
             double ke = 0.5 * rho * (vr * vr + vt * vt);
-            diag.kinetic_energy += ke * vol;
+            kinetic_energy += ke * vol;
 
             double e_total = state.E[k];
             double e_int = e_total - ke;
-            diag.thermal_energy += e_int * vol;
+            thermal_energy += e_int * vol;
 
-            diag.gravitational_energy += 0.5 * rho * state.phi[flat] * vol;
+            gravitational_energy += 0.5 * rho * state.phi[flat] * vol;
         }
     }
 
+    diag.total_mass = total_mass;
+    diag.kinetic_energy = kinetic_energy;
+    diag.thermal_energy = thermal_energy;
+    diag.gravitational_energy = gravitational_energy;
     diag.total_energy = diag.kinetic_energy + diag.thermal_energy + diag.gravitational_energy;
     return diag;
 }
 
-void write_vtk(const std::string& filename, const Grid& grid, const State& state, double gamma) {
+void write_vtk(const std::string& filename, const Grid& grid, const State& state, const EOS& eos) {
     int nr = grid.nr, nt = grid.ntheta;
     int npts = (nr + 1) * (nt + 1);
     int ncells = nr * nt;
@@ -67,13 +79,21 @@ void write_vtk(const std::string& filename, const Grid& grid, const State& state
     for (int i = 0; i < nr; ++i) {
         for (int j = 0; j < nt; ++j) {
             int k = grid.idx(i, j);
+            PrimitiveVars w = state.to_primitive(k, eos);
+            out << w.P << "\n";
+        }
+    }
+
+    out << "SCALARS temperature double 1\nLOOKUP_TABLE default\n";
+    for (int i = 0; i < nr; ++i) {
+        for (int j = 0; j < nt; ++j) {
+            int k = grid.idx(i, j);
             double rho = state.rho[k];
             double vr = state.mr[k] / rho;
             double vt = state.mtheta[k] / rho;
             double ke = 0.5 * (vr * vr + vt * vt);
-            double e_int = state.E[k] / rho - ke;
-            double P = (gamma - 1.0) * rho * e_int;
-            out << P << "\n";
+            double e_int = std::fmax(state.E[k] / rho - ke, 1e-30);
+            out << eos.temperature_from_rho_e(rho, e_int) << "\n";
         }
     }
 

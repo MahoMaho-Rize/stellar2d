@@ -258,107 +258,6 @@ void k_residual_var(const double* phi, const double* rhs, const double* alpha,
 }
 
 // =================================================================
-// Helmholtz stencil: ∇²u - σ(x)·u
-// Same as constant-coefficient Laplacian but with -σ on diagonal
-// =================================================================
-
-__global__
-void k_line_smooth_helm(double* phi, const double* rhs, const double* sigma,
-                        int nr, int nt,
-                        const double* r_face, const double* r_center, const double* dr,
-                        const double* dtheta,
-                        const double* sin_tf, const double* sin_tc) {
-    int i = blockIdx.x;
-    if (i >= nr) return;
-    if (i == nr - 1) {
-        for (int j = threadIdx.x; j < nt; j += blockDim.x)
-            phi[i * nt + j] = rhs[i * nt + j];
-        return;
-    }
-
-    extern __shared__ double smem[];
-    double* sa = smem;
-    double* sb = sa + nt;
-    double* sc = sb + nt;
-    double* sd = sc + nt;
-
-    for (int j = threadIdx.x; j < nt; j += blockDim.x) {
-        double cW, cE, cS, cN, cC;
-        d_stencil(i, j, nr, nt, r_face, r_center, dr, dtheta, sin_tf, sin_tc,
-                  cW, cE, cS, cN, cC);
-        cC -= sigma[i * nt + j];
-        double rj = rhs[i * nt + j];
-        if (i > 0)    rj -= cW * phi[(i - 1) * nt + j];
-        if (i < nr-1) rj -= cE * phi[(i + 1) * nt + j];
-        sa[j] = (j > 0) ? cS : 0.0;
-        sb[j] = cC;
-        sc[j] = (j < nt - 1) ? cN : 0.0;
-        sd[j] = rj;
-    }
-    __syncthreads();
-
-    if (threadIdx.x == 0) {
-        for (int j = 1; j < nt; ++j) {
-            double m = sa[j] / sb[j - 1];
-            sb[j] -= m * sc[j - 1];
-            sd[j] -= m * sd[j - 1];
-        }
-        sd[nt - 1] /= sb[nt - 1];
-        for (int j = nt - 2; j >= 0; --j)
-            sd[j] = (sd[j] - sc[j] * sd[j + 1]) / sb[j];
-    }
-    __syncthreads();
-
-    for (int j = threadIdx.x; j < nt; j += blockDim.x)
-        phi[i * nt + j] = sd[j];
-}
-
-__global__
-void k_residual_helm(const double* phi, const double* rhs, const double* sigma,
-                     double* res,
-                     int nr, int nt,
-                     const double* r_face, const double* r_center, const double* dr,
-                     const double* dtheta,
-                     const double* sin_tf, const double* sin_tc) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr * nt) return;
-    int i = flat / nt, j = flat % nt;
-    if (i == nr - 1) { res[flat] = rhs[flat] - phi[flat]; return; }
-
-    double cW, cE, cS, cN, cC;
-    d_stencil(i, j, nr, nt, r_face, r_center, dr, dtheta, sin_tf, sin_tc,
-              cW, cE, cS, cN, cC);
-    cC -= sigma[flat];
-    double Lp = cC * phi[flat];
-    if (i > 0)     Lp += cW * phi[(i - 1) * nt + j];
-    if (i < nr-1)  Lp += cE * phi[(i + 1) * nt + j];
-    if (j > 0)     Lp += cS * phi[i * nt + (j - 1)];
-    if (j < nt-1)  Lp += cN * phi[i * nt + (j + 1)];
-    res[flat] = rhs[flat] - Lp;
-}
-
-// Restrict σ: volume-weighted average over 2×2 fine cells
-__global__
-void k_restrict_sigma(const double* fine_sigma, const double* fine_vol,
-                      double* coarse_sigma,
-                      int cnr, int cnt, int fnr, int fnt) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= cnr * cnt) return;
-    int ic = flat / cnt, jc = flat % cnt;
-    int if0 = 2 * ic, jf0 = 2 * jc;
-
-    double wsum = 0.0, vsum = 0.0;
-    for (int di = 0; di < 2; ++di)
-        for (int dj = 0; dj < 2; ++dj) {
-            int kf = (if0 + di) * fnt + (jf0 + dj);
-            double v = fine_vol[kf];
-            wsum += fine_sigma[kf] * v;
-            vsum += v;
-        }
-    coarse_sigma[flat] = (vsum > 0.0) ? wsum / vsum : 0.0;
-}
-
-// =================================================================
 // Restriction: volume-weighted, Dirichlet-aware
 // =================================================================
 
@@ -458,7 +357,6 @@ static void alloc_level_arrays(GmgLevel& lev) {
     CUDA_CHECK(cudaMalloc(&lev.d_res, n * sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_phi_tmp, n * sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_alpha, n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&lev.d_sigma, n * sizeof(double)));
 }
 
 void GmgGpu::build_level(int l, int nr, int nt,
@@ -503,7 +401,6 @@ void GmgGpu::build_level(int l, int nr, int nt,
     CUDA_CHECK(cudaMemset(lev.d_res, 0, n*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_phi_tmp, 0, n*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_alpha, 0, n*sizeof(double)));
-    CUDA_CHECK(cudaMemset(lev.d_sigma, 0, n*sizeof(double)));
 }
 
 void GmgGpu::init(int nr, int nt,
@@ -604,48 +501,6 @@ void GmgGpu::vcycle_var(int l) {
 }
 
 // =================================================================
-// Smooth / residual / V-cycle: Helmholtz (∇² - σ)
-// =================================================================
-
-void GmgGpu::smooth_helm(int l, int n_iters) {
-    GmgLevel& lev = levels[l];
-    size_t smem = 4 * lev.nt * sizeof(double);
-    int threads = min(128, lev.nt);
-    for (int it = 0; it < n_iters; ++it)
-        k_line_smooth_helm<<<lev.nr, threads, smem>>>(
-            lev.d_phi, lev.d_rhs, lev.d_sigma, lev.nr, lev.nt,
-            lev.d_r_face, lev.d_r_center, lev.d_dr,
-            lev.d_dtheta, lev.d_sin_theta_face, lev.d_sin_theta_center);
-}
-
-void GmgGpu::compute_residual_helm(int l) {
-    GmgLevel& lev = levels[l];
-    int n = lev.nr * lev.nt, B = 256;
-    k_residual_helm<<<(n+B-1)/B, B>>>(lev.d_phi, lev.d_rhs, lev.d_sigma, lev.d_res,
-        lev.nr, lev.nt,
-        lev.d_r_face, lev.d_r_center, lev.d_dr,
-        lev.d_dtheta, lev.d_sin_theta_face, lev.d_sin_theta_center);
-}
-
-void GmgGpu::restrict_sigma(int fine, int coarse) {
-    GmgLevel& fl = levels[fine], &cl = levels[coarse];
-    int cn = cl.nr * cl.nt, B = 256;
-    k_restrict_sigma<<<(cn+B-1)/B, B>>>(fl.d_sigma, fl.d_cell_volume,
-                                         cl.d_sigma, cl.nr, cl.nt, fl.nr, fl.nt);
-}
-
-void GmgGpu::vcycle_helm(int l) {
-    if (l == n_levels - 1) { smooth_helm(l, 200); return; }
-    smooth_helm(l, NU1);
-    compute_residual_helm(l);
-    restrict_level(l, l + 1);
-    restrict_sigma(l, l + 1);
-    vcycle_helm(l + 1);
-    prolongate_and_correct(l + 1, l);
-    smooth_helm(l, NU2);
-}
-
-// =================================================================
 // Restriction / Prolongation (shared by both paths)
 // =================================================================
 
@@ -727,25 +582,6 @@ void GmgGpu::solve_varcoeff(double* d_alpha_finest, double* d_rhs_in,
     CUDA_CHECK(cudaMemcpy(d_phi_inout, finest.d_phi, n*sizeof(double), cudaMemcpyDeviceToDevice));
 }
 
-void GmgGpu::solve_helmholtz(double* d_sigma_finest, double* d_rhs_in,
-                              double* d_phi_inout,
-                              int max_cycles, double tol) {
-    GmgLevel& finest = levels[0];
-    int n = finest.nr * finest.nt;
-    CUDA_CHECK(cudaMemcpy(finest.d_phi, d_phi_inout, n*sizeof(double), cudaMemcpyDeviceToDevice));
-    CUDA_CHECK(cudaMemcpy(finest.d_rhs, d_rhs_in, n*sizeof(double), cudaMemcpyDeviceToDevice));
-    CUDA_CHECK(cudaMemcpy(finest.d_sigma, d_sigma_finest, n*sizeof(double), cudaMemcpyDeviceToDevice));
-
-    for (int cyc = 0; cyc < max_cycles; ++cyc) {
-        vcycle_helm(0);
-        if ((cyc & 1) == 1 || cyc == max_cycles - 1) {
-            compute_residual_helm(0);
-            if (reduce_absmax(0) < tol) break;
-        }
-    }
-    CUDA_CHECK(cudaMemcpy(d_phi_inout, finest.d_phi, n*sizeof(double), cudaMemcpyDeviceToDevice));
-}
-
 void GmgGpu::destroy() {
     for (int l = 0; l < n_levels; ++l) {
         GmgLevel& lev = levels[l];
@@ -754,7 +590,7 @@ void GmgGpu::destroy() {
         cudaFree(lev.d_sin_theta_face); cudaFree(lev.d_sin_theta_center);
         cudaFree(lev.d_cell_volume);
         cudaFree(lev.d_phi); cudaFree(lev.d_rhs); cudaFree(lev.d_res);
-        cudaFree(lev.d_phi_tmp); cudaFree(lev.d_alpha); cudaFree(lev.d_sigma);
+        cudaFree(lev.d_phi_tmp); cudaFree(lev.d_alpha);
     }
     n_levels = 0;
 }

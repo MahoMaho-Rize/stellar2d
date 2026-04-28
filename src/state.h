@@ -1,6 +1,7 @@
 #pragma once
 
 #include "grid.h"
+#include "eos.h"
 #include <vector>
 
 struct PrimitiveVars {
@@ -29,8 +30,8 @@ struct State {
 
     void allocate(const Grid& grid);
 
-    PrimitiveVars to_primitive(int k, double gamma) const;
-    void from_primitive(int k, const PrimitiveVars& w, double gamma);
+    PrimitiveVars to_primitive(int k, const EOS& eos) const;
+    void from_primitive(int k, const PrimitiveVars& w, const EOS& eos);
 
     ConservedVars get_conserved(int k) const;
     void set_conserved(int k, const ConservedVars& u);

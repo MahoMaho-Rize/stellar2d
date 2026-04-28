@@ -11,4 +11,5 @@ double compute_cfl_dt(const Grid& grid, const State& state, const EOS& eos, doub
 void rk2_substep(const Grid& grid, State& state, const FluxAccumulator& acc, double dt);
 
 void compute_rhs(const Grid& grid, State& state, const EOS& eos,
-                 FluxAccumulator& acc, Limiter lim);
+                 FluxAccumulator& acc, Limiter lim,
+                 PolarThetaGeomMode polar_theta_geom_mode = PolarThetaGeomMode::DEFAULT);

@@ -2,7 +2,7 @@
 #include <cmath>
 
 void init_sedov(const Grid& grid, State& state,
-                const SedovParams& params, double gamma) {
+                const SedovParams& params, const EOS& eos) {
     double P_ambient = 1e-10;
     double vol_blast = 0.0;
 
@@ -25,12 +25,12 @@ void init_sedov(const Grid& grid, State& state,
             w.vtheta = 0.0;
 
             if (grid.r_center[i] <= params.r_blast) {
-                w.P = (gamma - 1.0) * params.rho_0 * e_blast; // Eq. (9.6)
+                w.P = eos.pressure_from_rho_e(params.rho_0, e_blast); // Eq. (9.6), generalized EOS
             } else {
                 w.P = P_ambient;
             }
 
-            state.from_primitive(k, w, gamma);
+            state.from_primitive(k, w, eos);
         }
     }
 }

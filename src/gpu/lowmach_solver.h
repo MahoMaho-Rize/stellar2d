@@ -24,7 +24,7 @@
 // Linear solver: GMRES with block-diagonal scaling preconditioner.
 // Gravity: GMG constant-coefficient Poisson.
 
-enum class PrecondType { NONE, BLOCK_JACOBI, SIMPLE, COMBINED, LINE_JACOBI, BLOCK_SCHUR };
+enum class PrecondType { NONE, BLOCK_JACOBI };
 
 struct LowMachSolver {
     void init(const Grid& grid, const EOS& eos, double G, double cfl,
@@ -44,12 +44,12 @@ struct LowMachSolver {
     double *d_r_face, *d_r_center, *d_dr;
     double *d_theta_face, *d_theta_center, *d_dtheta;
     double *d_cell_volume, *d_area_r, *d_area_theta;
-    double *d_sin_theta_face, *d_sin_theta_center;
+    double *d_sin_theta_face;
 
     // State: ρ, ρvr, ρvθ, ρe (with ghost cells)
     double *d_rho, *d_mr, *d_mtheta, *d_rhoE;
 
-    // Gravity potential Φ (physical cells only) — part of state vector for 5-DOF
+    // Gravity potential (physical cells only)
     double *d_phi;
 
     // Perturbation pressure π (physical cells only)
@@ -58,18 +58,13 @@ struct LowMachSolver {
     // Background hydrostatic equilibrium
     double *d_rho0, *d_P0, *d_phi0;
 
-    // 1D radial gravity: g_r(i) = -G·M(<r_i)/r_i², angle-averaged
-    double *d_gr;       // current gravity (size nr)
-    double *d_gr0;      // reference gravity at HSE (size nr)
-    double *d_shell_mass; // scratch for shell mass computation (size nr)
-
-    // Packed state vectors for Newton (5*n: ρ, ρvr, ρvθ, ρe, Φ)
+    // Packed state vectors for Newton (4*n)
     double *d_Un;      // U^n saved state
     double *d_Fk;      // F(U^k) residual
     double *d_residual; // scratch for residual computation
 
     // GMRES arrays
-    static constexpr int GMRES_RESTART = 60;
+    static constexpr int GMRES_RESTART = 30;
     double *d_gmres_V[GMRES_RESTART + 1];
     double *d_gmres_Z[GMRES_RESTART + 1]; // preconditioned
     double *d_gmres_w;
@@ -80,28 +75,11 @@ struct LowMachSolver {
     double *d_rhs_poisson;
     double *d_inv_rho; // 1/ρ for variable-coefficient Poisson (future)
     double *d_residual_ls; // line search F output
-    double *d_scale;   // clamp scaling: max(1, |U|) per DOF (4*n)
-    double *d_scale_R; // MUSIC right scaling (unknowns), 4*n
-    double *d_scale_L; // MUSIC left scaling (residuals), 4*n
+    double *d_scale;   // variable scaling: max(1, |U|) per DOF (4*n)
 
     // Block-diagonal Jacobi preconditioner: 4×4 block inverse per cell
+    // d_blk_diag: n * 16 doubles (row-major 4×4 blocks)
     double *d_blk_diag;
-
-    // SIMPLE preconditioner scratch (n = nr*nt each)
-    double *d_Ap;           // momentum diagonal: 1/dt + upwind_coeff (per cell)
-    double *d_simple_p;     // pressure correction from GMG
-    double *d_simple_div;   // divergence RHS for pressure Poisson
-    double *d_simple_vr_s, *d_simple_vt_s; // intermediate velocity (star)
-
-    // Second GMG instance for pressure Poisson (separate from gravity)
-    GmgGpu gmg_pressure;
-
-    // Third GMG instance for Schur complement Helmholtz (∇² - σ)
-    GmgGpu gmg_schur;
-    double *d_sigma_schur; // σ(x) = 4πGρ/Ap per cell
-    double *d_poisson_scale; // S(x) = max(|cC|, 1) per cell — Poisson residual scaling
-    double *d_schur_rhs; // scratch for Schur RHS assembly
-
     PrecondType precond_type;
 
     // GMG for gravity
@@ -121,18 +99,12 @@ struct LowMachSolver {
     void unpack_delta(const double* d_delta, double alpha);
     void apply_floor();
     void solve_gravity();
-    void compute_gravity_1d();
     void launch_ghost();
     double compute_cfl_dt();
     void compute_scaling();
     void clamp_correction(double* d_delta, double max_rel_change);
     void assemble_block_jacobi(double dt);
-    void assemble_simple(double dt);
-    void apply_preconditioner(const double* d_v, double* d_Mv, double dt);
-    void apply_simple(const double* d_v, double* d_Mv, double dt);
-    void apply_line_jacobi(const double* d_v, double* d_Mv, double dt);
-    void apply_block_schur(const double* d_v, double* d_Mv, double dt);
-    void assemble_schur_sigma(double dt);
+    void apply_preconditioner(const double* d_v, double* d_Mv);
 
     // Snapshot current state as HSE reference (call before adding perturbations)
     void snapshot_hse();

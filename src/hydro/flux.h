@@ -17,13 +17,19 @@ struct FluxAccumulator {
     void zero();
 };
 
+enum class PolarThetaGeomMode {
+    DEFAULT,
+    ZERO,
+    ADJACENT
+};
+
 void compute_flux_divergence(
     const Grid& grid, const State& state, const EOS& eos,
     FluxAccumulator& acc, Limiter lim);
 
 void add_geometric_source(
     const Grid& grid, const State& state, const EOS& eos,
-    FluxAccumulator& acc);
+    FluxAccumulator& acc, PolarThetaGeomMode polar_theta_geom_mode);
 
 void add_gravity_source(
     const Grid& grid, const State& state,

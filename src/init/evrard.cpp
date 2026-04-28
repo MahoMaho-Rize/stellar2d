@@ -2,7 +2,7 @@
 #include <cmath>
 
 void init_evrard(const Grid& grid, State& state,
-                 const EvrardParams& params, double gamma) {
+                 const EvrardParams& params, const EOS& eos) {
     // Eq. (9.7): rho(r) = M / (2*pi*R^3) * 1/r  for r < R
     double e_spec = 0.05 * params.G * params.M / params.R; // cold but nonzero
 
@@ -20,9 +20,9 @@ void init_evrard(const Grid& grid, State& state,
 
             w.vr = 0.0;
             w.vtheta = 0.0;
-            w.P = (gamma - 1.0) * w.rho * e_spec; // Eq. (1.2)
+            w.P = eos.pressure_from_rho_e(w.rho, e_spec); // Eq. (1.2), generalized EOS
 
-            state.from_primitive(k, w, gamma);
+            state.from_primitive(k, w, eos);
         }
     }
 }

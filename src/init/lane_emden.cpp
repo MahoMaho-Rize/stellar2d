@@ -66,7 +66,7 @@ static double interp_le(const LaneEmdenSolution& sol, double xi_val) {
 }
 
 void init_lane_emden(const Grid& grid, State& state,
-                     const LaneEmdenParams& params, double gamma) {
+                     const LaneEmdenParams& params, const EOS& eos) {
     auto sol = solve_lane_emden(params.n_poly);
 
     // Eq. (9.2): Lane-Emden length scale
@@ -89,25 +89,25 @@ void init_lane_emden(const Grid& grid, State& state,
             w.vr = 0.0;
             w.vtheta = 0.0;
             w.P = std::max(P, 1e-30);
-            state.from_primitive(k, w, gamma);
+            state.from_primitive(k, w, eos);
         }
     }
 }
 
 void init_lane_emden_perturbed(const Grid& grid, State& state,
-                                const LaneEmdenParams& params, double gamma,
+                                const LaneEmdenParams& params, const EOS& eos,
                                 double amplitude) {
-    init_lane_emden(grid, state, params, gamma);
+    init_lane_emden(grid, state, params, eos);
 
     for (int i = 0; i < grid.nr; ++i) {
         double r = grid.r_center[i];
         for (int j = 0; j < grid.ntheta; ++j) {
             int k = grid.idx(i, j);
-            PrimitiveVars w = state.to_primitive(k, gamma);
+            PrimitiveVars w = state.to_primitive(k, eos);
             double delta = amplitude * std::sin(M_PI * r / grid.R_outer);
             w.rho *= (1.0 + delta);
-            w.P *= (1.0 + gamma * delta); // adiabatic perturbation
-            state.from_primitive(k, w, gamma);
+            w.P *= (1.0 + eos.gamma * delta); // adiabatic perturbation
+            state.from_primitive(k, w, eos);
         }
     }
 }
