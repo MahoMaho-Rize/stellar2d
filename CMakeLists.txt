@@ -30,10 +30,12 @@ set(SOURCES
 
 if(USE_GPU)
     list(APPEND SOURCES
-        src/gpu/gpu_solver.cu
         src/gpu/lowmach_solver.cu
         src/gpu/gmg_gpu.cu
     )
+    if(AMGX_DIR)
+        list(APPEND SOURCES src/gpu/gpu_solver.cu)
+    endif()
 endif()
 
 add_executable(stellar2d ${SOURCES})
@@ -55,21 +57,17 @@ if(USE_GPU)
         set(CMAKE_CUDA_ARCHITECTURES 89)
     endif()
 
+    target_link_libraries(stellar2d PRIVATE
+        CUDA::cudart
+    )
+
+    # AmgX is optional: only needed for --solver compressible (GpuSolver)
     if(AMGX_DIR)
+        target_compile_definitions(stellar2d PRIVATE USE_AMGX)
         target_include_directories(stellar2d PRIVATE ${AMGX_DIR}/include)
         target_link_directories(stellar2d PRIVATE ${AMGX_DIR}/lib)
-    else()
-        target_include_directories(stellar2d PRIVATE ${CMAKE_SOURCE_DIR}/../AmgX/include)
-        target_link_directories(stellar2d PRIVATE ${CMAKE_SOURCE_DIR}/../AmgX/build)
+        target_link_libraries(stellar2d PRIVATE amgx CUDA::cublas CUDA::cusparse CUDA::cusolver)
     endif()
-
-    target_link_libraries(stellar2d PRIVATE
-        amgx
-        CUDA::cudart
-        CUDA::cublas
-        CUDA::cusparse
-        CUDA::cusolver
-    )
 endif()
 
 # ── Tests ────────────────────────────────────────────────────────────
