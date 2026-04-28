@@ -12,3 +12,5 @@ Makefile
 *.vtk
 __pycache__/
 .serena/
+node_modules/
+results/
