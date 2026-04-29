@@ -30,9 +30,22 @@ set(SOURCES
 
 if(USE_GPU)
     list(APPEND SOURCES
+        src/gpu/fas_residual.cu
+        src/gpu/fas_smoothers.cu
+        src/gpu/fas_multigrid.cu
+        src/gpu/fas_solver.cu
+        src/gpu/lm_residual.cu
+        src/gpu/lm_precond.cu
+        src/gpu/lm_krylov.cu
         src/gpu/lowmach_solver.cu
         src/gpu/gmg_gpu.cu
-        src/gpu/fas_solver.cu
+    )
+    set(LOWMACH_SOURCES
+        src/gpu/lm_residual.cu
+        src/gpu/lm_precond.cu
+        src/gpu/lm_krylov.cu
+        src/gpu/lowmach_solver.cu
+        src/gpu/gmg_gpu.cu
     )
     if(AMGX_DIR)
         list(APPEND SOURCES src/gpu/gpu_solver.cu)
@@ -103,8 +116,7 @@ add_test(NAME pitfalls COMMAND test_pitfalls)
 if(USE_GPU)
     add_executable(test_lowmach tests/test_lowmach.cu
         ${TEST_COMMON_SOURCES}
-        src/gpu/lowmach_solver.cu
-        src/gpu/gmg_gpu.cu
+        ${LOWMACH_SOURCES}
     )
     target_include_directories(test_lowmach PRIVATE src)
     target_compile_definitions(test_lowmach PRIVATE USE_GPU)
@@ -117,8 +129,7 @@ if(USE_GPU)
 
     add_executable(test_solver_diagnosis tests/test_solver_diagnosis.cu
         ${TEST_COMMON_SOURCES}
-        src/gpu/lowmach_solver.cu
-        src/gpu/gmg_gpu.cu
+        ${LOWMACH_SOURCES}
     )
     target_include_directories(test_solver_diagnosis PRIVATE src)
     target_compile_definitions(test_solver_diagnosis PRIVATE USE_GPU)
@@ -130,8 +141,7 @@ if(USE_GPU)
 
     add_executable(test_precond_quality tests/test_precond_quality.cu
         ${TEST_COMMON_SOURCES}
-        src/gpu/lowmach_solver.cu
-        src/gpu/gmg_gpu.cu
+        ${LOWMACH_SOURCES}
     )
     target_include_directories(test_precond_quality PRIVATE src)
     target_compile_definitions(test_precond_quality PRIVATE USE_GPU)
@@ -143,8 +153,7 @@ if(USE_GPU)
 
     add_executable(test_newton_tuning tests/test_newton_tuning.cu
         ${TEST_COMMON_SOURCES}
-        src/gpu/lowmach_solver.cu
-        src/gpu/gmg_gpu.cu
+        ${LOWMACH_SOURCES}
     )
     target_include_directories(test_newton_tuning PRIVATE src)
     target_compile_definitions(test_newton_tuning PRIVATE USE_GPU)
@@ -156,8 +165,7 @@ if(USE_GPU)
 
     add_executable(test_eps_sweep tests/test_eps_sweep.cu
         ${TEST_COMMON_SOURCES}
-        src/gpu/lowmach_solver.cu
-        src/gpu/gmg_gpu.cu
+        ${LOWMACH_SOURCES}
     )
     target_include_directories(test_eps_sweep PRIVATE src)
     target_compile_definitions(test_eps_sweep PRIVATE USE_GPU)
@@ -191,7 +199,7 @@ target_link_options(stellar2d PRIVATE
 )
 
 if(USE_GPU)
-    add_executable(test_mini tests/test_mini.cu ${TEST_COMMON_SOURCES} src/gpu/lowmach_solver.cu src/gpu/gmg_gpu.cu)
+    add_executable(test_mini tests/test_mini.cu ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
     target_include_directories(test_mini PRIVATE src)
     target_compile_definitions(test_mini PRIVATE USE_GPU)
     set_target_properties(test_mini PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)

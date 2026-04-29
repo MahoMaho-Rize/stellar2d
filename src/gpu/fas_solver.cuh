@@ -3,10 +3,11 @@
 #include "../grid.h"
 #include "../state.h"
 #include "../eos.h"
+#include "fas_common.cuh"
 #include "gmg_gpu.cuh"
 
 // FAS (Full Approximation Scheme) nonlinear multigrid for the low-Mach
-// 4-DOF Euler system: (ρ, ρvr, ρvθ, ρe).
+// 4-DOF Euler system: (ρ, ρvr, ρvθ, E).
 //
 // Backward Euler: F(U) = (U - Uⁿ)/dt - R(U) = 0
 //
@@ -67,6 +68,14 @@ struct FasLevel {
     double *d_dp;           // pressure correction (phys)
     double *d_poisson_rhs;  // Poisson RHS (phys)
     double *d_inv_Ap;       // 1/Ap (phys)
+
+    // GMRES(k) scratch (per level): k=3, right-preconditioned
+    // V[0..k]: Krylov basis vectors, each 4*phys
+    // Z[0..k-1]: preconditioned search directions, each 4*phys
+    static constexpr int GMRES_K = 3;
+    double *d_gmres_V[GMRES_K + 1];   // 4 vectors of size 4*phys
+    double *d_gmres_Z[GMRES_K];       // 3 vectors of size 4*phys
+    double *d_gmres_Ubak;             // state backup for JFD, size 4*phys
     GmgGpu pressure_gmg;   // per-level pressure Poisson solver
 };
 
@@ -107,8 +116,8 @@ struct FasSolver {
     double sponge_r_top = 0.0;
     double sponge_kappa = 10.0;
 
-    static constexpr int NU1 = 2;     // pre-smooth iterations
-    static constexpr int NU2 = 3;     // post-smooth iterations
+    static constexpr int NU1 = 3;     // pre-smooth iterations
+    static constexpr int NU2 = 4;     // post-smooth iterations
     static constexpr double OMEGA = 0.7;  // damping factor
 
 private:
