@@ -1,0 +1,39 @@
+[workspace]
+name = "stellar2d"
+version = "0.1.0"
+description = "2D axisymmetric compressible Euler + self-gravity Poisson solver"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+# ════════════════════════════════════════════════════════════
+#  C++/CUDA build toolchain
+# ════════════════════════════════════════════════════════════
+[dependencies]
+cuda-toolkit = ">=12.6,<13"
+cmake = ">=3.23"
+make = "*"
+gcc = ">=11"
+gxx = ">=11"
+
+# ════════════════════════════════════════════════════════════
+#  Python (scripts, tests, frontend tooling)
+# ════════════════════════════════════════════════════════════
+python = ">=3.11,<3.14"
+numpy = ">=1.24"
+matplotlib = ">=3.7"
+pillow = ">=10.0"
+pytest = ">=7.0"
+
+# ════════════════════════════════════════════════════════════
+#  Tasks — 对齐 stellar2d.py 子命令
+# ════════════════════════════════════════════════════════════
+[tasks]
+configure-cpu = { cmd = "mkdir -p build-cpu && cmake -S . -B build-cpu -DCMAKE_BUILD_TYPE=Release", description = "CMake configure (CPU only)" }
+configure-gpu = { cmd = "mkdir -p build && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_GPU=ON -DCMAKE_CUDA_ARCHITECTURES=89", description = "CMake configure (CUDA)" }
+build-cpu = { cmd = "cmake --build build-cpu -j$(nproc)", depends-on = ["configure-cpu"], description = "Build CPU binary" }
+build-gpu = { cmd = "cmake --build build -j$(nproc)", depends-on = ["configure-gpu"], description = "Build GPU binary" }
+test-cpp = { cmd = "ctest --test-dir build-cpu --output-on-failure", depends-on = ["build-cpu"], description = "Run C++ tests" }
+test-py = { cmd = "pytest -v -m 'not slow'", description = "Run Python integration tests" }
+test = { depends-on = ["test-cpp", "test-py"], description = "Run all fast tests" }
+clean = { cmd = "rm -rf build build-cpu", description = "Remove build directories" }
+viewer = { cmd = "cd frontend && pnpm dev", description = "Start web viewer" }

@@ -111,3 +111,30 @@ void init_lane_emden_perturbed(const Grid& grid, State& state,
         }
     }
 }
+
+void init_lane_emden_bubble(const Grid& grid, State& state,
+                            const LaneEmdenParams& params, double gamma,
+                            double bubble_r0, double bubble_theta0,
+                            double bubble_radius, double bubble_entropy_boost) {
+    init_lane_emden(grid, state, params, gamma);
+
+    for (int i = 0; i < grid.nr; ++i) {
+        double r = grid.r_center[i];
+        for (int j = 0; j < grid.ntheta; ++j) {
+            double theta = grid.theta_center[j];
+            int k = grid.idx(i, j);
+
+            double x = r * std::sin(theta) - bubble_r0 * std::sin(bubble_theta0);
+            double z = r * std::cos(theta) - bubble_r0 * std::cos(bubble_theta0);
+            double dist = std::sqrt(x*x + z*z);
+
+            if (dist < bubble_radius) {
+                PrimitiveVars w = state.to_primitive(k, gamma);
+                double smooth = 0.5 * (1.0 + std::cos(M_PI * dist / bubble_radius));
+                double boost = 1.0 + bubble_entropy_boost * smooth;
+                w.P *= boost;
+                state.from_primitive(k, w, gamma);
+            }
+        }
+    }
+}
