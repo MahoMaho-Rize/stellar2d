@@ -66,6 +66,13 @@ __global__ void k_fas_ghost_t_s(double* rho, double* mr, double* mt, double* rho
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=-mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
+__global__ void k_fas_pole_lock(double* mt, int nr, int nt, int ng) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x - ng;
+    if (i < -ng || i >= nr + ng) return;
+    mt[fas_idx(i, 0, nt, ng)] = 0.0;
+    mt[fas_idx(i, nt - 1, nt, ng)] = 0.0;
+}
+
 void FasSolver::launch_ghost(int l) {
     FasLevel& lev = levels[l];
     int B=256;
@@ -73,6 +80,8 @@ void FasSolver::launch_ghost(int l) {
     { dim3 g((lev.nt+B-1)/B, lev.ng); k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_n<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_s<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
+    int ntot = lev.nr + 2*lev.ng;
+    k_fas_pole_lock<<<(ntot+B-1)/B,B>>>(lev.d_mt, lev.nr, lev.nt, lev.ng);
 }
 
 // ========================= 1D radial gravity ========================
@@ -117,7 +126,7 @@ void FasSolver::compute_gravity_1d(int l) {
 }
 
 // ========================= Nonlinear residual R(U) ========================
-// Reuses the same physics as k_lm_residual but self-contained for FAS.
+// Standard kernel for i >= 1 (all non-singular cells).
 
 __global__
 void k_fas_residual(
@@ -141,6 +150,9 @@ void k_fas_residual(
         return;
     }
 
+    // i==0 handled by k_fas_residual_origin
+    if (i == 0) return;
+
     int k = fas_idx(i,j,nt,ng);
     double invV = 1.0 / vol[flat];
 
@@ -151,7 +163,6 @@ void k_fas_residual(
     double P_c = fmax((gam - 1.0) * rho_c * e_c, 1e-30);
     double r = r_center[i];
 
-    // Upwind advection (donor-cell)
     auto upwind_r = [&](int il, int ir, int jj, int c) -> double {
         int kl = fas_idx(il,jj,nt,ng), kr_k = fas_idx(ir,jj,nt,ng);
         double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
@@ -185,13 +196,6 @@ void k_fas_residual(
         div[c] = -invV*(Ar_hi*fr_hi - Ar_lo*fr_lo + At_hi*ft_hi - At_lo*ft_lo);
     }
 
-    // Pressure gradient + gravity source terms.
-    // On fine level (use_wellbalance=1): well-balanced perturbation form
-    //   force = -∇P' + ρ'g₀ + ρg'  where P'=P-P₀, ρ'=ρ-ρ₀, g'=g-g₀
-    // On coarse levels (use_wellbalance=0): standard (non-perturbation) form
-    //   force = -∇P + ρg
-    // The τ-correction in FAS naturally compensates for the different operator.
-
     double P_ref = use_wellbalance ? P0[flat] : 0.0;
     double rho_ref = use_wellbalance ? rho0[flat] : 0.0;
     double g0_r = use_wellbalance ? gr0[i] : 0.0;
@@ -200,18 +204,14 @@ void k_fas_residual(
     double rhop_c = rho_c - rho_ref;
 
     double dPp_dr = 0;
-    if (i > 0 && i < nr-1) {
+    if (i < nr-1) {
         double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i-1,j,nt,ng)],1e-30)
                       - (use_wellbalance ? P0[(i-1)*nt+j] : 0.0);
         double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i+1,j,nt,ng)],1e-30)
                       - (use_wellbalance ? P0[(i+1)*nt+j] : 0.0);
         double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
         dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh) / (dl+dh);
-    } else if (i == 0 && nr > 1) {
-        double dh = r_center[1]-r_center[0];
-        dPp_dr = (fmax((gam-1.0)*rhoE[fas_idx(1,j,nt,ng)],1e-30)
-                  - (use_wellbalance ? P0[1*nt+j] : 0.0) - Pp_c)/dh;
-    } else if (i == nr-1 && nr >= 2) {
+    } else {
         double dl = r_center[nr-1]-r_center[nr-2];
         dPp_dr = (Pp_c - (fmax((gam-1.0)*rhoE[fas_idx(nr-2,j,nt,ng)],1e-30)
                   - (use_wellbalance ? P0[(nr-2)*nt+j] : 0.0)))/dl;
@@ -261,12 +261,154 @@ void k_fas_residual(
     res[3*n + flat] = div[3] - P_c * div_v + S_E;
 }
 
+// ========================= Origin kernel (i=0, divergence theorem) ========
+// The innermost cell is a pie-slice wedge touching r=0.
+// Inner face has zero area (point). Only the outer radial face carries flux.
+// Volume = (1/3)*r_face[1]^3 * (cos(θ_lo) - cos(θ_hi))
+// Outer area = r_face[1]^2 * (cos(θ_lo) - cos(θ_hi))
+// No 1/r source terms — use exact integral: ∫ρv²/r dV = ρv² * 0.5*r_face[1]^2*(cosθ_lo-cosθ_hi)
+// which divided by V gives 1.5/r_face[1] — the volume-averaged <1/r>.
+
+__global__
+void k_fas_residual_origin(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face,
+    const double* theta_face, const double* dr, const double* dtheta,
+    const double* gr, const double* gr0,
+    const double* P0, const double* rho0,
+    double* res,
+    int nr, int nt, int ng, double gam, double atm_thresh,
+    int use_wellbalance) {
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j >= nt) return;
+    int i = 0;
+    int flat = j;  // i*nt + j = 0*nt + j
+    int n = nr*nt;
+
+    if (rho0[flat] < atm_thresh) {
+        res[flat] = 0.0; res[n+flat] = 0.0;
+        res[2*n+flat] = 0.0; res[3*n+flat] = 0.0;
+        return;
+    }
+
+    int k = fas_idx(0, j, nt, ng);
+    double invV = 1.0 / vol[flat];
+
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr_c = mr[k] / rho_c;
+    double vt_c = mt[k] / rho_c;
+    double e_c = rhoE[k] / rho_c;
+    double P_c = fmax((gam - 1.0) * rho_c * e_c, 1e-30);
+
+    // Outer radial face flux only — inner face at r=0 has zero area
+    double Ar_hi = ar[1*nt + j];  // area of face at r_face[1]
+    // At faces for θ direction (same as standard)
+    double At_hi = at[0*(nt+1) + j+1], At_lo = at[0*(nt+1) + j];
+
+    // Advective fluxes: only outer r-face contributes in r-direction
+    auto upwind_r_outer = [&](int jj, int c) -> double {
+        int kl = fas_idx(0,jj,nt,ng), kr_k = fas_idx(1,jj,nt,ng);
+        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
+        double vf = 0.5*(mr[kl]/rl + mr[kr_k]/rr);
+        double ql, qr;
+        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
+        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
+        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
+        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
+        return vf * (vf >= 0.0 ? ql : qr);
+    };
+    auto upwind_t = [&](int jl, int jr, int c) -> double {
+        int kl = fas_idx(0,jl,nt,ng), kr_k = fas_idx(0,jr,nt,ng);
+        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
+        double vf = 0.5*(mt[kl]/rl + mt[kr_k]/rr);
+        double ql, qr;
+        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
+        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
+        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
+        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
+        return vf * (vf >= 0.0 ? ql : qr);
+    };
+
+    double div[4];
+    for (int c = 0; c < 4; ++c) {
+        double fr_hi = upwind_r_outer(j, c);
+        // Inner face: zero area → zero flux
+        double ft_hi = upwind_t(j, j+1, c), ft_lo = upwind_t(j-1, j, c);
+        div[c] = -invV*(Ar_hi*fr_hi + At_hi*ft_hi - At_lo*ft_lo);
+    }
+
+    // Pressure gradient: one-sided (only neighbor at i=1 exists)
+    double P_ref = use_wellbalance ? P0[flat] : 0.0;
+    double rho_ref = use_wellbalance ? rho0[flat] : 0.0;
+    double g0_r = use_wellbalance ? gr0[0] : 0.0;
+
+    double Pp_c = P_c - P_ref;
+    double rhop_c = rho_c - rho_ref;
+
+    double dh = r_center[1] - r_center[0];
+    double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(1,j,nt,ng)],1e-30)
+                  - (use_wellbalance ? P0[1*nt+j] : 0.0);
+    double dPp_dr = (Pp_p - Pp_c) / dh;
+
+    double r = r_center[0];
+    double dPp_dt_r = 0;
+    if (j > 0 && j < nt-1 && r > 1e-14) {
+        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
+        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
+        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
+        double dl=tc_c-tc_m, dhh=tc_p-tc_c;
+        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(0,j-1,nt,ng)],1e-30)
+                      - (use_wellbalance ? P0[j-1] : 0.0);
+        double Pp_pp = fmax((gam-1.0)*rhoE[fas_idx(0,j+1,nt,ng)],1e-30)
+                      - (use_wellbalance ? P0[j+1] : 0.0);
+        dPp_dt_r = ((dhh*(Pp_c-Pp_m)/dl + dl*(Pp_pp-Pp_c)/dhh))/(r*(dl+dhh));
+    }
+
+    double gp_r = gr[0] - g0_r;
+
+    // Volume-averaged <1/r> = 3/(2*r_face[1]) for the pie-slice cell
+    double r_out = r_face[1];
+    double inv_r_avg = (r_out > 1e-30) ? 1.5 / r_out : 0.0;
+    double S_mr = rho_c * vt_c * vt_c * inv_r_avg;
+    double S_mt = -rho_c * vr_c * vt_c * inv_r_avg;
+
+    double force_r = -dPp_dr + rhop_c*g0_r + rho_c*gp_r;
+    double force_t = -dPp_dt_r;
+
+    double S_E = rho_c * vr_c * (g0_r + gp_r);
+
+    // div_v using divergence theorem: only outer r-face
+    double rl = fmax(rho[fas_idx(0,j,nt,ng)],1e-20);
+    double rr = fmax(rho[fas_idx(1,j,nt,ng)],1e-20);
+    double vr_outer = 0.5*(mr[fas_idx(0,j,nt,ng)]/rl + mr[fas_idx(1,j,nt,ng)]/rr);
+    auto vt_face_f = [&](int jl, int jr) -> double {
+        double rll = fmax(rho[fas_idx(0,jl,nt,ng)],1e-20);
+        double rrr = fmax(rho[fas_idx(0,jr,nt,ng)],1e-20);
+        return 0.5*(mt[fas_idx(0,jl,nt,ng)]/rll + mt[fas_idx(0,jr,nt,ng)]/rrr);
+    };
+    double div_v = invV*(Ar_hi*vr_outer
+        + At_hi*vt_face_f(j,j+1) - At_lo*vt_face_f(j-1,j));
+
+    res[flat]       = div[0];
+    res[n + flat]   = div[1] + force_r + S_mr;
+    res[2*n + flat] = div[2] + force_t + S_mt;
+    res[3*n + flat] = div[3] - P_c * div_v + S_E;
+}
+
+__global__
+void k_fas_axpy(double* y, double a, const double* x, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) y[i] += a * x[i];
+}
+
 void FasSolver::compute_residual(int l) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     launch_ghost(l);
     compute_gravity_1d(l);
-    int wb = (l == 0) ? 1 : 0;  // well-balance only on finest level
+    int wb = 1;  // WB on all levels — each has its own consistent ρ₀/P₀/g₀
+    // Standard kernel handles i >= 1 (returns early for i==0)
     k_fas_residual<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -275,6 +417,18 @@ void FasSolver::compute_residual(int l) {
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
         lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
+    // Origin kernel handles i==0 using divergence theorem
+    k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+        lev.d_r_center, lev.d_r_face, lev.d_theta_face,
+        lev.d_dr, lev.d_dtheta,
+        lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
+        lev.d_res,
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
+    // Subtract pre-computed HSE defect: R_corrected(U) = R(U) - R(U₀)
+    // This ensures R(U₀) = 0 exactly, fixing WB inconsistency on coarse grids.
+    k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
 }
 
 // ========================= Newton residual F(U) ========================
@@ -319,6 +473,8 @@ void k_fas_copy(double* dst, const double* src, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) dst[i] = src[i];
 }
+
+// (k_fas_axpy moved before compute_residual)
 
 // Pack physical cells from ghost-cell arrays into flat array
 __global__
@@ -772,20 +928,6 @@ void FasSolver::restrict_defect(int fine, int coarse, double dt) {
         cl.d_fas_rhs,
         1.0/dt, cl.nr, cl.nt, cl.ng);
 
-    // ===== 方案 C: HSE defect subtraction =====
-    // The well-balanced residual on the coarse grid may not be exactly zero
-    // for the HSE reference state due to restriction errors.
-    // Compute this "HSE defect" and subtract it from fas_rhs, so that
-    // F(U₀_H) = 0 exactly on the coarse grid.
-    // This is only needed when use_wellbalance=1 on coarse levels.
-    // When use_wellbalance=0 (方案 A), this is automatically handled.
-    //
-    // Disabled by default since 方案 A (non-WB coarse) is simpler and more robust.
-    // Uncomment to enable:
-    // {
-    //     // Temporarily load HSE state into coarse level
-    //     // ... compute R(U₀_H) ... subtract from fas_rhs ...
-    // }
 }
 
 // ========================= Prolongation + correction ========================
@@ -809,16 +951,18 @@ void k_fas_prolongate_correct(
     double d_mt   = c_mt[ck]   - save_mt[flat];
     double d_rhoE = c_rhoE[ck] - save_rhoE[flat];
 
-    // Piecewise constant prolongation to 2×2 fine cells
+    // Damped piecewise constant prolongation to 2×2 fine cells
+    // α < 1 prevents overcorrection when post-smooth is weak
+    const double alpha = 0.5;
     for (int di = 0; di < 2; ++di) {
         int fi = 2*ic + di;
         for (int dj = 0; dj < 2; ++dj) {
             int fj = 2*jc + dj;
             int fk = (fi+fng)*(fnt+2*fng) + (fj+fng);
-            f_rho[fk]  += d_rho;
-            f_mr[fk]   += d_mr;
-            f_mt[fk]   += d_mt;
-            f_rhoE[fk] += d_rhoE;
+            f_rho[fk]  += alpha * d_rho;
+            f_mr[fk]   += alpha * d_mr;
+            f_mt[fk]   += alpha * d_mt;
+            f_rhoE[fk] += alpha * d_rhoE;
         }
     }
 }
@@ -839,12 +983,9 @@ void FasSolver::prolongate_correct(int coarse, int fine) {
 // ========================= FAS V-cycle ========================
 
 void FasSolver::fas_vcycle(int l, double dt) {
-    // During initial transient (first 10 steps), use smooth-only on finest
-    // level to avoid coarse-grid instability. After that, use full V-cycle.
-    // Disable coarse correction entirely for now.
-    // Block Jacobi smooth-only converges for small dt (dominated by 1/dt diagonal).
-    // TODO: fix coarse-level HSE reference to enable proper V-cycles.
-    bool use_coarse = false;
+    // Only coarsen from level 0→1. Coarser levels (8x4, 4x2) have too few cells
+    // for meaningful gravity/geometry — their corrections are garbage.
+    bool use_coarse = (l == 0 && n_levels > 1);
 
     if (!use_coarse || l == n_levels - 1) {
         assemble_smoother(l, dt);
@@ -928,6 +1069,8 @@ static void alloc_fas_level(FasLevel& lev) {
     // HSE reference
     CUDA_CHECK(cudaMalloc(&lev.d_rho0, phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_P0, phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_hse_defect, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMemset(lev.d_hse_defect, 0, 4*phys*sizeof(double)));
 
     // Gravity
     CUDA_CHECK(cudaMalloc(&lev.d_gr, nr*sizeof(double)));
@@ -1224,6 +1367,50 @@ void FasSolver::snapshot_hse() {
         CUDA_CHECK(cudaMemcpy(cl.d_P0, c_P0.data(), cn*sizeof(double), cudaMemcpyHostToDevice));
     }
 
+    // Compute HSE defect on each level: R_WB(U₀) with U₀ = (ρ₀, 0, 0, P₀/(γ-1))
+    // This residual should be ~0 but is nonzero due to discrete ∇P₀ ≠ ρ₀g₀.
+    // We store it and subtract from fas_rhs during restrict_defect.
+    for (int l = 0; l < n_levels; ++l) {
+        FasLevel& lev = levels[l];
+        int ln = lev.nr * lev.nt, B2 = 256;
+
+        // Save current state
+        std::vector<double> save_rho(lev.total), save_mr(lev.total), save_mt(lev.total), save_rhoE(lev.total);
+        CUDA_CHECK(cudaMemcpy(save_rho.data(), lev.d_rho, lev.total*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(save_mr.data(), lev.d_mr, lev.total*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(save_mt.data(), lev.d_mt, lev.total*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(save_rhoE.data(), lev.d_rhoE, lev.total*sizeof(double), cudaMemcpyDeviceToHost));
+
+        // Load HSE state: ρ=ρ₀, mr=0, mt=0, rhoE=P₀/(γ-1)
+        std::vector<double> h_rho0(ln), h_P0(ln);
+        CUDA_CHECK(cudaMemcpy(h_rho0.data(), lev.d_rho0, ln*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_P0.data(), lev.d_P0, ln*sizeof(double), cudaMemcpyDeviceToHost));
+
+        std::vector<double> h_rho(lev.total, 1e-20), h_mr(lev.total, 0.0), h_mt(lev.total, 0.0), h_rhoE(lev.total, 1e-20);
+        int lstride = lev.nt + 2*lev.ng;
+        for (int i = 0; i < lev.nr; ++i)
+            for (int j = 0; j < lev.nt; ++j) {
+                int k = (i+lev.ng)*lstride + (j+lev.ng);
+                int flat = i*lev.nt + j;
+                h_rho[k] = h_rho0[flat];
+                h_rhoE[k] = h_P0[flat] / (gamma - 1.0);
+            }
+        CUDA_CHECK(cudaMemcpy(lev.d_rho, h_rho.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(lev.d_mr, h_mr.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(lev.d_mt, h_mt.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(lev.d_rhoE, h_rhoE.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+
+        // Compute R_WB(U₀) and store as HSE defect
+        compute_residual(l);
+        CUDA_CHECK(cudaMemcpy(lev.d_hse_defect, lev.d_res, 4*ln*sizeof(double), cudaMemcpyDeviceToDevice));
+
+        // Restore original state
+        CUDA_CHECK(cudaMemcpy(lev.d_rho, save_rho.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(lev.d_mr, save_mr.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(lev.d_mt, save_mt.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(lev.d_rhoE, save_rhoE.data(), lev.total*sizeof(double), cudaMemcpyHostToDevice));
+    }
+
     hse_set = true;
     std::fprintf(stderr, "  FAS HSE snapshot: ρ_max=%.3e, atm_thresh=%.3e\n",
                  rho_max, atm_rho_thresh);
@@ -1270,7 +1457,6 @@ double FasSolver::step(double t, double t_end) {
     // Save state before solve (for rollback on failure)
     FasLevel& finest = levels[0];
     int n = finest.nr * finest.nt, B = 256;
-    // Use d_save on finest level as rollback buffer
     k_fas_pack_flat<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
         finest.d_save, finest.nr, finest.nt, finest.ng);
@@ -1283,7 +1469,6 @@ double FasSolver::step(double t, double t_end) {
                 std::exit(1);
             }
             // Rollback state from saved
-            // Unpack d_save back into state arrays
             std::vector<double> h_save(4*n);
             CUDA_CHECK(cudaMemcpy(h_save.data(), finest.d_save, 4*n*sizeof(double), cudaMemcpyDeviceToHost));
             std::vector<double> h_rho(finest.total), h_mr(finest.total), h_mt(finest.total), h_rhoE(finest.total);
@@ -1342,7 +1527,7 @@ void FasSolver::destroy() {
         cudaFree(lev.d_sin_theta_face); cudaFree(lev.d_sin_theta_center);
         cudaFree(lev.d_rho); cudaFree(lev.d_mr); cudaFree(lev.d_mt); cudaFree(lev.d_rhoE);
         cudaFree(lev.d_fas_rhs); cudaFree(lev.d_res); cudaFree(lev.d_Un); cudaFree(lev.d_save);
-        cudaFree(lev.d_rho0); cudaFree(lev.d_P0);
+        cudaFree(lev.d_rho0); cudaFree(lev.d_P0); cudaFree(lev.d_hse_defect);
         cudaFree(lev.d_gr); cudaFree(lev.d_gr0); cudaFree(lev.d_shell_mass);
         cudaFree(lev.d_blk_inv);
         cudaFree(lev.d_Ap); cudaFree(lev.d_vr_s); cudaFree(lev.d_vt_s);

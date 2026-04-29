@@ -47,6 +47,11 @@ struct FasLevel {
     // HSE reference for well-balanced residual
     double *d_rho0, *d_P0;
 
+    // Pre-computed WB residual of HSE state: R_WB(U₀) on this level (4*phys)
+    // Should be ~0 but nonzero due to discrete HSE inconsistency.
+    // Subtracted from fas_rhs after restrict_defect to ensure F(U₀)=0 exactly.
+    double *d_hse_defect;
+
     // 1D gravity arrays
     double *d_gr, *d_gr0;
     double *d_shell_mass;
@@ -94,7 +99,7 @@ struct FasSolver {
     bool use_simple_smoother = false; // false=block Jacobi, true=SIMPLE
 
     static constexpr int NU1 = 3;     // pre-smooth iterations
-    static constexpr int NU2 = 3;     // post-smooth iterations
+    static constexpr int NU2 = 5;     // post-smooth iterations (extra to clean prolongation)
     static constexpr double OMEGA = 0.7;  // damping factor
 
 private:
