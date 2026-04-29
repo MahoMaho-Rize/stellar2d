@@ -26,4 +26,13 @@ __global__ void k_fas_sponge(double* rho, double* mr, double* mt, double* rhoE,
 __global__ void k_fas_compute_F(double* F, const double* R,
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* fas_rhs, double inv_dt, int nr, int nt, int ng);
+
+__global__ void k_fas_line_solve(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face, const double* theta_face,
+    const double* dr, const double* dtheta,
+    const double* gr0,
+    const double* v_in, double* Mv_out,
+    int nr, int nt, int ng, double gamma, double inv_dt);
 #endif

@@ -516,18 +516,10 @@ void k_fas_smooth_blkjac(
 void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
-    bool verbose = false;  // disable for production runs
-    int n4 = 4 * n;
 
     for (int it = 0; it < n_iters; ++it) {
         // ===== Block-Jacobi relaxation: U -= ω · J⁻¹_diag · F(U) =====
         compute_F(l, g0_over_dt);
-
-        if (verbose && it == 0) {
-            double norm_pre = residual_norm(l);
-            std::fprintf(stderr, "    smooth L%d pre: ||F||=%.4e\n", l, norm_pre);
-        }
-
         k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_res, lev.d_blk_inv,
@@ -566,12 +558,6 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                 sponge_r_start, sponge_r_top, sponge_kappa, dt,
                 1.0/(gamma-1.0),
                 lev.nr, lev.nt, lev.ng);
-        }
-
-        if (verbose) {
-            compute_F(l, g0_over_dt);
-            double norm_post = residual_norm(l);
-            std::fprintf(stderr, "    smooth L%d it%d: ||F||=%.4e\n", l, it, norm_post);
         }
     }
 }

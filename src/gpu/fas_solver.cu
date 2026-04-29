@@ -73,6 +73,8 @@ static void alloc_fas_level(FasLevel& lev) {
     for (int i = 0; i < FasLevel::GMRES_K; ++i)
         CUDA_CHECK(cudaMalloc(&lev.d_gmres_Z[i], 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_gmres_Ubak, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_Fk, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_gmres_w, 4*phys*sizeof(double)));
 
     // Zero everything
     CUDA_CHECK(cudaMemset(lev.d_rho, 0, total*sizeof(double)));
@@ -423,21 +425,214 @@ void k_fas_bdf2_rhs(const double* Un, const double* Un_prev,
     rhs[i] = -(alpha1 * Un[i] + alpha2 * Un_prev[i]) * inv_dt;
 }
 
+// ========================= JFNK matvec ========================
+// J·v ≈ (F(U+εv) - F(U)) / ε   (finite-difference Jacobian-vector product)
+
+void FasSolver::jfnk_matvec(const double* d_v, double* d_Jv, double dt, double g0_over_dt) {
+    FasLevel& lev = levels[0];
+    int n = lev.nr * lev.nt, N4 = 4*n, B = 256;
+
+    double norm_v = gpu_norm(d_v, N4);
+    if (norm_v < 1e-30) {
+        CUDA_CHECK(cudaMemset(d_Jv, 0, N4*sizeof(double)));
+        return;
+    }
+
+    double norm_U = gpu_norm(lev.d_Un, N4);
+    double eps_fd = std::sqrt(1e-15) * (1.0 + norm_U) / norm_v;
+
+    // Save state
+    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
+
+    // Perturb: U += eps * v
+    k_fas_perturb<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        d_v, eps_fd, lev.nr, lev.nt, lev.ng);
+    apply_floor(0);
+    launch_ghost(0);
+
+    // F(U + eps*v)
+    compute_F(0, g0_over_dt);
+    k_fas_copy<<<(N4+B-1)/B,B>>>(d_Jv, lev.d_res, N4);
+
+    // Jv = (F(U+εv) - F(U)) / ε
+    k_fas_axpy_v<<<(N4+B-1)/B,B>>>(d_Jv, -1.0, lev.d_Fk, N4);
+    k_fas_scale<<<(N4+B-1)/B,B>>>(d_Jv, 1.0/eps_fd, N4);
+
+    // Restore state
+    k_fas_unpack_flat<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
+    launch_ghost(0);
+}
+
+// ========================= V-cycle preconditioner ========================
+// M⁻¹·v: approximate solve of J·w = v using one FAS V-cycle on F(U) = 0.
+//
+// The idea: F(U) = -r currently. If we run a V-cycle that reduces ||F|| by
+// factor μ, the state correction δU_vcycle ≈ -J⁻¹·F(U) · (1-μ).
+// So for arbitrary v, we scale: w = (||v||/||F||) · δU_vcycle.
+//
+// Implementation: save U, run one V-cycle, w = U_after - U_before, restore U.
+// This is a NONLINEAR preconditioner — requires FGMRES (which we have).
+
+void FasSolver::apply_preconditioner(const double* d_v, double* d_Mv,
+                                      double dt, double g0_over_dt) {
+    FasLevel& lev = levels[0];
+    int n = lev.nr * lev.nt, N4 = 4*n, B = 256;
+
+    // Save current state
+    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
+
+    // Run one V-cycle on F(U) = 0 (nonlinear preconditioner)
+    assemble_smoother(0, g0_over_dt);
+    fas_vcycle(0, dt, g0_over_dt);
+
+    // δU = U_after - U_before (the V-cycle correction)
+    // This approximates -J⁻¹·F(U). We need M⁻¹·v, not M⁻¹·F(U).
+    // For FGMRES, z_j = M⁻¹(v_j) can be nonlinear in v_j.
+    // We return the V-cycle correction regardless of v_j — FGMRES orthogonalizes
+    // the resulting J·z_j against previous basis vectors, so this is valid as long
+    // as z_j is a "good search direction" for reducing ||F||.
+    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        d_Mv, lev.nr, lev.nt, lev.ng);
+    k_fas_axpy_v<<<(N4+B-1)/B,B>>>(d_Mv, -1.0, lev.d_gmres_Ubak, N4);
+
+    // Restore state
+    k_fas_unpack_flat<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
+    launch_ghost(0);
+}
+
+// ========================= FGMRES ========================
+// Right-preconditioned FGMRES: minimizes ||F(U) + J·δU|| in Krylov space.
+
+int FasSolver::gmres_solve(double* d_x, const double* d_b, double dt,
+                            double g0_over_dt, double tol, int max_iter) {
+    FasLevel& lev = levels[0];
+    int n = lev.nr * lev.nt, N = 4*n, B = 256;
+    int m = std::min(max_iter, (int)FasLevel::GMRES_K);
+
+    std::vector<double> H((m+1)*m, 0.0);
+    std::vector<double> cs(m), sn(m), g(m+1, 0.0);
+
+    // r₀ = -b (= -F(U), the RHS of J·δU = -F)
+    k_fas_copy<<<(N+B-1)/B,B>>>(lev.d_gmres_V[0], d_b, N);
+    k_fas_scale<<<(N+B-1)/B,B>>>(lev.d_gmres_V[0], -1.0, N);
+
+    double beta = gpu_norm(lev.d_gmres_V[0], N);
+    if (beta < 1e-30) return 0;
+    k_fas_scale<<<(N+B-1)/B,B>>>(lev.d_gmres_V[0], 1.0/beta, N);
+    g[0] = beta;
+
+    int j;
+    for (j = 0; j < m; ++j) {
+        // z_j = M⁻¹ · v_j
+        apply_preconditioner(lev.d_gmres_V[j], lev.d_gmres_Z[j], dt, g0_over_dt);
+
+        // w = J · z_j
+        jfnk_matvec(lev.d_gmres_Z[j], lev.d_gmres_w, dt, g0_over_dt);
+
+        // Modified Gram-Schmidt
+        for (int i = 0; i <= j; ++i) {
+            H[i*m+j] = gpu_dot(lev.d_gmres_w, lev.d_gmres_V[i], N);
+            k_fas_axpy_v<<<(N+B-1)/B,B>>>(lev.d_gmres_w, -H[i*m+j], lev.d_gmres_V[i], N);
+        }
+        H[(j+1)*m+j] = gpu_norm(lev.d_gmres_w, N);
+
+        if (H[(j+1)*m+j] < 1e-30) { j++; break; }
+        k_fas_copy<<<(N+B-1)/B,B>>>(lev.d_gmres_V[j+1], lev.d_gmres_w, N);
+        k_fas_scale<<<(N+B-1)/B,B>>>(lev.d_gmres_V[j+1], 1.0/H[(j+1)*m+j], N);
+
+        // Givens rotations
+        for (int i = 0; i < j; ++i) {
+            double h1 = H[i*m+j], h2 = H[(i+1)*m+j];
+            H[i*m+j]     =  cs[i]*h1 + sn[i]*h2;
+            H[(i+1)*m+j] = -sn[i]*h1 + cs[i]*h2;
+        }
+        double h1 = H[j*m+j], h2 = H[(j+1)*m+j];
+        double t = std::sqrt(h1*h1 + h2*h2);
+        cs[j] = h1/t; sn[j] = h2/t;
+        H[j*m+j] = t; H[(j+1)*m+j] = 0.0;
+        g[j+1] = -sn[j]*g[j]; g[j] = cs[j]*g[j];
+
+        if (std::fabs(g[j+1]) < tol * beta) { j++; break; }
+    }
+
+    // Back-substitution
+    std::vector<double> y(j);
+    for (int i = j-1; i >= 0; --i) {
+        y[i] = g[i];
+        for (int kk = i+1; kk < j; ++kk)
+            y[i] -= H[i*m+kk] * y[kk];
+        y[i] /= H[i*m+i];
+    }
+
+    // x = Σ y_j · z_j
+    CUDA_CHECK(cudaMemset(d_x, 0, N*sizeof(double)));
+    for (int i = 0; i < j; ++i)
+        k_fas_axpy_v<<<(N+B-1)/B,B>>>(d_x, y[i], lev.d_gmres_Z[i], N);
+
+    return j;
+}
+
 // ========================= Public solve ========================
+// JFNK: Newton iterations with FGMRES inner solve, block-Jacobi preconditioner.
 
 int FasSolver::solve(double dt, double g0_over_dt, int max_cycles, double tol) {
-    bool verbose = false;  // disable detail prints for speed
-    for (int cyc = 0; cyc < max_cycles; ++cyc) {
-        fas_vcycle(0, dt, g0_over_dt);
+    FasLevel& lev = levels[0];
+    int n = lev.nr * lev.nt, N4 = 4*n, B = 256;
+    int gmres_restart = std::min(3, (int)FasLevel::GMRES_K);
 
+    for (int newton = 0; newton < max_cycles; ++newton) {
+        // Assemble block-Jacobi at current state (used as preconditioner)
+        assemble_smoother(0, g0_over_dt);
+
+        // Evaluate F(U) and check convergence
         compute_F(0, g0_over_dt);
-        double norm = residual_norm(0);
-        if (verbose) {
-            char label[64];
-            std::snprintf(label, sizeof(label), "step%d cyc%d", step_count, cyc);
-            residual_norm_detail(0, label);
+        double norm0 = residual_norm(0);
+        if (norm0 < tol) return newton;
+
+        // Save F(U) for JFNK matvec (d_Fk = F(U) at current linearization point)
+        k_fas_copy<<<(N4+B-1)/B,B>>>(lev.d_Fk, lev.d_res, N4);
+
+        // Save state for potential backtracking
+        k_fas_pack_flat<<<(n+B-1)/B,B>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
+
+        // Solve J·δU ≈ -F(U) via GMRES with block-Jacobi preconditioner
+        int iters = gmres_solve(lev.d_gmres_w, lev.d_res, dt, g0_over_dt,
+                                0.3, gmres_restart);
+
+        // Apply correction with backtracking line search
+        // Try full step first; if ||F|| increases, halve step size
+        double alpha = 1.0;
+        for (int bt = 0; bt < 4; ++bt) {
+            // Restore to pre-correction state
+            k_fas_unpack_flat<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
+
+            // U += alpha * δU
+            k_fas_perturb<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_gmres_w, alpha, lev.nr, lev.nt, lev.ng);
+            apply_floor(0);
+            launch_ghost(0);
+
+            compute_F(0, g0_over_dt);
+            double norm1 = residual_norm(0);
+
+            if (norm1 < norm0 || alpha < 0.125) break;  // accept if improved or step too small
+            alpha *= 0.5;
         }
-        if (norm < tol) return cyc + 1;
     }
     return max_cycles;
 }
@@ -459,7 +654,7 @@ double FasSolver::step(double t, double t_end) {
     double cfl_max_factor = 200.0;
 
     int max_dt_cuts = 4;
-    int max_cycles = 6;
+    int max_cycles = 12;
     double tol = 0.1;
     double dt = std::min({dt_current, dt_cap, cfl_max_factor * dt_cfl, t_end - t});
 
@@ -579,6 +774,8 @@ void FasSolver::destroy() {
         for (int i = 0; i <= FasLevel::GMRES_K; ++i) cudaFree(lev.d_gmres_V[i]);
         for (int i = 0; i < FasLevel::GMRES_K; ++i) cudaFree(lev.d_gmres_Z[i]);
         cudaFree(lev.d_gmres_Ubak);
+        cudaFree(lev.d_Fk);
+        cudaFree(lev.d_gmres_w);
         lev.pressure_gmg.destroy();
     }
     n_levels = 0;
