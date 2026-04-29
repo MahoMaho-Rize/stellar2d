@@ -136,6 +136,9 @@ void k_lm_residual(
     int i = flat/nt, j = flat%nt;
     int n = nr*nt;
 
+    // i==0 handled by k_lm_residual_origin
+    if (i == 0) return;
+
     if (rho0[flat] < atm_thresh) {
         res[flat] = 0.0; res[n+flat] = 0.0;
         res[2*n+flat] = 0.0; res[3*n+flat] = 0.0;
@@ -250,6 +253,121 @@ void k_lm_residual(
     res[3*n + flat] = div[3] - P_c * div_v + S_E;
 }
 
+// ========================= Origin kernel (i=0, divergence theorem) ========
+// Pie-slice cell at r=0: inner face has zero area.
+// Volume-averaged <1/r> = 1.5/r_face[1].
+
+__global__
+void k_lm_residual_origin(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face,
+    const double* theta_face, const double* dr, const double* dtheta,
+    const double* gr, const double* gr0,
+    const double* P0, const double* rho0,
+    double* res,
+    int nr, int nt, int ng, double gamma, double atm_thresh) {
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j >= nt) return;
+    int flat = j;
+    int n = nr*nt;
+
+    if (rho0[flat] < atm_thresh) {
+        res[flat] = 0.0; res[n+flat] = 0.0;
+        res[2*n+flat] = 0.0; res[3*n+flat] = 0.0;
+        return;
+    }
+
+    int k = d_idx(0, j, nt, ng);
+    double invV = 1.0 / vol[flat];
+
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr_c = mr[k] / rho_c;
+    double vt_c = mt[k] / rho_c;
+    double P_c = fmax((gamma - 1.0) * rhoE[k], 1e-30);
+
+    double Ar_hi = ar[1*nt + j];
+    double At_hi = at[0*(nt+1) + j+1], At_lo = at[0*(nt+1) + j];
+
+    auto upwind_r_outer = [&](int jj, int c) -> double {
+        int kl = d_idx(0,jj,nt,ng), kr_k = d_idx(1,jj,nt,ng);
+        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
+        double vf = 0.5*(mr[kl]/rl + mr[kr_k]/rr);
+        double ql, qr;
+        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
+        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
+        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
+        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
+        return vf * (vf >= 0.0 ? ql : qr);
+    };
+    auto upwind_t = [&](int jl, int jr, int c) -> double {
+        int kl = d_idx(0,jl,nt,ng), kr_k = d_idx(0,jr,nt,ng);
+        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
+        double vf = 0.5*(mt[kl]/rl + mt[kr_k]/rr);
+        double ql, qr;
+        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
+        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
+        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
+        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
+        return vf * (vf >= 0.0 ? ql : qr);
+    };
+
+    double div[4];
+    for (int c = 0; c < 4; ++c) {
+        double fr_hi = upwind_r_outer(j, c);
+        double ft_hi = upwind_t(j, j+1, c), ft_lo = upwind_t(j-1, j, c);
+        div[c] = -invV*(Ar_hi*fr_hi + At_hi*ft_hi - At_lo*ft_lo);
+    }
+
+    double Pp_c = P_c - P0[flat];
+    double rhop_c = rho_c - rho0[flat];
+    double g0_r = gr0[0];
+
+    double dh = r_center[1] - r_center[0];
+    double Pp_p = fmax((gamma-1.0)*rhoE[d_idx(1,j,nt,ng)],1e-30) - P0[1*nt+j];
+    double dPp_dr = (Pp_p - Pp_c) / dh;
+
+    double r = r_center[0];
+    double dPp_dt_r = 0;
+    if (j > 0 && j < nt-1 && r > 1e-14) {
+        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
+        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
+        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
+        double dl=tc_c-tc_m, dhh=tc_p-tc_c;
+        double Pp_m = fmax((gamma-1.0)*rhoE[d_idx(0,j-1,nt,ng)],1e-30) - P0[j-1];
+        double Pp_pp = fmax((gamma-1.0)*rhoE[d_idx(0,j+1,nt,ng)],1e-30) - P0[j+1];
+        dPp_dt_r = ((dhh*(Pp_c-Pp_m)/dl + dl*(Pp_pp-Pp_c)/dhh))/(r*(dl+dhh));
+    }
+
+    double gp_r = gr[0] - g0_r;
+
+    double r_out = r_face[1];
+    double inv_r_avg = (r_out > 1e-30) ? 1.5 / r_out : 0.0;
+    double S_mr = rho_c * vt_c * vt_c * inv_r_avg;
+    double S_mt = -rho_c * vr_c * vt_c * inv_r_avg;
+
+    double force_r = -dPp_dr + rhop_c*g0_r + rho_c*gp_r;
+    double force_t = -dPp_dt_r;
+
+    double S_E = rho_c * vr_c * (g0_r + gp_r);
+
+    double rl = fmax(rho[d_idx(0,j,nt,ng)],1e-20);
+    double rr = fmax(rho[d_idx(1,j,nt,ng)],1e-20);
+    double vr_outer = 0.5*(mr[d_idx(0,j,nt,ng)]/rl + mr[d_idx(1,j,nt,ng)]/rr);
+    auto vt_face_f = [&](int jl, int jr) -> double {
+        double rll = fmax(rho[d_idx(0,jl,nt,ng)],1e-20);
+        double rrr = fmax(rho[d_idx(0,jr,nt,ng)],1e-20);
+        return 0.5*(mt[d_idx(0,jl,nt,ng)]/rll + mt[d_idx(0,jr,nt,ng)]/rrr);
+    };
+    double div_v = invV*(Ar_hi*vr_outer
+        + At_hi*vt_face_f(j,j+1) - At_lo*vt_face_f(j-1,j));
+
+    res[flat]       = div[0];
+    res[n + flat]   = div[1] + force_r + S_mr;
+    res[2*n + flat] = div[2] + force_t + S_mt;
+    res[3*n + flat] = div[3] - P_c * div_v + S_E;
+}
+
 // ========================= Pack / unpack (5-DOF: ρ, mr, mt, ρe, Φ) =
 
 __global__
@@ -355,13 +473,11 @@ void k_lm_floor(double* rho, double* mr, double* mt, double* rhoE,
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int k = d_idx(flat/nt, flat%nt, nt, ng);
-    if (rho[k] < rho_fl) {
-        rho[k] = rho_fl; mr[k] = 0.0; mt[k] = 0.0;
-        rhoE[k] = P_fl / (gamma - 1.0);
-    }
+    double r = rho[k];
+    rho[k] = 0.5 * (r + sqrt(r*r + 4.0*rho_fl*rho_fl));
     double P = (gamma - 1.0) * rhoE[k];
-    if (P < P_fl)
-        rhoE[k] = P_fl / (gamma - 1.0);
+    double P_s = 0.5 * (P + sqrt(P*P + 4.0*P_fl*P_fl));
+    rhoE[k] = P_s / (gamma - 1.0);
 }
 
 // Freeze atmosphere cells to HSE reference state.
@@ -589,6 +705,13 @@ void LowMachSolver::compute_residual(double* d_res) {
         d_r_center,d_r_face,d_theta_face,d_dr,d_dtheta,
         d_gr, d_gr0, d_P0, d_rho0,
         d_grad_r_wm, d_grad_r_wp, d_grad_t_wm, d_grad_t_wp,
+        d_residual,
+        nr,nt,ng,gamma, atm_rho_thresh);
+    k_lm_residual_origin<<<(nt+B-1)/B,B>>>(
+        d_rho,d_mr,d_mtheta,d_rhoE,
+        d_cell_volume,d_area_r,d_area_theta,
+        d_r_center,d_r_face,d_theta_face,d_dr,d_dtheta,
+        d_gr, d_gr0, d_P0, d_rho0,
         d_residual,
         nr,nt,ng,gamma, atm_rho_thresh);
 }
@@ -2090,24 +2213,26 @@ int LowMachSolver::gmres_solve(double* d_x, const double* d_b, double dt,
     return j;
 }
 
-// ========================= CFL (advection only) ===================
+// ========================= CFL (|v| + cs signal speed) ============
 
 __global__
 void k_lm_cfl(const double* rho, const double* mr, const double* mt,
+              const double* rhoE,
               const double* dr, const double* rc, const double* dtheta,
               const double* rho0, double* out,
-              int nr, int nt, int ng, double atm_thresh) {
+              int nr, int nt, int ng, double gam, double atm_thresh) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    // Skip atmosphere cells — they're frozen, their velocity is meaningless
     if (rho0[flat] < atm_thresh) { out[flat] = 1e30; return; }
     int i = flat/nt, j = flat%nt;
     int k = d_idx(i,j,nt,ng);
-    double r = fmax(rho[k], 1e-20);
-    double vr = fabs(mr[k] / r);
-    double vt = fabs(mt[k] / r);
-    double dt_r = dr[i] / fmax(vr, 1e-20);
-    double dt_t = rc[i] * dtheta[j] / fmax(vt, 1e-20);
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k] / rho_c);
+    double vt = fabs(mt[k] / rho_c);
+    double P = fmax((gam-1.0)*rhoE[k], 1e-30);
+    double cs = sqrt(gam * P / rho_c);
+    double dt_r = dr[i] / (vr + cs);
+    double dt_t = rc[i] * dtheta[j] / (vt + cs);
     out[flat] = fmin(dt_r, dt_t);
 }
 
@@ -2126,8 +2251,9 @@ void k_lm_reduce_min(const double* in, double* out, int n) {
 
 double LowMachSolver::compute_cfl_dt() {
     int n = nr*nt, B = 256;
-    k_lm_cfl<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta, d_dr,d_r_center,d_dtheta,
-                                d_rho0, d_work_a, nr,nt,ng, atm_rho_thresh);
+    k_lm_cfl<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,
+                                d_dr,d_r_center,d_dtheta,
+                                d_rho0, d_work_a, nr,nt,ng, gamma, atm_rho_thresh);
     int cur = n;
     double *src = d_work_a, *dst = d_work_b;
     while (cur > 1) {
@@ -2159,7 +2285,9 @@ double LowMachSolver::step(double t, double t_end) {
 
     double dt_cap = 1.0;
     if (dt_current < 1e-30) dt_current = 1e-6;
-    double dt = std::min({dt_current, dt_cap, t_end - t});
+    double dt_cfl = compute_cfl_dt();
+    double cfl_max_factor = 20.0;
+    double dt = std::min({dt_current, dt_cap, cfl_max_factor * dt_cfl, t_end - t});
 
     // Save U^{n-1} before overwriting d_Un
     int n5 = 5*nr*nt;

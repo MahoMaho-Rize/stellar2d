@@ -26,6 +26,71 @@ int fas_idx(int i, int j, int nt, int ng) {
     return (i + ng) * (nt + 2 * ng) + (j + ng);
 }
 
+// ========================= MUSCL + HLLC (inline) ===================
+
+struct FPrim { double rho, vr, vt, P; };
+struct FFlux4 { double f_rho, f_mr, f_mt, f_E; };
+
+__device__ __forceinline__
+double fas_minmod(double a, double b) {
+    return (a*b <= 0.0) ? 0.0 : (fabs(a) < fabs(b) ? a : b);
+}
+
+__device__ __forceinline__
+void fas_recon(double vm1, double v0, double vp1, double vp2,
+               double& L, double& R) {
+    L = v0   + 0.5 * fas_minmod(v0 - vm1, vp1 - v0);
+    R = vp1  - 0.5 * fas_minmod(vp1 - v0, vp2 - vp1);
+}
+
+__device__
+FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
+    double rhol=wl.rho, rhor=wr.rho, pl=wl.P, pr=wr.P;
+    double ul = radial ? wl.vr : wl.vt;
+    double ur = radial ? wr.vr : wr.vt;
+    double vtl = radial ? wl.vt : wl.vr;
+    double vtr = radial ? wr.vt : wr.vr;
+
+    double cl = sqrt(gamma*pl/rhol), cr = sqrt(gamma*pr/rhor);
+    double sl = fmin(ul-cl, ur-cr), sr = fmax(ul+cl, ur+cr);
+    double denom = rhol*(sl-ul) - rhor*(sr-ur);
+    if (fabs(denom) < 1e-300) denom = -1e-300;
+    double s_star = (pr-pl + rhol*ul*(sl-ul) - rhor*ur*(sr-ur)) / denom;
+
+    auto phys_flux = [&](double rho, double u, double vt, double p) -> FFlux4 {
+        double E = p/(gamma-1.0) + 0.5*rho*(u*u + vt*vt);
+        FFlux4 f;
+        f.f_rho = rho*u;
+        if (radial) { f.f_mr = rho*u*u+p; f.f_mt = rho*u*vt; }
+        else        { f.f_mr = rho*u*vt;  f.f_mt = rho*u*u+p; }
+        f.f_E = (E+p)*u;
+        return f;
+    };
+
+    auto star_flux = [&](double rho, double u, double vt, double p,
+                         double sk, FFlux4 fk) -> FFlux4 {
+        double E = p/(gamma-1.0) + 0.5*rho*(u*u+vt*vt);
+        double ratio = rho*(sk-u)/(sk-s_star);
+        double E_star = ratio*(E/rho + (s_star-u)*(s_star + p/(rho*(sk-u))));
+        FFlux4 f;
+        f.f_rho = fk.f_rho + sk*(ratio-rho);
+        if (radial) {
+            f.f_mr = fk.f_mr + sk*(ratio*s_star - rho*u);
+            f.f_mt = fk.f_mt + sk*(ratio*vt - rho*vt);
+        } else {
+            f.f_mr = fk.f_mr + sk*(ratio*vt - rho*vt);
+            f.f_mt = fk.f_mt + sk*(ratio*s_star - rho*u);
+        }
+        f.f_E = fk.f_E + sk*(E_star-E);
+        return f;
+    };
+
+    if (sl >= 0.0) return phys_flux(rhol,ul,vtl,pl);
+    else if (s_star >= 0.0) { auto fl=phys_flux(rhol,ul,vtl,pl); return star_flux(rhol,ul,vtl,pl,sl,fl); }
+    else if (sr >= 0.0) { auto fr=phys_flux(rhor,ur,vtr,pr); return star_flux(rhor,ur,vtr,pr,sr,fr); }
+    else return phys_flux(rhor,ur,vtr,pr);
+}
+
 // ========================= Ghost cells ============================
 
 __global__ void k_fas_ghost_r_in(double* rho, double* mr, double* mt, double* rhoE,
@@ -138,7 +203,7 @@ void k_fas_residual(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, double gam, double atm_thresh,
-    int use_wellbalance) {
+    int use_wellbalance, int use_hllc) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
@@ -156,88 +221,171 @@ void k_fas_residual(
     double rho_c = fmax(rho[k], 1e-20);
     double vr_c = mr[k] / rho_c;
     double vt_c = mt[k] / rho_c;
-    double e_c = rhoE[k] / rho_c;
-    double P_c = fmax((gam - 1.0) * rho_c * e_c, 1e-30);
+    double P_c = fmax((gam - 1.0) * rhoE[k], 1e-30);
     double r = r_center[i];
 
-    auto upwind_r = [&](int il, int ir, int jj, int c) -> double {
-        int kl = fas_idx(il,jj,nt,ng), kr_k = fas_idx(ir,jj,nt,ng);
-        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
-        double vf = 0.5*(mr[kl]/rl + mr[kr_k]/rr);
-        double ql, qr;
-        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
-        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
-        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
-        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
-        return vf * (vf >= 0.0 ? ql : qr);
+    // ===== Donor-cell fallback (used by implicit smoother) =====
+    if (!use_hllc) {
+        int wb = use_wellbalance;
+        auto upwind_r = [&](int il, int ir, int jj, int c) -> double {
+            int kl = fas_idx(il,jj,nt,ng), kr_k = fas_idx(ir,jj,nt,ng);
+            double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
+            double vf = 0.5*(mr[kl]/rl + mr[kr_k]/rr);
+            double ql, qr;
+            if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
+            else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
+            else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
+            else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
+            return vf * (vf >= 0.0 ? ql : qr);
+        };
+        auto upwind_t = [&](int ii, int jl, int jr, int c) -> double {
+            int kl = fas_idx(ii,jl,nt,ng), kr_k = fas_idx(ii,jr,nt,ng);
+            double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
+            double vf = 0.5*(mt[kl]/rl + mt[kr_k]/rr);
+            double ql, qr;
+            if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
+            else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
+            else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
+            else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
+            return vf * (vf >= 0.0 ? ql : qr);
+        };
+        double Ar_hi=ar[(i+1)*nt+j], Ar_lo=ar[i*nt+j];
+        double At_hi=at[i*(nt+1)+j+1], At_lo=at[i*(nt+1)+j];
+        double div[4];
+        for (int c = 0; c < 4; ++c) {
+            double fr_hi = upwind_r(i,i+1,j,c), fr_lo = upwind_r(i-1,i,j,c);
+            double ft_hi = upwind_t(i,j,j+1,c), ft_lo = upwind_t(i,j-1,j,c);
+            div[c] = -invV*(Ar_hi*fr_hi - Ar_lo*fr_lo + At_hi*ft_hi - At_lo*ft_lo);
+        }
+        double P_ref = wb ? P0[flat] : 0.0;
+        double rho_ref = wb ? rho0[flat] : 0.0;
+        double g0_r = wb ? gr0[i] : 0.0;
+        double Pp_c = P_c - P_ref, rhop_c = rho_c - rho_ref;
+        double dPp_dr = 0;
+        if (i < nr-1) {
+            double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i-1,j,nt,ng)],1e-30) - (wb?P0[(i-1)*nt+j]:0.0);
+            double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i+1,j,nt,ng)],1e-30) - (wb?P0[(i+1)*nt+j]:0.0);
+            double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
+            dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh)/(dl+dh);
+        } else {
+            double dl=r_center[nr-1]-r_center[nr-2];
+            dPp_dr = (Pp_c-(fmax((gam-1.0)*rhoE[fas_idx(nr-2,j,nt,ng)],1e-30)-(wb?P0[(nr-2)*nt+j]:0.0)))/dl;
+        }
+        double dPp_dt_r = 0;
+        if (j > 0 && j < nt-1) {
+            double tc_m=0.5*(theta_face[j-1]+theta_face[j]), tc_c=0.5*(theta_face[j]+theta_face[j+1]), tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
+            double dl=tc_c-tc_m, dh=tc_p-tc_c;
+            double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i,j-1,nt,ng)],1e-30) - (wb?P0[i*nt+j-1]:0.0);
+            double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i,j+1,nt,ng)],1e-30) - (wb?P0[i*nt+j+1]:0.0);
+            dPp_dt_r = ((dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh))/(r*(dl+dh));
+        }
+        double gp_r = gr[i] - g0_r;
+        double inv_r = 1.0/r;
+        auto vr_ff = [&](int il, int ir, int jj) -> double {
+            double rl=fmax(rho[fas_idx(il,jj,nt,ng)],1e-20), rr=fmax(rho[fas_idx(ir,jj,nt,ng)],1e-20);
+            return 0.5*(mr[fas_idx(il,jj,nt,ng)]/rl + mr[fas_idx(ir,jj,nt,ng)]/rr);
+        };
+        auto vt_ff = [&](int ii, int jl, int jr) -> double {
+            double rl=fmax(rho[fas_idx(ii,jl,nt,ng)],1e-20), rr=fmax(rho[fas_idx(ii,jr,nt,ng)],1e-20);
+            return 0.5*(mt[fas_idx(ii,jl,nt,ng)]/rl + mt[fas_idx(ii,jr,nt,ng)]/rr);
+        };
+        double div_v = invV*(Ar_hi*vr_ff(i,i+1,j)-Ar_lo*vr_ff(i-1,i,j)+At_hi*vt_ff(i,j,j+1)-At_lo*vt_ff(i,j-1,j));
+        res[flat]       = div[0];
+        res[n + flat]   = div[1] + (-dPp_dr + rhop_c*g0_r + rho_c*gp_r) + rho_c*vt_c*vt_c*inv_r;
+        res[2*n + flat] = div[2] + (-dPp_dt_r) + (-rho_c*vr_c*vt_c*inv_r);
+        res[3*n + flat] = div[3] - P_c*div_v + rho_c*vr_c*(g0_r+gp_r);
+        return;
+    }
+
+    // ===== WB-MUSCL+HLLC face fluxes =====
+    // Helper: primitives from FAS state (rhoE = internal energy density ρe)
+    auto W = [&](int ii, int jj) -> FPrim {
+        int kk = fas_idx(ii,jj,nt,ng);
+        double r_ = fmax(rho[kk], 1e-20);
+        FPrim w;
+        w.rho = r_;
+        w.vr = mr[kk] / r_;
+        w.vt = mt[kk] / r_;
+        w.P = fmax((gam - 1.0) * rhoE[kk], 1e-30);
+        return w;
     };
-    auto upwind_t = [&](int ii, int jl, int jr, int c) -> double {
-        int kl = fas_idx(ii,jl,nt,ng), kr_k = fas_idx(ii,jr,nt,ng);
-        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
-        double vf = 0.5*(mt[kl]/rl + mt[kr_k]/rr);
-        double ql, qr;
-        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
-        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
-        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
-        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
-        return vf * (vf >= 0.0 ? ql : qr);
+    int wb = use_wellbalance;
+    auto P0r = [&](int ii) -> double { return wb ? P0[max(0,min(ii,nr-1))*nt+j] : 0.0; };
+    auto r0r = [&](int ii) -> double { return wb ? rho0[max(0,min(ii,nr-1))*nt+j] : 0.0; };
+    auto P0t = [&](int jj) -> double { return wb ? P0[i*nt+max(0,min(jj,nt-1))] : 0.0; };
+    auto r0t = [&](int jj) -> double { return wb ? rho0[i*nt+max(0,min(jj,nt-1))] : 0.0; };
+
+    // --- r-direction faces ---
+    auto hllc_r_face = [&](int face_i) -> FFlux4 {
+        FPrim wa=W(face_i-2,j), wb_=W(face_i-1,j), wc=W(face_i,j), wd=W(face_i+1,j);
+        double ppL,ppR,rpL,rpR;
+        fas_recon(wa.P-P0r(face_i-2), wb_.P-P0r(face_i-1), wc.P-P0r(face_i), wd.P-P0r(face_i+1), ppL, ppR);
+        fas_recon(wa.rho-r0r(face_i-2), wb_.rho-r0r(face_i-1), wc.rho-r0r(face_i), wd.rho-r0r(face_i+1), rpL, rpR);
+        double P0f = 0.5*(P0r(face_i-1)+P0r(face_i)), r0f = 0.5*(r0r(face_i-1)+r0r(face_i));
+        FPrim wl, wr;
+        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr);
+        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt);
+        wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
+        wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
+        return fas_hllc(wl, wr, gam, true);
     };
+    FFlux4 fr_hi = hllc_r_face(i+1);
+    FFlux4 fr_lo = hllc_r_face(i);
+
+    // --- θ-direction faces ---
+    auto hllc_t_face = [&](int face_j) -> FFlux4 {
+        FPrim wa=W(i,face_j-2), wb_=W(i,face_j-1), wc=W(i,face_j), wd=W(i,face_j+1);
+        double ppL,ppR,rpL,rpR;
+        fas_recon(wa.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc.P-P0t(face_j), wd.P-P0t(face_j+1), ppL, ppR);
+        fas_recon(wa.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc.rho-r0t(face_j), wd.rho-r0t(face_j+1), rpL, rpR);
+        double P0f = 0.5*(P0t(face_j-1)+P0t(face_j)), r0f = 0.5*(r0t(face_j-1)+r0t(face_j));
+        FPrim wl, wr;
+        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr);
+        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt);
+        wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
+        wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
+        return fas_hllc(wl, wr, gam, false);
+    };
+    FFlux4 ft_hi = hllc_t_face(j+1);
+    FFlux4 ft_lo = hllc_t_face(j);
 
     double Ar_hi=ar[(i+1)*nt+j], Ar_lo=ar[i*nt+j];
     double At_hi=at[i*(nt+1)+j+1], At_lo=at[i*(nt+1)+j];
 
-    double div[4];
-    for (int c = 0; c < 4; ++c) {
-        double fr_hi = upwind_r(i,i+1,j,c), fr_lo = upwind_r(i-1,i,j,c);
-        double ft_hi = upwind_t(i,j,j+1,c), ft_lo = upwind_t(i,j-1,j,c);
-        div[c] = -invV*(Ar_hi*fr_hi - Ar_lo*fr_lo + At_hi*ft_hi - At_lo*ft_lo);
-    }
+    // HLLC energy flux is total energy; convert to internal energy divergence:
+    // ∇·(ρe·v) = ∇·((E-½ρv²)·v) ... but easier: just use the HLLC fluxes for
+    // ρ, mr, mt directly, and for energy use the total-E flux then subtract
+    // the kinetic energy flux contribution via the Pdv term.
+    // Actually: FAS tracks ρe. The correct conservation form is:
+    //   ∂(ρe)/∂t + ∇·(ρe·v) = -P∇·v + ρv·g
+    // HLLC gives fluxes of (ρ, ρv_r, ρv_θ, E) where E = ρe + ½ρv².
+    // We use: ∇·(ρe·v) = ∇·(E·v) - ∇·(½ρv²·v) = ∇·(E·v) - (½v²)·∇·(ρv) - ρv·∇(½v²)
+    // This gets complicated. Simpler: use HLLC only for ρ, ρvr, ρvθ (first 3 equations).
+    // For energy: keep the existing P∇·v form but with HLLC-derived div_v.
+    // Full WB-HLLC for ρ, mr, mt. HSE defect subtraction ensures R(U₀)=0.
+    // HLLC reconstructs P'=P-P₀, ρ'=ρ-ρ₀ → flux is intrinsically WB.
+    double div_rho = -invV*(Ar_hi*fr_hi.f_rho - Ar_lo*fr_lo.f_rho
+                           + At_hi*ft_hi.f_rho - At_lo*ft_lo.f_rho);
+    double div_mr  = -invV*(Ar_hi*fr_hi.f_mr  - Ar_lo*fr_lo.f_mr
+                           + At_hi*ft_hi.f_mr  - At_lo*ft_lo.f_mr);
+    double div_mt  = -invV*(Ar_hi*fr_hi.f_mt  - Ar_lo*fr_lo.f_mt
+                           + At_hi*ft_hi.f_mt  - At_lo*ft_lo.f_mt);
 
-    double P_ref = wb_local ? P0[flat] : 0.0;
-    double rho_ref = wb_local ? rho0[flat] : 0.0;
-    double g0_r = wb_local ? gr0[i] : 0.0;
-
-    double Pp_c = P_c - P_ref;
+    // Gravity (not in HLLC flux — added as source)
+    double rho_ref = wb ? rho0[flat] : 0.0;
+    double g0_r = wb ? gr0[i] : 0.0;
     double rhop_c = rho_c - rho_ref;
-
-    double dPp_dr = 0;
-    if (i < nr-1) {
-        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i-1,j,nt,ng)],1e-30)
-                      - (wb_local ? P0[(i-1)*nt+j] : 0.0);
-        double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i+1,j,nt,ng)],1e-30)
-                      - (wb_local ? P0[(i+1)*nt+j] : 0.0);
-        double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
-        dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh) / (dl+dh);
-    } else {
-        double dl = r_center[nr-1]-r_center[nr-2];
-        dPp_dr = (Pp_c - (fmax((gam-1.0)*rhoE[fas_idx(nr-2,j,nt,ng)],1e-30)
-                  - (wb_local ? P0[(nr-2)*nt+j] : 0.0)))/dl;
-    }
-
-    double dPp_dt_r = 0;
-    if (j > 0 && j < nt-1) {
-        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
-        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
-        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-        double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i,j-1,nt,ng)],1e-30)
-                      - (wb_local ? P0[i*nt+j-1] : 0.0);
-        double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i,j+1,nt,ng)],1e-30)
-                      - (wb_local ? P0[i*nt+j+1] : 0.0);
-        dPp_dt_r = ((dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh))/(r*(dl+dh));
-    }
-
     double gp_r = gr[i] - g0_r;
+    double gravity_r = rhop_c*g0_r + rho_c*gp_r;
 
+    // Geometric source
     double inv_r = 1.0 / r;
     double S_mr = rho_c * vt_c * vt_c * inv_r;
     double S_mt = -rho_c * vr_c * vt_c * inv_r;
 
-    double force_r = -dPp_dr + rhop_c*g0_r + rho_c*gp_r;
-    double force_t = -dPp_dt_r;
-
     double S_E = rho_c * vr_c * (g0_r + gp_r);
 
+    // Internal energy: ∂(ρe)/∂t + ∇·(ρe·v) = -P∇·v + ρv·g
     auto vr_face_f = [&](int il, int ir, int jj) -> double {
         double rl = fmax(rho[fas_idx(il,jj,nt,ng)],1e-20);
         double rr = fmax(rho[fas_idx(ir,jj,nt,ng)],1e-20);
@@ -248,14 +396,26 @@ void k_fas_residual(
         double rr = fmax(rho[fas_idx(ii,jr,nt,ng)],1e-20);
         return 0.5*(mt[fas_idx(ii,jl,nt,ng)]/rl + mt[fas_idx(ii,jr,nt,ng)]/rr);
     };
-    double div_v = invV*(
-        Ar_hi*vr_face_f(i,i+1,j) - Ar_lo*vr_face_f(i-1,i,j) +
-        At_hi*vt_face_f(i,j,j+1) - At_lo*vt_face_f(i,j-1,j));
+    double vr_rhi = vr_face_f(i,i+1,j), vr_rlo = vr_face_f(i-1,i,j);
+    double vt_thi = vt_face_f(i,j,j+1), vt_tlo = vt_face_f(i,j-1,j);
+    double div_v = invV*(Ar_hi*vr_rhi - Ar_lo*vr_rlo + At_hi*vt_thi - At_lo*vt_tlo);
 
-    res[flat]       = div[0];
-    res[n + flat]   = div[1] + force_r + S_mr;
-    res[2*n + flat] = div[2] + force_t + S_mt;
-    res[3*n + flat] = div[3] - P_c * div_v + S_E;
+    auto rhoe_upwind_r = [&](int il, int ir, int jj, double vf) -> double {
+        double el = rhoE[fas_idx(il,jj,nt,ng)], er = rhoE[fas_idx(ir,jj,nt,ng)];
+        return vf * (vf >= 0.0 ? el : er);
+    };
+    auto rhoe_upwind_t = [&](int ii, int jl, int jr, double vf) -> double {
+        double el = rhoE[fas_idx(ii,jl,nt,ng)], er = rhoE[fas_idx(ii,jr,nt,ng)];
+        return vf * (vf >= 0.0 ? el : er);
+    };
+    double div_rhoE = -invV*(
+        Ar_hi*rhoe_upwind_r(i,i+1,j,vr_rhi) - Ar_lo*rhoe_upwind_r(i-1,i,j,vr_rlo) +
+        At_hi*rhoe_upwind_t(i,j,j+1,vt_thi) - At_lo*rhoe_upwind_t(i,j-1,j,vt_tlo));
+
+    res[flat]       = div_rho;
+    res[n + flat]   = div_mr + gravity_r + S_mr;
+    res[2*n + flat] = div_mt + S_mt;
+    res[3*n + flat] = div_rhoE - P_c * div_v + S_E;
 }
 
 // ========================= Origin kernel (i=0, divergence theorem) ========
@@ -289,102 +449,86 @@ void k_fas_residual_origin(
     double rho_c = fmax(rho[k], 1e-20);
     double vr_c = mr[k] / rho_c;
     double vt_c = mt[k] / rho_c;
-    double e_c = rhoE[k] / rho_c;
-    double P_c = fmax((gam - 1.0) * rho_c * e_c, 1e-30);
+    double P_c = fmax((gam - 1.0) * rhoE[k], 1e-30);
 
-    // Outer radial face flux only — inner face at r=0 has zero area
-    double Ar_hi = ar[1*nt + j];  // area of face at r_face[1]
-    // At faces for θ direction (same as standard)
+    double Ar_hi = ar[1*nt + j];
     double At_hi = at[0*(nt+1) + j+1], At_lo = at[0*(nt+1) + j];
 
-    // Advective fluxes: only outer r-face contributes in r-direction
-    auto upwind_r_outer = [&](int jj, int c) -> double {
-        int kl = fas_idx(0,jj,nt,ng), kr_k = fas_idx(1,jj,nt,ng);
-        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
-        double vf = 0.5*(mr[kl]/rl + mr[kr_k]/rr);
-        double ql, qr;
-        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
-        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
-        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
-        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
-        return vf * (vf >= 0.0 ? ql : qr);
+    // Helper to get primitives
+    auto W = [&](int ii, int jj) -> FPrim {
+        int kk = fas_idx(ii,jj,nt,ng);
+        double r_ = fmax(rho[kk], 1e-20);
+        FPrim w; w.rho = r_; w.vr = mr[kk]/r_; w.vt = mt[kk]/r_;
+        w.P = fmax((gam-1.0)*rhoE[kk], 1e-30); return w;
     };
-    auto upwind_t = [&](int jl, int jr, int c) -> double {
-        int kl = fas_idx(0,jl,nt,ng), kr_k = fas_idx(0,jr,nt,ng);
-        double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
-        double vf = 0.5*(mt[kl]/rl + mt[kr_k]/rr);
-        double ql, qr;
-        if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
-        else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
-        else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
-        else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
-        return vf * (vf >= 0.0 ? ql : qr);
-    };
+    int wb = use_wellbalance;
+    auto P0r = [&](int ii) -> double { return wb ? P0[max(0,min(ii,nr-1))*nt+j] : 0.0; };
+    auto r0r = [&](int ii) -> double { return wb ? rho0[max(0,min(ii,nr-1))*nt+j] : 0.0; };
+    auto P0t = [&](int jj) -> double { return wb ? P0[max(0,min(jj,nt-1))] : 0.0; };
+    auto r0t = [&](int jj) -> double { return wb ? rho0[max(0,min(jj,nt-1))] : 0.0; };
 
-    double div[4];
-    for (int c = 0; c < 4; ++c) {
-        double fr_hi = upwind_r_outer(j, c);
-        // Inner face: zero area → zero flux
-        double ft_hi = upwind_t(j, j+1, c), ft_lo = upwind_t(j-1, j, c);
-        div[c] = -invV*(Ar_hi*fr_hi + At_hi*ft_hi - At_lo*ft_lo);
+    // Outer r-face: first-order HLLC (no MUSCL, stencil too short at origin)
+    {
+        FPrim wl = W(0,j), wr = W(1,j);
+        double P0f = 0.5*(P0r(0)+P0r(1)), r0f = 0.5*(r0r(0)+r0r(1));
+        wl.P = fmax(P0f + (wl.P - P0r(0)), 1e-30);
+        wr.P = fmax(P0f + (wr.P - P0r(1)), 1e-30);
+        wl.rho = fmax(r0f + (wl.rho - r0r(0)), 1e-20);
+        wr.rho = fmax(r0f + (wr.rho - r0r(1)), 1e-20);
+        FFlux4 fr_hi = fas_hllc(wl, wr, gam, true);
+
+        // θ-face fluxes: MUSCL where stencil allows
+        auto hllc_t_face = [&](int face_j) -> FFlux4 {
+            FPrim wa_=W(0,face_j-2), wb_=W(0,face_j-1), wc_=W(0,face_j), wd_=W(0,face_j+1);
+            double ppL,ppR,rpL,rpR;
+            fas_recon(wa_.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc_.P-P0t(face_j), wd_.P-P0t(face_j+1), ppL, ppR);
+            fas_recon(wa_.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc_.rho-r0t(face_j), wd_.rho-r0t(face_j+1), rpL, rpR);
+            double P0ff = 0.5*(P0t(face_j-1)+P0t(face_j)), r0ff = 0.5*(r0t(face_j-1)+r0t(face_j));
+            FPrim wll, wrr;
+            fas_recon(wa_.vr, wb_.vr, wc_.vr, wd_.vr, wll.vr, wrr.vr);
+            fas_recon(wa_.vt, wb_.vt, wc_.vt, wd_.vt, wll.vt, wrr.vt);
+            wll.rho = fmax(r0ff+rpL, 1e-20); wrr.rho = fmax(r0ff+rpR, 1e-20);
+            wll.P = fmax(P0ff+ppL, 1e-30); wrr.P = fmax(P0ff+ppR, 1e-30);
+            return fas_hllc(wll, wrr, gam, false);
+        };
+        FFlux4 ft_hi = hllc_t_face(j+1);
+        FFlux4 ft_lo = hllc_t_face(j);
+
+        // Full WB-HLLC for ρ, mr, mt (same as main kernel)
+        double div_rho = -invV*(Ar_hi*fr_hi.f_rho + At_hi*ft_hi.f_rho - At_lo*ft_lo.f_rho);
+        double div_mr  = -invV*(Ar_hi*fr_hi.f_mr  + At_hi*ft_hi.f_mr  - At_lo*ft_lo.f_mr);
+        double div_mt  = -invV*(Ar_hi*fr_hi.f_mt  + At_hi*ft_hi.f_mt  - At_lo*ft_lo.f_mt);
+
+        double rho_ref = wb ? rho0[flat] : 0.0;
+        double g0_r = wb ? gr0[0] : 0.0;
+        double rhop_c = rho_c - rho_ref;
+        double gp_r = gr[0] - g0_r;
+        double gravity_r = rhop_c*g0_r + rho_c*gp_r;
+
+        double r_out = r_face[1];
+        double inv_r_avg = (r_out > 1e-30) ? 1.5 / r_out : 0.0;
+        double S_mr = rho_c * vt_c * vt_c * inv_r_avg;
+        double S_mt = -rho_c * vr_c * vt_c * inv_r_avg;
+
+        double S_E = rho_c * vr_c * (g0_r + gp_r);
+
+        double rl_ = fmax(rho[fas_idx(0,j,nt,ng)],1e-20);
+        double rr_ = fmax(rho[fas_idx(1,j,nt,ng)],1e-20);
+        double vr_outer = 0.5*(mr[fas_idx(0,j,nt,ng)]/rl_ + mr[fas_idx(1,j,nt,ng)]/rr_);
+        auto vt_face_f = [&](int jl, int jr) -> double {
+            double rll = fmax(rho[fas_idx(0,jl,nt,ng)],1e-20);
+            double rrr = fmax(rho[fas_idx(0,jr,nt,ng)],1e-20);
+            return 0.5*(mt[fas_idx(0,jl,nt,ng)]/rll + mt[fas_idx(0,jr,nt,ng)]/rrr);
+        };
+        double div_v = invV*(Ar_hi*vr_outer
+            + At_hi*vt_face_f(j,j+1) - At_lo*vt_face_f(j-1,j));
+
+        res[flat]       = div_rho;
+        res[n + flat]   = div_mr + gravity_r + S_mr;
+        res[2*n + flat] = div_mt + S_mt;
+        res[3*n + flat] = -P_c * div_v + S_E;
+        return;
     }
-
-    // Pressure gradient: one-sided (only neighbor at i=1 exists)
-    double P_ref = use_wellbalance ? P0[flat] : 0.0;
-    double rho_ref = use_wellbalance ? rho0[flat] : 0.0;
-    double g0_r = use_wellbalance ? gr0[0] : 0.0;
-
-    double Pp_c = P_c - P_ref;
-    double rhop_c = rho_c - rho_ref;
-
-    double dh = r_center[1] - r_center[0];
-    double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(1,j,nt,ng)],1e-30)
-                  - (use_wellbalance ? P0[1*nt+j] : 0.0);
-    double dPp_dr = (Pp_p - Pp_c) / dh;
-
-    double r = r_center[0];
-    double dPp_dt_r = 0;
-    if (j > 0 && j < nt-1 && r > 1e-14) {
-        double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
-        double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
-        double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-        double dl=tc_c-tc_m, dhh=tc_p-tc_c;
-        double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(0,j-1,nt,ng)],1e-30)
-                      - (use_wellbalance ? P0[j-1] : 0.0);
-        double Pp_pp = fmax((gam-1.0)*rhoE[fas_idx(0,j+1,nt,ng)],1e-30)
-                      - (use_wellbalance ? P0[j+1] : 0.0);
-        dPp_dt_r = ((dhh*(Pp_c-Pp_m)/dl + dl*(Pp_pp-Pp_c)/dhh))/(r*(dl+dhh));
-    }
-
-    double gp_r = gr[0] - g0_r;
-
-    // Volume-averaged <1/r> = 3/(2*r_face[1]) for the pie-slice cell
-    double r_out = r_face[1];
-    double inv_r_avg = (r_out > 1e-30) ? 1.5 / r_out : 0.0;
-    double S_mr = rho_c * vt_c * vt_c * inv_r_avg;
-    double S_mt = -rho_c * vr_c * vt_c * inv_r_avg;
-
-    double force_r = -dPp_dr + rhop_c*g0_r + rho_c*gp_r;
-    double force_t = -dPp_dt_r;
-
-    double S_E = rho_c * vr_c * (g0_r + gp_r);
-
-    // div_v using divergence theorem: only outer r-face
-    double rl = fmax(rho[fas_idx(0,j,nt,ng)],1e-20);
-    double rr = fmax(rho[fas_idx(1,j,nt,ng)],1e-20);
-    double vr_outer = 0.5*(mr[fas_idx(0,j,nt,ng)]/rl + mr[fas_idx(1,j,nt,ng)]/rr);
-    auto vt_face_f = [&](int jl, int jr) -> double {
-        double rll = fmax(rho[fas_idx(0,jl,nt,ng)],1e-20);
-        double rrr = fmax(rho[fas_idx(0,jr,nt,ng)],1e-20);
-        return 0.5*(mt[fas_idx(0,jl,nt,ng)]/rll + mt[fas_idx(0,jr,nt,ng)]/rrr);
-    };
-    double div_v = invV*(Ar_hi*vr_outer
-        + At_hi*vt_face_f(j,j+1) - At_lo*vt_face_f(j-1,j));
-
-    res[flat]       = div[0];
-    res[n + flat]   = div[1] + force_r + S_mr;
-    res[2*n + flat] = div[2] + force_t + S_mt;
-    res[3*n + flat] = div[3] - P_c * div_v + S_E;
 }
 
 __global__
@@ -393,13 +537,43 @@ void k_fas_axpy(double* y, double a, const double* x, int n) {
     if (i < n) y[i] += a * x[i];
 }
 
-void FasSolver::compute_residual(int l) {
+__global__
+void k_fas_explicit_advect(
+    double* rho, double* mr, double* mt, double* rhoE,
+    const double* R,
+    const double* dr, const double* r_center, const double* r_face,
+    const double* dtheta,
+    const double* rho0, double atm_thresh,
+    int nr, int nt, int ng, double gam, double cfl_pseudo, double dt_phys) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;
+    int i = flat/nt, j = flat%nt;
+    int k = fas_idx(i,j,nt,ng);
+    int n = nr*nt;
+
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k] / rho_c);
+    double vt = fabs(mt[k] / rho_c);
+    double P = fmax((gam-1.0)*rhoE[k], 1e-30);
+    double cs = sqrt(gam * P / rho_c);
+    double r_eff = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
+    double dt_r = dr[i] / (vr + cs);
+    double dt_t = r_eff * dtheta[j] / (vt + cs);
+    double dtau = cfl_pseudo * fmin(dt_r, dt_t);
+
+    rho[k]  += fmin(dtau, dt_phys) * R[flat];
+    mr[k]   += fmin(dtau, dt_phys) * R[n + flat];
+    mt[k]   += fmin(dtau, dt_phys) * R[2*n + flat];
+    rhoE[k] += fmin(dtau, dt_phys) * R[3*n + flat];
+}
+
+void FasSolver::compute_residual(int l, int use_hllc) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     launch_ghost(l);
     compute_gravity_1d(l);
-    int wb = 1;  // WB on all levels — each has its own consistent ρ₀/P₀/g₀
-    // Standard kernel handles i >= 1 (returns early for i==0)
+    int wb = 1;
     k_fas_residual<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -407,7 +581,7 @@ void FasSolver::compute_residual(int l) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, use_hllc);
     // Origin kernel handles i==0 using divergence theorem
     k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
@@ -489,14 +663,13 @@ void k_fas_floor(double* rho, double* mr, double* mt, double* rhoE,
     if (flat >= nr*nt) return;
     int k = fas_idx(flat/nt, flat%nt, nt, ng);
     double r = rho[k], e = rhoE[k];
-    bool bad = (r < 1e-20) || (e < 1e-20) || isnan(r) || isnan(e)
-               || isnan(mr[k]) || isnan(mt[k]);
-    if (bad) {
-        rho[k] = 1e-20;
-        mr[k] = 0.0;
-        mt[k] = 0.0;
-        rhoE[k] = 1e-20;
+    if (isnan(r) || isnan(e) || isnan(mr[k]) || isnan(mt[k])) {
+        rho[k] = 1e-20; mr[k] = 0.0; mt[k] = 0.0; rhoE[k] = 1e-20;
+        return;
     }
+    const double rho_fl = 1e-20, e_fl = 1e-20;
+    rho[k]  = 0.5 * (r + sqrt(r*r + 4.0*rho_fl*rho_fl));
+    rhoE[k] = 0.5 * (e + sqrt(e*e + 4.0*e_fl*e_fl));
 }
 
 void FasSolver::apply_floor(int l) {
@@ -561,10 +734,11 @@ void k_fas_assemble_blkjac(
     double e_c = rhoE[k] / rho_c;
     double P_c = fmax((gam-1.0)*rho_c*e_c, 1e-30);
     double cs = sqrt(gam * P_c / rho_c);
-    double r = r_center[i];
+    double r = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
     double invV = 1.0 / vol[flat];
 
-    double sr = (fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]);
+    // Factor 2: MUSCL reconstruction doubles the effective stencil width vs donor-cell
+    double sr = 2.0 * ((fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]));
     double dP_drhoE = gam - 1.0;
 
     double dPdr_coeff = 0.0;
@@ -640,7 +814,8 @@ void k_fas_assemble_blkjac(
 __global__
 void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
                     const double* rhoE,
-                    const double* dr, const double* rc, const double* dtheta,
+                    const double* dr, const double* rc, const double* rf,
+                    const double* dtheta,
                     double* Ap, int nr, int nt, int ng,
                     double inv_dt, double gam) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -651,7 +826,8 @@ void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
     double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
     double P = fmax((gam - 1.0) * rhoE[k], 1e-30);
     double cs = sqrt(gam * P / rho_c);
-    Ap[flat] = inv_dt + (vr + cs)/dr[i] + (vt + cs)/(rc[i]*dtheta[j]);
+    double r_eff = (i == 0 && rf[1] > 1e-30) ? (2.0/3.0)*rf[1] : rc[i];
+    Ap[flat] = inv_dt + (vr + cs)/dr[i] + (vt + cs)/(r_eff*dtheta[j]);
 }
 
 __global__
@@ -701,7 +877,7 @@ void k_fas_simple_correct(
     const double* F, const double* blk_inv,
     const double* vr_s, const double* vt_s,
     const double* dp, const double* Ap,
-    const double* r_center, const double* theta_face,
+    const double* r_center, const double* r_face, const double* theta_face,
     const double* rho0, double atm_thresh,
     int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -721,6 +897,7 @@ void k_fas_simple_correct(
     } else if (i==0 && nr>1) dp_dr = (dp[ip]-dp[flat])/(r_center[1]-r_center[0]);
     else if (i==nr-1 && nr>=2) dp_dr = (dp[flat]-dp[im])/(r_center[nr-1]-r_center[nr-2]);
 
+    double r_eff = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
     double dp_dt_r = 0.0;
     if (j > 0 && j < nt-1) {
         double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
@@ -728,7 +905,7 @@ void k_fas_simple_correct(
         double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
         double dl=tc_c-tc_m, dh=tc_p-tc_c;
         dp_dt_r = (dh*(dp[flat]-dp[i*nt+j-1])/dl + dl*(dp[i*nt+j+1]-dp[flat])/dh)
-                  / (r_center[i]*(dl+dh));
+                  / (r_eff*(dl+dh));
     }
 
     double inv_ap = 1.0 / Ap[flat];
@@ -761,7 +938,7 @@ void FasSolver::assemble_smoother(int l, double g0_over_dt) {
         lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
     k_fas_mom_diag<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_dr, lev.d_r_center, lev.d_dtheta,
+        lev.d_dr, lev.d_r_center, lev.d_r_face, lev.d_dtheta,
         lev.d_Ap, lev.nr, lev.nt, lev.ng, g0_over_dt, gamma);
 }
 
@@ -789,7 +966,24 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
 
+    // Only use explicit advection sub-step when dt exceeds CFL
+    // (i.e., when advection is the stiff part that SIMPLE can't smooth).
+    // When dt < CFL, the system is well-conditioned and SIMPLE alone works.
+    bool do_explicit = (l == 0 && dt > compute_cfl_dt());
+
     for (int it = 0; it < n_iters; ++it) {
+        if (do_explicit) {
+            compute_residual(l, 1);  // HLLC for explicit wave propagation
+            k_fas_explicit_advect<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_res,
+                lev.d_dr, lev.d_r_center, lev.d_r_face, lev.d_dtheta,
+                lev.d_rho0, atm_rho_thresh,
+                lev.nr, lev.nt, lev.ng, gamma, 0.8, dt);
+            apply_floor(l);
+        }
+
+        // Implicit pressure correction
         compute_F(l, g0_over_dt);
 
         if (use_simple_smoother) {
@@ -808,7 +1002,7 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                 lev.d_res, lev.d_blk_inv,
                 lev.d_vr_s, lev.d_vt_s,
                 lev.d_dp, lev.d_Ap,
-                lev.d_r_center, lev.d_theta_face,
+                lev.d_r_center, lev.d_r_face, lev.d_theta_face,
                 lev.d_rho0, atm_rho_thresh,
                 lev.nr, lev.nt, lev.ng);
         } else {
@@ -1063,12 +1257,48 @@ void FasSolver::fas_vcycle(int l, double dt, double g0_over_dt) {
 double FasSolver::residual_norm(int l) {
     FasLevel& lev = levels[l];
     int n4 = 4 * lev.nr * lev.nt;
-    // Simple: download and compute on host
     std::vector<double> h(n4);
     CUDA_CHECK(cudaMemcpy(h.data(), lev.d_res, n4*sizeof(double), cudaMemcpyDeviceToHost));
     double mx = 0;
     for (int i = 0; i < n4; ++i) mx = std::max(mx, std::fabs(h[i]));
     return mx;
+}
+
+// ========================= CFL dt ========================
+
+__global__
+void k_fas_cfl(const double* rho, const double* mr, const double* mt, const double* rhoE,
+               const double* dr, const double* r_center, const double* dtheta,
+               const double* rho0, double* out,
+               int nr, int nt, int ng, double gam, double atm_thresh) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) { out[flat] = 1e30; return; }
+    int i = flat/nt, j = flat%nt;
+    int k = fas_idx(i,j,nt,ng);
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k] / rho_c);
+    double vt = fabs(mt[k] / rho_c);
+    double P = fmax((gam-1.0)*rhoE[k], 1e-30);
+    double cs = sqrt(gam * P / rho_c);
+    double dt_r = dr[i] / (vr + cs);
+    double dt_t = r_center[i] * dtheta[j] / (vt + cs);
+    out[flat] = fmin(dt_r, dt_t);
+}
+
+double FasSolver::compute_cfl_dt() {
+    FasLevel& lev = levels[0];
+    int n = lev.nr * lev.nt, B = 256;
+    k_fas_cfl<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_dr, lev.d_r_center, lev.d_dtheta,
+        lev.d_rho0, lev.d_res, // reuse d_res as scratch (safe — called outside solve)
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh);
+    std::vector<double> h(n);
+    CUDA_CHECK(cudaMemcpy(h.data(), lev.d_res, n*sizeof(double), cudaMemcpyDeviceToHost));
+    double mn = 1e30;
+    for (int i = 0; i < n; ++i) mn = std::min(mn, h[i]);
+    return cfl_num * mn;
 }
 
 // ========================= Level construction ========================
@@ -1512,12 +1742,18 @@ double FasSolver::step(double t, double t_end) {
     apply_floor(0);
 
     double dt_cap = use_simple_smoother ? 1.0 : 1e-4;
-    if (dt_current < 1e-30) dt_current = 1e-8;
+    if (dt_current < 1e-30) {
+        dt_current = compute_cfl_dt();
+        if (dt_current < 1e-30) dt_current = 1e-8;
+    }
+
+    double dt_cfl = compute_cfl_dt();
+    double cfl_max_factor = 20.0;
 
     int max_dt_cuts = 6;
     int max_cycles = 40;
     double tol = 1e-4;
-    double dt = std::min({dt_current, dt_cap, t_end - t});
+    double dt = std::min({dt_current, dt_cap, cfl_max_factor * dt_cfl, t_end - t});
     bool converged = false;
 
     FasLevel& finest = levels[0];
