@@ -128,7 +128,8 @@ int main(int argc, char** argv) {
             cfg.precond = argv[++i];
     }
 
-    if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed") {
+    if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
+        || cfg.test_case == "bubble") {
         cfg.R_outer = compute_lane_emden_R_outer(1.5, 1.0, 1.0, cfg.G);
     }
 
@@ -138,7 +139,8 @@ int main(int argc, char** argv) {
 
     Grid grid;
     if (cfg.mesh_type == "equimass" &&
-        (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed")) {
+        (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
+         || cfg.test_case == "bubble")) {
         double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
         auto le_sol = solve_lane_emden(n_poly);
         double alpha2 = (n_poly + 1.0) * K_poly
@@ -179,6 +181,11 @@ int main(int argc, char** argv) {
         LaneEmdenParams lep;
         lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
         init_lane_emden_perturbed(grid, state, lep, cfg.gamma, 1e-3);
+    } else if (cfg.test_case == "bubble") {
+        LaneEmdenParams lep;
+        lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
+        init_lane_emden_bubble(grid, state, lep, cfg.gamma,
+                               0.5, M_PI/3.0, 0.15, 0.5);
     } else if (cfg.test_case == "sedov") {
         SedovParams sp;
         sp.rho_0 = 1.0; sp.E_blast = 1.0; sp.r_blast = 0.05;
@@ -218,7 +225,7 @@ int main(int argc, char** argv) {
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
         fas.init(grid, eos, cfg.G, cfg.cfl);
 
-        if (cfg.test_case == "lane_emden_perturbed") {
+        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;
             state_hse.allocate(grid);
             LaneEmdenParams lep;
@@ -264,7 +271,7 @@ int main(int argc, char** argv) {
         lm.init(grid, eos, cfg.G, cfg.cfl, pc);
 
         // For perturbed ICs: snapshot unperturbed HSE first, then load perturbation.
-        if (cfg.test_case == "lane_emden_perturbed") {
+        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;
             state_hse.allocate(grid);
             LaneEmdenParams lep;
