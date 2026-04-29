@@ -111,6 +111,7 @@ struct FasSolver {
     int step_count = 0;
     bool hse_set = false;
     bool use_simple_smoother = true; // true=SIMPLE (Poisson-based), false=block Jacobi
+    bool use_line_jacobi = true;     // Line-Jacobi preconditioner for GMRES (replaces block-Jacobi)
 
     double sponge_r_start = 0.0;
     double sponge_r_top = 0.0;
