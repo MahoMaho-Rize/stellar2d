@@ -104,8 +104,8 @@ struct FasSolver {
     double sponge_r_top = 0.0;
     double sponge_kappa = 10.0;
 
-    static constexpr int NU1 = 3;     // pre-smooth iterations
-    static constexpr int NU2 = 5;     // post-smooth iterations (extra to clean prolongation)
+    static constexpr int NU1 = 2;     // pre-smooth iterations
+    static constexpr int NU2 = 3;     // post-smooth iterations
     static constexpr double OMEGA = 0.7;  // damping factor
 
 private:

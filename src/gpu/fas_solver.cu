@@ -535,8 +535,8 @@ void k_fas_sponge(double* rho, double* mr, double* mt, double* rhoE,
     // Relax internal energy toward HSE reference: rhoE₀ = P₀/(γ-1)
     double rhoE0 = P0[flat] * gam_minus1_inv;
     rhoE[k] = (rhoE[k] + alpha * rhoE0) * damp;
-    // Relax density toward HSE reference
-    rho[k] = (rho[k] + alpha * rho0[flat]) * damp;
+    // Do NOT touch rho — mass conservation requires density to evolve
+    // only through the continuity equation's flux divergence.
 }
 
 // ========================= Block Jacobi smoother ========================
@@ -802,7 +802,7 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
             k_fas_inv_ap<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
             k_fas_prhs<<<(n+B-1)/B,B>>>(lev.d_div_s, lev.d_poisson_rhs, lev.nr, lev.nt);
             CUDA_CHECK(cudaMemset(lev.d_dp, 0, n*sizeof(double)));
-            lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_poisson_rhs, lev.d_dp, 3, 1e-2);
+            lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_poisson_rhs, lev.d_dp, 2, 1e-2);
             k_fas_simple_correct<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                 lev.d_res, lev.d_blk_inv,
