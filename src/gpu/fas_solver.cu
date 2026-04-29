@@ -147,9 +147,8 @@ void k_fas_residual(
     // i==0 handled by k_fas_residual_origin
     if (i == 0) return;
 
-    // Atmosphere: use non-WB residual (no meaningful HSE reference)
-    int is_atm = (rho0[flat] < atm_thresh) ? 1 : 0;
-    int wb_local = is_atm ? 0 : use_wellbalance;
+    // All cells use WB — prevents O(h²/ρ) spurious acceleration in low-density surface
+    int wb_local = use_wellbalance;
 
     int k = fas_idx(i,j,nt,ng);
     double invV = 1.0 / vol[flat];
@@ -443,13 +442,13 @@ void k_fas_compute_F(double* F, const double* R, const double* rho, const double
     F[3*n + flat] = R[3*n + flat] - inv_dt*rhoE[k] + fas_rhs[3*n + flat];
 }
 
-void FasSolver::compute_F(int l, double dt) {
+void FasSolver::compute_F(int l, double g0_over_dt) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     compute_residual(l);
     k_fas_compute_F<<<(n+B-1)/B,B>>>(
         lev.d_res, lev.d_res, lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_fas_rhs, 1.0/dt, lev.nr, lev.nt, lev.ng);
+        lev.d_fas_rhs, g0_over_dt, lev.nr, lev.nt, lev.ng);
 }
 
 // ========================= BLAS-like helpers ========================
@@ -507,11 +506,19 @@ void FasSolver::apply_floor(int l) {
                                    lev.nr, lev.nt, lev.ng);
 }
 
-// ========================= Sponge layer ========================
+// ========================= Sponge + isothermal buffer ========================
+// Velocity damping: v *= 1/(1 + dt·κ)
+// Thermal relaxation: rhoE → rhoE₀ with same timescale (MUSIC-style)
+//   rhoE_new = (rhoE + dt·κ·rhoE₀) / (1 + dt·κ)
+// This creates a stably stratified isothermal layer that prevents
+// convective instability from reaching the boundary.
 
 __global__
-void k_fas_sponge(double* mr, double* mt, const double* r_center,
+void k_fas_sponge(double* rho, double* mr, double* mt, double* rhoE,
+                  const double* rho0, const double* P0,
+                  const double* r_center,
                   double r_sp, double r_tp, double kappa_max, double dt_s,
+                  double gam_minus1_inv,
                   int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -520,10 +527,16 @@ void k_fas_sponge(double* mr, double* mt, const double* r_center,
     if (r <= r_sp) return;
     double xi = fmin((r - r_sp) / fmax(r_tp - r_sp, 1e-30), 1.0);
     double kappa = kappa_max * 0.5 * (1.0 - cos(M_PI * xi));
-    double damp = 1.0 / (1.0 + dt_s * kappa);
+    double alpha = dt_s * kappa;
+    double damp = 1.0 / (1.0 + alpha);
     int k = (i + ng) * (nt + 2*ng) + (j + ng);
     mr[k] *= damp;
     mt[k] *= damp;
+    // Relax internal energy toward HSE reference: rhoE₀ = P₀/(γ-1)
+    double rhoE0 = P0[flat] * gam_minus1_inv;
+    rhoE[k] = (rhoE[k] + alpha * rhoE0) * damp;
+    // Relax density toward HSE reference
+    rho[k] = (rho[k] + alpha * rho0[flat]) * damp;
 }
 
 // ========================= Block Jacobi smoother ========================
@@ -735,7 +748,7 @@ void k_fas_simple_correct(
 
 // ========================= SIMPLE smoother ========================
 
-void FasSolver::assemble_smoother(int l, double dt) {
+void FasSolver::assemble_smoother(int l, double g0_over_dt) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     k_fas_assemble_blkjac<<<(n+B-1)/B,B>>>(
@@ -745,11 +758,11 @@ void FasSolver::assemble_smoother(int l, double dt) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr0,
         lev.d_blk_inv,
-        lev.nr, lev.nt, lev.ng, gamma, 1.0/dt);
+        lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
     k_fas_mom_diag<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_dr, lev.d_r_center, lev.d_dtheta,
-        lev.d_Ap, lev.nr, lev.nt, lev.ng, 1.0/dt, gamma);
+        lev.d_Ap, lev.nr, lev.nt, lev.ng, g0_over_dt, gamma);
 }
 
 // Block Jacobi smooth: U ← U - ω · J⁻¹_diag · F(U)
@@ -772,12 +785,12 @@ void k_fas_smooth_blkjac(
     rhoE[k] -= omega * (B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3);
 }
 
-void FasSolver::smooth(int l, double dt, int n_iters) {
+void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
 
     for (int it = 0; it < n_iters; ++it) {
-        compute_F(l, dt);
+        compute_F(l, g0_over_dt);
 
         if (use_simple_smoother) {
             k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
@@ -806,6 +819,14 @@ void FasSolver::smooth(int l, double dt, int n_iters) {
                 OMEGA, lev.nr, lev.nt, lev.ng);
         }
         apply_floor(l);
+        if (l == 0 && sponge_r_start < sponge_r_top) {
+            k_fas_sponge<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_rho0, lev.d_P0, lev.d_r_center,
+                sponge_r_start, sponge_r_top, sponge_kappa, dt,
+                1.0/(gamma-1.0),
+                lev.nr, lev.nt, lev.ng);
+        }
     }
 }
 
@@ -920,33 +941,28 @@ void k_fas_assemble_coarse_rhs(
     fas_rhs[3*n + flat] = inv_dt*rhoE_H[k] - R_H[3*n + flat] + defect[3*n + flat];
 }
 
-void FasSolver::restrict_defect(int fine, int coarse, double dt) {
+void FasSolver::restrict_defect(int fine, int coarse, double g0_over_dt) {
     FasLevel& fl = levels[fine], &cl = levels[coarse];
     int fn = fl.nr * fl.nt, cn = cl.nr * cl.nt, B = 256;
 
-    // 1. Compute F(u_h) on fine level (already have d_res from last smooth)
-    compute_F(fine, dt);
+    compute_F(fine, g0_over_dt);
 
-    // 2. Restrict fine defect F(u_h) → temporary in cl.d_Un (4*cn scratch)
     k_fas_restrict_defect<<<(cn+B-1)/B,B>>>(
         fl.d_res, fl.d_cell_volume,
         cl.d_Un,
         cl.nr, cl.nt, fl.nr, fl.nt);
 
-    // 3. Restrict state u_h → u_H
     restrict_state(fine, coarse);
     apply_floor(coarse);
 
-    // 4. Compute R(u_H) on coarse level
     compute_residual(coarse);
 
-    // 5. Assemble fas_rhs_H so that F(u_H) = restricted defect
     k_fas_assemble_coarse_rhs<<<(cn+B-1)/B,B>>>(
         cl.d_res,
         cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
-        cl.d_Un,  // restricted defect from step 2
+        cl.d_Un,
         cl.d_fas_rhs,
-        1.0/dt, cl.nr, cl.nt, cl.ng);
+        g0_over_dt, cl.nr, cl.nt, cl.ng);
 
 }
 
@@ -959,30 +975,41 @@ void k_fas_prolongate_correct(
     double* f_rho, double* f_mr, double* f_mt, double* f_rhoE,
     const double* c_rho, const double* c_mr, const double* c_mt, const double* c_rhoE,
     const double* save_rho, const double* save_mr, const double* save_mt, const double* save_rhoE,
-    int cnr, int cnt, int fnt, int fng, int cng) {
+    int cnr, int cnt, int fnt, int fng, int cng, double gam) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= cnr*cnt) return;
     int ic = flat/cnt, jc = flat%cnt;
     int ck = (ic+cng)*(cnt+2*cng) + (jc+cng);
 
-    // Coarse grid correction = u_H_new - u_H_before_solve (saved)
     double d_rho  = c_rho[ck]  - save_rho[flat];
     double d_mr   = c_mr[ck]   - save_mr[flat];
     double d_mt   = c_mt[ck]   - save_mt[flat];
     double d_rhoE = c_rhoE[ck] - save_rhoE[flat];
 
-    // Damped piecewise constant prolongation to 2×2 fine cells
-    // α < 1 prevents overcorrection when post-smooth is weak
-    const double alpha = 0.5;
     for (int di = 0; di < 2; ++di) {
         int fi = 2*ic + di;
         for (int dj = 0; dj < 2; ++dj) {
             int fj = 2*jc + dj;
             int fk = (fi+fng)*(fnt+2*fng) + (fj+fng);
-            f_rho[fk]  += alpha * d_rho;
-            f_mr[fk]   += alpha * d_mr;
-            f_mt[fk]   += alpha * d_mt;
-            f_rhoE[fk] += alpha * d_rhoE;
+
+            double rho_f = fmax(f_rho[fk], 1e-20);
+            double P_f = fmax((gam - 1.0) * f_rhoE[fk], 1e-30);
+            double cs = sqrt(gam * P_f / rho_f);
+
+            const double beta = 0.5;
+            double lim_rho  = beta * rho_f;
+            double lim_mom  = beta * rho_f * cs;
+            double lim_rhoE = beta * fmax(f_rhoE[fk], 1e-20);
+
+            double cr  = fmax(-lim_rho,  fmin(d_rho,  lim_rho));
+            double cmr = fmax(-lim_mom,  fmin(d_mr,   lim_mom));
+            double cmt = fmax(-lim_mom,  fmin(d_mt,   lim_mom));
+            double crE = fmax(-lim_rhoE, fmin(d_rhoE, lim_rhoE));
+
+            f_rho[fk]  += cr;
+            f_mr[fk]   += cmr;
+            f_mt[fk]   += cmt;
+            f_rhoE[fk] += crE;
         }
     }
 }
@@ -996,47 +1023,39 @@ void FasSolver::prolongate_correct(int coarse, int fine) {
         fl.d_rho, fl.d_mr, fl.d_mt, fl.d_rhoE,
         cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
         cl.d_save, cl.d_save + cn, cl.d_save + 2*cn, cl.d_save + 3*cn,
-        cl.nr, cl.nt, fl.nt, fl.ng, cl.ng);
+        cl.nr, cl.nt, fl.nt, fl.ng, cl.ng, gamma);
     apply_floor(fine);
 }
 
 // ========================= FAS V-cycle ========================
 
-void FasSolver::fas_vcycle(int l, double dt) {
-    // Only coarsen from level 0→1. Coarser levels (8x4, 4x2) have too few cells
-    // for meaningful gravity/geometry — their corrections are garbage.
+void FasSolver::fas_vcycle(int l, double dt, double g0_over_dt) {
     bool use_coarse = (l == 0 && n_levels > 1);
 
     if (!use_coarse || l == n_levels - 1) {
-        assemble_smoother(l, dt);
-        smooth(l, dt, NU1 + NU2);
+        assemble_smoother(l, g0_over_dt);
+        smooth(l, dt, g0_over_dt, NU1 + NU2);
         return;
     }
 
-    // Pre-smooth
-    assemble_smoother(l, dt);
-    smooth(l, dt, NU1);
+    assemble_smoother(l, g0_over_dt);
+    smooth(l, dt, g0_over_dt, NU1);
 
     FasLevel& cl = levels[l + 1];
     int cn = cl.nr * cl.nt, B = 256;
 
-    // Restrict defect and state: fine → coarse
-    restrict_defect(l, l + 1, dt);
+    restrict_defect(l, l + 1, g0_over_dt);
 
-    // Save restricted state BEFORE coarse solve
     k_fas_pack_flat<<<(cn+B-1)/B,B>>>(
         cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
         cl.d_save, cl.nr, cl.nt, cl.ng);
 
-    // Recurse
-    fas_vcycle(l + 1, dt);
+    fas_vcycle(l + 1, dt, g0_over_dt);
 
-    // Prolongate: u_h += P·(u_H_new - u_H_old)
     prolongate_correct(l + 1, l);
 
-    // Post-smooth
-    assemble_smoother(l, dt);
-    smooth(l, dt, NU2);
+    assemble_smoother(l, g0_over_dt);
+    smooth(l, dt, g0_over_dt, NU2);
 }
 
 // ========================= Residual norm ========================
@@ -1084,6 +1103,8 @@ static void alloc_fas_level(FasLevel& lev) {
     CUDA_CHECK(cudaMalloc(&lev.d_fas_rhs, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_res, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_Un, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_Un_prev, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMemset(lev.d_Un_prev, 0, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_save, 4*phys*sizeof(double)));
 
     // HSE reference
@@ -1452,22 +1473,31 @@ void FasSolver::snapshot_hse() {
                  rho_max, atm_rho_thresh);
 }
 
+// ========================= BDF2 rhs kernel ========================
+// fas_rhs = -(α₁·Uⁿ + α₂·Uⁿ⁻¹) / dt_n
+// For BE (step 0): α₁=-1, α₂=0 → fas_rhs = Uⁿ/dt
+
+__global__
+void k_fas_bdf2_rhs(const double* Un, const double* Un_prev,
+                    double* rhs, double alpha1, double alpha2,
+                    double inv_dt, int n4) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n4) return;
+    rhs[i] = -(alpha1 * Un[i] + alpha2 * Un_prev[i]) * inv_dt;
+}
+
 // ========================= Public solve ========================
 
-int FasSolver::solve(double dt, int max_cycles, double tol) {
+int FasSolver::solve(double dt, double g0_over_dt, int max_cycles, double tol) {
     FasLevel& finest = levels[0];
     int n = finest.nr * finest.nt, B = 256;
 
-    // Save Uⁿ and set fas_rhs = Uⁿ/dt on finest level
-    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
-        finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
-        finest.d_fas_rhs, finest.nr, finest.nt, finest.ng);
-    k_fas_scale<<<(4*n+B-1)/B,B>>>(finest.d_fas_rhs, 1.0/dt, 4*n);
+    // BDF2 coefficients are baked into fas_rhs and g0_over_dt by caller
 
     for (int cyc = 0; cyc < max_cycles; ++cyc) {
-        fas_vcycle(0, dt);
+        fas_vcycle(0, dt, g0_over_dt);
 
-        compute_F(0, dt);
+        compute_F(0, g0_over_dt);
         double norm = residual_norm(0);
         if (norm < tol) return cyc + 1;
     }
@@ -1490,16 +1520,56 @@ double FasSolver::step(double t, double t_end) {
     double dt = std::min({dt_current, dt_cap, t_end - t});
     bool converged = false;
 
-    // Save state before solve (for rollback on failure)
     FasLevel& finest = levels[0];
     int n = finest.nr * finest.nt, B = 256;
+
+    // BDF2 coefficients
+    bool use_bdf2 = false; // temporarily disabled for A/B testing
+    double gamma0, alpha1, alpha2;
+    if (use_bdf2) {
+        double omega = dt / dt_prev;
+        gamma0 = (1.0 + 2.0*omega) / (1.0 + omega);
+        alpha1 = -(1.0 + omega);
+        alpha2 = omega*omega / (1.0 + omega);
+    } else {
+        gamma0 = 1.0;
+        alpha1 = -1.0;
+        alpha2 = 0.0;
+    }
+    double g0_over_dt = gamma0 / dt;
+
+    // Save Uⁿ⁻¹ ← Uⁿ (before overwriting Uⁿ)
+    CUDA_CHECK(cudaMemcpy(finest.d_Un_prev, finest.d_Un, 4*n*sizeof(double), cudaMemcpyDeviceToDevice));
+
+    // Pack current state as Uⁿ
+    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
+        finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+        finest.d_Un, finest.nr, finest.nt, finest.ng);
+
+    // Set fas_rhs = -(α₁·Uⁿ + α₂·Uⁿ⁻¹) / dt
+    k_fas_bdf2_rhs<<<(4*n+B-1)/B,B>>>(
+        finest.d_Un, finest.d_Un_prev, finest.d_fas_rhs,
+        alpha1, alpha2, 1.0/dt, 4*n);
+
+    // Save state for rollback
     k_fas_pack_flat<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
         finest.d_save, finest.nr, finest.nt, finest.ng);
 
     for (int cut = 0; cut < max_dt_cuts; ++cut) {
         if (cut > 0) {
+            // Recompute BDF2 coefficients for halved dt
             dt *= 0.5;
+            if (use_bdf2) {
+                double omega = dt / dt_prev;
+                gamma0 = (1.0 + 2.0*omega) / (1.0 + omega);
+                alpha1 = -(1.0 + omega);
+                alpha2 = omega*omega / (1.0 + omega);
+            }
+            g0_over_dt = gamma0 / dt;
+            k_fas_bdf2_rhs<<<(4*n+B-1)/B,B>>>(
+                finest.d_Un, finest.d_Un_prev, finest.d_fas_rhs,
+                alpha1, alpha2, 1.0/dt, 4*n);
             if (dt < 1e-12) {
                 std::fprintf(stderr, "FATAL: FAS step %d dt=%.3e diverged.\n", step_count, dt);
                 std::exit(1);
@@ -1530,12 +1600,12 @@ double FasSolver::step(double t, double t_end) {
 
         }
 
-        int cycles = solve(dt, max_cycles, tol);
+        int cycles = solve(dt, g0_over_dt, max_cycles, tol);
         if (cycles < max_cycles) {
             converged = true;
             break;
         }
-        compute_F(0, dt);
+        compute_F(0, g0_over_dt);
         double norm = residual_norm(0);
         if (norm < 10.0 * tol) {
             converged = true;
@@ -1621,11 +1691,12 @@ double FasSolver::step(double t, double t_end) {
         }
     }
 
-    // Sponge: damp velocities in low-density envelope
     if (sponge_r_start < sponge_r_top) {
         k_fas_sponge<<<(n+B-1)/B,B>>>(
-            finest.d_mr, finest.d_mt, levels[0].d_r_center,
+            finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+            finest.d_rho0, finest.d_P0, levels[0].d_r_center,
             sponge_r_start, sponge_r_top, sponge_kappa, dt,
+            1.0/(gamma-1.0),
             finest.nr, finest.nt, finest.ng);
     }
 
@@ -1634,6 +1705,7 @@ double FasSolver::step(double t, double t_end) {
     } else {
         dt_current = dt;  // don't grow
     }
+    dt_prev = dt;
     step_count++;
     return dt;
 }
@@ -1648,7 +1720,7 @@ void FasSolver::destroy() {
         cudaFree(lev.d_cell_volume); cudaFree(lev.d_area_r); cudaFree(lev.d_area_theta);
         cudaFree(lev.d_sin_theta_face); cudaFree(lev.d_sin_theta_center);
         cudaFree(lev.d_rho); cudaFree(lev.d_mr); cudaFree(lev.d_mt); cudaFree(lev.d_rhoE);
-        cudaFree(lev.d_fas_rhs); cudaFree(lev.d_res); cudaFree(lev.d_Un); cudaFree(lev.d_save);
+        cudaFree(lev.d_fas_rhs); cudaFree(lev.d_res); cudaFree(lev.d_Un); cudaFree(lev.d_Un_prev); cudaFree(lev.d_save);
         cudaFree(lev.d_rho0); cudaFree(lev.d_P0); cudaFree(lev.d_hse_defect);
         cudaFree(lev.d_gr); cudaFree(lev.d_gr0); cudaFree(lev.d_shell_mass);
         cudaFree(lev.d_blk_inv);

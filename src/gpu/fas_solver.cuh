@@ -38,8 +38,9 @@ struct FasLevel {
     // Residual scratch: size 4*phys
     double *d_res;
 
-    // Saved Uⁿ for time derivative: size 4*phys
+    // Saved Uⁿ and Uⁿ⁻¹ for time derivative: size 4*phys each
     double *d_Un;
+    double *d_Un_prev;
 
     // Saved restricted state before coarse solve (for prolongation correction): size 4*phys
     double *d_save;
@@ -76,7 +77,7 @@ struct FasSolver {
     // Solve F(U) = (U-Uⁿ)/dt - R(U) = 0 using FAS V-cycles.
     // State is in d_rho/d_mr/d_mt/d_rhoE on finest level.
     // Returns number of V-cycles used.
-    int solve(double dt, int max_cycles = 20, double tol = 1e-4);
+    int solve(double dt, double g0_over_dt, int max_cycles = 20, double tol = 1e-4);
 
     // Upload / download state from host
     void upload_state(const Grid& grid, const State& state);
@@ -93,6 +94,7 @@ struct FasSolver {
 
     double gamma, G_const, cfl_num;
     double dt_current = 0.0;
+    double dt_prev = 0.0;
     double atm_rho_thresh = 0.0;
     int step_count = 0;
     bool hse_set = false;
@@ -112,21 +114,19 @@ private:
     void build_coarse_geometry(int fine, int coarse);
 
     // FAS operations
-    void fas_vcycle(int l, double dt);
-    void smooth(int l, double dt, int n_iters);
+    void fas_vcycle(int l, double dt, double g0_over_dt);
+    void smooth(int l, double dt, double g0_over_dt, int n_iters);
     void compute_residual(int l);
-    void compute_F(int l, double dt);  // F = U/dt - Uⁿ/dt - R(U)
+    void compute_F(int l, double g0_over_dt);
     void launch_ghost(int l);
     void compute_gravity_1d(int l);
     void apply_floor(int l);
 
-    // Inter-grid transfers (4-DOF, conservative)
     void restrict_state(int fine, int coarse);
-    void restrict_defect(int fine, int coarse, double dt);
+    void restrict_defect(int fine, int coarse, double g0_over_dt);
     void prolongate_correct(int coarse, int fine);
 
-    // Block Jacobi assembly
-    void assemble_smoother(int l, double dt);
+    void assemble_smoother(int l, double g0_over_dt);
 
     // Diagnostics
     double residual_norm(int l);
