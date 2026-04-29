@@ -1538,13 +1538,16 @@ double FasSolver::step(double t, double t_end) {
     }
     double g0_over_dt = gamma0 / dt;
 
-    // Save Uⁿ⁻¹ ← Uⁿ (before overwriting Uⁿ)
-    CUDA_CHECK(cudaMemcpy(finest.d_Un_prev, finest.d_Un, 4*n*sizeof(double), cudaMemcpyDeviceToDevice));
-
-    // Pack current state as Uⁿ
+    // Pack current state as Uⁿ (into d_Un), but first save old Uⁿ as Uⁿ⁻¹
+    if (step_count > 0) {
+        CUDA_CHECK(cudaMemcpy(finest.d_Un_prev, finest.d_Un, 4*n*sizeof(double), cudaMemcpyDeviceToDevice));
+    }
     k_fas_pack_flat<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
         finest.d_Un, finest.nr, finest.nt, finest.ng);
+    if (step_count == 0) {
+        CUDA_CHECK(cudaMemcpy(finest.d_Un_prev, finest.d_Un, 4*n*sizeof(double), cudaMemcpyDeviceToDevice));
+    }
 
     // Set fas_rhs = -(α₁·Uⁿ + α₂·Uⁿ⁻¹) / dt
     k_fas_bdf2_rhs<<<(4*n+B-1)/B,B>>>(
@@ -1601,12 +1604,15 @@ double FasSolver::step(double t, double t_end) {
         }
 
         int cycles = solve(dt, g0_over_dt, max_cycles, tol);
+        compute_F(0, g0_over_dt);
+        double norm = residual_norm(0);
+        if (step_count % 100 == 0 && cut == 0)
+            std::fprintf(stderr, "  step %d dt=%.2e cyc=%d ||F||=%.2e\n",
+                         step_count, dt, cycles, norm);
         if (cycles < max_cycles) {
             converged = true;
             break;
         }
-        compute_F(0, g0_over_dt);
-        double norm = residual_norm(0);
         if (norm < 10.0 * tol) {
             converged = true;
             break;
@@ -1701,7 +1707,7 @@ double FasSolver::step(double t, double t_end) {
     }
 
     if (converged) {
-        dt_current = std::min(1.2 * dt, dt_cap);
+        dt_current = std::min(1.5 * dt, dt_cap);
     } else {
         dt_current = dt;  // don't grow
     }
