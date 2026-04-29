@@ -54,4 +54,10 @@ void fill_ghost_cells(const Grid& grid, State& state, double gamma) {
             state.E[k_ghost] = state.E[k_phys];
         }
     }
+
+    // Pole lock: force v_theta = 0 at the two polar boundaries
+    for (int i = -ng; i < nr + ng; ++i) {
+        state.mtheta[grid.idx(i, 0)] = 0.0;
+        state.mtheta[grid.idx(i, nt - 1)] = 0.0;
+    }
 }

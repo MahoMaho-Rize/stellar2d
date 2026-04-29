@@ -72,12 +72,21 @@ __global__ void k_lm_ghost_t_s(double* rho, double* mr, double* mt, double* rhoE
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=-mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
+__global__ void k_lm_pole_lock(double* mt, int nr, int nt, int ng) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x - ng;
+    if (i < -ng || i >= nr + ng) return;
+    mt[d_idx(i, 0, nt, ng)] = 0.0;
+    mt[d_idx(i, nt - 1, nt, ng)] = 0.0;
+}
+
 void LowMachSolver::launch_ghost() {
     int B=256;
     { dim3 g((nt+B-1)/B, ng);       k_lm_ghost_r_in<<<g,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,nr,nt,ng); }
     { dim3 g((nt+B-1)/B, ng);       k_lm_ghost_r_out<<<g,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,nr,nt,ng); }
     { dim3 g((nr+2*ng+B-1)/B, ng);  k_lm_ghost_t_n<<<g,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,nr,nt,ng); }
     { dim3 g((nr+2*ng+B-1)/B, ng);  k_lm_ghost_t_s<<<g,B>>>(d_rho,d_mr,d_mtheta,d_rhoE,nr,nt,ng); }
+    int ntot = nr + 2*ng;
+    k_lm_pole_lock<<<(ntot+B-1)/B,B>>>(d_mtheta, nr, nt, ng);
 }
 
 // ========================= Upwind advection =======================
