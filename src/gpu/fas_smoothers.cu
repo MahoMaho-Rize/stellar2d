@@ -359,6 +359,280 @@ void k_fas_line_solve(
     }
 }
 
+// ========================= Theta-line Thomas sweep ========================
+// For each r-line (fixed i), solve the 4×4 block-tridiagonal system along θ.
+// Mirrors k_fas_line_solve but sweeps in the θ direction.
+// One GPU block per r-line; sequential Thomas algorithm on thread 0.
+// Captures θ-advection, θ-pressure gradient, and geometric source coupling.
+
+__global__
+void k_fas_line_solve_theta(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face, const double* theta_face,
+    const double* dr, const double* dtheta,
+    const double* gr0,
+    const double* v_in, double* Mv_out,
+    int nr, int nt, int ng, double gamma, double inv_dt) {
+    int i = blockIdx.x;
+    if (i >= nr) return;
+
+    extern __shared__ double smem[];
+    double* L     = smem;               // nt * 16
+    double* D     = L + nt * 16;        // nt * 16
+    double* U_b   = D + nt * 16;        // nt * 16
+    double* rhs_s = U_b + nt * 16;      // nt * 4
+    double* x_s   = rhs_s + nt * 4;     // nt * 4
+
+    int tid = threadIdx.x;
+    int n = nr * nt;
+
+    // ---------- Assembly (parallel over j) ----------
+    for (int j = tid; j < nt; j += blockDim.x) {
+        int flat = i * nt + j;
+        int k = fas_idx(i, j, nt, ng);
+
+        double rho_c = fmax(rho[k], 1e-20);
+        double vr_c  = mr[k] / rho_c;
+        double vt_c  = mt[k] / rho_c;
+        double KE_c  = 0.5 * rho_c * (vr_c*vr_c + vt_c*vt_c);
+        double P_c   = fmax((gamma - 1.0) * (rhoE[k] - KE_c), 1e-30);
+        double cs    = sqrt(gamma * P_c / rho_c);
+        double r     = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
+        double invV  = 1.0 / vol[flat];
+
+        double At_lo = at[i*(nt+1)+j], At_hi = at[i*(nt+1)+j+1];
+
+        double sr = 2.0 * ((fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]));
+        double diag_val = -(inv_dt + sr);
+
+        // θ-face velocities
+        double vf_lo = 0.0, vf_hi = 0.0;
+        if (j > 0) {
+            double rl = fmax(rho[fas_idx(i,j-1,nt,ng)], 1e-20);
+            vf_lo = 0.5 * (mt[fas_idx(i,j-1,nt,ng)] / rl + vt_c);
+        }
+        if (j < nt - 1) {
+            double rr = fmax(rho[fas_idx(i,j+1,nt,ng)], 1e-20);
+            vf_hi = 0.5 * (vt_c + mt[fas_idx(i,j+1,nt,ng)] / rr);
+        }
+
+        // ----- Lower block (coupling to j-1) -----
+        double* Lb = &L[j * 16];
+        for (int q = 0; q < 16; q++) Lb[q] = 0.0;
+        if (j > 0) {
+            double coeff = (vf_lo >= 0.0 ? vf_lo : 0.0) * At_lo * invV;
+            Lb[0]  = coeff;   Lb[5]  = coeff;
+            Lb[10] = coeff;   Lb[15] = coeff;
+            // θ-pressure coupling: dR_mt/d(rhoE_{j-1})
+            double tc_m = 0.5*(theta_face[j-1]+theta_face[j]);
+            double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
+            double dl = tc_c - tc_m;
+            double dh = (j < nt-1) ? 0.5*(theta_face[j+1]+theta_face[j+2]) - tc_c : dl;
+            Lb[2*4+3] += -(gamma - 1.0) * dh / (r * dl * (dl + dh));
+        }
+
+        // ----- Upper block (coupling to j+1) -----
+        double* Ub = &U_b[j * 16];
+        for (int q = 0; q < 16; q++) Ub[q] = 0.0;
+        if (j < nt - 1) {
+            double coeff = (vf_hi < 0.0 ? -vf_hi : 0.0) * At_hi * invV;
+            Ub[0]  = coeff;   Ub[5]  = coeff;
+            Ub[10] = coeff;   Ub[15] = coeff;
+            double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
+            double tc_p = 0.5*(theta_face[j+1]+theta_face[j+2]);
+            double dh = tc_p - tc_c;
+            double dl = (j > 0) ? tc_c - 0.5*(theta_face[j-1]+theta_face[j]) : dh;
+            Ub[2*4+3] += -(gamma - 1.0) * dl / (r * dh * (dl + dh));
+        }
+
+        // ----- Diagonal block -----
+        double* Db = &D[j * 16];
+        for (int q = 0; q < 16; q++) Db[q] = 0.0;
+        Db[0]  = diag_val;   Db[5]  = diag_val;
+        Db[10] = diag_val;   Db[15] = diag_val;
+
+        // θ-pressure self-coupling: dR_mt/dE (central-diff diagonal part)
+        double dP_drhoE = gamma - 1.0;
+        if (j > 0 && j < nt-1) {
+            double tc_m = 0.5*(theta_face[j-1]+theta_face[j]);
+            double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
+            double tc_p = 0.5*(theta_face[j+1]+theta_face[j+2]);
+            double dl = tc_c - tc_m, dh = tc_p - tc_c;
+            Db[2*4+3] = (dh/(dl*(dl+dh)) + dl/(dh*(dl+dh))) * dP_drhoE / r;
+        } else if (j == 0 && nt > 1) {
+            double tc_c = 0.5*(theta_face[0]+theta_face[1]);
+            double tc_p = 0.5*(theta_face[1]+theta_face[2]);
+            Db[2*4+3] = dP_drhoE / (r * (tc_p - tc_c));
+        } else if (j == nt-1 && nt >= 2) {
+            double tc_m = 0.5*(theta_face[nt-2]+theta_face[nt-1]);
+            double tc_c = 0.5*(theta_face[nt-1]+theta_face[nt]);
+            Db[2*4+3] = -dP_drhoE / (r * (tc_c - tc_m));
+        }
+
+        // Geometric source coupling (intra-cell):
+        //   S_mr  = +ρvθ²/r  → dS_mr/d(mt) = 2vθ/r
+        //   S_mt  = -ρvr·vθ/r → dS_mt/d(mr) = -vθ/r,  dS_mt/d(mt) = -vr/r
+        Db[1*4+2] += 2.0 * vt_c / r;
+        Db[2*4+1] += -vt_c / r;
+        Db[2*4+2] += -vr_c / r;
+
+        // Advection self-coupling (upwind at both θ-faces)
+        double coeff_lo_self = (vf_lo < 0.0 ? -vf_lo : 0.0) * At_lo * invV;
+        double coeff_hi_self = (vf_hi >= 0.0 ?  vf_hi : 0.0) * At_hi * invV;
+        double adv_self = -(coeff_lo_self + coeff_hi_self);
+        Db[0]  += adv_self;   Db[5]  += adv_self;
+        Db[10] += adv_self;   Db[15] += adv_self;
+
+        // Energy-momentum coupling: P·∇·v work term
+        double Ar_lo = ar[i*nt+j], Ar_hi = ar[(i+1)*nt+j];
+        Db[3*4+1] = -P_c * invV * 0.5/rho_c * (Ar_hi + Ar_lo);
+        Db[3*4+2] = -P_c * invV * 0.5/rho_c * (At_hi + At_lo);
+
+        // RHS = residual vector at this cell
+        rhs_s[j*4+0] = v_in[flat];
+        rhs_s[j*4+1] = v_in[n + flat];
+        rhs_s[j*4+2] = v_in[2*n + flat];
+        rhs_s[j*4+3] = v_in[3*n + flat];
+    }
+    __syncthreads();
+
+    // ---------- Block-Thomas forward elimination (thread 0) ----------
+    if (tid == 0) {
+        for (int j = 0; j < nt; j++) {
+            double* Db = &D[j*16];
+            double* rb = &rhs_s[j*4];
+
+            if (j > 0) {
+                double* Lb = &L[j*16];
+                double* Dp = &D[(j-1)*16];
+                double* Up = &U_b[(j-1)*16];
+
+                // inv(D_{j-1}) via 4×4 Gauss-Jordan
+                double inv_D[16];
+                {
+                    double A[16];
+                    for(int q=0;q<16;q++) A[q]=Dp[q];
+                    for(int q=0;q<16;q++) inv_D[q]=(q/4==q%4)?1.0:0.0;
+                    for(int col=0;col<4;col++){
+                        double mx=fabs(A[col*4+col]); int mi=col;
+                        for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
+                        if(mi!=col){
+                            for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
+                            for(int q=0;q<4;q++){double t=inv_D[col*4+q];inv_D[col*4+q]=inv_D[mi*4+q];inv_D[mi*4+q]=t;}
+                        }
+                        double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
+                        for(int row=col+1;row<4;row++){
+                            double m=A[row*4+col]/d;
+                            for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
+                            for(int q=0;q<4;q++) inv_D[row*4+q]-=m*inv_D[col*4+q];
+                        }
+                    }
+                    for(int c=0;c<4;c++){
+                        for(int row=3;row>=0;row--){
+                            double s=inv_D[row*4+c];
+                            for(int q=row+1;q<4;q++) s-=A[row*4+q]*inv_D[q*4+c];
+                            inv_D[row*4+c]=s/A[row*4+row];
+                        }
+                    }
+                }
+
+                // M = L_j · inv(D_{j-1})
+                double M[16];
+                for(int r2=0;r2<4;r2++)
+                    for(int c=0;c<4;c++){
+                        double s=0;
+                        for(int q=0;q<4;q++) s+=Lb[r2*4+q]*inv_D[q*4+c];
+                        M[r2*4+c]=s;
+                    }
+
+                // D_j -= M · U_{j-1}
+                for(int r2=0;r2<4;r2++)
+                    for(int c=0;c<4;c++){
+                        double s=0;
+                        for(int q=0;q<4;q++) s+=M[r2*4+q]*Up[q*4+c];
+                        Db[r2*4+c]-=s;
+                    }
+
+                // rhs_j -= M · rhs_{j-1}
+                double* rp = &rhs_s[(j-1)*4];
+                for(int r2=0;r2<4;r2++){
+                    double s=0;
+                    for(int q=0;q<4;q++) s+=M[r2*4+q]*rp[q];
+                    rb[r2]-=s;
+                }
+            }
+        }
+
+        // ---------- Back-substitution ----------
+        for (int j = nt-1; j >= 0; j--) {
+            double* Db = &D[j*16];
+            double* rb = &rhs_s[j*4];
+            double* xb = &x_s[j*4];
+
+            if (j < nt-1) {
+                double* Ub = &U_b[j*16];
+                double* xp = &x_s[(j+1)*4];
+                for(int r2=0;r2<4;r2++){
+                    double s=0;
+                    for(int q=0;q<4;q++) s+=Ub[r2*4+q]*xp[q];
+                    rb[r2]-=s;
+                }
+            }
+
+            // Solve D_j · x_j = rhs_j
+            double A[16]; for(int q=0;q<16;q++) A[q]=Db[q];
+            double b4[4]; for(int q=0;q<4;q++) b4[q]=rb[q];
+            for(int col=0;col<4;col++){
+                double mx=fabs(A[col*4+col]); int mi=col;
+                for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
+                if(mi!=col){
+                    for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
+                    {double t=b4[col];b4[col]=b4[mi];b4[mi]=t;}
+                }
+                double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
+                for(int row=col+1;row<4;row++){
+                    double m=A[row*4+col]/d;
+                    for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
+                    b4[row]-=m*b4[col];
+                }
+            }
+            for(int row=3;row>=0;row--){
+                double s=b4[row];
+                for(int q=row+1;q<4;q++) s-=A[row*4+q]*b4[q];
+                xb[row]=s/A[row*4+row];
+            }
+        }
+    }
+    __syncthreads();
+
+    // ---------- Write output ----------
+    for (int j = tid; j < nt; j += blockDim.x) {
+        int flat = i * nt + j;
+        Mv_out[flat]       = x_s[j*4+0];
+        Mv_out[n + flat]   = x_s[j*4+1];
+        Mv_out[2*n + flat] = x_s[j*4+2];
+        Mv_out[3*n + flat] = x_s[j*4+3];
+    }
+}
+
+// Apply line-solve correction with atmosphere masking
+__global__
+void k_fas_apply_line_correction(
+    double* rho, double* mr, double* mt, double* rhoE,
+    const double* corr, const double* rho0, double atm_thresh,
+    double omega, int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int n = nr*nt;
+    rho[k]  -= omega * corr[flat];
+    mr[k]   -= omega * corr[n + flat];
+    mt[k]   -= omega * corr[2*n + flat];
+    rhoE[k] -= omega * corr[3*n + flat];
+}
+
 // ========================= SIMPLE smoother kernels ========================
 
 __global__
@@ -516,18 +790,76 @@ void k_fas_smooth_blkjac(
 void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
+    bool verbose = false;
 
     for (int it = 0; it < n_iters; ++it) {
-        // ===== Block-Jacobi relaxation: U -= ω · J⁻¹_diag · F(U) =====
-        compute_F(l, g0_over_dt);
-        k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
-            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-            lev.d_res, lev.d_blk_inv,
-            lev.d_rho0, atm_rho_thresh,
-            OMEGA, lev.nr, lev.nt, lev.ng);
-        apply_floor(l);
 
-        // ===== SIMPLE: pressure correction (elliptic mode) =====
+        if (use_line_jacobi) {
+            // ===== ADLR: alternating r-line / θ-line Thomas sweeps =====
+            // Scratch buffer for line-solve output (reuse GMRES V[0])
+            double* scratch = lev.d_gmres_V[0];
+
+            // --- r-line sweep (one block per θ-line) ---
+            compute_F(l, g0_over_dt);
+
+            if (verbose && it == 0) {
+                double norm_pre = residual_norm(l);
+                std::fprintf(stderr, "    smooth L%d pre: ||F||=%.4e\n", l, norm_pre);
+            }
+
+            {
+                size_t smem_r = lev.nr * 56 * sizeof(double);
+                int threads_r = std::min(lev.nr, 256);
+                // Opt-in to extended shared memory when needed (>48 KB)
+                cudaFuncSetAttribute(k_fas_line_solve,
+                    cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem_r);
+                k_fas_line_solve<<<lev.nt, threads_r, smem_r>>>(
+                    lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                    lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+                    lev.d_r_center, lev.d_r_face, lev.d_theta_face,
+                    lev.d_dr, lev.d_dtheta, lev.d_gr0,
+                    lev.d_res, scratch,
+                    lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
+            }
+            k_fas_apply_line_correction<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                scratch, lev.d_rho0, atm_rho_thresh,
+                OMEGA, lev.nr, lev.nt, lev.ng);
+            apply_floor(l);
+
+            // --- θ-line sweep (one block per r-line) ---
+            compute_F(l, g0_over_dt);
+            {
+                size_t smem_t = lev.nt * 56 * sizeof(double);
+                int threads_t = std::min(lev.nt, 256);
+                cudaFuncSetAttribute(k_fas_line_solve_theta,
+                    cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem_t);
+                k_fas_line_solve_theta<<<lev.nr, threads_t, smem_t>>>(
+                    lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                    lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+                    lev.d_r_center, lev.d_r_face, lev.d_theta_face,
+                    lev.d_dr, lev.d_dtheta, lev.d_gr0,
+                    lev.d_res, scratch,
+                    lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
+            }
+            k_fas_apply_line_correction<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                scratch, lev.d_rho0, atm_rho_thresh,
+                OMEGA, lev.nr, lev.nt, lev.ng);
+            apply_floor(l);
+
+        } else {
+            // ===== Fallback: point-wise block-Jacobi =====
+            compute_F(l, g0_over_dt);
+            k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_res, lev.d_blk_inv,
+                lev.d_rho0, atm_rho_thresh,
+                OMEGA, lev.nr, lev.nt, lev.ng);
+            apply_floor(l);
+        }
+
+        // ===== SIMPLE pressure correction (elliptic coupling) =====
         if (use_simple_smoother) {
             compute_F(l, g0_over_dt);
             k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
