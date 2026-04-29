@@ -729,9 +729,11 @@ double FasSolver::step(double t, double t_end) {
 
 __global__
 void k_fas_rk_update(double* rho, double* mr, double* mt, double* rhoE,
-                     const double* R, double dt_val, int nr, int nt, int ng) {
+                     const double* R, const double* rho0, double atm_thresh,
+                     double dt_val, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;  // skip atmosphere
     int k = fas_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  += dt_val * R[flat];
@@ -786,11 +788,11 @@ double FasSolver::step_explicit(double t, double t_end) {
         lev.d_Un, lev.nr, lev.nt, lev.ng);
 
     // Stage 1: U* = Un + dt * R(Un)
-    // Explicit: use NON-well-balanced residual (wb=0) for stability
+    // Well-balanced residual (wb=1) to avoid polar artifacts
     launch_ghost(0);
     compute_gravity_1d(0);
     {
-        int wb = 0;
+        int wb = 1;
         k_fas_residual<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -810,14 +812,14 @@ double FasSolver::step_explicit(double t, double t_end) {
     }
     k_fas_rk_update<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_res, dt, lev.nr, lev.nt, lev.ng);
+        lev.d_res, lev.d_rho0, atm_rho_thresh, dt, lev.nr, lev.nt, lev.ng);
     apply_floor(0);
 
     // Stage 2: compute R(U*)
     launch_ghost(0);
     compute_gravity_1d(0);
     {
-        int wb = 0;
+        int wb = 1;
         k_fas_residual<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -837,7 +839,7 @@ double FasSolver::step_explicit(double t, double t_end) {
     }
     k_fas_rk_update<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_res, dt, lev.nr, lev.nt, lev.ng);
+        lev.d_res, lev.d_rho0, atm_rho_thresh, dt, lev.nr, lev.nt, lev.ng);
 
     // Average: U^{n+1} = 0.5*(Un + U**)
     k_fas_rk_average<<<(n+B-1)/B,B>>>(
