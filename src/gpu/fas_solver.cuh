@@ -143,4 +143,5 @@ private:
 
     // Diagnostics
     double residual_norm(int l);
+    void residual_norm_detail(int l, const char* label);
 };

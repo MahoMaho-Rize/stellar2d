@@ -426,11 +426,17 @@ void k_fas_bdf2_rhs(const double* Un, const double* Un_prev,
 // ========================= Public solve ========================
 
 int FasSolver::solve(double dt, double g0_over_dt, int max_cycles, double tol) {
+    bool verbose = false;  // disable detail prints for speed
     for (int cyc = 0; cyc < max_cycles; ++cyc) {
         fas_vcycle(0, dt, g0_over_dt);
 
         compute_F(0, g0_over_dt);
         double norm = residual_norm(0);
+        if (verbose) {
+            char label[64];
+            std::snprintf(label, sizeof(label), "step%d cyc%d", step_count, cyc);
+            residual_norm_detail(0, label);
+        }
         if (norm < tol) return cyc + 1;
     }
     return max_cycles;
@@ -450,7 +456,7 @@ double FasSolver::step(double t, double t_end) {
     }
 
     double dt_cfl = compute_cfl_dt();
-    double cfl_max_factor = 20.0;
+    double cfl_max_factor = 200.0;
 
     int max_dt_cuts = 4;
     int max_cycles = 6;

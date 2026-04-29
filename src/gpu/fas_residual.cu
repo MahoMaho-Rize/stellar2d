@@ -506,12 +506,59 @@ void k_fas_sponge(double* rho, double* mr, double* mt, double* rhoE,
 
 double FasSolver::residual_norm(int l) {
     FasLevel& lev = levels[l];
-    int n4 = 4 * lev.nr * lev.nt;
+    int n = lev.nr * lev.nt;
+    int n4 = 4 * n;
     std::vector<double> h(n4);
     CUDA_CHECK(cudaMemcpy(h.data(), lev.d_res, n4*sizeof(double), cudaMemcpyDeviceToHost));
+
+    // Only count interior cells (ρ₀ >= atm_rho_thresh)
+    std::vector<double> h_rho0(n);
+    CUDA_CHECK(cudaMemcpy(h_rho0.data(), lev.d_rho0, n*sizeof(double), cudaMemcpyDeviceToHost));
+
     double mx = 0;
-    for (int i = 0; i < n4; ++i) mx = std::max(mx, std::fabs(h[i]));
+    for (int flat = 0; flat < n; ++flat) {
+        if (h_rho0[flat] < atm_rho_thresh) continue;
+        for (int eq = 0; eq < 4; ++eq)
+            mx = std::max(mx, std::fabs(h[eq*n + flat]));
+    }
     return mx;
+}
+
+// Detailed residual norm with per-equation and per-region breakdown
+void FasSolver::residual_norm_detail(int l, const char* label) {
+    FasLevel& lev = levels[l];
+    int n = lev.nr * lev.nt;
+    int n4 = 4 * n;
+    std::vector<double> h(n4);
+    CUDA_CHECK(cudaMemcpy(h.data(), lev.d_res, n4*sizeof(double), cudaMemcpyDeviceToHost));
+
+    std::vector<double> h_rho0(n);
+    CUDA_CHECK(cudaMemcpy(h_rho0.data(), lev.d_rho0, n*sizeof(double), cudaMemcpyDeviceToHost));
+
+    double eq_max[4] = {0,0,0,0};        // per-equation L∞
+    double interior_max[4] = {0,0,0,0};   // interior cells only
+    double atm_max[4] = {0,0,0,0};        // atmosphere cells only
+    int n_interior = 0, n_atm = 0;
+
+    for (int flat = 0; flat < n; ++flat) {
+        bool is_interior = h_rho0[flat] >= atm_rho_thresh;
+        if (is_interior) n_interior++; else n_atm++;
+        for (int eq = 0; eq < 4; ++eq) {
+            double val = std::fabs(h[eq*n + flat]);
+            eq_max[eq] = std::max(eq_max[eq], val);
+            if (is_interior)
+                interior_max[eq] = std::max(interior_max[eq], val);
+            else
+                atm_max[eq] = std::max(atm_max[eq], val);
+        }
+    }
+
+    std::fprintf(stderr, "  [%s] L%d  ||F||: rho=%.2e mr=%.2e mt=%.2e E=%.2e\n",
+                 label, l, eq_max[0], eq_max[1], eq_max[2], eq_max[3]);
+    std::fprintf(stderr, "         interior(%d): rho=%.2e mr=%.2e mt=%.2e E=%.2e\n",
+                 n_interior, interior_max[0], interior_max[1], interior_max[2], interior_max[3]);
+    std::fprintf(stderr, "         atm(%d):      rho=%.2e mr=%.2e mt=%.2e E=%.2e\n",
+                 n_atm, atm_max[0], atm_max[1], atm_max[2], atm_max[3]);
 }
 
 // ========================= CFL dt ========================
