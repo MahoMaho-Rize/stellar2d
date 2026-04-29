@@ -72,10 +72,12 @@ struct FasLevel {
     // GMRES(k) scratch (per level): k=3, right-preconditioned
     // V[0..k]: Krylov basis vectors, each 4*phys
     // Z[0..k-1]: preconditioned search directions, each 4*phys
-    static constexpr int GMRES_K = 3;
-    double *d_gmres_V[GMRES_K + 1];   // 4 vectors of size 4*phys
-    double *d_gmres_Z[GMRES_K];       // 3 vectors of size 4*phys
-    double *d_gmres_Ubak;             // state backup for JFD, size 4*phys
+    static constexpr int GMRES_K = 30;
+    double *d_gmres_V[GMRES_K + 1];   // Krylov basis vectors, each 4*phys
+    double *d_gmres_Z[GMRES_K];       // preconditioned directions, each 4*phys
+    double *d_gmres_Ubak;             // state backup for matvec, size 4*phys
+    double *d_Fk;                     // saved F(U) for JFNK matvec, size 4*phys
+    double *d_gmres_w;                // matvec scratch, size 4*phys
     GmgGpu pressure_gmg;   // per-level pressure Poisson solver
 };
 
@@ -98,6 +100,9 @@ struct FasSolver {
     // Full time step (manages dt, calls solve)
     double step(double t, double t_end);
 
+    // Explicit RK2 time step (CFL-limited, for reference runs)
+    double step_explicit(double t, double t_end);
+
     // CFL-based dt estimate (|v|+cs signal speed)
     double compute_cfl_dt();
 
@@ -117,9 +122,9 @@ struct FasSolver {
     double sponge_r_top = 0.0;
     double sponge_kappa = 10.0;
 
-    static constexpr int NU1 = 3;     // pre-smooth iterations
+    static constexpr int NU1 = 4;     // pre-smooth iterations
     static constexpr int NU2 = 4;     // post-smooth iterations
-    static constexpr double OMEGA = 0.7;  // damping factor
+    static constexpr double OMEGA = 0.8;  // damping factor
 
 private:
     void build_level(int l, int nr, int nt, int ng,
@@ -140,6 +145,12 @@ private:
     void prolongate_correct(int coarse, int fine);
 
     void assemble_smoother(int l, double g0_over_dt);
+
+    // JFNK outer solver
+    void jfnk_matvec(const double* d_v, double* d_Jv, double dt, double g0_over_dt);
+    void apply_preconditioner(const double* d_v, double* d_Mv, double dt, double g0_over_dt);
+    int gmres_solve(double* d_x, const double* d_b, double dt, double g0_over_dt,
+                    double tol, int max_iter);
 
     // Diagnostics
     double residual_norm(int l);

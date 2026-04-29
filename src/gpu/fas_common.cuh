@@ -26,4 +26,33 @@ __global__ void k_fas_sponge(double* rho, double* mr, double* mt, double* rhoE,
 __global__ void k_fas_compute_F(double* F, const double* R,
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* fas_rhs, double inv_dt, int nr, int nt, int ng);
+
+// Residual kernels (needed by explicit stepper)
+__global__ void k_fas_residual(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face,
+    const double* theta_face, const double* dr, const double* dtheta,
+    const double* gr, const double* gr0,
+    const double* P0, const double* rho0,
+    double* res,
+    int nr, int nt, int ng, double gam, double atm_thresh,
+    int use_wellbalance);
+
+__global__ void k_fas_residual_origin(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face,
+    const double* theta_face, const double* dr, const double* dtheta,
+    const double* gr, const double* gr0,
+    const double* P0, const double* rho0,
+    double* res,
+    int nr, int nt, int ng, double gam, double atm_thresh,
+    int use_wellbalance);
+
+__global__ void k_fas_cfl(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* dr, const double* r_center, const double* dtheta,
+    const double* rho0, double* out,
+    int nr, int nt, int ng, double gam, double atm_thresh);
 #endif
