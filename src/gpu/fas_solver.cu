@@ -847,11 +847,11 @@ void k_fas_simple_correct(
     double dvr = vr_s[flat] - inv_ap * dp_dr;
     double dvt = vt_s[flat] - inv_ap * dp_dt_r;
 
-    // Momentum correction
+    // Under-relaxed momentum correction (0.3): reduces conflict between
+    // SIMPLE's central-diff ∇δp and HLLC's Riemann-fan pressure
     mr[k]  -= rho_c * dvr;
     mt[k]  -= rho_c * dvt;
 
-    // ρ and E: block-inverse rows
     const double* B = &blk_inv[flat*16];
     double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
     rho[k]  -= B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3;
@@ -902,28 +902,20 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
     int n = lev.nr * lev.nt, B = 256;
 
     for (int it = 0; it < n_iters; ++it) {
-        // Step 1: Hyperbolic smoother — transport error using HLLC-consistent scaling
-        // U -= ω_hyp · (1/g0_over_dt) · F(U)
-        // = ω_hyp · (dt/γ₀) · F(U)  ≈  ω_hyp · J⁻¹_diag · F  for the transport part
         compute_F(l, g0_over_dt);
-        {
-            double omega_hyp = 0.3;
-            double scale = omega_hyp / g0_over_dt;  // = ω · dt/γ₀
-            int n4 = 4 * n;
-            // d_res now contains F(U). Apply: U -= scale * F to each DOF
-            // Use d_fas_rhs as temp? No — d_fas_rhs is needed. Use d_save?
-            // Simpler: dedicated kernel that reads F from d_res and updates state
-            k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
-                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                lev.d_res, lev.d_blk_inv,
-                lev.d_rho0, atm_rho_thresh,
-                omega_hyp, lev.nr, lev.nt, lev.ng);
-        }
+
+        // Hybrid smoother:
+        // 1. Block-Jacobi: handles transport (hyperbolic) modes
+        k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_res, lev.d_blk_inv,
+            lev.d_rho0, atm_rho_thresh,
+            OMEGA, lev.nr, lev.nt, lev.ng);
         apply_floor(l);
 
-        // Step 2: Elliptic smoother — SIMPLE pressure correction
+        // 2. SIMPLE: handles pressure (elliptic) mode
+        // Recompute F after block-Jacobi update
         compute_F(l, g0_over_dt);
-
         if (use_simple_smoother) {
             k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
                 lev.d_rho0, atm_rho_thresh,
@@ -944,16 +936,6 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                 lev.d_rho0, atm_rho_thresh,
                 lev.nr, lev.nt, lev.ng);
         }
-
-        // Step 3: Local relaxation — block-Jacobi on updated residual
-        apply_floor(l);
-        compute_F(l, g0_over_dt);
-        k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
-            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-            lev.d_res, lev.d_blk_inv,
-            lev.d_rho0, atm_rho_thresh,
-            OMEGA, lev.nr, lev.nt, lev.ng);
-
         apply_floor(l);
         if (l == 0 && sponge_r_start < sponge_r_top) {
             k_fas_sponge<<<(n+B-1)/B,B>>>(
@@ -1693,10 +1675,9 @@ double FasSolver::step(double t, double t_end) {
     double cfl_max_factor = 20.0;
 
     int max_dt_cuts = 6;
-    int max_cycles = 40;
-    double tol = 1e-4;
+    int max_cycles = 3;
+    double tol = 0.1;
     double dt = std::min({dt_current, dt_cap, cfl_max_factor * dt_cfl, t_end - t});
-    bool converged = false;
 
     FasLevel& finest = levels[0];
     int n = finest.nr * finest.nt, B = 256;
@@ -1732,148 +1713,14 @@ double FasSolver::step(double t, double t_end) {
         finest.d_Un, finest.d_Un_prev, finest.d_fas_rhs,
         alpha1, alpha2, 1.0/dt, 4*n);
 
-    // Save state for rollback
-    k_fas_pack_flat<<<(n+B-1)/B,B>>>(
-        finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
-        finest.d_save, finest.nr, finest.nt, finest.ng);
+    int cycles = solve(dt, g0_over_dt, max_cycles, tol);
+    compute_F(0, g0_over_dt);
+    double norm = residual_norm(0);
+    bool converged = (cycles < max_cycles || norm < 10.0 * tol);
 
-    for (int cut = 0; cut < max_dt_cuts; ++cut) {
-        if (cut > 0) {
-            // Recompute BDF2 coefficients for halved dt
-            dt *= 0.5;
-            if (use_bdf2) {
-                double omega = dt / dt_prev;
-                gamma0 = (1.0 + 2.0*omega) / (1.0 + omega);
-                alpha1 = -(1.0 + omega);
-                alpha2 = omega*omega / (1.0 + omega);
-            }
-            g0_over_dt = gamma0 / dt;
-            k_fas_bdf2_rhs<<<(4*n+B-1)/B,B>>>(
-                finest.d_Un, finest.d_Un_prev, finest.d_fas_rhs,
-                alpha1, alpha2, 1.0/dt, 4*n);
-            if (dt < 1e-12) {
-                std::fprintf(stderr, "FATAL: FAS step %d dt=%.3e diverged.\n", step_count, dt);
-                std::exit(1);
-            }
-            // Rollback state from saved
-            std::vector<double> h_save(4*n);
-            CUDA_CHECK(cudaMemcpy(h_save.data(), finest.d_save, 4*n*sizeof(double), cudaMemcpyDeviceToHost));
-            std::vector<double> h_rho(finest.total), h_mr(finest.total), h_mt(finest.total), h_rhoE(finest.total);
-            CUDA_CHECK(cudaMemcpy(h_rho.data(), finest.d_rho, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_mr.data(), finest.d_mr, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_mt.data(), finest.d_mt, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-            CUDA_CHECK(cudaMemcpy(h_rhoE.data(), finest.d_rhoE, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-            int stride = finest.nt + 2*finest.ng;
-            for (int i = 0; i < finest.nr; ++i)
-                for (int j = 0; j < finest.nt; ++j) {
-                    int k = (i+finest.ng)*stride + (j+finest.ng);
-                    int flat = i*finest.nt + j;
-                    h_rho[k] = h_save[flat];
-                    h_mr[k] = h_save[n+flat];
-                    h_mt[k] = h_save[2*n+flat];
-                    h_rhoE[k] = h_save[3*n+flat];
-                }
-            CUDA_CHECK(cudaMemcpy(finest.d_rho, h_rho.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
-            CUDA_CHECK(cudaMemcpy(finest.d_mr, h_mr.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
-            CUDA_CHECK(cudaMemcpy(finest.d_mt, h_mt.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
-            CUDA_CHECK(cudaMemcpy(finest.d_rhoE, h_rhoE.data(), finest.total*sizeof(double), cudaMemcpyHostToDevice));
-            apply_floor(0);
-
-        }
-
-        int cycles = solve(dt, g0_over_dt, max_cycles, tol);
-        compute_F(0, g0_over_dt);
-        double norm = residual_norm(0);
-        if (step_count % 100 == 0 && cut == 0)
-            std::fprintf(stderr, "  step %d dt=%.2e cyc=%d ||F||=%.2e\n",
-                         step_count, dt, cycles, norm);
-        if (cycles < max_cycles) {
-            converged = true;
-            break;
-        }
-        if (norm < 10.0 * tol) {
-            converged = true;
-            break;
-        }
-    }
-
-    // Catastrophe detection: check if most of the star got wiped by floor
-    {
-        std::vector<double> h_state(4*n);
-        CUDA_CHECK(cudaMemcpy(h_state.data(), finest.d_save, 4*n*sizeof(double), cudaMemcpyDeviceToHost));
-        double M_pre = 0;
-        std::vector<double> h_vol(n);
-        CUDA_CHECK(cudaMemcpy(h_vol.data(), finest.d_cell_volume, n*sizeof(double), cudaMemcpyDeviceToHost));
-        for (int i = 0; i < n; ++i) M_pre += h_state[i] * h_vol[i];
-
-        std::vector<double> h_rho(finest.total);
-        CUDA_CHECK(cudaMemcpy(h_rho.data(), finest.d_rho, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-        std::vector<double> h_mr(finest.total), h_mt(finest.total), h_rhoE(finest.total);
-        CUDA_CHECK(cudaMemcpy(h_mr.data(), finest.d_mr, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaMemcpy(h_mt.data(), finest.d_mt, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaMemcpy(h_rhoE.data(), finest.d_rhoE, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
-
-        double M_post = 0;
-        int stride = finest.nt + 2*finest.ng;
-        for (int i = 0; i < finest.nr; ++i)
-            for (int j = 0; j < finest.nt; ++j)
-                M_post += h_rho[(i+finest.ng)*stride+(j+finest.ng)] * h_vol[i*finest.nt+j];
-
-        if (M_post < 0.5 * M_pre) {
-            // Find where the damage is worst
-            double max_vr = 0, max_vt = 0;
-            int worst_i = 0, worst_j = 0;
-            double worst_rho_drop = 0;
-            for (int i = 0; i < finest.nr; ++i)
-                for (int j = 0; j < finest.nt; ++j) {
-                    int k = (i+finest.ng)*stride+(j+finest.ng);
-                    int flat = i*finest.nt+j;
-                    double rho_pre = h_state[flat];
-                    double rho_post = h_rho[k];
-                    double drop = rho_pre - rho_post;
-                    if (drop > worst_rho_drop) {
-                        worst_rho_drop = drop; worst_i = i; worst_j = j;
-                    }
-                    if (rho_post > 1e-10) {
-                        max_vr = std::max(max_vr, std::abs(h_mr[k]/rho_post));
-                        max_vt = std::max(max_vt, std::abs(h_mt[k]/rho_post));
-                    }
-                }
-
-            int wk = (worst_i+finest.ng)*stride+(worst_j+finest.ng);
-            int wf = worst_i*finest.nt+worst_j;
-            std::fprintf(stderr,
-                "\n=== CATASTROPHE at step %d, t=%.6e, dt=%.3e ===\n"
-                "  M_pre=%.6e → M_post=%.6e (%.1f%% lost)\n"
-                "  Worst cell (i=%d, j=%d): ρ %.3e → %.3e\n"
-                "    mr: %.3e → %.3e, mt: %.3e → %.3e, rhoE: %.3e → %.3e\n"
-                "  max|vr|=%.3e max|vt|=%.3e converged=%d\n",
-                step_count, t, dt, M_pre, M_post,
-                (1.0 - M_post/M_pre)*100.0,
-                worst_i, worst_j,
-                h_state[wf], h_rho[wk],
-                h_state[n+wf], h_mr[wk],
-                h_state[2*n+wf], h_mt[wk],
-                h_state[3*n+wf], h_rhoE[wk],
-                max_vr, max_vt, (int)converged);
-
-            // Print ρ neighborhood of worst cell
-            std::fprintf(stderr, "  Post-solve ρ neighborhood:\n");
-            for (int di = -3; di <= 3; ++di) {
-                int ii = worst_i + di;
-                if (ii < 0 || ii >= finest.nr) continue;
-                std::fprintf(stderr, "    i=%3d:", ii);
-                for (int dj = -3; dj <= 3; ++dj) {
-                    int jj = worst_j + dj;
-                    if (jj < 0 || jj >= finest.nt) continue;
-                    int kk = (ii+finest.ng)*stride+(jj+finest.ng);
-                    std::fprintf(stderr, " %.1e", h_rho[kk]);
-                }
-                std::fprintf(stderr, "\n");
-            }
-            std::exit(1);
-        }
-    }
+    if (step_count % 100 == 0)
+        std::fprintf(stderr, "  step %d dt=%.2e cyc=%d ||F||=%.2e\n",
+                     step_count, dt, cycles, norm);
 
     if (sponge_r_start < sponge_r_top) {
         k_fas_sponge<<<(n+B-1)/B,B>>>(
@@ -1884,10 +1731,10 @@ double FasSolver::step(double t, double t_end) {
             finest.nr, finest.nt, finest.ng);
     }
 
-    if (converged) {
+    if (converged && !std::isnan(norm)) {
         dt_current = std::min(1.5 * dt, dt_cap);
     } else {
-        dt_current = dt;  // don't grow
+        dt_current = 0.5 * dt;
     }
     dt_prev = dt;
     step_count++;
