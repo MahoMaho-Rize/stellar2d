@@ -1524,7 +1524,7 @@ double FasSolver::step(double t, double t_end) {
     int n = finest.nr * finest.nt, B = 256;
 
     // BDF2 coefficients
-    bool use_bdf2 = false; // temporarily disabled for A/B testing
+    bool use_bdf2 = (step_count > 0 && dt_prev > 1e-30);
     double gamma0, alpha1, alpha2;
     if (use_bdf2) {
         double omega = dt / dt_prev;
