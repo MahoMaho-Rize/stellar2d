@@ -219,7 +219,8 @@ int main(int argc, char** argv) {
     std::printf("Starting time integration...\n");
 
 #ifdef USE_GPU
-    if (cfg.solver_type == "fas") {
+    if (cfg.solver_type == "fas" || cfg.solver_type == "explicit") {
+        bool use_explicit = (cfg.solver_type == "explicit");
         // ===== GPU FAS nonlinear multigrid path =====
         FasSolver fas;
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
@@ -238,7 +239,7 @@ int main(int argc, char** argv) {
         fas.upload_state(grid, state);
 
         while (t < cfg.t_end) {
-            double dt = fas.step(t, cfg.t_end);
+            double dt = use_explicit ? fas.step_explicit(t, cfg.t_end) : fas.step(t, cfg.t_end);
             t += dt;
             step++;
 
