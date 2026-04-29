@@ -25,3 +25,8 @@ void init_lane_emden(const Grid& grid, State& state,
 void init_lane_emden_perturbed(const Grid& grid, State& state,
                                 const LaneEmdenParams& params, double gamma,
                                 double amplitude);
+
+void init_lane_emden_bubble(const Grid& grid, State& state,
+                            const LaneEmdenParams& params, double gamma,
+                            double bubble_r0, double bubble_theta0,
+                            double bubble_radius, double bubble_entropy_boost);

@@ -147,5 +147,8 @@ void Grid::compute_geometry() {
         for (int j = 0; j <= ntheta; ++j) {
             area_theta[i * (ntheta + 1) + j] = std::sin(theta_face[j]) * r2_diff; // Eq. (2.4)
         }
+        // sin(π) ≈ 1.2e-16 in IEEE 754 — force exact zero at both poles
+        area_theta[i * (ntheta + 1) + 0] = 0.0;
+        area_theta[i * (ntheta + 1) + ntheta] = 0.0;
     }
 }
