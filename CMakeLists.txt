@@ -34,6 +34,7 @@ if(USE_GPU)
         src/gpu/fas_smoothers.cu
         src/gpu/fas_multigrid.cu
         src/gpu/fas_solver.cu
+        src/gpu/simple_solver.cu
         src/gpu/lm_residual.cu
         src/gpu/lm_precond.cu
         src/gpu/lm_krylov.cu

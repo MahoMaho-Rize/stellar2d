@@ -18,6 +18,7 @@
 #endif
 #include "gpu/lowmach_solver.h"
 #include "gpu/fas_solver.cuh"
+#include "gpu/simple_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -219,7 +220,49 @@ int main(int argc, char** argv) {
     std::printf("Starting time integration...\n");
 
 #ifdef USE_GPU
-    if (cfg.solver_type == "fas" || cfg.solver_type == "explicit") {
+    if (cfg.solver_type == "simple") {
+        // ===== GPU SIMPLE pressure-correction solver =====
+        SimpleSolver sim;
+        sim.init(grid, eos, cfg.G, cfg.cfl);
+
+        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
+            State state_hse;
+            state_hse.allocate(grid);
+            LaneEmdenParams lep;
+            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
+            init_lane_emden(grid, state_hse, lep, cfg.gamma);
+            sim.upload_state(grid, state_hse);
+            sim.snapshot_hse();
+        }
+
+        sim.upload_state(grid, state);
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        while (t < cfg.t_end) {
+            double dt = sim.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                sim.download_state(grid, state);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
+        }
+        std::fprintf(stderr, "\n");
+        sim.download_state(grid, state);
+        sim.destroy();
+    } else if (cfg.solver_type == "fas" || cfg.solver_type == "explicit") {
         bool use_explicit = (cfg.solver_type == "explicit");
         // ===== GPU FAS nonlinear multigrid path =====
         FasSolver fas;
