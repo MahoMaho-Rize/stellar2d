@@ -516,139 +516,28 @@ void k_fas_smooth_blkjac(
 void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
-
-    constexpr int KK = FasLevel::GMRES_K;  // = 3
+    bool verbose = false;  // disable for production runs
     int n4 = 4 * n;
 
     for (int it = 0; it < n_iters; ++it) {
-        // ===== Right-preconditioned GMRES(k) on J·δU = -F(U) =====
-        // Preconditioner M⁻¹ = block-Jacobi inverse (already computed).
-        // Jacobian-vector product via finite differences:
-        //   J·z ≈ (F(U+ε·z) - F(U)) / ε
-
-        // r₀ = -F(U) (= RHS of Newton system)
+        // ===== Block-Jacobi relaxation: U -= ω · J⁻¹_diag · F(U) =====
         compute_F(l, g0_over_dt);
-        k_fas_copy<<<(n4+255)/256,256>>>(lev.d_gmres_V[0], lev.d_res, n4);
-        k_fas_scale<<<(n4+255)/256,256>>>(lev.d_gmres_V[0], -1.0, n4);
 
-        double beta = gpu_norm(lev.d_gmres_V[0], n4);
-        if (beta < 1e-14) break;
-        k_fas_scale<<<(n4+255)/256,256>>>(lev.d_gmres_V[0], 1.0/beta, n4);
-
-        // Hessenberg matrix H (KK+1 x KK)
-        double H[(KK+1)*KK];
-        for (int q = 0; q < (KK+1)*KK; ++q) H[q] = 0.0;
-
-        int k_actual = KK;
-        for (int j = 0; j < KK; ++j) {
-            // z_j = M⁻¹ · v_j
-            if (use_line_jacobi) {
-                int smem = lev.nr * (3*16 + 2*4) * (int)sizeof(double);
-                int threads = std::min(lev.nr, 256);
-                cudaFuncSetAttribute(k_fas_line_solve,
-                    cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
-                k_fas_line_solve<<<lev.nt, threads, smem>>>(
-                    lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                    lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
-                    lev.d_r_center, lev.d_r_face, lev.d_theta_face,
-                    lev.d_dr, lev.d_dtheta, lev.d_gr0,
-                    lev.d_gmres_V[j], lev.d_gmres_Z[j],
-                    lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
-            } else {
-                k_fas_precond<<<(n+255)/256,256>>>(
-                    lev.d_gmres_V[j], lev.d_blk_inv, lev.d_gmres_Z[j], n4);
-            }
-
-            // w = J · z_j via finite difference
-            // Save current state for FD Jacobian-vector product
-            k_fas_pack_flat<<<(n+255)/256,256>>>(
-                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
-
-            double z_norm = gpu_norm(lev.d_gmres_Z[j], n4);
-            double eps_fd = 1e-7 * std::fmax(1.0, beta) / std::fmax(z_norm, 1e-30);
-
-            // U_pert = U + eps·z_j
-            k_fas_perturb<<<(n+255)/256,256>>>(
-                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                lev.d_gmres_Z[j], eps_fd, lev.nr, lev.nt, lev.ng);
-            compute_F(l, g0_over_dt);  // F(U+ε·z) stored in d_res
-
-            // w = (F(U+ε·z) - F(U)) / ε  →  stored in V[j+1]
-            // But F(U) = -r₀·beta·... no, we need to save F(U).
-            // Actually: V[0] = -F(U)/||F||, so F(U) = -beta·V[0] (only at j=0 before
-            // V[0] was overwritten).  Simpler: recompute F(U) after restoring state.
-
-            // Store F_pert in V[j+1] temporarily
-            k_fas_copy<<<(n4+255)/256,256>>>(lev.d_gmres_V[j+1], lev.d_res, n4);
-
-            // Restore state
-            k_fas_unpack_flat<<<(n+255)/256,256>>>(
-                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
-            launch_ghost(l);
-
-            // Recompute F(U) at original state
-            compute_F(l, g0_over_dt);
-            // V[j+1] = (F_pert - F(U)) / eps
-            k_fas_axpy_v<<<(n4+255)/256,256>>>(lev.d_gmres_V[j+1], -1.0, lev.d_res, n4);
-            k_fas_scale<<<(n4+255)/256,256>>>(lev.d_gmres_V[j+1], 1.0/eps_fd, n4);
-
-            // Modified Gram-Schmidt
-            for (int i = 0; i <= j; ++i) {
-                double hij = gpu_dot(lev.d_gmres_V[j+1], lev.d_gmres_V[i], n4);
-                H[i*KK + j] = hij;
-                k_fas_axpy_v<<<(n4+255)/256,256>>>(lev.d_gmres_V[j+1], -hij, lev.d_gmres_V[i], n4);
-            }
-            double hjj = gpu_norm(lev.d_gmres_V[j+1], n4);
-            H[(j+1)*KK + j] = hjj;
-            if (hjj < 1e-14) { k_actual = j + 1; break; }
-            k_fas_scale<<<(n4+255)/256,256>>>(lev.d_gmres_V[j+1], 1.0/hjj, n4);
+        if (verbose && it == 0) {
+            double norm_pre = residual_norm(l);
+            std::fprintf(stderr, "    smooth L%d pre: ||F||=%.4e\n", l, norm_pre);
         }
 
-        // Solve least-squares: min ||β·e₁ - H·y||
-        double g[KK+1];
-        g[0] = beta;
-        for (int i = 1; i <= KK; ++i) g[i] = 0.0;
-
-        // Givens rotations
-        double cs[KK], sn[KK];
-        for (int j = 0; j < k_actual; ++j) {
-            for (int i = 0; i < j; ++i) {
-                double tmp = cs[i]*H[i*KK+j] + sn[i]*H[(i+1)*KK+j];
-                H[(i+1)*KK+j] = -sn[i]*H[i*KK+j] + cs[i]*H[(i+1)*KK+j];
-                H[i*KK+j] = tmp;
-            }
-            double a = H[j*KK+j], b = H[(j+1)*KK+j];
-            double r = std::sqrt(a*a + b*b);
-            cs[j] = a / std::fmax(r, 1e-30);
-            sn[j] = b / std::fmax(r, 1e-30);
-            H[j*KK+j] = r;
-            H[(j+1)*KK+j] = 0.0;
-            double tmp = cs[j]*g[j] + sn[j]*g[j+1];
-            g[j+1] = -sn[j]*g[j] + cs[j]*g[j+1];
-            g[j] = tmp;
-        }
-
-        // Back-substitution
-        double y[KK];
-        for (int i = k_actual - 1; i >= 0; --i) {
-            y[i] = g[i];
-            for (int j = i + 1; j < k_actual; ++j) y[i] -= H[i*KK+j]*y[j];
-            y[i] /= std::fmax(std::fabs(H[i*KK+i]), 1e-30);
-        }
-
-        // Update: U += Σ y_j · z_j (damped)
-        for (int j = 0; j < k_actual; ++j) {
-            k_fas_perturb<<<(n+255)/256,256>>>(
-                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                lev.d_gmres_Z[j], OMEGA * y[j], lev.nr, lev.nt, lev.ng);
-        }
+        k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_res, lev.d_blk_inv,
+            lev.d_rho0, atm_rho_thresh,
+            OMEGA, lev.nr, lev.nt, lev.ng);
         apply_floor(l);
 
         // ===== SIMPLE: pressure correction (elliptic mode) =====
-        compute_F(l, g0_over_dt);
         if (use_simple_smoother) {
+            compute_F(l, g0_over_dt);
             k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
                 lev.d_rho0, atm_rho_thresh,
                 lev.d_vr_s, lev.d_vt_s, n);
@@ -667,8 +556,8 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                 lev.d_r_center, lev.d_r_face, lev.d_theta_face,
                 lev.d_rho0, atm_rho_thresh,
                 lev.nr, lev.nt, lev.ng);
+            apply_floor(l);
         }
-        apply_floor(l);
 
         if (l == 0 && sponge_r_start < sponge_r_top) {
             k_fas_sponge<<<(n+B-1)/B,B>>>(
@@ -677,6 +566,12 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                 sponge_r_start, sponge_r_top, sponge_kappa, dt,
                 1.0/(gamma-1.0),
                 lev.nr, lev.nt, lev.ng);
+        }
+
+        if (verbose) {
+            compute_F(l, g0_over_dt);
+            double norm_post = residual_norm(l);
+            std::fprintf(stderr, "    smooth L%d it%d: ||F||=%.4e\n", l, it, norm_post);
         }
     }
 }

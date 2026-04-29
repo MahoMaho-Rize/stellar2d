@@ -150,6 +150,7 @@ void k_fas_prolongate_correct(
     double* f_rho, double* f_mr, double* f_mt, double* f_rhoE,
     const double* c_rho, const double* c_mr, const double* c_mt, const double* c_rhoE,
     const double* save_rho, const double* save_mr, const double* save_mt, const double* save_rhoE,
+    const double* f_rho0, double atm_thresh,
     int cnr, int cnt, int fnt, int fng, int cng, double gam) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= cnr*cnt) return;
@@ -165,10 +166,16 @@ void k_fas_prolongate_correct(
         int fi = 2*ic + di;
         for (int dj = 0; dj < 2; ++dj) {
             int fj = 2*jc + dj;
+            int ff = fi*fnt + fj;
+
+            // Skip atmosphere cells — coarse correction is meaningless there
+            if (f_rho0[ff] < atm_thresh) continue;
+
             int fk = (fi+fng)*(fnt+2*fng) + (fj+fng);
 
             double rho_f = fmax(f_rho[fk], 1e-20);
-            double P_f = fmax((gam - 1.0) * f_rhoE[fk], 1e-30);
+            double KE_f = 0.5*(f_mr[fk]*f_mr[fk] + f_mt[fk]*f_mt[fk]) / rho_f;
+            double P_f = fmax((gam - 1.0) * (f_rhoE[fk] - KE_f), 1e-30);
             double cs = sqrt(gam * P_f / rho_f);
 
             const double beta = 0.5;
@@ -198,6 +205,7 @@ void FasSolver::prolongate_correct(int coarse, int fine) {
         fl.d_rho, fl.d_mr, fl.d_mt, fl.d_rhoE,
         cl.d_rho, cl.d_mr, cl.d_mt, cl.d_rhoE,
         cl.d_save, cl.d_save + cn, cl.d_save + 2*cn, cl.d_save + 3*cn,
+        fl.d_rho0, atm_rho_thresh,
         cl.nr, cl.nt, fl.nt, fl.ng, cl.ng, gamma);
     apply_floor(fine);
 }
