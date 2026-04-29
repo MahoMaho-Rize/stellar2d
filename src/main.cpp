@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
     if (cfg.solver_type == "fas") {
         // ===== GPU FAS nonlinear multigrid path =====
         FasSolver fas;
-        fas.use_simple_smoother = (cfg.precond == "simple");
+        fas.use_simple_smoother = (cfg.precond != "block_jacobi");
         fas.init(grid, eos, cfg.G, cfg.cfl);
 
         if (cfg.test_case == "lane_emden_perturbed") {
