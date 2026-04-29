@@ -203,7 +203,7 @@ void k_fas_residual(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, double gam, double atm_thresh,
-    int use_wellbalance, int use_hllc) {
+    int use_wellbalance) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
@@ -224,80 +224,7 @@ void k_fas_residual(
     double P_c = fmax((gam - 1.0) * rhoE[k], 1e-30);
     double r = r_center[i];
 
-    // ===== Donor-cell fallback (used by implicit smoother) =====
-    if (!use_hllc) {
-        int wb = use_wellbalance;
-        auto upwind_r = [&](int il, int ir, int jj, int c) -> double {
-            int kl = fas_idx(il,jj,nt,ng), kr_k = fas_idx(ir,jj,nt,ng);
-            double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
-            double vf = 0.5*(mr[kl]/rl + mr[kr_k]/rr);
-            double ql, qr;
-            if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
-            else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
-            else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
-            else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
-            return vf * (vf >= 0.0 ? ql : qr);
-        };
-        auto upwind_t = [&](int ii, int jl, int jr, int c) -> double {
-            int kl = fas_idx(ii,jl,nt,ng), kr_k = fas_idx(ii,jr,nt,ng);
-            double rl = fmax(rho[kl],1e-20), rr = fmax(rho[kr_k],1e-20);
-            double vf = 0.5*(mt[kl]/rl + mt[kr_k]/rr);
-            double ql, qr;
-            if      (c==0) { ql=rho[kl]; qr=rho[kr_k]; }
-            else if (c==1) { ql=mr[kl];  qr=mr[kr_k]; }
-            else if (c==2) { ql=mt[kl];  qr=mt[kr_k]; }
-            else           { ql=rhoE[kl]; qr=rhoE[kr_k]; }
-            return vf * (vf >= 0.0 ? ql : qr);
-        };
-        double Ar_hi=ar[(i+1)*nt+j], Ar_lo=ar[i*nt+j];
-        double At_hi=at[i*(nt+1)+j+1], At_lo=at[i*(nt+1)+j];
-        double div[4];
-        for (int c = 0; c < 4; ++c) {
-            double fr_hi = upwind_r(i,i+1,j,c), fr_lo = upwind_r(i-1,i,j,c);
-            double ft_hi = upwind_t(i,j,j+1,c), ft_lo = upwind_t(i,j-1,j,c);
-            div[c] = -invV*(Ar_hi*fr_hi - Ar_lo*fr_lo + At_hi*ft_hi - At_lo*ft_lo);
-        }
-        double P_ref = wb ? P0[flat] : 0.0;
-        double rho_ref = wb ? rho0[flat] : 0.0;
-        double g0_r = wb ? gr0[i] : 0.0;
-        double Pp_c = P_c - P_ref, rhop_c = rho_c - rho_ref;
-        double dPp_dr = 0;
-        if (i < nr-1) {
-            double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i-1,j,nt,ng)],1e-30) - (wb?P0[(i-1)*nt+j]:0.0);
-            double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i+1,j,nt,ng)],1e-30) - (wb?P0[(i+1)*nt+j]:0.0);
-            double dl=r_center[i]-r_center[i-1], dh=r_center[i+1]-r_center[i];
-            dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh)/(dl+dh);
-        } else {
-            double dl=r_center[nr-1]-r_center[nr-2];
-            dPp_dr = (Pp_c-(fmax((gam-1.0)*rhoE[fas_idx(nr-2,j,nt,ng)],1e-30)-(wb?P0[(nr-2)*nt+j]:0.0)))/dl;
-        }
-        double dPp_dt_r = 0;
-        if (j > 0 && j < nt-1) {
-            double tc_m=0.5*(theta_face[j-1]+theta_face[j]), tc_c=0.5*(theta_face[j]+theta_face[j+1]), tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
-            double dl=tc_c-tc_m, dh=tc_p-tc_c;
-            double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i,j-1,nt,ng)],1e-30) - (wb?P0[i*nt+j-1]:0.0);
-            double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i,j+1,nt,ng)],1e-30) - (wb?P0[i*nt+j+1]:0.0);
-            dPp_dt_r = ((dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh))/(r*(dl+dh));
-        }
-        double gp_r = gr[i] - g0_r;
-        double inv_r = 1.0/r;
-        auto vr_ff = [&](int il, int ir, int jj) -> double {
-            double rl=fmax(rho[fas_idx(il,jj,nt,ng)],1e-20), rr=fmax(rho[fas_idx(ir,jj,nt,ng)],1e-20);
-            return 0.5*(mr[fas_idx(il,jj,nt,ng)]/rl + mr[fas_idx(ir,jj,nt,ng)]/rr);
-        };
-        auto vt_ff = [&](int ii, int jl, int jr) -> double {
-            double rl=fmax(rho[fas_idx(ii,jl,nt,ng)],1e-20), rr=fmax(rho[fas_idx(ii,jr,nt,ng)],1e-20);
-            return 0.5*(mt[fas_idx(ii,jl,nt,ng)]/rl + mt[fas_idx(ii,jr,nt,ng)]/rr);
-        };
-        double div_v = invV*(Ar_hi*vr_ff(i,i+1,j)-Ar_lo*vr_ff(i-1,i,j)+At_hi*vt_ff(i,j,j+1)-At_lo*vt_ff(i,j-1,j));
-        res[flat]       = div[0];
-        res[n + flat]   = div[1] + (-dPp_dr + rhop_c*g0_r + rho_c*gp_r) + rho_c*vt_c*vt_c*inv_r;
-        res[2*n + flat] = div[2] + (-dPp_dt_r) + (-rho_c*vr_c*vt_c*inv_r);
-        res[3*n + flat] = div[3] - P_c*div_v + rho_c*vr_c*(g0_r+gp_r);
-        return;
-    }
-
-    // ===== WB-MUSCL+HLLC face fluxes =====
+    // ===== Flux-level WB-MUSCL+HLLC =====
     // Helper: primitives from FAS state (rhoE = internal energy density ρe)
     auto W = [&](int ii, int jj) -> FPrim {
         int kk = fas_idx(ii,jj,nt,ng);
@@ -364,14 +291,22 @@ void k_fas_residual(
     // For energy: keep the existing P∇·v form but with HLLC-derived div_v.
     // Full WB-HLLC for ρ, mr, mt. HSE defect subtraction ensures R(U₀)=0.
     // HLLC reconstructs P'=P-P₀, ρ'=ρ-ρ₀ → flux is intrinsically WB.
+    // Flux-level WB: subtract P₀_face from momentum flux so divergence is O(ε) at HSE.
+    // r-faces: f_mr contains P in radial direction → subtract P₀_face
+    // θ-faces: f_mt contains P in θ direction → subtract P₀_face
+    double P0f_rhi = 0.5*(P0r(i) + P0r(i+1));
+    double P0f_rlo = 0.5*(P0r(i-1) + P0r(i));
+    double P0f_thi = 0.5*(P0t(j) + P0t(j+1));
+    double P0f_tlo = 0.5*(P0t(j-1) + P0t(j));
+
     double div_rho = -invV*(Ar_hi*fr_hi.f_rho - Ar_lo*fr_lo.f_rho
                            + At_hi*ft_hi.f_rho - At_lo*ft_lo.f_rho);
-    double div_mr  = -invV*(Ar_hi*fr_hi.f_mr  - Ar_lo*fr_lo.f_mr
-                           + At_hi*ft_hi.f_mr  - At_lo*ft_lo.f_mr);
-    double div_mt  = -invV*(Ar_hi*fr_hi.f_mt  - Ar_lo*fr_lo.f_mt
-                           + At_hi*ft_hi.f_mt  - At_lo*ft_lo.f_mt);
+    double div_mr  = -invV*(Ar_hi*(fr_hi.f_mr - P0f_rhi) - Ar_lo*(fr_lo.f_mr - P0f_rlo)
+                           + At_hi*ft_hi.f_mr - At_lo*ft_lo.f_mr);
+    double div_mt  = -invV*(Ar_hi*fr_hi.f_mt - Ar_lo*fr_lo.f_mt
+                           + At_hi*(ft_hi.f_mt - P0f_thi) - At_lo*(ft_lo.f_mt - P0f_tlo));
 
-    // Gravity (not in HLLC flux — added as source)
+    // WB gravity source: ρ'g₀ + ρg' (same as donor-cell path)
     double rho_ref = wb ? rho0[flat] : 0.0;
     double g0_r = wb ? gr0[i] : 0.0;
     double rhop_c = rho_c - rho_ref;
@@ -568,7 +503,7 @@ void k_fas_explicit_advect(
     rhoE[k] += fmin(dtau, dt_phys) * R[3*n + flat];
 }
 
-void FasSolver::compute_residual(int l, int use_hllc) {
+void FasSolver::compute_residual(int l) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     launch_ghost(l);
@@ -581,7 +516,7 @@ void FasSolver::compute_residual(int l, int use_hllc) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, use_hllc);
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
     // Origin kernel handles i==0 using divergence theorem
     k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
@@ -966,24 +901,27 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
 
-    // Only use explicit advection sub-step when dt exceeds CFL
-    // (i.e., when advection is the stiff part that SIMPLE can't smooth).
-    // When dt < CFL, the system is well-conditioned and SIMPLE alone works.
-    bool do_explicit = (l == 0 && dt > compute_cfl_dt());
-
     for (int it = 0; it < n_iters; ++it) {
-        if (do_explicit) {
-            compute_residual(l, 1);  // HLLC for explicit wave propagation
-            k_fas_explicit_advect<<<(n+B-1)/B,B>>>(
+        // Step 1: Hyperbolic smoother — transport error using HLLC-consistent scaling
+        // U -= ω_hyp · (1/g0_over_dt) · F(U)
+        // = ω_hyp · (dt/γ₀) · F(U)  ≈  ω_hyp · J⁻¹_diag · F  for the transport part
+        compute_F(l, g0_over_dt);
+        {
+            double omega_hyp = 0.3;
+            double scale = omega_hyp / g0_over_dt;  // = ω · dt/γ₀
+            int n4 = 4 * n;
+            // d_res now contains F(U). Apply: U -= scale * F to each DOF
+            // Use d_fas_rhs as temp? No — d_fas_rhs is needed. Use d_save?
+            // Simpler: dedicated kernel that reads F from d_res and updates state
+            k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                lev.d_res,
-                lev.d_dr, lev.d_r_center, lev.d_r_face, lev.d_dtheta,
+                lev.d_res, lev.d_blk_inv,
                 lev.d_rho0, atm_rho_thresh,
-                lev.nr, lev.nt, lev.ng, gamma, 0.8, dt);
-            apply_floor(l);
+                omega_hyp, lev.nr, lev.nt, lev.ng);
         }
+        apply_floor(l);
 
-        // Implicit pressure correction
+        // Step 2: Elliptic smoother — SIMPLE pressure correction
         compute_F(l, g0_over_dt);
 
         if (use_simple_smoother) {
@@ -1005,13 +943,17 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                 lev.d_r_center, lev.d_r_face, lev.d_theta_face,
                 lev.d_rho0, atm_rho_thresh,
                 lev.nr, lev.nt, lev.ng);
-        } else {
-            k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
-                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-                lev.d_res, lev.d_blk_inv,
-                lev.d_rho0, atm_rho_thresh,
-                OMEGA, lev.nr, lev.nt, lev.ng);
         }
+
+        // Step 3: Local relaxation — block-Jacobi on updated residual
+        apply_floor(l);
+        compute_F(l, g0_over_dt);
+        k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_res, lev.d_blk_inv,
+            lev.d_rho0, atm_rho_thresh,
+            OMEGA, lev.nr, lev.nt, lev.ng);
+
         apply_floor(l);
         if (l == 0 && sponge_r_start < sponge_r_top) {
             k_fas_sponge<<<(n+B-1)/B,B>>>(

@@ -119,7 +119,7 @@ private:
     // FAS operations
     void fas_vcycle(int l, double dt, double g0_over_dt);
     void smooth(int l, double dt, double g0_over_dt, int n_iters);
-    void compute_residual(int l, int use_hllc = 0);
+    void compute_residual(int l);
     void compute_F(int l, double g0_over_dt);
     void launch_ghost(int l);
     void compute_gravity_1d(int l);
