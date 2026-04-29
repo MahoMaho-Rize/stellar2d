@@ -96,7 +96,11 @@ struct FasSolver {
     double atm_rho_thresh = 0.0;
     int step_count = 0;
     bool hse_set = false;
-    bool use_simple_smoother = false; // false=block Jacobi, true=SIMPLE
+    bool use_simple_smoother = true; // true=SIMPLE (Poisson-based), false=block Jacobi
+
+    double sponge_r_start = 0.0;
+    double sponge_r_top = 0.0;
+    double sponge_kappa = 10.0;
 
     static constexpr int NU1 = 3;     // pre-smooth iterations
     static constexpr int NU2 = 5;     // post-smooth iterations (extra to clean prolongation)

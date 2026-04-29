@@ -144,14 +144,12 @@ void k_fas_residual(
     int i = flat/nt, j = flat%nt;
     int n = nr*nt;
 
-    if (rho0[flat] < atm_thresh) {
-        res[flat] = 0.0; res[n+flat] = 0.0;
-        res[2*n+flat] = 0.0; res[3*n+flat] = 0.0;
-        return;
-    }
-
     // i==0 handled by k_fas_residual_origin
     if (i == 0) return;
+
+    // Atmosphere: use non-WB residual (no meaningful HSE reference)
+    int is_atm = (rho0[flat] < atm_thresh) ? 1 : 0;
+    int wb_local = is_atm ? 0 : use_wellbalance;
 
     int k = fas_idx(i,j,nt,ng);
     double invV = 1.0 / vol[flat];
@@ -196,9 +194,9 @@ void k_fas_residual(
         div[c] = -invV*(Ar_hi*fr_hi - Ar_lo*fr_lo + At_hi*ft_hi - At_lo*ft_lo);
     }
 
-    double P_ref = use_wellbalance ? P0[flat] : 0.0;
-    double rho_ref = use_wellbalance ? rho0[flat] : 0.0;
-    double g0_r = use_wellbalance ? gr0[i] : 0.0;
+    double P_ref = wb_local ? P0[flat] : 0.0;
+    double rho_ref = wb_local ? rho0[flat] : 0.0;
+    double g0_r = wb_local ? gr0[i] : 0.0;
 
     double Pp_c = P_c - P_ref;
     double rhop_c = rho_c - rho_ref;
@@ -206,15 +204,15 @@ void k_fas_residual(
     double dPp_dr = 0;
     if (i < nr-1) {
         double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i-1,j,nt,ng)],1e-30)
-                      - (use_wellbalance ? P0[(i-1)*nt+j] : 0.0);
+                      - (wb_local ? P0[(i-1)*nt+j] : 0.0);
         double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i+1,j,nt,ng)],1e-30)
-                      - (use_wellbalance ? P0[(i+1)*nt+j] : 0.0);
+                      - (wb_local ? P0[(i+1)*nt+j] : 0.0);
         double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
         dPp_dr = (dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh) / (dl+dh);
     } else {
         double dl = r_center[nr-1]-r_center[nr-2];
         dPp_dr = (Pp_c - (fmax((gam-1.0)*rhoE[fas_idx(nr-2,j,nt,ng)],1e-30)
-                  - (use_wellbalance ? P0[(nr-2)*nt+j] : 0.0)))/dl;
+                  - (wb_local ? P0[(nr-2)*nt+j] : 0.0)))/dl;
     }
 
     double dPp_dt_r = 0;
@@ -224,9 +222,9 @@ void k_fas_residual(
         double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
         double dl=tc_c-tc_m, dh=tc_p-tc_c;
         double Pp_m = fmax((gam-1.0)*rhoE[fas_idx(i,j-1,nt,ng)],1e-30)
-                      - (use_wellbalance ? P0[i*nt+j-1] : 0.0);
+                      - (wb_local ? P0[i*nt+j-1] : 0.0);
         double Pp_p = fmax((gam-1.0)*rhoE[fas_idx(i,j+1,nt,ng)],1e-30)
-                      - (use_wellbalance ? P0[i*nt+j+1] : 0.0);
+                      - (wb_local ? P0[i*nt+j+1] : 0.0);
         dPp_dt_r = ((dh*(Pp_c-Pp_m)/dl + dl*(Pp_p-Pp_c)/dh))/(r*(dl+dh));
     }
 
@@ -283,14 +281,8 @@ void k_fas_residual_origin(
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     if (j >= nt) return;
     int i = 0;
-    int flat = j;  // i*nt + j = 0*nt + j
+    int flat = j;
     int n = nr*nt;
-
-    if (rho0[flat] < atm_thresh) {
-        res[flat] = 0.0; res[n+flat] = 0.0;
-        res[2*n+flat] = 0.0; res[3*n+flat] = 0.0;
-        return;
-    }
 
     int k = fas_idx(0, j, nt, ng);
     double invV = 1.0 / vol[flat];
@@ -492,18 +484,46 @@ void k_fas_pack_flat(const double* rho, const double* mr,
 // ========================= Floor ========================
 
 __global__
-void k_fas_floor(double* rho, double* rhoE, int nr, int nt, int ng) {
+void k_fas_floor(double* rho, double* mr, double* mt, double* rhoE,
+                 int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int k = fas_idx(flat/nt, flat%nt, nt, ng);
-    rho[k] = fmax(rho[k], 1e-20);
-    rhoE[k] = fmax(rhoE[k], 1e-20);
+    double r = rho[k], e = rhoE[k];
+    bool bad = (r < 1e-20) || (e < 1e-20) || isnan(r) || isnan(e)
+               || isnan(mr[k]) || isnan(mt[k]);
+    if (bad) {
+        rho[k] = 1e-20;
+        mr[k] = 0.0;
+        mt[k] = 0.0;
+        rhoE[k] = 1e-20;
+    }
 }
 
 void FasSolver::apply_floor(int l) {
     FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
-    k_fas_floor<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_rhoE, lev.nr, lev.nt, lev.ng);
+    k_fas_floor<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                                   lev.nr, lev.nt, lev.ng);
+}
+
+// ========================= Sponge layer ========================
+
+__global__
+void k_fas_sponge(double* mr, double* mt, const double* r_center,
+                  double r_sp, double r_tp, double kappa_max, double dt_s,
+                  int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat/nt, j = flat%nt;
+    double r = r_center[i];
+    if (r <= r_sp) return;
+    double xi = fmin((r - r_sp) / fmax(r_tp - r_sp, 1e-30), 1.0);
+    double kappa = kappa_max * 0.5 * (1.0 - cos(M_PI * xi));
+    double damp = 1.0 / (1.0 + dt_s * kappa);
+    int k = (i + ng) * (nt + 2*ng) + (j + ng);
+    mr[k] *= damp;
+    mt[k] *= damp;
 }
 
 // ========================= Block Jacobi smoother ========================
@@ -1275,6 +1295,22 @@ void FasSolver::snapshot_hse() {
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
     atm_rho_thresh = 1e-6 * rho_max;
 
+    // Sponge layer: start where ρ₀ drops below 1% of max
+    std::vector<double> h_rc(nr);
+    CUDA_CHECK(cudaMemcpy(h_rc.data(), finest.d_r_center, nr*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_rf(nr+1);
+    CUDA_CHECK(cudaMemcpy(h_rf.data(), finest.d_r_face, (nr+1)*sizeof(double), cudaMemcpyDeviceToHost));
+    sponge_r_top = h_rf[nr];
+    sponge_r_start = sponge_r_top;
+    double sponge_density = 0.01 * rho_max;
+    for (int i = nr - 1; i >= 0; --i) {
+        double rho_eq = rho0[i * nt + nt / 2];
+        if (rho_eq > sponge_density) {
+            sponge_r_start = h_rc[i];
+            break;
+        }
+    }
+
     // Propagate HSE reference to coarse levels.
     // Three strategies available (selected by coarse_hse_mode):
     //   0 = volume-weighted restriction of ρ₀/P₀ (original, causes HSE inconsistency)
@@ -1505,6 +1541,92 @@ double FasSolver::step(double t, double t_end) {
             converged = true;
             break;
         }
+    }
+
+    // Catastrophe detection: check if most of the star got wiped by floor
+    {
+        std::vector<double> h_state(4*n);
+        CUDA_CHECK(cudaMemcpy(h_state.data(), finest.d_save, 4*n*sizeof(double), cudaMemcpyDeviceToHost));
+        double M_pre = 0;
+        std::vector<double> h_vol(n);
+        CUDA_CHECK(cudaMemcpy(h_vol.data(), finest.d_cell_volume, n*sizeof(double), cudaMemcpyDeviceToHost));
+        for (int i = 0; i < n; ++i) M_pre += h_state[i] * h_vol[i];
+
+        std::vector<double> h_rho(finest.total);
+        CUDA_CHECK(cudaMemcpy(h_rho.data(), finest.d_rho, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+        std::vector<double> h_mr(finest.total), h_mt(finest.total), h_rhoE(finest.total);
+        CUDA_CHECK(cudaMemcpy(h_mr.data(), finest.d_mr, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_mt.data(), finest.d_mt, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_rhoE.data(), finest.d_rhoE, finest.total*sizeof(double), cudaMemcpyDeviceToHost));
+
+        double M_post = 0;
+        int stride = finest.nt + 2*finest.ng;
+        for (int i = 0; i < finest.nr; ++i)
+            for (int j = 0; j < finest.nt; ++j)
+                M_post += h_rho[(i+finest.ng)*stride+(j+finest.ng)] * h_vol[i*finest.nt+j];
+
+        if (M_post < 0.5 * M_pre) {
+            // Find where the damage is worst
+            double max_vr = 0, max_vt = 0;
+            int worst_i = 0, worst_j = 0;
+            double worst_rho_drop = 0;
+            for (int i = 0; i < finest.nr; ++i)
+                for (int j = 0; j < finest.nt; ++j) {
+                    int k = (i+finest.ng)*stride+(j+finest.ng);
+                    int flat = i*finest.nt+j;
+                    double rho_pre = h_state[flat];
+                    double rho_post = h_rho[k];
+                    double drop = rho_pre - rho_post;
+                    if (drop > worst_rho_drop) {
+                        worst_rho_drop = drop; worst_i = i; worst_j = j;
+                    }
+                    if (rho_post > 1e-10) {
+                        max_vr = std::max(max_vr, std::abs(h_mr[k]/rho_post));
+                        max_vt = std::max(max_vt, std::abs(h_mt[k]/rho_post));
+                    }
+                }
+
+            int wk = (worst_i+finest.ng)*stride+(worst_j+finest.ng);
+            int wf = worst_i*finest.nt+worst_j;
+            std::fprintf(stderr,
+                "\n=== CATASTROPHE at step %d, t=%.6e, dt=%.3e ===\n"
+                "  M_pre=%.6e → M_post=%.6e (%.1f%% lost)\n"
+                "  Worst cell (i=%d, j=%d): ρ %.3e → %.3e\n"
+                "    mr: %.3e → %.3e, mt: %.3e → %.3e, rhoE: %.3e → %.3e\n"
+                "  max|vr|=%.3e max|vt|=%.3e converged=%d\n",
+                step_count, t, dt, M_pre, M_post,
+                (1.0 - M_post/M_pre)*100.0,
+                worst_i, worst_j,
+                h_state[wf], h_rho[wk],
+                h_state[n+wf], h_mr[wk],
+                h_state[2*n+wf], h_mt[wk],
+                h_state[3*n+wf], h_rhoE[wk],
+                max_vr, max_vt, (int)converged);
+
+            // Print ρ neighborhood of worst cell
+            std::fprintf(stderr, "  Post-solve ρ neighborhood:\n");
+            for (int di = -3; di <= 3; ++di) {
+                int ii = worst_i + di;
+                if (ii < 0 || ii >= finest.nr) continue;
+                std::fprintf(stderr, "    i=%3d:", ii);
+                for (int dj = -3; dj <= 3; ++dj) {
+                    int jj = worst_j + dj;
+                    if (jj < 0 || jj >= finest.nt) continue;
+                    int kk = (ii+finest.ng)*stride+(jj+finest.ng);
+                    std::fprintf(stderr, " %.1e", h_rho[kk]);
+                }
+                std::fprintf(stderr, "\n");
+            }
+            std::exit(1);
+        }
+    }
+
+    // Sponge: damp velocities in low-density envelope
+    if (sponge_r_start < sponge_r_top) {
+        k_fas_sponge<<<(n+B-1)/B,B>>>(
+            finest.d_mr, finest.d_mt, levels[0].d_r_center,
+            sponge_r_start, sponge_r_top, sponge_kappa, dt,
+            finest.nr, finest.nt, finest.ng);
     }
 
     if (converged) {
