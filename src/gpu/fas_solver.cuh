@@ -100,6 +100,9 @@ struct FasSolver {
     // Full time step (manages dt, calls solve)
     double step(double t, double t_end);
 
+    // Explicit RK2 time step (CFL-limited, for reference runs)
+    double step_explicit(double t, double t_end);
+
     // CFL-based dt estimate (|v|+cs signal speed)
     double compute_cfl_dt();
 
