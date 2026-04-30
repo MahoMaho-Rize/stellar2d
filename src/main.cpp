@@ -24,6 +24,7 @@
 #include "gpu/radial1d_solver.cuh"
 #include "gpu/wb2d_solver.cuh"
 #include "gpu/ale2d_solver.cuh"
+#include "gpu/cart_lag_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -293,6 +294,10 @@ int main(int argc, char** argv) {
         EvrardParams ep;
         ep.M = 1.0; ep.R = 1.0; ep.G = cfg.G;
         init_evrard(grid, state, ep, cfg.gamma);
+    } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
+               || cfg.test_case == "sod") {
+        // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
+        // cart_lag solver branch handles its own IC.
     } else {
         std::fprintf(stderr, "Unknown test case: %s\n", cfg.test_case.c_str());
         return 1;
@@ -590,6 +595,63 @@ int main(int argc, char** argv) {
         cudaFree(d_snap_buf);
         fas.download_state(grid, state);
         fas.destroy();
+    } else if (cfg.solver_type == "cart_lag") {
+        // ===== Cartesian 2D Lagrangian (Caramana compatible, planar) =====
+        // Runs independent of Grid/State: uses [0,Lx]×[0,Ly] box = [1,1].
+        // IC: Sod shock tube (default) or uniform.
+        CartLagSolver clag;
+        // For HSE: square box. For Sod: thin strip.
+        bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed");
+        double Lx = is_hse ? 1.0 : 1.0;
+        double Ly = is_hse ? 1.0 : 0.2;
+        double gam = is_hse ? cfg.gamma : 1.4;  // Sod expects γ=1.4 by default
+        clag.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
+        if (is_hse) {
+            double amp = (cfg.test_case == "hse_perturbed") ? cfg.perturb_amplitude : 0.0;
+            clag.init_hse_polytrope(/*rho_base=*/1.0, /*g=*/1.0, amp);
+        } else {
+            clag.init_sod();
+        }
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach\n");
+
+        int frame = 0;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = clag.step(t, cfg.t_end);
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+            if (step % cfg.output_interval == 0 || t >= cfg.t_end) {
+                auto d = clag.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e KE=%.4e IE=%.10e PE=%.10e E=%.10e |v|=%.3e\n",
+                            step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                            d.total_PE, d.total_E, d.max_v);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                             d.total_PE, d.total_E, d.max_v, d.max_mach);
+                std::fflush(csv);
+                std::vector<double> xv, rhov, Pv, vxv, ev;
+                clag.download_xslice(xv, rhov, Pv, vxv, ev);
+                char path[512];
+                std::snprintf(path, sizeof(path), "%s/xslice_%04d.txt", run_dir.c_str(), ++frame);
+                std::FILE* fp = std::fopen(path, "w");
+                std::fprintf(fp, "# t=%.10e step=%d\n# x rho P vx e\n", t, step);
+                for (int i = 0; i < (int)xv.size(); ++i)
+                    std::fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n",
+                                 xv[i], rhov[i], Pv[i], vxv[i], ev[i]);
+                std::fclose(fp);
+            }
+        }
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        clag.destroy();
     } else if (cfg.solver_type == "ale2d") {
         // ===== 2D axisymmetric Lagrangian (Caramana compatible) =====
         if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {

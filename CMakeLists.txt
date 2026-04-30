@@ -47,6 +47,8 @@ if(USE_GPU)
         src/gpu/wb2d_kernels.cu
         src/gpu/ale2d_solver.cu
         src/gpu/ale2d_kernels.cu
+        src/gpu/cart_lag_solver.cu
+        src/gpu/cart_lag_kernels.cu
     )
     set(LOWMACH_SOURCES
         src/gpu/lm_residual.cu
