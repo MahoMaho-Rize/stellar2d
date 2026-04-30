@@ -508,12 +508,13 @@ void k_fas_floor(double* rho, double* mr, double* mt, double* rhoE,
     }
     const double rho_fl = 1e-20;
     r = 0.5 * (r + sqrt(r*r + 4.0*rho_fl*rho_fl));
+    r = fmax(r, rho_fl);
     rho[k] = r;
-    // Ensure positive internal energy: e_int = E - ½ρv² > 0
-    double KE = 0.5 * (mr[k]*mr[k] + mt[k]*mt[k]) / fmax(r, rho_fl);
+    double KE = 0.5 * (mr[k]*mr[k] + mt[k]*mt[k]) / r;
     double e_int = E - KE;
     const double e_fl = 1e-20;
     e_int = 0.5 * (e_int + sqrt(e_int*e_int + 4.0*e_fl*e_fl));
+    e_int = fmax(e_int, e_fl);
     rhoE[k] = e_int + KE;
 }
 

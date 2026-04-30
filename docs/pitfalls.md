@@ -318,7 +318,7 @@ The velocity correction `delta_v = -(1/Ap)*nabla(dp)` then has `delta_v ≈ -dt 
 
 3. **Diagonal pressure coupling formula wrong**: Used `-(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh)))` without the outer negative from `dF_mr/d(rhoE)` being `- dPdr_coeff * (gamma-1)`. The double negation produced the wrong coefficient.
 
-**Status**: Identified but not fully fixed. Reverted to BLOCK_JACOBI as default.
+**Status**: Fixed. All three bugs corrected in both LM and FAS line-solve kernels.
 
 **Files**: `lowmach_solver.cu:k_lm_line_solve`
 

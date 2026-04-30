@@ -950,10 +950,6 @@ double StrangSolver::max_velocity()
     return vmax;
 }
 
-// ============================================================
-//  5. STUBS (to be implemented in Parts 2-5)
-// ============================================================
-
 void StrangSolver::fill_ghost_x()
 {
     int ny_g = ny + 2 * ng;

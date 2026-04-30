@@ -131,6 +131,13 @@ struct LowMachSolver {
     double sponge_r_top = 0.0;    // outer edge (= R_outer)
     double sponge_kappa = 100.0;   // damping strength
 
+    // Mass mesh configuration (shared with FAS/SIMPLE/projection)
+    bool use_hse_outer_bc = false;
+    bool use_core_excision = false;
+    double M_core = 0.0;
+    int n_angular_avg = 0;
+    int n_pole_avg = 0;
+
     // Internal methods
     void compute_residual(double* d_res);
     void compute_F(double* d_F, double dt);
