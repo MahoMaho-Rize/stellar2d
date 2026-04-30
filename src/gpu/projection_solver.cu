@@ -32,9 +32,11 @@ __global__ void k_fas_ghost_t_n(double*, double*, double*, double*, int, int, in
 __global__ void k_fas_ghost_t_s(double*, double*, double*, double*, int, int, int);
 __global__ void k_fas_pole_lock(double*, int, int, int);
 __global__ void k_fas_shell_mass(const double*, const double*, double*, int, int, int);
-__global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double);
+__global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double, double);
 __global__ void k_fas_atm_reset(double*, double*, double*, double*,
     const double*, const double*, double, double, int, int, int);
+__global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
+    const double*, const double*, double, int, int, int);
 
 // ========================= Projection-specific kernels ========================
 
@@ -433,7 +435,14 @@ void ProjSolver::snapshot_hse() {
 void ProjSolver::launch_ghost() {
     int B = 256;
     { dim3 g((nt+B-1)/B, ng); k_fas_ghost_r_in<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,nr,nt,ng); }
-    { dim3 g((nt+B-1)/B, ng); k_fas_ghost_r_out<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,nr,nt,ng); }
+    if (use_hse_outer_bc && hse_set) {
+        dim3 g((nt+B-1)/B, ng);
+        k_fas_ghost_r_out_hse<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,
+            d_rho0, d_P0, 1.0/(gamma-1.0), nr,nt,ng);
+    } else {
+        dim3 g((nt+B-1)/B, ng);
+        k_fas_ghost_r_out<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,nr,nt,ng);
+    }
     { dim3 g((nr+2*ng+B-1)/B, ng); k_fas_ghost_t_n<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,nr,nt,ng); }
     { dim3 g((nr+2*ng+B-1)/B, ng); k_fas_ghost_t_s<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,nr,nt,ng); }
     k_fas_pole_lock<<<(nr+2*ng+B-1)/B,B>>>(d_mt, nr, nt, ng);
@@ -442,7 +451,7 @@ void ProjSolver::launch_ghost() {
 void ProjSolver::compute_gravity_1d() {
     int B = std::min(nt, 256);
     k_fas_shell_mass<<<nr, B, B*sizeof(double)>>>(d_rho, d_cell_volume, d_shell_mass, nr, nt, ng);
-    k_fas_gravity_from_shells<<<1,1>>>(d_shell_mass, d_r_center, d_gr, nr, G_const);
+    k_fas_gravity_from_shells<<<1,1>>>(d_shell_mass, d_r_center, d_gr, nr, G_const, M_core);
 }
 
 void ProjSolver::apply_floor() {
@@ -458,10 +467,12 @@ void ProjSolver::compute_residual() {
         d_cell_volume,d_area_r,d_area_theta,d_r_center,d_r_face,
         d_theta_face,d_dr,d_dtheta,d_gr,d_gr0,d_P0,d_rho0,
         d_res, nr,nt,ng,gamma,atm_rho_thresh, 1, 0, 0);
-    k_fas_residual_origin<<<(nt+B-1)/B,B>>>(d_rho,d_mr,d_mt,d_rhoE,
-        d_cell_volume,d_area_r,d_area_theta,d_r_center,d_r_face,
-        d_theta_face,d_dr,d_dtheta,d_gr,d_gr0,d_P0,d_rho0,
-        d_res, nr,nt,ng,gamma,atm_rho_thresh, 1, 0, 0);
+    if (!use_core_excision) {
+        k_fas_residual_origin<<<(nt+B-1)/B,B>>>(d_rho,d_mr,d_mt,d_rhoE,
+            d_cell_volume,d_area_r,d_area_theta,d_r_center,d_r_face,
+            d_theta_face,d_dr,d_dtheta,d_gr,d_gr0,d_P0,d_rho0,
+            d_res, nr,nt,ng,gamma,atm_rho_thresh, 1, 0, 0);
+    }
     // Subtract HSE defect
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(d_res, -1.0, d_hse_defect, 4*n);
 }

@@ -27,6 +27,21 @@ __global__ void k_fas_ghost_r_out(double* rho, double* mr, double* mt, double* r
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
+__global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
+                                       const double* rho0, const double* P0,
+                                       double gam_m1_inv,
+                                       int nr, int nt, int ng) {
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y;
+    if (j >= nt || g >= ng) return;
+    int kg = fas_idx(nr+g, j, nt, ng);
+    int flat_last = (nr-1)*nt + j;
+    rho[kg]  = fmax(rho0[flat_last], 1e-20);
+    mr[kg]   = 0.0;
+    mt[kg]   = 0.0;
+    rhoE[kg] = fmax(P0[flat_last] * gam_m1_inv, 1e-20);
+}
+
 __global__ void k_fas_ghost_t_n(double* rho, double* mr, double* mt, double* rhoE,
                                  int nr, int nt, int ng) {
     int ii = blockIdx.x * blockDim.x + threadIdx.x;
@@ -58,7 +73,14 @@ void FasSolver::launch_ghost(int l) {
     FasLevel& lev = levels[l];
     int B=256;
     { dim3 g((lev.nt+B-1)/B, lev.ng); k_fas_ghost_r_in<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
-    { dim3 g((lev.nt+B-1)/B, lev.ng); k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
+    if (use_hse_outer_bc && hse_set) {
+        dim3 g((lev.nt+B-1)/B, lev.ng);
+        k_fas_ghost_r_out_hse<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
+            lev.d_rho0, lev.d_P0, 1.0/(gamma-1.0), lev.nr,lev.nt,lev.ng);
+    } else {
+        dim3 g((lev.nt+B-1)/B, lev.ng);
+        k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng);
+    }
     { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_n<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_s<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     int ntot = lev.nr + 2*lev.ng;
@@ -88,9 +110,10 @@ void k_fas_shell_mass(const double* rho, const double* vol,
 
 __global__
 void k_fas_gravity_from_shells(const double* shell_mass, const double* rc,
-                                double* gr, int nr, double G) {
+                                double* gr, int nr, double G,
+                                double M_core) {
     if (threadIdx.x != 0) return;
-    double M_enc = 0.0;
+    double M_enc = M_core;
     for (int i = 0; i < nr; ++i) {
         M_enc += shell_mass[i];
         gr[i] = -G * M_enc / (rc[i] * rc[i]);
@@ -103,7 +126,7 @@ void FasSolver::compute_gravity_1d(int l) {
     k_fas_shell_mass<<<lev.nr, B, B*sizeof(double)>>>(
         lev.d_rho, lev.d_cell_volume, lev.d_shell_mass, lev.nr, lev.nt, lev.ng);
     k_fas_gravity_from_shells<<<1, 1>>>(
-        lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const);
+        lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const, M_core);
 }
 
 // ========================= Nonlinear residual R(U) ========================
@@ -125,8 +148,8 @@ void k_fas_residual(
     int i = flat/nt, j = flat%nt;
     int n = nr*nt;
 
-    // i==0 handled by k_fas_residual_origin
-    if (i == 0) return;
+    // i==0 handled by k_fas_residual_origin (unless core excision: r_face[0]>0)
+    if (i == 0 && r_face[0] < 1e-30) return;
 
     // All cells use WB — prevents O(h²/ρ) spurious acceleration in low-density surface
     int wb_local = use_wellbalance;
@@ -396,14 +419,16 @@ void FasSolver::compute_residual(int l) {
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
         lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
-    k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
-        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
-        lev.d_r_center, lev.d_r_face, lev.d_theta_face,
-        lev.d_dr, lev.d_dtheta,
-        lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
-        lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
+    if (!use_core_excision) {
+        k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+            lev.d_r_center, lev.d_r_face, lev.d_theta_face,
+            lev.d_dr, lev.d_dtheta,
+            lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
+            lev.d_res,
+            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
+    }
     // Subtract pre-computed HSE defect: R_corrected(U) = R(U) - R(U₀)
     // This ensures R(U₀) = 0 exactly, fixing WB inconsistency on coarse grids.
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
@@ -479,8 +504,22 @@ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
                      int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    if (rho0[flat] >= atm_thresh) return;
     int k = fas_idx(flat/nt, flat%nt, nt, ng);
+
+    bool is_atm = rho0[flat] < atm_thresh;
+    bool evacuated = rho[k] < 0.01 * fmax(rho0[flat], 1e-20);
+
+    // Hot vacuum: T/T₀ > 100 (P/ρ >> P₀/ρ₀)
+    bool hot_vacuum = false;
+    if (!is_atm && !evacuated) {
+        double rho_c = fmax(rho[k], 1e-20);
+        double vr = mr[k] / rho_c, vt = mt[k] / rho_c;
+        double P_c = fmax((rhoE[k] - 0.5*rho_c*(vr*vr+vt*vt)) / gam_m1_inv, 0.0);
+        double T_ratio = (P_c * rho0[flat]) / fmax(P0[flat] * rho_c, 1e-30);
+        hot_vacuum = (T_ratio > 100.0);
+    }
+
+    if (!is_atm && !evacuated && !hot_vacuum) return;
     rho[k]  = fmax(rho0[flat], 1e-20);
     mr[k]   = 0.0;
     mt[k]   = 0.0;
@@ -598,6 +637,7 @@ void k_fas_cfl(const double* rho, const double* mr, const double* mt, const doub
     int i = flat/nt, j = flat%nt;
     int k = fas_idx(i,j,nt,ng);
     double rho_c = fmax(rho[k], 1e-20);
+    if (rho_c < 0.01 * rho0[flat]) { out[flat] = 1e30; return; }
     double vr = fabs(mr[k] / rho_c);
     double vt = fabs(mt[k] / rho_c);
     double KE = 0.5 * rho_c * (vr*vr + vt*vt);

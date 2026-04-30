@@ -60,4 +60,9 @@ __global__ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rho
     const double* rho0, const double* P0,
     double atm_thresh, double gam_m1_inv,
     int nr, int nt, int ng);
+
+__global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
+    const double* rho0, const double* P0,
+    double gam_m1_inv,
+    int nr, int nt, int ng);
 #endif
