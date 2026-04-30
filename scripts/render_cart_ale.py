@@ -150,9 +150,6 @@ def render_one(args):
 
     data_map = {"density": rho, "entropy_pert": ds, "mach": mach}
 
-    ds_amp = max(float(np.max(np.abs(ds))), 1e-8)
-    mach_max = max(float(np.max(mach)), 1e-8)
-
     frame = Image.new("RGB", (W_FRAME, H_FRAME), BG)
     draw = ImageDraw.Draw(frame)
     fonts = get_fonts()
@@ -173,13 +170,7 @@ def render_one(args):
         d = data_map[cfg["field"]]
         cm = _cmaps[cfg["cmap"]]
 
-        # Per-frame dynamic range for perturbation fields
         vmin, vmax = cfg["vmin"], cfg["vmax"]
-        if cfg["field"] == "entropy_pert":
-            vmin, vmax = -ds_amp, ds_amp
-        elif cfg["field"] == "mach":
-            vmin, vmax = 0.0, mach_max
-
         rgb = field_to_rgb(d, cm, vmin, vmax, cfg["log"])
         frame.paste(Image.fromarray(rgb), (px + DX, DY))
 
@@ -251,7 +242,9 @@ def main():
     rho0 = np.maximum(flds0["density"], 1e-20)
     P0 = np.maximum(flds0["pressure"], 1e-30)
     # average entropy over x to get a 1D baseline s0(y)
-    s0 = np.mean(P0 / rho0 ** GAMMA, axis=1)
+    # Use per-row MEDIAN as the entropy baseline, so local IC perturbations
+    # (e.g. bubbles) don't shift the baseline for the surrounding cells.
+    s0 = np.median(P0 / rho0 ** GAMMA, axis=1)
 
     # Pre-scan color ranges
     sample_idx = np.linspace(0, len(files) - 1, min(20, len(files))).astype(int)

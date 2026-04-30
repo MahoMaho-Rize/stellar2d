@@ -89,6 +89,14 @@ struct CartAleSolver {
     void init_sod();
     void init_hse_polytrope(double rho_base, double g_val, double perturb_amp = 0.0);
 
+    // HSE polytrope + N Gaussian bubble overlays (multiplicative, so bubbles
+    // compound if they overlap).
+    //   ρ(x,y) = ρ_HSE(y) · Π_i [1 + αᵢ · exp(-rᵢ²/rbᵢ²)]
+    //   P(x,y) = P_HSE(y) · Π_i [1 + βᵢ · exp(-rᵢ²/rbᵢ²)]
+    struct Bubble { double xc, yc, rb, alpha, beta; };
+    void init_hse_bubbles(double rho_base, double g_val,
+                          const std::vector<Bubble>& bubbles);
+
     // One ALE step: Lagrangian → Rezone → Remap
     double step(double t, double t_end);
 
