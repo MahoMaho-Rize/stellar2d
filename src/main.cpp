@@ -13,6 +13,7 @@
 #include "init/evrard.h"
 
 #ifdef USE_GPU
+#include <cuda_runtime.h>
 #ifdef USE_AMGX
 #include "gpu/gpu_solver.h"
 #endif
@@ -27,7 +28,11 @@
 #include <string>
 #include <cstring>
 #include <ctime>
+#include <csignal>
 #include <sys/stat.h>
+
+static volatile sig_atomic_t g_interrupted = 0;
+static void handle_sigint(int) { g_interrupted = 1; }
 
 struct SimConfig {
     int nr = 128;
@@ -115,6 +120,9 @@ static std::string make_run_dir(const SimConfig& cfg) {
 }
 
 int main(int argc, char** argv) {
+    std::signal(SIGINT, handle_sigint);
+    std::signal(SIGTERM, handle_sigint);
+
     SimConfig cfg;
 
     for (int i = 1; i < argc; ++i) {
@@ -289,6 +297,7 @@ int main(int argc, char** argv) {
         if (cfg.no_sponge) proj.sponge_kappa = 0.0;
         if (cfg.mesh_type == "mass") {
             proj.use_hse_outer_bc = true;
+            proj.n_angular_avg = 4;
         }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
@@ -306,7 +315,7 @@ int main(int argc, char** argv) {
         std::timespec wall_start;
         clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
-        while (t < cfg.t_end) {
+        while (t < cfg.t_end && !g_interrupted) {
             double dt = proj.step(t, cfg.t_end);
             t += dt;
             step++;
@@ -335,6 +344,7 @@ int main(int argc, char** argv) {
         if (cfg.no_sponge) sim.sponge_kappa = 0.0;
         if (cfg.mesh_type == "mass") {
             sim.use_hse_outer_bc = true;
+            sim.n_angular_avg = 4;
         }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
@@ -352,7 +362,7 @@ int main(int argc, char** argv) {
         std::timespec wall_start;
         clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
-        while (t < cfg.t_end) {
+        while (t < cfg.t_end && !g_interrupted) {
             double dt = sim.step(t, cfg.t_end);
             t += dt;
             step++;
@@ -385,6 +395,7 @@ int main(int argc, char** argv) {
         if (cfg.no_sponge) fas.sponge_kappa = 0.0;
         if (cfg.mesh_type == "mass") {
             fas.use_hse_outer_bc = true;
+            fas.n_angular_avg = 4;
         }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
@@ -399,23 +410,75 @@ int main(int argc, char** argv) {
 
         fas.upload_state(grid, state);
 
-        while (t < cfg.t_end) {
+        // GPU snapshot buffer: store frames in VRAM, write all at end
+        FasLevel& fl = fas.levels[0];
+        int snap_size = fl.total;  // per-variable size (with ghost)
+        int max_snaps = static_cast<int>(cfg.t_end / (cfg.output_interval * 1e-5)) + 100;
+        // Cap by available GPU memory (~40GB free, 4*snap_size*8 bytes per frame)
+        long long bytes_per_snap = 4LL * snap_size * sizeof(double);
+        long long max_bytes = 40LL * 1024 * 1024 * 1024;  // 40GB budget
+        if (max_snaps > max_bytes / bytes_per_snap)
+            max_snaps = static_cast<int>(max_bytes / bytes_per_snap);
+
+        double* d_snap_buf = nullptr;
+        CUDA_CHECK(cudaMalloc(&d_snap_buf, (long long)max_snaps * 4 * snap_size * sizeof(double)));
+        std::vector<double> snap_times;
+        std::vector<double> snap_dts;
+        std::vector<int> snap_steps;
+        int n_snaps = 0;
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        while (t < cfg.t_end && !g_interrupted) {
             double dt = use_explicit ? fas.step_explicit(t, cfg.t_end) : fas.step(t, cfg.t_end);
             t += dt;
             step++;
 
-            if (step % cfg.output_interval == 0) {
-                fas.download_state(grid, state);
-                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy);
-
-                char fname[512];
-                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
-                write_vtk(fname, grid, state, cfg.gamma);
+            if (step % cfg.output_interval == 0 && n_snaps < max_snaps) {
+                // D2D snapshot: ~0.1ms vs D2H+VTK ~100ms
+                long long off = (long long)n_snaps * 4 * snap_size;
+                CUDA_CHECK(cudaMemcpy(d_snap_buf + off, fl.d_rho, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+                CUDA_CHECK(cudaMemcpy(d_snap_buf + off + snap_size, fl.d_mr, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+                CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 2*snap_size, fl.d_mt, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+                CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 3*snap_size, fl.d_rhoE, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+                snap_times.push_back(t);
+                snap_dts.push_back(dt);
+                snap_steps.push_back(step);
+                n_snaps++;
             }
+
+            if (step % 2000 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
         }
+        std::fprintf(stderr, "\n");
+        if (g_interrupted)
+            std::printf("\nInterrupted at step %d, t=%.6e. ", step, t);
+        std::printf("Writing %d snapshots from GPU...\n", n_snaps);
+
+        // Bulk D2H + VTK write
+        std::vector<double> h_buf(4LL * snap_size);
+        for (int s = 0; s < n_snaps; ++s) {
+            long long off = (long long)s * 4 * snap_size;
+            CUDA_CHECK(cudaMemcpy(h_buf.data(), d_snap_buf + off, 4*snap_size*sizeof(double), cudaMemcpyDeviceToHost));
+            // Unpack into state
+            for (int ii = 0; ii < fl.nr; ++ii)
+                for (int jj = 0; jj < fl.nt; ++jj) {
+                    int k = grid.idx(ii, jj);
+                    int kg = (ii + fl.ng) * (fl.nt + 2*fl.ng) + (jj + fl.ng);
+                    state.rho[k] = h_buf[kg];
+                    state.mr[k] = h_buf[snap_size + kg];
+                    state.mtheta[k] = h_buf[2*snap_size + kg];
+                    state.E[k] = h_buf[3*snap_size + kg];
+                }
+            Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+            std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                        snap_steps[s], snap_times[s], snap_dts[s], diag.total_mass, diag.total_energy);
+            char fname[512];
+            std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), s + 1);
+            write_vtk(fname, grid, state, cfg.gamma);
+        }
+
+        cudaFree(d_snap_buf);
         fas.download_state(grid, state);
         fas.destroy();
     } else if (cfg.solver_type == "lowmach") {
@@ -448,7 +511,7 @@ int main(int argc, char** argv) {
         std::timespec wall_start;
         clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
-        while (t < cfg.t_end) {
+        while (t < cfg.t_end && !g_interrupted) {
             double dt = lm.step(t, cfg.t_end);
             t += dt;
             step++;
@@ -494,7 +557,7 @@ int main(int argc, char** argv) {
         std::timespec wall_start;
         clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
-        while (t < cfg.t_end) {
+        while (t < cfg.t_end && !g_interrupted) {
             double dt = gpu.step(t, cfg.t_end);
             t += dt;
             step++;
@@ -542,7 +605,7 @@ int main(int argc, char** argv) {
     std::timespec wall_start;
     clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
-    while (t < cfg.t_end) {
+    while (t < cfg.t_end && !g_interrupted) {
         fill_ghost_cells(grid, state, cfg.gamma);
 
         double dt = compute_cfl_dt(grid, state, eos, cfg.cfl);

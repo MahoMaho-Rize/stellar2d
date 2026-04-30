@@ -54,7 +54,8 @@ __global__ void k_fas_cfl(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* dr, const double* r_center, const double* dtheta,
     const double* rho0, double* out,
-    int nr, int nt, int ng, double gam, double atm_thresh);
+    int nr, int nt, int ng, double gam, double atm_thresh,
+    int n_angular_avg);
 
 __global__ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
     const double* rho0, const double* P0,
@@ -65,4 +66,8 @@ __global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, doubl
     const double* rho0, const double* P0,
     double gam_m1_inv,
     int nr, int nt, int ng);
+
+__global__ void k_fas_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
+    const double* vol,
+    int n_avg, int nr, int nt, int ng);
 #endif
