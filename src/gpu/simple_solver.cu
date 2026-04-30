@@ -61,6 +61,8 @@ __global__ void k_fas_simple_correct(double*, double*, double*, double*,
     const double*, const double*, const double*, const double*, const double*,
     const double*, double, int, int, int);
 __global__ void k_fas_bdf2_rhs(const double*, const double*, double*, double, double, double, int);
+__global__ void k_fas_atm_reset(double*, double*, double*, double*,
+    const double*, const double*, double, double, int, int, int);
 
 // ========================= Init / Destroy ========================
 
@@ -214,7 +216,7 @@ void SimpleSolver::snapshot_hse() {
     CUDA_CHECK(cudaMemcpy(lev.d_P0, P0.data(), n*sizeof(double), cudaMemcpyHostToDevice));
 
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
-    atm_rho_thresh = 1e-6 * rho_max;
+    atm_rho_thresh = 1e-3 * rho_max;
 
     // Sponge
     std::vector<double> h_rc(nr), h_rf(nr+1);
@@ -421,11 +423,18 @@ double SimpleSolver::step(double t, double t_end) {
             std::fprintf(stderr, "  step %d: reject dt=%.2e (||F||=%.2e), retry %.2e\n", step_count, dt_old, norm, dt);
     }
 
-    if (!converged && !std::isnan(norm))
-        std::fprintf(stderr, "  step %d: accepting dt=%.2e (||F||=%.2e)\n", step_count, dt, norm);
+    if (!converged) {
+        std::fprintf(stderr, "  step %d: rollback to Un (||F||=%.2e, dt=%.2e)\n", step_count, norm, dt);
+        k_fas_unpack_flat<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE, lev.d_Un, lev.nr, lev.nt, lev.ng);
+        launch_ghost();
+        dt = dt_current * 0.25;
+    }
 
     if (step_count % 100 == 0)
         std::fprintf(stderr, "  step %d dt=%.2e ||F||=%.2e cuts=%d\n", step_count, dt, norm, cuts);
+
+    k_fas_atm_reset<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_rho0, lev.d_P0, atm_rho_thresh, 1.0/(gamma-1.0), lev.nr, lev.nt, lev.ng);
 
     if (converged) dt_current = std::min(1.2*dt, 1.0); else dt_current = dt;
     dt_prev = dt;

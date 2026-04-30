@@ -253,7 +253,7 @@ void FasSolver::snapshot_hse() {
     CUDA_CHECK(cudaMemcpy(finest.d_P0, P0.data(), n*sizeof(double), cudaMemcpyHostToDevice));
 
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
-    atm_rho_thresh = 1e-6 * rho_max;
+    atm_rho_thresh = 1e-3 * rho_max;
 
     // Sponge layer: start where ρ₀ drops below 1% of max
     std::vector<double> h_rc(nr);
@@ -693,11 +693,15 @@ double FasSolver::step(double t, double t_end) {
                          step_count, dt_old, norm, norm*dt_old, dt);
     }
 
-    // If all cuts failed but state is not NaN, accept with minimum dt
-    // (transport step has been applied — state is at least partially advanced)
-    if (!converged && !std::isnan(norm)) {
-        std::fprintf(stderr, "  step %d: accepting dt=%.2e after %d cuts (||F||=%.2e)\n",
-                     step_count, dt, max_dt_cuts, norm);
+    // If all cuts failed, rollback to Uⁿ — never accept a diverged state
+    if (!converged) {
+        std::fprintf(stderr, "  step %d: rollback to Un (||F||=%.2e, dt=%.2e)\n",
+                     step_count, norm, dt);
+        k_fas_unpack_flat<<<(n+B-1)/B,B>>>(
+            finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+            finest.d_Un, finest.nr, finest.nt, finest.ng);
+        launch_ghost(0);
+        dt = dt_current * 0.25;
     }
 
     if (step_count % 100 == 0)
@@ -712,6 +716,13 @@ double FasSolver::step(double t, double t_end) {
             1.0/(gamma-1.0),
             finest.nr, finest.nt, finest.ng);
     }
+
+    // Atmosphere reset: force vacuum cells to exact HSE (MUSIC-style)
+    k_fas_atm_reset<<<(n+B-1)/B,B>>>(
+        finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+        finest.d_rho0, finest.d_P0,
+        atm_rho_thresh, 1.0/(gamma-1.0),
+        finest.nr, finest.nt, finest.ng);
 
     if (converged) {
         dt_current = std::min(1.2 * dt, dt_cap);
@@ -858,6 +869,12 @@ double FasSolver::step_explicit(double t, double t_end) {
             1.0/(gamma-1.0),
             lev.nr, lev.nt, lev.ng);
     }
+
+    k_fas_atm_reset<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_rho0, lev.d_P0,
+        atm_rho_thresh, 1.0/(gamma-1.0),
+        lev.nr, lev.nt, lev.ng);
 
     step_count++;
     if (step_count <= 10 || step_count % 1000 == 0)

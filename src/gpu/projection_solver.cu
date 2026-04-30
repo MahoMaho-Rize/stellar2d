@@ -33,6 +33,8 @@ __global__ void k_fas_ghost_t_s(double*, double*, double*, double*, int, int, in
 __global__ void k_fas_pole_lock(double*, int, int, int);
 __global__ void k_fas_shell_mass(const double*, const double*, double*, int, int, int);
 __global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double);
+__global__ void k_fas_atm_reset(double*, double*, double*, double*,
+    const double*, const double*, double, double, int, int, int);
 
 // ========================= Projection-specific kernels ========================
 
@@ -390,7 +392,7 @@ void ProjSolver::snapshot_hse() {
     CUDA_CHECK(cudaMemcpy(d_P0, P0.data(), n*sizeof(double), cudaMemcpyHostToDevice));
 
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
-    atm_rho_thresh = 1e-6 * rho_max;
+    atm_rho_thresh = 1e-3 * rho_max;
 
     std::vector<double> h_rc(nr), h_rf(nr+1);
     CUDA_CHECK(cudaMemcpy(h_rc.data(), d_r_center, nr*sizeof(double), cudaMemcpyDeviceToHost));
@@ -581,6 +583,9 @@ double ProjSolver::step(double t, double t_end) {
             sponge_r_start, sponge_r_top, sponge_kappa, dt, 1.0/(gamma-1.0),
             nr, nt, ng);
     }
+
+    k_fas_atm_reset<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
+        d_rho0, d_P0, atm_rho_thresh, 1.0/(gamma-1.0), nr, nt, ng);
 
     step_count++;
     if (step_count % 500 == 0)

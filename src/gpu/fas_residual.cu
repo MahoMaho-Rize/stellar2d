@@ -468,6 +468,25 @@ void FasSolver::apply_floor(int l) {
                                    lev.nr, lev.nt, lev.ng, gamma);
 }
 
+// ========================= Atmosphere reset (MUSIC-style) ====================
+// Force cells with ρ₀ < atm_rho_thresh to exact HSE state: ρ=ρ₀, v=0, E=P₀/(γ-1).
+// Prevents numerical noise in near-vacuum from poisoning the implicit solve.
+
+__global__
+void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
+                     const double* rho0, const double* P0,
+                     double atm_thresh, double gam_m1_inv,
+                     int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] >= atm_thresh) return;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    rho[k]  = fmax(rho0[flat], 1e-20);
+    mr[k]   = 0.0;
+    mt[k]   = 0.0;
+    rhoE[k] = fmax(P0[flat] * gam_m1_inv, 1e-20);
+}
+
 // ========================= Sponge + isothermal buffer ========================
 // Velocity damping: v *= 1/(1 + dt·κ)
 // Thermal relaxation: rhoE → rhoE₀ with same timescale (MUSIC-style)

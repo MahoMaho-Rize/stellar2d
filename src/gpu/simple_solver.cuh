@@ -71,7 +71,7 @@ struct SimpleSolver {
     bool hse_set = false;
 
     double sponge_r_start = 0.0, sponge_r_top = 0.0;
-    double sponge_kappa = 10.0;
+    double sponge_kappa = 100.0;
 
     static constexpr int N_INNER = 8;       // block-Jacobi + SIMPLE iterations per solve
     static constexpr int MAX_OUTER = 12;     // max outer Newton-like iterations
