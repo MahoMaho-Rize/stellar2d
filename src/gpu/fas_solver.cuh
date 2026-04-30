@@ -121,6 +121,7 @@ struct FasSolver {
     bool use_lm_hllc = false;        // low-Mach corrected HLLC (Rieper 2011)
     bool use_hse_outer_bc = false;   // HSE Dirichlet at outer radial boundary
     bool use_core_excision = false;  // r_face[0] > 0, skip origin kernel
+    bool radial_only = false;        // enforce v_theta=0 and skip theta-direction work
     double M_core = 0.0;            // enclosed mass inside r_inner
     int n_angular_avg = 0;           // angular-average this many inner shells per step
     int n_pole_avg = 0;              // wedge-average this many cells near each pole

@@ -21,6 +21,7 @@
 #include "gpu/fas_solver.cuh"
 #include "gpu/simple_solver.cuh"
 #include "gpu/projection_solver.cuh"
+#include "gpu/radial1d_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -53,6 +54,7 @@ struct SimConfig {
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     bool no_sponge = false;
     bool lm_hllc = false;
+    bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
 };
@@ -159,6 +161,8 @@ int main(int argc, char** argv) {
             cfg.no_sponge = true;
         else if (std::strcmp(argv[i], "--lm-hllc") == 0)
             cfg.lm_hllc = true;
+        else if (std::strcmp(argv[i], "--radial-only") == 0)
+            cfg.radial_only = true;
         else if (std::strcmp(argv[i], "--r-inner") == 0 && i + 1 < argc)
             cfg.r_inner = std::atof(argv[++i]);
     }
@@ -307,7 +311,69 @@ int main(int argc, char** argv) {
     std::printf("Starting time integration...\n");
 
 #ifdef USE_GPU
-    if (cfg.solver_type == "projection") {
+    if (cfg.solver_type == "radial1d") {
+        // ===== 1D Lagrangian radial solver (MESA RSP-inspired) =====
+        // Ignores the 2D Grid; uses nr as number of Lagrangian zones.
+        // Lane-Emden specific; other test cases not supported yet.
+        if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
+            std::fprintf(stderr, "ERROR: radial1d solver only supports lane_emden / lane_emden_perturbed\n");
+            return 1;
+        }
+        Radial1DSolver r1d;
+        r1d.init(cfg.nr, cfg.gamma, cfg.G, cfg.cfl);
+        r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
+        r1d.snapshot_hse();
+        if (cfg.test_case == "lane_emden_perturbed")
+            r1d.apply_perturbation(cfg.perturb_amplitude);
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        // Simple text output (CSV format) for radial1d mode
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr\n");
+
+        int frame = 0;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = r1d.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                auto d = r1d.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
+                            step, t, dt, d.total_mass, d.total_E, d.max_vr, d.max_mach);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                             d.total_grav_E, d.total_E, d.max_mach, d.max_vr);
+                std::fflush(csv);
+
+                // Dump profile as simple text
+                std::vector<double> r_face, v_face, rho_cell, P_cell, e_cell;
+                r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
+                char path[512];
+                std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
+                std::FILE* fp = std::fopen(path, "w");
+                std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int\n", t, step);
+                for (int k = 0; k < r1d.lev.nz; ++k) {
+                    std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
+                                 k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k]);
+                }
+                // last face
+                std::fprintf(fp, "%d %.10e %.10e - - -\n", r1d.lev.nz, r_face[r1d.lev.nz], v_face[r1d.lev.nz]);
+                std::fclose(fp);
+            }
+        }
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        r1d.destroy();
+    } else if (cfg.solver_type == "projection") {
         // ===== GPU semi-implicit pressure projection =====
         ProjSolver proj;
         proj.init(grid, eos, cfg.G, cfg.cfl);
@@ -420,7 +486,10 @@ int main(int argc, char** argv) {
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
         fas.limiter_type = static_cast<int>(cfg.limiter);
         fas.use_lm_hllc = cfg.lm_hllc;
+        fas.radial_only = cfg.radial_only;
         fas.init(grid, eos, cfg.G, cfg.cfl);
+        if (cfg.radial_only)
+            std::printf("Radial-only mode: v_theta=0 enforced, theta fluxes and atm_reset skipped\n");
         if (cfg.no_sponge) fas.sponge_kappa = 0.0;
         if (cfg.mesh_type == "mass") {
             fas.use_hse_outer_bc = true;
@@ -450,11 +519,13 @@ int main(int argc, char** argv) {
         FasLevel& fl = fas.levels[0];
         int snap_size = fl.total;  // per-variable size (with ghost)
         int max_snaps = static_cast<int>(cfg.t_end / (cfg.output_interval * 1e-5)) + 100;
-        // Cap by available GPU memory (~40GB free, 4*snap_size*8 bytes per frame)
         long long bytes_per_snap = 4LL * snap_size * sizeof(double);
-        long long max_bytes = 40LL * 1024 * 1024 * 1024;  // 40GB budget
+        size_t mem_free = 0, mem_total = 0;
+        cudaMemGetInfo(&mem_free, &mem_total);
+        long long max_bytes = static_cast<long long>(mem_free) / 2;
         if (max_snaps > max_bytes / bytes_per_snap)
             max_snaps = static_cast<int>(max_bytes / bytes_per_snap);
+        if (max_snaps < 1) max_snaps = 1;
 
         double* d_snap_buf = nullptr;
         CUDA_CHECK(cudaMalloc(&d_snap_buf, (long long)max_snaps * 4 * snap_size * sizeof(double)));
