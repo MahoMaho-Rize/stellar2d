@@ -126,6 +126,11 @@ struct FasSolver {
     static constexpr int NU2 = 4;     // post-smooth iterations
     static constexpr double OMEGA = 0.8;  // damping factor
 
+    // Public for testing access
+    void launch_ghost(int l);
+    void apply_floor(int l);
+    void restrict_state_pub(int fine, int coarse) { restrict_state(fine, coarse); }
+
 private:
     void build_level(int l, int nr, int nt, int ng,
                      const double* h_rf, const double* h_tf);
@@ -136,9 +141,7 @@ private:
     void smooth(int l, double dt, double g0_over_dt, int n_iters);
     void compute_residual(int l);
     void compute_F(int l, double g0_over_dt);
-    void launch_ghost(int l);
     void compute_gravity_1d(int l);
-    void apply_floor(int l);
 
     void restrict_state(int fine, int coarse);
     void restrict_defect(int fine, int coarse, double g0_over_dt);

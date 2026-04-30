@@ -312,9 +312,15 @@ void k_fas_residual_origin(
         FFlux4 ft_hi = hllc_t_face(j+1);
         FFlux4 ft_lo = hllc_t_face(j);
 
+        // Flux-level WB: subtract HSE background pressure from momentum flux
+        // (Same treatment as k_fas_residual for i>=1, lines 200-211)
+        double P0f_rhi = 0.5*(P0r(0) + P0r(1));
+        double P0f_thi = 0.5*(P0t(j) + P0t(j+1));
+        double P0f_tlo = 0.5*(P0t(j-1) + P0t(j));
+
         double div_rho = -invV*(Ar_hi*fr_hi.f_rho + At_hi*ft_hi.f_rho - At_lo*ft_lo.f_rho);
-        double div_mr  = -invV*(Ar_hi*fr_hi.f_mr  + At_hi*ft_hi.f_mr  - At_lo*ft_lo.f_mr);
-        double div_mt  = -invV*(Ar_hi*fr_hi.f_mt  + At_hi*ft_hi.f_mt  - At_lo*ft_lo.f_mt);
+        double div_mr  = -invV*(Ar_hi*(fr_hi.f_mr - P0f_rhi) + At_hi*ft_hi.f_mr - At_lo*ft_lo.f_mr);
+        double div_mt  = -invV*(Ar_hi*fr_hi.f_mt + At_hi*(ft_hi.f_mt - P0f_thi) - At_lo*(ft_lo.f_mt - P0f_tlo));
         double div_E   = -invV*(Ar_hi*fr_hi.f_E   + At_hi*ft_hi.f_E   - At_lo*ft_lo.f_E);
 
         double rho_ref = wb ? rho0[flat] : 0.0;
