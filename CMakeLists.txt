@@ -42,6 +42,7 @@ if(USE_GPU)
         src/gpu/lm_krylov.cu
         src/gpu/lowmach_solver.cu
         src/gpu/gmg_gpu.cu
+        src/gpu/radial1d_solver.cu
     )
     set(LOWMACH_SOURCES
         src/gpu/lm_residual.cu

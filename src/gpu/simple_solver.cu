@@ -297,12 +297,12 @@ void SimpleSolver::compute_residual() {
     k_fas_residual<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
         lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
-        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0);
+        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0, 0);
     if (!use_core_excision) {
         k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
             lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
             lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
-            lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0);
+            lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0, 0);
     }
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
 }
@@ -342,7 +342,7 @@ double SimpleSolver::compute_cfl_dt() {
     int n = lev.nr*lev.nt, B = 256;
     k_fas_cfl<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_dr,lev.d_r_center,lev.d_dtheta,lev.d_rho0,lev.d_dp,
-        lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, n_angular_avg);
+        lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, n_angular_avg, 0);
     double mn = gpu_reduce_min(lev.d_dp, lev.d_poisson_rhs, n);
     return cfl_num * mn;
 }
@@ -448,7 +448,7 @@ double SimpleSolver::step(double t, double t_end) {
         std::fprintf(stderr, "  step %d dt=%.2e ||F||=%.2e cuts=%d\n", step_count, dt, norm, cuts);
 
     k_fas_atm_reset<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_rho0, lev.d_P0, atm_rho_thresh, 1.0/(gamma-1.0), lev.nr, lev.nt, lev.ng);
+        lev.d_rho0, lev.d_P0, atm_rho_thresh, 1.0/(gamma-1.0), lev.nr, lev.nt, lev.ng, 0);
 
     if (n_angular_avg > 0) {
         int B2 = std::min(lev.nt, 256);
