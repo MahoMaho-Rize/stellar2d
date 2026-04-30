@@ -43,6 +43,10 @@ if(USE_GPU)
         src/gpu/lowmach_solver.cu
         src/gpu/gmg_gpu.cu
         src/gpu/radial1d_solver.cu
+        src/gpu/wb2d_solver.cu
+        src/gpu/wb2d_kernels.cu
+        src/gpu/ale2d_solver.cu
+        src/gpu/ale2d_kernels.cu
     )
     set(LOWMACH_SOURCES
         src/gpu/lm_residual.cu

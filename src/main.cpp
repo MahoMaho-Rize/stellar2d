@@ -22,6 +22,8 @@
 #include "gpu/simple_solver.cuh"
 #include "gpu/projection_solver.cuh"
 #include "gpu/radial1d_solver.cuh"
+#include "gpu/wb2d_solver.cuh"
+#include "gpu/ale2d_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -588,6 +590,115 @@ int main(int argc, char** argv) {
         cudaFree(d_snap_buf);
         fas.download_state(grid, state);
         fas.destroy();
+    } else if (cfg.solver_type == "ale2d") {
+        // ===== 2D axisymmetric Lagrangian (Caramana compatible) =====
+        if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
+            std::fprintf(stderr, "ERROR: ale2d currently supports lane_emden / lane_emden_perturbed only\n");
+            return 1;
+        }
+        Ale2DSolver ale;
+        ale.init(grid, eos, cfg.G, cfg.cfl);
+        ale.init_lane_emden(1.0, 1.0, 1.5);
+        ale.snapshot_hse();
+        if (cfg.test_case == "lane_emden_perturbed")
+            ale.apply_perturbation(cfg.perturb_amplitude);
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_v\n");
+
+        int frame = 0;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = ale.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                auto d = ale.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
+                            step, t, dt, d.total_mass, d.total_E, d.max_v, d.max_mach);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                             d.total_grav_E, d.total_E, d.max_mach, d.max_v);
+                std::fflush(csv);
+
+                std::vector<double> rp, rhop, Pp, ep, vrp;
+                ale.download_radial_profile(rp, rhop, Pp, ep, vrp);
+                char path[512];
+                std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
+                std::FILE* fp = std::fopen(path, "w");
+                std::fprintf(fp, "# t = %.10e  step = %d\n# ic r rho P e_int v_r\n", t, step);
+                for (int ic = 0; ic < ale.nr; ++ic)
+                    std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
+                                 ic, rp[ic], rhop[ic], Pp[ic], ep[ic], vrp[ic]);
+                std::fclose(fp);
+            }
+        }
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        ale.destroy();
+    } else if (cfg.solver_type == "wb2d") {
+        // ===== Well-Balanced 2D Eulerian (MESA-stabilized) =====
+        Wb2DSolver wb;
+        wb.limiter_type = static_cast<int>(cfg.limiter);
+        wb.use_lm_hllc = cfg.lm_hllc ? 1 : 0;
+        wb.init(grid, eos, cfg.G, cfg.cfl);
+        if (cfg.mesh_type == "mass") {
+            wb.n_pole_avg = cfg.ntheta / 2;
+            if (cfg.r_inner <= 0) {
+                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
+                wb.n_angular_avg = n_uni;
+                wb.central_damp_r = 0.15 * cfg.R_outer;
+            }
+        }
+        if (!cfg.no_sponge) wb.sponge_kappa = 100.0;
+
+        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
+            State state_hse;
+            state_hse.allocate(grid);
+            LaneEmdenParams lep;
+            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
+            init_lane_emden(grid, state_hse, lep, cfg.gamma);
+            wb.upload_state(grid, state_hse);
+            wb.snapshot_hse();
+        }
+        wb.upload_state(grid, state);
+        if (!(cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble"))
+            wb.snapshot_hse();
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = wb.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                wb.download_state(grid, state);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk",
+                              run_dir.c_str(), step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
+        }
+        std::fprintf(stderr, "\n");
+        wb.download_state(grid, state);
+        wb.destroy();
     } else if (cfg.solver_type == "lowmach") {
         // ===== GPU low-Mach path =====
         PrecondType pc = PrecondType::LINE_JACOBI;
