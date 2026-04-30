@@ -51,6 +51,7 @@ void CartLagSolver::init(int nx_in, int ny_in, double Lx, double Ly,
     mal(&d_X,  nnode*sizeof(double));  mal(&d_Y,  nnode*sizeof(double));
     mal(&d_vX, nnode*sizeof(double));  mal(&d_vY, nnode*sizeof(double));
     mal(&d_FX, nnode*sizeof(double));  mal(&d_FY, nnode*sizeof(double));
+    mal(&d_FX_hse, nnode*sizeof(double)); mal(&d_FY_hse, nnode*sizeof(double));
     mal(&d_mnode, nnode*sizeof(double));
     mal(&d_dX, nnode*sizeof(double));  mal(&d_dY, nnode*sizeof(double));
 
@@ -87,6 +88,7 @@ void CartLagSolver::init(int nx_in, int ny_in, double Lx, double Ly,
 void CartLagSolver::destroy() {
     auto f = [](double* p) { if (p) cudaFree(p); };
     f(d_X); f(d_Y); f(d_vX); f(d_vY); f(d_FX); f(d_FY);
+    f(d_FX_hse); f(d_FY_hse);
     f(d_mnode); f(d_dX); f(d_dY);
     f(d_dm); f(d_Vol); f(d_Area0); f(d_rho); f(d_e_int);
     f(d_P); f(d_Q); f(d_cs); f(d_minheight); f(d_strain_rate);
@@ -206,6 +208,52 @@ void CartLagSolver::init_hse_polytrope(double rho_base, double g_val, double amp
 }
 
 // ============================================================
+// Capture HSE residual force so it can be subtracted each step.
+// Must be called when state is at rest (v=0) and is meant to be HSE.
+// ============================================================
+void CartLagSolver::snapshot_hse_force() {
+    int B = 256;
+    int BCell = (ncell + B - 1) / B;
+    int BNode = (nnode + B - 1) / B;
+
+    CUDA_CHECK(cudaMemset(d_vX, 0, nnode*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_vY, 0, nnode*sizeof(double)));
+
+    k_clag_geometry<<<BCell, B>>>(d_X, d_Y, d_Vol, d_minheight, nx, ny);
+    k_clag_eos_and_q<<<BCell, B>>>(
+        d_X, d_Y, d_vX, d_vY, d_dm, d_Vol, d_Area0, d_e_int,
+        d_rho, d_P, d_Q, d_cs, d_strain_rate,
+        nx, ny, gamma, CQ_lin, CQ_quad);
+
+    k_clag_zero<<<BNode, B>>>(d_FX, nnode);
+    k_clag_zero<<<BNode, B>>>(d_FY, nnode);
+    k_clag_node_forces<<<BCell, B>>>(d_X, d_Y, d_P, d_Q,
+                                     d_FX, d_FY, d_FSX, d_FSY, nx, ny);
+    if (g_y != 0.0)
+        k_clag_add_gravity<<<BNode, B>>>(d_mnode, d_FY, g_y, nnode);
+
+    // Do NOT apply BC here — store the raw force; BC zeros wall-normal components
+    // each step and this remains consistent since BC is applied post-subtraction.
+
+    CUDA_CHECK(cudaMemcpy(d_FX_hse, d_FX, nnode*sizeof(double), cudaMemcpyDeviceToDevice));
+    CUDA_CHECK(cudaMemcpy(d_FY_hse, d_FY, nnode*sizeof(double), cudaMemcpyDeviceToDevice));
+
+    // Report max |F|/m so we see how big the discrete HSE defect was
+    std::vector<double> h_FX(nnode), h_FY(nnode), h_m(nnode);
+    CUDA_CHECK(cudaMemcpy(h_FX.data(), d_FX,    nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_FY.data(), d_FY,    nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_m.data(),  d_mnode, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    double max_a = 0.0;
+    for (int n = 0; n < nnode; ++n) {
+        if (h_m[n] <= 0.0) continue;
+        double a = std::sqrt(h_FX[n]*h_FX[n] + h_FY[n]*h_FY[n]) / h_m[n];
+        if (a > max_a) max_a = a;
+    }
+    hse_force_set = true;
+    std::fprintf(stderr, "  CartLag HSE force snapshot: max|F|/m = %.3e\n", max_a);
+}
+
+// ============================================================
 // One kick-drift-kick step
 // ============================================================
 double CartLagSolver::step(double t, double t_end) {
@@ -241,6 +289,16 @@ double CartLagSolver::step(double t, double t_end) {
     // automatically through the Pos + v update.)
     if (g_y != 0.0) {
         k_clag_add_gravity<<<BNode, B>>>(d_mnode, d_FY, g_y, nnode);
+    }
+
+    // HSE residual-force subtraction: F ← F - F_HSE.
+    // Guarantees that the captured initial-state force field produces zero
+    // acceleration. Valid because on a small neighborhood of HSE the force
+    // varies smoothly in mesh position, so any true perturbation force is
+    // preserved (the subtraction only removes the static "phantom" defect).
+    if (hse_force_set) {
+        k_fas_axpy_v<<<BNode, B>>>(d_FX, -1.0, d_FX_hse, nnode);
+        k_fas_axpy_v<<<BNode, B>>>(d_FY, -1.0, d_FY_hse, nnode);
     }
 
     // BCs: zero normal component of force on wall edges
