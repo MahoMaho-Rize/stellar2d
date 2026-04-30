@@ -736,3 +736,472 @@ pressure coupling that GMRES alone would need $O(N)$ iterations to discover.
 Because this is only a preconditioner, approximation errors do not affect
 the final solution — the outer JFNK iteration converges to the exact
 Backward Euler solution regardless of preconditioner quality.
+
+---
+
+## §12 FAS Nonlinear Multigrid (Polar Grid)
+
+The FAS (Full Approximation Scheme) solver operates on the same polar grid as
+the explicit solver (§1–§8), using nonlinear multigrid with block-Jacobi
+smoothing.
+
+### Well-balanced flux-level P₀ subtraction
+
+The momentum flux divergence subtracts background pressure at each face to
+achieve $R(U_\mathrm{HSE}) = 0$ to machine precision. For regular cells
+($i \geq 1$):
+
+$$
+(\nabla\cdot F)_{m_r} = -\frac{1}{V_{ij}}\Bigl[
+  A^r_{i+1/2}\bigl(\hat F^{m_r}_{i+1/2} - P^0_{i+1/2}\bigr)
+- A^r_{i-1/2}\bigl(\hat F^{m_r}_{i-1/2} - P^0_{i-1/2}\bigr)
++ A^\theta_{j+1/2}\hat G^{m_r}_{j+1/2}
+- A^\theta_{j-1/2}\hat G^{m_r}_{j-1/2}
+\Bigr]
+\tag{12.1}
+$$
+
+where $P^0_{i+1/2} = \tfrac{1}{2}(P_0(r_i) + P_0(r_{i+1}))$ is the
+face-averaged HSE pressure. The theta momentum equation subtracts $P^0$
+from the $\theta$-face flux analogously.
+
+### Well-balanced gravity source (perturbation split)
+
+$$
+S^g_{m_r} = \rho'\,g_{0,r} + \rho\,g'_r,
+\qquad
+\rho' = \rho - \rho_0, \quad g' = g - g_0
+\tag{12.2}
+$$
+
+where $\rho_0, g_0$ are the HSE reference state. At equilibrium,
+$\rho' = 0$ and $g' = 0$, so the source vanishes exactly.
+
+### HSE defect subtraction
+
+On coarse grids the discrete flux-level WB is not exact due to averaging.
+The solver precomputes and subtracts the frozen defect:
+
+$$
+R_\mathrm{corrected}(U) = R(U) - R(U_0)
+\tag{12.3}
+$$
+
+ensuring $R_\mathrm{corrected}(U_0) = 0$ on every grid level.
+
+### Origin cell ($i = 0$)
+
+The innermost cell is a pie-slice wedge touching $r = 0$. It has no inner
+radial face (zero area). Geometry:
+
+$$
+V_{0j} = \tfrac{1}{3}\,r_{1/2}^3\,(\cos\theta_{j-1/2} - \cos\theta_{j+1/2}),
+\qquad
+A^r_{1/2,j} = r_{1/2}^2\,(\cos\theta_{j-1/2} - \cos\theta_{j+1/2})
+\tag{12.4}
+$$
+
+Volume-averaged $\langle 1/r \rangle$ for geometric source:
+
+$$
+\left\langle \frac{1}{r} \right\rangle_{0j} = \frac{3}{2\,r_{1/2}}
+\tag{12.5}
+$$
+
+First-order HLLC is used at the origin (stencil too short for MUSCL).
+WB P₀ subtraction applies to the single outer radial face:
+
+$$
+(\nabla\cdot F)_{m_r}\big|_{i=0} = -\frac{1}{V_{0j}}
+  \Bigl[A^r_{1/2}\bigl(\hat F^{m_r}_{1/2} - P^0_{1/2}\bigr)
+  + A^\theta_{j+1/2}\hat G^{m_r}_{j+1/2}
+  - A^\theta_{j-1/2}\hat G^{m_r}_{j-1/2}\Bigr]
+\tag{12.6}
+$$
+
+### MUSCL reconstruction (perturbation form)
+
+Slopes are computed on perturbation variables, then face states are
+restored using the face-centered HSE background:
+
+$$
+\sigma^\rho_i = \mathrm{limiter}\bigl(\rho'_i - \rho'_{i-1},\;
+  \rho'_{i+1} - \rho'_i\bigr)
+\tag{12.7a}
+$$
+
+$$
+\rho^L_{i+1/2} = \rho_0(r_{i+1/2}) + \rho'_i + \tfrac{1}{2}\sigma^\rho_i,
+\qquad
+\rho^R_{i+1/2} = \rho_0(r_{i+1/2}) + \rho'_{i+1} - \tfrac{1}{2}\sigma^\rho_{i+1}
+\tag{12.7b}
+$$
+
+where $\rho_0(r_{i+1/2}) = \tfrac{1}{2}(\rho_{0,i} + \rho_{0,i+1})$ is
+the face-centered background. Pressure is treated identically.
+
+### FAS restrict (volume-weighted)
+
+Fine-to-coarse state transfer with 2×2 coarsening:
+
+$$
+U^H_{I,J} = \frac{\sum_{(i,j)\in\mathcal{C}(I,J)} U^h_{ij}\,V^h_{ij}}
+                  {\sum_{(i,j)\in\mathcal{C}(I,J)} V^h_{ij}}
+\tag{12.8}
+$$
+
+where $\mathcal{C}(I,J)$ denotes the 2×2 fine children of coarse cell
+$(I,J)$.
+
+### FAS tau correction
+
+The coarse-level FAS right-hand side incorporates the restricted
+fine-level defect so that the coarse solve drives the fine-level residual
+to zero:
+
+$$
+\tau_H = \frac{U_H}{\Delta t} - R(U_H) + \bar{d}_H
+\tag{12.9}
+$$
+
+where $\bar{d}_H$ is the restricted fine defect (Eq. 12.8 applied to
+$F(U^h) = R(U^h) - U^h/\Delta t + \tau^h$).
+
+### FAS prolongate (limited injection)
+
+Coarse correction is piecewise-constant, clamped for safety:
+
+$$
+\delta U_H = U_H^{\mathrm{solved}} - U_H^{\mathrm{restricted}}
+\tag{12.10a}
+$$
+
+$$
+U^h_{ij} \mathrel{+}= \mathrm{clamp}(\delta U_H,\;
+  -\beta\,s_{ij},\; +\beta\,s_{ij}),
+\qquad \beta = 0.5
+\tag{12.10b}
+$$
+
+where $s_{ij}$ is a local scale ($\rho$, $\rho c_s$, or $\rho E$
+depending on the equation).
+
+### Block-Jacobi smoother
+
+$$
+U^{k+1} = U^k - \omega\,J_\mathrm{diag}^{-1}\,F(U^k),
+\qquad \omega = 0.8
+\tag{12.11}
+$$
+
+The $4\times4$ diagonal Jacobian block at each cell is:
+
+$$
+J_\mathrm{diag} = -\Bigl(\frac{1}{\Delta t} + s_r\Bigr)I
+  + \text{off-diagonal couplings}
+\tag{12.12}
+$$
+
+where $s_r = 2\bigl[(|v_r|+c_s)/\Delta r + (|v_\theta|+c_s)/(r\Delta\theta)\bigr]$
+is the spectral radius estimate (factor 2 for MUSCL doubling).
+Off-diagonal entries capture pressure–energy coupling
+($\partial(\nabla P)/\partial(\rho E)$) and gravity–density coupling
+($\partial S^g/\partial\rho$). The block is inverted per cell via
+4×4 Gauss–Jordan elimination.
+
+### Smooth floor
+
+Density and internal energy are kept non-negative by a $C^\infty$ smooth
+approximation to $\max(x,\varepsilon)$:
+
+$$
+\mathrm{floor}(x) = \tfrac{1}{2}\bigl(x + \sqrt{x^2 + 4\varepsilon^2}\bigr),
+\qquad \varepsilon = 10^{-20}
+\tag{12.13}
+$$
+
+Applied first to $\rho$, then to the internal energy
+$e_\mathrm{int} = \rho E - \tfrac{1}{2}\rho v^2$.
+
+### CFL condition (polar grid)
+
+$$
+\Delta t = C_\mathrm{CFL}\;\min_{i,j}\left[\min\!\left(
+  \frac{\Delta r_i}{|v_r|+c_s},\;
+  \frac{r_i\,\Delta\theta_j}{|v_\theta|+c_s}
+\right)\right]
+\tag{12.14}
+$$
+
+Atmosphere cells ($\rho_0 < 10^{-6}\rho_{\max}$) are excluded from the
+CFL computation.
+
+---
+
+## §13 Strang Cartesian Solver
+
+The Strang solver operates on a uniform Cartesian grid $(x,y)$,
+$[0, L_x]\times[0, L_y]$, with cell sizes $\Delta x = L_x/N_x$,
+$\Delta y = L_y/N_y$ and $n_g = 2$ ghost layers.
+
+### Perturbation storage
+
+The solver stores perturbations from a 1-D isentropic HSE background:
+
+$$
+\rho'_{ij} = \rho_{ij} - \bar\rho(y_j), \qquad
+E'_{ij} = E_{ij} - \frac{\bar p(y_j)}{\gamma - 1}
+\tag{13.1}
+$$
+
+Momentum $(\rho u, \rho v)$ is stored in total form (background velocity
+is zero).
+
+### Isentropic HSE background
+
+$$
+\bar\rho(y) = \Bigl[\rho_0^{\gamma-1}
+  - \frac{(\gamma-1)\,g\,y}{\gamma\,K}\Bigr]^{1/(\gamma-1)},
+\qquad
+\bar p(y) = K\,\bar\rho(y)^\gamma
+\tag{13.2}
+$$
+
+where $\rho_0$ is the base density, $K$ the polytropic constant, $g$
+the uniform gravitational acceleration, and $\gamma$ the adiabatic index.
+
+### MC (Monotonised Central) limiter
+
+$$
+\mathrm{MC}(a,b) = \begin{cases}
+\mathrm{sgn}(a)\;\min\!\bigl(\tfrac{1}{2}|a+b|,\; 2|a|,\; 2|b|\bigr)
+  & \text{if } ab > 0 \\
+0 & \text{otherwise}
+\end{cases}
+\tag{13.3}
+$$
+
+### Well-balanced y-sweep MUSCL reconstruction
+
+Slopes are computed on perturbation quantities; face states are restored
+using face-centred HSE values:
+
+$$
+\sigma^\rho_j = \mathrm{MC}(\rho'_j - \rho'_{j-1},\;
+  \rho'_{j+1} - \rho'_j)
+\tag{13.4a}
+$$
+
+$$
+\sigma^P_j = \mathrm{MC}(P'_j - P'_{j-1},\;
+  P'_{j+1} - P'_j), \qquad
+P'_j = P_j - \bar p(y_j)
+\tag{13.4b}
+$$
+
+$$
+\rho^L_{j+1/2} = \bar\rho(y_{j+1/2}) + \rho'_j + \tfrac{1}{2}\sigma^\rho_j
+\tag{13.4c}
+$$
+
+$$
+P^L_{j+1/2} = \bar p(y_{j+1/2}) + P'_j + \tfrac{1}{2}\sigma^P_j
+\tag{13.4d}
+$$
+
+The x-sweep uses no WB (background is y-dependent only); slopes and
+reconstruction are on total variables.
+
+### MUSCL-Hancock predictor
+
+Both left and right face states of a cell are evolved by half a time step
+using the within-cell flux difference:
+
+$$
+\mathbf{U}^{n+1/2}_\mathrm{face} =
+  \mathbf{U}^n_\mathrm{face}
+  + \frac{\Delta t}{2\Delta x}
+    \bigl[\mathbf{F}(\mathbf{W}_L) - \mathbf{F}(\mathbf{W}_R)\bigr]
+\tag{13.5}
+$$
+
+where $\mathbf{W}_L, \mathbf{W}_R$ are the MUSCL-reconstructed left and
+right primitives of the same cell. In the y-sweep, the gravity source
+$-\rho g$ is included in the Hancock half-step to balance
+$\partial\bar p/\partial y$:
+
+$$
+(\rho v)^{n+1/2}_\mathrm{face} \mathrel{+}= -\tfrac{1}{2}\Delta t\,\rho\,g
+\tag{13.6}
+$$
+
+### Strang splitting
+
+$$
+\mathbf{U}^{n+1} = \mathcal{L}_x(\tfrac{\Delta t}{2})
+  \circ \mathcal{L}_y(\tfrac{\Delta t}{2})
+  \circ \mathcal{L}_y(\tfrac{\Delta t}{2})
+  \circ \mathcal{L}_x(\tfrac{\Delta t}{2})\;\mathbf{U}^n
+\tag{13.7}
+$$
+
+Each $\mathcal{L}$ is a MUSCL-Hancock + LM-HLLC unsplit sweep in the
+corresponding direction.
+
+### Boundary conditions (Cartesian)
+
+**x-periodic** ($n_g$ ghost layers):
+
+$$
+U_{-g,\,j} = U_{N_x-g,\,j}, \qquad
+U_{N_x+g,\,j} = U_{g,\,j}
+\tag{13.8a}
+$$
+
+**y-bottom reflective** ($y = 0$):
+
+$$
+\rho_{i,-g} = \rho_{i,g-1}, \quad
+(\rho u)_{i,-g} = (\rho u)_{i,g-1}, \quad
+(\rho v)_{i,-g} = -(\rho v)_{i,g-1}, \quad
+E_{i,-g} = E_{i,g-1}
+\tag{13.8b}
+$$
+
+**y-top outflow** (zero-gradient):
+
+$$
+U_{i,\,N_y+g} = U_{i,\,N_y-1}
+\tag{13.8c}
+$$
+
+### CFL condition (Cartesian)
+
+$$
+\Delta t = C_\mathrm{CFL}\;\min_{i,j}\left[\min\!\left(
+  \frac{\Delta x}{|u| + c_s},\;
+  \frac{\Delta y}{|v| + c_s}
+\right)\right]
+\tag{13.9}
+$$
+
+---
+
+## §14 Low-Mach HLLC (LM-HLLC)
+
+The LM-HLLC Riemann solver modifies the standard HLLC (§4) to reduce
+excessive numerical diffusion at low Mach number. The modification scales
+the pressure jump in the contact wave speed estimate.
+
+### Local Mach number
+
+$$
+M_\mathrm{local} = \frac{|u_L| + |u_R|}{c_L + c_R}
+\tag{14.1}
+$$
+
+### Blending factor
+
+$$
+f(M) = \mathrm{clamp}(M_\mathrm{local},\; M_\mathrm{cutoff},\; 1)
+\tag{14.2}
+$$
+
+with $M_\mathrm{cutoff} = 10^{-3}$. At $M \gg M_\mathrm{cutoff}$,
+$f = 1$ and standard HLLC is recovered. At $M < M_\mathrm{cutoff}$,
+$f = M_\mathrm{cutoff}$ and the acoustic dissipation is suppressed.
+
+### Modified contact wave speed
+
+In the Strang solver:
+
+$$
+S^* = \frac{f(M)(P_R - P_L) + \rho_L u_L(S_L - u_L) - \rho_R u_R(S_R - u_R)}
+           {\rho_L(S_L - u_L) - \rho_R(S_R - u_R)}
+\tag{14.3}
+$$
+
+In the FAS solver (equivalent, alternative formulation):
+
+$$
+P_{L,\mathrm{mod}} = \bar P + \tfrac{1}{2}f(P_L - P_R), \qquad
+P_{R,\mathrm{mod}} = \bar P - \tfrac{1}{2}f(P_L - P_R)
+\tag{14.4a}
+$$
+
+$$
+S^* = \frac{P_{R,\mathrm{mod}} - P_{L,\mathrm{mod}}
+  + \rho_L u_L(S_L-u_L) - \rho_R u_R(S_R-u_R)}
+  {\rho_L(S_L-u_L) - \rho_R(S_R-u_R)}
+\tag{14.4b}
+$$
+
+where $\bar P = \tfrac{1}{2}(P_L + P_R)$. The two formulations are
+algebraically identical.
+
+### Physical interpretation
+
+At low Mach number, the pressure jump across a contact wave is $O(M^2 P)$
+while the acoustic pressure fluctuation is $O(M P)$. Standard HLLC treats
+both at the same order, creating $O(1/M)$ numerical dissipation. Scaling
+by $f(M)$ reduces the effective pressure jump, suppressing the spurious
+acoustic mode and allowing buoyancy-driven flows to develop correctly.
+
+Consequence: sound waves with $M < M_\mathrm{cutoff}$ are damped. For
+stellar convection ($M \sim 10^{-3}$–$10^{-1}$), this is acceptable
+because the dynamics are buoyancy-dominated.
+
+---
+
+## Equation Index
+
+| Eq. | Description | Source file(s) |
+|-----|-------------|---------------|
+| 1.1 | Conservative variables $\mathbf{U}$ | `state.h`, `fas_common.cuh` |
+| 1.2 | Ideal gas EOS | `eos.h`, `strang_device.cuh:d_cons2prim` |
+| 1.3 | Sound speed | `eos.h`, `strang_device.cuh`, `fas_hllc.cuh` |
+| 1.4 | Euler equations (spherical) | `hydro/flux.cpp`, `fas_residual.cu` |
+| 1.5 | Radial flux | `hydro/riemann.cpp`, `fas_hllc.cuh` |
+| 1.6 | Theta flux | `hydro/riemann.cpp`, `fas_hllc.cuh` |
+| 1.7 | Geometric + gravity source | `hydro/flux.cpp`, `fas_residual.cu` |
+| 1.8–1.9 | Poisson equation | `gravity/poisson.cpp`, `gmg_gpu.cu` |
+| 2.1 | Logarithmic radial mesh | `grid.cpp` |
+| 2.2 | Cell volume | `grid.cpp`, `fas_solver.cu` |
+| 2.3 | Radial face area | `grid.cpp`, `fas_solver.cu` |
+| 2.4 | Theta face area | `grid.cpp`, `fas_solver.cu` |
+| 2.5 | FV update | `hydro/flux.cpp`, `fas_residual.cu` |
+| 3.1 | Minmod limiter | `hydro/reconstruct.cpp`, `fas_hllc.cuh` |
+| 3.2 | Van Leer limiter | `hydro/reconstruct.cpp` |
+| 3.3–3.5 | MUSCL reconstruction | `hydro/reconstruct.cpp`, `fas_residual.cu` |
+| 4.1–4.7 | HLLC Riemann solver | `hydro/riemann.cpp`, `fas_hllc.cuh`, `strang_device.cuh` |
+| 5.1–5.4 | Geometric source (volume-consistent) | `hydro/flux.cpp`, `fas_residual.cu` |
+| 6.1–6.3 | Gravity source | `hydro/flux.cpp`, `fas_residual.cu`, `lm_residual.cu` |
+| 6.4–6.5 | Discrete Laplacian | `gravity/poisson.cpp`, `gmg_gpu.cu` |
+| 6.6–6.8 | Poisson BCs | `gravity/poisson.cpp`, `gmg_gpu.cu` |
+| 6.9–6.10 | Gravity gradient | `hydro/flux.cpp`, `fas_residual.cu` |
+| 7.1–7.3 | RK2 (Heun's method) | `hydro/integrate.cpp` |
+| 7.4 | CFL condition | `hydro/integrate.cpp` |
+| 8.1–8.3 | Polar BCs | `bc/boundary.cpp`, `fas_residual.cu` |
+| 9.1–9.8 | Initial conditions | `init/lane_emden.cpp`, `init/sedov.cpp`, `init/jeans.cpp`, `init/evrard.cpp` |
+| 10.1–10.5 | Low-Mach JFNK solver | `lm_residual.cu`, `lm_krylov.cu`, `lowmach_solver.cu` |
+| 11.1–11.6 | Physics-based preconditioner | `lm_precond.cu` |
+| 12.1–12.3 | FAS WB residual | `fas_residual.cu` |
+| 12.4–12.6 | FAS origin cell | `fas_residual.cu:k_fas_residual_origin` |
+| 12.7 | FAS perturbation MUSCL | `fas_residual.cu` |
+| 12.8 | FAS restrict | `fas_multigrid.cu:k_fas_restrict_state` |
+| 12.9 | FAS tau correction | `fas_multigrid.cu:k_fas_assemble_coarse_rhs` |
+| 12.10 | FAS prolongate (limited) | `fas_multigrid.cu:k_fas_prolongate_correct` |
+| 12.11–12.12 | Block-Jacobi smoother | `fas_smoothers.cu:k_fas_smooth_blkjac` |
+| 12.13 | Smooth floor | `fas_residual.cu:k_fas_floor` |
+| 12.14 | CFL (polar) | `fas_residual.cu:k_fas_cfl` |
+| 13.1 | Perturbation storage | `strang_solver.cuh` |
+| 13.2 | Isentropic HSE background | `strang_device.cuh:d_hse_rho`, `d_hse_p` |
+| 13.3 | MC limiter | `strang_device.cuh:d_mc_limit` |
+| 13.4 | WB y-sweep MUSCL | `strang_solver.cu:k_strang_sweep_y` |
+| 13.5–13.6 | Hancock predictor | `strang_solver.cu:k_strang_sweep_x`, `k_strang_sweep_y` |
+| 13.7 | Strang splitting | `strang_solver.cu:StrangSolver::step` |
+| 13.8 | Cartesian BCs | `strang_solver.cu:k_ghost_x`, `k_ghost_y` |
+| 13.9 | CFL (Cartesian) | `strang_solver.cu:StrangSolver::compute_dt` |
+| 14.1–14.2 | LM-HLLC Mach blending | `strang_device.cuh:d_lmhllc`, `fas_hllc.cuh:fas_hllc_lm` |
+| 14.3 | LM-HLLC $S^*$ (Strang) | `strang_device.cuh:d_lmhllc` |
+| 14.4 | LM-HLLC $S^*$ (FAS) | `fas_hllc.cuh:fas_hllc_lm` |

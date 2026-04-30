@@ -12,9 +12,17 @@ double van_leer(double a, double b) { // Eq. (3.2)
     return 2.0 * a * b / (a + b);
 }
 
+double mc_limiter(double a, double b) {
+    if (a * b <= 0.0) return 0.0;
+    double c = 0.5 * (a + b);
+    double s = (a > 0.0) ? 1.0 : -1.0;
+    return s * std::min({std::abs(c), 2.0 * std::abs(a), 2.0 * std::abs(b)});
+}
+
 double apply_limiter(double a, double b, Limiter lim) {
     switch (lim) {
         case Limiter::VAN_LEER: return van_leer(a, b);
+        case Limiter::MC:       return mc_limiter(a, b);
         default:                return minmod(a, b);
     }
 }
