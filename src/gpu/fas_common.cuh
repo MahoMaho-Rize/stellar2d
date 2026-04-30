@@ -80,6 +80,12 @@ __global__ void k_fas_central_damp(double* mr, double* rhoE,
     double r_damp, double alpha,
     int nr, int nt, int ng);
 
+__global__ void k_fas_rhoV_EV(const double*, const double*, const double*,
+    double*, double*, int, int, int);
+
+__global__ void k_fas_conserve_correct(double*, double*,
+    const double*, double, double, double, int, int, int);
+
 // 4×4 Gauss-Jordan inverse: A → inv_out (row-major, partial pivoting)
 __device__ __forceinline__
 void mat4_invert(const double* __restrict__ src, double* __restrict__ inv_out) {

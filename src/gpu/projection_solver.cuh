@@ -36,6 +36,7 @@ struct ProjSolver {
     double M_core = 0.0;
     int n_angular_avg = 0;
     int n_pole_avg = 0;
+    double interior_volume = 0.0;
     int step_count = 0;
     bool hse_set = false;
 

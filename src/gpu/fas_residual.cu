@@ -558,6 +558,37 @@ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
     rhoE[k] = fmax(P0[flat] * gam_m1_inv, 1e-20);
 }
 
+// ========================= Conservation helpers ==============================
+// Compute ρ·V and E·V per cell (for global reduce before/after atm_reset)
+__global__
+void k_fas_rhoV_EV(const double* rho, const double* rhoE, const double* vol,
+                   double* rhoV_out, double* EV_out,
+                   int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    double V = vol[flat];
+    rhoV_out[flat] = rho[k] * V;
+    EV_out[flat]   = rhoE[k] * V;
+}
+
+// Distribute mass/energy correction over interior cells, proportional to cell volume.
+// delta_rho_per_vol = ΔM / V_interior  (density correction, uniform)
+// delta_E_per_vol   = ΔE / V_interior  (energy density correction, uniform)
+__global__
+void k_fas_conserve_correct(double* rho, double* rhoE,
+                            const double* rho0,
+                            double atm_thresh,
+                            double delta_rho_per_vol, double delta_E_per_vol,
+                            int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    rho[k]  += delta_rho_per_vol;
+    rhoE[k] += delta_E_per_vol;
+}
+
 // ========================= Angular averaging near origin ======================
 // Volume-weighted θ-average for shells i < n_avg.
 // Eliminates geometric focusing artifacts at r→0 (PLUTO-style axis smoothing).
