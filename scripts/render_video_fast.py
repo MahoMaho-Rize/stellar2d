@@ -16,7 +16,7 @@ import numpy as np
 import re, os, sys, glob, subprocess, time
 from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import map_coordinates
-from multiprocessing import Pool
+import multiprocessing
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -370,7 +370,7 @@ def main():
             "-f", "rawvideo", "-pix_fmt", "rgb24",
             "-s", f"{W_FRAME}x{H_FRAME}", "-r", str(fps),
             "-i", "-",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+            "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "18",
             "-pix_fmt", "yuv420p",
             out_path,
         ],
@@ -383,7 +383,8 @@ def main():
     t_render = time.time()
     print(f"Rendering {len(files)} frames @ {fps}fps using {n_workers} workers ...")
 
-    with Pool(n_workers) as pool:
+    ctx = multiprocessing.get_context("fork")
+    with ctx.Pool(n_workers) as pool:
         for raw in pool.imap(render_one, args, chunksize=4):
             if raw is not None:
                 ffproc.stdin.write(raw)
