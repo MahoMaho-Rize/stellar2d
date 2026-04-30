@@ -142,7 +142,16 @@ class StellarRun:
         return self._diagnostics
 
     def vtk(self, name="output_final.vtk"):
-        return read_vtk(os.path.join(self.workdir, name))
+        direct = os.path.join(self.workdir, name)
+        if os.path.exists(direct):
+            return read_vtk(direct)
+        runs_dir = os.path.join(self.workdir, "runs")
+        if os.path.isdir(runs_dir):
+            for sub in sorted(os.listdir(runs_dir)):
+                candidate = os.path.join(runs_dir, sub, name)
+                if os.path.exists(candidate):
+                    return read_vtk(candidate)
+        return read_vtk(direct)
 
     @property
     def mass_drift(self):

@@ -18,13 +18,13 @@ __global__ void k_fas_residual(
     const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, int, int, int, double, double, int);
+    double*, int, int, int, double, double, int, int, int);
 __global__ void k_fas_residual_origin(
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, int, int, int, double, double, int);
+    double*, int, int, int, double, double, int, int, int);
 __global__ void k_fas_compute_F(double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, double, int, int, int);
@@ -280,11 +280,11 @@ void SimpleSolver::compute_residual() {
     k_fas_residual<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
         lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
-        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1);
+        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0);
     k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
         lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
-        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1);
+        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0);
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
 }
 

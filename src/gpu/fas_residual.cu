@@ -119,7 +119,7 @@ void k_fas_residual(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, double gam, double atm_thresh,
-    int use_wellbalance) {
+    int use_wellbalance, int lim_type, int use_lm_hllc) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
@@ -164,15 +164,15 @@ void k_fas_residual(
     auto hllc_r_face = [&](int face_i) -> FFlux4 {
         FPrim wa=W(face_i-2,j), wb_=W(face_i-1,j), wc=W(face_i,j), wd=W(face_i+1,j);
         double ppL,ppR,rpL,rpR;
-        fas_recon(wa.P-P0r(face_i-2), wb_.P-P0r(face_i-1), wc.P-P0r(face_i), wd.P-P0r(face_i+1), ppL, ppR);
-        fas_recon(wa.rho-r0r(face_i-2), wb_.rho-r0r(face_i-1), wc.rho-r0r(face_i), wd.rho-r0r(face_i+1), rpL, rpR);
+        fas_recon(wa.P-P0r(face_i-2), wb_.P-P0r(face_i-1), wc.P-P0r(face_i), wd.P-P0r(face_i+1), ppL, ppR, lim_type);
+        fas_recon(wa.rho-r0r(face_i-2), wb_.rho-r0r(face_i-1), wc.rho-r0r(face_i), wd.rho-r0r(face_i+1), rpL, rpR, lim_type);
         double P0f = 0.5*(P0r(face_i-1)+P0r(face_i)), r0f = 0.5*(r0r(face_i-1)+r0r(face_i));
         FPrim wl, wr;
-        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr);
-        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt);
+        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
+        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
         wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
         wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-        return fas_hllc(wl, wr, gam, true);
+        return use_lm_hllc ? fas_hllc_lm(wl, wr, gam, true) : fas_hllc(wl, wr, gam, true);
     };
     FFlux4 fr_hi = hllc_r_face(i+1);
     FFlux4 fr_lo = hllc_r_face(i);
@@ -181,15 +181,15 @@ void k_fas_residual(
     auto hllc_t_face = [&](int face_j) -> FFlux4 {
         FPrim wa=W(i,face_j-2), wb_=W(i,face_j-1), wc=W(i,face_j), wd=W(i,face_j+1);
         double ppL,ppR,rpL,rpR;
-        fas_recon(wa.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc.P-P0t(face_j), wd.P-P0t(face_j+1), ppL, ppR);
-        fas_recon(wa.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc.rho-r0t(face_j), wd.rho-r0t(face_j+1), rpL, rpR);
+        fas_recon(wa.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc.P-P0t(face_j), wd.P-P0t(face_j+1), ppL, ppR, lim_type);
+        fas_recon(wa.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc.rho-r0t(face_j), wd.rho-r0t(face_j+1), rpL, rpR, lim_type);
         double P0f = 0.5*(P0t(face_j-1)+P0t(face_j)), r0f = 0.5*(r0t(face_j-1)+r0t(face_j));
         FPrim wl, wr;
-        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr);
-        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt);
+        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
+        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
         wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
         wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-        return fas_hllc(wl, wr, gam, false);
+        return use_lm_hllc ? fas_hllc_lm(wl, wr, gam, false) : fas_hllc(wl, wr, gam, false);
     };
     FFlux4 ft_hi = hllc_t_face(j+1);
     FFlux4 ft_lo = hllc_t_face(j);
@@ -252,7 +252,7 @@ void k_fas_residual_origin(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, double gam, double atm_thresh,
-    int use_wellbalance) {
+    int use_wellbalance, int lim_type, int use_lm_hllc) {
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     if (j >= nt) return;
     int i = 0;
@@ -293,21 +293,21 @@ void k_fas_residual_origin(
         wr.P = fmax(P0f + (wr.P - P0r(1)), 1e-30);
         wl.rho = fmax(r0f + (wl.rho - r0r(0)), 1e-20);
         wr.rho = fmax(r0f + (wr.rho - r0r(1)), 1e-20);
-        FFlux4 fr_hi = fas_hllc(wl, wr, gam, true);
+        FFlux4 fr_hi = use_lm_hllc ? fas_hllc_lm(wl, wr, gam, true) : fas_hllc(wl, wr, gam, true);
 
         // θ-face fluxes: MUSCL where stencil allows
         auto hllc_t_face = [&](int face_j) -> FFlux4 {
             FPrim wa_=W(0,face_j-2), wb_=W(0,face_j-1), wc_=W(0,face_j), wd_=W(0,face_j+1);
             double ppL,ppR,rpL,rpR;
-            fas_recon(wa_.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc_.P-P0t(face_j), wd_.P-P0t(face_j+1), ppL, ppR);
-            fas_recon(wa_.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc_.rho-r0t(face_j), wd_.rho-r0t(face_j+1), rpL, rpR);
+            fas_recon(wa_.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc_.P-P0t(face_j), wd_.P-P0t(face_j+1), ppL, ppR, lim_type);
+            fas_recon(wa_.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc_.rho-r0t(face_j), wd_.rho-r0t(face_j+1), rpL, rpR, lim_type);
             double P0ff = 0.5*(P0t(face_j-1)+P0t(face_j)), r0ff = 0.5*(r0t(face_j-1)+r0t(face_j));
             FPrim wll, wrr;
-            fas_recon(wa_.vr, wb_.vr, wc_.vr, wd_.vr, wll.vr, wrr.vr);
-            fas_recon(wa_.vt, wb_.vt, wc_.vt, wd_.vt, wll.vt, wrr.vt);
+            fas_recon(wa_.vr, wb_.vr, wc_.vr, wd_.vr, wll.vr, wrr.vr, lim_type);
+            fas_recon(wa_.vt, wb_.vt, wc_.vt, wd_.vt, wll.vt, wrr.vt, lim_type);
             wll.rho = fmax(r0ff+rpL, 1e-20); wrr.rho = fmax(r0ff+rpR, 1e-20);
             wll.P = fmax(P0ff+ppL, 1e-30); wrr.P = fmax(P0ff+ppR, 1e-30);
-            return fas_hllc(wll, wrr, gam, false);
+            return use_lm_hllc ? fas_hllc_lm(wll, wrr, gam, false) : fas_hllc(wll, wrr, gam, false);
         };
         FFlux4 ft_hi = hllc_t_face(j+1);
         FFlux4 ft_lo = hllc_t_face(j);
@@ -395,8 +395,7 @@ void FasSolver::compute_residual(int l) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
-    // Origin kernel handles i==0 using divergence theorem
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
     k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -404,7 +403,7 @@ void FasSolver::compute_residual(int l) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
     // Subtract pre-computed HSE defect: R_corrected(U) = R(U) - R(U₀)
     // This ensures R(U₀) = 0 exactly, fixing WB inconsistency on coarse grids.
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);

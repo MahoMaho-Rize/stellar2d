@@ -15,6 +15,19 @@ void Grid::init(int nr_, int ntheta_, double R_outer_, double alpha_, int ng_) {
     compute_geometry();
 }
 
+void Grid::init_uniform(int nr_, int ntheta_, double R_outer_, int ng_) {
+    nr = nr_;
+    ntheta = ntheta_;
+    R_outer = R_outer_;
+    log_alpha = 1.0;
+    ng = ng_;
+    mesh_type = MeshType::UNIFORM;
+
+    build_uniform_radial_mesh();
+    build_theta_mesh();
+    compute_geometry();
+}
+
 void Grid::init_equimass(int nr_, int ntheta_, double R_outer_,
                          std::function<double(double)> rho_func, int ng_) {
     nr = nr_;
@@ -27,6 +40,20 @@ void Grid::init_equimass(int nr_, int ntheta_, double R_outer_,
     build_equimass_radial_mesh(rho_func);
     build_theta_mesh();
     compute_geometry();
+}
+
+void Grid::build_uniform_radial_mesh() {
+    r_face.resize(nr + 1);
+    r_center.resize(nr);
+    dr.resize(nr);
+
+    for (int i = 0; i <= nr; ++i)
+        r_face[i] = R_outer * static_cast<double>(i) / nr;
+
+    for (int i = 0; i < nr; ++i) {
+        r_center[i] = 0.5 * (r_face[i] + r_face[i + 1]);
+        dr[i] = r_face[i + 1] - r_face[i];
+    }
 }
 
 void Grid::build_radial_mesh() {

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <functional>
 
-enum class MeshType { LOG, EQUIMASS };
+enum class MeshType { LOG, EQUIMASS, UNIFORM };
 
 struct Grid {
     int nr, ntheta;
@@ -41,12 +41,15 @@ struct Grid {
 
     void init(int nr_, int ntheta_, double R_outer_, double alpha_, int ng_ = 2);
 
+    void init_uniform(int nr_, int ntheta_, double R_outer_, int ng_ = 2);
+
     // Equimass mesh: rho_func(r) returns density at radius r
     void init_equimass(int nr_, int ntheta_, double R_outer_,
                        std::function<double(double)> rho_func, int ng_ = 2);
 
 private:
     void build_radial_mesh();
+    void build_uniform_radial_mesh();
     void build_equimass_radial_mesh(std::function<double(double)> rho_func);
     void build_theta_mesh();
     void compute_geometry();
