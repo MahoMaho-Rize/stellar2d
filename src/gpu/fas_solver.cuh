@@ -123,6 +123,8 @@ struct FasSolver {
     bool use_core_excision = false;  // r_face[0] > 0, skip origin kernel
     double M_core = 0.0;            // enclosed mass inside r_inner
     int n_angular_avg = 0;           // angular-average this many inner shells per step
+    int n_pole_avg = 0;              // wedge-average this many cells near each pole
+    double central_damp_r = 0.0;     // damp v_r for r < this radius (0 = off)
 
     double sponge_r_start = 0.0;
     double sponge_r_top = 0.0;

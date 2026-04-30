@@ -70,4 +70,13 @@ __global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, doubl
 __global__ void k_fas_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
     const double* vol,
     int n_avg, int nr, int nt, int ng);
+
+__global__ void k_fas_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
+    const double* vol,
+    int n_pole, int nr, int nt, int ng);
+
+__global__ void k_fas_central_damp(double* mr, double* rhoE,
+    const double* rho, const double* r_center,
+    double r_damp, double alpha,
+    int nr, int nt, int ng);
 #endif

@@ -67,6 +67,8 @@ __global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
     const double*, const double*, double, int, int, int);
 __global__ void k_fas_angular_avg(double*, double*, double*, double*,
     const double*, int, int, int, int);
+__global__ void k_fas_pole_avg(double*, double*, double*, double*,
+    const double*, int, int, int, int);
 
 // ========================= Init / Destroy ========================
 
@@ -454,6 +456,12 @@ double SimpleSolver::step(double t, double t_end) {
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_cell_volume,
             n_angular_avg, lev.nr, lev.nt, lev.ng);
+    }
+    if (n_pole_avg > 0) {
+        k_fas_pole_avg<<<lev.nr, 1>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume,
+            n_pole_avg, lev.nr, lev.nt, lev.ng);
     }
 
     if (converged) dt_current = std::min(1.2*dt, 1.0); else dt_current = dt;

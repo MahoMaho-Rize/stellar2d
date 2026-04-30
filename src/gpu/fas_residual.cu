@@ -259,7 +259,6 @@ void k_fas_residual(
                            + At_hi*ft_hi.f_mr - At_lo*ft_lo.f_mr);
     double div_mt  = -invV*(Ar_hi*fr_hi.f_mt - Ar_lo*fr_lo.f_mt
                            + At_hi*(ft_hi.f_mt - P0f_thi) - At_lo*(ft_lo.f_mt - P0f_tlo));
-    // Total energy: HLLC f_E = (E+P)u is the total energy flux
     double div_E   = -invV*(Ar_hi*fr_hi.f_E - Ar_lo*fr_lo.f_E
                            + At_hi*ft_hi.f_E - At_lo*ft_lo.f_E);
 
@@ -368,10 +367,20 @@ void k_fas_residual_origin(
         double P0f_thi = 0.5*(P0t(j) + P0t(j+1));
         double P0f_tlo = 0.5*(P0t(j-1) + P0t(j));
 
-        double div_rho = -invV*(Ar_hi*fr_hi.f_rho + At_hi*ft_hi.f_rho - At_lo*ft_lo.f_rho);
-        double div_mr  = -invV*(Ar_hi*(fr_hi.f_mr - P0f_rhi) + At_hi*ft_hi.f_mr - At_lo*ft_lo.f_mr);
-        double div_mt  = -invV*(Ar_hi*fr_hi.f_mt + At_hi*(ft_hi.f_mt - P0f_thi) - At_lo*(ft_lo.f_mt - P0f_tlo));
-        double div_E   = -invV*(Ar_hi*fr_hi.f_E   + At_hi*ft_hi.f_E   - At_lo*ft_lo.f_E);
+        // Origin cell: only outer radial face has nonzero area (inner face at r=0 has A=0).
+        // No theta flux (all j-cells share the same point r=0).
+        // The reflecting inner BC means the inner face contributes a pressure force
+        // P_center * A_inner, but A_inner = 0, so no mass/energy flux from inner face.
+        // However, the momentum flux needs the pressure at r=0 pushing outward:
+        // physically, the center is a reflecting wall with P = P_cell.
+        // For the divergence theorem on a wedge touching r=0:
+        //   ∫∇·F dV = F_outer·A_outer  (no inner face contribution for mass/energy)
+        //   For momentum: add P_center * A_inner = 0 (area is zero at r=0)
+        // So the formulas are correct as written — single-sided flux.
+        double div_rho = -invV*(Ar_hi*fr_hi.f_rho);
+        double div_mr  = -invV*(Ar_hi*(fr_hi.f_mr - P0f_rhi));
+        double div_mt  = 0.0;
+        double div_E   = -invV*(Ar_hi*fr_hi.f_E);
 
         double rho_ref = wb ? rho0[flat] : 0.0;
         double g0_r = wb ? gr0[0] : 0.0;
@@ -379,16 +388,11 @@ void k_fas_residual_origin(
         double gp_r = gr[0] - g0_r;
         double gravity_r = rhop_c*g0_r + rho_c*gp_r;
 
-        double r_out = r_face[1];
-        double inv_r_avg = (r_out > 1e-30) ? 1.5 / r_out : 0.0;
-        double S_mr = rho_c * vt_c * vt_c * inv_r_avg;
-        double S_mt = -rho_c * vr_c * vt_c * inv_r_avg;
-
         double S_E = rho_c * vr_c * (g0_r + gp_r);
 
         res[flat]       = div_rho;
-        res[n + flat]   = div_mr + gravity_r + S_mr;
-        res[2*n + flat] = div_mt + S_mt;
+        res[n + flat]   = div_mr + gravity_r;
+        res[2*n + flat] = 0.0;
         res[3*n + flat] = div_E + S_E;
         return;
     }
@@ -613,6 +617,97 @@ void k_fas_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
         mt[k]   = 0.0;  // no θ-momentum at origin
         rhoE[k] = avg_rhoE;
     }
+}
+
+// ========================= Pole wedge averaging ==============================
+// Merge n_pole cells near each pole (j=0..n_pole-1 and j=nt-n_pole..nt-1)
+// into volume-weighted averages. Fixes polar axis numerical focusing where
+// At/V ~ 1/dθ amplifies any asymmetry near θ=0,π.
+// One block per radial shell, threads reduce over the n_pole cells.
+
+__global__
+void k_fas_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
+                    const double* vol,
+                    int n_pole, int nr, int nt, int ng) {
+    int i = blockIdx.x;
+    if (i >= nr) return;
+
+    // North pole: j = 0 .. n_pole-1
+    {
+        double sum_rho = 0, sum_mr = 0, sum_rhoE = 0, sum_vol = 0;
+        for (int j = 0; j < n_pole && j < nt; ++j) {
+            int k = fas_idx(i, j, nt, ng);
+            double v = vol[i * nt + j];
+            sum_rho  += rho[k] * v;
+            sum_mr   += mr[k] * v;
+            sum_rhoE += rhoE[k] * v;
+            sum_vol  += v;
+        }
+        double inv_V = 1.0 / fmax(sum_vol, 1e-30);
+        double avg_rho  = sum_rho * inv_V;
+        double avg_mr   = sum_mr * inv_V;
+        double avg_rhoE = sum_rhoE * inv_V;
+        for (int j = 0; j < n_pole && j < nt; ++j) {
+            int k = fas_idx(i, j, nt, ng);
+            rho[k]  = avg_rho;
+            mr[k]   = avg_mr;
+            mt[k]   = 0.0;
+            rhoE[k] = avg_rhoE;
+        }
+    }
+
+    // South pole: j = nt-n_pole .. nt-1
+    {
+        double sum_rho = 0, sum_mr = 0, sum_rhoE = 0, sum_vol = 0;
+        for (int j = nt - n_pole; j < nt; ++j) {
+            if (j < 0) continue;
+            int k = fas_idx(i, j, nt, ng);
+            double v = vol[i * nt + j];
+            sum_rho  += rho[k] * v;
+            sum_mr   += mr[k] * v;
+            sum_rhoE += rhoE[k] * v;
+            sum_vol  += v;
+        }
+        double inv_V = 1.0 / fmax(sum_vol, 1e-30);
+        double avg_rho  = sum_rho * inv_V;
+        double avg_mr   = sum_mr * inv_V;
+        double avg_rhoE = sum_rhoE * inv_V;
+        for (int j = nt - n_pole; j < nt; ++j) {
+            if (j < 0) continue;
+            int k = fas_idx(i, j, nt, ng);
+            rho[k]  = avg_rho;
+            mr[k]   = avg_mr;
+            mt[k]   = 0.0;
+            rhoE[k] = avg_rhoE;
+        }
+    }
+}
+
+// ========================= Central radial damping ============================
+// In the angular-averaged zone (i < n_damp), damp radial velocity to prevent
+// geometric convergence runaway at r→0. Removes kinetic energy from v_r
+// while preserving density and pressure (no mass injection).
+// Damping factor: v_r *= exp(-alpha * (1 - r/r_damp)) for r < r_damp
+
+__global__
+void k_fas_central_damp(double* mr, double* rhoE,
+                        const double* rho, const double* r_center,
+                        double r_damp, double alpha,
+                        int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr * nt) return;
+    int i = flat / nt, j = flat % nt;
+    double r = r_center[i];
+    if (r >= r_damp) return;
+
+    double f = exp(-alpha * (1.0 - r / r_damp));
+    int k = fas_idx(i, j, nt, ng);
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr_old = mr[k] / rho_c;
+    double vr_new = vr_old * f;
+    double dKE = 0.5 * rho_c * (vr_old * vr_old - vr_new * vr_new);
+    mr[k] = rho_c * vr_new;
+    rhoE[k] -= dKE;
 }
 
 // ========================= Sponge + isothermal buffer ========================
