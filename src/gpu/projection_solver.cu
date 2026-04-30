@@ -15,13 +15,13 @@ __global__ void k_fas_residual(
     const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, int, int, int, double, double, int);
+    double*, int, int, int, double, double, int, int, int);
 __global__ void k_fas_residual_origin(
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, int, int, int, double, double, int);
+    double*, int, int, int, double, double, int, int, int);
 __global__ void k_fas_floor(double*, double*, double*, double*, int, int, int, double);
 __global__ void k_fas_sponge(double*, double*, double*, double*,
     const double*, const double*, const double*,
@@ -455,11 +455,11 @@ void ProjSolver::compute_residual() {
     k_fas_residual<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mt,d_rhoE,
         d_cell_volume,d_area_r,d_area_theta,d_r_center,d_r_face,
         d_theta_face,d_dr,d_dtheta,d_gr,d_gr0,d_P0,d_rho0,
-        d_res, nr,nt,ng,gamma,atm_rho_thresh, 1);
+        d_res, nr,nt,ng,gamma,atm_rho_thresh, 1, 0, 0);
     k_fas_residual_origin<<<(nt+B-1)/B,B>>>(d_rho,d_mr,d_mt,d_rhoE,
         d_cell_volume,d_area_r,d_area_theta,d_r_center,d_r_face,
         d_theta_face,d_dr,d_dtheta,d_gr,d_gr0,d_P0,d_rho0,
-        d_res, nr,nt,ng,gamma,atm_rho_thresh, 1);
+        d_res, nr,nt,ng,gamma,atm_rho_thresh, 1, 0, 0);
     // Subtract HSE defect
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(d_res, -1.0, d_hse_defect, 4*n);
 }

@@ -3,7 +3,7 @@
 #include "../state.h"
 #include "../grid.h"
 
-enum class Limiter { MINMOD, VAN_LEER };
+enum class Limiter { MINMOD, VAN_LEER, MC };
 
 double minmod(double a, double b);
 double van_leer(double a, double b);

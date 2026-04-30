@@ -44,6 +44,9 @@ struct SimConfig {
     std::string solver_type = "compressible"; // "compressible" or "lowmach"
     std::string precond = "line_jacobi";         // preconditioner for lowmach solver
     Limiter limiter = Limiter::MINMOD;
+    std::string bubble_mode = "pressure"; // "pressure" or "entropy"
+    bool no_sponge = false;
+    bool lm_hllc = false;
 };
 
 static void extract_density(const Grid& grid, const State& state, std::vector<double>& rho_cells) {
@@ -128,6 +131,18 @@ int main(int argc, char** argv) {
             cfg.solver_type = argv[++i];
         else if (std::strcmp(argv[i], "--precond") == 0 && i + 1 < argc)
             cfg.precond = argv[++i];
+        else if (std::strcmp(argv[i], "--limiter") == 0 && i + 1 < argc) {
+            std::string lim = argv[++i];
+            if (lim == "vanleer") cfg.limiter = Limiter::VAN_LEER;
+            else if (lim == "mc") cfg.limiter = Limiter::MC;
+            else cfg.limiter = Limiter::MINMOD;
+        }
+        else if (std::strcmp(argv[i], "--bubble-mode") == 0 && i + 1 < argc)
+            cfg.bubble_mode = argv[++i];
+        else if (std::strcmp(argv[i], "--no-sponge") == 0)
+            cfg.no_sponge = true;
+        else if (std::strcmp(argv[i], "--lm-hllc") == 0)
+            cfg.lm_hllc = true;
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -166,6 +181,9 @@ int main(int argc, char** argv) {
 
         grid.init_equimass(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func);
         std::printf("Using equimass radial mesh based on Lane-Emden density\n");
+    } else if (cfg.mesh_type == "uniform") {
+        grid.init_uniform(cfg.nr, cfg.ntheta, cfg.R_outer);
+        std::printf("Using uniform radial mesh\n");
     } else {
         grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
     }
@@ -186,8 +204,14 @@ int main(int argc, char** argv) {
     } else if (cfg.test_case == "bubble") {
         LaneEmdenParams lep;
         lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-        init_lane_emden_bubble(grid, state, lep, cfg.gamma,
-                               0.5, M_PI/3.0, 0.15, 0.5);
+        if (cfg.bubble_mode == "entropy") {
+            init_lane_emden_bubble_entropy(grid, state, lep, cfg.gamma,
+                                           0.5, M_PI/3.0, 0.15, 0.5);
+            std::printf("Bubble mode: entropy (constant pressure, density perturbation)\n");
+        } else {
+            init_lane_emden_bubble(grid, state, lep, cfg.gamma,
+                                   0.5, M_PI/3.0, 0.15, 0.5);
+        }
     } else if (cfg.test_case == "sedov") {
         SedovParams sp;
         sp.rho_0 = 1.0; sp.E_blast = 1.0; sp.r_blast = 0.05;
@@ -225,6 +249,7 @@ int main(int argc, char** argv) {
         // ===== GPU semi-implicit pressure projection =====
         ProjSolver proj;
         proj.init(grid, eos, cfg.G, cfg.cfl);
+        if (cfg.no_sponge) proj.sponge_kappa = 0.0;
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;
@@ -267,6 +292,7 @@ int main(int argc, char** argv) {
         // ===== GPU SIMPLE pressure-correction solver =====
         SimpleSolver sim;
         sim.init(grid, eos, cfg.G, cfg.cfl);
+        if (cfg.no_sponge) sim.sponge_kappa = 0.0;
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;
@@ -310,7 +336,10 @@ int main(int argc, char** argv) {
         // ===== GPU FAS nonlinear multigrid path =====
         FasSolver fas;
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
+        fas.limiter_type = static_cast<int>(cfg.limiter);
+        fas.use_lm_hllc = cfg.lm_hllc;
         fas.init(grid, eos, cfg.G, cfg.cfl);
+        if (cfg.no_sponge) fas.sponge_kappa = 0.0;
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;
