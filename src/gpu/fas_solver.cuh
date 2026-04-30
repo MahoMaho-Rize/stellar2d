@@ -107,7 +107,7 @@ struct FasSolver {
     double compute_cfl_dt();
 
     int n_levels = 0;
-    FasLevel levels[8];
+    FasLevel levels[12];
 
     double gamma, G_const, cfl_num;
     double dt_current = 0.0;
@@ -122,6 +122,7 @@ struct FasSolver {
     bool use_hse_outer_bc = false;   // HSE Dirichlet at outer radial boundary
     bool use_core_excision = false;  // r_face[0] > 0, skip origin kernel
     double M_core = 0.0;            // enclosed mass inside r_inner
+    int n_angular_avg = 0;           // angular-average this many inner shells per step
 
     double sponge_r_start = 0.0;
     double sponge_r_top = 0.0;

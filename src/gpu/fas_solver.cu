@@ -724,6 +724,14 @@ double FasSolver::step(double t, double t_end) {
         atm_rho_thresh, 1.0/(gamma-1.0),
         finest.nr, finest.nt, finest.ng);
 
+    if (n_angular_avg > 0) {
+        int B2 = std::min(finest.nt, 256);
+        k_fas_angular_avg<<<n_angular_avg, B2, 5*B2*sizeof(double)>>>(
+            finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+            finest.d_cell_volume,
+            n_angular_avg, finest.nr, finest.nt, finest.ng);
+    }
+
     if (converged) {
         dt_current = std::min(1.2 * dt, dt_cap);
     } else {
@@ -775,19 +783,15 @@ double FasSolver::step_explicit(double t, double t_end) {
     apply_floor(0);
     launch_ghost(0);
 
-    // Compute CFL dt directly (don't use compute_cfl_dt which clobbers d_res)
+    // Compute CFL dt on GPU (no D2H copy of full array)
     {
         int B2 = 256;
         k_fas_cfl<<<(n+B2-1)/B2,B2>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_dr, lev.d_r_center, lev.d_dtheta,
-            lev.d_rho0, lev.d_dp,  // use d_dp as scratch (not d_res!)
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh);
-        std::vector<double> h_dt(n);
-        CUDA_CHECK(cudaMemcpy(h_dt.data(), lev.d_dp, n*sizeof(double), cudaMemcpyDeviceToHost));
-        double mn = 1e30;
-        for (int i = 0; i < n; ++i) mn = std::min(mn, h_dt[i]);
-        dt_current = cfl_num * mn;
+            lev.d_rho0, lev.d_dp,
+            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, n_angular_avg);
+        dt_current = cfl_num * gpu_reduce_min(lev.d_dp, lev.d_poisson_rhs, n);
     }
     double dt = dt_current;
     if (dt < 1e-30) dt = 1e-10;
@@ -879,6 +883,14 @@ double FasSolver::step_explicit(double t, double t_end) {
         lev.d_rho0, lev.d_P0,
         atm_rho_thresh, 1.0/(gamma-1.0),
         lev.nr, lev.nt, lev.ng);
+
+    if (n_angular_avg > 0) {
+        int B2 = std::min(lev.nt, 256);
+        k_fas_angular_avg<<<n_angular_avg, B2, 5*B2*sizeof(double)>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume,
+            n_angular_avg, lev.nr, lev.nt, lev.ng);
+    }
 
     step_count++;
     if (step_count <= 10 || step_count % 1000 == 0)

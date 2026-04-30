@@ -41,7 +41,7 @@ __global__ void k_fas_shell_mass(const double*, const double*, double*, int, int
 __global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double, double);
 __global__ void k_fas_cfl(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, double*,
-    int, int, int, double, double);
+    int, int, int, double, double, int);
 __global__ void k_fas_assemble_blkjac(
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*,
@@ -65,6 +65,8 @@ __global__ void k_fas_atm_reset(double*, double*, double*, double*,
     const double*, const double*, double, double, int, int, int);
 __global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
     const double*, const double*, double, int, int, int);
+__global__ void k_fas_angular_avg(double*, double*, double*, double*,
+    const double*, int, int, int, int);
 
 // ========================= Init / Destroy ========================
 
@@ -276,7 +278,9 @@ void SimpleSolver::launch_ghost() {
 void SimpleSolver::compute_gravity_1d() {
     int B = std::min(lev.nt, 256);
     k_fas_shell_mass<<<lev.nr, B, B*sizeof(double)>>>(lev.d_rho, lev.d_cell_volume, lev.d_shell_mass, lev.nr, lev.nt, lev.ng);
-    k_fas_gravity_from_shells<<<1,1>>>(lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const, M_core);
+    int np2 = 1;
+    while (np2 < lev.nr) np2 <<= 1;
+    k_fas_gravity_from_shells<<<1, np2, np2*sizeof(double)>>>(lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const, M_core);
 }
 
 void SimpleSolver::apply_floor() {
@@ -336,11 +340,8 @@ double SimpleSolver::compute_cfl_dt() {
     int n = lev.nr*lev.nt, B = 256;
     k_fas_cfl<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_dr,lev.d_r_center,lev.d_dtheta,lev.d_rho0,lev.d_dp,
-        lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh);
-    std::vector<double> h(n);
-    CUDA_CHECK(cudaMemcpy(h.data(), lev.d_dp, n*sizeof(double), cudaMemcpyDeviceToHost));
-    double mn = 1e30;
-    for (int i = 0; i < n; i++) mn = std::min(mn, h[i]);
+        lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, n_angular_avg);
+    double mn = gpu_reduce_min(lev.d_dp, lev.d_poisson_rhs, n);
     return cfl_num * mn;
 }
 
@@ -446,6 +447,14 @@ double SimpleSolver::step(double t, double t_end) {
 
     k_fas_atm_reset<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_rho0, lev.d_P0, atm_rho_thresh, 1.0/(gamma-1.0), lev.nr, lev.nt, lev.ng);
+
+    if (n_angular_avg > 0) {
+        int B2 = std::min(lev.nt, 256);
+        k_fas_angular_avg<<<n_angular_avg, B2, 5*B2*sizeof(double)>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume,
+            n_angular_avg, lev.nr, lev.nt, lev.ng);
+    }
 
     if (converged) dt_current = std::min(1.2*dt, 1.0); else dt_current = dt;
     dt_prev = dt;

@@ -112,11 +112,35 @@ __global__
 void k_fas_gravity_from_shells(const double* shell_mass, const double* rc,
                                 double* gr, int nr, double G,
                                 double M_core) {
-    if (threadIdx.x != 0) return;
-    double M_enc = M_core;
-    for (int i = 0; i < nr; ++i) {
-        M_enc += shell_mass[i];
-        gr[i] = -G * M_enc / (rc[i] * rc[i]);
+    extern __shared__ double smem[];
+    int tid = threadIdx.x;
+    smem[tid] = (tid < nr) ? shell_mass[tid] : 0.0;
+    __syncthreads();
+
+    // Inclusive prefix sum (Blelloch-style up-sweep + down-sweep)
+    int n = blockDim.x;
+    // Up-sweep
+    for (int d = 1; d < n; d <<= 1) {
+        int idx = (tid + 1) * (d << 1) - 1;
+        if (idx < n) smem[idx] += smem[idx - d];
+        __syncthreads();
+    }
+    // Down-sweep for inclusive scan
+    if (tid == n - 1) smem[tid] = 0.0;
+    __syncthreads();
+    for (int d = n >> 1; d >= 1; d >>= 1) {
+        int idx = (tid + 1) * (d << 1) - 1;
+        if (idx < n) {
+            double tmp = smem[idx - d];
+            smem[idx - d] = smem[idx];
+            smem[idx] += tmp;
+        }
+        __syncthreads();
+    }
+    // smem[tid] is now exclusive prefix sum; add shell_mass[tid] for inclusive
+    if (tid < nr) {
+        double M_enc = M_core + smem[tid] + shell_mass[tid];
+        gr[tid] = -G * M_enc / (rc[tid] * rc[tid]);
     }
 }
 
@@ -125,7 +149,10 @@ void FasSolver::compute_gravity_1d(int l) {
     int B = std::min(lev.nt, 256);
     k_fas_shell_mass<<<lev.nr, B, B*sizeof(double)>>>(
         lev.d_rho, lev.d_cell_volume, lev.d_shell_mass, lev.nr, lev.nt, lev.ng);
-    k_fas_gravity_from_shells<<<1, 1>>>(
+    // Round up to power of 2 for prefix scan
+    int np2 = 1;
+    while (np2 < lev.nr) np2 <<= 1;
+    k_fas_gravity_from_shells<<<1, np2, np2*sizeof(double)>>>(
         lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const, M_core);
 }
 
@@ -526,6 +553,68 @@ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
     rhoE[k] = fmax(P0[flat] * gam_m1_inv, 1e-20);
 }
 
+// ========================= Angular averaging near origin ======================
+// Volume-weighted θ-average for shells i < n_avg.
+// Eliminates geometric focusing artifacts at r→0 (PLUTO-style axis smoothing).
+// One block per shell (i), threads reduce over j.
+
+__global__
+void k_fas_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
+                       const double* vol,
+                       int n_avg, int nr, int nt, int ng) {
+    int i = blockIdx.x;
+    if (i >= n_avg || i >= nr) return;
+
+    extern __shared__ double smem[];
+    double* s_rho  = smem;
+    double* s_mr   = smem + blockDim.x;
+    double* s_mt   = smem + 2 * blockDim.x;
+    double* s_rhoE = smem + 3 * blockDim.x;
+    double* s_vol  = smem + 4 * blockDim.x;
+
+    int tid = threadIdx.x;
+
+    double sum_rho = 0, sum_mr = 0, sum_mt = 0, sum_rhoE = 0, sum_vol = 0;
+    for (int j = tid; j < nt; j += blockDim.x) {
+        int k = fas_idx(i, j, nt, ng);
+        double v = vol[i * nt + j];
+        sum_rho  += rho[k] * v;
+        sum_mr   += mr[k] * v;
+        sum_mt   += mt[k] * v;
+        sum_rhoE += rhoE[k] * v;
+        sum_vol  += v;
+    }
+    s_rho[tid] = sum_rho; s_mr[tid] = sum_mr;
+    s_mt[tid] = sum_mt; s_rhoE[tid] = sum_rhoE;
+    s_vol[tid] = sum_vol;
+    __syncthreads();
+
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            s_rho[tid] += s_rho[tid + s];
+            s_mr[tid]  += s_mr[tid + s];
+            s_mt[tid]  += s_mt[tid + s];
+            s_rhoE[tid]+= s_rhoE[tid + s];
+            s_vol[tid] += s_vol[tid + s];
+        }
+        __syncthreads();
+    }
+
+    double inv_V = 1.0 / fmax(s_vol[0], 1e-30);
+    double avg_rho  = s_rho[0] * inv_V;
+    double avg_mr   = s_mr[0] * inv_V;
+    double avg_mt   = s_mt[0] * inv_V;
+    double avg_rhoE = s_rhoE[0] * inv_V;
+
+    for (int j = tid; j < nt; j += blockDim.x) {
+        int k = fas_idx(i, j, nt, ng);
+        rho[k]  = avg_rho;
+        mr[k]   = avg_mr;
+        mt[k]   = 0.0;  // no θ-momentum at origin
+        rhoE[k] = avg_rhoE;
+    }
+}
+
 // ========================= Sponge + isothermal buffer ========================
 // Velocity damping: v *= 1/(1 + dt·κ)
 // Thermal relaxation: rhoE → rhoE₀ with same timescale (MUSIC-style)
@@ -630,7 +719,8 @@ __global__
 void k_fas_cfl(const double* rho, const double* mr, const double* mt, const double* rhoE,
                const double* dr, const double* r_center, const double* dtheta,
                const double* rho0, double* out,
-               int nr, int nt, int ng, double gam, double atm_thresh) {
+               int nr, int nt, int ng, double gam, double atm_thresh,
+               int n_angular_avg) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) { out[flat] = 1e30; return; }
@@ -644,8 +734,13 @@ void k_fas_cfl(const double* rho, const double* mr, const double* mt, const doub
     double P = fmax((gam-1.0)*(rhoE[k] - KE), 1e-30);
     double cs = sqrt(gam * P / rho_c);
     double dt_r = dr[i] / (vr + cs);
-    double dt_t = r_center[i] * dtheta[j] / (vt + cs);
-    out[flat] = fmin(dt_r, dt_t);
+    // Angular-averaged shells: skip theta CFL (state is forced uniform in theta)
+    if (i < n_angular_avg) {
+        out[flat] = dt_r;
+    } else {
+        double dt_t = r_center[i] * dtheta[j] / (vt + cs);
+        out[flat] = fmin(dt_r, dt_t);
+    }
 }
 
 double FasSolver::compute_cfl_dt() {
@@ -654,12 +749,8 @@ double FasSolver::compute_cfl_dt() {
     k_fas_cfl<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_dr, lev.d_r_center, lev.d_dtheta,
-        lev.d_rho0, lev.d_res, // reuse d_res as scratch (safe — called outside solve)
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh);
-    std::vector<double> h(n);
-    CUDA_CHECK(cudaMemcpy(h.data(), lev.d_res, n*sizeof(double), cudaMemcpyDeviceToHost));
-    double mn = 1e30;
-    for (int i = 0; i < n; ++i) mn = std::min(mn, h[i]);
-    return cfl_num * mn;
+        lev.d_rho0, lev.d_res,
+        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, n_angular_avg);
+    return cfl_num * gpu_reduce_min(lev.d_res, lev.d_poisson_rhs, n);
 }
 

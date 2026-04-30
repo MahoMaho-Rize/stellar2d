@@ -37,6 +37,8 @@ __global__ void k_fas_atm_reset(double*, double*, double*, double*,
     const double*, const double*, double, double, int, int, int);
 __global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
     const double*, const double*, double, int, int, int);
+__global__ void k_fas_angular_avg(double*, double*, double*, double*,
+    const double*, int, int, int, int);
 
 // ========================= Projection-specific kernels ========================
 
@@ -451,7 +453,9 @@ void ProjSolver::launch_ghost() {
 void ProjSolver::compute_gravity_1d() {
     int B = std::min(nt, 256);
     k_fas_shell_mass<<<nr, B, B*sizeof(double)>>>(d_rho, d_cell_volume, d_shell_mass, nr, nt, ng);
-    k_fas_gravity_from_shells<<<1,1>>>(d_shell_mass, d_r_center, d_gr, nr, G_const, M_core);
+    int np2 = 1;
+    while (np2 < nr) np2 <<= 1;
+    k_fas_gravity_from_shells<<<1, np2, np2*sizeof(double)>>>(d_shell_mass, d_r_center, d_gr, nr, G_const, M_core);
 }
 
 void ProjSolver::apply_floor() {
@@ -597,6 +601,14 @@ double ProjSolver::step(double t, double t_end) {
 
     k_fas_atm_reset<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
         d_rho0, d_P0, atm_rho_thresh, 1.0/(gamma-1.0), nr, nt, ng);
+
+    if (n_angular_avg > 0) {
+        int B2 = std::min(nt, 256);
+        k_fas_angular_avg<<<n_angular_avg, B2, 5*B2*sizeof(double)>>>(
+            d_rho, d_mr, d_mt, d_rhoE,
+            d_cell_volume,
+            n_angular_avg, nr, nt, ng);
+    }
 
     step_count++;
     if (step_count % 500 == 0)
