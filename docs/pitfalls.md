@@ -1,6 +1,11 @@
-# stellar2d Low-Mach Solver Pitfall Log
+# stellar2d Pitfall Log
 
-This document records every bug, misdesign, and subtle numerical issue encountered during the development of the fully-implicit Low-Mach solver (`lowmach_solver.cu`). Each entry describes the symptom, root cause, fix, and how to write a regression test.
+This document records every bug, misdesign, and subtle numerical issue
+encountered during the development of stellar2d. Each entry describes the
+symptom, root cause, fix, and how to write a regression test.
+
+P01–P22: Low-Mach implicit solver (`lowmach_solver.cu`).
+P23–P29: FAS solver and Strang Cartesian solver.
 
 ---
 
@@ -26,6 +31,15 @@ This document records every bug, misdesign, and subtle numerical issue encounter
 18. [P18: Poisson residual scale mismatch on log mesh (5-DOF)](#p18)
 19. [P19: solve_gravity at step start destroys well-balanced HSE](#p19)
 20. [P20: GMRES Krylov basis polluted by Poisson noise floor (5-DOF)](#p20)
+21. [P21: Line search solve_gravity inconsistent with JFNK frozen-Φ](#p21)
+22. [P22: GMRES Krylov vectors have uninitialized 5th component](#p22)
+23. [P23: FAS origin cell missing flux-level WB P₀ subtraction](#p23)
+24. [P24: Strang `-=` operator precedence in source term update](#p24)
+25. [P25: Strang face-state ghost cells uninitialized after MUSCL](#p25)
+26. [P26: Strang reflective BC face mapping error](#p26)
+27. [P27: Smooth floor returns exact zero for large negative inputs](#p27)
+28. [P28: Entropy wave convergence masked by nonlinear O(A²) error](#p28)
+29. [P29: LM-HLLC acoustic suppression foils sound-wave convergence test](#p29)
 
 ---
 
@@ -407,32 +421,181 @@ The JFNK matvec saves/restores state via `d_gmres_Uk`, so the state after each m
 
 ---
 
+<a id="p23"></a>
+## P23: FAS origin cell missing flux-level WB P₀ subtraction
+
+**Symptom**: Explicit polar solver: unperturbed Lane-Emden star develops max|vr| = 0.387 at origin, corresponding to ~6750g spurious radial acceleration. All other cells have max|vr| ~ 1e-14.
+
+**Root cause**: `k_fas_residual_origin` (i=0 cell) computes the radial momentum flux divergence as:
+```cuda
+div_mr = -invV*(Ar_hi*fr_hi.f_mr + At_hi*ft_hi.f_mr - At_lo*ft_lo.f_mr);
+```
+This uses the **full** HLLC momentum flux `f_mr = rho*u^2 + P` without subtracting the HSE background pressure P₀ at the face. The regular-cell kernel `k_fas_residual` (i ≥ 1) correctly subtracts P₀:
+```cuda
+div_mr = -invV*(Ar_hi*(fr_hi.f_mr - P0f_rhi) - Ar_lo*(fr_lo.f_mr - P0f_rlo) + ...);
+```
+The origin kernel was written separately (different geometry: no inner face, volume-averaged 1/r) and the P₀ subtraction was overlooked.
+
+**Fix**: Add 3 lines computing face-averaged P₀ and subtract from the momentum flux in the origin kernel (Eq. 12.6):
+```cuda
+double P0f_rhi = 0.5*(P0r(0) + P0r(1));
+double P0f_thi = 0.5*(P0t(j) + P0t(j+1));
+double P0f_tlo = 0.5*(P0t(j-1) + P0t(j));
+```
+
+**Impact**: Affects all 4 solvers sharing this kernel: explicit, FAS, SIMPLE, projection. The LowMach solver is unaffected (uses FD pressure gradient, not flux-level WB). After fix: max|vr| = 7.6e-23 (17 orders of magnitude improvement).
+
+**Files**: `fas_residual.cu:k_fas_residual_origin`, line 316
+
+**Test strategy**: `test_fas_verify` F11: upload unperturbed Lane-Emden, run 1 explicit step, assert `max|vr| < 1e-10`. `test_coverage_critical` P1: LM origin HSE residual ≈ 0.
+
+---
+
+<a id="p24"></a>
+## P24: Strang `-=` operator precedence in source term update
+
+**Symptom**: Y-sweep gravity double-counted. Star atmosphere in hydrostatic equilibrium develops dv/dt ≈ 2g instead of 0.
+
+**Root cause**: C++ operator precedence on compound assignment:
+```cpp
+d_my -= dp_dy + rho_avg * g;   // WRONG: d_my = d_my - dp_dy - rho*g
+```
+The intent was `d_my = d_my - dp_dy + rho*g` (pressure gradient opposes gravity). But `-= (A + B)` is parsed as `d_my = d_my - (A + B) = d_my - A - B`. Both terms have the same sign, doubling the gravity instead of cancelling.
+
+**Fix**: Always use explicit assignment for mixed-sign source terms:
+```cpp
+d_my = d_my - dp_dy + rho_avg * g;
+```
+
+**Files**: `strang_solver.cu:k_strang_sweep_y`
+
+**Test strategy**: `test_strang_step` S1: run 50 steps of unperturbed isentropic HSE, assert `max|v| < 1e-3` (HSE preserved). Would show max|v| growing linearly with the double-counting bug.
+
+---
+
+<a id="p25"></a>
+## P25: Strang face-state ghost cells uninitialized after MUSCL
+
+**Symptom**: First step produces random results — sometimes reasonable, sometimes NaN. `compute-sanitizer` reports reads of uninitialized GPU memory in the HLLC kernel.
+
+**Root cause**: The MUSCL-Hancock kernel fills face states (`rho_L, rho_R, u_L, u_R, ...`) only for physical cells `[0, nx) × [0, ny)`. The HLLC kernel at boundary `j=0` reads `face_L[j=0]`, which is the right-face state of ghost cell `j=-1` — never written by MUSCL. GPU memory is not zeroed, so HLLC reads garbage.
+
+**Fix**: After MUSCL, before HLLC, explicitly fill boundary face states:
+- y=0 reflective: `face_R[j=-1] = reflect(face_R[j=0])` (use inner face of first physical cell, negate v_y)
+- y=ny outflow: `face_L[j=ny] = face_R[j=ny-1]` (copy outer face of last physical cell)
+- x-periodic: `face_R[x=-1] = face_R[x=nx-1]`, `face_L[x=nx] = face_L[x=0]`
+
+**Files**: `strang_solver.cu` (face ghost fill routines added after each MUSCL call)
+
+**Test strategy**: Run `compute-sanitizer --tool initcheck ./test_strang_step`. Should report 0 uninitialized reads. `test_strang_step` S1 with HSE should give deterministic results.
+
+---
+
+<a id="p26"></a>
+## P26: Strang reflective BC face mapping error
+
+**Symptom**: At y=0 boundary, reflected face state uses wrong side of the boundary cell. Result: small but systematic velocity error at the reflecting wall that grows over time.
+
+**Root cause**: The reflective BC was filling `ghost_face = reflect(face_L[j=0])`. But `face_L[j=0]` is the left face of cell j=0 (pointing away from the boundary). The correct source is `face_R[j=0]` — the right face of cell j=0, which is the state closest to the y=0 boundary.
+
+**Fix**: Use `face_R[j=0]` as the source for reflected ghost face state:
+```
+ghost_face_R[j=-1] = reflect(face_R[j=0])
+```
+where `reflect` negates the y-velocity component.
+
+**Files**: `strang_solver.cu` (y-boundary face ghost fill)
+
+**Test strategy**: `test_strang_unit` U7: test y-bottom ghost cell by checking that the reflected cell has exactly negated v_y and identical rho, u, P.
+
+---
+
+<a id="p27"></a>
+## P27: Smooth floor returns exact zero for large negative inputs
+
+**Symptom**: `test_coverage_critical` P4: after corrupting a cell to ρ = -0.5 and applying floor, the cell has ρ = 0.0 exactly (not ρ > 0).
+
+**Root cause**: The smooth floor `floor(x) = 0.5*(x + sqrt(x² + 4ε²))` with ε = 1e-20. For x = -0.5: `sqrt(0.25 + 4e-40) ≈ sqrt(0.25) = 0.5` in double precision. So `floor(-0.5) = 0.5*(-0.5 + 0.5) = 0.0` exactly. The smooth floor is designed for |x| ~ ε, not for |x| >> ε.
+
+**Fix**: The floor is mathematically correct (it never returns negative values), but it does not guarantee strict positivity for large negative inputs. Options:
+1. For tests: use small corruption (ρ = -1e-5) and check `≥ 0` not `> 0`.
+2. For production: add hard clamp after smooth floor: `rho = fmax(rho, rho_fl)`.
+
+Current approach: option 1 for tests. Production code retains the smooth floor only.
+
+**Files**: `fas_residual.cu:k_fas_floor`
+
+**Test strategy**: `test_coverage_critical` P4: corrupt ρ to -1e-5, apply floor, assert `min(ρ) ≥ 0` and no NaN.
+
+---
+
+<a id="p28"></a>
+## P28: Entropy wave convergence masked by nonlinear O(A²) error
+
+**Symptom**: Using a sound wave (A=0.01) to test 2nd-order convergence of the Strang solver, the measured order at N=128→256 is 0.3 instead of ~2.0. L1 error barely decreases with refinement.
+
+**Root cause**: The Euler equations are nonlinear. A sound wave with amplitude A produces solution deviation from the linear mode at O(A²·t). For A=0.01 and t=0.1: nonlinear error ~ O(1e-4). At N=128: truncation error ~ O(dx²) = O(6e-5). At N=256: truncation error ~ O(1.5e-5). Since O(A²) = 1e-4 dominates at both resolutions, the convergence ratio is ~1 (order 0).
+
+**Fix**: Use **entropy waves** (δρ ≠ 0, δP = 0, δv = 0, advected at constant velocity). These are **exact nonlinear solutions** of Euler (passive scalar advection). The only error is truncation, so convergence is clean.
+
+Alternative: use sound waves with A << dx (e.g., A=1e-6) so that A² << dx² at all tested resolutions.
+
+**Files**: `test_strang_convergence.cu`
+
+**Test strategy**: Entropy wave at A=0.01, measure L1 convergence at N=64/128/256. Assert order > 1.8 (2nd-order). Achieved: 1.92 (L1), 1.99 (L2).
+
+---
+
+<a id="p29"></a>
+## P29: LM-HLLC acoustic suppression foils sound-wave convergence test
+
+**Symptom**: Even with small amplitude (A=1e-6), sound wave test shows order ~1.0 instead of ~2.0 when LM-HLLC is enabled.
+
+**Root cause**: The LM-HLLC blending factor f(M) = clamp(M_local, M_cutoff=1e-3, 1.0) is clamped to M_cutoff for flows with M < 1e-3. A sound wave with A=1e-6 has M ~ 1e-6, so f = 1e-3. This adds O(M_cutoff) = O(1e-3) artificial dissipation to the acoustic mode — much larger than the truncation error O(dx²) at reasonable resolutions. The dissipation scales as 1/dx (first-order), masking the 2nd-order truncation.
+
+**Fix**: For convergence testing, either (a) use entropy waves (unaffected by LM-HLLC since they have no acoustic component), or (b) disable LM-HLLC (use standard HLLC for sound wave tests).
+
+The acoustic suppression is a **feature** for stellar convection simulations where M ~ 10^{-3}–10^{-1}: it prevents the acoustic time scale from dominating the dynamics. It is not a bug.
+
+**Files**: `strang_device.cuh:d_lmhllc`, `fas_hllc.cuh:fas_hllc_lm`
+
+**Test strategy**: `test_strang_convergence` uses entropy waves exclusively to avoid this issue. Sound wave convergence should only be tested with standard HLLC.
+
+---
+
 ## Summary: Regression Test Priority
 
 ### Tier 1 — Correctness fundamentals (must pass for any commit)
 
 | Test | Validates | Key assertion |
 |------|-----------|---------------|
-| HSE zero residual | P07, P08, P09, P19 | `||R_fluid(U_HSE)||_2 < 1e-20` |
-| Mass conservation | P01 | `|M_numerical - M_analytic| < 1e-6` |
-| Floor enforcement | P05 | `rho >= floor`, `P >= floor`, no NaN |
-| Gravity Phi(R) | P01, P02 | `|Phi(R) + GM/R| < tol` |
+| HSE zero residual (polar) | P07, P08, P09, P19, P23 | `\|\|R_fluid(U_HSE)\|\|_2 < 1e-20` |
+| HSE zero residual (Cartesian) | P24, P25, P26 | `max\|v\| < 1e-3` after 50 steps |
+| Mass conservation | P01 | `\|M_numerical - M_analytic\| < 1e-6` |
+| Floor enforcement | P05, P27 | `rho >= 0`, `P >= floor`, no NaN |
+| Gravity Phi(R) | P01, P02 | `\|Phi(R) + GM/R\| < tol` |
+| Origin cell WB | P23 | `max\|vr\|_{i=0} < 1e-10` in explicit HSE step |
 
-### Tier 2 — Solver convergence (must pass for lowmach solver)
+### Tier 2 — Solver convergence (must pass for lowmach / strang solver)
 
 | Test | Validates | Key assertion |
 |------|-----------|---------------|
-| Unperturbed HSE long run | P09, P15, P19 | 100 steps, `per-cell < 1e-4`, dt grows monotonically |
-| Perturbed first step | P10, P07 | `||R_mr|| > 0` (perturbation visible) |
-| Newton convergence at small dt | P15 | dt=1e-10: converge in 0-1 Newton iterations |
+| Unperturbed HSE long run | P09, P15, P19 | 100 steps, `per-cell < 1e-4`, dt grows |
+| Perturbed first step | P10, P07 | `\|\|R_mr\|\| > 0` (perturbation visible) |
+| Newton convergence at small dt | P15 | dt=1e-10: converge in 0-1 iterations |
 | dt recovery after failure | P16 | dt recovers within 20 steps |
+| Entropy wave 2nd-order | P28, P29 | order > 1.8 (L1 and L2) |
+| Memory safety | P25 | `compute-sanitizer` reports 0 errors |
 
 ### Tier 3 — Component tests (preconditioner, matvec, stencil)
 
 | Test | Validates | Key assertion |
 |------|-----------|---------------|
-| Analytical vs FD Jacobian | P11 | `||J_analytic*v - J_FD*v|| / ||J_FD*v|| < 0.01` |
-| Preconditioner sign | P12 | `sign(M^{-1}*r) = sign(-J^{-1}*r)` for diagonal-dominant system |
-| Poisson residual scaling | P18 | `max|F_Phi_scaled| < 0.1` after converged GMG |
-| Helmholtz GMG | new | `||(nabla^2 - sigma)*u_solved - rhs|| < tol` for known sigma |
-| Theta symmetry | P02 | `S_mt_gravity = 0` for spherically symmetric state |
+| Analytical vs FD Jacobian | P11 | `\|\|J_analytic*v - J_FD*v\|\| / \|\|J_FD*v\|\| < 0.01` |
+| Preconditioner sign | P12 | `sign(M^{-1}*r) = sign(-J^{-1}*r)` |
+| Poisson residual scaling | P18 | `max\|F_Phi_scaled\| < 0.1` after GMG |
+| Helmholtz GMG | new | `\|\|(nabla^2 - sigma)*u - rhs\|\| < tol` |
+| Theta symmetry | P02 | `S_mt_gravity = 0` for symmetric state |
+| MC limiter monotonicity | new | MC(a,b) has correct sign and magnitude |
+| Reflective BC sign | P26 | `v_y(ghost) = -v_y(mirror)` |
+| Face ghost fill | P25 | All face states finite after MUSCL + fill |

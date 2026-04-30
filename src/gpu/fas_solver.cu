@@ -253,7 +253,7 @@ void FasSolver::snapshot_hse() {
     CUDA_CHECK(cudaMemcpy(finest.d_P0, P0.data(), n*sizeof(double), cudaMemcpyHostToDevice));
 
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
-    atm_rho_thresh = 1e-6 * rho_max;
+    atm_rho_thresh = 1e-3 * rho_max;
 
     // Sponge layer: start where ρ₀ drops below 1% of max
     std::vector<double> h_rc(nr);
@@ -693,11 +693,15 @@ double FasSolver::step(double t, double t_end) {
                          step_count, dt_old, norm, norm*dt_old, dt);
     }
 
-    // If all cuts failed but state is not NaN, accept with minimum dt
-    // (transport step has been applied — state is at least partially advanced)
-    if (!converged && !std::isnan(norm)) {
-        std::fprintf(stderr, "  step %d: accepting dt=%.2e after %d cuts (||F||=%.2e)\n",
-                     step_count, dt, max_dt_cuts, norm);
+    // If all cuts failed, rollback to Uⁿ — never accept a diverged state
+    if (!converged) {
+        std::fprintf(stderr, "  step %d: rollback to Un (||F||=%.2e, dt=%.2e)\n",
+                     step_count, norm, dt);
+        k_fas_unpack_flat<<<(n+B-1)/B,B>>>(
+            finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+            finest.d_Un, finest.nr, finest.nt, finest.ng);
+        launch_ghost(0);
+        dt = dt_current * 0.25;
     }
 
     if (step_count % 100 == 0)
@@ -711,6 +715,33 @@ double FasSolver::step(double t, double t_end) {
             sponge_r_start, sponge_r_top, sponge_kappa, dt,
             1.0/(gamma-1.0),
             finest.nr, finest.nt, finest.ng);
+    }
+
+    // Atmosphere reset: force vacuum cells to exact HSE (MUSIC-style)
+    k_fas_atm_reset<<<(n+B-1)/B,B>>>(
+        finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+        finest.d_rho0, finest.d_P0,
+        atm_rho_thresh, 1.0/(gamma-1.0),
+        finest.nr, finest.nt, finest.ng);
+
+    if (n_angular_avg > 0) {
+        int B2 = std::min(finest.nt, 256);
+        k_fas_angular_avg<<<n_angular_avg, B2, 5*B2*sizeof(double)>>>(
+            finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+            finest.d_cell_volume,
+            n_angular_avg, finest.nr, finest.nt, finest.ng);
+    }
+    if (n_pole_avg > 0) {
+        k_fas_pole_avg<<<finest.nr, 1>>>(
+            finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+            finest.d_cell_volume,
+            n_pole_avg, finest.nr, finest.nt, finest.ng);
+    }
+    if (central_damp_r > 0) {
+        int n = finest.nr * finest.nt, B = 256;
+        k_fas_central_damp<<<(n+B-1)/B,B>>>(
+            finest.d_mr, finest.d_rhoE, finest.d_rho, finest.d_r_center,
+            central_damp_r, 5.0, finest.nr, finest.nt, finest.ng);
     }
 
     if (converged) {
@@ -729,9 +760,11 @@ double FasSolver::step(double t, double t_end) {
 
 __global__
 void k_fas_rk_update(double* rho, double* mr, double* mt, double* rhoE,
-                     const double* R, double dt_val, int nr, int nt, int ng) {
+                     const double* R, const double* rho0, double atm_thresh,
+                     double dt_val, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;  // skip atmosphere
     int k = fas_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  += dt_val * R[flat];
@@ -762,19 +795,15 @@ double FasSolver::step_explicit(double t, double t_end) {
     apply_floor(0);
     launch_ghost(0);
 
-    // Compute CFL dt directly (don't use compute_cfl_dt which clobbers d_res)
+    // Compute CFL dt on GPU (no D2H copy of full array)
     {
         int B2 = 256;
         k_fas_cfl<<<(n+B2-1)/B2,B2>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_dr, lev.d_r_center, lev.d_dtheta,
-            lev.d_rho0, lev.d_dp,  // use d_dp as scratch (not d_res!)
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh);
-        std::vector<double> h_dt(n);
-        CUDA_CHECK(cudaMemcpy(h_dt.data(), lev.d_dp, n*sizeof(double), cudaMemcpyDeviceToHost));
-        double mn = 1e30;
-        for (int i = 0; i < n; ++i) mn = std::min(mn, h_dt[i]);
-        dt_current = cfl_num * mn;
+            lev.d_rho0, lev.d_dp,
+            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, n_angular_avg);
+        dt_current = cfl_num * gpu_reduce_min(lev.d_dp, lev.d_poisson_rhs, n);
     }
     double dt = dt_current;
     if (dt < 1e-30) dt = 1e-10;
@@ -786,11 +815,11 @@ double FasSolver::step_explicit(double t, double t_end) {
         lev.d_Un, lev.nr, lev.nt, lev.ng);
 
     // Stage 1: U* = Un + dt * R(Un)
-    // Explicit: use NON-well-balanced residual (wb=0) for stability
+    // Well-balanced residual (wb=1) to avoid polar artifacts
     launch_ghost(0);
     compute_gravity_1d(0);
     {
-        int wb = 0;
+        int wb = 1;
         k_fas_residual<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -798,26 +827,29 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
-        k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
-            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
-            lev.d_r_center, lev.d_r_face, lev.d_theta_face,
-            lev.d_dr, lev.d_dtheta,
-            lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
-            lev.d_res,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
+            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
+        if (!use_core_excision) {
+            k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+                lev.d_r_center, lev.d_r_face, lev.d_theta_face,
+                lev.d_dr, lev.d_dtheta,
+                lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
+                lev.d_res,
+                lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
+        }
+        k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
     }
     k_fas_rk_update<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_res, dt, lev.nr, lev.nt, lev.ng);
+        lev.d_res, lev.d_rho0, atm_rho_thresh, dt, lev.nr, lev.nt, lev.ng);
     apply_floor(0);
 
     // Stage 2: compute R(U*)
     launch_ghost(0);
     compute_gravity_1d(0);
     {
-        int wb = 0;
+        int wb = 1;
         k_fas_residual<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
@@ -825,19 +857,22 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
-        k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
-            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
-            lev.d_r_center, lev.d_r_face, lev.d_theta_face,
-            lev.d_dr, lev.d_dtheta,
-            lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
-            lev.d_res,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb);
+            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
+        if (!use_core_excision) {
+            k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+                lev.d_r_center, lev.d_r_face, lev.d_theta_face,
+                lev.d_dr, lev.d_dtheta,
+                lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
+                lev.d_res,
+                lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc);
+        }
+        k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
     }
     k_fas_rk_update<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_res, dt, lev.nr, lev.nt, lev.ng);
+        lev.d_res, lev.d_rho0, atm_rho_thresh, dt, lev.nr, lev.nt, lev.ng);
 
     // Average: U^{n+1} = 0.5*(Un + U**)
     k_fas_rk_average<<<(n+B-1)/B,B>>>(
@@ -853,6 +888,31 @@ double FasSolver::step_explicit(double t, double t_end) {
             sponge_r_start, sponge_r_top, sponge_kappa, dt,
             1.0/(gamma-1.0),
             lev.nr, lev.nt, lev.ng);
+    }
+
+    k_fas_atm_reset<<<(n+B-1)/B,B>>>(
+        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+        lev.d_rho0, lev.d_P0,
+        atm_rho_thresh, 1.0/(gamma-1.0),
+        lev.nr, lev.nt, lev.ng);
+
+    if (n_angular_avg > 0) {
+        int B2 = std::min(lev.nt, 256);
+        k_fas_angular_avg<<<n_angular_avg, B2, 5*B2*sizeof(double)>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume,
+            n_angular_avg, lev.nr, lev.nt, lev.ng);
+    }
+    if (n_pole_avg > 0) {
+        k_fas_pole_avg<<<lev.nr, 1>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume,
+            n_pole_avg, lev.nr, lev.nt, lev.ng);
+    }
+    if (central_damp_r > 0) {
+        k_fas_central_damp<<<(n+B-1)/B,B>>>(
+            lev.d_mr, lev.d_rhoE, lev.d_rho, lev.d_r_center,
+            central_damp_r, 5.0, lev.nr, lev.nt, lev.ng);
     }
 
     step_count++;

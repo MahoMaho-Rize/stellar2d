@@ -42,6 +42,42 @@ inline void k_fas_axpy_v(double* y, double a, const double* x, int n) {
 }
 
 __global__
+inline void k_fas_reduce_min(const double* in, double* out, int n) {
+    extern __shared__ double sdata[];
+    int tid = threadIdx.x;
+    int i = blockIdx.x * blockDim.x * 2 + tid;
+    double val = 1e30;
+    if (i < n) val = in[i];
+    if (i + blockDim.x < n) val = fmin(val, in[i + blockDim.x]);
+    sdata[tid] = val;
+    __syncthreads();
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) sdata[tid] = fmin(sdata[tid], sdata[tid + s]);
+        __syncthreads();
+    }
+    if (tid == 0) out[blockIdx.x] = sdata[0];
+}
+
+static inline double gpu_reduce_min(const double* d_data, double* d_scratch, int n) {
+    int B = 256;
+    int nblocks = (n + 2 * B - 1) / (2 * B);
+    k_fas_reduce_min<<<nblocks, B, B * sizeof(double)>>>(d_data, d_scratch, n);
+    if (nblocks > 1) {
+        int nb2 = (nblocks + 2 * B - 1) / (2 * B);
+        k_fas_reduce_min<<<nb2, B, B * sizeof(double)>>>(d_scratch, d_scratch, nblocks);
+        nblocks = nb2;
+    }
+    while (nblocks > 1) {
+        int nb2 = (nblocks + 2 * B - 1) / (2 * B);
+        k_fas_reduce_min<<<nb2, B, B * sizeof(double)>>>(d_scratch, d_scratch, nblocks);
+        nblocks = nb2;
+    }
+    double result;
+    CUDA_CHECK(cudaMemcpy(&result, d_scratch, sizeof(double), cudaMemcpyDeviceToHost));
+    return result;
+}
+
+__global__
 inline void k_fas_pack_flat(const double* rho, const double* mr,
                             const double* mt, const double* rhoE,
                             double* out, int nr, int nt, int ng) {

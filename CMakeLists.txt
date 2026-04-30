@@ -34,6 +34,9 @@ if(USE_GPU)
         src/gpu/fas_smoothers.cu
         src/gpu/fas_multigrid.cu
         src/gpu/fas_solver.cu
+        src/gpu/simple_solver.cu
+        src/gpu/projection_solver.cu
+        src/gpu/strang_solver.cu
         src/gpu/lm_residual.cu
         src/gpu/lm_precond.cu
         src/gpu/lm_krylov.cu
@@ -204,4 +207,90 @@ if(USE_GPU)
     target_compile_definitions(test_mini PRIVATE USE_GPU)
     set_target_properties(test_mini PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_mini PRIVATE CUDA::cudart)
+
+    add_executable(test_strang_init tests/test_strang_init.cu
+        src/gpu/strang_solver.cu)
+    target_include_directories(test_strang_init PRIVATE src)
+    target_compile_definitions(test_strang_init PRIVATE USE_GPU)
+    set_target_properties(test_strang_init PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_strang_init PRIVATE CUDA::cudart)
+    add_test(NAME strang_init COMMAND test_strang_init)
+
+    add_executable(test_strang_muscl tests/test_strang_muscl.cu
+        src/gpu/strang_solver.cu)
+    target_include_directories(test_strang_muscl PRIVATE src)
+    target_compile_definitions(test_strang_muscl PRIVATE USE_GPU)
+    set_target_properties(test_strang_muscl PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_strang_muscl PRIVATE CUDA::cudart)
+    add_test(NAME strang_muscl COMMAND test_strang_muscl)
+
+    add_executable(test_strang_hllc tests/test_strang_hllc.cu
+        src/gpu/strang_solver.cu)
+    target_include_directories(test_strang_hllc PRIVATE src)
+    target_compile_definitions(test_strang_hllc PRIVATE USE_GPU)
+    set_target_properties(test_strang_hllc PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_strang_hllc PRIVATE CUDA::cudart)
+    add_test(NAME strang_hllc COMMAND test_strang_hllc)
+
+    add_executable(test_strang_step tests/test_strang_step.cu
+        src/gpu/strang_solver.cu)
+    target_include_directories(test_strang_step PRIVATE src)
+    target_compile_definitions(test_strang_step PRIVATE USE_GPU)
+    set_target_properties(test_strang_step PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_strang_step PRIVATE CUDA::cudart)
+    add_test(NAME strang_step COMMAND test_strang_step)
+
+    add_executable(test_strang_unit tests/test_strang_unit.cu
+        src/gpu/strang_solver.cu)
+    target_include_directories(test_strang_unit PRIVATE src)
+    target_compile_definitions(test_strang_unit PRIVATE USE_GPU)
+    set_target_properties(test_strang_unit PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_strang_unit PRIVATE CUDA::cudart)
+    add_test(NAME strang_unit COMMAND test_strang_unit)
+
+    add_executable(test_strang_convergence tests/test_strang_convergence.cu
+        src/gpu/strang_solver.cu)
+    target_include_directories(test_strang_convergence PRIVATE src)
+    target_compile_definitions(test_strang_convergence PRIVATE USE_GPU)
+    set_target_properties(test_strang_convergence PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_strang_convergence PRIVATE CUDA::cudart)
+    add_test(NAME strang_convergence COMMAND test_strang_convergence)
+
+    set(FAS_GPU_SOURCES
+        src/gpu/fas_residual.cu
+        src/gpu/fas_smoothers.cu
+        src/gpu/fas_multigrid.cu
+        src/gpu/fas_solver.cu
+        src/gpu/simple_solver.cu
+        src/gpu/projection_solver.cu
+        src/gpu/gmg_gpu.cu
+    )
+    add_executable(test_fas_verify tests/test_fas_verify.cu
+        ${TEST_COMMON_SOURCES}
+        ${FAS_GPU_SOURCES})
+    target_include_directories(test_fas_verify PRIVATE src)
+    target_compile_definitions(test_fas_verify PRIVATE USE_GPU)
+    set_target_properties(test_fas_verify PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_fas_verify PRIVATE CUDA::cudart)
+    add_test(NAME fas_verify COMMAND test_fas_verify)
+
+    add_executable(test_fas_diagnose tests/test_fas_diagnose_hse.cu
+        ${TEST_COMMON_SOURCES}
+        ${FAS_GPU_SOURCES})
+    target_include_directories(test_fas_diagnose PRIVATE src)
+    target_compile_definitions(test_fas_diagnose PRIVATE USE_GPU)
+    set_target_properties(test_fas_diagnose PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_fas_diagnose PRIVATE CUDA::cudart)
+
+    add_executable(test_coverage_critical tests/test_coverage_critical.cu
+        ${TEST_COMMON_SOURCES}
+        ${FAS_GPU_SOURCES}
+        ${LOWMACH_SOURCES}
+        src/init/jeans.cpp
+        src/init/evrard.cpp)
+    target_include_directories(test_coverage_critical PRIVATE src)
+    target_compile_definitions(test_coverage_critical PRIVATE USE_GPU)
+    set_target_properties(test_coverage_critical PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_coverage_critical PRIVATE CUDA::cudart)
+    add_test(NAME coverage_critical COMMAND test_coverage_critical)
 endif()
