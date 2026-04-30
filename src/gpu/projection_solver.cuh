@@ -31,6 +31,9 @@ struct ProjSolver {
     double gamma, G_const, cfl_num;
     double atm_rho_thresh = 0.0;
     double sponge_r_start = 0.0, sponge_r_top = 0.0, sponge_kappa = 100.0;
+    bool use_hse_outer_bc = false;
+    bool use_core_excision = false;
+    double M_core = 0.0;
     int step_count = 0;
     bool hse_set = false;
 

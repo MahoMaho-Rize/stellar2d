@@ -47,6 +47,8 @@ struct SimConfig {
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     bool no_sponge = false;
     bool lm_hllc = false;
+    double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
+    double M_core = 0.0;
 };
 
 static void extract_density(const Grid& grid, const State& state, std::vector<double>& rho_cells) {
@@ -57,14 +59,17 @@ static void extract_density(const Grid& grid, const State& state, std::vector<do
             rho_cells[i * nt + j] = state.rho[grid.idx(i, j)];
 }
 
-static double compute_lane_emden_R_outer(double n_poly, double K_poly, double rho_c, double G) {
+static double compute_lane_emden_R_star(double n_poly, double K_poly, double rho_c, double G) {
     auto sol = solve_lane_emden(n_poly);
     double alpha2 = (n_poly + 1.0) * K_poly
                     * std::pow(rho_c, 1.0 / n_poly - 1.0)
                     / (4.0 * M_PI * G);
     double alpha = std::sqrt(alpha2);
-    double R_star = alpha * sol.xi_1;
-    return R_star * 1.1;
+    return alpha * sol.xi_1;
+}
+
+static double compute_lane_emden_R_outer(double n_poly, double K_poly, double rho_c, double G) {
+    return compute_lane_emden_R_star(n_poly, K_poly, rho_c, G) * 1.1;
 }
 
 static void print_progress(double t, double t_end, int step, double dt,
@@ -143,11 +148,16 @@ int main(int argc, char** argv) {
             cfg.no_sponge = true;
         else if (std::strcmp(argv[i], "--lm-hllc") == 0)
             cfg.lm_hllc = true;
+        else if (std::strcmp(argv[i], "--r-inner") == 0 && i + 1 < argc)
+            cfg.r_inner = std::atof(argv[++i]);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
         || cfg.test_case == "bubble") {
-        cfg.R_outer = compute_lane_emden_R_outer(1.5, 1.0, 1.0, cfg.G);
+        if (cfg.mesh_type == "mass")
+            cfg.R_outer = compute_lane_emden_R_star(1.5, 1.0, 1.0, cfg.G);
+        else
+            cfg.R_outer = compute_lane_emden_R_outer(1.5, 1.0, 1.0, cfg.G);
     }
 
     std::printf("stellar2d - 2D Axisymmetric Euler + Self-Gravity\n");
@@ -181,6 +191,33 @@ int main(int argc, char** argv) {
 
         grid.init_equimass(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func);
         std::printf("Using equimass radial mesh based on Lane-Emden density\n");
+    } else if (cfg.mesh_type == "mass" &&
+               (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
+                || cfg.test_case == "bubble")) {
+        double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
+        auto le_sol = solve_lane_emden(n_poly);
+        double alpha2 = (n_poly + 1.0) * K_poly
+                        * std::pow(rho_c, 1.0 / n_poly - 1.0) / (4.0 * M_PI * G);
+        double alpha = std::sqrt(alpha2);
+
+        auto rho_func = [&](double r) -> double {
+            double xi = r / alpha;
+            if (xi >= le_sol.xi_1) return 1e-20;
+            auto it = std::lower_bound(le_sol.xi.begin(), le_sol.xi.end(), xi);
+            int idx = static_cast<int>(it - le_sol.xi.begin());
+            if (idx <= 0) return rho_c;
+            if (idx >= static_cast<int>(le_sol.xi.size())) return 1e-20;
+            double x0 = le_sol.xi[idx - 1], x1 = le_sol.xi[idx];
+            double t0 = le_sol.theta_le[idx - 1], t1 = le_sol.theta_le[idx];
+            double frac = (xi - x0) / (x1 - x0);
+            double theta_val = t0 + frac * (t1 - t0);
+            return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
+        };
+
+        grid.init_mass_shell(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func);
+        cfg.no_sponge = true;
+        std::printf("Using hybrid mass-shell radial mesh (R_star=%.6f, no sponge, HSE outer BC)\n",
+                    cfg.R_outer);
     } else if (cfg.mesh_type == "uniform") {
         grid.init_uniform(cfg.nr, cfg.ntheta, cfg.R_outer);
         std::printf("Using uniform radial mesh\n");
@@ -250,6 +287,9 @@ int main(int argc, char** argv) {
         ProjSolver proj;
         proj.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.no_sponge) proj.sponge_kappa = 0.0;
+        if (cfg.mesh_type == "mass") {
+            proj.use_hse_outer_bc = true;
+        }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;
@@ -293,6 +333,9 @@ int main(int argc, char** argv) {
         SimpleSolver sim;
         sim.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.no_sponge) sim.sponge_kappa = 0.0;
+        if (cfg.mesh_type == "mass") {
+            sim.use_hse_outer_bc = true;
+        }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;
@@ -340,6 +383,9 @@ int main(int argc, char** argv) {
         fas.use_lm_hllc = cfg.lm_hllc;
         fas.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.no_sponge) fas.sponge_kappa = 0.0;
+        if (cfg.mesh_type == "mass") {
+            fas.use_hse_outer_bc = true;
+        }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
             State state_hse;

@@ -38,7 +38,7 @@ __global__ void k_fas_ghost_t_n(double*, double*, double*, double*, int, int, in
 __global__ void k_fas_ghost_t_s(double*, double*, double*, double*, int, int, int);
 __global__ void k_fas_pole_lock(double*, int, int, int);
 __global__ void k_fas_shell_mass(const double*, const double*, double*, int, int, int);
-__global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double);
+__global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double, double);
 __global__ void k_fas_cfl(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, double*,
     int, int, int, double, double);
@@ -63,6 +63,8 @@ __global__ void k_fas_simple_correct(double*, double*, double*, double*,
 __global__ void k_fas_bdf2_rhs(const double*, const double*, double*, double, double, double, int);
 __global__ void k_fas_atm_reset(double*, double*, double*, double*,
     const double*, const double*, double, double, int, int, int);
+__global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
+    const double*, const double*, double, int, int, int);
 
 // ========================= Init / Destroy ========================
 
@@ -258,7 +260,14 @@ void SimpleSolver::snapshot_hse() {
 void SimpleSolver::launch_ghost() {
     int B = 256;
     { dim3 g((lev.nt+B-1)/B, lev.ng); k_fas_ghost_r_in<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
-    { dim3 g((lev.nt+B-1)/B, lev.ng); k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
+    if (use_hse_outer_bc && hse_set) {
+        dim3 g((lev.nt+B-1)/B, lev.ng);
+        k_fas_ghost_r_out_hse<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
+            lev.d_rho0, lev.d_P0, 1.0/(gamma-1.0), lev.nr,lev.nt,lev.ng);
+    } else {
+        dim3 g((lev.nt+B-1)/B, lev.ng);
+        k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng);
+    }
     { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_n<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_s<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     k_fas_pole_lock<<<(lev.nr+2*lev.ng+B-1)/B,B>>>(lev.d_mt, lev.nr, lev.nt, lev.ng);
@@ -267,7 +276,7 @@ void SimpleSolver::launch_ghost() {
 void SimpleSolver::compute_gravity_1d() {
     int B = std::min(lev.nt, 256);
     k_fas_shell_mass<<<lev.nr, B, B*sizeof(double)>>>(lev.d_rho, lev.d_cell_volume, lev.d_shell_mass, lev.nr, lev.nt, lev.ng);
-    k_fas_gravity_from_shells<<<1,1>>>(lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const);
+    k_fas_gravity_from_shells<<<1,1>>>(lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const, M_core);
 }
 
 void SimpleSolver::apply_floor() {
@@ -283,10 +292,12 @@ void SimpleSolver::compute_residual() {
         lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
         lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
         lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0);
-    k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
-        lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
-        lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
-        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0);
+    if (!use_core_excision) {
+        k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
+            lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
+            lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
+            lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0);
+    }
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
 }
 

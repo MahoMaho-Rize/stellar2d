@@ -4,13 +4,14 @@
 #include <cmath>
 #include <functional>
 
-enum class MeshType { LOG, EQUIMASS, UNIFORM };
+enum class MeshType { LOG, EQUIMASS, UNIFORM, MASS_SHELL };
 
 struct Grid {
     int nr, ntheta;
     int ng; // ghost cells per side
 
     double R_outer;
+    double R_inner = 0.0;  // inner boundary radius (>0 for core excision)
     double log_alpha; // radial stretch exponent
     MeshType mesh_type = MeshType::LOG;
 
@@ -47,10 +48,16 @@ struct Grid {
     void init_equimass(int nr_, int ntheta_, double R_outer_,
                        std::function<double(double)> rho_func, int ng_ = 2);
 
+    // Mass-shell mesh: equal spherical mass per radial shell, domain = [r_inner, R_star]
+    void init_mass_shell(int nr_, int ntheta_, double R_star_,
+                         std::function<double(double)> rho_func,
+                         double r_inner_ = 0.0, int ng_ = 2);
+
 private:
     void build_radial_mesh();
     void build_uniform_radial_mesh();
     void build_equimass_radial_mesh(std::function<double(double)> rho_func);
+    void build_mass_shell_radial_mesh(std::function<double(double)> rho_func, double r_inner_);
     void build_theta_mesh();
     void compute_geometry();
 };
