@@ -33,6 +33,8 @@
 #include <string>
 #include <cstring>
 #include <ctime>
+#include <array>
+#include <vector>
 #include <csignal>
 #include <sys/stat.h>
 
@@ -56,6 +58,15 @@ struct SimConfig {
     Limiter limiter = Limiter::MINMOD;
     double perturb_amplitude = 1e-3;  // density perturbation for lane_emden_perturbed
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
+    // cart_ale --test hse_bubble parameters
+    double bubble_xc = 0.5;
+    double bubble_yc = 0.3;
+    double bubble_rb = 0.1;
+    double bubble_alpha = -0.5;   // density multiplier: ρ = ρ_HSE·(1+α·exp(-r²/rb²))
+    double bubble_beta  = 0.0;    // pressure multiplier
+    // Multi-bubble: each --bubble "xc,yc,rb,alpha,beta" appends one bubble.
+    // If none given, falls back to the single --bubble-* defaults.
+    std::vector<std::array<double, 5>> bubbles;
     bool no_sponge = false;
     bool lm_hllc = false;
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
@@ -153,6 +164,27 @@ int main(int argc, char** argv) {
             cfg.precond = argv[++i];
         else if (std::strcmp(argv[i], "--perturb") == 0 && i + 1 < argc)
             cfg.perturb_amplitude = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
+            cfg.bubble_xc = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
+            cfg.bubble_yc = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-rb") == 0 && i + 1 < argc)
+            cfg.bubble_rb = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-alpha") == 0 && i + 1 < argc)
+            cfg.bubble_alpha = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-beta") == 0 && i + 1 < argc)
+            cfg.bubble_beta = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble") == 0 && i + 1 < argc) {
+            // --bubble "xc,yc,rb,alpha,beta"  — may be repeated
+            std::array<double, 5> b{};
+            int n = std::sscanf(argv[++i], "%lf,%lf,%lf,%lf,%lf",
+                                &b[0], &b[1], &b[2], &b[3], &b[4]);
+            if (n < 5) {
+                std::fprintf(stderr, "ERROR: --bubble needs xc,yc,rb,alpha,beta\n");
+                return 1;
+            }
+            cfg.bubbles.push_back(b);
+        }
         else if (std::strcmp(argv[i], "--limiter") == 0 && i + 1 < argc) {
             std::string lim = argv[++i];
             if (lim == "vanleer") cfg.limiter = Limiter::VAN_LEER;
@@ -296,7 +328,7 @@ int main(int argc, char** argv) {
         ep.M = 1.0; ep.R = 1.0; ep.G = cfg.G;
         init_evrard(grid, state, ep, cfg.gamma);
     } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
-               || cfg.test_case == "sod") {
+               || cfg.test_case == "hse_bubble" || cfg.test_case == "sod") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -661,16 +693,26 @@ int main(int argc, char** argv) {
     } else if (cfg.solver_type == "cart_ale") {
         // ===== Cartesian 2D ALE (Caramana Lagrangian + Eulerian rezone + swept remap) =====
         CartAleSolver cale;
-        bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed");
+        bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
+                       || cfg.test_case == "hse_bubble");
         double Lx = 1.0;
         double Ly = is_hse ? 1.0 : 0.2;
         double gam = is_hse ? cfg.gamma : 1.4;
         cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
-        if (is_hse) {
-            if (cfg.test_case == "hse_perturbed")
-                cale.init_hse_polytrope(1.0, 1.0, cfg.perturb_amplitude);
-            else
-                cale.init_hse_polytrope(1.0, 1.0, 0.0);
+        if (cfg.test_case == "hse_bubble") {
+            std::vector<CartAleSolver::Bubble> blist;
+            if (!cfg.bubbles.empty()) {
+                for (const auto& b : cfg.bubbles)
+                    blist.push_back({b[0], b[1], b[2], b[3], b[4]});
+            } else {
+                blist.push_back({cfg.bubble_xc, cfg.bubble_yc, cfg.bubble_rb,
+                                 cfg.bubble_alpha, cfg.bubble_beta});
+            }
+            cale.init_hse_bubbles(1.0, 1.0, blist);
+        } else if (cfg.test_case == "hse_perturbed") {
+            cale.init_hse_polytrope(1.0, 1.0, cfg.perturb_amplitude);
+        } else if (cfg.test_case == "hse") {
+            cale.init_hse_polytrope(1.0, 1.0, 0.0);
         } else {
             cale.init_sod();
         }

@@ -222,6 +222,68 @@ void CartAleSolver::init_hse_polytrope(double rho_base, double g_val, double amp
 }
 
 // ============================================================
+// HSE polytrope + N Gaussian bubble overlays
+// ============================================================
+void CartAleSolver::init_hse_bubbles(double rho_base, double g_val,
+                                     const std::vector<Bubble>& bubbles) {
+    g_y = g_val;
+    double Ly = g_Ly;
+    double n = 1.0 / (gamma - 1.0);
+    double K = (gamma - 1.0) / gamma * g_val * Ly * std::pow(rho_base, gamma - 1.0);
+
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    double rho_floor = 1e-6 * rho_base;
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double theta_val = std::max(1.0 - Yc / Ly, 1e-10);
+            double rho_hse = std::max(rho_base * std::pow(theta_val, n), rho_floor);
+            double P_hse   = K * std::pow(rho_hse, gamma);
+
+            double rho_mul = 1.0, P_mul = 1.0;
+            for (const auto& b : bubbles) {
+                double dx = Xc - b.xc, dy = Yc - b.yc;
+                double bump = std::exp(-(dx*dx + dy*dy) / (b.rb * b.rb));
+                rho_mul *= (1.0 + b.alpha * bump);
+                P_mul   *= (1.0 + b.beta  * bump);
+            }
+            double rho = std::max(rho_hse * rho_mul, rho_floor);
+            double P   = std::max(P_hse   * P_mul,   1e-30);
+            double e   = P / ((gamma - 1.0) * rho);
+
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = e;
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_vX, 0, nnode*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_vY, 0, nnode*sizeof(double)));
+
+    int B = 256;
+    k_cale_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny);
+
+    std::fprintf(stderr,
+        "  CartAle HSE bubbles: ρ_b=%g, g=%g, N=%zu\n",
+        rho_base, g_val, bubbles.size());
+    for (size_t i = 0; i < bubbles.size(); ++i) {
+        const auto& b = bubbles[i];
+        std::fprintf(stderr,
+            "    bubble[%zu]: center=(%g,%g), rb=%g, α=%g, β=%g\n",
+            i, b.xc, b.yc, b.rb, b.alpha, b.beta);
+    }
+}
+
+// ============================================================
 // One ALE step
 // ============================================================
 double CartAleSolver::step(double t, double t_end) {
