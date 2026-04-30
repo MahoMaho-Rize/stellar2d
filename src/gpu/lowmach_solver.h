@@ -129,7 +129,7 @@ struct LowMachSolver {
     // Sponge layer: smooth velocity damping near outer boundary
     double sponge_r_start = 0.0;  // inner edge (auto-set from ρ₀)
     double sponge_r_top = 0.0;    // outer edge (= R_outer)
-    double sponge_kappa = 10.0;   // damping strength
+    double sponge_kappa = 100.0;   // damping strength
 
     // Internal methods
     void compute_residual(double* d_res);

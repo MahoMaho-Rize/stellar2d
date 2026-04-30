@@ -55,4 +55,9 @@ __global__ void k_fas_cfl(
     const double* dr, const double* r_center, const double* dtheta,
     const double* rho0, double* out,
     int nr, int nt, int ng, double gam, double atm_thresh);
+
+__global__ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
+    const double* rho0, const double* P0,
+    double atm_thresh, double gam_m1_inv,
+    int nr, int nt, int ng);
 #endif
