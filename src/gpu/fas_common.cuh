@@ -37,7 +37,7 @@ __global__ void k_fas_residual(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, double gam, double atm_thresh,
-    int use_wellbalance);
+    int use_wellbalance, int lim_type, int use_lm_hllc);
 
 __global__ void k_fas_residual_origin(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
@@ -48,11 +48,35 @@ __global__ void k_fas_residual_origin(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, double gam, double atm_thresh,
-    int use_wellbalance);
+    int use_wellbalance, int lim_type, int use_lm_hllc);
 
 __global__ void k_fas_cfl(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* dr, const double* r_center, const double* dtheta,
     const double* rho0, double* out,
-    int nr, int nt, int ng, double gam, double atm_thresh);
+    int nr, int nt, int ng, double gam, double atm_thresh,
+    int n_angular_avg);
+
+__global__ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
+    const double* rho0, const double* P0,
+    double atm_thresh, double gam_m1_inv,
+    int nr, int nt, int ng);
+
+__global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
+    const double* rho0, const double* P0,
+    double gam_m1_inv,
+    int nr, int nt, int ng);
+
+__global__ void k_fas_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
+    const double* vol,
+    int n_avg, int nr, int nt, int ng);
+
+__global__ void k_fas_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
+    const double* vol,
+    int n_pole, int nr, int nt, int ng);
+
+__global__ void k_fas_central_damp(double* mr, double* rhoE,
+    const double* rho, const double* r_center,
+    double r_damp, double alpha,
+    int nr, int nt, int ng);
 #endif

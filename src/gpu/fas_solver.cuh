@@ -107,7 +107,7 @@ struct FasSolver {
     double compute_cfl_dt();
 
     int n_levels = 0;
-    FasLevel levels[8];
+    FasLevel levels[12];
 
     double gamma, G_const, cfl_num;
     double dt_current = 0.0;
@@ -117,14 +117,27 @@ struct FasSolver {
     bool hse_set = false;
     bool use_simple_smoother = true; // true=SIMPLE (Poisson-based), false=block Jacobi
     bool use_line_jacobi = true;     // Line-Jacobi preconditioner for GMRES (replaces block-Jacobi)
+    int limiter_type = 0;            // 0=minmod, 1=van_leer, 2=MC
+    bool use_lm_hllc = false;        // low-Mach corrected HLLC (Rieper 2011)
+    bool use_hse_outer_bc = false;   // HSE Dirichlet at outer radial boundary
+    bool use_core_excision = false;  // r_face[0] > 0, skip origin kernel
+    double M_core = 0.0;            // enclosed mass inside r_inner
+    int n_angular_avg = 0;           // angular-average this many inner shells per step
+    int n_pole_avg = 0;              // wedge-average this many cells near each pole
+    double central_damp_r = 0.0;     // damp v_r for r < this radius (0 = off)
 
     double sponge_r_start = 0.0;
     double sponge_r_top = 0.0;
-    double sponge_kappa = 10.0;
+    double sponge_kappa = 100.0;
 
     static constexpr int NU1 = 4;     // pre-smooth iterations
     static constexpr int NU2 = 4;     // post-smooth iterations
     static constexpr double OMEGA = 0.8;  // damping factor
+
+    // Public for testing access
+    void launch_ghost(int l);
+    void apply_floor(int l);
+    void restrict_state_pub(int fine, int coarse) { restrict_state(fine, coarse); }
 
 private:
     void build_level(int l, int nr, int nt, int ng,
@@ -136,9 +149,7 @@ private:
     void smooth(int l, double dt, double g0_over_dt, int n_iters);
     void compute_residual(int l);
     void compute_F(int l, double g0_over_dt);
-    void launch_ghost(int l);
     void compute_gravity_1d(int l);
-    void apply_floor(int l);
 
     void restrict_state(int fine, int coarse);
     void restrict_defect(int fine, int coarse, double g0_over_dt);

@@ -201,7 +201,7 @@ void LowMachSolver::snapshot_hse() {
     CUDA_CHECK(cudaMemcpy(h_rho0.data(), d_rho0, n*sizeof(double), cudaMemcpyDeviceToHost));
     double rho_max = 0;
     for (int i = 0; i < n; ++i) rho_max = std::max(rho_max, h_rho0[i]);
-    atm_rho_thresh = 1e-6 * rho_max;
+    atm_rho_thresh = 1e-3 * rho_max;
 
     // Sponge layer: start where ρ₀ drops below 1% of max, end at outer boundary
     double sponge_density = 0.01 * rho_max;
