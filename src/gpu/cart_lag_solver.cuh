@@ -27,6 +27,7 @@ struct CartLagSolver {
     double *d_X, *d_Y;              // positions
     double *d_vX, *d_vY;             // velocities
     double *d_FX, *d_FY;             // net forces
+    double *d_FX_hse, *d_FY_hse;      // HSE residual-force snapshot (subtracted when enabled)
     double *d_mnode;                 // node mass (constant in A1)
     double *d_dX, *d_dY;             // displacement (used by compatible energy)
 
@@ -80,6 +81,14 @@ struct CartLagSolver {
     // Optional sinusoidal perturbation on e_int (for pulsation tests).
     void init_hse_polytrope(double rho_base, double g_val,
                              double perturb_amp = 0.0);
+
+    // Capture current node forces (pressure+gravity) and store as HSE reference.
+    // During step(), this reference is subtracted from the instantaneous force
+    // so that the initial (stationary) state sees zero net acceleration, killing
+    // O(h) HSE discretization defect. Call AFTER init_hse_polytrope(),
+    // BEFORE any perturbation is applied.
+    void snapshot_hse_force();
+    bool hse_force_set = false;
 
     // One kick-drift-kick step with Caramana compatible energy update.
     double step(double t, double t_end);

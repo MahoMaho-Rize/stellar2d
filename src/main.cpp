@@ -607,8 +607,13 @@ int main(int argc, char** argv) {
         double gam = is_hse ? cfg.gamma : 1.4;  // Sod expects γ=1.4 by default
         clag.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
         if (is_hse) {
-            double amp = (cfg.test_case == "hse_perturbed") ? cfg.perturb_amplitude : 0.0;
-            clag.init_hse_polytrope(/*rho_base=*/1.0, /*g=*/1.0, amp);
+            // Two-step: first build HSE unperturbed, snapshot its discrete
+            // force defect, then (if hse_perturbed) layer the perturbation on top.
+            clag.init_hse_polytrope(1.0, 1.0, 0.0);
+            clag.snapshot_hse_force();
+            if (cfg.test_case == "hse_perturbed") {
+                clag.init_hse_polytrope(1.0, 1.0, cfg.perturb_amplitude);
+            }
         } else {
             clag.init_sod();
         }
