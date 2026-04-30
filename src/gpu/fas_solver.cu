@@ -731,6 +731,18 @@ double FasSolver::step(double t, double t_end) {
             finest.d_cell_volume,
             n_angular_avg, finest.nr, finest.nt, finest.ng);
     }
+    if (n_pole_avg > 0) {
+        k_fas_pole_avg<<<finest.nr, 1>>>(
+            finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
+            finest.d_cell_volume,
+            n_pole_avg, finest.nr, finest.nt, finest.ng);
+    }
+    if (central_damp_r > 0) {
+        int n = finest.nr * finest.nt, B = 256;
+        k_fas_central_damp<<<(n+B-1)/B,B>>>(
+            finest.d_mr, finest.d_rhoE, finest.d_rho, finest.d_r_center,
+            central_damp_r, 5.0, finest.nr, finest.nt, finest.ng);
+    }
 
     if (converged) {
         dt_current = std::min(1.2 * dt, dt_cap);
@@ -890,6 +902,17 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_cell_volume,
             n_angular_avg, lev.nr, lev.nt, lev.ng);
+    }
+    if (n_pole_avg > 0) {
+        k_fas_pole_avg<<<lev.nr, 1>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume,
+            n_pole_avg, lev.nr, lev.nt, lev.ng);
+    }
+    if (central_damp_r > 0) {
+        k_fas_central_damp<<<(n+B-1)/B,B>>>(
+            lev.d_mr, lev.d_rhoE, lev.d_rho, lev.d_r_center,
+            central_damp_r, 5.0, lev.nr, lev.nt, lev.ng);
     }
 
     step_count++;

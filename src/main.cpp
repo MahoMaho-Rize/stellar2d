@@ -222,10 +222,24 @@ int main(int argc, char** argv) {
             return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
         };
 
-        grid.init_mass_shell(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func);
+        double r_inner = (cfg.r_inner >= 0) ? cfg.r_inner : 0.0;
+        cfg.r_inner = r_inner;
+
+        if (r_inner > 0) {
+            const int nfine = 20000;
+            double dr_f = r_inner / nfine;
+            double m = 0.0;
+            for (int ii = 0; ii < nfine; ++ii) {
+                double r = (ii + 0.5) * dr_f;
+                m += 4.0 * M_PI * rho_func(r) * r * r * dr_f;
+            }
+            cfg.M_core = m;
+        }
+
+        grid.init_mass_shell(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func, r_inner);
         cfg.no_sponge = true;
-        std::printf("Using hybrid mass-shell radial mesh (R_star=%.6f, no sponge, HSE outer BC)\n",
-                    cfg.R_outer);
+        std::printf("Using hybrid mass-shell mesh (R_star=%.6f, r_inner=%.4f, M_core=%.5f, HSE outer BC)\n",
+                    cfg.R_outer, r_inner, cfg.M_core);
     } else if (cfg.mesh_type == "uniform") {
         grid.init_uniform(cfg.nr, cfg.ntheta, cfg.R_outer);
         std::printf("Using uniform radial mesh\n");
@@ -297,7 +311,13 @@ int main(int argc, char** argv) {
         if (cfg.no_sponge) proj.sponge_kappa = 0.0;
         if (cfg.mesh_type == "mass") {
             proj.use_hse_outer_bc = true;
-            proj.n_angular_avg = 4;
+            proj.use_core_excision = (cfg.r_inner > 0);
+            proj.M_core = cfg.M_core;
+            proj.n_pole_avg = cfg.ntheta / 2;
+            if (cfg.r_inner <= 0) {
+                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
+                proj.n_angular_avg = n_uni;
+            }
         }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
@@ -344,7 +364,13 @@ int main(int argc, char** argv) {
         if (cfg.no_sponge) sim.sponge_kappa = 0.0;
         if (cfg.mesh_type == "mass") {
             sim.use_hse_outer_bc = true;
-            sim.n_angular_avg = 4;
+            sim.use_core_excision = (cfg.r_inner > 0);
+            sim.M_core = cfg.M_core;
+            sim.n_pole_avg = cfg.ntheta / 2;
+            if (cfg.r_inner <= 0) {
+                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
+                sim.n_angular_avg = n_uni;
+            }
         }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
@@ -395,7 +421,14 @@ int main(int argc, char** argv) {
         if (cfg.no_sponge) fas.sponge_kappa = 0.0;
         if (cfg.mesh_type == "mass") {
             fas.use_hse_outer_bc = true;
-            fas.n_angular_avg = 4;
+            fas.use_core_excision = (cfg.r_inner > 0);
+            fas.M_core = cfg.M_core;
+            fas.n_pole_avg = cfg.ntheta / 2;
+            if (cfg.r_inner <= 0) {
+                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
+                fas.n_angular_avg = n_uni;
+                fas.central_damp_r = 0.15 * cfg.R_outer;
+            }
         }
 
         if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {

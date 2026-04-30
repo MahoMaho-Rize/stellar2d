@@ -39,6 +39,8 @@ __global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
     const double*, const double*, double, int, int, int);
 __global__ void k_fas_angular_avg(double*, double*, double*, double*,
     const double*, int, int, int, int);
+__global__ void k_fas_pole_avg(double*, double*, double*, double*,
+    const double*, int, int, int, int);
 
 // ========================= Projection-specific kernels ========================
 
@@ -608,6 +610,12 @@ double ProjSolver::step(double t, double t_end) {
             d_rho, d_mr, d_mt, d_rhoE,
             d_cell_volume,
             n_angular_avg, nr, nt, ng);
+    }
+    if (n_pole_avg > 0) {
+        k_fas_pole_avg<<<nr, 1>>>(
+            d_rho, d_mr, d_mt, d_rhoE,
+            d_cell_volume,
+            n_pole_avg, nr, nt, ng);
     }
 
     step_count++;
