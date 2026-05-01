@@ -35,6 +35,9 @@ struct PseudoSpectralSolver {
     double cfl = 0.5;            // 對流 CFL 上限
     double dt_visc_factor = 0.5; // 顯式擴散 CFL 安全係數 (ν·dt·|k|²max ≤ factor)
     double dt_max = 5e-3;
+    // 積分因子 RK3 (IFRK3):黏性在譜空間解析積分為 exp(-νk²Δt)。
+    // 啟用後 dt 只受對流 CFL 限制,可大幅放寬。預設 true。
+    bool   use_ifrk = true;
 
     // ---- 物理空間 (double, ncell) ----
     double* d_omega = nullptr;   // ω

@@ -35,9 +35,16 @@ __global__ void k_scale_inplace(double*, double, int);
 __global__ void k_form_rhs_hat(const cufftDoubleComplex*, const cufftDoubleComplex*,
     const double*, const double*, const double*,
     cufftDoubleComplex*, double, int, int);
+__global__ void k_form_rhs_adv_only(const cufftDoubleComplex*, const double*,
+    cufftDoubleComplex*, int);
 __global__ void k_rk_combine(cufftDoubleComplex*, const cufftDoubleComplex*,
     const cufftDoubleComplex*, const cufftDoubleComplex*,
     double, double, double, int);
+__global__ void k_ifrk_combine(cufftDoubleComplex*, const cufftDoubleComplex*,
+    const cufftDoubleComplex*, const cufftDoubleComplex*,
+    const double*, const double*,
+    double, double, double, double, double, double,
+    int, int);
 __global__ void k_reduce_diag(const double*, const double*, const double*,
     double*, int, double);
 __global__ void k_snapshot_frame(const double*, const double*, const double*, double*, int);
@@ -100,6 +107,35 @@ static void compute_rhs_hat(PseudoSpectralSolver& s,
                               rhs_hat_out, s.nu, s.nx, s.nh);
 }
 
+// IFRK 專用:只算 -N̂,黏性在 IFRK combine 裡解析處理。
+// 輸入/scratch 用量與 compute_rhs_hat 一致 (d_u, d_v, d_dwx, d_dwy, d_Nphys,
+// d_tmp_hat),不碰 d_k1_hat。
+static void compute_rhs_adv_only(PseudoSpectralSolver& s,
+                                 const cufftDoubleComplex* omega_hat_in,
+                                 cufftDoubleComplex* rhs_hat_out) {
+    int B = 256;
+    int Gh = (s.ncplx + B - 1) / B;
+    int Gc = (s.ncell + B - 1) / B;
+    cufftDoubleComplex* tmp = s.d_tmp_hat;
+
+    k_spec_uv<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
+                         tmp, rhs_hat_out, s.nx, s.nh);
+    spec_to_phys(s.plan_c2r, tmp,         s.d_u, s.ncell);
+    spec_to_phys(s.plan_c2r, rhs_hat_out, s.d_v, s.ncell);
+
+    k_spec_grad_omega<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
+                                 tmp, rhs_hat_out, s.nx, s.nh);
+    spec_to_phys(s.plan_c2r, tmp,         s.d_dwx, s.ncell);
+    spec_to_phys(s.plan_c2r, rhs_hat_out, s.d_dwy, s.ncell);
+
+    k_compute_convection<<<Gc, B>>>(s.d_u, s.d_v, s.d_dwx, s.d_dwy, s.d_Nphys, s.ncell);
+
+    phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
+
+    // rhs = -N̂  (dealiased)
+    k_form_rhs_adv_only<<<Gh, B>>>(tmp, s.d_dealias, rhs_hat_out, s.ncplx);
+}
+
 // ============================================================
 // init / destroy
 // ============================================================
@@ -145,8 +181,8 @@ void PseudoSpectralSolver::init(int nx_, int ny_, double Lx_, double Ly_,
 
     std::fprintf(stderr,
         "  PseudoSpectral init: %dx%d (nh=%d, cells=%d, cplx=%d), "
-        "L=(%.3g,%.3g), ν=%.3g, cfl=%.3g\n",
-        nx, ny, nh, ncell, ncplx, Lx, Ly, nu, cfl);
+        "L=(%.3g,%.3g), ν=%.3g, cfl=%.3g, ifrk=%d\n",
+        nx, ny, nh, ncell, ncplx, Lx, Ly, nu, cfl, use_ifrk ? 1 : 0);
 }
 
 void PseudoSpectralSolver::destroy() {
@@ -203,13 +239,17 @@ void PseudoSpectralSolver::init_kh_shear(double vshear, double amp, int k) {
 }
 
 // ============================================================
-// dt — 對流 + 擴散聯合 CFL
+// dt — 對流 CFL (+ 顯式粘性 CFL, 若未啟用 IFRK)
 // ============================================================
 static double compute_dt(PseudoSpectralSolver& s, double max_v) {
-    double dt_adv  = s.cfl * std::fmin(s.dx, s.dy) / std::fmax(max_v, 1e-30);
-    double kmax2   = (M_PI / s.dx) * (M_PI / s.dx) + (M_PI / s.dy) * (M_PI / s.dy);
-    double dt_visc = s.dt_visc_factor / std::fmax(s.nu * kmax2, 1e-30);
-    return std::fmin(std::fmin(dt_adv, dt_visc), s.dt_max);
+    double dt_adv = s.cfl * std::fmin(s.dx, s.dy) / std::fmax(max_v, 1e-30);
+    double dt = dt_adv;
+    if (!s.use_ifrk) {
+        double kmax2 = (M_PI / s.dx) * (M_PI / s.dx) + (M_PI / s.dy) * (M_PI / s.dy);
+        double dt_visc = s.dt_visc_factor / std::fmax(s.nu * kmax2, 1e-30);
+        dt = std::fmin(dt, dt_visc);
+    }
+    return std::fmin(dt, s.dt_max);
 }
 
 static inline void copy_hat(cufftDoubleComplex* dst, const cufftDoubleComplex* src, int n) {
@@ -225,7 +265,8 @@ double PseudoSpectralSolver::step() {
 
     // 第一步時 d_u/d_v 尚未有意義,跑一次 u, v 更新供 dt 估計與後續複用
     if (step_count == 0) {
-        compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
+        if (use_ifrk) compute_rhs_adv_only(*this, d_omega_hat, d_rhs_hat);
+        else          compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
     }
 
     // max|v| reduction
@@ -242,20 +283,52 @@ double PseudoSpectralSolver::step() {
     // y_orig ← ω̂_n,保存在 d_k1_hat
     copy_hat(d_k1_hat, d_omega_hat, ncplx);
 
-    // 級 1: y1 = y + dt · rhs(y)
-    compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
-    k_rk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
-                            1.0, 0.0, dt, ncplx);
+    if (use_ifrk) {
+        // ─── IFRK3: 黏性經積分因子精確處理 ───
+        //   E_1 = exp(-νk²Δt),   E_½ = exp(-νk²Δt·½),   E_-½ = exp(-νk²Δt·-½)
+        //   級 1: y1 = E_1·yₙ + Δt·E_1·(-N̂(yₙ))
+        //   級 2: y2 = ¾·E_½·yₙ + ¼·E_-½·y1 + ¼Δt·E_-½·(-N̂(y1))
+        //   級 3: y₃ = ⅓·E_1·yₙ + ⅔·E_½·y2 + ⅔Δt·E_½·(-N̂(y2))
+        double nu_dt = nu * dt;
 
-    // 級 2: y2 = 3/4 y + 1/4 y1 + 1/4 dt · rhs(y1)
-    compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
-    k_rk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
-                            0.75, 0.25, 0.25 * dt, ncplx);
+        // 級 1
+        compute_rhs_adv_only(*this, d_omega_hat, d_rhs_hat);
+        k_ifrk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
+                                  d_kx, d_ky,
+                                  1.0, 0.0, dt,
+                                  /*expo_a*/1.0, /*expo_b*/1.0,
+                                  nu_dt, nx, nh);
+        // 級 2
+        compute_rhs_adv_only(*this, d_omega_hat, d_rhs_hat);
+        k_ifrk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
+                                  d_kx, d_ky,
+                                  0.75, 0.25, 0.25 * dt,
+                                  /*expo_a*/0.5, /*expo_b*/-0.5,
+                                  nu_dt, nx, nh);
+        // 級 3
+        compute_rhs_adv_only(*this, d_omega_hat, d_rhs_hat);
+        k_ifrk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
+                                  d_kx, d_ky,
+                                  1.0/3.0, 2.0/3.0, (2.0/3.0)*dt,
+                                  /*expo_a*/1.0, /*expo_b*/0.5,
+                                  nu_dt, nx, nh);
+    } else {
+        // ─── 顯式 SSP-RK3 (黏性也顯式, dt 受擴散 CFL 限制) ───
+        // 級 1: y1 = y + dt · rhs(y)
+        compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
+        k_rk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
+                                1.0, 0.0, dt, ncplx);
 
-    // 級 3: y_{n+1} = 1/3 y + 2/3 y2 + 2/3 dt · rhs(y2)
-    compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
-    k_rk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
-                            1.0 / 3.0, 2.0 / 3.0, (2.0 / 3.0) * dt, ncplx);
+        // 級 2: y2 = ¾ y + ¼ y1 + ¼ dt · rhs(y1)
+        compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
+        k_rk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
+                                0.75, 0.25, 0.25 * dt, ncplx);
+
+        // 級 3: y_{n+1} = ⅓ y + ⅔ y2 + ⅔ dt · rhs(y2)
+        compute_rhs_hat(*this, d_omega_hat, d_rhs_hat);
+        k_rk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
+                                1.0 / 3.0, 2.0 / 3.0, (2.0 / 3.0) * dt, ncplx);
+    }
 
     // 同步物理場 (供輸出與下一步 dt)。
     // cuFFT Z2D 預設會破壞輸入,所以對 d_omega_hat 做 C2R 前必須先拷貝。

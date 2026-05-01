@@ -19,10 +19,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # ── Layout ──────────────────────────────────────────────────────────────
-W_FRAME, H_FRAME = 1920, 1080
+W_FRAME, H_FRAME = 2304, 1152    # 雙 1024² panel 原生尺寸 (+ margin),不下採樣
 N_PANELS = 2
 PANEL_W = W_FRAME // N_PANELS
-DSZ = 900
+DSZ = 1024
 BG = (10, 10, 20)
 BG_ARR = np.array(BG, dtype=np.uint8)
 GAMMA = 5.0 / 3.0
@@ -349,8 +349,10 @@ def main():
          "-f", "rawvideo", "-pix_fmt", "rgb24",
          "-s", f"{W_FRAME}x{H_FRAME}", "-r", str(fps),
          "-i", "-",
-         "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "18",
-         "-pix_fmt", "yuv420p",
+         # yuv420p 通用兼容;high profile + CQ14 + 高 bitrate 保銳利
+         "-c:v", "h264_nvenc", "-preset", "p7", "-cq", "14",
+         "-profile:v", "high", "-pix_fmt", "yuv420p",
+         "-rc", "vbr", "-b:v", "0", "-maxrate", "30M", "-bufsize", "60M",
          out_path],
         stdin=subprocess.PIPE,
     )

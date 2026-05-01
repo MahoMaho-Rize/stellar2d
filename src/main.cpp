@@ -90,6 +90,7 @@ struct SimConfig {
     double ps_Ly = 1.0;
     double ps_vshear = 0.5;       // KH 基流速度
     int    ps_k = 4;              // KH 擾動模數
+    bool   ps_explicit = false;   // 預設用 IFRK3 隱式黏性;此旗標強制改回全顯式 SSP-RK3
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -258,6 +259,8 @@ int main(int argc, char** argv) {
             cfg.ps_vshear = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-k") == 0 && i + 1 < argc)
             cfg.ps_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-explicit") == 0)
+            cfg.ps_explicit = true;
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -999,6 +1002,7 @@ int main(int argc, char** argv) {
             return 1;
         }
         PseudoSpectralSolver ps;
+        ps.use_ifrk = !cfg.ps_explicit;
         ps.init(cfg.nr, cfg.ntheta, cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
         double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
         ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);

@@ -122,7 +122,22 @@ __global__ void k_scale_inplace(double* x, double s, int n) {
 }
 
 // ============================================================
-// rhs_hat = -N̂ - ν |k|² ω̂   (並套 2/3 dealias mask)
+// rhs_hat = -N̂ (只含對流, 套 dealias mask) — IFRK3 用
+//   粘性項在 k_ifrk_combine 裡經積分因子 exp(-νk²Δt·λ) 精確處理。
+// ============================================================
+__global__ void k_form_rhs_adv_only(const cufftDoubleComplex* N_hat,
+                                    const double* dealias,
+                                    cufftDoubleComplex* rhs_hat,
+                                    int n) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= n) return;
+    double m = dealias[gid];
+    rhs_hat[gid].x = -N_hat[gid].x * m;
+    rhs_hat[gid].y = -N_hat[gid].y * m;
+}
+
+// ============================================================
+// rhs_hat = -N̂ - ν |k|² ω̂   (並套 2/3 dealias mask) — 顯式版
 // ============================================================
 __global__ void k_form_rhs_hat(const cufftDoubleComplex* N_hat,
                                const cufftDoubleComplex* omega_hat,
@@ -159,6 +174,53 @@ __global__ void k_rk_combine(cufftDoubleComplex* y_out,
     if (gid >= n) return;
     y_out[gid].x = a * y_orig[gid].x + b * y_curr[gid].x + c_dt * rhs[gid].x;
     y_out[gid].y = a * y_orig[gid].y + b * y_curr[gid].y + c_dt * rhs[gid].y;
+}
+
+// ============================================================
+// IFRK3 級更新 (積分因子):
+//   y_out = E_a·(a·y_orig) + E_b·(b·y_curr + c_dt·rhs)
+// 其中 E_a = exp(-νk²Δt·expo_a),E_b = exp(-νk²Δt·expo_b)。
+//
+// 對應 IFRK3 三級:
+//   stage 1 (y1): a=1, b=0, c=Δt, expo_a=expo_b=1       → E_a=E_b=E^1
+//   stage 2 (y2): a=¾, b=¼, c=¼Δt, expo_a=½, expo_b=-½  → y_orig 帶 E^½,
+//                 y_curr 帶 E^{-½} (y1 已是 E^1 倍,與 E^{-½} 合成 E^½)
+//                 但更直觀:我們用正係數版本 —— 見下方 step() 註解。
+//
+// 實作採直接係數版:
+//   y_out = (a·E_a)·y_orig + (b·E_b)·y_curr + (c_dt·E_b)·rhs
+// stage 1: E_a = E_b = exp(-νk²Δt)
+// stage 2: E_a = exp(-νk²Δt·½), E_b = exp(-νk²Δt·(-½))
+// stage 3: E_a = exp(-νk²Δt),   E_b = exp(-νk²Δt·½)
+//
+// 注意 E_b 在 stage 2 指數為負 (放大),但 y_curr 本身帶 E^1,合成後 ≤ 1 不放大。
+// 公式驗證:令 N=0,IFRK 應化簡為 y_{n+1} = E·yₙ (精確擴散)。
+//   stage 1: y1 = E·ωₙ
+//   stage 2: y2 = ¾·E^½·ωₙ + ¼·E^{-½}·y1 = ¾E^½·ωₙ + ¼E^{½}·ωₙ = E^½·ωₙ
+//   stage 3: y3 = ⅓·E·ωₙ + ⅔·E^½·y2 = ⅓E·ωₙ + ⅔E^½·E^½·ωₙ = E·ωₙ  ✓
+// ============================================================
+__global__ void k_ifrk_combine(cufftDoubleComplex* y_out,
+                               const cufftDoubleComplex* y_orig,
+                               const cufftDoubleComplex* y_curr,
+                               const cufftDoubleComplex* rhs,
+                               const double* kx, const double* ky,
+                               double a, double b, double c_dt,
+                               double expo_a, double expo_b,
+                               double nu_dt,
+                               int nx, int nh) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = nx * nh;
+    if (gid >= total) return;
+    int ic = gid / nh;
+    int jc = gid - ic * nh;
+    double k2 = kx[ic] * kx[ic] + ky[jc] * ky[jc];
+    double Ea = exp(-nu_dt * k2 * expo_a);
+    double Eb = exp(-nu_dt * k2 * expo_b);
+    double ca = a * Ea;
+    double cb = b * Eb;
+    double cc = c_dt * Eb;
+    y_out[gid].x = ca * y_orig[gid].x + cb * y_curr[gid].x + cc * rhs[gid].x;
+    y_out[gid].y = ca * y_orig[gid].y + cb * y_curr[gid].y + cc * rhs[gid].y;
 }
 
 // ============================================================
