@@ -5,6 +5,9 @@
   - Inverse cascade range (k < k_inj):    E(k) ~ k^α,  α 應接近 -5/3
   - Enstrophy cascade range (k > k_inj):  E(k) ~ k^β,  β 應接近 -3
 
+關鍵:k_inj 必須是 **IC 注入波數**,不是當前幀的譜峰(後者在 2D 衰減
+湍流中會隨時間逆級串到最低模 k=2π/L)。
+
 輸出:
   1. 單張圖 — 譜 + 兩段擬合直線 + 帶陰影的 ±σ 95% CI + 斜率數值
   2. stdout — 擬合斜率 ± 標準誤、R², 理論偏差
@@ -12,10 +15,12 @@
 複用 spectrum_pseudo_spectral.py 的 compute_spectrum / load_velocity / parse_vtk_*。
 
 Usage:
-  scripts/spectrum_fit_pseudo_spectral.py <run_dir> [out.png] [t_snap]
-     t_snap = 要做 fit 的物理時間 (預設 = 最後一幀)
-  scripts/spectrum_fit_pseudo_spectral.py <file.vtk> [out.png]
-     直接指定 VTK 檔
+  scripts/spectrum_fit_pseudo_spectral.py <run_dir> [out.png] [t_snap] [k_mode]
+     t_snap  = 要做 fit 的物理時間 (預設 = 最後一幀)
+     k_mode  = IC 擾動模數 (例如 --ps-k 的值); 預設 4
+              物理 k_inj = k_mode · 2π/L
+  scripts/spectrum_fit_pseudo_spectral.py <file.vtk> [out.png] [- k_mode]
+     直接指定 VTK 檔 (t_snap 給 '-' 跳過)
 """
 
 import numpy as np
@@ -60,43 +65,32 @@ def loglog_linregress(k, E, k_min, k_max):
                 r2=r2, n=n, k_min=k_min, k_max=k_max)
 
 
-def auto_split_ranges(k, E, k_inj_hint=None, nu=None, eps=None):
-    """自動挑 inverse / enstrophy cascade 的 k-range。
-    - Inverse: [1, k_inj·0.8]  (包含到 peak 附近, 讓 k<k_inj 有足夠點)
-    - Enstrophy: [k_inj·1.5, k_eta/3]  (避開 dissipation range)
-      其中 k_eta = 1/η = (ε/ν³)^{1/4} 是 Kolmogorov 耗散波數
-      若 ν, ε 未提供,用 kmax/3 作代替
+def auto_split_ranges(k, E, k_inj, nu=None, eps=None):
+    """挑 inverse / enstrophy cascade 的 k-range。
+    k_inj 必須由呼叫者提供(IC 擾動物理 k = k_mode · 2π/L)。
+    - Inverse:   [dk, k_inj·0.8]  (k < 注入)
+    - Enstrophy: [k_inj·1.5, k_eta·0.1]  (k > 注入,遠離耗散)
     """
     kmax = k.max()
-    if k_inj_hint is None:
-        idx = np.argmax(E[1:]) + 1
-        k_inj = max(k[idx], 2.0)
-    else:
-        k_inj = max(float(k_inj_hint), 2.0)
-
-    # 找 dk (第一個非零 bin)
     dk = k[1] if len(k) > 1 and k[1] > 0 else 1.0
 
-    # Inverse cascade:實際頻譜空間很窄(2D DNS 注入前只有 1~2 個 bin)
-    # 策略:[dk, k_inj](若 k_inj > 2dk 才有意義)
-    if k_inj > 2 * dk:
-        inv = (dk, k_inj)
+    # Inverse cascade k 範圍: [dk, k_inj·0.8]
+    if k_inj > 2.5 * dk:
+        inv = (dk, k_inj * 0.8)
     else:
-        inv = None  # 沒有 inverse range
+        inv = None
 
-    # Enstrophy cascade 的上限:避開耗散範圍
-    # k_eta = 1/η,η = (ν³/ε)^{1/4}
+    # Enstrophy cascade 上限: 避開 Kolmogorov 耗散範圍
     if nu is not None and eps is not None and eps > 0:
         eta = (nu ** 3 / eps) ** 0.25
         k_eta = 1.0 / eta
-        # fit 到 k_eta·0.1,遠離耗散轉折
         k_high = min(k_eta * 0.1, kmax * 0.3)
     else:
-        k_high = kmax * 0.05   # 保守 5%
+        k_high = kmax * 0.05
 
-    k_low_enst = k_inj * 1.5  # 避開 injection 周圍
+    k_low_enst = k_inj * 1.5
     enst = (k_low_enst, max(k_high, k_low_enst * 2.0)) if k_high > k_low_enst * 1.5 else None
-    return k_inj, inv, enst
+    return inv, enst
 
 
 # ───────────────────────────────────────────────────────────
@@ -134,7 +128,11 @@ def main():
         sys.exit(1)
     arg = sys.argv[1]
     out_path = sys.argv[2] if len(sys.argv) > 2 else None
-    t_req = float(sys.argv[3]) if len(sys.argv) > 3 else None
+    # argv[3] = t_snap, argv[4] = k_mode
+    t_req = None
+    if len(sys.argv) > 3 and sys.argv[3] not in ("-", ""):
+        t_req = float(sys.argv[3])
+    k_mode = int(sys.argv[4]) if len(sys.argv) > 4 else 4
 
     if arg.endswith(".vtk"):
         path = arg
@@ -174,11 +172,13 @@ def main():
         except Exception:
             pass
 
-    k_inj, inv_rng, enst_rng = auto_split_ranges(k, Ek, nu=nu_est, eps=eps_est)
+    # 物理注入波數 (IC k_mode · 2π/L,假設 L=1)
+    k_inj = k_mode * 2.0 * np.pi
+    inv_rng, enst_rng = auto_split_ranges(k, Ek, k_inj, nu=nu_est, eps=eps_est)
     if nu_est and eps_est:
         eta = (nu_est ** 3 / eps_est) ** 0.25
         print(f"  ν≈{nu_est:.2e},  ε≈{eps_est:.2e},  η≈{eta:.3e},  k_η≈{1.0/eta:.1f}")
-    print(f"  k_inj (peak) ≈ {k_inj:.2f}")
+    print(f"  k_inj = k_mode·2π = {k_mode}·2π ≈ {k_inj:.2f}")
     print(f"  inverse range:   {inv_rng}")
     print(f"  enstrophy range: {enst_rng}")
     print()
@@ -213,7 +213,7 @@ def main():
     # Injection k 垂直線
     ax.axvline(k_inj, color="gray", lw=0.9, ls=":", alpha=0.7)
     ax.text(k_inj * 1.05, ax.get_ylim()[1] * 0.3,
-            f"  k_inj ≈ {k_inj:.1f}", color="gray", fontsize=9, va="top")
+            f"  k_inj = {k_mode}·2π ≈ {k_inj:.1f}", color="gray", fontsize=9, va="top")
 
     # dealias cutoff
     kmax_dealias = k.max()   # compute_spectrum 回傳的 k 已含全部到 kmax_bin
