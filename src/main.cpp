@@ -82,6 +82,7 @@ struct SimConfig {
     bool   cart_ale_shear_aware = false; // cart_ale: reduce Q in shear-dominated cells
     std::string cart_ale2_bc_x = "reflect";  // cart_ale2: reflect / periodic
     std::string cart_ale2_bc_y = "reflect";
+    bool cart_ale2_ppm = false;   // cart_ale2: PPM-in-remap (default OFF; falls back to MUSCL)
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -238,6 +239,8 @@ int main(int argc, char** argv) {
             cfg.cart_ale2_bc_x = argv[++i];
         else if (std::strcmp(argv[i], "--bc-y") == 0 && i + 1 < argc)
             cfg.cart_ale2_bc_y = argv[++i];
+        else if (std::strcmp(argv[i], "--ppm") == 0)
+            cfg.cart_ale2_ppm = true;
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -868,6 +871,7 @@ int main(int argc, char** argv) {
         if (cfg.cart_ale2_bc_x == "periodic") bcm |= 1;
         if (cfg.cart_ale2_bc_y == "periodic") bcm |= 2;
         cale.bc_mode = bcm;
+        cale.ppm_enabled = cfg.cart_ale2_ppm ? 1 : 0;
         if      (cfg.cart_ale_limiter == "minmod")  cale.remap_limiter = 0;
         else if (cfg.cart_ale_limiter == "vanleer") cale.remap_limiter = 1;
         else if (cfg.cart_ale_limiter == "mc")      cale.remap_limiter = 2;
@@ -875,10 +879,12 @@ int main(int argc, char** argv) {
                             cfg.cart_ale_limiter.c_str()); cale.remap_limiter = 1; }
         const char* lim_name = cale.remap_limiter == 0 ? "minmod"
                              : cale.remap_limiter == 1 ? "vanleer" : "mc";
+        const char* recon_name = (cale.remap_order < 2) ? "donor-cell"
+                               : cale.ppm_enabled       ? "PPM"
+                                                        : "MUSCL-in-remap";
         std::fprintf(stderr,
             "  CartAle2 remap_order = %d (%s)  limiter = %s  CQ_lin=%g CQ_quad=%g  shear_aware_av=%d  bc=(%s,%s)\n",
-            cale.remap_order,
-            cale.remap_order >= 2 ? "MUSCL-in-remap" : "donor-cell",
+            cale.remap_order, recon_name,
             lim_name, cale.CQ_lin, cale.CQ_quad, cale.shear_aware_av,
             cfg.cart_ale2_bc_x.c_str(), cfg.cart_ale2_bc_y.c_str());
         if (cfg.test_case == "hse_bubble") {

@@ -72,6 +72,21 @@ struct CartAle2Solver {
     double *d_rhoE_sx = nullptr, *d_rhoE_sy = nullptr;
     double *d_pxd_sx  = nullptr, *d_pxd_sy  = nullptr;
     double *d_pyd_sx  = nullptr, *d_pyd_sy  = nullptr;
+    // PPM face values (Colella-Woodward 1984): each cell owns left/right
+    // face values in x (L/R subscript) and bottom/top in y (D/U subscript).
+    // Parabolic profile inside cell:
+    //   f(ξ_x, ξ_y) ≈ f_bar + s_x·(ξ_x−½)·dx + s_y·(ξ_y−½)·dy
+    //                 + Δ²_x·((ξ_x−½)²−1/12) + Δ²_y·((ξ_y−½)²−1/12)
+    // For remap swept integration we only need point evaluation, done in
+    // the 2nd-order PPM remap kernels. Same four fields as MUSCL.
+    double *d_rho_xL  = nullptr, *d_rho_xR  = nullptr;
+    double *d_rho_yD  = nullptr, *d_rho_yU  = nullptr;
+    double *d_rhoE_xL = nullptr, *d_rhoE_xR = nullptr;
+    double *d_rhoE_yD = nullptr, *d_rhoE_yU = nullptr;
+    double *d_pxd_xL  = nullptr, *d_pxd_xR  = nullptr;
+    double *d_pxd_yD  = nullptr, *d_pxd_yU  = nullptr;
+    double *d_pyd_xL  = nullptr, *d_pyd_xR  = nullptr;
+    double *d_pyd_yD  = nullptr, *d_pyd_yU  = nullptr;
     // Uniform reference mesh spacing (cached for donor-center lookup in kernels).
     double dx_u = 0.0, dy_u = 0.0;
 
@@ -100,6 +115,9 @@ struct CartAle2Solver {
     int remap_order = 2;
     // Limiter for 2nd-order remap: 0=minmod, 1=van Leer (default), 2=MC.
     int remap_limiter = 1;
+    // Use PPM (Colella-Woodward 1984) piecewise parabolic reconstruction
+    // instead of MUSCL linear. Only applies when remap_order >= 2.
+    int ppm_enabled = 0;
 
     // ---- Bookkeeping ----
     double dt_current = 0.0;
