@@ -371,6 +371,72 @@ __global__ void k_reduce_k2E(const cufftDoubleComplex* omega_hat,
 }
 
 // ============================================================
+// Ring-integrated energy spectrum E(k) (譜密度,Σ E·dk = KE_total)
+//
+// 對每個 R2C mode (ic, jc) 做:
+//   E_mode = (Lx·Ly / N⁴) · w(k) · ½·|ω̂|² / k²      (k>0;k=0 丟棄)
+//   bin    = round(|k|/dk),  dk = 2π/max(Lx,Ly)
+//   atomicAdd 進 E_bins[bin]
+//
+// w(k): R2C Hermitian 冗餘因子 = 2 (一般 jc≥1) 或 1 (jc=0 與 Nyquist)。
+//
+// 輸出 E_bins 是「每 bin 內的總能量 (未除 dk)」;
+// host 端讀回後再 / dk 得到譜密度。
+// ============================================================
+__global__ void k_reduce_spectrum_bins(const cufftDoubleComplex* omega_hat,
+                                       const double* kx, const double* ky,
+                                       double* E_bins,
+                                       int nx, int nh, int nbins,
+                                       double dk_inv,         // 1 / dk
+                                       double mode_scale,     // Lx·Ly / N⁴ · ½
+                                       int    ny_even) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = nx * nh;
+    if (gid >= total) return;
+
+    int ic = gid / nh;
+    int jc = gid - ic * nh;
+    double kxv = kx[ic];
+    double kyv = ky[jc];
+    double k2  = kxv * kxv + kyv * kyv;
+    if (k2 <= 0.0) return;                       // 跳過 DC
+
+    cufftDoubleComplex w = omega_hat[gid];
+    double mag2 = w.x * w.x + w.y * w.y;
+    // Hermitian 重數:jc=0 與 (ny 偶時) jc=nh-1 不雙計
+    double weight = (jc == 0 || (ny_even && jc == nh - 1)) ? 1.0 : 2.0;
+    double E_mode = mode_scale * weight * mag2 / k2;
+
+    double kmag = sqrt(k2);
+    int b = (int)(kmag * dk_inv + 0.5);          // round
+    if (b < 0)       b = 0;
+    if (b >= nbins)  b = nbins - 1;
+    atomicAdd(&E_bins[b], E_mode);
+}
+
+// ============================================================
+// 隨機相位強迫 (white-noise forcing in vorticity, thin shell)
+//   Per step:  Δω̂(k) = √dt · σ(k) · e^{iφ}
+//   idx[i]    = 被強迫的 ncplx 索引
+//   sigma[i]  = 對應 σ 值
+//   phase_cos[i], phase_sin[i]: 每步由 host mt19937 生成
+// σ 的挑選由 host 端在 init_forcing 做,滿足
+//   ε_inj = ½·(Lx·Ly/N^4)·Σ w(k)·σ²/|k|²
+// ============================================================
+__global__ void k_apply_forcing(cufftDoubleComplex* omega_hat,
+                                const int* idx, const double* sigma,
+                                const double* phase_cos,
+                                const double* phase_sin,
+                                double sqrt_dt, int n_forcing) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= n_forcing) return;
+    int k_idx = idx[gid];
+    double s = sigma[gid] * sqrt_dt;
+    omega_hat[k_idx].x += s * phase_cos[gid];
+    omega_hat[k_idx].y += s * phase_sin[gid];
+}
+
+// ============================================================
 // Frame pool snapshot — layout per frame: [ω | u | v] × ncell
 // ============================================================
 __global__ void k_snapshot_frame(const double* omega, const double* u,

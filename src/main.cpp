@@ -92,6 +92,11 @@ struct SimConfig {
     int    ps_k = 4;              // KH 擾動模數
     bool   ps_explicit = false;   // 預設用 IFRK3 隱式黏性;此旗標強制改回全顯式 SSP-RK3
     bool   ps_adv_only = false;   // 預設用 skew-symmetric;此旗標強制回到 advective-only 對流
+    // forced turbulence (Lilly/Alvelius-style stochastic forcing)
+    double ps_forcing_eps = 0.0;  // 能量注入率 ε_inj (0 = 停用 forcing)
+    int    ps_forcing_kf  = 32;   // forcing 中心波數 (mode 整數)
+    int    ps_forcing_dk  = 1;    // forcing 殼半寬 (mode)
+    uint64_t ps_forcing_seed = 0x5a5a5a5aULL;
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -264,6 +269,14 @@ int main(int argc, char** argv) {
             cfg.ps_explicit = true;
         else if (std::strcmp(argv[i], "--ps-adv-only") == 0)
             cfg.ps_adv_only = true;
+        else if (std::strcmp(argv[i], "--ps-forcing-eps") == 0 && i + 1 < argc)
+            cfg.ps_forcing_eps = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-forcing-kf") == 0 && i + 1 < argc)
+            cfg.ps_forcing_kf = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-forcing-dk") == 0 && i + 1 < argc)
+            cfg.ps_forcing_dk = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-forcing-seed") == 0 && i + 1 < argc)
+            cfg.ps_forcing_seed = std::strtoull(argv[++i], nullptr, 0);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -392,7 +405,7 @@ int main(int argc, char** argv) {
         init_evrard(grid, state, ep, cfg.gamma);
     } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
                || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
-               || cfg.test_case == "kh_shear") {
+               || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -999,17 +1012,31 @@ int main(int argc, char** argv) {
         cale.destroy();
     } else if (cfg.solver_type == "pseudo_spectral") {
         // ===== 偽譜法 2D 不可壓 NS (渦度-流函數, cuFFT) =====
-        if (cfg.test_case != "kh_shear") {
+        if (cfg.test_case != "kh_shear" && cfg.test_case != "forced_turb") {
             std::fprintf(stderr,
-                "ERROR: pseudo_spectral currently only supports --test kh_shear\n");
+                "ERROR: pseudo_spectral supports --test {kh_shear, forced_turb}\n");
             return 1;
         }
         PseudoSpectralSolver ps;
         ps.use_ifrk = !cfg.ps_explicit;
         ps.use_skew = !cfg.ps_adv_only;
         ps.init(cfg.nr, cfg.ntheta, cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
-        double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
-        ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
+        if (cfg.test_case == "kh_shear") {
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
+            ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
+        } else {
+            // forced_turb: zero IC + stochastic forcing
+            ps.init_zero();
+            if (cfg.ps_forcing_eps <= 0.0) {
+                std::fprintf(stderr,
+                    "ERROR: --test forced_turb requires --ps-forcing-eps > 0\n");
+                return 1;
+            }
+        }
+        if (cfg.ps_forcing_eps > 0.0) {
+            ps.init_forcing(cfg.ps_forcing_kf, cfg.ps_forcing_dk,
+                            cfg.ps_forcing_eps, cfg.ps_forcing_seed);
+        }
 
         std::timespec wall_start;
         clock_gettime(CLOCK_MONOTONIC, &wall_start);

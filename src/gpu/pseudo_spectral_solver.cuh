@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cufft.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -73,6 +74,23 @@ struct PseudoSpectralSolver {
     cufftHandle plan_r2c = 0;    // d_omega  → d_omega_hat
     cufftHandle plan_c2r = 0;    // hat      → physical
 
+    // ---- 隨機相位強迫 (Lilly 1969 / Boffetta-Ecke 2012 風格) ----
+    //   在薄殼 |k| ∈ [(kf-dk)·2π/L, (kf+dk)·2π/L] 注入 white-noise 相位,
+    //   控制每步能量注入率 = ε_inj。
+    //   Δω̂(k) = √dt · σ(k) · e^{iφ_rand}  (φ 每步重擲)
+    //   σ 由 host 端在 init_forcing 算好,滿足 ε_inj = (Lx·Ly/N²)·σ²·Σ_shell 1/k²
+    //   為保 Hermitian 對稱,只動 jc ∈ [1, nh-2] 的模 (conjugate 在 array 外)。
+    bool    forcing_enabled = false;
+    double  forcing_eps     = 0.0;   // 目標能量注入率
+    int     forcing_kf      = 0;     // 中心波數 (mode 整數, 物理 k = 2π·kf/L)
+    int     forcing_dk      = 1;     // 殼厚 (半寬 mode)
+    int     forcing_n       = 0;     // 殼內模個數
+    int*    d_forcing_idx   = nullptr;  // ncplx 索引 (size forcing_n)
+    double* d_forcing_sigma = nullptr;  // σ 值    (size forcing_n)
+    double* d_forcing_cos   = nullptr;  // 每步新 phase (size forcing_n)
+    double* d_forcing_sin   = nullptr;
+    uint64_t forcing_seed   = 0x5a5a5a5aULL;
+
     // ---- 診斷/書記 ----
     double dt_current = 0.0;
     int step_count = 0;
@@ -87,9 +105,31 @@ struct PseudoSpectralSolver {
     std::vector<int>    frame_steps;
     std::string frame_out_dir;
 
+    // ---- 譜 CSV (per frame;與 VTK 同步採樣) ----
+    //   bin 數 nbins = min(nx,ny)/2 + 1;dk = 2π/max(Lx,Ly)
+    //   每 capture_frame 呼叫時做一次 GPU ring-integrate,結果 push 進 frame_spectra
+    //   flush 時連同 frames.csv 一起寫 spectrum.csv
+    int nbins = 0;
+    double dk_bin = 0.0;
+    double* d_E_bins = nullptr;                    // GPU scratch (nbins doubles)
+    std::vector<std::vector<double>> frame_spectra;
+
     // ---- 生命週期 ----
     void init(int nx_, int ny_, double Lx_, double Ly_, double nu_, double cfl_);
     void destroy();
+
+    // 零場初始化 (所有 ω̂=0;通常配合 forcing 使用)
+    void init_zero();
+
+    // 設置隨機相位強迫:
+    //   k_f:中心波數 (mode 整數,物理 |k| = 2π·k_f/L)
+    //   dk :殼半寬 (mode)
+    //   eps:目標能量注入率 (per unit area)
+    //   seed:mt19937 種子 (同 seed 可重現)
+    void init_forcing(int kf, int dk, double eps, uint64_t seed = 0x5a5a5a5aULL);
+
+    // 生成新一組 phase (host mt19937) 並 add √dt·σ·e^{iφ} 到 ω̂
+    void apply_forcing(double dt);
 
     // Kelvin-Helmholtz: 雙 tanh 剪切層 (對齊 cart_ale2::init_kh_shear 幾何)
     //   y ∈ (0.25 Ly, 0.75 Ly): vx = +vshear
@@ -129,4 +169,9 @@ struct PseudoSpectralSolver {
         double eps_enstrophy;   // enstrophy 耗散率 = ν·∫|∇ω|² dA (譜空間算)
     };
     Diagnostics compute_diagnostics();
+
+    // GPU ring-integrate: 算 E(k) per bin (長度 nbins),寫入 out。
+    // 規則 (與 scripts/spectrum_pseudo_spectral.py 一致):
+    //   Σ_k E(k)·dk = KE_total
+    void compute_spectrum_bins(std::vector<double>& out);
 };

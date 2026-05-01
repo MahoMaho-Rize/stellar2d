@@ -16,6 +16,7 @@
 #include <cstring>
 #include <cmath>
 #include <cstdint>
+#include <random>
 #include <vector>
 #include <algorithm>
 
@@ -56,6 +57,10 @@ __global__ void k_reduce_diag(const double*, const double*, const double*,
 __global__ void k_reduce_k2E(const cufftDoubleComplex*, const double*, const double*,
     double*, int, int, int, double);
 __global__ void k_snapshot_frame(const double*, const double*, const double*, double*, int);
+__global__ void k_apply_forcing(cufftDoubleComplex*, const int*, const double*,
+    const double*, const double*, double, int);
+__global__ void k_reduce_spectrum_bins(const cufftDoubleComplex*, const double*, const double*,
+    double*, int, int, int, double, double, int);
 
 #define CUFFT_CHECK(call) do {                                                   \
     cufftResult _r = (call);                                                     \
@@ -241,6 +246,12 @@ void PseudoSpectralSolver::init(int nx_, int ny_, double Lx_, double Ly_,
     reduce_blocks = (ncell + B - 1) / B;
     CUDA_CHECK(cudaMalloc(&d_reduce, 4 * reduce_blocks * sizeof(double)));
 
+    // 譜 bin: 與 python compute_spectrum 一致
+    //   dk = 2π/max(Lx,Ly),  nbins = min(nx,ny)/2 + 1
+    nbins  = (std::min(nx, ny) / 2) + 1;
+    dk_bin = 2.0 * M_PI / std::max(Lx, Ly);
+    CUDA_CHECK(cudaMalloc(&d_E_bins, nbins * sizeof(double)));
+
     std::fprintf(stderr,
         "  PseudoSpectral init: %dx%d (nh=%d, cells=%d, cplx=%d), "
         "L=(%.3g,%.3g), ν=%.3g, cfl=%.3g, ifrk=%d, skew=%d\n",
@@ -259,6 +270,13 @@ void PseudoSpectralSolver::destroy() {
     F((void*&)d_skew_hat);
     F((void*&)d_kx); F((void*&)d_ky); F((void*&)d_dealias);
     F((void*&)d_reduce);
+    F((void*&)d_forcing_idx);
+    F((void*&)d_forcing_sigma);
+    F((void*&)d_forcing_cos);
+    F((void*&)d_forcing_sin);
+    F((void*&)d_E_bins);
+    forcing_enabled = false;
+    forcing_n = 0;
     free_frame_buffer();
 }
 
@@ -310,6 +328,118 @@ void PseudoSpectralSolver::init_kh_shear(double vshear, double amp, int k) {
 }
 
 // ============================================================
+// 零場 IC (給 forced turbulence 用)
+// ============================================================
+void PseudoSpectralSolver::init_zero() {
+    CUDA_CHECK(cudaMemset(d_omega, 0, ncell * sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_omega_hat, 0, ncplx * sizeof(cufftDoubleComplex)));
+    dt_current = 0.0;
+    step_count = 0;
+    std::fprintf(stderr, "  PseudoSpectral zero IC\n");
+}
+
+// ============================================================
+// 設置 stochastic forcing — 薄殼白噪聲相位
+//
+// 方法學 (Boffetta-Ecke 2012, Alvelius 1999):
+//   每步對 ω̂ 加 Δω̂(k) = √dt · σ · e^{iφ}   (φ 每步重擲)
+//   期望注入功率:  E[|Δω̂|²] = dt · σ²
+//   對應動能注入率(2D 不可壓,Parseval, R2C Hermitian weight w(k)):
+//     ε_inj = (Lx·Ly)/(dt·N⁴)·Σ_shell w(k)·|Δω̂|²/(2·|k|²)
+//           = (Lx·Ly·σ²)/(N⁴) · Σ_shell w(k)/(2·|k|²)
+//   其中 N² = nx·ny, w(k)=2 (一般模), w(k)=1 (jc=0 或 jc=nh-1 Nyquist)。
+//   反解 σ:  σ = √( ε_inj·N⁴ / (Lx·Ly · Σ_shell w/(2·k²)) )
+//
+// shell: |k_mode|² ∈ [(kf-dk)², (kf+dk)²]  其中 k_mode = (shift(ic), jc)
+// 為避免 DC / jc=0 的 Hermitian 自共軛問題,排除 jc=0 (Hermitian 被成對動會破壞實值性)。
+// ============================================================
+void PseudoSpectralSolver::init_forcing(int kf, int dk, double eps, uint64_t seed) {
+    forcing_enabled = true;
+    forcing_eps     = eps;
+    forcing_kf      = kf;
+    forcing_dk      = dk;
+    forcing_seed    = seed;
+
+    // host 端枚舉 shell 模 (排除 jc=0 避開 Hermitian 自共軛)
+    std::vector<int>    h_idx;
+    std::vector<double> h_k2;   // 先存 k_mode² (整數),稍後換算
+    double kf_lo2 = (double)(kf - dk) * (kf - dk);
+    double kf_hi2 = (double)(kf + dk) * (kf + dk);
+    for (int ic = 0; ic < nx; ++ic) {
+        int i_shift = (ic <= nx / 2) ? ic : ic - nx;
+        for (int jc = 1; jc < nh; ++jc) {   // 跳過 jc=0 (Hermitian 自共軛帶)
+            // 也跳過 Nyquist (jc=nh-1 且 ny 偶)——受 Hermitian 約束退化
+            if ((ny % 2 == 0) && (jc == nh - 1)) continue;
+            double km2 = (double)(i_shift * i_shift + jc * jc);
+            if (km2 >= kf_lo2 && km2 <= kf_hi2) {
+                h_idx.push_back(ic * nh + jc);
+                h_k2.push_back(km2);
+            }
+        }
+    }
+    forcing_n = (int)h_idx.size();
+    if (forcing_n == 0) {
+        std::fprintf(stderr,
+            "  PS forcing: WARNING shell k_f=%d±%d empty (nx=%d,ny=%d)\n",
+            kf, dk, nx, ny);
+        forcing_enabled = false;
+        return;
+    }
+
+    // Σ_shell w(k) / (2·k²_phys);k_phys = 2π·k_mode/L (取 Lx=Ly 為主流場景)
+    //   (異向 Lx≠Ly 下 k² 要分向量化,此實作假設 Lx=Ly;Lx≠Ly 可用平均 L)
+    double L = 0.5 * (Lx + Ly);
+    double Nsum = 0.0;
+    for (int i = 0; i < forcing_n; ++i) {
+        double k_phys2 = h_k2[i] * (2.0 * M_PI / L) * (2.0 * M_PI / L);
+        // 所有模都 jc≥1 且非 Nyquist → weight = 2
+        Nsum += 2.0 / (2.0 * k_phys2);
+    }
+
+    // σ² = ε·N⁴ / (Lx·Ly·Nsum)
+    double sigma2 = forcing_eps * (double)ncell * (double)ncell
+                    / (Lx * Ly * Nsum);
+    double sigma_val = std::sqrt(sigma2);
+
+    // host σ 向量 (本實作 σ 與 k 無關,per-mode 相同)
+    std::vector<double> h_sigma(forcing_n, sigma_val);
+
+    CUDA_CHECK(cudaMalloc(&d_forcing_idx,   forcing_n * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&d_forcing_sigma, forcing_n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_forcing_cos,   forcing_n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_forcing_sin,   forcing_n * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_forcing_idx, h_idx.data(),
+                          forcing_n * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_forcing_sigma, h_sigma.data(),
+                          forcing_n * sizeof(double), cudaMemcpyHostToDevice));
+
+    std::fprintf(stderr,
+        "  PS forcing: k_f=%d±%d (%d modes), ε_inj=%.3e, σ=%.3e, seed=0x%lx\n",
+        kf, dk, forcing_n, eps, sigma_val, (unsigned long)seed);
+}
+
+// 每步呼叫: host 擲 phase → cudaMemcpy → k_apply_forcing
+void PseudoSpectralSolver::apply_forcing(double dt) {
+    if (!forcing_enabled || forcing_n == 0 || dt <= 0.0) return;
+    static thread_local std::mt19937_64 rng(forcing_seed);
+    static thread_local std::uniform_real_distribution<double> U(0.0, 2.0 * M_PI);
+    std::vector<double> h_cos(forcing_n), h_sin(forcing_n);
+    for (int i = 0; i < forcing_n; ++i) {
+        double phi = U(rng);
+        h_cos[i] = std::cos(phi);
+        h_sin[i] = std::sin(phi);
+    }
+    CUDA_CHECK(cudaMemcpy(d_forcing_cos, h_cos.data(),
+                          forcing_n * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_forcing_sin, h_sin.data(),
+                          forcing_n * sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256, G = (forcing_n + B - 1) / B;
+    k_apply_forcing<<<G, B>>>(d_omega_hat, d_forcing_idx, d_forcing_sigma,
+                              d_forcing_cos, d_forcing_sin,
+                              std::sqrt(dt), forcing_n);
+}
+
+// ============================================================
 // dt — 對流 CFL (+ 顯式粘性 CFL, 若未啟用 IFRK)
 // ============================================================
 static double compute_dt(PseudoSpectralSolver& s, double max_v) {
@@ -351,7 +481,12 @@ double PseudoSpectralSolver::step() {
     double dt = compute_dt(*this, max_v);
     dt_current = dt;
 
-    // y_orig ← ω̂_n,保存在 d_k1_hat
+    // ── 隨機相位強迫 (若啟用) ──
+    // 加在 RK3 之前,把 √dt·σ·e^{iφ} 注入 ω̂。
+    // 用 Euler-Maruyama 意義:ω̂(t+dt) 裡包含強迫貢獻,RK3 演化的是「含初值強迫」的 ω̂。
+    if (forcing_enabled) apply_forcing(dt);
+
+    // y_orig ← ω̂_n (已含本步強迫),保存在 d_k1_hat
     copy_hat(d_k1_hat, d_omega_hat, ncplx);
 
     if (use_ifrk) {
@@ -450,6 +585,31 @@ PseudoSpectralSolver::Diagnostics PseudoSpectralSolver::compute_diagnostics() {
     return d;
 }
 
+// ============================================================
+// GPU ring-integrated energy spectrum
+//
+// 對照 scripts/spectrum_pseudo_spectral.py:compute_spectrum
+//   E_mode = (dA/N)·½·(|û|²+|v̂|²) = (Lx·Ly/N⁴)·½·|ω̂|²/k²
+//   bin    = round(|k|/dk),  dk = 2π/max(Lx,Ly)
+//   E(k)   = Σ_mode E_mode_in_bin / dk   (密度)
+// 回傳向量 out 大小 = nbins,為譜密度。
+// ============================================================
+void PseudoSpectralSolver::compute_spectrum_bins(std::vector<double>& out) {
+    CUDA_CHECK(cudaMemset(d_E_bins, 0, nbins * sizeof(double)));
+    int B = 256;
+    int Gh = (ncplx + B - 1) / B;
+    double mode_scale = (Lx * Ly) / ((double)ncell * (double)ncell) * 0.5;
+    int ny_even = (ny % 2 == 0) ? 1 : 0;
+    k_reduce_spectrum_bins<<<Gh, B>>>(d_omega_hat, d_kx, d_ky, d_E_bins,
+                                       nx, nh, nbins,
+                                       1.0 / dk_bin, mode_scale, ny_even);
+    out.resize(nbins);
+    CUDA_CHECK(cudaMemcpy(out.data(), d_E_bins,
+                          nbins * sizeof(double), cudaMemcpyDeviceToHost));
+    // 轉密度:bin 內總能 / dk
+    for (auto& v : out) v /= dk_bin;
+}
+
 void PseudoSpectralSolver::download_omega(std::vector<double>& h) {
     h.resize(ncell);
     CUDA_CHECK(cudaMemcpy(h.data(), d_omega, ncell * sizeof(double), cudaMemcpyDeviceToHost));
@@ -537,6 +697,12 @@ void PseudoSpectralSolver::capture_frame(double t, int step) {
     k_snapshot_frame<<<G, B>>>(d_omega, d_u, d_v, slot, ncell);
     frame_times.push_back(t);
     frame_steps.push_back(step);
+
+    // 順手做一份譜快照 (GPU reduce + D2H,~20 μs 量級)
+    std::vector<double> E_k;
+    compute_spectrum_bins(E_k);
+    frame_spectra.push_back(std::move(E_k));
+
     frame_count++;
 }
 
@@ -653,6 +819,18 @@ void PseudoSpectralSolver::flush_frames_to_disk(const std::string& run_dir) {
     bool first_batch = (total_frames == 0);
     std::FILE* fcsv = std::fopen(csv_path, first_batch ? "w" : "a");
     if (fcsv && first_batch) std::fprintf(fcsv, "index,step,t\n");
+
+    // spectrum.csv: header = index,step,t,<k0>,<k1>,...
+    char spec_path[512];
+    std::snprintf(spec_path, sizeof(spec_path), "%s/spectrum.csv", run_dir.c_str());
+    std::FILE* fspec = std::fopen(spec_path, first_batch ? "w" : "a");
+    if (fspec && first_batch) {
+        std::fprintf(fspec, "index,step,t");
+        for (int b = 0; b < nbins; ++b)
+            std::fprintf(fspec, ",%.6e", b * dk_bin);
+        std::fputc('\n', fspec);
+    }
+
     int base_idx = total_frames;
     for (int f = 0; f < frame_count; ++f) {
         ++total_frames;
@@ -668,8 +846,17 @@ void PseudoSpectralSolver::flush_frames_to_disk(const std::string& run_dir) {
             int idx = base_idx + f + 1;
             std::fprintf(fcsv, "%d,%d,%.10e\n", idx, frame_steps[f], frame_times[f]);
         }
+        if (fspec && f < (int)frame_spectra.size()) {
+            int idx = base_idx + f + 1;
+            std::fprintf(fspec, "%d,%d,%.10e", idx, frame_steps[f], frame_times[f]);
+            const auto& E = frame_spectra[f];
+            for (double v : E) std::fprintf(fspec, ",%.6e", v);
+            std::fputc('\n', fspec);
+        }
     }
-    if (fcsv) std::fclose(fcsv);
+    if (fcsv)  std::fclose(fcsv);
+    if (fspec) std::fclose(fspec);
+    frame_spectra.clear();
     std::fprintf(stderr, " done (%d total)\n", total_frames);
     frame_count = 0;
     frame_times.clear();
@@ -682,4 +869,5 @@ void PseudoSpectralSolver::free_frame_buffer() {
     frame_count = 0;
     frame_times.clear();
     frame_steps.clear();
+    frame_spectra.clear();
 }
