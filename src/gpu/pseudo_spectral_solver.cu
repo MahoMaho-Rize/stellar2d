@@ -12,6 +12,7 @@
 
 #include "pseudo_spectral_solver.cuh"
 #include "fas_common.cuh"
+#include <curand_kernel.h>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -36,7 +37,7 @@ __global__ void k_scale_inplace(double*, double, int);
 __global__ void k_apply_dealias(cufftDoubleComplex*, const double*, int);
 __global__ void k_form_rhs_hat(const cufftDoubleComplex*, const cufftDoubleComplex*,
     const double*, const double*, const double*,
-    cufftDoubleComplex*, double, int, int);
+    cufftDoubleComplex*, double, double, int, int, int);
 __global__ void k_form_rhs_adv_only(const cufftDoubleComplex*, const double*,
     cufftDoubleComplex*, int);
 __global__ void k_compute_u_omega(const double*, const double*, const double*,
@@ -44,21 +45,30 @@ __global__ void k_compute_u_omega(const double*, const double*, const double*,
 __global__ void k_form_rhs_skew(const cufftDoubleComplex*, const cufftDoubleComplex*,
     const cufftDoubleComplex*, const double*, const double*, const double*,
     cufftDoubleComplex*, int, int);
+__global__ void k_form_rhs_conservative(const cufftDoubleComplex*, const cufftDoubleComplex*,
+    const double*, const double*, const double*,
+    cufftDoubleComplex*, int, int);
 __global__ void k_rk_combine(cufftDoubleComplex*, const cufftDoubleComplex*,
     const cufftDoubleComplex*, const cufftDoubleComplex*,
     double, double, double, int);
 __global__ void k_ifrk_combine(cufftDoubleComplex*, const cufftDoubleComplex*,
     const cufftDoubleComplex*, const cufftDoubleComplex*,
     const double*, const double*,
-    double, double, double, double, double, double,
-    int, int);
+    double, double, double, double, double, double, double,
+    int, int, int);
 __global__ void k_reduce_diag(const double*, const double*, const double*,
     double*, int, double);
 __global__ void k_reduce_k2E(const cufftDoubleComplex*, const double*, const double*,
-    double*, int, int, int, double);
+    double*, int, int, int, double, int);
+__global__ void k_reduce_tg_err(const cufftDoubleComplex*, const cufftDoubleComplex*,
+    double, double*, int, int, double);
+__global__ void k_clear_dc(cufftDoubleComplex*);
 __global__ void k_snapshot_frame(const double*, const double*, const double*, double*, int);
 __global__ void k_apply_forcing(cufftDoubleComplex*, const int*, const double*,
     const double*, const double*, double, int);
+__global__ void k_init_curand_states(curandStatePhilox4_32_10_t*, uint64_t, int);
+__global__ void k_apply_forcing_curand(cufftDoubleComplex*, const int*, const double*,
+    curandStatePhilox4_32_10_t*, double, int);
 __global__ void k_reduce_spectrum_bins(const cufftDoubleComplex*, const double*, const double*,
     double*, int, int, int, double, double, int);
 
@@ -115,9 +125,10 @@ static void compute_rhs_hat(PseudoSpectralSolver& s,
     // Stage D: N → N̂ in tmp
     phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
 
-    // Stage E: rhs_hat = -N̂ - ν|k|² ω̂
+    // Stage E: rhs_hat = -N̂ - (ν·|k|^(2p) + α) ω̂
     k_form_rhs_hat<<<Gh, B>>>(tmp, omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
-                              rhs_hat_out, s.nu, s.nx, s.nh);
+                              rhs_hat_out, s.nu, s.drag_alpha, s.hyper_p,
+                              s.nx, s.nh);
 }
 
 // IFRK 專用:只算 -N̂,黏性在 IFRK combine 裡解析處理。
@@ -143,6 +154,25 @@ static void compute_rhs_adv_only(PseudoSpectralSolver& s,
                                  tmp, rhs_hat_out, s.nx, s.nh);
     spec_to_phys(s.plan_c2r, tmp,         s.d_dwx, s.ncell);
     spec_to_phys(s.plan_c2r, rhs_hat_out, s.d_dwy, s.ncell);
+
+    // Conservative (rotational) form: 只需 2 次 R2C FFT
+    // N_C = ∂(uω)/∂x + ∂(vω)/∂y  (∇·u=0 下 ≡ N_A)
+    if (s.use_conservative && !s.use_skew) {
+        // 先把 ω 物理搞到 d_Nphys (借用為 ω scratch)
+        CUDA_CHECK(cudaMemcpy(tmp, omega_hat_in,
+                              s.ncplx * sizeof(cufftDoubleComplex),
+                              cudaMemcpyDeviceToDevice));
+        spec_to_phys(s.plan_c2r, tmp, s.d_Nphys, s.ncell);  // d_Nphys ← ω
+        // uω, vω → d_dwx, d_dwy (覆寫,之後不再需要)
+        k_compute_u_omega<<<Gc, B>>>(s.d_u, s.d_v, s.d_Nphys,
+                                     s.d_dwx, s.d_dwy, s.ncell);
+        phys_to_spec(s.plan_r2c, s.d_dwx, tmp);              // (uω)^
+        phys_to_spec(s.plan_r2c, s.d_dwy, s.d_skew_hat);     // (vω)^
+        k_form_rhs_conservative<<<Gh, B>>>(tmp, s.d_skew_hat,
+                                           s.d_kx, s.d_ky, s.d_dealias,
+                                           rhs_hat_out, s.nx, s.nh);
+        return;
+    }
 
     // N_A (物理) = u·∂ω/∂x + v·∂ω/∂y
     k_compute_convection<<<Gc, B>>>(s.d_u, s.d_v, s.d_dwx, s.d_dwy, s.d_Nphys, s.ncell);
@@ -274,9 +304,12 @@ void PseudoSpectralSolver::destroy() {
     F((void*&)d_forcing_sigma);
     F((void*&)d_forcing_cos);
     F((void*&)d_forcing_sin);
+    F((void*&)d_forcing_states);
+    F((void*&)d_omega_hat_ic);
     F((void*&)d_E_bins);
     forcing_enabled = false;
     forcing_n = 0;
+    has_analytic_ic = false;
     free_frame_buffer();
 }
 
@@ -287,9 +320,10 @@ void PseudoSpectralSolver::destroy() {
 // 解析求 ω = ∂vy/∂x - ∂vx/∂y 後 FFT → ω̂。
 // ============================================================
 void PseudoSpectralSolver::init_kh_shear(double vshear, double amp, int k) {
-    // 剪切層厚度: 用 max(4·dy, 0.01·Ly) 保證 Gibbs ringing 被光譜可解析
-    // (舊設 2·dy 在 1024² 下只佔 2 格,高 k 會有顯著 IC 能量污染)
-    double delta   = std::fmax(4.0 * dy, 0.01 * Ly);
+    // 剪切層厚度: 用 max(8·dy, 0.02·Ly) — 較舊版 (4dy, 0.01Ly) 多倍,
+    // 使 Fourier 係數 ~ sech²(k·δ) 在 dealias cut 前衰減到 <1e-10,
+    // 高 k Gibbs 殘餘完全被譜截斷清除,不依賴 dealias mask 遮蔽。
+    double delta   = std::fmax(8.0 * dy, 0.02 * Ly);
     double y_low   = 0.25 * Ly;
     double y_high  = 0.75 * Ly;
     double sigma   = 0.05 * Ly;
@@ -314,10 +348,11 @@ void PseudoSpectralSolver::init_kh_shear(double vshear, double amp, int k) {
                           ncell * sizeof(double), cudaMemcpyHostToDevice));
     phys_to_spec(plan_r2c, d_omega, d_omega_hat);
 
-    // 套 2/3 圓形 dealias mask 清掉 tanh IC 的 Gibbs 高 k 能量
+    // 套 2/3 圓形 dealias mask (雙保險 — δ 加大後 Gibbs 已經被譜衰減壓住)
     int B = 256;
     int Gh = (ncplx + B - 1) / B;
     k_apply_dealias<<<Gh, B>>>(d_omega_hat, d_dealias, ncplx);
+    k_clear_dc<<<1, 1>>>(d_omega_hat);
 
     dt_current = 0.0;
     step_count = 0;
@@ -336,6 +371,47 @@ void PseudoSpectralSolver::init_zero() {
     dt_current = 0.0;
     step_count = 0;
     std::fprintf(stderr, "  PseudoSpectral zero IC\n");
+}
+
+// ============================================================
+// Taylor-Green vortex:純擴散解析解驗證用 IC
+//   ω(x,y,0) = 2·k_phys·cos(kx·x)·cos(ky·y)
+//   kx = ky = k·2π/L (假設 Lx=Ly=L;異向時按各自 2π/L 構造)
+//   對流項 u·∇ω 在此幾何下嚴格為 0 → ω(t) = ω(0)·exp(-2ν·k_phys²·t)
+// ============================================================
+void PseudoSpectralSolver::init_taylor_green(int k) {
+    double kx_phys = k * 2.0 * M_PI / Lx;
+    double ky_phys = k * 2.0 * M_PI / Ly;
+
+    std::vector<double> h_omega(ncell);
+    for (int ic = 0; ic < nx; ++ic) {
+        double x = (ic + 0.5) * dx;
+        double cx = std::cos(kx_phys * x);
+        for (int jc = 0; jc < ny; ++jc) {
+            double y = (jc + 0.5) * dy;
+            h_omega[ic * ny + jc] = 2.0 * kx_phys * cx * std::cos(ky_phys * y);
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_omega, h_omega.data(),
+                          ncell * sizeof(double), cudaMemcpyHostToDevice));
+    phys_to_spec(plan_r2c, d_omega, d_omega_hat);
+
+    // 保存 IC 譜,用於 err_L2 解析解比對
+    if (!d_omega_hat_ic) {
+        CUDA_CHECK(cudaMalloc(&d_omega_hat_ic,
+                              ncplx * sizeof(cufftDoubleComplex)));
+    }
+    CUDA_CHECK(cudaMemcpy(d_omega_hat_ic, d_omega_hat,
+                          ncplx * sizeof(cufftDoubleComplex),
+                          cudaMemcpyDeviceToDevice));
+    has_analytic_ic = true;
+    analytic_k = k;
+
+    dt_current = 0.0;
+    step_count = 0;
+    std::fprintf(stderr,
+        "  PseudoSpectral Taylor-Green: k=%d (kx=%.3g, ky=%.3g)\n",
+        k, kx_phys, ky_phys);
 }
 
 // ============================================================
@@ -361,66 +437,88 @@ void PseudoSpectralSolver::init_forcing(int kf, int dk, double eps, uint64_t see
     forcing_seed    = seed;
 
     // host 端枚舉 shell 模 (排除 jc=0 避開 Hermitian 自共軛)
+    // 各向異性域 (Lx≠Ly): shell 以物理 |k|² 判斷,而非 mode²
     std::vector<int>    h_idx;
-    std::vector<double> h_k2;   // 先存 k_mode² (整數),稍後換算
-    double kf_lo2 = (double)(kf - dk) * (kf - dk);
-    double kf_hi2 = (double)(kf + dk) * (kf + dk);
+    std::vector<double> h_kphys2;  // 物理 |k|²(2π 單位)
+    double kx_unit = 2.0 * M_PI / Lx;
+    double ky_unit = 2.0 * M_PI / Ly;
+    // shell 中心物理 k (以 mode kf 為基準,取較短邊的 L 做尺度參考)
+    double L_ref = std::min(Lx, Ly);
+    double kc_phys = (2.0 * M_PI / L_ref) * (double)kf;
+    double kw_phys = (2.0 * M_PI / L_ref) * (double)dk;
+    double klo_phys2 = (kc_phys - kw_phys) * (kc_phys - kw_phys);
+    double khi_phys2 = (kc_phys + kw_phys) * (kc_phys + kw_phys);
+
     for (int ic = 0; ic < nx; ++ic) {
         int i_shift = (ic <= nx / 2) ? ic : ic - nx;
+        double kxv = (double)i_shift * kx_unit;
         for (int jc = 1; jc < nh; ++jc) {   // 跳過 jc=0 (Hermitian 自共軛帶)
-            // 也跳過 Nyquist (jc=nh-1 且 ny 偶)——受 Hermitian 約束退化
-            if ((ny % 2 == 0) && (jc == nh - 1)) continue;
-            double km2 = (double)(i_shift * i_shift + jc * jc);
-            if (km2 >= kf_lo2 && km2 <= kf_hi2) {
+            if ((ny % 2 == 0) && (jc == nh - 1)) continue;  // 跳過 Nyquist
+            double kyv = (double)jc * ky_unit;
+            double k_phys2 = kxv * kxv + kyv * kyv;
+            if (k_phys2 >= klo_phys2 && k_phys2 <= khi_phys2) {
                 h_idx.push_back(ic * nh + jc);
-                h_k2.push_back(km2);
+                h_kphys2.push_back(k_phys2);
             }
         }
     }
     forcing_n = (int)h_idx.size();
     if (forcing_n == 0) {
         std::fprintf(stderr,
-            "  PS forcing: WARNING shell k_f=%d±%d empty (nx=%d,ny=%d)\n",
-            kf, dk, nx, ny);
+            "  PS forcing: WARNING shell k_f=%d±%d empty (nx=%d,ny=%d,Lx=%g,Ly=%g)\n",
+            kf, dk, nx, ny, Lx, Ly);
         forcing_enabled = false;
         return;
     }
 
-    // Σ_shell w(k) / (2·k²_phys);k_phys = 2π·k_mode/L (取 Lx=Ly 為主流場景)
-    //   (異向 Lx≠Ly 下 k² 要分向量化,此實作假設 Lx=Ly;Lx≠Ly 可用平均 L)
-    double L = 0.5 * (Lx + Ly);
+    // ε_inj = (Lx·Ly / N⁴)·Σ_shell w(k)·σ²/(2·k²_phys)
+    //   w(k)=2 (jc≥1 且非 Nyquist,皆已滿足),σ per-mode 同值 (isotropic shell)
+    // 反解: σ² = ε·N⁴ / (Lx·Ly·Σ 1/k²_phys)
     double Nsum = 0.0;
     for (int i = 0; i < forcing_n; ++i) {
-        double k_phys2 = h_k2[i] * (2.0 * M_PI / L) * (2.0 * M_PI / L);
-        // 所有模都 jc≥1 且非 Nyquist → weight = 2
-        Nsum += 2.0 / (2.0 * k_phys2);
+        Nsum += 1.0 / h_kphys2[i];
     }
-
-    // σ² = ε·N⁴ / (Lx·Ly·Nsum)
     double sigma2 = forcing_eps * (double)ncell * (double)ncell
                     / (Lx * Ly * Nsum);
     double sigma_val = std::sqrt(sigma2);
 
-    // host σ 向量 (本實作 σ 與 k 無關,per-mode 相同)
     std::vector<double> h_sigma(forcing_n, sigma_val);
 
     CUDA_CHECK(cudaMalloc(&d_forcing_idx,   forcing_n * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_forcing_sigma, forcing_n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_forcing_cos,   forcing_n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_forcing_sin,   forcing_n * sizeof(double)));
     CUDA_CHECK(cudaMemcpy(d_forcing_idx, h_idx.data(),
                           forcing_n * sizeof(int), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_forcing_sigma, h_sigma.data(),
                           forcing_n * sizeof(double), cudaMemcpyHostToDevice));
 
+    if (forcing_use_curand) {
+        CUDA_CHECK(cudaMalloc(&d_forcing_states,
+                              forcing_n * sizeof(curandStatePhilox4_32_10_t)));
+        int B = 256, G = (forcing_n + B - 1) / B;
+        k_init_curand_states<<<G, B>>>(d_forcing_states, seed, forcing_n);
+    } else {
+        CUDA_CHECK(cudaMalloc(&d_forcing_cos, forcing_n * sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_forcing_sin, forcing_n * sizeof(double)));
+    }
+
     std::fprintf(stderr,
-        "  PS forcing: k_f=%d±%d (%d modes), ε_inj=%.3e, σ=%.3e, seed=0x%lx\n",
-        kf, dk, forcing_n, eps, sigma_val, (unsigned long)seed);
+        "  PS forcing: k_f=%d±%d (%d modes, %s), ε_inj=%.3e, σ=%.3e, seed=0x%lx\n",
+        kf, dk, forcing_n,
+        forcing_use_curand ? "cuRAND" : "host-mt19937",
+        eps, sigma_val, (unsigned long)seed);
 }
 
-// 每步呼叫: host 擲 phase → cudaMemcpy → k_apply_forcing
+// 每步呼叫: cuRAND device-side 或 host mt19937 回退
 void PseudoSpectralSolver::apply_forcing(double dt) {
     if (!forcing_enabled || forcing_n == 0 || dt <= 0.0) return;
+    int B = 256, G = (forcing_n + B - 1) / B;
+    double sqrt_dt = std::sqrt(dt);
+    if (forcing_use_curand) {
+        k_apply_forcing_curand<<<G, B>>>(d_omega_hat, d_forcing_idx,
+                                         d_forcing_sigma, d_forcing_states,
+                                         sqrt_dt, forcing_n);
+        return;
+    }
     static thread_local std::mt19937_64 rng(forcing_seed);
     static thread_local std::uniform_real_distribution<double> U(0.0, 2.0 * M_PI);
     std::vector<double> h_cos(forcing_n), h_sin(forcing_n);
@@ -433,10 +531,9 @@ void PseudoSpectralSolver::apply_forcing(double dt) {
                           forcing_n * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_forcing_sin, h_sin.data(),
                           forcing_n * sizeof(double), cudaMemcpyHostToDevice));
-    int B = 256, G = (forcing_n + B - 1) / B;
     k_apply_forcing<<<G, B>>>(d_omega_hat, d_forcing_idx, d_forcing_sigma,
                               d_forcing_cos, d_forcing_sin,
-                              std::sqrt(dt), forcing_n);
+                              sqrt_dt, forcing_n);
 }
 
 // ============================================================
@@ -446,11 +543,23 @@ static double compute_dt(PseudoSpectralSolver& s, double max_v) {
     double dt_adv = s.cfl * std::fmin(s.dx, s.dy) / std::fmax(max_v, 1e-30);
     double dt = dt_adv;
     if (!s.use_ifrk) {
-        double kmax2 = (M_PI / s.dx) * (M_PI / s.dx) + (M_PI / s.dy) * (M_PI / s.dy);
-        double dt_visc = s.dt_visc_factor / std::fmax(s.nu * kmax2, 1e-30);
+        // 顯式 hyperviscosity: |k|^(2p) 的 CFL 要跟著 p
+        double kmax = std::sqrt((M_PI / s.dx) * (M_PI / s.dx)
+                                + (M_PI / s.dy) * (M_PI / s.dy));
+        double kmax2p = 1.0;
+        for (int q = 0; q < s.hyper_p; ++q) kmax2p *= (kmax * kmax);
+        double dt_visc = s.dt_visc_factor / std::fmax(s.nu * kmax2p, 1e-30);
         dt = std::fmin(dt, dt_visc);
     }
-    return std::fmin(dt, s.dt_max);
+    dt = std::fmin(dt, s.dt_max);
+    // PI smoother (Söderlind 2003 H211b 簡化):dt ≤ dt_prev·(1 + β),β = 0.1
+    // 僅在啟用且 dt_prev 有效時生效,打住 max|v| 突變導致 CFL overshoot 的 dt 抖動。
+    if (s.use_pi_dt && s.dt_prev > 0.0) {
+        double dt_up = s.dt_prev * 1.10;    // 一步最多放大 10%
+        double dt_dn = s.dt_prev * 0.50;    // 一步最多縮到 50%
+        dt = std::fmax(std::fmin(dt, dt_up), std::fmin(dt_dn, dt));
+    }
+    return std::fmax(dt, s.dt_min);
 }
 
 static inline void copy_hat(cufftDoubleComplex* dst, const cufftDoubleComplex* src, int n) {
@@ -490,12 +599,11 @@ double PseudoSpectralSolver::step() {
     copy_hat(d_k1_hat, d_omega_hat, ncplx);
 
     if (use_ifrk) {
-        // ─── IFRK3: 黏性經積分因子精確處理 ───
-        //   E_1 = exp(-νk²Δt),   E_½ = exp(-νk²Δt·½),   E_-½ = exp(-νk²Δt·-½)
-        //   級 1: y1 = E_1·yₙ + Δt·E_1·(-N̂(yₙ))
-        //   級 2: y2 = ¾·E_½·yₙ + ¼·E_-½·y1 + ¼Δt·E_-½·(-N̂(y1))
-        //   級 3: y₃ = ⅓·E_1·yₙ + ⅔·E_½·y2 + ⅔Δt·E_½·(-N̂(y2))
-        double nu_dt = nu * dt;
+        // ─── IFRK3: 黏性 + drag 經積分因子精確處理 ───
+        //   Ldt = (ν·|k|^(2p) + α)·dt
+        //   E_1 = exp(-Ldt),   E_½ = exp(-½Ldt),   E_-½ = exp(½Ldt)
+        double nu_dt   = nu * dt;
+        double drag_dt = drag_alpha * dt;
 
         // 級 1
         compute_rhs_adv_only(*this, d_omega_hat, d_rhs_hat);
@@ -503,21 +611,21 @@ double PseudoSpectralSolver::step() {
                                   d_kx, d_ky,
                                   1.0, 0.0, dt,
                                   /*expo_a*/1.0, /*expo_b*/1.0,
-                                  nu_dt, nx, nh);
+                                  nu_dt, drag_dt, hyper_p, nx, nh);
         // 級 2
         compute_rhs_adv_only(*this, d_omega_hat, d_rhs_hat);
         k_ifrk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
                                   d_kx, d_ky,
                                   0.75, 0.25, 0.25 * dt,
                                   /*expo_a*/0.5, /*expo_b*/-0.5,
-                                  nu_dt, nx, nh);
+                                  nu_dt, drag_dt, hyper_p, nx, nh);
         // 級 3
         compute_rhs_adv_only(*this, d_omega_hat, d_rhs_hat);
         k_ifrk_combine<<<Gh, B>>>(d_omega_hat, d_k1_hat, d_omega_hat, d_rhs_hat,
                                   d_kx, d_ky,
                                   1.0/3.0, 2.0/3.0, (2.0/3.0)*dt,
                                   /*expo_a*/1.0, /*expo_b*/0.5,
-                                  nu_dt, nx, nh);
+                                  nu_dt, drag_dt, hyper_p, nx, nh);
     } else {
         // ─── 顯式 SSP-RK3 (黏性也顯式, dt 受擴散 CFL 限制) ───
         // 級 1: y1 = y + dt · rhs(y)
@@ -536,6 +644,9 @@ double PseudoSpectralSolver::step() {
                                 1.0 / 3.0, 2.0 / 3.0, (2.0 / 3.0) * dt, ncplx);
     }
 
+    // DC mode 強制歸零(浮點 + forcing + IC 殘影可能累積非零 spurious mean vorticity)
+    k_clear_dc<<<1, 1>>>(d_omega_hat);
+
     // 同步物理場 (供輸出與下一步 dt)。
     // cuFFT Z2D 預設會破壞輸入,所以對 d_omega_hat 做 C2R 前必須先拷貝。
     copy_hat(d_tmp_hat, d_omega_hat, ncplx);
@@ -545,6 +656,7 @@ double PseudoSpectralSolver::step() {
     spec_to_phys(plan_c2r, d_tmp_hat, d_u, ncell);
     spec_to_phys(plan_c2r, d_rhs_hat, d_v, ncell);
 
+    dt_prev = dt;
     step_count++;
     return dt;
 }
@@ -552,13 +664,15 @@ double PseudoSpectralSolver::step() {
 // ============================================================
 // Diagnostics
 // ============================================================
-PseudoSpectralSolver::Diagnostics PseudoSpectralSolver::compute_diagnostics() {
+PseudoSpectralSolver::Diagnostics PseudoSpectralSolver::compute_diagnostics(double t_eval) {
     int B = 256;
     size_t shm = 4 * (size_t)B * sizeof(double);
     k_reduce_diag<<<reduce_blocks, B, shm>>>(d_u, d_v, d_omega, d_reduce, ncell, dx * dy);
     std::vector<double> h(4 * reduce_blocks);
     CUDA_CHECK(cudaMemcpy(h.data(), d_reduce, h.size() * sizeof(double), cudaMemcpyDeviceToHost));
     Diagnostics d{};
+    d.err_L2 = std::nan("");
+    d.t_eval = t_eval;
     for (int i = 0; i < reduce_blocks; ++i) {
         d.max_v           = std::fmax(d.max_v,     h[4 * i + 0]);
         d.max_omega       = std::fmax(d.max_omega, h[4 * i + 1]);
@@ -566,21 +680,85 @@ PseudoSpectralSolver::Diagnostics PseudoSpectralSolver::compute_diagnostics() {
         d.total_enstrophy+= h[4 * i + 3];
     }
 
-    // ε_KE (動能耗散率) = 2ν·Ω = 2ν·total_enstrophy
-    d.eps_KE = 2.0 * nu * d.total_enstrophy;
-
-    // ε_Ω (enstrophy 耗散率) = ν·∫|∇ω|² dA
-    //   譜: ∫|∇ω|² dA = (Lx·Ly/N²)·Σ_k (Hermitian 對稱因子)·k²·|ω̂|²
+    // ε_Ω (enstrophy 耗散率) = ν·∫ω·(-Δ)^p·ω dA
+    //   譜: Σ_k weight·|ω̂|²·k^(2p)·scale ;  scale = Lx·Ly/N²
+    //   p=1 退化為 ν·∫|∇ω|² dA。
     int Gk = (ncplx + B - 1) / B;
     size_t shm2 = (size_t)B * sizeof(double);
     double scale = (Lx * Ly) / ((double)ncell * (double)ncell);
     k_reduce_k2E<<<Gk, B, shm2>>>(d_omega_hat, d_kx, d_ky,
-                                   d_reduce, ncplx, nx, nh, scale);
+                                   d_reduce, ncplx, nx, nh, scale, hyper_p);
     std::vector<double> h2(Gk);
     CUDA_CHECK(cudaMemcpy(h2.data(), d_reduce, Gk * sizeof(double), cudaMemcpyDeviceToHost));
-    double sum_k2E = 0.0;
-    for (int i = 0; i < Gk; ++i) sum_k2E += h2[i];
-    d.eps_enstrophy = nu * sum_k2E;
+    double sum_k2pE = 0.0;
+    for (int i = 0; i < Gk; ++i) sum_k2pE += h2[i];
+    d.eps_enstrophy = nu * sum_k2pE;
+
+    // ε_KE (動能耗散率):
+    //   對 p=1 (Laplacian): dKE/dt|_visc = -2ν·Ω;加 drag → -2α·KE
+    //   對 p>1: dKE/dt|_hyper = -2ν·Σ k^(2p-2)·|ψ̂_k|²·k² = -2ν·Σ k^(2p-2)·|ω̂|²/k²·k²
+    //         = -2ν·Σ k^(2p-2)·|ω̂|² (+ weight/scale)
+    //   更直接:以 ω 方程 -(ν·|k|^(2p)+α)·ω 推動,對 KE 的影響是:
+    //     dKE/dt = -2·Σ (ν·k^(2p-2) + α·k^{-2})·|ω̂|²·... (Parseval)
+    //   當前實作:p=1 用 2ν·Ω;p>1 時以譜積分補上 hyperviscosity 貢獻。
+    if (hyper_p == 1) {
+        d.eps_KE = 2.0 * nu * d.total_enstrophy + 2.0 * drag_alpha * d.total_KE;
+    } else {
+        // eps_KE(hyper) = 2ν·Σ k^(2p-2)·|ω̂|²·scale_weight
+        k_reduce_k2E<<<Gk, B, shm2>>>(d_omega_hat, d_kx, d_ky,
+                                      d_reduce, ncplx, nx, nh, scale, hyper_p - 1);
+        CUDA_CHECK(cudaMemcpy(h2.data(), d_reduce, Gk * sizeof(double),
+                              cudaMemcpyDeviceToHost));
+        double sum_k2pm2 = 0.0;
+        for (int i = 0; i < Gk; ++i) sum_k2pm2 += h2[i];
+        d.eps_KE = 2.0 * nu * sum_k2pm2 + 2.0 * drag_alpha * d.total_KE;
+    }
+
+    // 交叉檢查(p=1 Laplacian):物理空間 Ω 對比譜空間 Ω。
+    //   Ω_phys = ½·Σ_cell ω²·dA = total_enstrophy
+    //   Ω_spec = ½·Σ_k w(k)·|ω̂|²·(Lx·Ly/N²)   (p_eff = 0)
+    //   兩者理論上完全相等 (Parseval)。發散則表示 FFT plan / dealias / 介面錯誤。
+    if (hyper_p == 1) {
+        k_reduce_k2E<<<Gk, B, shm2>>>(d_omega_hat, d_kx, d_ky,
+                                      d_reduce, ncplx, nx, nh, scale, 0);
+        CUDA_CHECK(cudaMemcpy(h2.data(), d_reduce, Gk * sizeof(double),
+                              cudaMemcpyDeviceToHost));
+        double sum_E = 0.0;
+        for (int i = 0; i < Gk; ++i) sum_E += h2[i];
+        double Omega_spec = 0.5 * sum_E;
+        d.eps_KE_spec = 2.0 * nu * Omega_spec + 2.0 * drag_alpha * d.total_KE;
+        double ref = std::fmax(std::fabs(d.eps_KE), 1e-300);
+        double rel = std::fabs(d.eps_KE_spec - d.eps_KE) / ref;
+        if (rel > 1e-6 && ref > 1e-20) {
+            std::fprintf(stderr,
+                "  PS diag WARN: eps_KE(phys)=%.6e vs spec=%.6e rel=%.3e "
+                "(Ω_phys=%.6e Ω_spec=%.6e)\n",
+                d.eps_KE, d.eps_KE_spec, rel,
+                d.total_enstrophy, Omega_spec);
+        }
+    } else {
+        d.eps_KE_spec = d.eps_KE;   // hyper_p>1 時 spec 交叉檢查不簡單,略過
+    }
+
+    // Taylor-Green 解析解誤差 (僅在 init_taylor_green 啟用後有意義)
+    if (has_analytic_ic && d_omega_hat_ic) {
+        // 解析解衰減因子:ω(t) = ω(0)·exp(-2ν·k_phys²·t)
+        double kx_phys = analytic_k * 2.0 * M_PI / Lx;
+        double ky_phys = analytic_k * 2.0 * M_PI / Ly;
+        double kf2 = kx_phys * kx_phys + ky_phys * ky_phys;
+        // hyperviscosity: exp(-2·ν·k²p·t) — 但 TG ω̂ 只在 4 個 mode,手動展開
+        double k2p = kf2;
+        for (int q = 1; q < hyper_p; ++q) k2p *= kf2;
+        double decay = std::exp(-(nu * k2p + drag_alpha) * t_eval);  // 連續解析
+
+        k_reduce_tg_err<<<Gk, B, shm2>>>(d_omega_hat, d_omega_hat_ic, decay,
+                                          d_reduce, ncplx, nh, scale);
+        CUDA_CHECK(cudaMemcpy(h2.data(), d_reduce, Gk * sizeof(double),
+                              cudaMemcpyDeviceToHost));
+        double err2 = 0.0;
+        for (int i = 0; i < Gk; ++i) err2 += h2[i];
+        d.err_L2 = std::sqrt(std::fmax(err2, 0.0));
+    }
 
     return d;
 }
@@ -861,6 +1039,114 @@ void PseudoSpectralSolver::flush_frames_to_disk(const std::string& run_dir) {
     frame_count = 0;
     frame_times.clear();
     frame_steps.clear();
+}
+
+// ============================================================
+// Checkpoint / Restart
+//   格式:
+//     magic (uint64)    = 0x50534350434B3031  "PSCPCK01"
+//     nx, ny (int32 x2)
+//     hyper_p (int32)
+//     Lx, Ly, nu, drag_alpha (double x4)
+//     step (int64), t (double)
+//     ncplx (int64)
+//     omega_hat (cufftDoubleComplex × ncplx,  little-endian host bytes)
+// 注:RNG 狀態 (cuRAND) 不 dump;restart 會重啟一個新 seed sequence
+//     (forcing 是 statistically stationary,統計量不受影響)。
+// ============================================================
+static constexpr uint64_t PS_CKPT_MAGIC = 0x50534350434B3031ULL;
+
+void PseudoSpectralSolver::save_checkpoint(const std::string& path, double t) {
+    std::FILE* fp = std::fopen(path.c_str(), "wb");
+    if (!fp) {
+        std::fprintf(stderr, "  PS checkpoint: cannot open %s\n", path.c_str());
+        return;
+    }
+    uint64_t magic = PS_CKPT_MAGIC;
+    int32_t i_nx = nx, i_ny = ny, i_hp = hyper_p;
+    int64_t i_step = step_count;
+    int64_t i_ncplx = ncplx;
+    std::fwrite(&magic,      sizeof(magic),      1, fp);
+    std::fwrite(&i_nx,       sizeof(i_nx),       1, fp);
+    std::fwrite(&i_ny,       sizeof(i_ny),       1, fp);
+    std::fwrite(&i_hp,       sizeof(i_hp),       1, fp);
+    std::fwrite(&Lx,         sizeof(Lx),         1, fp);
+    std::fwrite(&Ly,         sizeof(Ly),         1, fp);
+    std::fwrite(&nu,         sizeof(nu),         1, fp);
+    std::fwrite(&drag_alpha, sizeof(drag_alpha), 1, fp);
+    std::fwrite(&i_step,     sizeof(i_step),     1, fp);
+    std::fwrite(&t,          sizeof(t),          1, fp);
+    std::fwrite(&i_ncplx,    sizeof(i_ncplx),    1, fp);
+    std::vector<cufftDoubleComplex> h(ncplx);
+    CUDA_CHECK(cudaMemcpy(h.data(), d_omega_hat,
+                          ncplx * sizeof(cufftDoubleComplex),
+                          cudaMemcpyDeviceToHost));
+    std::fwrite(h.data(), sizeof(cufftDoubleComplex), ncplx, fp);
+    std::fclose(fp);
+    std::fprintf(stderr,
+        "  PS checkpoint saved: %s (step=%lld, t=%.6e)\n",
+        path.c_str(), (long long)step_count, t);
+}
+
+bool PseudoSpectralSolver::load_checkpoint(const std::string& path, double& t_out) {
+    std::FILE* fp = std::fopen(path.c_str(), "rb");
+    if (!fp) {
+        std::fprintf(stderr, "  PS checkpoint: cannot open %s for read\n", path.c_str());
+        return false;
+    }
+    uint64_t magic = 0;
+    int32_t i_nx = 0, i_ny = 0, i_hp = 0;
+    double r_Lx = 0, r_Ly = 0, r_nu = 0, r_alpha = 0;
+    int64_t i_step = 0, i_ncplx = 0;
+    double  r_t = 0;
+    std::fread(&magic,    sizeof(magic),    1, fp);
+    if (magic != PS_CKPT_MAGIC) {
+        std::fprintf(stderr, "  PS checkpoint: bad magic 0x%llx in %s\n",
+                     (unsigned long long)magic, path.c_str());
+        std::fclose(fp);
+        return false;
+    }
+    std::fread(&i_nx,     sizeof(i_nx),     1, fp);
+    std::fread(&i_ny,     sizeof(i_ny),     1, fp);
+    std::fread(&i_hp,     sizeof(i_hp),     1, fp);
+    std::fread(&r_Lx,     sizeof(r_Lx),     1, fp);
+    std::fread(&r_Ly,     sizeof(r_Ly),     1, fp);
+    std::fread(&r_nu,     sizeof(r_nu),     1, fp);
+    std::fread(&r_alpha,  sizeof(r_alpha),  1, fp);
+    std::fread(&i_step,   sizeof(i_step),   1, fp);
+    std::fread(&r_t,      sizeof(r_t),      1, fp);
+    std::fread(&i_ncplx,  sizeof(i_ncplx),  1, fp);
+    if (i_nx != nx || i_ny != ny || i_ncplx != ncplx) {
+        std::fprintf(stderr,
+            "  PS checkpoint: size mismatch ckpt=%dx%d (ncplx=%lld) vs solver=%dx%d (%d)\n",
+            i_nx, i_ny, (long long)i_ncplx, nx, ny, ncplx);
+        std::fclose(fp);
+        return false;
+    }
+    std::vector<cufftDoubleComplex> h(ncplx);
+    size_t read_n = std::fread(h.data(), sizeof(cufftDoubleComplex), ncplx, fp);
+    std::fclose(fp);
+    if ((int)read_n != ncplx) {
+        std::fprintf(stderr, "  PS checkpoint: truncated (%zu/%d)\n", read_n, ncplx);
+        return false;
+    }
+    CUDA_CHECK(cudaMemcpy(d_omega_hat, h.data(),
+                          ncplx * sizeof(cufftDoubleComplex),
+                          cudaMemcpyHostToDevice));
+    // 同步物理場
+    copy_hat(d_tmp_hat, d_omega_hat, ncplx);
+    spec_to_phys(plan_c2r, d_tmp_hat, d_omega, ncell);
+    int B = 256, Gh = (ncplx + B - 1) / B;
+    k_spec_uv<<<Gh, B>>>(d_omega_hat, d_kx, d_ky, d_dealias,
+                         d_tmp_hat, d_rhs_hat, nx, nh);
+    spec_to_phys(plan_c2r, d_tmp_hat, d_u, ncell);
+    spec_to_phys(plan_c2r, d_rhs_hat, d_v, ncell);
+    step_count = (int)i_step;
+    t_out = r_t;
+    std::fprintf(stderr,
+        "  PS checkpoint loaded: %s (step=%lld, t=%.6e, ν_ckpt=%.3g, α_ckpt=%.3g)\n",
+        path.c_str(), (long long)step_count, r_t, r_nu, r_alpha);
+    return true;
 }
 
 void PseudoSpectralSolver::free_frame_buffer() {

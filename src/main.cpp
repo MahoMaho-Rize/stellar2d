@@ -102,6 +102,14 @@ struct SimConfig {
     int    ps_forcing_kf  = 32;   // forcing 中心波數 (mode 整數)
     int    ps_forcing_dk  = 1;    // forcing 殼半寬 (mode)
     uint64_t ps_forcing_seed = 0x5a5a5a5aULL;
+    bool   ps_forcing_host_rng = false;   // 強制回到 host mt19937 + D2H (除錯用)
+    double ps_drag_alpha   = 0.0;          // linear drag -α·ω, 破壞 condensate
+    int    ps_hyper_p      = 1;            // hyperviscosity 冪次: 1=Laplacian, >1 高階
+    bool   ps_conservative = false;        // 用 conservative(rotational)對流形式
+    bool   ps_pi_dt        = false;        // PI controller 自適應 dt
+    int    ps_tg_k         = 2;            // Taylor-Green 波數 (for --test taylor_green)
+    int    ps_ckpt_every   = 0;            // 每 N 步存 checkpoint (0 = 停用)
+    std::string ps_resume;                 // restart 檔路徑 (空 = 從 IC 開始)
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -292,6 +300,22 @@ int main(int argc, char** argv) {
             cfg.ps_forcing_dk = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-forcing-seed") == 0 && i + 1 < argc)
             cfg.ps_forcing_seed = std::strtoull(argv[++i], nullptr, 0);
+        else if (std::strcmp(argv[i], "--ps-forcing-host-rng") == 0)
+            cfg.ps_forcing_host_rng = true;
+        else if (std::strcmp(argv[i], "--ps-drag") == 0 && i + 1 < argc)
+            cfg.ps_drag_alpha = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-hyper") == 0 && i + 1 < argc)
+            cfg.ps_hyper_p = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-conservative") == 0)
+            cfg.ps_conservative = true;
+        else if (std::strcmp(argv[i], "--ps-pi") == 0)
+            cfg.ps_pi_dt = true;
+        else if (std::strcmp(argv[i], "--ps-tg-k") == 0 && i + 1 < argc)
+            cfg.ps_tg_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-ckpt-every") == 0 && i + 1 < argc)
+            cfg.ps_ckpt_every = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-resume") == 0 && i + 1 < argc)
+            cfg.ps_resume = argv[++i];
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -421,7 +445,8 @@ int main(int argc, char** argv) {
     } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
                || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
                || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb"
-               || cfg.test_case == "kh_lecoanet") {
+               || cfg.test_case == "kh_lecoanet"
+               || cfg.test_case == "taylor_green") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -1015,18 +1040,26 @@ int main(int argc, char** argv) {
         cale.destroy();
     } else if (cfg.solver_type == "pseudo_spectral") {
         // ===== 偽譜法 2D 不可壓 NS (渦度-流函數, cuFFT) =====
-        if (cfg.test_case != "kh_shear" && cfg.test_case != "forced_turb") {
+        if (cfg.test_case != "kh_shear" && cfg.test_case != "forced_turb"
+            && cfg.test_case != "taylor_green") {
             std::fprintf(stderr,
-                "ERROR: pseudo_spectral supports --test {kh_shear, forced_turb}\n");
+                "ERROR: pseudo_spectral supports --test {kh_shear, forced_turb, taylor_green}\n");
             return 1;
         }
         PseudoSpectralSolver ps;
-        ps.use_ifrk = !cfg.ps_explicit;
-        ps.use_skew = !cfg.ps_adv_only;
+        ps.use_ifrk         = !cfg.ps_explicit;
+        ps.use_skew         = !cfg.ps_adv_only && !cfg.ps_conservative;
+        ps.use_conservative = cfg.ps_conservative && !cfg.ps_adv_only;
+        ps.drag_alpha       = cfg.ps_drag_alpha;
+        ps.hyper_p          = std::max(1, cfg.ps_hyper_p);
+        ps.use_pi_dt        = cfg.ps_pi_dt;
+        ps.forcing_use_curand = !cfg.ps_forcing_host_rng;
         ps.init(cfg.nr, cfg.ntheta, cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
         if (cfg.test_case == "kh_shear") {
             double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
             ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
+        } else if (cfg.test_case == "taylor_green") {
+            ps.init_taylor_green(cfg.ps_tg_k);
         } else {
             // forced_turb: zero IC + stochastic forcing
             ps.init_zero();
@@ -1040,6 +1073,19 @@ int main(int argc, char** argv) {
             ps.init_forcing(cfg.ps_forcing_kf, cfg.ps_forcing_dk,
                             cfg.ps_forcing_eps, cfg.ps_forcing_seed);
         }
+        // Restart (若提供):覆寫 IC 的 ω̂,更新 step/t。
+        if (!cfg.ps_resume.empty()) {
+            double t_ckpt = 0.0;
+            if (ps.load_checkpoint(cfg.ps_resume, t_ckpt)) {
+                t = t_ckpt;
+                step = ps.step_count;
+                // Taylor-Green IC-比對 buffer 在 restart 後對非-TG run 沒意義;
+                // 對 TG run,IC 譜仍來自 init_taylor_green 的初次呼叫 → 已保存。
+            } else {
+                std::fprintf(stderr, "ERROR: --ps-resume failed\n");
+                return 1;
+            }
+        }
 
         std::timespec wall_start;
         clock_gettime(CLOCK_MONOTONIC, &wall_start);
@@ -1047,7 +1093,8 @@ int main(int argc, char** argv) {
         char csv_path[512];
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
-        std::fprintf(csv, "step,t,dt,KE,enstrophy,max_v,max_omega,eps_KE,eps_enstrophy\n");
+        std::fprintf(csv,
+            "step,t,dt,KE,enstrophy,max_v,max_omega,eps_KE,eps_enstrophy,err_L2\n");
 
         int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
         int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
@@ -1080,15 +1127,28 @@ int main(int argc, char** argv) {
             }
 
             if (do_diag) {
-                auto d = ps.compute_diagnostics();
+                auto d = ps.compute_diagnostics(t);
                 std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ω|=%.3e εKE=%.3e εΩ=%.3e\n",
-                            step, t, dt, d.total_KE, d.total_enstrophy,
-                            d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy);
-                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e\n",
+                if (cfg.test_case == "taylor_green") {
+                    std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ω|=%.3e εKE=%.3e errL2=%.3e\n",
+                                step, t, dt, d.total_KE, d.total_enstrophy,
+                                d.max_v, d.max_omega, d.eps_KE, d.err_L2);
+                } else {
+                    std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ω|=%.3e εKE=%.3e εΩ=%.3e\n",
+                                step, t, dt, d.total_KE, d.total_enstrophy,
+                                d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy);
+                }
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
                              step, t, dt, d.total_KE, d.total_enstrophy,
-                             d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy);
+                             d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy,
+                             d.err_L2);
                 std::fflush(csv);
+            }
+            if (cfg.ps_ckpt_every > 0 && step % cfg.ps_ckpt_every == 0) {
+                char cpath[512];
+                std::snprintf(cpath, sizeof(cpath), "%s/checkpoint.bin",
+                              run_dir.c_str());
+                ps.save_checkpoint(cpath, t);
             }
             if (do_vtk) {
                 if (cfg.frame_buffer && ps.frame_capacity > 0) {

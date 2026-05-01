@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cufft.h>
+#include <curand_kernel.h>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -36,6 +37,13 @@ struct PseudoSpectralSolver {
     double cfl = 0.5;            // 對流 CFL 上限
     double dt_visc_factor = 0.5; // 顯式擴散 CFL 安全係數 (ν·dt·|k|²max ≤ factor)
     double dt_max = 5e-3;
+    double dt_min = 1e-12;
+    // Linear drag 係數 α:∂ω/∂t 加 -α·ω (破壞 condensate,允許 forced turb 穩態)。
+    // 0 = 停用。啟用後 IFRK 積分因子變 exp(-(ν·k^(2p) + α)·dt·expo)。
+    double drag_alpha = 0.0;
+    // Hyperviscosity 冪次:-(-Δ)^p·ν·ω。p=1 為標準 Laplacian;p>1 把耗散壓到最高 k。
+    // 注意:dt_visc_factor 下顯式擴散 CFL ∝ ν·|k|^(2p)·dt,p 大時 dt_max 要手動調。
+    int    hyper_p = 1;
     // 積分因子 RK3 (IFRK3):黏性在譜空間解析積分為 exp(-νk²Δt)。
     // 啟用後 dt 只受對流 CFL 限制,可大幅放寬。預設 true。
     bool   use_ifrk = true;
@@ -43,6 +51,15 @@ struct PseudoSpectralSolver {
     // 離散下嚴格保持能量+enstrophy (Orszag 1971)。代價:每級多 1 次 R2C FFT。
     // 預設 true;--ps-adv-only 強制回到 advective。
     bool   use_skew = true;
+    // Conservative / rotational form (Basdevant 1986): N_C = ∂(uω)/∂x + ∂(vω)/∂y
+    //   連續條件下 N_C ≡ N_A (∇·u=0 時);離散下也守 enstrophy,但只要 2 次 R2C。
+    //   use_conservative 與 use_skew 互斥 (後者優先);兩者都 false 回到 advective。
+    bool   use_conservative = false;
+    // PI controller (Söderlind 2003):dt 跟隨 max|v| 變化平滑調節,避免 CFL overshoot。
+    // 預設 false (保當前可重現性);啟用後 dt_prev / err_prev 被維護。
+    bool   use_pi_dt = false;
+    double dt_prev = 0.0;
+    double pi_cfl_target = 0.0;   // 啟用時自動設為 cfl;<=0 走預設。
 
     // ---- 物理空間 (double, ncell) ----
     double* d_omega = nullptr;   // ω
@@ -87,9 +104,12 @@ struct PseudoSpectralSolver {
     int     forcing_n       = 0;     // 殼內模個數
     int*    d_forcing_idx   = nullptr;  // ncplx 索引 (size forcing_n)
     double* d_forcing_sigma = nullptr;  // σ 值    (size forcing_n)
-    double* d_forcing_cos   = nullptr;  // 每步新 phase (size forcing_n)
+    double* d_forcing_cos   = nullptr;  // host-path: 每步新 phase (size forcing_n)
     double* d_forcing_sin   = nullptr;
     uint64_t forcing_seed   = 0x5a5a5a5aULL;
+    // cuRAND device-side path(預設 ON;避免 host mt19937+D2H 每步同步)
+    bool    forcing_use_curand = true;
+    curandStatePhilox4_32_10_t* d_forcing_states = nullptr;
 
     // ---- 診斷/書記 ----
     double dt_current = 0.0;
@@ -139,6 +159,16 @@ struct PseudoSpectralSolver {
     // 不可壓假設下 ρ=1,P 不參與演化(無熱力學)。
     void init_kh_shear(double vshear, double amp, int k);
 
+    // Taylor-Green vortex (純擴散解析解):
+    //   ω(x,y,0) = 2k·cos(k·2π·x/Lx)·cos(k·2π·y/Ly)
+    //   ω(x,y,t) = ω(x,y,0)·exp(-2ν·k_phys²·t),  k_phys² = (k·2π/L)²·2
+    // 對流項應嚴格為 0(u·∇ω 在 Taylor-Green 幾何上精確消去),只測 IFRK3 積分因子與空間階。
+    // 啟用後會存 ω̂₀ 到 d_omega_hat_ic,compute_diagnostics 可額外算 err_L2。
+    void init_taylor_green(int k);
+    bool has_analytic_ic = false;
+    int  analytic_k = 0;     // Taylor-Green 波數 mode
+    cufftDoubleComplex* d_omega_hat_ic = nullptr;
+
     // RK3 Shu-Osher 低存儲推進。回傳 dt。
     double step();
 
@@ -165,13 +195,22 @@ struct PseudoSpectralSolver {
         double total_enstrophy; // ∫½ω² dA
         double max_v;
         double max_omega;
-        double eps_KE;          // 動能耗散率 = 2ν·Ω
-        double eps_enstrophy;   // enstrophy 耗散率 = ν·∫|∇ω|² dA (譜空間算)
+        double eps_KE;          // 動能耗散率 = 2ν·Ω + 2α·KE (drag 貢獻)
+        double eps_enstrophy;   // enstrophy 耗散率 = ν·∫|∇ω|²p 項 (譜空間算)
+        double eps_KE_spec;     // 譜空間重算的 eps_KE,用於交叉檢查
+        double err_L2;          // |ω_num - ω_exact| L2 (解析解 IC 才有意義,否則 NaN)
+        double t_eval;          // 傳入 compute_diagnostics 的當前 t (err_L2 需要)
     };
-    Diagnostics compute_diagnostics();
+    Diagnostics compute_diagnostics(double t_eval = 0.0);
 
     // GPU ring-integrate: 算 E(k) per bin (長度 nbins),寫入 out。
     // 規則 (與 scripts/spectrum_pseudo_spectral.py 一致):
     //   Σ_k E(k)·dk = KE_total
     void compute_spectrum_bins(std::vector<double>& out);
+
+    // ---- Checkpoint / Restart ----
+    // 二進位 dump:header(magic,nx,ny,Lx,Ly,nu,step,t,forcing_seed_state) + ω̂ (ncplx·16B)。
+    // save: 呼叫端提供當前 t;load: 回傳 t (解析器再 restore)。
+    void save_checkpoint(const std::string& path, double t);
+    bool load_checkpoint(const std::string& path, double& t_out);
 };

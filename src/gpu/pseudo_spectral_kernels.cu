@@ -7,6 +7,8 @@
 
 #include <cuda_runtime.h>
 #include <cufft.h>
+#include <curand_kernel.h>
+#include <cstdint>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -133,6 +135,35 @@ __global__ void k_compute_u_omega(const double* u, const double* v,
 }
 
 // ============================================================
+// Conservative/rotational form (Basdevant 1986):
+//   N_C = ∂(uω)/∂x + ∂(vω)/∂y
+// ∇·u=0 下連續方程 N_A ≡ N_C;離散下也守 enstrophy,只要 2 次 R2C FFT
+// (vs skew 的 3 次)。輸入 (uω)^ 在 uw_hat,(vω)^ 在 vw_hat。
+// 輸出 rhs = -N̂_C (套 dealias)。
+// ============================================================
+__global__ void k_form_rhs_conservative(const cufftDoubleComplex* uw_hat,
+                                        const cufftDoubleComplex* vw_hat,
+                                        const double* kx, const double* ky,
+                                        const double* dealias,
+                                        cufftDoubleComplex* rhs_hat,
+                                        int nx, int nh) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = nx * nh;
+    if (gid >= total) return;
+    int ic = gid / nh;
+    int jc = gid - ic * nh;
+    double kxv = kx[ic], kyv = ky[jc];
+    double m = dealias[gid];
+    cufftDoubleComplex uw = uw_hat[gid];
+    cufftDoubleComplex vw = vw_hat[gid];
+    // N̂_C = i·kx·(uω)^ + i·ky·(vω)^
+    double NC_r = -(kxv * uw.y + kyv * vw.y);
+    double NC_i =  (kxv * uw.x + kyv * vw.x);
+    rhs_hat[gid].x = -NC_r * m;
+    rhs_hat[gid].y = -NC_i * m;
+}
+
+// ============================================================
 // 譜空間組 skew-symmetric convection:
 //   N̂_S = ½ (N̂_A + N̂_C)
 //   其中 N̂_C = i·kx·(uω)^ + i·ky·(vω)^
@@ -201,14 +232,17 @@ __global__ void k_form_rhs_adv_only(const cufftDoubleComplex* N_hat,
 }
 
 // ============================================================
-// rhs_hat = -N̂ - ν |k|² ω̂   (並套 2/3 dealias mask) — 顯式版
+// rhs_hat = -N̂ - (ν·|k|^(2p) + α)·ω̂   (並套 2/3 dealias mask) — 顯式版
+//   hyper_p: 1 為標準 Laplacian;>1 為 hyperviscosity -ν·(-Δ)^p。
+//   drag_alpha: linear drag -α·ω,破壞 condensate (Kraichnan regime)。
 // ============================================================
 __global__ void k_form_rhs_hat(const cufftDoubleComplex* N_hat,
                                const cufftDoubleComplex* omega_hat,
                                const double* kx, const double* ky,
                                const double* dealias,
                                cufftDoubleComplex* rhs_hat,
-                               double nu, int nx, int nh) {
+                               double nu, double drag_alpha,
+                               int hyper_p, int nx, int nh) {
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     int total = nx * nh;
     if (gid >= total) return;
@@ -216,12 +250,15 @@ __global__ void k_form_rhs_hat(const cufftDoubleComplex* N_hat,
     int jc = gid - ic * nh;
     double kxv = kx[ic], kyv = ky[jc];
     double k2  = kxv * kxv + kyv * kyv;
+    double k2p = k2;
+    for (int q = 1; q < hyper_p; ++q) k2p *= k2;   // |k|^(2p)
     double mask = dealias[gid];
+    double diss = nu * k2p + drag_alpha;
 
     cufftDoubleComplex n = N_hat[gid];
     cufftDoubleComplex w = omega_hat[gid];
-    rhs_hat[gid].x = (-n.x - nu * k2 * w.x) * mask;
-    rhs_hat[gid].y = (-n.y - nu * k2 * w.y) * mask;
+    rhs_hat[gid].x = (-n.x - diss * w.x) * mask;
+    rhs_hat[gid].y = (-n.y - diss * w.y) * mask;
 }
 
 // ============================================================
@@ -270,7 +307,8 @@ __global__ void k_ifrk_combine(cufftDoubleComplex* y_out,
                                const double* kx, const double* ky,
                                double a, double b, double c_dt,
                                double expo_a, double expo_b,
-                               double nu_dt,
+                               double nu_dt, double drag_dt,
+                               int hyper_p,
                                int nx, int nh) {
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     int total = nx * nh;
@@ -278,13 +316,30 @@ __global__ void k_ifrk_combine(cufftDoubleComplex* y_out,
     int ic = gid / nh;
     int jc = gid - ic * nh;
     double k2 = kx[ic] * kx[ic] + ky[jc] * ky[jc];
-    double Ea = exp(-nu_dt * k2 * expo_a);
-    double Eb = exp(-nu_dt * k2 * expo_b);
+    double k2p = k2;
+    for (int q = 1; q < hyper_p; ++q) k2p *= k2;
+    // 總耗散指數 L·dt = (ν·|k|^(2p) + α)·dt
+    double Ldt = nu_dt * k2p + drag_dt;
+    // Clamp 防下溢產生 denormal * inf = NaN;Ldt·expo 極大時直接歸 0(exp(-∞)=0)。
+    double Ea = (Ldt * expo_a >  700.0) ? 0.0
+              : (Ldt * expo_a < -700.0) ? __longlong_as_double(0x7FF0000000000000LL)
+              : exp(-Ldt * expo_a);
+    double Eb = (Ldt * expo_b >  700.0) ? 0.0
+              : (Ldt * expo_b < -700.0) ? __longlong_as_double(0x7FF0000000000000LL)
+              : exp(-Ldt * expo_b);
+    // 若 Ea/Eb 達到 0 (強耗散),強制 ω̂(k) → 0(避免 0·NaN 污染)
+    double y_orig_x = y_orig[gid].x, y_orig_y = y_orig[gid].y;
+    double y_curr_x = y_curr[gid].x, y_curr_y = y_curr[gid].y;
+    double rhs_x    = rhs[gid].x,    rhs_y    = rhs[gid].y;
     double ca = a * Ea;
     double cb = b * Eb;
     double cc = c_dt * Eb;
-    y_out[gid].x = ca * y_orig[gid].x + cb * y_curr[gid].x + cc * rhs[gid].x;
-    y_out[gid].y = ca * y_orig[gid].y + cb * y_curr[gid].y + cc * rhs[gid].y;
+    double out_x = ca * y_orig_x + cb * y_curr_x + cc * rhs_x;
+    double out_y = ca * y_orig_y + cb * y_curr_y + cc * rhs_y;
+    if (!isfinite(out_x)) out_x = 0.0;
+    if (!isfinite(out_y)) out_y = 0.0;
+    y_out[gid].x = out_x;
+    y_out[gid].y = out_y;
 }
 
 // ============================================================
@@ -341,10 +396,16 @@ __global__ void k_reduce_diag(const double* u, const double* v,
 //   輸出 out[blockIdx] 為 block 內加和,host 再求總和。
 // 這裡我們忽略 jc=0/末 的半計數 (差 O(1/N)),實用足夠。
 // ============================================================
+// 通用 Σ k^(2·p_eff)·|ω̂|²·weight·scale reduction。
+//   p_eff = 0  → 純 Σ|ω̂|² (能量代理)
+//   p_eff = 1  → Σk²|ω̂|² = ∫|∇ω|²
+//   p_eff = p-1 (hyperviscosity p):  對應 eps_KE hyper 修正項
+//   p_eff = p   (hyperviscosity p):  對應 eps_enstrophy
 __global__ void k_reduce_k2E(const cufftDoubleComplex* omega_hat,
                              const double* kx, const double* ky,
                              double* out, int ncplx, int nx, int nh,
-                             double scale /* = 2/N² for Hermitian doubling + normalization */) {
+                             double scale /* = (Lx·Ly)/N² 量級 */,
+                             int p_eff /* 0,1,… exponent of k^2 */) {
     extern __shared__ double shm_k2[];
     int tid = threadIdx.x;
     int gid = blockIdx.x * blockDim.x + tid;
@@ -355,11 +416,13 @@ __global__ void k_reduce_k2E(const cufftDoubleComplex* omega_hat,
         int jc = gid - ic * nh;
         double kxv = kx[ic], kyv = ky[jc];
         double k2 = kxv * kxv + kyv * kyv;
+        double k2p = 1.0;
+        for (int q = 0; q < p_eff; ++q) k2p *= k2;
         cufftDoubleComplex w = omega_hat[gid];
         double mag2 = w.x * w.x + w.y * w.y;
         // jc = 0 (和 ny 偶時 jc = nh-1) 不重複,其他 ×2 (Hermitian 對稱)
         double weight = (jc == 0 || jc == nh - 1) ? 1.0 : 2.0;
-        s = scale * weight * k2 * mag2;
+        s = scale * weight * k2p * mag2;
     }
     shm_k2[tid] = s;
     __syncthreads();
@@ -435,6 +498,98 @@ __global__ void k_apply_forcing(cufftDoubleComplex* omega_hat,
     omega_hat[k_idx].x += s * phase_cos[gid];
     omega_hat[k_idx].y += s * phase_sin[gid];
 }
+
+// ============================================================
+// cuRAND-based device-side forcing:per-mode Philox 生成 phase,省 D2H。
+//   每 mode 有自己的 curandStatePhilox4_32_10_t。init 一次,後續重複用。
+// ============================================================
+__global__ void k_init_curand_states(curandStatePhilox4_32_10_t* states,
+                                     uint64_t seed, int n) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= n) return;
+    // 每個 mode 不同 sequence,保證獨立
+    curand_init(seed, (unsigned long long)gid, 0, &states[gid]);
+}
+
+__global__ void k_apply_forcing_curand(cufftDoubleComplex* omega_hat,
+                                       const int* idx, const double* sigma,
+                                       curandStatePhilox4_32_10_t* states,
+                                       double sqrt_dt, int n_forcing) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= n_forcing) return;
+    curandStatePhilox4_32_10_t st = states[gid];
+    double u = curand_uniform_double(&st);
+    double phi = 2.0 * M_PI * u;
+    states[gid] = st;
+    double cphi, sphi;
+    sincos(phi, &sphi, &cphi);
+    int k_idx = idx[gid];
+    double s = sigma[gid] * sqrt_dt;
+    omega_hat[k_idx].x += s * cphi;
+    omega_hat[k_idx].y += s * sphi;
+}
+
+// ============================================================
+// DC mode 清零 (R2C 約定下 gid=0 即 (ic=0, jc=0))。
+// 防止浮點誤差 + forcing 殘影累積成 spurious mean vorticity。
+// ============================================================
+__global__ void k_clear_dc(cufftDoubleComplex* hat) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        hat[0].x = 0.0;
+        hat[0].y = 0.0;
+    }
+}
+
+// ============================================================
+// Taylor-Green 解析解誤差(譜空間;避開 IFFT 數值噪聲):
+//   ω_exact_hat(t) = ω_hat_ic · exp(-2·ν·k_f²·t)     (k_f: 對應的 TG 波數物理值²)
+//   err_L2² = (Lx·Ly/N⁴) · Σ w(k)·|ω̂(t) - ω̂_exact(t)|²
+// 注:TG 在連續下對流項 ≡ 0,故數值誤差純來自 IFRK/hyper 處理。
+// 對每個 mode 算 |diff|²,weight 同 R2C Hermitian。
+// ============================================================
+__global__ void k_reduce_tg_err(const cufftDoubleComplex* omega_hat,
+                                const cufftDoubleComplex* omega_hat_ic,
+                                double decay,   // exp(-2·ν·k_f²·t)
+                                double* out, int ncplx, int nh,
+                                double scale) {
+    extern __shared__ double shm_tg[];
+    int tid = threadIdx.x;
+    int gid = blockIdx.x * blockDim.x + tid;
+    double s = 0.0;
+    if (gid < ncplx) {
+        int ic = gid / nh;
+        int jc = gid - ic * nh;
+        (void)ic;
+        double weight = (jc == 0 || jc == nh - 1) ? 1.0 : 2.0;
+        cufftDoubleComplex w  = omega_hat[gid];
+        cufftDoubleComplex w0 = omega_hat_ic[gid];
+        double ex_r = decay * w0.x;
+        double ex_i = decay * w0.y;
+        double dr = w.x - ex_r;
+        double di = w.y - ex_i;
+        s = scale * weight * (dr * dr + di * di);
+    }
+    shm_tg[tid] = s;
+    __syncthreads();
+    for (int off = blockDim.x / 2; off > 0; off >>= 1) {
+        if (tid < off) shm_tg[tid] += shm_tg[tid + off];
+        __syncthreads();
+    }
+    if (tid == 0) out[blockIdx.x] = shm_tg[0];
+}
+
+// ============================================================
+// 譜空間動能耗散率交叉檢查:
+//   eps_KE_spec = 2·(ν·Σk²p·|ψ̂|²·k² + α·Σ|ψ̂|²·k²) ·scale
+// 當前做法更簡:eps_KE = 2·(ν + α·某種表示)?
+// 其實 d(KE)/dt = -2·(ν·∫|∇ω|² + α·∫|∇ψ|²? no: α 在 ω 方程)
+// d(KE)/dt(drag) = ∫u · ∂u/∂t dA;∂u/∂t 含 -α·u(由 ω 的 -α·ω 投影回 u)
+//   → drag 對 KE 貢獻 = -2α·KE   (見文獻 Boffetta-Ecke 2012 eq 7)
+// Laplacian/hyper 對 KE 貢獻 = -2ν·Σk^(2p-2)·|ω̂|²·factor
+//   p=1: -2ν·Ω
+//   p>1: -2ν·∫ω·(-Δ)^(p-1)·ω dA
+// 我們直接在 host 側用 total_KE 和 譜 Σk^(2p-2)|ω̂|² 合成,不需新 kernel。
+// ============================================================
 
 // ============================================================
 // Frame pool snapshot — layout per frame: [ω | u | v] × ncell

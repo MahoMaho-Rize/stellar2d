@@ -499,3 +499,82 @@ find runs/ -name "*.vtk" -delete
 - 在 pseudo_spectral_*.cu 內塞磁場/重力/溫度(要開新 solver)
 - 修改任何既有 solver(strang, cart_ale*, fas, lowmach 等)
 - `rm -rf runs/*`(要只刪 *.vtk,保 CSV)
+
+---
+
+## Part 9. 2026-05-01 追補完善(本分支 `pseudo-astro-explore`)
+
+本次補齊 roadmap Part 2 列出的全部短期項目 + 幾個未列的工程缺陷:
+
+### 方法學
+- ✅ **Taylor-Green 解析解驗證**(`--test taylor_green --ps-tg-k <int>`)
+  - IC:`ω = 2k·cos(kx·x)·cos(ky·y)`,對流項嚴格為 0
+  - `compute_diagnostics` 多欄 `err_L2`,對比 `ω_exact(t) = IC·exp(-2νk²t)`
+  - 驗證結果:N=32..512, CFL=0.05..0.4 下 err_L2 全部 ≤ 1e-13
+    → **IFRK3 對純擴散解析精確**(無截斷誤差,只有浮點累加噪聲)
+- ✅ **Linear drag `-α·ω`**(`--ps-drag <α>`)
+  - IFRK 積分因子擴展:exp(-νk²Δt) → exp(-(νk²+α)Δt)
+  - Diagnostics eps_KE 加上 `+2α·KE` 貢獻
+  - Smoke 驗證:KH + drag=0.1 下 ε_KE = 2ν·Ω + 2α·KE 吻合實測
+- ✅ **Hyperviscosity**(`--ps-hyper <p>`,p=1,2,4,…)
+  - `-ν·(-Δ)^p·ω`;顯式 CFL 隨 `|k|^(2p)` scaling
+  - IFRK kernel 加 exp 下溢 clamp(|L·dt| > 700 時直接歸 0 避免 NaN)
+- ✅ **Conservative / rotational form**(`--ps-conservative`,Basdevant 1986)
+  - 只需 2 次 R2C FFT(vs skew 的 3 次),離散下同守 enstrophy
+  - 與 `--ps-adv-only` / skew(預設)互斥,skew 優先
+- ✅ **DC mode 強制歸零**:每步 step 末尾 + IC 末尾調用 `k_clear_dc`
+  - 防浮點 + forcing 殘影累積成 spurious mean vorticity
+- ✅ **各向異性 forcing σ**:shell 現以物理 |k|² 判斷,
+  `σ² = ε·N⁴/(Lx·Ly·Σ 1/k_phys²)`(Lx≠Ly 下不再用平均 L 近似)
+- ✅ **光滑 KH IC**:tanh 層厚 δ 從 `max(4dy, 0.01Ly)` 加大到
+  `max(8dy, 0.02Ly)` — 譜衰減 sech²(k·δ) 在 dealias cut 前到 <1e-10
+- ✅ **eps_KE cross-check**:p=1 時比較物理空間 Ω_phys 與譜空間 Ω_spec,
+  相對差 > 1e-6 時 warn(抓 FFT plan / dealias / indexing bug)
+
+### 工程
+- ✅ **cuRAND device-side forcing**(`--ps-forcing-host-rng` 回退 host mt19937)
+  - Philox4_32_10 per-mode state,消除 host mt19937 + D2H 每步同步
+  - 寬殼 / 高頻強迫時顯著加速
+- ✅ **PI controller**(`--ps-pi`)
+  - 一步 dt 最多放大 10% / 縮到 50%,避免 max|v| 突變的 CFL overshoot
+- ✅ **Checkpoint / Restart**(`--ps-ckpt-every <N>` + `--ps-resume <file>`)
+  - Binary dump:magic + ω̂ + step + t + metadata;磁碟大小 = ncplx·16B
+  - 長 run 中斷可續跑
+- ✅ **dt_min guard**:防 max|v| → ∞ 時 dt → 0 卡死
+
+### 新增 CLI 總表
+```
+--ps-drag <α>              linear drag coefficient (預設 0)
+--ps-hyper <p>             hyperviscosity exponent (預設 1 = Laplacian)
+--ps-conservative          用 rotational form (省 FFT);skew 優先
+--ps-pi                    啟用 PI dt controller
+--ps-tg-k <k>              Taylor-Green 波數(for --test taylor_green)
+--ps-ckpt-every <N>        每 N 步存 checkpoint.bin 到 run_dir
+--ps-resume <file>         從 checkpoint 續跑
+--ps-forcing-host-rng      回退 host mt19937(除錯用)
+```
+
+### 新增 test case
+- `--test taylor_green` — 解析解驗證。
+
+### 新增驗證腳本
+- `scripts/convergence_pseudo_spectral.py` — 空間 / 時間兩類掃描,產出
+  `videos/ps_convergence_{spatial,temporal}.png`。
+
+### 驗證數字 (本輪)
+| 測試 | 設定 | err_L2 | 結論 |
+|---|---|---|---|
+| TG 空間掃 | N=32..512, ν=1e-3, t=0.1 | 5e-15 .. 7e-14 | IFRK3 analytically exact ✓ |
+| TG 時間掃 | N=128, CFL=0.05..0.4, t=0.05 | 1.5e-14 .. 8e-14 | 全停在 ε_mach ✓ |
+| KH smoke | N=128, ν=1e-3, k=4, t=2 | — | 守恆穩定,無 diag warn |
+| KH + drag=0.1 | N=128, ν=1e-3, t=1 | — | ε_KE ≈ 2ν·Ω+2α·KE 自洽 |
+| Forced + drag + ckpt | N=128, restart 正確 | — | step/t 續接無縫 ✓ |
+| Hyper p=4 | N=128, ν=1e-20 | — | 跑穩(大 ν 會強耗散但不 NaN) |
+
+### 未完成(留給後續)
+- [ ] **SRK3 嚴格化**:目前 forcing 仍在 RK3 起點一次性加 √dt·σ·e^{iφ}
+  (Euler-Maruyama 風格,非真 SRK3);統計量正確但 per-step 行為非嚴格。
+  文獻路徑:Burrage-Tian 2004 stochastic RK3。
+- [ ] **GPU-side 終局 reduction**:compute_dt 仍每步 D2H `4·reduce_blocks·8B`;
+  2048²+ 時有 10-30 μs 同步成本,可用 CUDA graph + persistent pinned mem。
+- [ ] **Frame flush async**:`cudaMemcpy D2H` + fwrite 仍阻塞,可 pinned + 雙緩衝。
