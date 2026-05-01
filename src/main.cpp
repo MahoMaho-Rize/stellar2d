@@ -27,6 +27,7 @@
 #include "gpu/cart_lag_solver.cuh"
 #include "gpu/cart_ale_solver.cuh"
 #include "gpu/cart_ale2_solver.cuh"
+#include "gpu/pseudo_spectral_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -83,6 +84,12 @@ struct SimConfig {
     std::string cart_ale2_bc_x = "reflect";  // cart_ale2: reflect / periodic
     std::string cart_ale2_bc_y = "reflect";
     bool cart_ale2_ppm = false;   // cart_ale2: PPM-in-remap (default OFF; falls back to MUSCL)
+    // pseudo-spectral (偽譜法) 專用
+    double ps_nu = 1e-4;          // 運動黏度
+    double ps_Lx = 1.0;
+    double ps_Ly = 1.0;
+    double ps_vshear = 0.5;       // KH 基流速度
+    int    ps_k = 4;              // KH 擾動模數
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -241,6 +248,16 @@ int main(int argc, char** argv) {
             cfg.cart_ale2_bc_y = argv[++i];
         else if (std::strcmp(argv[i], "--ppm") == 0)
             cfg.cart_ale2_ppm = true;
+        else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
+            cfg.ps_nu = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)
+            cfg.ps_Lx = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-Ly") == 0 && i + 1 < argc)
+            cfg.ps_Ly = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-vshear") == 0 && i + 1 < argc)
+            cfg.ps_vshear = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-k") == 0 && i + 1 < argc)
+            cfg.ps_k = std::atoi(argv[++i]);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -974,6 +991,85 @@ int main(int argc, char** argv) {
         std::fclose(csv);
         std::fprintf(stderr, "\n");
         cale.destroy();
+    } else if (cfg.solver_type == "pseudo_spectral") {
+        // ===== 偽譜法 2D 不可壓 NS (渦度-流函數, cuFFT) =====
+        if (cfg.test_case != "kh_shear") {
+            std::fprintf(stderr,
+                "ERROR: pseudo_spectral currently only supports --test kh_shear\n");
+            return 1;
+        }
+        PseudoSpectralSolver ps;
+        ps.init(cfg.nr, cfg.ntheta, cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
+        double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
+        ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,KE,enstrophy,max_v,max_omega\n");
+
+        int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
+        int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
+        bool vtk_by_time = cfg.vtk_dt > 0.0;
+        double next_vtk_t = 0.0;
+        if (cfg.frame_buffer) ps.alloc_frame_buffer(cfg.frame_headroom_mb);
+
+        int frame = 0;
+        // t=0 幀 (便於 renderer 取首幀參考)
+        if (cfg.frame_buffer && ps.frame_capacity > 0) ps.capture_frame(0.0, 0);
+        else {
+            char path[512];
+            std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), ++frame);
+            ps.write_vtk_2d(path);
+        }
+
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = ps.step();
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            bool do_diag = (step % diag_every == 0) || t >= cfg.t_end;
+            bool do_vtk;
+            if (vtk_by_time) {
+                do_vtk = (t >= next_vtk_t) || t >= cfg.t_end;
+                if (do_vtk) next_vtk_t = t + cfg.vtk_dt;
+            } else {
+                do_vtk = (step % vtk_every == 0) || t >= cfg.t_end;
+            }
+
+            if (do_diag) {
+                auto d = ps.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ω|=%.3e\n",
+                            step, t, dt, d.total_KE, d.total_enstrophy,
+                            d.max_v, d.max_omega);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_KE, d.total_enstrophy,
+                             d.max_v, d.max_omega);
+                std::fflush(csv);
+            }
+            if (do_vtk) {
+                if (cfg.frame_buffer && ps.frame_capacity > 0) {
+                    if (ps.frame_count >= ps.frame_capacity)
+                        ps.flush_frames_to_disk(run_dir);
+                    ps.capture_frame(t, step);
+                } else {
+                    ++frame;
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/output_%04d.vtk",
+                                  run_dir.c_str(), frame);
+                    ps.write_vtk_2d(path);
+                }
+            }
+        }
+        if (cfg.frame_buffer) ps.flush_frames_to_disk(run_dir);
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        ps.destroy();
     } else if (cfg.solver_type == "ale2d") {
         // ===== 2D axisymmetric Lagrangian (Caramana compatible) =====
         if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
