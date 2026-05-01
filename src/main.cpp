@@ -76,6 +76,9 @@ struct SimConfig {
     bool frame_buffer = false;   // cart_ale: buffer frames in VRAM, dump at wall/end
     int frame_headroom_mb = 1024; // cart_ale: leave this much free VRAM when sizing the pool
     double vtk_dt = 0.0;         // cart_ale: capture every T physical time; 0 = use vtk_interval (step count)
+    double cart_ale_cq_lin  = 0.5;   // cart_ale: AV linear coefficient (default Caramana)
+    double cart_ale_cq_quad = 2.0;   // cart_ale: AV quadratic coefficient
+    bool   cart_ale_shear_aware = false; // cart_ale: reduce Q in shear-dominated cells
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -222,6 +225,12 @@ int main(int argc, char** argv) {
             cfg.frame_headroom_mb = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--vtk-dt") == 0 && i + 1 < argc)
             cfg.vtk_dt = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--cq-lin") == 0 && i + 1 < argc)
+            cfg.cart_ale_cq_lin = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--cq-quad") == 0 && i + 1 < argc)
+            cfg.cart_ale_cq_quad = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-aware-av") == 0)
+            cfg.cart_ale_shear_aware = true;
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -349,7 +358,8 @@ int main(int argc, char** argv) {
         ep.M = 1.0; ep.R = 1.0; ep.G = cfg.G;
         init_evrard(grid, state, ep, cfg.gamma);
     } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
-               || cfg.test_case == "hse_bubble" || cfg.test_case == "sod") {
+               || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
+               || cfg.test_case == "kh_shear") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -716,11 +726,15 @@ int main(int argc, char** argv) {
         CartAleSolver cale;
         bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
                        || cfg.test_case == "hse_bubble");
+        bool is_kh = (cfg.test_case == "kh_shear");
         double Lx = 1.0;
-        double Ly = is_hse ? 1.0 : 0.2;
+        double Ly = (is_hse || is_kh) ? 1.0 : 0.2;
         double gam = is_hse ? cfg.gamma : 1.4;
         cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
         cale.remap_order = cfg.cart_ale_remap_order;
+        cale.CQ_lin  = cfg.cart_ale_cq_lin;
+        cale.CQ_quad = cfg.cart_ale_cq_quad;
+        cale.shear_aware_av = cfg.cart_ale_shear_aware ? 1 : 0;
         if      (cfg.cart_ale_limiter == "minmod")  cale.remap_limiter = 0;
         else if (cfg.cart_ale_limiter == "vanleer") cale.remap_limiter = 1;
         else if (cfg.cart_ale_limiter == "mc")      cale.remap_limiter = 2;
@@ -728,10 +742,11 @@ int main(int argc, char** argv) {
                             cfg.cart_ale_limiter.c_str()); cale.remap_limiter = 1; }
         const char* lim_name = cale.remap_limiter == 0 ? "minmod"
                              : cale.remap_limiter == 1 ? "vanleer" : "mc";
-        std::fprintf(stderr, "  CartAle remap_order = %d (%s)  limiter = %s\n",
-                     cale.remap_order,
-                     cale.remap_order >= 2 ? "MUSCL-in-remap" : "donor-cell",
-                     lim_name);
+        std::fprintf(stderr,
+            "  CartAle remap_order = %d (%s)  limiter = %s  CQ_lin=%g CQ_quad=%g  shear_aware_av=%d\n",
+            cale.remap_order,
+            cale.remap_order >= 2 ? "MUSCL-in-remap" : "donor-cell",
+            lim_name, cale.CQ_lin, cale.CQ_quad, cale.shear_aware_av);
         if (cfg.test_case == "hse_bubble") {
             std::vector<CartAleSolver::Bubble> blist;
             if (!cfg.bubbles.empty()) {
@@ -746,6 +761,13 @@ int main(int argc, char** argv) {
             cale.init_hse_polytrope(1.0, 1.0, cfg.perturb_amplitude);
         } else if (cfg.test_case == "hse") {
             cale.init_hse_polytrope(1.0, 1.0, 0.0);
+        } else if (cfg.test_case == "kh_shear") {
+            // Canonical KH (Athena++ parity): ρ_heavy/ρ_light=2, P0=2.5,
+            // |vx|=0.5, amp=0.1 (fully nonlinear seed), k=2 (2 vortices
+            // per interface — 256 cells resolve each vortex). --perturb
+            // overrides amplitude.
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 0.1;
+            cale.init_kh_shear(1.0, 2.0, 2.5, 0.5, amp, 2);
         } else {
             cale.init_sod();
         }
