@@ -16,6 +16,7 @@
 | `wb2d` | `src/gpu/wb2d_solver.*` | ⚠️ 扰动 t≈2 死 | 物理无错,是 well-balanced 欧拉流族的合理实现;未来需要时改进稳定器,不要拆 |
 | `ale2d` | `src/gpu/ale2d_solver.*` | ⚠️ 轴对称 hoop bug | 轴对称 Caramana,文档里 `docs/ale_hoop_stress_fix.md` 已说明该怎么补丁。未来继续做球对称时直接上此文件,不要在新 ALE 里重做 |
 | `cart_lag` | `src/gpu/cart_lag_solver.*` | ⚠️ HSE dt 退化 | 纯 Lagrangian,hourglass-mode 导致长时间 HSE 退化;文档 `docs/ale_rezone_design.md` 分析了原因。是"真 ALE"的 Lagrangian 相参考实现,不要覆盖 |
+| `cart_ale` | `src/gpu/cart_ale_solver.*` | ✅ stable | Cartesian 2D ALE(Caramana Lagrangian + Eulerian rezone + swept remap)。`--remap-order 1|2`:1=donor-cell,2=MUSCL-minmod(默认,Kucharik-Shashkov) |
 
 **"做真正的 ALE"的正确路径**:开**新文件 + 新求解器 struct**(例如 `cart_ale_solver.{cu,cuh}` 配 `cart_ale_kernels.cu`),可以**参考**`cart_lag_*` 里的 Lagrangian kernel,但不要修改它们。CMakeLists.txt 里新增编译条目即可。
 

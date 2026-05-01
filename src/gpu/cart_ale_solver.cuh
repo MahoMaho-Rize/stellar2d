@@ -60,6 +60,20 @@ struct CartAleSolver {
     double *d_px_new = nullptr;      // new cell momentum
     double *d_py_new = nullptr;
 
+    // ---- 2nd-order remap (MUSCL-in-remap, Kucharik-Shashkov 2012) ----
+    // Per-cell densities on the reference uniform grid.
+    double *d_rho_dens  = nullptr;   // dm/V0
+    double *d_rhoE_dens = nullptr;   // (dm·e_int)/V0
+    double *d_pxd_dens  = nullptr;   // px/V0
+    double *d_pyd_dens  = nullptr;   // py/V0
+    // Per-cell minmod-limited slopes (∂f/∂x, ∂f/∂y) for each of the 4 fields.
+    double *d_rho_sx  = nullptr, *d_rho_sy  = nullptr;
+    double *d_rhoE_sx = nullptr, *d_rhoE_sy = nullptr;
+    double *d_pxd_sx  = nullptr, *d_pxd_sy  = nullptr;
+    double *d_pyd_sx  = nullptr, *d_pyd_sy  = nullptr;
+    // Uniform reference mesh spacing (cached for donor-center lookup in kernels).
+    double dx_u = 0.0, dy_u = 0.0;
+
     // ---- Subcell forces (nsub) ----
     double *d_FSX = nullptr, *d_FSY = nullptr;
 
@@ -74,6 +88,9 @@ struct CartAleSolver {
     double CQ_quad = 2.0;
     double comp_dt_frac = 0.25;
     double g_y = 0.0;                // downward gravity magnitude (pulls −y)
+    // Remap order: 1 = donor-cell (legacy, kept for regression), 2 = MUSCL-in-remap
+    // with minmod limiter (Kucharik-Shashkov 2012). Default is 2.
+    int remap_order = 2;
 
     // ---- Bookkeeping ----
     double dt_current = 0.0;

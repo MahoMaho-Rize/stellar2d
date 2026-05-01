@@ -69,6 +69,7 @@ struct SimConfig {
     std::vector<std::array<double, 5>> bubbles;
     bool no_sponge = false;
     bool lm_hllc = false;
+    int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -201,6 +202,8 @@ int main(int argc, char** argv) {
             cfg.radial_only = true;
         else if (std::strcmp(argv[i], "--r-inner") == 0 && i + 1 < argc)
             cfg.r_inner = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--remap-order") == 0 && i + 1 < argc)
+            cfg.cart_ale_remap_order = std::atoi(argv[++i]);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -699,6 +702,10 @@ int main(int argc, char** argv) {
         double Ly = is_hse ? 1.0 : 0.2;
         double gam = is_hse ? cfg.gamma : 1.4;
         cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
+        cale.remap_order = cfg.cart_ale_remap_order;
+        std::fprintf(stderr, "  CartAle remap_order = %d (%s)\n",
+                     cale.remap_order,
+                     cale.remap_order >= 2 ? "MUSCL-in-remap, minmod" : "donor-cell");
         if (cfg.test_case == "hse_bubble") {
             std::vector<CartAleSolver::Bubble> blist;
             if (!cfg.bubbles.empty()) {
