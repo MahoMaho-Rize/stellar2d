@@ -931,6 +931,295 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
     }
 }
 
+// ============================================================
+// PPM (Colella-Woodward 1984) piecewise-parabolic reconstruction.
+//
+// Per cell, store left/right face values in x and bottom/top in y.
+// The 4-cell centered interpolant:
+//   f_{i+1/2} = (7(f_i + f_{i+1}) - (f_{i-1} + f_{i+2})) / 12
+// then monotonicity:
+//   if (f_L - f)(f - f_R) ≤ 0  : f_L = f_R = f       (local extremum)
+//   else if |Δf| · 6|f - ½(f_L+f_R)| > Δf²  : clip f_L or f_R
+// where Δf = f_R - f_L.
+//
+// We apply it separately in x and y (direction-splitting at the
+// reconstruction level — a simplification; proper 2D PPM would use
+// the full biparabolic profile, but for Cartesian uniform mesh this
+// is already a strict improvement over MUSCL slopes).
+// ============================================================
+
+__device__ __forceinline__
+void ppm_monotonize(double f_c, double& f_L, double& f_R) {
+    // Test for local extremum.
+    double d1 = (f_L - f_c) * (f_c - f_R);
+    if (d1 <= 0.0) {
+        f_L = f_c;
+        f_R = f_c;
+        return;
+    }
+    // Test for over/undershoot.
+    double df = f_R - f_L;
+    double d6 = 6.0 * (f_c - 0.5 * (f_L + f_R));
+    if (df * d6 >  df * df) {
+        // clip f_L (cubic would push f below f_L)
+        f_L = 3.0 * f_c - 2.0 * f_R;
+    } else if (df * d6 < -df * df) {
+        // clip f_R (cubic would push f above f_R)
+        f_R = 3.0 * f_c - 2.0 * f_L;
+    }
+}
+
+__global__
+void k_cale2_ppm_reconstruct(const double* rho_d, const double* rhoE_d,
+                             const double* pxd,   const double* pyd,
+                             double* rho_xL, double* rho_xR,
+                             double* rho_yD, double* rho_yU,
+                             double* rhoE_xL, double* rhoE_xR,
+                             double* rhoE_yD, double* rhoE_yU,
+                             double* pxd_xL, double* pxd_xR,
+                             double* pxd_yD, double* pxd_yU,
+                             double* pyd_xL, double* pyd_xR,
+                             double* pyd_yD, double* pyd_yU,
+                             int nx, int ny, int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nx*ny) return;
+    int ic = flat / ny, jc = flat % ny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+
+    auto idx_x = [&](int i) -> int {
+        if (x_per) {
+            if (i < 0)   i += nx;
+            if (i >= nx) i -= nx;
+        } else {
+            if (i < 0)   i = 0;
+            if (i >= nx) i = nx - 1;
+        }
+        return i * ny + jc;
+    };
+    auto idx_y = [&](int j) -> int {
+        if (y_per) {
+            if (j < 0)   j += ny;
+            if (j >= ny) j -= ny;
+        } else {
+            if (j < 0)   j = 0;
+            if (j >= ny) j = ny - 1;
+        }
+        return ic * ny + j;
+    };
+
+    // Interpolate f at face i+1/2 given f_{i-1}, f_i, f_{i+1}, f_{i+2}.
+    auto interp_face = [](double fm1, double fc, double fp1, double fp2) {
+        return (7.0 * (fc + fp1) - (fm1 + fp2)) / 12.0;
+    };
+
+    auto do_x = [&](const double* f, double& fL, double& fR) {
+        double fm1 = f[idx_x(ic-1)];
+        double fc  = f[flat];
+        double fp1 = f[idx_x(ic+1)];
+        double fp2 = f[idx_x(ic+2)];
+        double fm2 = f[idx_x(ic-2)];
+        // left face: interp at i-1/2 using (i-2, i-1, i, i+1)
+        fL = interp_face(fm2, fm1, fc, fp1);
+        // right face: interp at i+1/2 using (i-1, i, i+1, i+2)
+        fR = interp_face(fm1, fc, fp1, fp2);
+        ppm_monotonize(fc, fL, fR);
+    };
+    auto do_y = [&](const double* f, double& fD, double& fU) {
+        double fm1 = f[idx_y(jc-1)];
+        double fc  = f[flat];
+        double fp1 = f[idx_y(jc+1)];
+        double fp2 = f[idx_y(jc+2)];
+        double fm2 = f[idx_y(jc-2)];
+        fD = interp_face(fm2, fm1, fc, fp1);
+        fU = interp_face(fm1, fc, fp1, fp2);
+        ppm_monotonize(fc, fD, fU);
+    };
+
+    do_x(rho_d,  rho_xL[flat],  rho_xR[flat]);
+    do_y(rho_d,  rho_yD[flat],  rho_yU[flat]);
+    do_x(rhoE_d, rhoE_xL[flat], rhoE_xR[flat]);
+    do_y(rhoE_d, rhoE_yD[flat], rhoE_yU[flat]);
+    do_x(pxd,    pxd_xL[flat],  pxd_xR[flat]);
+    do_y(pxd,    pxd_yD[flat],  pxd_yU[flat]);
+    do_x(pyd,    pyd_xL[flat],  pyd_xR[flat]);
+    do_y(pyd,    pyd_yD[flat],  pyd_yU[flat]);
+}
+
+// Point-evaluate PPM parabolic profile inside a donor cell at relative
+// position (sx, sy) ∈ [-1/2, 1/2]² from the cell centroid.
+// For direction-split PPM we use:
+//   f(sx, sy) = f_bar + s_x·Δ_x + x_6·(1/4 − sx²)   (x part)
+//             + s_y·Δ_y + y_6·(1/4 − sy²)            (y part — subtract f_bar)
+// where
+//   Δ  = (f_R − f_L)                 → slope = (f_R - f_L)
+//   f_6 = 6(f_bar − ½(f_L + f_R))    → curvature correction
+// Note that adding x-parabola and y-parabola independently and dropping one
+// f_bar gives the separable approximation used here.
+__device__ __forceinline__
+double ppm_eval(double f_bar, double fL, double fR, double s /* ξ - ½, in [-½, ½] */) {
+    // Standard PPM parabolic profile at ξ = s + ½ ∈ [0,1]:
+    //   f(ξ) = f_L + ξ(Δf + f_6·(1−ξ))
+    //        = f_L + ξ·Δf + ξ(1−ξ)·f_6
+    // with Δf = f_R − f_L, f_6 = 6·(f_bar − ½(f_L+f_R)).
+    double xi = s + 0.5;
+    double df = fR - fL;
+    double f6 = 6.0 * (f_bar - 0.5 * (fL + fR));
+    return fL + xi * df + xi * (1.0 - xi) * f6;
+}
+
+__global__
+void k_cale2_remap_east_ppm(const double* X0, const double* Y0,
+                            const double* X,  const double* Y,
+                            const double* rho_d,  const double* rhoE_d,
+                            const double* pxd,    const double* pyd,
+                            const double* rho_xL, const double* rho_xR,
+                            const double* rho_yD, const double* rho_yU,
+                            const double* rhoE_xL,const double* rhoE_xR,
+                            const double* rhoE_yD,const double* rhoE_yU,
+                            const double* pxd_xL, const double* pxd_xR,
+                            const double* pxd_yD, const double* pxd_yU,
+                            const double* pyd_xL, const double* pyd_xR,
+                            const double* pyd_yD, const double* pyd_yU,
+                            double* dm_new, double* ie_new,
+                            double* px_new, double* py_new,
+                            int nx, int ny, double dx_u, double dy_u) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n_edges = (nx - 1) * ny;
+    if (flat >= n_edges) return;
+    int ic = flat / ny, jc = flat % ny;
+    int nny = ny + 1;
+
+    int nA = caln(ic+1, jc,   nny);
+    int nB = caln(ic+1, jc+1, nny);
+    double Ax = X0[nA], Ay = Y0[nA];
+    double Bx = X0[nB], By = Y0[nB];
+    double Anx = X[nA], Any = Y[nA];
+    double Bnx = X[nB], Bny = Y[nB];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+
+    int cL = calc(ic,   jc, ny);
+    int cR = calc(ic+1, jc, ny);
+    int donor = (As > 0.0) ? cL : cR;
+    double V_sweep = fabs(As);
+
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double sx = (cx - xd) / dx_u;  // normalised ∈ [-½, ½]
+    double sy = (cy - yd) / dy_u;
+    // Clamp in case of slight overshoot (should be tiny for Eulerian rezone).
+    if (sx < -0.5) sx = -0.5; else if (sx > 0.5) sx = 0.5;
+    if (sy < -0.5) sy = -0.5; else if (sy > 0.5) sy = 0.5;
+
+    // Direction-split PPM evaluation: x-parabola + y-parabola − f_bar.
+    auto eval_2d = [](double f_bar, double fL, double fR,
+                      double fD, double fU, double sx, double sy) {
+        double fx = ppm_eval(f_bar, fL, fR, sx);
+        double fy = ppm_eval(f_bar, fD, fU, sy);
+        return fx + fy - f_bar;
+    };
+
+    double d_dm = eval_2d(rho_d[donor],  rho_xL[donor],  rho_xR[donor],
+                          rho_yD[donor], rho_yU[donor], sx, sy) * V_sweep;
+    double d_ie = eval_2d(rhoE_d[donor], rhoE_xL[donor], rhoE_xR[donor],
+                          rhoE_yD[donor], rhoE_yU[donor], sx, sy) * V_sweep;
+    double d_px = eval_2d(pxd[donor],    pxd_xL[donor],  pxd_xR[donor],
+                          pxd_yD[donor], pxd_yU[donor], sx, sy) * V_sweep;
+    double d_py = eval_2d(pyd[donor],    pyd_xL[donor],  pyd_xR[donor],
+                          pyd_yD[donor], pyd_yU[donor], sx, sy) * V_sweep;
+
+    if (As > 0.0) {
+        atomicAdd(&dm_new[cL], -d_dm);  atomicAdd(&ie_new[cL], -d_ie);
+        atomicAdd(&px_new[cL], -d_px);  atomicAdd(&py_new[cL], -d_py);
+        atomicAdd(&dm_new[cR],  d_dm);  atomicAdd(&ie_new[cR],  d_ie);
+        atomicAdd(&px_new[cR],  d_px);  atomicAdd(&py_new[cR],  d_py);
+    } else {
+        atomicAdd(&dm_new[cR], -d_dm);  atomicAdd(&ie_new[cR], -d_ie);
+        atomicAdd(&px_new[cR], -d_px);  atomicAdd(&py_new[cR], -d_py);
+        atomicAdd(&dm_new[cL],  d_dm);  atomicAdd(&ie_new[cL],  d_ie);
+        atomicAdd(&px_new[cL],  d_px);  atomicAdd(&py_new[cL],  d_py);
+    }
+}
+
+__global__
+void k_cale2_remap_north_ppm(const double* X0, const double* Y0,
+                             const double* X,  const double* Y,
+                             const double* rho_d,  const double* rhoE_d,
+                             const double* pxd,    const double* pyd,
+                             const double* rho_xL, const double* rho_xR,
+                             const double* rho_yD, const double* rho_yU,
+                             const double* rhoE_xL,const double* rhoE_xR,
+                             const double* rhoE_yD,const double* rhoE_yU,
+                             const double* pxd_xL, const double* pxd_xR,
+                             const double* pxd_yD, const double* pxd_yU,
+                             const double* pyd_xL, const double* pyd_xR,
+                             const double* pyd_yD, const double* pyd_yU,
+                             double* dm_new, double* ie_new,
+                             double* px_new, double* py_new,
+                             int nx, int ny, double dx_u, double dy_u) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n_edges = nx * (ny - 1);
+    if (flat >= n_edges) return;
+    int ic = flat / (ny - 1), jc = flat % (ny - 1);
+    int nny = ny + 1;
+
+    int nW = caln(ic,   jc+1, nny);
+    int nE = caln(ic+1, jc+1, nny);
+    double Ax = X0[nE], Ay = Y0[nE];
+    double Anx = X[nE],  Any = Y[nE];
+    double Bx = X0[nW], By = Y0[nW];
+    double Bnx = X[nW],  Bny = Y[nW];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+
+    int cD = calc(ic, jc,   ny);
+    int cU = calc(ic, jc+1, ny);
+    int donor = (As > 0.0) ? cD : cU;
+    double V_sweep = fabs(As);
+
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double sx = (cx - xd) / dx_u;
+    double sy = (cy - yd) / dy_u;
+    if (sx < -0.5) sx = -0.5; else if (sx > 0.5) sx = 0.5;
+    if (sy < -0.5) sy = -0.5; else if (sy > 0.5) sy = 0.5;
+
+    auto eval_2d = [](double f_bar, double fL, double fR,
+                      double fD, double fU, double sx, double sy) {
+        double fx = ppm_eval(f_bar, fL, fR, sx);
+        double fy = ppm_eval(f_bar, fD, fU, sy);
+        return fx + fy - f_bar;
+    };
+
+    double d_dm = eval_2d(rho_d[donor],  rho_xL[donor],  rho_xR[donor],
+                          rho_yD[donor], rho_yU[donor], sx, sy) * V_sweep;
+    double d_ie = eval_2d(rhoE_d[donor], rhoE_xL[donor], rhoE_xR[donor],
+                          rhoE_yD[donor], rhoE_yU[donor], sx, sy) * V_sweep;
+    double d_px = eval_2d(pxd[donor],    pxd_xL[donor],  pxd_xR[donor],
+                          pxd_yD[donor], pxd_yU[donor], sx, sy) * V_sweep;
+    double d_py = eval_2d(pyd[donor],    pyd_xL[donor],  pyd_xR[donor],
+                          pyd_yD[donor], pyd_yU[donor], sx, sy) * V_sweep;
+
+    if (As > 0.0) {
+        atomicAdd(&dm_new[cD], -d_dm);  atomicAdd(&ie_new[cD], -d_ie);
+        atomicAdd(&px_new[cD], -d_px);  atomicAdd(&py_new[cD], -d_py);
+        atomicAdd(&dm_new[cU],  d_dm);  atomicAdd(&ie_new[cU],  d_ie);
+        atomicAdd(&px_new[cU],  d_px);  atomicAdd(&py_new[cU],  d_py);
+    } else {
+        atomicAdd(&dm_new[cU], -d_dm);  atomicAdd(&ie_new[cU], -d_ie);
+        atomicAdd(&px_new[cU], -d_px);  atomicAdd(&py_new[cU], -d_py);
+        atomicAdd(&dm_new[cD],  d_dm);  atomicAdd(&ie_new[cD],  d_ie);
+        atomicAdd(&px_new[cD],  d_px);  atomicAdd(&py_new[cD],  d_py);
+    }
+}
+
 // Snapshot (ρ, P, e_int, vx_cc, vy_cc) into a contiguous per-frame
 // slice of the frame pool. Layout per frame:
 //   [0 .. ncell)         ρ
