@@ -23,13 +23,13 @@
 __global__ void k_cale_geometry(const double*, const double*, double*, double*, int, int);
 __global__ void k_cale_eos_and_q(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, double*, double*, double*, double*, int, int, double, double, double);
+    double*, double*, double*, double*, double*, int, int, double, double, double, int);
 __global__ void k_cale_node_forces(const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int, int);
 __global__ void k_cale_zero(double*, int);
 __global__ void k_cale_add_gravity(const double*, double*, double, int);
 __global__ void k_cale_bc_reflective(const double*, const double*, double*, double*,
-    double*, double*, double*, double*, int, int);
+    double*, double*, double*, double*, int, int, int);
 __global__ void k_cale_node_update(double*, double*, double*, double*,
     const double*, const double*, const double*, double*, double*, double, int);
 __global__ void k_cale_energy_update(int, int, const double*, const double*,
@@ -52,7 +52,8 @@ __global__ void k_cale_remap_north(const double*, const double*, const double*, 
 __global__ void k_cale_remap_finalize_cells(const double*, const double*, double*, double*, int);
 __global__ void k_cale_rebuild_node_v(const double*, const double*, const double*,
     double*, double*, int, int);
-__global__ void k_cale_bc_velocity(double*, double*, int, int);
+__global__ void k_cale_bc_velocity(double*, double*, int, int, int);
+__global__ void k_cale_periodic_sync_node(double*, double*, int, int, int);
 __global__ void k_cale_cell_densities(const double*, const double*, const double*, const double*,
     const double*, double*, double*, double*, double*, int);
 __global__ void k_cale_slopes_minmod(const double*, const double*, const double*, const double*,
@@ -318,6 +319,76 @@ void CartAleSolver::init_hse_bubbles(double rho_base, double g_val,
 }
 
 // ============================================================
+// Classic KH shear: two horizontal bands with opposite vx, isobaric,
+// zero gravity. Gaussian perturbation in vy near each interface seeds
+// the instability.
+// ============================================================
+void CartAleSolver::init_kh_shear(double rho_light, double rho_heavy,
+                                  double P0, double vshear,
+                                  double amp, int k) {
+    g_y = 0.0;
+    double Lx = g_Lx, Ly = g_Ly;
+
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    // Smooth the ρ and vx jump across a few cells so AV doesn't spike
+    // at the interface. Transition thickness δ = 2·h in each direction.
+    double dy = Ly / ny;
+    double delta = 2.0 * dy;
+    double y_low  = 0.25 * Ly;
+    double y_high = 0.75 * Ly;
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            // tanh blend: inside=1, outside=0
+            double band = 0.5 * (std::tanh((Yc - y_low)  / delta)
+                               - std::tanh((Yc - y_high) / delta));
+            double rho = rho_light + (rho_heavy - rho_light) * band;
+            double e = P0 / ((gamma - 1.0) * rho);
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = e;
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+
+    // Node velocities: tanh-blended vx, Gaussian-envelope sin(k·2π·x) vy seed.
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    double sigma = 0.05 * Ly;
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double x = h_X[f], y = h_Y[f];
+            double band = 0.5 * (std::tanh((y - y_low)  / delta)
+                               - std::tanh((y - y_high) / delta));
+            // vx: +vshear inside the band, −vshear outside
+            double vx = vshear * (2.0 * band - 1.0);
+            // vy seed: amp·sin(k·2π·x/Lx) × Gaussian centered on each interface
+            double gy1 = std::exp(-(y - y_low)*(y - y_low) / (sigma*sigma));
+            double gy2 = std::exp(-(y - y_high)*(y - y_high) / (sigma*sigma));
+            double vy = amp * std::sin(k * 2.0 * M_PI * x / Lx) * (gy1 + gy2);
+            h_vX[f] = vx;
+            h_vY[f] = vy;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+
+    int B = 256;
+    k_cale_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny);
+
+    std::fprintf(stderr,
+        "  CartAle KH shear: ρ_light=%g, ρ_heavy=%g, P0=%g, |vx|=%g, amp=%g, k=%d (g=0)\n",
+        rho_light, rho_heavy, P0, vshear, amp, k);
+}
+
+// ============================================================
 // One ALE step
 // ============================================================
 double CartAleSolver::step(double t, double t_end) {
@@ -332,7 +403,7 @@ double CartAleSolver::step(double t, double t_end) {
     k_cale_eos_and_q<<<BCell, B>>>(
         d_X, d_Y, d_vX, d_vY, d_dm, d_Area0, d_Area0, d_e_int,
         d_rho, d_P, d_Q, d_cs, d_strain_rate,
-        nx, ny, gamma, CQ_lin, CQ_quad);
+        nx, ny, gamma, CQ_lin, CQ_quad, shear_aware_av);
 
     k_cale_cfl<<<BCell, B>>>(
         d_minheight, d_cs, d_strain_rate, d_vX, d_vY,
@@ -350,13 +421,19 @@ double CartAleSolver::step(double t, double t_end) {
         k_cale_add_gravity<<<BNode, B>>>(d_mnode, d_FY, g_y, nnode);
 
     k_cale_bc_reflective<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, d_vX, d_vY,
-                                       d_FX, d_FY, nnode_x, nnode_y);
+                                       d_FX, d_FY, nnode_x, nnode_y, bc_mode);
+    if (bc_mode) k_cale_periodic_sync_node<<<BNode, B>>>(d_FX, d_FY,
+                                                         nnode_x, nnode_y, bc_mode);
 
     k_cale_node_update<<<BNode, B>>>(d_X, d_Y, d_vX, d_vY, d_FX, d_FY,
                                      d_mnode, d_dX, d_dY, dt, nnode);
 
     k_cale_bc_reflective<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, d_vX, d_vY,
-                                       d_FX, d_FY, nnode_x, nnode_y);
+                                       d_FX, d_FY, nnode_x, nnode_y, bc_mode);
+    if (bc_mode) {
+        k_cale_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode);
+        k_cale_periodic_sync_node<<<BNode, B>>>(d_dX, d_dY, nnode_x, nnode_y, bc_mode);
+    }
 
     k_cale_energy_update<<<BCell, B>>>(nx, ny, d_FSX, d_FSY,
                                        d_dX, d_dY, d_dm, d_e_int);
@@ -432,7 +509,9 @@ double CartAleSolver::step(double t, double t_end) {
     // Rebuild node velocities from remapped momentum and mass
     k_cale_rebuild_node_v<<<BNode, B>>>(d_px_new, d_py_new, d_dm_new,
                                         d_vX, d_vY, nx, ny);
-    k_cale_bc_velocity<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y);
+    k_cale_bc_velocity<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode);
+    if (bc_mode) k_cale_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY,
+                                                         nnode_x, nnode_y, bc_mode);
 
     // --- Phase R: snap mesh back to uniform ------------------
     k_cale_reset_mesh<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, nnode);

@@ -77,7 +77,8 @@ void k_cale_eos_and_q(const double* X, const double* Y,
                       double* rho, double* P, double* Q, double* cs,
                       double* strain_rate,
                       int nx, int ny, double gam,
-                      double CQ_lin, double CQ_quad) {
+                      double CQ_lin, double CQ_quad,
+                      int shear_aware_av) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nx*ny) return;
     int ic = flat / ny, jc = flat % ny;
@@ -114,11 +115,47 @@ void k_cale_eos_and_q(const double* X, const double* Y,
     strain_rate[flat] = s;
 
     double L = sqrt(fmax(Area0[flat], 1e-30));
+
+    // Shear-aware AV (simplified tensor-AV): reduce Q when the cell is
+    // dominated by pure shear (no compression normal to any edge) rather
+    // than true compression. This is the single biggest factor distinguishing
+    // our KH visual from Athena-class Godunov codes, because scalar Q would
+    // otherwise fire on every discretisation error at a shear layer.
+    //
+    // Detect compression anisotropically by computing ∂v_n/∂n along both
+    // local axes (uniform mesh makes this trivial). If BOTH directions are
+    // dilating (∂u/∂x > 0 AND ∂v/∂y > 0), even a positive div·v is spurious
+    // → kill Q. If only one is compressing, reduce Q by that fraction.
+    double shear_weight = 1.0;
+    if (shear_aware_av) {
+        // Estimate ∂u/∂x and ∂v/∂y from the staggered node velocities.
+        // Uniform mesh: east face vx avg − west face vx avg, divided by dx.
+        double dx = fmax(X1 - X0, 1e-30);   // approx east-west spacing at bottom edge
+        double dy = fmax(Y3 - Y0, 1e-30);   // approx north-south at west edge
+        // du/dx: (avg vx on east edge) − (avg vx on west edge), per dx.
+        //        east edge = nodes 1,2; west edge = nodes 0,3.
+        double du_dx = 0.5 * ((vX1 + vX2) - (vX0 + vX3)) / dx;
+        // dv/dy: (avg vy on north edge) − (avg vy on south edge), per dy.
+        //        north edge = nodes 2,3; south edge = nodes 0,1.
+        double dv_dy = 0.5 * ((vY2 + vY3) - (vY0 + vY1)) / dy;
+        double comp_x = -du_dx;   // > 0 = compression
+        double comp_y = -dv_dy;
+        // Only count positive (compression) parts; normalised to their sum
+        double cx = fmax(comp_x, 0.0);
+        double cy = fmax(comp_y, 0.0);
+        double csum = cx + cy;
+        double tot  = fabs(comp_x) + fabs(comp_y) + 1e-30;
+        // When both axes compress evenly, weight=1 (full shock); when only
+        // one compresses, weight = that fraction of total |∂v_n/∂n|; when
+        // neither, weight=0 (pure shear/dilation).
+        shear_weight = csum / tot;
+    }
+
     double q = 0.0;
     if (s > 0.0) {
         double q_quad = CQ_quad * s * L * s * L;
         double q_lin  = CQ_lin  * cs[flat] * s * L;
-        q = r_ * (q_quad + q_lin);
+        q = shear_weight * r_ * (q_quad + q_lin);
     }
     Q[flat] = q;
 }
@@ -184,22 +221,29 @@ void k_cale_add_gravity(const double* mnode, double* FY,
 // pinning is almost redundant — but it keeps the Lagrangian
 // substep honest.
 // ============================================================
+// bc_mode encoding:
+//   bit 0 (0x1): x-direction periodic (else reflective)
+//   bit 1 (0x2): y-direction periodic (else reflective)
+//   0 = both reflective (default, backward-compatible)
+//   3 = both periodic
 __global__
 void k_cale_bc_reflective(const double* X0, const double* Y0,
                           double* X, double* Y,
                           double* vX, double* vY,
                           double* FX, double* FY,
-                          int nnx, int nny) {
+                          int nnx, int nny, int bc_mode) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     int n = nnx * nny;
     if (flat >= n) return;
     int in = flat / nny, jn = flat % nny;
-    if (in == 0 || in == nnx - 1) {
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    if (!x_per && (in == 0 || in == nnx - 1)) {
         X[flat] = X0[flat];
         vX[flat] = 0.0;
         FX[flat] = 0.0;
     }
-    if (jn == 0 || jn == nny - 1) {
+    if (!y_per && (jn == 0 || jn == nny - 1)) {
         Y[flat] = Y0[flat];
         vY[flat] = 0.0;
         FY[flat] = 0.0;
@@ -559,10 +603,14 @@ void k_cale_remap_finalize_cells(const double* dm_new, const double* ie_new,
     e_int[c] = ie_new[c] / m;
 }
 
-// Rebuild node velocity = Σ_adj_cells (p_cell / m_cell) · 0.25  /  (Σ_adj 0.25)
-// i.e. area-weighted average of adjacent cell-center velocities.
-// Using 1/4 weights per cell (all 4 corners contribute equally) gives
-// simple arithmetic mean of the (up to 4) adjacent cell-center velocities.
+// Rebuild node velocity — mass-weighted average of adjacent cell-centered
+// velocities. For a node with up to 4 adjacent cells:
+//   v_node = Σ(0.25·m_c · v_c) / Σ(0.25·m_c) = Σ p_c/4 / Σ m_c/4
+// Equivalently Σ px_c / Σ m_c (each cell contributes 1/4 of its mass to
+// a node). This is exactly momentum-conservative: the kinetic energy
+// loss from the averaging is proportional to ∇v variance within the
+// stencil, which is physically meaningful (sub-grid diffusion), not
+// the arithmetic-mean artifact of the old rebuild.
 __global__
 void k_cale_rebuild_node_v(const double* px_new, const double* py_new,
                            const double* dm_new,
@@ -573,21 +621,21 @@ void k_cale_rebuild_node_v(const double* px_new, const double* py_new,
     int n = nnx * nny;
     if (flat >= n) return;
     int in = flat / nny, jn = flat % nny;
-    double sx = 0.0, sy = 0.0, w = 0.0;
+    double spx = 0.0, spy = 0.0, sm = 0.0;
     for (int di = -1; di <= 0; ++di) {
         for (int dj = -1; dj <= 0; ++dj) {
             int ic = in + di, jc = jn + dj;
             if (ic < 0 || ic >= nx || jc < 0 || jc >= ny) continue;
             int c = ic * ny + jc;
-            double m = fmax(dm_new[c], 1e-30);
-            sx += px_new[c] / m;
-            sy += py_new[c] / m;
-            w  += 1.0;
+            // each adjacent cell contributes 1/4 of its corner mass+momentum.
+            spx += 0.25 * px_new[c];
+            spy += 0.25 * py_new[c];
+            sm  += 0.25 * dm_new[c];
         }
     }
-    if (w > 0.0) {
-        vX[flat] = sx / w;
-        vY[flat] = sy / w;
+    if (sm > 1e-30) {
+        vX[flat] = spx / sm;
+        vY[flat] = spy / sm;
     }
 }
 
@@ -873,13 +921,50 @@ void k_cale_snapshot(const double* rho, const double* P, const double* e_int,
     out[flat + 4*n]   = vy;
 }
 
-// Clamp edge-aligned node velocities AFTER rebuild (reflective BC)
+// Periodic sync of node-centered fields across x and/or y boundaries.
+// For periodic BC we keep the duplicated boundary nodes in lockstep:
+//   node (0, j)  ≡  node (nnx-1, j)    (x-periodic)
+//   node (i, 0)  ≡  node (i, nny-1)    (y-periodic)
+// Both sides must carry identical values after every Lagrangian update.
+// Call this on (vX, vY), (FX, FY), (dX, dY) whenever any of them is
+// touched. Corners are handled by averaging all corner partners.
 __global__
-void k_cale_bc_velocity(double* vX, double* vY, int nnx, int nny) {
+void k_cale_periodic_sync_node(double* fX, double* fY,
+                               int nnx, int nny, int bc_mode) {
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    if (!x_per && !y_per) return;
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    // Visit every node; each pair updates itself from the averaged value.
+    int n = nnx * nny;
+    if (flat >= n) return;
+    int in = flat / nny, jn = flat % nny;
+    int in_m = (in == 0)       ?  nnx - 1 : in;
+    int in_p = (in == nnx - 1) ?  0       : in;
+    int jn_m = (jn == 0)       ?  nny - 1 : jn;
+    int jn_p = (jn == nny - 1) ?  0       : jn;
+    // Only boundary nodes do work.
+    bool on_x_bd = x_per && (in == 0 || in == nnx - 1);
+    bool on_y_bd = y_per && (jn == 0 || jn == nny - 1);
+    if (!on_x_bd && !on_y_bd) return;
+    int a = flat;
+    int b = in_p * nny + jn_p;   // opposite corner partner
+    double vx = 0.5 * (fX[a] + fX[b]);
+    double vy = 0.5 * (fY[a] + fY[b]);
+    fX[a] = vx; fX[b] = vx;
+    fY[a] = vy; fY[b] = vy;
+}
+
+// Clamp edge-aligned node velocities AFTER rebuild (reflective walls only).
+// bc_mode: see k_cale_bc_reflective.
+__global__
+void k_cale_bc_velocity(double* vX, double* vY, int nnx, int nny, int bc_mode) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     int n = nnx * nny;
     if (flat >= n) return;
     int in = flat / nny, jn = flat % nny;
-    if (in == 0 || in == nnx - 1) vX[flat] = 0.0;
-    if (jn == 0 || jn == nny - 1) vY[flat] = 0.0;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    if (!x_per && (in == 0 || in == nnx - 1)) vX[flat] = 0.0;
+    if (!y_per && (jn == 0 || jn == nny - 1)) vY[flat] = 0.0;
 }

@@ -88,6 +88,12 @@ struct CartAleSolver {
     double CQ_lin = 0.5;
     double CQ_quad = 2.0;
     double comp_dt_frac = 0.25;
+    // Shear-aware AV: if 1, reduce Q in shear-dominated cells (pseudo-tensor
+    // AV). Recommended ON for KH, convection, turbulence; OFF for pure
+    // shocks (Sod) where the legacy scalar Q is well calibrated.
+    int shear_aware_av = 0;
+    // BC mode (bit 0: x-periodic, bit 1: y-periodic). 0 = reflective walls.
+    int bc_mode = 0;
     double g_y = 0.0;                // downward gravity magnitude (pulls −y)
     // Remap order: 1 = donor-cell (legacy, kept for regression), 2 = MUSCL-in-remap
     // with slope limiter (Kucharik-Shashkov 2012). Default is 2.
@@ -116,6 +122,15 @@ struct CartAleSolver {
     struct Bubble { double xc, yc, rb, alpha, beta; };
     void init_hse_bubbles(double rho_base, double g_val,
                           const std::vector<Bubble>& bubbles);
+
+    // Zero-gravity Kelvin-Helmholtz shear test:
+    //   y ∈ (0.25, 0.75):  ρ = rho_heavy,  vx = +vshear
+    //   else             :  ρ = rho_light,  vx = −vshear
+    // Pressure uniform P0 (isobaric). Seeded with vy = amp·sin(k·2π·x)
+    // × Gaussian envelope around each interface (σ = 0.05) to trigger KH.
+    // g_y is set to 0 inside this IC — ideal for watching pure KH roll-up.
+    void init_kh_shear(double rho_light, double rho_heavy, double P0,
+                       double vshear, double amp, int k);
 
     // One ALE step: Lagrangian → Rezone → Remap
     double step(double t, double t_end);
