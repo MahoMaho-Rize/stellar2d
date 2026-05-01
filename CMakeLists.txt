@@ -55,6 +55,9 @@ if(USE_GPU)
         src/gpu/cart_ale2_kernels.cu
         src/gpu/pseudo_spectral_solver.cu
         src/gpu/pseudo_spectral_kernels.cu
+        src/gpu/sph_transforms.cu
+        src/gpu/sph2d_spectral_solver.cu
+        src/gpu/sph2d_spectral_kernels.cu
     )
     set(LOWMACH_SOURCES
         src/gpu/lm_residual.cu

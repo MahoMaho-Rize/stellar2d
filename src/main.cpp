@@ -28,6 +28,7 @@
 #include "gpu/cart_ale_solver.cuh"
 #include "gpu/cart_ale2_solver.cuh"
 #include "gpu/pseudo_spectral_solver.cuh"
+#include "gpu/sph2d_spectral_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -110,6 +111,24 @@ struct SimConfig {
     int    ps_tg_k         = 2;            // Taylor-Green 波數 (for --test taylor_green)
     int    ps_ckpt_every   = 0;            // 每 N 步存 checkpoint (0 = 停用)
     std::string ps_resume;                 // restart 檔路徑 (空 = 從 IC 開始)
+
+    // --- sph2d_spectral 2D 薄球殼 偽譜 ---
+    double sph_R = 1.0;
+    double sph_Omega = 1.0;
+    double sph_nu = 1e-4;
+    int    sph_Lmax = 0;               // 0 = auto (min(N_theta-1, N_phi/2-1))
+    double sph_drag = 0.0;
+    int    sph_hyper = 1;
+    bool   sph_pi_dt = false;
+    int    sph_rossby_l = 4;
+    int    sph_rossby_m = 2;
+    double sph_rossby_amp = 1.0;
+    double sph_forcing_eps = 0.0;
+    int    sph_forcing_lmin = 20;
+    int    sph_forcing_lmax = 30;
+    uint64_t sph_forcing_seed = 0x5a5a5a5aULL;
+    int    sph_ckpt_every = 0;
+    std::string sph_resume;
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -316,6 +335,39 @@ int main(int argc, char** argv) {
             cfg.ps_ckpt_every = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-resume") == 0 && i + 1 < argc)
             cfg.ps_resume = argv[++i];
+        // sph2d flags
+        else if (std::strcmp(argv[i], "--sph-R") == 0 && i + 1 < argc)
+            cfg.sph_R = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-Omega") == 0 && i + 1 < argc)
+            cfg.sph_Omega = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-nu") == 0 && i + 1 < argc)
+            cfg.sph_nu = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-Lmax") == 0 && i + 1 < argc)
+            cfg.sph_Lmax = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-drag") == 0 && i + 1 < argc)
+            cfg.sph_drag = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-hyper") == 0 && i + 1 < argc)
+            cfg.sph_hyper = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-pi") == 0)
+            cfg.sph_pi_dt = true;
+        else if (std::strcmp(argv[i], "--sph-rossby-l") == 0 && i + 1 < argc)
+            cfg.sph_rossby_l = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-rossby-m") == 0 && i + 1 < argc)
+            cfg.sph_rossby_m = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-rossby-amp") == 0 && i + 1 < argc)
+            cfg.sph_rossby_amp = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-forcing-eps") == 0 && i + 1 < argc)
+            cfg.sph_forcing_eps = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-forcing-lmin") == 0 && i + 1 < argc)
+            cfg.sph_forcing_lmin = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-forcing-lmax") == 0 && i + 1 < argc)
+            cfg.sph_forcing_lmax = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-forcing-seed") == 0 && i + 1 < argc)
+            cfg.sph_forcing_seed = std::strtoull(argv[++i], nullptr, 0);
+        else if (std::strcmp(argv[i], "--sph-ckpt-every") == 0 && i + 1 < argc)
+            cfg.sph_ckpt_every = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--sph-resume") == 0 && i + 1 < argc)
+            cfg.sph_resume = argv[++i];
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -446,7 +498,9 @@ int main(int argc, char** argv) {
                || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
                || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb"
                || cfg.test_case == "kh_lecoanet"
-               || cfg.test_case == "taylor_green") {
+               || cfg.test_case == "taylor_green"
+               || cfg.test_case == "rossby_wave"
+               || cfg.test_case == "jovian_bands") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -1168,6 +1222,119 @@ int main(int argc, char** argv) {
         std::fclose(csv);
         std::fprintf(stderr, "\n");
         ps.destroy();
+    } else if (cfg.solver_type == "sph2d_spectral") {
+        // ===== 2D 薄球殼 barotropic 偽譜 =====
+        if (cfg.test_case != "rossby_wave" && cfg.test_case != "jovian_bands") {
+            std::fprintf(stderr,
+                "ERROR: sph2d_spectral supports --test {rossby_wave, jovian_bands}\n");
+            return 1;
+        }
+        Sph2DSpectralSolver sph;
+        sph.drag_alpha = cfg.sph_drag;
+        sph.hyper_p    = std::max(1, cfg.sph_hyper);
+        sph.use_pi_dt  = cfg.sph_pi_dt;
+        int Lmax_req = (cfg.sph_Lmax > 0) ? cfg.sph_Lmax
+                       : std::min(cfg.nr - 1, cfg.ntheta / 2 - 2);
+        sph.init(cfg.nr, cfg.ntheta, Lmax_req,
+                 cfg.sph_R, cfg.sph_Omega, cfg.sph_nu, cfg.cfl);
+        if (cfg.test_case == "rossby_wave") {
+            sph.init_rossby_wave(cfg.sph_rossby_l, cfg.sph_rossby_m,
+                                 cfg.sph_rossby_amp);
+        } else {
+            sph.init_zero();
+            if (cfg.sph_forcing_eps <= 0.0) {
+                std::fprintf(stderr,
+                    "ERROR: --test jovian_bands requires --sph-forcing-eps > 0\n");
+                return 1;
+            }
+        }
+        if (cfg.sph_forcing_eps > 0.0) {
+            sph.init_forcing(cfg.sph_forcing_lmin, cfg.sph_forcing_lmax,
+                             cfg.sph_forcing_eps, cfg.sph_forcing_seed);
+        }
+        if (!cfg.sph_resume.empty()) {
+            double t_ckpt = 0.0;
+            if (sph.load_checkpoint(cfg.sph_resume, t_ckpt)) {
+                t = t_ckpt;
+                step = sph.step_count;
+            } else {
+                std::fprintf(stderr, "ERROR: --sph-resume failed\n");
+                return 1;
+            }
+        }
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,KE,enstrophy,max_v,max_zeta,err_L2\n");
+
+        int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
+        int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
+        bool vtk_by_time = cfg.vtk_dt > 0.0;
+        double next_vtk_t = 0.0;
+        if (cfg.frame_buffer) sph.alloc_frame_buffer(cfg.frame_headroom_mb);
+
+        int frame = 0;
+        if (cfg.frame_buffer && sph.frame_capacity > 0) sph.capture_frame(0.0, 0);
+        else {
+            char path[512];
+            std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), ++frame);
+            sph.write_vtk_2d(path);
+        }
+
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = sph.step();
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            bool do_diag = (step % diag_every == 0) || t >= cfg.t_end;
+            bool do_vtk;
+            if (vtk_by_time) {
+                do_vtk = (t >= next_vtk_t) || t >= cfg.t_end;
+                if (do_vtk) next_vtk_t = t + cfg.vtk_dt;
+            } else {
+                do_vtk = (step % vtk_every == 0) || t >= cfg.t_end;
+            }
+
+            if (do_diag) {
+                auto d = sph.compute_diagnostics(t);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ζ|=%.3e err=%.3e\n",
+                            step, t, dt, d.total_KE, d.total_enstrophy,
+                            d.max_v, d.max_zeta, d.err_L2);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e\n",
+                             step, t, dt, d.total_KE, d.total_enstrophy,
+                             d.max_v, d.max_zeta, d.err_L2);
+                std::fflush(csv);
+            }
+            if (cfg.sph_ckpt_every > 0 && step % cfg.sph_ckpt_every == 0) {
+                char cpath[512];
+                std::snprintf(cpath, sizeof(cpath), "%s/checkpoint.bin",
+                              run_dir.c_str());
+                sph.save_checkpoint(cpath, t);
+            }
+            if (do_vtk) {
+                if (cfg.frame_buffer && sph.frame_capacity > 0) {
+                    if (sph.frame_count >= sph.frame_capacity)
+                        sph.flush_frames_to_disk(run_dir);
+                    sph.capture_frame(t, step);
+                } else {
+                    ++frame;
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/output_%04d.vtk",
+                                  run_dir.c_str(), frame);
+                    sph.write_vtk_2d(path);
+                }
+            }
+        }
+        if (cfg.frame_buffer) sph.flush_frames_to_disk(run_dir);
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        sph.destroy();
     } else if (cfg.solver_type == "ale2d") {
         // ===== 2D axisymmetric Lagrangian (Caramana compatible) =====
         if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
