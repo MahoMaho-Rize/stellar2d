@@ -255,6 +255,16 @@ void FasSolver::snapshot_hse() {
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
     atm_rho_thresh = 1e-3 * rho_max;
 
+    // Precompute total volume of interior cells (for conservation correction)
+    {
+        std::vector<double> h_vol(n);
+        CUDA_CHECK(cudaMemcpy(h_vol.data(), finest.d_cell_volume, n*sizeof(double), cudaMemcpyDeviceToHost));
+        interior_volume = 0.0;
+        for (int flat = 0; flat < n; ++flat)
+            if (rho0[flat] >= atm_rho_thresh)
+                interior_volume += h_vol[flat];
+    }
+
     // Sponge layer: start where ρ₀ drops below 1% of max
     std::vector<double> h_rc(nr);
     CUDA_CHECK(cudaMemcpy(h_rc.data(), finest.d_r_center, nr*sizeof(double), cudaMemcpyDeviceToHost));
@@ -708,6 +718,18 @@ double FasSolver::step(double t, double t_end) {
         std::fprintf(stderr, "  step %d dt=%.2e cyc=%d ||F||=%.2e cuts=%d\n",
                      step_count, dt, cycles, norm, cuts);
 
+    // ── Conservation-preserving post-step treatments ──
+    // Measure total mass/energy before non-conservative operations
+    double* d_rhoV = finest.d_res;           // scratch: first n doubles
+    double* d_EV   = finest.d_res + n;       // scratch: next n doubles
+    double* d_scratch = finest.d_res + 2*n;  // scratch for reduce
+
+    k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
+        finest.d_rho, finest.d_rhoE, finest.d_cell_volume,
+        d_rhoV, d_EV, finest.nr, finest.nt, finest.ng);
+    double M_before = fas_reduce_sum(d_rhoV, d_scratch, n);
+    double E_before = fas_reduce_sum(d_EV, d_scratch, n);
+
     if (sponge_r_start < sponge_r_top) {
         k_fas_sponge<<<(n+B-1)/B,B>>>(
             finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
@@ -717,14 +739,30 @@ double FasSolver::step(double t, double t_end) {
             finest.nr, finest.nt, finest.ng);
     }
 
-    // Atmosphere reset: force vacuum cells to exact HSE (MUSIC-style).
-    // Under radial_only, use strict mode (only rho0 < atm_thresh cells, no evacuated/hot_vacuum
-    // triggers) to remove non-conservative injection in the stellar interior.
     k_fas_atm_reset<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
         finest.d_rho0, finest.d_P0,
         atm_rho_thresh, 1.0/(gamma-1.0),
         finest.nr, finest.nt, finest.ng, (int)radial_only);
+
+    // Measure after and distribute deficit back to interior cells
+    k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
+        finest.d_rho, finest.d_rhoE, finest.d_cell_volume,
+        d_rhoV, d_EV, finest.nr, finest.nt, finest.ng);
+    double M_after = fas_reduce_sum(d_rhoV, d_scratch, n);
+    double E_after = fas_reduce_sum(d_EV, d_scratch, n);
+
+    if (interior_volume > 0) {
+        double dM = (M_before - M_after) / interior_volume;
+        double dE = (E_before - E_after) / interior_volume;
+        if (fabs(dM) > 1e-30 || fabs(dE) > 1e-30) {
+            k_fas_conserve_correct<<<(n+B-1)/B,B>>>(
+                finest.d_rho, finest.d_rhoE,
+                finest.d_rho0, atm_rho_thresh,
+                dM, dE,
+                finest.nr, finest.nt, finest.ng);
+        }
+    }
 
     if (!radial_only && n_angular_avg > 0) {
         int B2 = std::min(finest.nt, 256);
@@ -892,23 +930,51 @@ double FasSolver::step_explicit(double t, double t_end) {
         lev.d_Un, lev.nr, lev.nt, lev.ng);
     apply_floor(0);
 
-    // Sponge
-    if (sponge_r_start < sponge_r_top) {
-        k_fas_sponge<<<(n+B-1)/B,B>>>(
-            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-            lev.d_rho0, lev.d_P0, lev.d_r_center,
-            sponge_r_start, sponge_r_top, sponge_kappa, dt,
-            1.0/(gamma-1.0),
-            lev.nr, lev.nt, lev.ng);
-    }
+    // Conservation-preserving sponge + atm reset
+    {
+        double* d_rhoV = lev.d_res;
+        double* d_EV   = lev.d_res + n;
+        double* d_scr  = lev.d_res + 2*n;
 
-    // Atmosphere reset: under radial_only use strict mode (true atm cells only,
-    // no evacuated/hot_vacuum triggers that inject mass/energy during oscillations).
-    k_fas_atm_reset<<<(n+B-1)/B,B>>>(
-        lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        lev.d_rho0, lev.d_P0,
-        atm_rho_thresh, 1.0/(gamma-1.0),
-        lev.nr, lev.nt, lev.ng, (int)radial_only);
+        k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
+            lev.d_rho, lev.d_rhoE, lev.d_cell_volume,
+            d_rhoV, d_EV, lev.nr, lev.nt, lev.ng);
+        double M_before = fas_reduce_sum(d_rhoV, d_scr, n);
+        double E_before = fas_reduce_sum(d_EV, d_scr, n);
+
+        if (sponge_r_start < sponge_r_top) {
+            k_fas_sponge<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+                lev.d_rho0, lev.d_P0, lev.d_r_center,
+                sponge_r_start, sponge_r_top, sponge_kappa, dt,
+                1.0/(gamma-1.0),
+                lev.nr, lev.nt, lev.ng);
+        }
+
+        k_fas_atm_reset<<<(n+B-1)/B,B>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_rho0, lev.d_P0,
+            atm_rho_thresh, 1.0/(gamma-1.0),
+            lev.nr, lev.nt, lev.ng, (int)radial_only);
+
+        k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
+            lev.d_rho, lev.d_rhoE, lev.d_cell_volume,
+            d_rhoV, d_EV, lev.nr, lev.nt, lev.ng);
+        double M_after = fas_reduce_sum(d_rhoV, d_scr, n);
+        double E_after = fas_reduce_sum(d_EV, d_scr, n);
+
+        if (interior_volume > 0) {
+            double dM = (M_before - M_after) / interior_volume;
+            double dE = (E_before - E_after) / interior_volume;
+            if (fabs(dM) > 1e-30 || fabs(dE) > 1e-30) {
+                k_fas_conserve_correct<<<(n+B-1)/B,B>>>(
+                    lev.d_rho, lev.d_rhoE,
+                    lev.d_rho0, atm_rho_thresh,
+                    dM, dE,
+                    lev.nr, lev.nt, lev.ng);
+            }
+        }
+    }
 
     // Angular/pole averaging are theta-direction smoothers; identity under radial_only.
     if (!radial_only && n_angular_avg > 0) {

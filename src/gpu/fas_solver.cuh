@@ -130,6 +130,7 @@ struct FasSolver {
     double sponge_r_start = 0.0;
     double sponge_r_top = 0.0;
     double sponge_kappa = 100.0;
+    double interior_volume = 0.0;  // total volume of cells with ρ₀ >= atm_thresh
 
     static constexpr int NU1 = 4;     // pre-smooth iterations
     static constexpr int NU2 = 4;     // post-smooth iterations

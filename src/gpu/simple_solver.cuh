@@ -77,6 +77,7 @@ struct SimpleSolver {
     double M_core = 0.0;
     int n_angular_avg = 0;
     int n_pole_avg = 0;
+    double interior_volume = 0.0;
 
     static constexpr int N_INNER = 8;       // block-Jacobi + SIMPLE iterations per solve
     static constexpr int MAX_OUTER = 12;     // max outer Newton-like iterations

@@ -6,6 +6,7 @@ symptom, root cause, fix, and how to write a regression test.
 
 P01–P22: Low-Mach implicit solver (`lowmach_solver.cu`).
 P23–P29: FAS solver and Strang Cartesian solver.
+P30: Conservation fix for atmosphere reset.
 
 ---
 
@@ -40,6 +41,7 @@ P23–P29: FAS solver and Strang Cartesian solver.
 27. [P27: Smooth floor returns exact zero for large negative inputs](#p27)
 28. [P28: Entropy wave convergence masked by nonlinear O(A²) error](#p28)
 29. [P29: LM-HLLC acoustic suppression foils sound-wave convergence test](#p29)
+30. [P30: Atmosphere reset and sponge layer destroy mass/energy conservation](#p30)
 
 ---
 
@@ -318,7 +320,7 @@ The velocity correction `delta_v = -(1/Ap)*nabla(dp)` then has `delta_v ≈ -dt 
 
 3. **Diagonal pressure coupling formula wrong**: Used `-(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh)))` without the outer negative from `dF_mr/d(rhoE)` being `- dPdr_coeff * (gamma-1)`. The double negation produced the wrong coefficient.
 
-**Status**: Identified but not fully fixed. Reverted to BLOCK_JACOBI as default.
+**Status**: Fixed. All three bugs corrected in both LM and FAS line-solve kernels.
 
 **Files**: `lowmach_solver.cu:k_lm_line_solve`
 
@@ -563,6 +565,30 @@ The acoustic suppression is a **feature** for stellar convection simulations whe
 
 ---
 
+<a id="p30"></a>
+## P30: Atmosphere reset and sponge layer destroy mass/energy conservation
+
+**Symptom**: Total mass `M = ∫ρ dV` drifts by 0.01–1% over 10⁴ steps, depending on how much material crosses the atmosphere boundary. Total energy shows similar drift.
+
+**Root cause**: Three non-conservative operations are applied every time step:
+
+1. `k_fas_atm_reset`: forces cells with `ρ₀ < atm_thresh`, `ρ < 0.01·ρ₀`, or `T/T₀ > 100` to exact HSE state `(ρ₀, 0, P₀/(γ-1))`. The mass and energy difference between the old and new state is silently discarded.
+
+2. `k_fas_sponge`: damps velocity via `v *= 1/(1+α)` and relaxes internal energy toward HSE. Kinetic energy is removed without conversion to heat; internal energy difference vanishes.
+
+3. `k_fas_floor` / `k_lm_floor`: smooth floor + hard clamp can create mass when `ρ` is lifted from below-floor to floor value.
+
+For HSE tests this is invisible (atmosphere cells are already at HSE). For convection, material reaching the atmosphere boundary is truncated, accumulating a deficit proportional to the flux × timestep × number of affected cells.
+
+**Fix**: Wrap the sponge + atm_reset block with global reduce of `∫ρ·dV` and `∫E·dV` before and after. The deficit `ΔM = M_before − M_after` is distributed uniformly as a density correction `ΔM / V_interior` to all interior cells (`ρ₀ ≥ atm_thresh`). Same for energy. This preserves the atm_reset's ability to suppress vacuum noise while maintaining exact global conservation.
+
+Applied to all 4 polar solvers: FAS (implicit + explicit), SIMPLE, projection.
+
+**Files**: `fas_solver.cu:step()`, `fas_solver.cu:step_explicit()`, `simple_solver.cu:step()`, `projection_solver.cu:step()`, `fas_residual.cu` (new kernels `k_fas_rhoV_EV`, `k_fas_conserve_correct`), `fas_linalg.cuh` (`fas_reduce_sum`)
+
+**Test strategy**: Run Lane-Emden perturbed for 1000 steps. Assert `|M_final - M_initial| / M_initial < 1e-12` (machine precision for compensated sum). Without the fix, expect ~1e-4 drift.
+
+---
 ## Summary: Regression Test Priority
 
 ### Tier 1 — Correctness fundamentals (must pass for any commit)

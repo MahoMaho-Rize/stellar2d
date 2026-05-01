@@ -430,10 +430,11 @@ void k_lm_floor(double* rho, double* mr, double* mt, double* rhoE,
     if (flat >= nr*nt) return;
     int k = d_idx(flat/nt, flat%nt, nt, ng);
     double r = rho[k];
-    rho[k] = 0.5 * (r + sqrt(r*r + 4.0*rho_fl*rho_fl));
+    r = 0.5 * (r + sqrt(r*r + 4.0*rho_fl*rho_fl));
+    rho[k] = fmax(r, rho_fl);
     double P = (gamma - 1.0) * rhoE[k];
     double P_s = 0.5 * (P + sqrt(P*P + 4.0*P_fl*P_fl));
-    rhoE[k] = P_s / (gamma - 1.0);
+    rhoE[k] = fmax(P_s, P_fl) / (gamma - 1.0);
 }
 
 // Freeze atmosphere cells to HSE reference state.

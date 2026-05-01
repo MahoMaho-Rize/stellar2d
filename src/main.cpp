@@ -38,6 +38,7 @@
 #include <array>
 #include <vector>
 #include <csignal>
+#include <functional>
 #include <sys/stat.h>
 
 static volatile sig_atomic_t g_interrupted = 0;
@@ -428,6 +429,67 @@ int main(int argc, char** argv) {
     std::printf("Starting time integration...\n");
 
 #ifdef USE_GPU
+    // ── Solver adapter: type-erased callbacks for the time-stepping loop ──
+    struct SolverOps {
+        std::function<double(double, double)> step;
+        std::function<void(const Grid&, State&, double dt)> download;
+        std::function<void()> destroy;
+        int progress_interval = 200;
+    };
+
+    auto snapshot_hse_if_needed = [&](auto& solver) {
+        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
+            State state_hse;
+            state_hse.allocate(grid);
+            LaneEmdenParams lep;
+            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
+            init_lane_emden(grid, state_hse, lep, cfg.gamma);
+            solver.upload_state(grid, state_hse);
+            solver.snapshot_hse();
+        }
+    };
+
+    auto configure_mass_mesh = [&](auto& solver) {
+        if (cfg.mesh_type != "mass") return;
+        solver.use_hse_outer_bc = true;
+        solver.use_core_excision = (cfg.r_inner > 0);
+        solver.M_core = cfg.M_core;
+        solver.n_pole_avg = cfg.ntheta / 2;
+        if (cfg.r_inner <= 0) {
+            int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
+            solver.n_angular_avg = n_uni;
+        }
+    };
+
+    auto run_time_loop = [&](SolverOps& ops) {
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = ops.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % ops.progress_interval == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                ops.download(grid, state, dt);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk",
+                              run_dir.c_str(), step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
+        }
+        std::fprintf(stderr, "\n");
+        ops.download(grid, state, 0.0);
+        ops.destroy();
+    };
+
     if (cfg.solver_type == "radial1d") {
         // ===== 1D Lagrangian radial solver (MESA RSP-inspired) =====
         // Ignores the 2D Grid; uses nr as number of Lagrangian zones.
@@ -490,115 +552,37 @@ int main(int argc, char** argv) {
         std::fclose(csv);
         std::fprintf(stderr, "\n");
         r1d.destroy();
+
     } else if (cfg.solver_type == "projection") {
-        // ===== GPU semi-implicit pressure projection =====
         ProjSolver proj;
         proj.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.no_sponge) proj.sponge_kappa = 0.0;
-        if (cfg.mesh_type == "mass") {
-            proj.use_hse_outer_bc = true;
-            proj.use_core_excision = (cfg.r_inner > 0);
-            proj.M_core = cfg.M_core;
-            proj.n_pole_avg = cfg.ntheta / 2;
-            if (cfg.r_inner <= 0) {
-                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
-                proj.n_angular_avg = n_uni;
-            }
-        }
-
-        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
-            State state_hse;
-            state_hse.allocate(grid);
-            LaneEmdenParams lep;
-            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-            init_lane_emden(grid, state_hse, lep, cfg.gamma);
-            proj.upload_state(grid, state_hse);
-            proj.snapshot_hse();
-        }
-
+        configure_mass_mesh(proj);
+        snapshot_hse_if_needed(proj);
         proj.upload_state(grid, state);
 
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+        SolverOps ops;
+        ops.step = [&](double t_, double te) { return proj.step(t_, te); };
+        ops.download = [&](const Grid& g, State& s, double) { proj.download_state(g, s); };
+        ops.destroy = [&]() { proj.destroy(); };
+        run_time_loop(ops);
 
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = proj.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % 200 == 0)
-                print_progress(t, cfg.t_end, step, dt, wall_start);
-
-            if (step % cfg.output_interval == 0) {
-                proj.download_state(grid, state);
-                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy);
-                char fname[512];
-                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
-                write_vtk(fname, grid, state, cfg.gamma);
-            }
-        }
-        std::fprintf(stderr, "\n");
-        proj.download_state(grid, state);
-        proj.destroy();
     } else if (cfg.solver_type == "simple") {
-        // ===== GPU SIMPLE pressure-correction solver =====
         SimpleSolver sim;
         sim.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.no_sponge) sim.sponge_kappa = 0.0;
-        if (cfg.mesh_type == "mass") {
-            sim.use_hse_outer_bc = true;
-            sim.use_core_excision = (cfg.r_inner > 0);
-            sim.M_core = cfg.M_core;
-            sim.n_pole_avg = cfg.ntheta / 2;
-            if (cfg.r_inner <= 0) {
-                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
-                sim.n_angular_avg = n_uni;
-            }
-        }
-
-        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
-            State state_hse;
-            state_hse.allocate(grid);
-            LaneEmdenParams lep;
-            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-            init_lane_emden(grid, state_hse, lep, cfg.gamma);
-            sim.upload_state(grid, state_hse);
-            sim.snapshot_hse();
-        }
-
+        configure_mass_mesh(sim);
+        snapshot_hse_if_needed(sim);
         sim.upload_state(grid, state);
 
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+        SolverOps ops;
+        ops.step = [&](double t_, double te) { return sim.step(t_, te); };
+        ops.download = [&](const Grid& g, State& s, double) { sim.download_state(g, s); };
+        ops.destroy = [&]() { sim.destroy(); };
+        run_time_loop(ops);
 
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = sim.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % 200 == 0)
-                print_progress(t, cfg.t_end, step, dt, wall_start);
-
-            if (step % cfg.output_interval == 0) {
-                sim.download_state(grid, state);
-                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy);
-                char fname[512];
-                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
-                write_vtk(fname, grid, state, cfg.gamma);
-            }
-        }
-        std::fprintf(stderr, "\n");
-        sim.download_state(grid, state);
-        sim.destroy();
     } else if (cfg.solver_type == "fas" || cfg.solver_type == "explicit") {
         bool use_explicit = (cfg.solver_type == "explicit");
-        // ===== GPU FAS nonlinear multigrid path =====
         FasSolver fas;
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
         fas.limiter_type = static_cast<int>(cfg.limiter);
@@ -608,28 +592,10 @@ int main(int argc, char** argv) {
         if (cfg.radial_only)
             std::printf("Radial-only mode: v_theta=0 enforced, theta fluxes and atm_reset skipped\n");
         if (cfg.no_sponge) fas.sponge_kappa = 0.0;
-        if (cfg.mesh_type == "mass") {
-            fas.use_hse_outer_bc = true;
-            fas.use_core_excision = (cfg.r_inner > 0);
-            fas.M_core = cfg.M_core;
-            fas.n_pole_avg = cfg.ntheta / 2;
-            if (cfg.r_inner <= 0) {
-                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
-                fas.n_angular_avg = n_uni;
-                fas.central_damp_r = 0.15 * cfg.R_outer;
-            }
-        }
-
-        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
-            State state_hse;
-            state_hse.allocate(grid);
-            LaneEmdenParams lep;
-            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-            init_lane_emden(grid, state_hse, lep, cfg.gamma);
-            fas.upload_state(grid, state_hse);
-            fas.snapshot_hse();
-        }
-
+        configure_mass_mesh(fas);
+        if (cfg.mesh_type == "mass" && cfg.r_inner <= 0)
+            fas.central_damp_r = 0.15 * cfg.R_outer;
+        snapshot_hse_if_needed(fas);
         fas.upload_state(grid, state);
 
         // GPU snapshot buffer: store frames in VRAM, write all at end
@@ -651,60 +617,53 @@ int main(int argc, char** argv) {
         std::vector<int> snap_steps;
         int n_snaps = 0;
 
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
-
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = use_explicit ? fas.step_explicit(t, cfg.t_end) : fas.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % cfg.output_interval == 0 && n_snaps < max_snaps) {
-                // D2D snapshot: ~0.1ms vs D2H+VTK ~100ms
-                long long off = (long long)n_snaps * 4 * snap_size;
-                CUDA_CHECK(cudaMemcpy(d_snap_buf + off, fl.d_rho, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
-                CUDA_CHECK(cudaMemcpy(d_snap_buf + off + snap_size, fl.d_mr, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
-                CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 2*snap_size, fl.d_mt, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
-                CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 3*snap_size, fl.d_rhoE, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
-                snap_times.push_back(t);
-                snap_dts.push_back(dt);
-                snap_steps.push_back(step);
-                n_snaps++;
+        SolverOps ops;
+        ops.progress_interval = 2000;
+        ops.step = [&](double t_, double te) -> double {
+            return use_explicit ? fas.step_explicit(t_, te) : fas.step(t_, te);
+        };
+        ops.download = [&](const Grid&, State&, double dt_val) {
+            if (n_snaps >= max_snaps) return;
+            long long off = (long long)n_snaps * 4 * snap_size;
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off, fl.d_rho, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off + snap_size, fl.d_mr, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 2*snap_size, fl.d_mt, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 3*snap_size, fl.d_rhoE, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            snap_times.push_back(t);
+            snap_dts.push_back(dt_val);
+            snap_steps.push_back(step);
+            n_snaps++;
+        };
+        ops.destroy = [&]() {
+            if (g_interrupted)
+                std::printf("\nInterrupted at step %d, t=%.6e. ", step, t);
+            std::printf("Writing %d snapshots from GPU...\n", n_snaps);
+            std::vector<double> h_buf(4LL * snap_size);
+            for (int s = 0; s < n_snaps; ++s) {
+                long long off = (long long)s * 4 * snap_size;
+                CUDA_CHECK(cudaMemcpy(h_buf.data(), d_snap_buf + off, 4*snap_size*sizeof(double), cudaMemcpyDeviceToHost));
+                for (int ii = 0; ii < fl.nr; ++ii)
+                    for (int jj = 0; jj < fl.nt; ++jj) {
+                        int k = grid.idx(ii, jj);
+                        int kg = (ii + fl.ng) * (fl.nt + 2*fl.ng) + (jj + fl.ng);
+                        state.rho[k] = h_buf[kg];
+                        state.mr[k] = h_buf[snap_size + kg];
+                        state.mtheta[k] = h_buf[2*snap_size + kg];
+                        state.E[k] = h_buf[3*snap_size + kg];
+                    }
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            snap_steps[s], snap_times[s], snap_dts[s], diag.total_mass, diag.total_energy);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), s + 1);
+                write_vtk(fname, grid, state, cfg.gamma);
             }
+            cudaFree(d_snap_buf);
+            fas.download_state(grid, state);
+            fas.destroy();
+        };
+        run_time_loop(ops);
 
-            if (step % 2000 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
-        }
-        std::fprintf(stderr, "\n");
-        if (g_interrupted)
-            std::printf("\nInterrupted at step %d, t=%.6e. ", step, t);
-        std::printf("Writing %d snapshots from GPU...\n", n_snaps);
-
-        // Bulk D2H + VTK write
-        std::vector<double> h_buf(4LL * snap_size);
-        for (int s = 0; s < n_snaps; ++s) {
-            long long off = (long long)s * 4 * snap_size;
-            CUDA_CHECK(cudaMemcpy(h_buf.data(), d_snap_buf + off, 4*snap_size*sizeof(double), cudaMemcpyDeviceToHost));
-            // Unpack into state
-            for (int ii = 0; ii < fl.nr; ++ii)
-                for (int jj = 0; jj < fl.nt; ++jj) {
-                    int k = grid.idx(ii, jj);
-                    int kg = (ii + fl.ng) * (fl.nt + 2*fl.ng) + (jj + fl.ng);
-                    state.rho[k] = h_buf[kg];
-                    state.mr[k] = h_buf[snap_size + kg];
-                    state.mtheta[k] = h_buf[2*snap_size + kg];
-                    state.E[k] = h_buf[3*snap_size + kg];
-                }
-            Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-            std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                        snap_steps[s], snap_times[s], snap_dts[s], diag.total_mass, diag.total_energy);
-            char fname[512];
-            std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), s + 1);
-            write_vtk(fname, grid, state, cfg.gamma);
-        }
-
-        cudaFree(d_snap_buf);
-        fas.download_state(grid, state);
-        fas.destroy();
     } else if (cfg.solver_type == "cart_lag") {
         // ===== Cartesian 2D Lagrangian (Caramana compatible, planar) =====
         // Runs independent of Grid/State: uses [0,Lx]×[0,Ly] box = [1,1].
@@ -1227,18 +1186,9 @@ int main(int argc, char** argv) {
 
         LowMachSolver lm;
         lm.init(grid, eos, cfg.G, cfg.cfl, pc);
-
-        // For perturbed ICs: snapshot unperturbed HSE first, then load perturbation.
-        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
-            State state_hse;
-            state_hse.allocate(grid);
-            LaneEmdenParams lep;
-            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-            init_lane_emden(grid, state_hse, lep, cfg.gamma);
-            lm.upload_state(grid, state_hse);
-            lm.snapshot_hse();
-        }
-
+        if (cfg.no_sponge) lm.sponge_kappa = 0.0;
+        configure_mass_mesh(lm);
+        snapshot_hse_if_needed(lm);
         lm.upload_state(grid, state);
 
         std::timespec wall_start;
@@ -1287,33 +1237,11 @@ int main(int argc, char** argv) {
         gpu.init(grid, eos, cfg.G, cfg.cfl, cfg.limiter);
         gpu.upload_state(grid, state);
 
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
-
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = gpu.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % 200 == 0)
-                print_progress(t, cfg.t_end, step, dt, wall_start);
-
-            if (step % cfg.output_interval == 0) {
-                gpu.download_state(grid, state);
-                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy);
-
-                char fname[512];
-                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
-                write_vtk(fname, grid, state, cfg.gamma);
-            }
-        }
-        std::fprintf(stderr, "\n");
-
-        gpu.download_state(grid, state);
-        gpu.destroy();
+        SolverOps ops;
+        ops.step = [&](double t_, double te) { return gpu.step(t_, te); };
+        ops.download = [&](const Grid& g, State& s, double) { gpu.download_state(g, s); };
+        ops.destroy = [&]() { gpu.destroy(); };
+        run_time_loop(ops);
 #else
         std::fprintf(stderr, "ERROR: --solver compressible requires AmgX. "
                      "Rebuild with -DAMGX_DIR=/path/to/amgx, or use --solver lowmach.\n");

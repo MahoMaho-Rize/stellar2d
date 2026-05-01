@@ -516,12 +516,13 @@ void k_fas_floor(double* rho, double* mr, double* mt, double* rhoE,
     }
     const double rho_fl = 1e-20;
     r = 0.5 * (r + sqrt(r*r + 4.0*rho_fl*rho_fl));
+    r = fmax(r, rho_fl);
     rho[k] = r;
-    // Ensure positive internal energy: e_int = E - ½ρv² > 0
-    double KE = 0.5 * (mr[k]*mr[k] + mt[k]*mt[k]) / fmax(r, rho_fl);
+    double KE = 0.5 * (mr[k]*mr[k] + mt[k]*mt[k]) / r;
     double e_int = E - KE;
     const double e_fl = 1e-20;
     e_int = 0.5 * (e_int + sqrt(e_int*e_int + 4.0*e_fl*e_fl));
+    e_int = fmax(e_int, e_fl);
     rhoE[k] = e_int + KE;
 }
 
@@ -577,6 +578,37 @@ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
     mr[k]   = 0.0;
     mt[k]   = 0.0;
     rhoE[k] = fmax(P0[flat] * gam_m1_inv, 1e-20);
+}
+
+// ========================= Conservation helpers ==============================
+// Compute ρ·V and E·V per cell (for global reduce before/after atm_reset)
+__global__
+void k_fas_rhoV_EV(const double* rho, const double* rhoE, const double* vol,
+                   double* rhoV_out, double* EV_out,
+                   int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    double V = vol[flat];
+    rhoV_out[flat] = rho[k] * V;
+    EV_out[flat]   = rhoE[k] * V;
+}
+
+// Distribute mass/energy correction over interior cells, proportional to cell volume.
+// delta_rho_per_vol = ΔM / V_interior  (density correction, uniform)
+// delta_E_per_vol   = ΔE / V_interior  (energy density correction, uniform)
+__global__
+void k_fas_conserve_correct(double* rho, double* rhoE,
+                            const double* rho0,
+                            double atm_thresh,
+                            double delta_rho_per_vol, double delta_E_per_vol,
+                            int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    if (rho0[flat] < atm_thresh) return;
+    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    rho[k]  += delta_rho_per_vol;
+    rhoE[k] += delta_E_per_vol;
 }
 
 // ========================= Angular averaging near origin ======================

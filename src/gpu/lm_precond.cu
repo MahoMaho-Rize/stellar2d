@@ -2,6 +2,7 @@
 
 #include "lowmach_solver.h"
 #include "lm_common.cuh"
+#include "fas_common.cuh"
 #include <algorithm>
 
 // ========================= Variable scaling =============================
@@ -108,58 +109,44 @@ void k_lm_assemble_blkjac(
     double sr_t = fabs(vt_c) / (r * dtheta[j]);
     double sr = sr_r + sr_t;
 
-    // Pressure gradient coupling: dP/d(rhoE) = (γ-1)
-    // Central diff stencil: dP_dr involves P at i-1,i,i+1
-    // The diagonal part (dependence on P_i) has coefficient:
-    //   for weighted central diff: -(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh)))
-    double dPdr_coeff = 0.0; // d(dP/dr)/dP_c
+    // Exact central-diff self-coefficient: b = (dh-dl)/(dl*dh)
+    double dPdr_self = 0.0;
     if (i > 0 && i < nr-1) {
         double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
-        dPdr_coeff = -(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh)));
+        dPdr_self = (dh - dl) / (dl * dh);
     } else if (i == 0 && nr > 1) {
-        dPdr_coeff = -1.0/(r_center[1]-r_center[0]);
+        dPdr_self = -1.0/(r_center[1]-r_center[0]);
     } else if (i == nr-1 && nr >= 2) {
-        dPdr_coeff = 1.0/(r_center[nr-1]-r_center[nr-2]);
+        dPdr_self = 1.0/(r_center[nr-1]-r_center[nr-2]);
     }
 
-    double dPdt_coeff = 0.0; // d((1/r)dP/dθ)/dP_c
+    double dPdt_self = 0.0;
     if (j > 0 && j < nt-1) {
         double tc_m=0.5*(theta_face[j-1]+theta_face[j]);
         double tc_c=0.5*(theta_face[j]+theta_face[j+1]);
         double tc_p=0.5*(theta_face[j+1]+theta_face[j+2]);
         double dl=tc_c-tc_m, dh=tc_p-tc_c;
-        dPdt_coeff = -(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh))) / r;
+        dPdt_self = (dh - dl) / (dl * dh * r);
     }
 
-    // dP/d(rhoE) = (γ-1)  (since P = (γ-1)*rhoE for our state variable)
     double dP_drhoE = gamma - 1.0;
-
-    // 1D gravity coupling: dF_mr/d(rho) += g₀(r) (from ρ'·g₀ term)
     double g0_val = gr0[i];
 
-    // div_v diagonal contribution: d(div_v)/d(mr_c) and d(div_v)/d(mt_c)
-    // From FV divergence: div_v = (1/V)(Ar_hi*vr_hi - Ar_lo*vr_lo + ...)
-    // vr at face (i,i+1) = 0.5*(mr[k]/ρ + mr[k_right]/ρ_right)
-    // d(vr_face)/d(mr[k]) = 0.5/ρ for both faces touching cell k
     double Ar_hi=ar[(i+1)*nt+j], Ar_lo=ar[i*nt+j];
     double At_hi=at[i*(nt+1)+j+1], At_lo=at[i*(nt+1)+j];
     double ddivv_dmr = invV * 0.5/rho_c * (Ar_hi + Ar_lo);
     double ddivv_dmt = invV * 0.5/rho_c * (At_hi + At_lo);
 
-    // Build 4×4 J block (row-major)
     double J[16];
     for (int q=0; q<16; q++) J[q] = 0.0;
 
-    // Diagonal: -1/dt - advection_rate
-    J[0]  = -(inv_dt + sr);  // dF_rho/d(rho)
-    J[5]  = -(inv_dt + sr);  // dF_mr/d(mr)
-    J[10] = -(inv_dt + sr);  // dF_mt/d(mt)
-    J[15] = -(inv_dt + sr);  // dF_rhoE/d(rhoE)
+    J[0]  = -(inv_dt + sr);
+    J[5]  = -(inv_dt + sr);
+    J[10] = -(inv_dt + sr);
+    J[15] = -(inv_dt + sr);
 
-    // Pressure-energy coupling: dF_mr/d(rhoE) = -d(dP'/dr)/d(rhoE)
-    // = -dPdr_coeff * dP/d(rhoE) = -dPdr_coeff * (γ-1)
-    J[1*4+3] = -dPdr_coeff * dP_drhoE;  // dF_mr/d(rhoE)
-    J[2*4+3] = -dPdt_coeff * dP_drhoE;  // dF_mt/d(rhoE)
+    J[1*4+3] = dPdr_self * dP_drhoE;
+    J[2*4+3] = dPdt_self * dP_drhoE;
 
     // 1D gravity-density coupling: dF_mr/d(rho) += g₀(r) (from +ρ'·g₀ term)
     J[1*4+0] += g0_val;   // dF_mr/d(rho)
@@ -403,19 +390,15 @@ void k_lm_line_solve(
         double P_c = fmax((gamma - 1.0) * rhoE[k], 1e-30);
         double r = r_center[i];
         double invV = 1.0 / vol[flat];
-        double sr_t = fabs(vt_c) / (r * dtheta[j]);
 
         double cs = sqrt(gamma * P_c / rho_c);
         double Ar_hi = ar[(i+1)*nt+j], Ar_lo = ar[i*nt+j];
 
-        // Diagonal: -(1/dt + sr) with acoustic stiffness cs/Δx
-        double sr = (fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]);
-        double diag_val = -(inv_dt + sr);
+        // Transverse (θ) spectral radius only; r-direction is captured
+        // structurally by L/D/U off-diagonals + adv_self
+        double sr_transverse = (fabs(vt_c)+cs)/(r*dtheta[j]);
+        double diag_val = -(inv_dt + sr_transverse);
 
-        // Off-diagonal from upwind advection in r:
-        // Flux at face (i-1,i): vr_face * q_upwind. If vr>0, q comes from i-1.
-        // dF/d(q_{i-1}) = vr_face * A_lo / V when upwinding from left.
-        // dF/d(q_i) = -vr_face * A_hi / V when upwinding from right.
         double vf_lo = 0.0, vf_hi = 0.0;
         if (i > 0) {
             double rl = fmax(rho[d_idx(i-1,j,nt,ng)], 1e-20);
@@ -449,11 +432,13 @@ void k_lm_line_solve(
             Ub[10] = coeff;
             Ub[15] = coeff;
 
-            // Pressure coupling to i+1: dR_mr/d(rhoE_{i+1}) from ∇P
+            // Pressure coupling to i+1: central-diff stencil coeff c = dl/(dh*(dl+dh))
+            // dR_mr/dP_{i+1} = -c  (gradient enters with minus sign)
+            // dF_mr/dP_{i+1} = +c  (F = -R)
+            // dF_mr/d(rhoE_{i+1}) = (γ-1) * dl/(dh*(dl+dh))
             double dh = r_center[i+1] - r_center[i];
             double dl = (i > 0) ? r_center[i] - r_center[i-1] : dh;
-            double pcoeff = -(gamma - 1.0) * dl / (dh * (dl + dh));
-            Ub[1*4+3] += pcoeff;  // dF_mr/d(rhoE_{i+1})
+            Ub[1*4+3] += (gamma - 1.0) * dl / (dh * (dl + dh));
         }
 
         // Diagonal block: full 4×4 from block Jacobi + corrections
@@ -468,11 +453,12 @@ void k_lm_line_solve(
         Db[10] = diag_val;  // dF_mt/d(mt)
         Db[15] = diag_val;  // dF_rhoE/d(rhoE)
 
-        // Pressure-energy coupling
+        // Pressure-energy coupling: dF_mr/d(rhoE_i)
+        // Central-diff self-coefficient b = (dh-dl)/(dl*dh)
+        // dF_mr/dP_i = -(-b) = b, so dF_mr/d(rhoE_i) = (γ-1)*(dh-dl)/(dl*dh)
         if (i > 0 && i < nr-1) {
             double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
-            double pcoeff = -(gamma-1.0) * (-(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh))));
-            Db[1*4+3] = pcoeff;
+            Db[1*4+3] = (gamma-1.0) * (dh - dl) / (dl * dh);
         } else if (i == 0 && nr > 1) {
             Db[1*4+3] = (gamma-1.0) / (r_center[1]-r_center[0]);
         } else if (i == nr-1 && nr >= 2) {
@@ -482,12 +468,14 @@ void k_lm_line_solve(
         // 1D gravity-density coupling: dF_mr/d(rho) += g₀(r)
         Db[1*4+0] += gr0[i];
 
-        // Lower block pressure coupling to i-1
+        // Lower block pressure coupling to i-1:
+        // Central-diff stencil coeff a = -dh/(dl*(dl+dh))
+        // dF_mr/dP_{i-1} = -(-a) = a (negative)
+        // dF_mr/d(rhoE_{i-1}) = -(γ-1)*dh/(dl*(dl+dh))
         if (i > 0) {
             double dl = r_center[i] - r_center[i-1];
             double dh = (i < nr-1) ? r_center[i+1] - r_center[i] : dl;
-            double pcoeff = -(gamma - 1.0) * dh / (dl * (dl + dh));
-            Lb[1*4+3] += pcoeff;  // dF_mr/d(rhoE_{i-1})
+            Lb[1*4+3] += -(gamma - 1.0) * dh / (dl * (dl + dh));
         }
 
         // Advection correction to diagonal from self-flux
@@ -526,116 +514,35 @@ void k_lm_line_solve(
                 double* Dp = &D[(i-1)*16]; // D_{i-1} after elimination = upper triangular
 
                 // Compute multiplier M = L_i * D_{i-1}^{-1}
-                // Then D_i -= M * U_{i-1}, rhs_i -= M * rhs_{i-1}
-                // For simplicity, solve D_{i-1} * X = L_i^T column by column
-                // This is expensive but nr is small (~64)
-
-                double* Up = &U[(i-1)*16];
-
-                // M = L_i * inv(D_{i-1}) — compute row by row
-                // Since D_{i-1} has been modified by forward elim, it's upper triangular
-                // Use back-substitution to get inv(D)*L^T columns
-
-                // Actually for a 4×4 system, just do the standard block Thomas:
-                // Solve D_{i-1} * tmp = U_{i-1} for each column → already done
-                // Instead, compute M = L_i * D_{i-1}^{-1} by solving D_{i-1}^T * M^T = L_i^T
-
-                // Simplest approach: invert D_{i-1} explicitly (4×4 Gauss-Jordan)
                 double inv_D[16];
-                {
-                    double A[16];
-                    for(int q=0;q<16;q++) A[q]=Dp[q];
-                    for(int q=0;q<16;q++) inv_D[q]=(q/4==q%4)?1.0:0.0;
-                    for(int col=0;col<4;col++){
-                        double mx=fabs(A[col*4+col]); int mi=col;
-                        for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
-                        if(mi!=col){
-                            for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
-                            for(int q=0;q<4;q++){double t=inv_D[col*4+q];inv_D[col*4+q]=inv_D[mi*4+q];inv_D[mi*4+q]=t;}
-                        }
-                        double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
-                        for(int row=col+1;row<4;row++){
-                            double m=A[row*4+col]/d;
-                            for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
-                            for(int q=0;q<4;q++) inv_D[row*4+q]-=m*inv_D[col*4+q];
-                        }
-                    }
-                    for(int c=0;c<4;c++){
-                        for(int row=3;row>=0;row--){
-                            double s=inv_D[row*4+c];
-                            for(int q=row+1;q<4;q++) s-=A[row*4+q]*inv_D[q*4+c];
-                            inv_D[row*4+c]=s/A[row*4+row];
-                        }
-                    }
-                }
-
-                // M = L_i * inv(D_{i-1})
+                mat4_invert(Dp, inv_D);
                 double M[16];
-                for(int r=0;r<4;r++)
-                    for(int c=0;c<4;c++){
-                        double s=0;
-                        for(int q=0;q<4;q++) s+=Lb[r*4+q]*inv_D[q*4+c];
-                        M[r*4+c]=s;
-                    }
-
-                // D_i -= M * U_{i-1}
-                for(int r=0;r<4;r++)
-                    for(int c=0;c<4;c++){
-                        double s=0;
-                        for(int q=0;q<4;q++) s+=M[r*4+q]*Up[q*4+c];
-                        Db[r*4+c]-=s;
-                    }
-
-                // rhs_i -= M * rhs_{i-1}
+                mat4_mul(Lb, inv_D, M);
+                double MU[16];
+                mat4_mul(M, &U[(i-1)*16], MU);
+                for (int q = 0; q < 16; q++) Db[q] -= MU[q];
                 double* rp = &rhs_s[(i-1)*4];
-                for(int r=0;r<4;r++){
-                    double s=0;
-                    for(int q=0;q<4;q++) s+=M[r*4+q]*rp[q];
-                    rb[r]-=s;
+                for (int r = 0; r < 4; r++) {
+                    double s = 0;
+                    for (int q = 0; q < 4; q++) s += M[r*4+q] * rp[q];
+                    rb[r] -= s;
                 }
             }
         }
-
-        // Back-substitution
         for (int i = nr-1; i >= 0; i--) {
-            double* Db = &D[i*16];
             double* rb = &rhs_s[i*4];
             double* xb = &x_s[i*4];
-
-            // rb -= U_i * x_{i+1}
             if (i < nr-1) {
                 double* Ub = &U[i*16];
                 double* xp = &x_s[(i+1)*4];
-                for(int r=0;r<4;r++){
-                    double s=0;
-                    for(int q=0;q<4;q++) s+=Ub[r*4+q]*xp[q];
-                    rb[r]-=s;
+                for (int r = 0; r < 4; r++) {
+                    double s = 0;
+                    for (int q = 0; q < 4; q++) s += Ub[r*4+q] * xp[q];
+                    rb[r] -= s;
                 }
             }
-
-            // Solve D_i * x_i = rb (D_i is modified from forward sweep)
-            // Inline 4×4 solve
-            double A[16]; for(int q=0;q<16;q++) A[q]=Db[q];
-            double b4[4]; for(int q=0;q<4;q++) b4[q]=rb[q];
-            for(int col=0;col<4;col++){
-                double mx=fabs(A[col*4+col]); int mi=col;
-                for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
-                if(mi!=col){
-                    for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
-                    {double t=b4[col];b4[col]=b4[mi];b4[mi]=t;}
-                }
-                double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
-                for(int row=col+1;row<4;row++){
-                    double m=A[row*4+col]/d;
-                    for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
-                    b4[row]-=m*b4[col];
-                }
-            }
-            for(int row=3;row>=0;row--){
-                double s=b4[row];
-                for(int q=row+1;q<4;q++) s-=A[row*4+q]*b4[q];
-                xb[row]=s/A[row*4+row];
-            }
+            for (int q = 0; q < 4; q++) xb[q] = rb[q];
+            mat4_solve(&D[i*16], xb);
         }
     }
     __syncthreads();
@@ -688,8 +595,9 @@ void k_lm_line_solve_theta(
 
         double At_hi = at[i*(nt+1)+j+1], At_lo = at[i*(nt+1)+j];
 
-        double sr = (fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]);
-        double diag_val = -(inv_dt + sr);
+        // Transverse (r) spectral radius only; θ-direction captured by L/D/U + adv_self
+        double sr_transverse = (fabs(vr_c)+cs)/dr[i];
+        double diag_val = -(inv_dt + sr_transverse);
 
         // θ-direction face velocities for upwind
         double vf_lo = 0.0, vf_hi = 0.0;
@@ -738,14 +646,15 @@ void k_lm_line_solve_theta(
         for (int q = 0; q < 16; q++) Db[q] = 0.0;
         Db[0] = diag_val; Db[5] = diag_val; Db[10] = diag_val; Db[15] = diag_val;
 
-        // θ pressure gradient diagonal: d(∂P/∂θ)/dP_j
+        // θ pressure gradient diagonal: dF_mt/d(rhoE_j)
+        // Self-coefficient b = (dh-dl)/(dl*dh), divided by r for θ-gradient
+        // dF_mt/d(rhoE_j) = (γ-1)*(dh-dl)/(dl*dh*r)
         if (j > 0 && j < nt-1) {
             double tc_m = 0.5*(theta_face[j-1]+theta_face[j]);
             double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
             double tc_p = 0.5*(theta_face[j+1]+theta_face[j+2]);
             double dl = tc_c-tc_m, dh = tc_p-tc_c;
-            double pcoeff = -(gamma-1.0) * (-(dh/(dl*(dl+dh)) + dl/(dh*(dl+dh)))) / r;
-            Db[2*4+3] = pcoeff;
+            Db[2*4+3] = (gamma-1.0) * (dh - dl) / (dl * dh * r);
         }
 
         // Advection self-coupling
@@ -783,95 +692,40 @@ void k_lm_line_solve_theta(
     }
     __syncthreads();
 
-    // Block Thomas: forward sweep + back-substitution (thread 0)
     if (tid == 0) {
         for (int j = 0; j < nt; j++) {
             double* Db = &D[j*16];
             double* rb = &rhs_s[j*4];
             if (j > 0) {
-                double* Lb = &L[j*16];
-                double* Dp = &D[(j-1)*16];
-                double* Up = &U[(j-1)*16];
-                // inv(D_{j-1})
-                double inv_D[16], A[16];
-                for(int q=0;q<16;q++) A[q]=Dp[q];
-                for(int q=0;q<16;q++) inv_D[q]=(q/4==q%4)?1.0:0.0;
-                for(int col=0;col<4;col++){
-                    double mx=fabs(A[col*4+col]); int mi=col;
-                    for(int row=col+1;row<4;row++){if(fabs(A[row*4+col])>mx){mx=fabs(A[row*4+col]);mi=row;}}
-                    if(mi!=col){
-                        for(int q=0;q<4;q++){double t=A[col*4+q];A[col*4+q]=A[mi*4+q];A[mi*4+q]=t;}
-                        for(int q=0;q<4;q++){double t=inv_D[col*4+q];inv_D[col*4+q]=inv_D[mi*4+q];inv_D[mi*4+q]=t;}
-                    }
-                    double d=A[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
-                    for(int row=col+1;row<4;row++){
-                        double m=A[row*4+col]/d;
-                        for(int q=col;q<4;q++) A[row*4+q]-=m*A[col*4+q];
-                        for(int q=0;q<4;q++) inv_D[row*4+q]-=m*inv_D[col*4+q];
-                    }
-                }
-                for(int c=0;c<4;c++){
-                    for(int row=3;row>=0;row--){
-                        double s=inv_D[row*4+c];
-                        for(int q=row+1;q<4;q++) s-=A[row*4+q]*inv_D[q*4+c];
-                        inv_D[row*4+c]=s/A[row*4+row];
-                    }
-                }
+                double inv_D[16];
+                mat4_invert(&D[(j-1)*16], inv_D);
                 double M[16];
-                for(int rr=0;rr<4;rr++)
-                    for(int c=0;c<4;c++){
-                        double s=0;
-                        for(int q=0;q<4;q++) s+=Lb[rr*4+q]*inv_D[q*4+c];
-                        M[rr*4+c]=s;
-                    }
-                for(int rr=0;rr<4;rr++)
-                    for(int c=0;c<4;c++){
-                        double s=0;
-                        for(int q=0;q<4;q++) s+=M[rr*4+q]*Up[q*4+c];
-                        Db[rr*4+c]-=s;
-                    }
+                mat4_mul(&L[j*16], inv_D, M);
+                double MU[16];
+                mat4_mul(M, &U[(j-1)*16], MU);
+                for (int q = 0; q < 16; q++) Db[q] -= MU[q];
                 double* rp = &rhs_s[(j-1)*4];
-                for(int rr=0;rr<4;rr++){
-                    double s=0;
-                    for(int q=0;q<4;q++) s+=M[rr*4+q]*rp[q];
-                    rb[rr]-=s;
+                for (int r = 0; r < 4; r++) {
+                    double s = 0;
+                    for (int q = 0; q < 4; q++) s += M[r*4+q] * rp[q];
+                    rb[r] -= s;
                 }
             }
         }
         for (int j = nt-1; j >= 0; j--) {
-            double* Db = &D[j*16];
             double* rb = &rhs_s[j*4];
             double* xb = &x_s[j*4];
             if (j < nt-1) {
                 double* Ub = &U[j*16];
                 double* xp = &x_s[(j+1)*4];
-                for(int rr=0;rr<4;rr++){
-                    double s=0;
-                    for(int q=0;q<4;q++) s+=Ub[rr*4+q]*xp[q];
-                    rb[rr]-=s;
+                for (int r = 0; r < 4; r++) {
+                    double s = 0;
+                    for (int q = 0; q < 4; q++) s += Ub[r*4+q] * xp[q];
+                    rb[r] -= s;
                 }
             }
-            double AA[16]; for(int q=0;q<16;q++) AA[q]=Db[q];
-            double b4[4]; for(int q=0;q<4;q++) b4[q]=rb[q];
-            for(int col=0;col<4;col++){
-                double mx=fabs(AA[col*4+col]); int mi=col;
-                for(int row=col+1;row<4;row++){if(fabs(AA[row*4+col])>mx){mx=fabs(AA[row*4+col]);mi=row;}}
-                if(mi!=col){
-                    for(int q=0;q<4;q++){double t=AA[col*4+q];AA[col*4+q]=AA[mi*4+q];AA[mi*4+q]=t;}
-                    {double t=b4[col];b4[col]=b4[mi];b4[mi]=t;}
-                }
-                double d=AA[col*4+col]; if(fabs(d)<1e-30) d=1e-30;
-                for(int row=col+1;row<4;row++){
-                    double m=AA[row*4+col]/d;
-                    for(int q=col;q<4;q++) AA[row*4+q]-=m*AA[col*4+q];
-                    b4[row]-=m*b4[col];
-                }
-            }
-            for(int row=3;row>=0;row--){
-                double s=b4[row];
-                for(int q=row+1;q<4;q++) s-=AA[row*4+q]*b4[q];
-                xb[row]=s/AA[row*4+row];
-            }
+            for (int q = 0; q < 4; q++) xb[q] = rb[q];
+            mat4_solve(&D[j*16], xb);
         }
     }
     __syncthreads();

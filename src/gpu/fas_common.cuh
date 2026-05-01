@@ -83,4 +83,77 @@ __global__ void k_fas_central_damp(double* mr, double* rhoE,
     const double* rho, const double* r_center,
     double r_damp, double alpha,
     int nr, int nt, int ng);
+
+__global__ void k_fas_rhoV_EV(const double*, const double*, const double*,
+    double*, double*, int, int, int);
+
+__global__ void k_fas_conserve_correct(double*, double*,
+    const double*, double, double, double, int, int, int);
+
+// 4×4 Gauss-Jordan inverse: A → inv_out (row-major, partial pivoting)
+__device__ __forceinline__
+void mat4_invert(const double* __restrict__ src, double* __restrict__ inv_out) {
+    double A[16], I[16];
+    for (int q = 0; q < 16; q++) { A[q] = src[q]; I[q] = (q/4 == q%4) ? 1.0 : 0.0; }
+    for (int col = 0; col < 4; col++) {
+        double mx = fabs(A[col*4+col]); int mi = col;
+        for (int row = col+1; row < 4; row++)
+            if (fabs(A[row*4+col]) > mx) { mx = fabs(A[row*4+col]); mi = row; }
+        if (mi != col) {
+            for (int q = 0; q < 4; q++) { double t = A[col*4+q]; A[col*4+q] = A[mi*4+q]; A[mi*4+q] = t; }
+            for (int q = 0; q < 4; q++) { double t = I[col*4+q]; I[col*4+q] = I[mi*4+q]; I[mi*4+q] = t; }
+        }
+        double d = A[col*4+col]; if (fabs(d) < 1e-30) d = (d >= 0 ? 1e-30 : -1e-30);
+        for (int row = col+1; row < 4; row++) {
+            double m = A[row*4+col] / d;
+            for (int q = col; q < 4; q++) A[row*4+q] -= m * A[col*4+q];
+            for (int q = 0; q < 4; q++) I[row*4+q] -= m * I[col*4+q];
+        }
+    }
+    for (int c = 0; c < 4; c++)
+        for (int row = 3; row >= 0; row--) {
+            double s = I[row*4+c];
+            for (int q = row+1; q < 4; q++) s -= A[row*4+q] * I[q*4+c];
+            I[row*4+c] = s / A[row*4+row];
+        }
+    for (int q = 0; q < 16; q++) inv_out[q] = I[q];
+}
+
+// 4×4 solve: A·x = b (in-place, b overwritten with x)
+__device__ __forceinline__
+void mat4_solve(const double* __restrict__ src, double* __restrict__ b) {
+    double A[16];
+    for (int q = 0; q < 16; q++) A[q] = src[q];
+    for (int col = 0; col < 4; col++) {
+        double mx = fabs(A[col*4+col]); int mi = col;
+        for (int row = col+1; row < 4; row++)
+            if (fabs(A[row*4+col]) > mx) { mx = fabs(A[row*4+col]); mi = row; }
+        if (mi != col) {
+            for (int q = 0; q < 4; q++) { double t = A[col*4+q]; A[col*4+q] = A[mi*4+q]; A[mi*4+q] = t; }
+            double t = b[col]; b[col] = b[mi]; b[mi] = t;
+        }
+        double d = A[col*4+col]; if (fabs(d) < 1e-30) d = 1e-30;
+        for (int row = col+1; row < 4; row++) {
+            double m = A[row*4+col] / d;
+            for (int q = col; q < 4; q++) A[row*4+q] -= m * A[col*4+q];
+            b[row] -= m * b[col];
+        }
+    }
+    for (int row = 3; row >= 0; row--) {
+        double s = b[row];
+        for (int q = row+1; q < 4; q++) s -= A[row*4+q] * b[q];
+        b[row] = s / A[row*4+row];
+    }
+}
+
+// 4×4 matrix multiply: C = A * B (row-major)
+__device__ __forceinline__
+void mat4_mul(const double* __restrict__ A, const double* __restrict__ B, double* __restrict__ C) {
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++) {
+            double s = 0;
+            for (int q = 0; q < 4; q++) s += A[r*4+q] * B[q*4+c];
+            C[r*4+c] = s;
+        }
+}
 #endif

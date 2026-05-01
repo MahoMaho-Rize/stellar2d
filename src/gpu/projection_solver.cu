@@ -400,6 +400,14 @@ void ProjSolver::snapshot_hse() {
     double rho_max = *std::max_element(rho0.begin(), rho0.end());
     atm_rho_thresh = 1e-3 * rho_max;
 
+    {
+        std::vector<double> h_vol(n);
+        CUDA_CHECK(cudaMemcpy(h_vol.data(), d_cell_volume, n*sizeof(double), cudaMemcpyDeviceToHost));
+        interior_volume = 0.0;
+        for (int flat = 0; flat < n; flat++)
+            if (rho0[flat] >= atm_rho_thresh) interior_volume += h_vol[flat];
+    }
+
     std::vector<double> h_rc(nr), h_rf(nr+1);
     CUDA_CHECK(cudaMemcpy(h_rc.data(), d_r_center, nr*sizeof(double), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(h_rf.data(), d_r_face, (nr+1)*sizeof(double), cudaMemcpyDeviceToHost));
@@ -593,16 +601,42 @@ double ProjSolver::step(double t, double t_end) {
         d_res, nr, nt, ng);
     apply_floor();
 
-    // Sponge
-    if (sponge_r_start < sponge_r_top) {
-        k_fas_sponge<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
-            d_rho0, d_P0, d_r_center,
-            sponge_r_start, sponge_r_top, sponge_kappa, dt, 1.0/(gamma-1.0),
-            nr, nt, ng);
-    }
+    {
+        double* d_rhoV = d_res;
+        double* d_EV   = d_res + n;
+        double* d_scr  = d_res + 2*n;
 
-    k_fas_atm_reset<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
-        d_rho0, d_P0, atm_rho_thresh, 1.0/(gamma-1.0), nr, nt, ng, 0);
+        k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
+            d_rho, d_rhoE, d_cell_volume,
+            d_rhoV, d_EV, nr, nt, ng);
+        double M_before = fas_reduce_sum(d_rhoV, d_scr, n);
+        double E_before = fas_reduce_sum(d_EV, d_scr, n);
+
+        if (sponge_r_start < sponge_r_top) {
+            k_fas_sponge<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
+                d_rho0, d_P0, d_r_center,
+                sponge_r_start, sponge_r_top, sponge_kappa, dt, 1.0/(gamma-1.0),
+                nr, nt, ng);
+        }
+
+        k_fas_atm_reset<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
+            d_rho0, d_P0, atm_rho_thresh, 1.0/(gamma-1.0), nr, nt, ng, 0);
+
+        k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
+            d_rho, d_rhoE, d_cell_volume,
+            d_rhoV, d_EV, nr, nt, ng);
+        double M_after = fas_reduce_sum(d_rhoV, d_scr, n);
+        double E_after = fas_reduce_sum(d_EV, d_scr, n);
+
+        if (interior_volume > 0) {
+            double dM = (M_before - M_after) / interior_volume;
+            double dE = (E_before - E_after) / interior_volume;
+            if (fabs(dM) > 1e-30 || fabs(dE) > 1e-30)
+                k_fas_conserve_correct<<<(n+B-1)/B,B>>>(
+                    d_rho, d_rhoE, d_rho0, atm_rho_thresh,
+                    dM, dE, nr, nt, ng);
+        }
+    }
 
     if (n_angular_avg > 0) {
         int B2 = std::min(nt, 256);
