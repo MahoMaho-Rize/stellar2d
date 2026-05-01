@@ -51,6 +51,8 @@ if(USE_GPU)
         src/gpu/cart_lag_kernels.cu
         src/gpu/cart_ale_solver.cu
         src/gpu/cart_ale_kernels.cu
+        src/gpu/cart_ale2_solver.cu
+        src/gpu/cart_ale2_kernels.cu
     )
     set(LOWMACH_SOURCES
         src/gpu/lm_residual.cu
