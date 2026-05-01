@@ -844,6 +844,35 @@ void k_cale_remap_north_2nd(const double* X0, const double* Y0,
     }
 }
 
+// Snapshot (ρ, P, e_int, vx_cc, vy_cc) into a contiguous per-frame
+// slice of the frame pool. Layout per frame:
+//   [0 .. ncell)         ρ
+//   [ncell .. 2·ncell)   P
+//   [2·ncell .. 3·ncell) e_int
+//   [3·ncell .. 4·ncell) vx_cc (avg of 4 corner vx)
+//   [4·ncell .. 5·ncell) vy_cc
+__global__
+void k_cale_snapshot(const double* rho, const double* P, const double* e_int,
+                     const double* vX, const double* vY,
+                     double* out, int nx, int ny) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nx*ny) return;
+    int ic = flat / ny, jc = flat % ny;
+    int nny = ny + 1;
+    int I[4] = { caln(ic,   jc,   nny),
+                 caln(ic+1, jc,   nny),
+                 caln(ic+1, jc+1, nny),
+                 caln(ic,   jc+1, nny) };
+    double vx = 0.25 * (vX[I[0]] + vX[I[1]] + vX[I[2]] + vX[I[3]]);
+    double vy = 0.25 * (vY[I[0]] + vY[I[1]] + vY[I[2]] + vY[I[3]]);
+    int n = nx * ny;
+    out[flat]         = rho[flat];
+    out[flat + n]     = P[flat];
+    out[flat + 2*n]   = e_int[flat];
+    out[flat + 3*n]   = vx;
+    out[flat + 4*n]   = vy;
+}
+
 // Clamp edge-aligned node velocities AFTER rebuild (reflective BC)
 __global__
 void k_cale_bc_velocity(double* vX, double* vY, int nnx, int nny) {

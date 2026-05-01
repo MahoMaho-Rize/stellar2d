@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
 // Cartesian 2D staggered quad ALE (Arbitrary Lagrangian-Eulerian).
 //
@@ -140,4 +141,29 @@ struct CartAleSolver {
     // Writes density, pressure, velocity vector (cell-centered).
     // Mesh is Lx × Ly uniform in node space.
     void write_vtk_2d(const char* filename, double Lx, double Ly);
+
+    // ---- VRAM-buffered frame dump (high-frame-rate I/O) ----
+    // Each captured frame stores 5 cell-centered fields (ρ, P, e_int, vx, vy)
+    // in device memory. When the pool fills, the whole batch is copied to
+    // host and written to binary VTK files as output_NNNN.vtk. The GPU
+    // stalls during D2H but otherwise never pays per-frame I/O cost.
+    //
+    //   alloc_frame_buffer(headroom_mb=1024)  — size pool to (free−1 GB)
+    //   capture_frame(t)                       — device-side snapshot
+    //   flush_frames_to_disk(run_dir, Lx, Ly)  — D2H + write all frames
+    //
+    // Layout per frame: 5 contiguous ncell arrays (ρ, P, e_int, vx_cc, vy_cc).
+    // t-stamp array is host-side.
+    double *d_frame_pool = nullptr;
+    int frame_capacity = 0;    // max frames the pool can hold
+    int frame_count = 0;       // frames currently captured (buffered)
+    int total_frames = 0;      // total frames written to disk so far
+    std::vector<double> frame_times;   // host: t at each captured frame
+    std::vector<int>    frame_steps;   // host: step index at each captured frame
+    std::string frame_out_dir;         // cached for flush
+
+    void alloc_frame_buffer(int headroom_mb);
+    void capture_frame(double t, int step);
+    void flush_frames_to_disk(const std::string& run_dir, double Lx, double Ly);
+    void free_frame_buffer();
 };

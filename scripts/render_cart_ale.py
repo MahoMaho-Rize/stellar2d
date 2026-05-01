@@ -39,23 +39,80 @@ _s0 = _cmaps = _panels = None
 _nx = _ny = 0
 _total_frames = 0
 _title = "cart_ale"
+_frame_times = None   # dict: filename-index (int) -> physical time
 
 
 def parse_vtk_dims(path):
-    with open(path) as f:
-        head = f.read(4096)
+    with open(path, "rb") as f:
+        head = f.read(4096).decode("ascii", errors="replace")
     m = re.search(r"DIMENSIONS\s+(\d+)\s+(\d+)", head)
     nnx, nny = int(m.group(1)), int(m.group(2))
     return nnx - 1, nny - 1
 
 
+def _is_binary_vtk(path):
+    with open(path, "rb") as f:
+        head = f.read(256)
+    return b"BINARY\n" in head
+
+
 def parse_vtk_cells(path, nx, ny, needed=None):
+    if _is_binary_vtk(path):
+        return _parse_vtk_binary(path, nx, ny, needed)
     with open(path) as f:
         text = f.read()
     pos = text.find("CELL_DATA")
     if pos < 0:
         return None
     return _parse_cell_data(text[pos:], nx, ny, needed)
+
+
+def _parse_vtk_binary(path, nx, ny, needed=None):
+    # Legacy VTK binary: ASCII header, then big-endian raw bytes per section.
+    n = nx * ny
+    nnode = (nx + 1) * (ny + 1)
+    with open(path, "rb") as f:
+        data = f.read()
+    # find CELL_DATA anchor
+    cd = data.find(b"CELL_DATA")
+    if cd < 0:
+        return None
+    # skip past CELL_DATA line
+    nl = data.index(b"\n", cd)
+    cursor = nl + 1
+    fields = {}
+
+    def read_bin_block(cursor, n_doubles):
+        # dtype '>f8' = big-endian double
+        arr = np.frombuffer(data, dtype=">f8", count=n_doubles, offset=cursor)
+        return arr.astype(np.float64), cursor + 8 * n_doubles
+
+    while cursor < len(data):
+        # find next SCALARS or VECTORS header line
+        m = re.match(rb"(SCALARS|VECTORS)\s+(\S+)", data[cursor:cursor+256])
+        if not m:
+            break
+        kind = m.group(1).decode()
+        name = m.group(2).decode()
+        eol1 = data.index(b"\n", cursor)
+        cursor = eol1 + 1
+        if kind == "SCALARS":
+            # expect LOOKUP_TABLE line
+            eol2 = data.index(b"\n", cursor)
+            cursor = eol2 + 1
+            vals, cursor = read_bin_block(cursor, n)
+            if needed is None or name in needed:
+                fields[name] = vals.reshape(ny, nx)
+        else:  # VECTORS
+            vals, cursor = read_bin_block(cursor, 3 * n)
+            v = vals.reshape(ny, nx, 3)
+            if needed is None or (name + "_x") in needed or (name + "_y") in needed:
+                fields[name + "_x"] = v[:, :, 0]
+                fields[name + "_y"] = v[:, :, 1]
+        # skip trailing '\n' if present
+        if cursor < len(data) and data[cursor:cursor+1] == b"\n":
+            cursor += 1
+    return fields
 
 
 def _parse_cell_data(text, nx, ny, needed=None):
@@ -156,9 +213,12 @@ def render_one(args):
 
     m_num = re.search(r"(\d+)", os.path.basename(path))
     fnum = int(m_num.group(1)) if m_num else idx
+    t_str = ""
+    if _frame_times is not None and fnum in _frame_times:
+        t_str = f"   t={_frame_times[fnum]:.4f}"
     draw.text(
         (W_FRAME // 2, 15),
-        f"{_title} \u2014 frame {fnum:04d}",
+        f"{_title} \u2014 frame {fnum:04d}{t_str}",
         fill=(220, 220, 255), font=fonts["title"], anchor="mt",
     )
     for si in range(1, N_PANELS):
@@ -282,13 +342,27 @@ def main():
         if p["cmap"] not in cmaps:
             cmaps[p["cmap"]] = plt.get_cmap(p["cmap"])
 
-    global _s0, _cmaps, _panels, _nx, _ny, _total_frames, _title
+    global _s0, _cmaps, _panels, _nx, _ny, _total_frames, _title, _frame_times
     _s0 = s0
     _cmaps = cmaps
     _panels = panels
     _nx, _ny = nx, ny
     _total_frames = len(files)
     _title = os.path.basename(os.path.normpath(run_dir))
+    # Load frames.csv if the simulator wrote one (VRAM-buffered run).
+    _frame_times = None
+    frames_csv = os.path.join(run_dir, "frames.csv")
+    if os.path.exists(frames_csv):
+        m = {}
+        with open(frames_csv) as f:
+            next(f, None)  # header
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) >= 3:
+                    m[int(parts[0])] = float(parts[2])
+        if m:
+            _frame_times = m
+            print(f"  Loaded frames.csv: {len(m)} entries, t=[{min(m.values()):.3f}, {max(m.values()):.3f}]")
 
     ffproc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "warning",
