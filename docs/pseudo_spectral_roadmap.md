@@ -18,31 +18,37 @@
 - ✅ **圓形 2/3 dealias** `|k|² ≤ (N/3·2π/L)²` — 各向同性
 - ✅ **IC Gibbs clean**: δ = max(4·dy, 0.01·Ly) + 初始譜套 dealias mask
 - ✅ **ν_eff 診斷**: `eps_KE = 2ν·Ω` 對比實測 `-dKE/dt`,1024² Re=2×10⁵ 實測比值 **1.000** → 數值粘性 ≈ 0%
+- ✅ **隨機相位 forcing** (Lilly/Alvelius):薄殼 √dt·σ·e^{iφ} 白噪聲注入,ε_inj 實測完美匹配
 - ✅ VRAM frame pool + binary VTK (複用 cart_ale2 pattern)
-- ✅ CLI 完整:`--ps-{nu,Lx,Ly,vshear,k,explicit,adv-only}`
+- ✅ **譜 CSV 解耦 VTK**:per VTK frame GPU ring-integrate E(k) 寫 `spectrum.csv`;跨 run 秒級分析
+- ✅ CLI 完整:`--ps-{nu,Lx,Ly,vshear,k,explicit,adv-only,forcing-{eps,kf,dk,seed}}`
 - ✅ 渲染腳本 `scripts/render_pseudo_spectral.py` 雙 panel (ω, |v|)
 - ✅ 譜分析腳本 `scripts/spectrum_pseudo_spectral.py` (多時間切片疊圖)
 - ✅ 譜斜率擬合腳本 `scripts/spectrum_fit_pseudo_spectral.py` (帶 k_mode 參數,1.96σ CI 陰影)
+- ✅ 純 CSV 分析腳本 `scripts/spectrum_from_csv.py` (fit/heatmap/overlay 三合一,auto-split k_η_ens 邊界檢查)
+- ✅ VTK → CSV 回補腳本 `scripts/backfill_spectrum_csv.py` (舊 run 永久保留譜資訊)
 
 ### 1.2 檔案清單
 
 ```
 src/gpu/
-├── pseudo_spectral_solver.cuh      135 lines — struct + API + Diagnostics
-├── pseudo_spectral_solver.cu       ~600 lines — init/step/IC/diagnostics/VTK/frame pool
-└── pseudo_spectral_kernels.cu      ~300 lines — 12 CUDA kernels
+├── pseudo_spectral_solver.cuh      ~180 lines — struct + API + Diagnostics + forcing + spectrum bins
+├── pseudo_spectral_solver.cu       ~900 lines — init/step/IC/diag/VTK/frame pool/forcing/spectrum.csv
+└── pseudo_spectral_kernels.cu      ~380 lines — 14 CUDA kernels (新增 forcing + spectrum reduce)
 
 scripts/
-├── render_pseudo_spectral.py       ~305 lines — 1080p/1152p 渲染 (h264_nvenc, yuv420p high profile)
-├── spectrum_pseudo_spectral.py     ~155 lines — 環積分能譜
-└── spectrum_fit_pseudo_spectral.py ~230 lines — log-log 線性回歸 + Kraichnan 參考
+├── render_pseudo_spectral.py          ~305 lines — 1080p/1152p 渲染 (h264_nvenc, yuv420p high profile)
+├── spectrum_pseudo_spectral.py        ~155 lines — 環積分能譜 (VTK-based,legacy)
+├── spectrum_fit_pseudo_spectral.py    ~230 lines — VTK-based fit + Kraichnan CI (legacy)
+├── spectrum_from_csv.py               ~280 lines — **純 CSV 分析** (fit/heatmap/overlay 三合一)
+└── backfill_spectrum_csv.py           ~90  lines — 從既有 VTK 回補 spectrum.csv
 
 docs/
 ├── pseudo_spectral_design_2026-05-01.md   完整設計/方法學
 └── pseudo_spectral_roadmap.md             本文檔
 
 CMakeLists.txt: 連結 CUDA::cufft,src/gpu/pseudo_spectral_*.cu 已納入 SOURCES
-src/main.cpp:   --solver pseudo_spectral --test kh_shear 分支 (line ~1000)
+src/main.cpp:   --solver pseudo_spectral --test {kh_shear,forced_turb} 分支 (line ~1000)
 ```
 
 ### 1.3 已產出視頻/圖
@@ -52,7 +58,10 @@ src/main.cpp:   --solver pseudo_spectral --test kh_shear 分支 (line ~1000)
 - `ps_kh_1024_Re1e6_tend40.mp4` — Re=10⁶ t=40 (borderline DNS)
 - `ps_kh_1024_Re2e5_newstack.mp4` — **新版** (IFRK+skew+圓 dealias+Gibbs) Re=2×10⁵ k=7 t=40
 - `ps_kh_1024_Re2e5_newstack_spectrum.png` — 10 時間切片疊圖
-- `ps_kh_1024_Re2e5_fit_t15_k7.png` — **Kraichnan k^{-3} 驗證** (slope −3.45 ± 0.31, 1.4σ ✓)
+- `ps_kh_1024_Re2e5_fit_t15_k7.png` — **decaying Kraichnan k^{-3} 驗證** (slope −3.45 ± 0.31, 1.4σ ✓)
+- `ps_forced1024_kf8_tend30.mp4` — **Forced turb** 1024² k_f=8 ν=5e-5 tend=30 (39 MB, 10s, 302 frames)
+- `ps_forced1024_heatmap.png` — **E(k,t) 熱圖**(condensate 建立過程清晰可見)
+- `ps_forced1024_enstrophy_k4.png` — **Condensate regime k^{-4} 驗證** (雙 panel: 時間疊圖 + 補償譜)
 
 ### 1.4 數值方法驗證結果
 
@@ -66,23 +75,74 @@ src/main.cpp:   --solver pseudo_spectral --test kh_shear 分支 (line ~1000)
 | t=15 enstrophy slope | **−3.45 ± 0.31** (理論 −3, 1.4σ ✓) |
 | Inverse cascade slope | −2.4 ~ −2.8 (decaying 常態,比 −5/3 陡) |
 
+### 1.5 Forced turbulence 首輪驗證 (1024² k_f=8 ν=5e-5 ε=0.1 tend=30)
+
+**參數**:N=1024²,k_f=8 mode,dk=1,ν=5e-5,ε_inj=0.1,tend=30 (231924 steps, ~24 分鐘)
+
+| 診斷 | 實測 | 理論/解釋 |
+|---|---|---|
+| ε_KE(t=30) | 0.031 | 比 ε_inj 低 — 注入 > 粘性耗散,系統**未達穩態** |
+| KE(t=30) | 2.30(仍線性增長) | condensate 填充中,dKE/dt ≈ 0.075 = ε_inj − ε_KE ✓ |
+| Ω(t=30) | 313 | 小尺度穩態 (~250 持續 t=5 起) |
+| **ε_Ω 穩定性** | 240 持續 t=5→30 | ✓ **小尺度 cascade 真正穩態** |
+| k_η_ens | 356 rad/m | (ε_Ω/ν³)^{1/6} |
+
+**Enstrophy cascade 斜率** (k ∈ [65, 300],4 時刻):
+
+| t | slope | SE | R² |
+|---|---|---|---|
+| 5 | -4.14 | 0.06 | 0.993 |
+| 10 | -4.15 | 0.07 | 0.991 |
+| 20 | -4.08 | 0.07 | 0.990 |
+| 30 | -4.04 | 0.06 | 0.992 |
+
+**時間上完全穩定 → 真實譜律**
+
+**補償譜檢驗** `E·k^p` 平整度(variability = max/min):
+- `E·k³` (純 Kraichnan 1967):4.9×(失敗)
+- `E·k³·ln^{1/3}` (Kraichnan 1971 log 修正):3.3×(略改善,仍不平)
+- **`E·k⁴`:1.78×(最平 ✓)**
+
+### 1.6 物理詮釋
+
+我們的 run **不在** Kraichnan k^{-3} regime,而在 **condensate-modified enstrophy cascade** (Borue 1994, Bracco-McWilliams 2010):
+- 沒有 large-scale drag → inverse cascade 能量堆在最低幾個 mode 形成 condensate vortex
+- condensate 產生的強 strain 陡化小尺度譜形 → **k^{-4}** (而非 -3)
+- 文獻報告值 -4.0 到 -4.5,我們的 -4.08 ± 0.06 **完全符合**
+
+**結論**:
+- 求解器小尺度物理 ✓ 正確(cascade 穩定性 + 譜律符合文獻)
+- 求解器大尺度物理 ✓ 正確(condensate 形成符合無 drag 預期)
+- 要拿 Kraichnan 經典雙段 (-5/3 + -3) 必須加 **linear drag -α·ω** 打破 condensate(下一階段)
+
 ---
 
 ## Part 2. 待完善的項目(在擴 MHD 之前)
 
 按優先級排:
 
-### 2.1 [高] Forced turbulence(穩態 Kraichnan 驗證)
+### 2.1 [✓ 部分完成] Forced turbulence — 現有 stochastic forcing, 下一步加 linear drag
 
-**動機**: 目前 inverse cascade slope -2.4~-2.8 偏離理論 -5/3,原因是 decaying 而非穩態。加 forcing 後應能在 k ∈ [2, k_f] 看到乾淨 -5/3,k ∈ [k_f, k_η] 看到乾淨 -3。
+**已完成** (commit `dac5b9d`):
+- ✅ `k_apply_forcing` kernel: 薄殼 √dt·σ·e^{iφ} 白噪聲(host mt19937 per-step)
+- ✅ σ 由 init_forcing 從 ε_inj 反解 (Alvelius 1999 約定)
+- ✅ CLI `--ps-forcing-{eps,kf,dk,seed}`
+- ✅ `--test forced_turb` (零 IC + forcing) 加入 test whitelist
+- ✅ 驗證:實測 ε_KE 完美匹配 ε_inj(512² run ε_KE=0.100 = ε_inj=0.1)
 
-**實作** (~100 行):
-- 新 kernel `k_add_stochastic_forcing`:每級在 `k_f ∈ [k_mode-1, k_mode+1]` 內隨機相位白噪聲注入
-- CLI: `--ps-forcing <ε_inj>`, `--ps-forcing-kf <k_f>`
-- 能量注入率 ε_inj 給定,統計穩定後 KE 與 Ω 應達到準穩態
-- 預期結果:兩段譜都在 1σ 內吻合 Kraichnan,可直接放 paper
+**現狀限制**:
+- 沒有 large-scale drag → 系統永不達到完全穩態 (condensate 無限成長)
+- 當前得到 -4.08 譜律(condensate regime),不是 Kraichnan -3
+- 跑到 tend=30 KE 仍線性增長(9% of 飽和值),tend 需 > 200 才接近飽和
 
-**文件**: cuRAND 或 host 端預生成隨機 phase(128 個 k 模足夠)。
+**下一步:加 linear drag -α·ω**(~20 LOC):
+- IFRK3 積分因子擴展:exp(-νk²Δt) → exp(-(νk² + α)·Δt)
+- CLI `--ps-drag <α>`,預設 0(不啟用,保當前行為可重現)
+- 建議 α = 0.1:τ_drag = 10,配合 tend=30 達真正穩態
+- 預期結果:
+  - k < k_f:**Kraichnan k^{-5/3}** (inverse cascade to drag sink)
+  - k > k_f:**Kraichnan k^{-3}** (enstrophy cascade, drag 不影響小尺度)
+  - 兩段同時達穩態(小尺度 cascade + inverse cascade 被 drag sink 吸收)
 
 ### 2.2 [中] Taylor-Green 收斂測試
 
@@ -115,7 +175,7 @@ src/main.cpp:   --solver pseudo_spectral --test kh_shear 分支 (line ~1000)
 **實作** (~50 行,新 script):
 - 所有幀提取 E(k),拼成 2D (nk, nt) 矩陣
 - 畫 log₁₀ E 的 pcolormesh,疊 k_inj 和 k_η 曲線
-- **這是投 paper 時最漂亮的 figure 之一**
+- **cascade 動態可視化的標準呈現**
 
 ### 2.5 [低] Hyperviscosity 選項
 
@@ -277,12 +337,14 @@ src/gpu/
 
 ### Phase A: 完善現有偽譜法(1–2 週)
 
-1. **Forced 2D NS turbulence**(2.1) → **穩態 Kraichnan 驗證**,寫進 paper "validation" 段
+1. **Forced 2D NS turbulence**(2.1)
+   - ✓ Stochastic forcing 實作 (commit `dac5b9d`)
+   - ✓ spectrum.csv 解耦 VTK
+   - ✓ 1024² first run:condensate-regime k^{-4} 驗證(符合 Borue 1994)
+   - **下一步**:加 linear drag → Kraichnan k^{-5/3} + k^{-3} 經典雙段
 2. **Taylor-Green convergence test**(2.2 + 2.3) → 定量誤差數字,spectral convergence 曲線
-3. **E(k,t) 熱圖**(2.4) → 漂亮的可視化
+3. **E(k,t) 熱圖**(2.4) → ✓ **已免費送達** via spectrum_from_csv.py heatmap mode
 4. **整理 docs/**:把當前這份 roadmap 之外再補一份 `pseudo_spectral_validation.md` 收錄所有 verification 數字
-
-完成後**整個偽譜法部分**就能拿去答辯/申博/投 NVIDIA DevRel。
 
 ### Phase B: 2D MHD 基礎(~5 天)
 
@@ -378,7 +440,7 @@ c83f30f  DOC: pseudo_spectral design & progress note
 pixi run build-gpu
 ```
 
-**跑目前最好看的算例 (Re=2×10⁵, k=7, IFRK+skew)**:
+**跑目前最好看的 KH 算例 (Re=2×10⁵, k=7, IFRK+skew)**:
 ```bash
 ./build/stellar2d --solver pseudo_spectral --test kh_shear \
   --nr 1024 --ntheta 1024 --tend 40 \
@@ -386,6 +448,16 @@ pixi run build-gpu
   --output-interval 2000 --vtk-dt 0.02 \
   --frame-buffer --frame-headroom-mb 2048
 # ~15 分鐘
+```
+
+**跑 forced turbulence (1024² condensate regime, -4 enstrophy cascade)**:
+```bash
+./build/stellar2d --solver pseudo_spectral --test forced_turb \
+  --nr 1024 --ntheta 1024 --tend 30 \
+  --ps-nu 5e-5 --ps-forcing-eps 0.1 --ps-forcing-kf 8 --ps-forcing-dk 1 \
+  --output-interval 2000 --vtk-dt 0.1 \
+  --frame-buffer --frame-headroom-mb 2048
+# ~25 分鐘,302 VTK frames + spectrum.csv
 ```
 
 **渲染**:
