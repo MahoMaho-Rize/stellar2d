@@ -70,6 +70,9 @@ struct SimConfig {
     bool no_sponge = false;
     bool lm_hllc = false;
     int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
+    std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
+    int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
+    int vtk_interval  = 0;   // cart_ale: step interval for VTK dump; 0 = follow output_interval
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -204,6 +207,12 @@ int main(int argc, char** argv) {
             cfg.r_inner = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--remap-order") == 0 && i + 1 < argc)
             cfg.cart_ale_remap_order = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--remap-limiter") == 0 && i + 1 < argc)
+            cfg.cart_ale_limiter = argv[++i];
+        else if (std::strcmp(argv[i], "--diag-interval") == 0 && i + 1 < argc)
+            cfg.diag_interval = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--vtk-interval") == 0 && i + 1 < argc)
+            cfg.vtk_interval = std::atoi(argv[++i]);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -703,9 +712,17 @@ int main(int argc, char** argv) {
         double gam = is_hse ? cfg.gamma : 1.4;
         cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
         cale.remap_order = cfg.cart_ale_remap_order;
-        std::fprintf(stderr, "  CartAle remap_order = %d (%s)\n",
+        if      (cfg.cart_ale_limiter == "minmod")  cale.remap_limiter = 0;
+        else if (cfg.cart_ale_limiter == "vanleer") cale.remap_limiter = 1;
+        else if (cfg.cart_ale_limiter == "mc")      cale.remap_limiter = 2;
+        else { std::fprintf(stderr, "unknown --remap-limiter %s; using vanleer\n",
+                            cfg.cart_ale_limiter.c_str()); cale.remap_limiter = 1; }
+        const char* lim_name = cale.remap_limiter == 0 ? "minmod"
+                             : cale.remap_limiter == 1 ? "vanleer" : "mc";
+        std::fprintf(stderr, "  CartAle remap_order = %d (%s)  limiter = %s\n",
                      cale.remap_order,
-                     cale.remap_order >= 2 ? "MUSCL-in-remap, minmod" : "donor-cell");
+                     cale.remap_order >= 2 ? "MUSCL-in-remap" : "donor-cell",
+                     lim_name);
         if (cfg.test_case == "hse_bubble") {
             std::vector<CartAleSolver::Bubble> blist;
             if (!cfg.bubbles.empty()) {
@@ -732,13 +749,20 @@ int main(int argc, char** argv) {
         std::FILE* csv = std::fopen(csv_path, "w");
         std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach\n");
 
+        int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
+        int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
+        std::fprintf(stderr, "  CartAle diag every %d steps, VTK every %d steps\n",
+                     diag_every, vtk_every);
+
         int frame = 0;
         while (t < cfg.t_end && !g_interrupted) {
             double dt = cale.step(t, cfg.t_end);
             t += dt;
             step++;
             if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
-            if (step % cfg.output_interval == 0 || t >= cfg.t_end) {
+            bool do_diag = (step % diag_every == 0) || t >= cfg.t_end;
+            bool do_vtk  = (step % vtk_every  == 0) || t >= cfg.t_end;
+            if (do_diag) {
                 auto d = cale.compute_diagnostics();
                 std::fprintf(stderr, "\n");
                 std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e KE=%.4e IE=%.10e PE=%.10e E=%.10e |v|=%.3e\n",
@@ -748,18 +772,10 @@ int main(int argc, char** argv) {
                              step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
                              d.total_PE, d.total_E, d.max_v, d.max_mach);
                 std::fflush(csv);
-                std::vector<double> xv, rhov, Pv, vxv, ev;
-                cale.download_xslice(xv, rhov, Pv, vxv, ev);
-                char path[512];
+            }
+            if (do_vtk) {
                 ++frame;
-                std::snprintf(path, sizeof(path), "%s/xslice_%04d.txt", run_dir.c_str(), frame);
-                std::FILE* fp = std::fopen(path, "w");
-                std::fprintf(fp, "# t=%.10e step=%d\n# x rho P vx e\n", t, step);
-                for (int i = 0; i < (int)xv.size(); ++i)
-                    std::fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n",
-                                 xv[i], rhov[i], Pv[i], vxv[i], ev[i]);
-                std::fclose(fp);
-
+                char path[512];
                 std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), frame);
                 cale.write_vtk_2d(path, Lx, Ly);
             }

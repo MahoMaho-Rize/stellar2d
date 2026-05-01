@@ -56,7 +56,7 @@ __global__ void k_cale_cell_densities(const double*, const double*, const double
     const double*, double*, double*, double*, double*, int);
 __global__ void k_cale_slopes_minmod(const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, double*, double*, double*, double*,
-    int, int, double, double);
+    int, int, double, double, int);
 __global__ void k_cale_remap_east_2nd(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
@@ -322,10 +322,11 @@ double CartAleSolver::step(double t, double t_end) {
     int BNode = (nnode + B - 1) / B;
 
     // --- Phase L: Lagrangian substep -------------------------
-    k_cale_geometry<<<BCell, B>>>(d_X, d_Y, d_Vol, d_minheight, nx, ny);
-
+    // Mesh is always X0/Y0 at step entry (reset by previous step's Phase R),
+    // so Vol ≡ Area0 and minheight is constant — both cached at init time.
+    // Skipping the per-step geometry kernel saves one launch per step.
     k_cale_eos_and_q<<<BCell, B>>>(
-        d_X, d_Y, d_vX, d_vY, d_dm, d_Vol, d_Area0, d_e_int,
+        d_X, d_Y, d_vX, d_vY, d_dm, d_Area0, d_Area0, d_e_int,
         d_rho, d_P, d_Q, d_cs, d_strain_rate,
         nx, ny, gamma, CQ_lin, CQ_quad);
 
@@ -381,7 +382,7 @@ double CartAleSolver::step(double t, double t_end) {
             d_rhoE_sx, d_rhoE_sy,
             d_pxd_sx,  d_pxd_sy,
             d_pyd_sx,  d_pyd_sy,
-            nx, ny, dx_u, dy_u);
+            nx, ny, dx_u, dy_u, remap_limiter);
         if (n_east > 0) {
             int BE = (n_east + B - 1) / B;
             k_cale_remap_east_2nd<<<BE, B>>>(
