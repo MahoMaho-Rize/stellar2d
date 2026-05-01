@@ -107,6 +107,7 @@ struct SimConfig {
     double ps_drag_alpha   = 0.0;          // linear drag -α·ω, 破壞 condensate
     int    ps_hyper_p      = 1;            // hyperviscosity 冪次: 1=Laplacian, >1 高階
     bool   ps_conservative = false;        // 用 conservative(rotational)對流形式
+    bool   ps_batched_fft  = false;        // 啟用 batched FFT pipeline (opt-in, 消費卡慢)
     bool   ps_pi_dt        = false;        // PI controller 自適應 dt
     int    ps_tg_k         = 2;            // Taylor-Green 波數 (for --test taylor_green)
     int    ps_ckpt_every   = 0;            // 每 N 步存 checkpoint (0 = 停用)
@@ -327,6 +328,8 @@ int main(int argc, char** argv) {
             cfg.ps_hyper_p = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-conservative") == 0)
             cfg.ps_conservative = true;
+        else if (std::strcmp(argv[i], "--ps-batched-fft") == 0)
+            cfg.ps_batched_fft = true;
         else if (std::strcmp(argv[i], "--ps-pi") == 0)
             cfg.ps_pi_dt = true;
         else if (std::strcmp(argv[i], "--ps-tg-k") == 0 && i + 1 < argc)
@@ -1104,6 +1107,7 @@ int main(int argc, char** argv) {
         ps.use_ifrk         = !cfg.ps_explicit;
         ps.use_skew         = !cfg.ps_adv_only && !cfg.ps_conservative;
         ps.use_conservative = cfg.ps_conservative && !cfg.ps_adv_only;
+        ps.use_batched_fft  = cfg.ps_batched_fft;
         ps.drag_alpha       = cfg.ps_drag_alpha;
         ps.hyper_p          = std::max(1, cfg.ps_hyper_p);
         ps.use_pi_dt        = cfg.ps_pi_dt;

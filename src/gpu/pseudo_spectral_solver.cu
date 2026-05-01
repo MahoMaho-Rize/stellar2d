@@ -48,6 +48,13 @@ __global__ void k_form_rhs_skew(const cufftDoubleComplex*, const cufftDoubleComp
 __global__ void k_form_rhs_conservative(const cufftDoubleComplex*, const cufftDoubleComplex*,
     const double*, const double*, const double*,
     cufftDoubleComplex*, int, int);
+__global__ void k_build_5fields_spec(const cufftDoubleComplex*, const double*, const double*,
+    const double*, cufftDoubleComplex*, int, int);
+__global__ void k_build_4fields_spec(const cufftDoubleComplex*, const double*, const double*,
+    const double*, cufftDoubleComplex*, int, int);
+__global__ void k_compute_skew_nonlinear(const double*, double*, int);
+__global__ void k_compute_adv_nonlinear(const double*, double*, int);
+__global__ void k_compute_conservative_nonlinear(const double*, double*, int);
 __global__ void k_rk_combine(cufftDoubleComplex*, const cufftDoubleComplex*,
     const cufftDoubleComplex*, const cufftDoubleComplex*,
     double, double, double, int);
@@ -80,12 +87,23 @@ __global__ void k_reduce_spectrum_bins(const cufftDoubleComplex*, const double*,
     }                                                                             \
 } while (0)
 
-// 譜 → 物理 (C2R + 1/(nx·ny) 歸一)
+// 譜 → 物理 (C2R + 1/(nx·ny) 歸一) — 單 field 版(IC / forcing / VTK)
 static void spec_to_phys(cufftHandle plan, cufftDoubleComplex* in_hat,
                          double* out, int ncell) {
     CUFFT_CHECK(cufftExecZ2D(plan, in_hat, out));
     int B = 256, G = (ncell + B - 1) / B;
     k_scale_inplace<<<G, B>>>(out, 1.0 / (double)ncell, ncell);
+}
+
+// Batched C2R:一次做 batch 個 IFFT,再一次歸一化整個 batch * ncell 陣列
+static void spec_to_phys_batch(cufftHandle plan_batched,
+                               cufftDoubleComplex* in_hat_batch,
+                               double* out_batch, int ncell, int batch) {
+    CUFFT_CHECK(cufftExecZ2D(plan_batched, in_hat_batch, out_batch));
+    int B = 256;
+    int total = batch * ncell;
+    int G = (total + B - 1) / B;
+    k_scale_inplace<<<G, B>>>(out_batch, 1.0 / (double)ncell, total);
 }
 
 // 物理 → 譜 (R2C)
@@ -107,44 +125,22 @@ static void compute_rhs_hat(PseudoSpectralSolver& s,
     int Gc = (s.ncell + B - 1) / B;
     cufftDoubleComplex* tmp = s.d_tmp_hat;
 
-    // Stage A: û, v̂ → tmp, rhs_hat_out;IFFT → d_u, d_v
-    k_spec_uv<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
-                         tmp, rhs_hat_out, s.nx, s.nh);
-    spec_to_phys(s.plan_c2r, tmp,          s.d_u, s.ncell);
-    spec_to_phys(s.plan_c2r, rhs_hat_out,  s.d_v, s.ncell);
+    if (s.use_batched_fft) {
+        // Batched 版
+        k_build_4fields_spec<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky,
+                                        s.d_dealias, s.d_specbatch,
+                                        s.nx, s.nh);
+        spec_to_phys_batch(s.plan_c2r_b4, s.d_specbatch,
+                           s.d_physbatch, s.ncell, 4);
+        k_compute_adv_nonlinear<<<Gc, B>>>(s.d_physbatch, s.d_Nphys, s.ncell);
+        phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
+        k_form_rhs_hat<<<Gh, B>>>(tmp, omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
+                                  rhs_hat_out, s.nu, s.drag_alpha, s.hyper_p,
+                                  s.nx, s.nh);
+        return;
+    }
 
-    // Stage B: ∂ωx̂, ∂ωŷ → tmp, rhs_hat_out;IFFT → d_dwx, d_dwy
-    k_spec_grad_omega<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
-                                 tmp, rhs_hat_out, s.nx, s.nh);
-    spec_to_phys(s.plan_c2r, tmp,          s.d_dwx, s.ncell);
-    spec_to_phys(s.plan_c2r, rhs_hat_out,  s.d_dwy, s.ncell);
-
-    // Stage C: N = u·∂ω/∂x + v·∂ω/∂y   (物理空間)
-    k_compute_convection<<<Gc, B>>>(s.d_u, s.d_v, s.d_dwx, s.d_dwy, s.d_Nphys, s.ncell);
-
-    // Stage D: N → N̂ in tmp
-    phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
-
-    // Stage E: rhs_hat = -N̂ - (ν·|k|^(2p) + α) ω̂
-    k_form_rhs_hat<<<Gh, B>>>(tmp, omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
-                              rhs_hat_out, s.nu, s.drag_alpha, s.hyper_p,
-                              s.nx, s.nh);
-}
-
-// IFRK 專用:只算 -N̂,黏性在 IFRK combine 裡解析處理。
-// 輸入/scratch 用量與 compute_rhs_hat 一致 (d_u, d_v, d_dwx, d_dwy, d_Nphys,
-// d_tmp_hat),不碰 d_k1_hat。
-// 若 s.use_skew = true,採 skew-symmetric form N_S = ½(N_A + N_C);
-// 否則採 advective form N_A。
-static void compute_rhs_adv_only(PseudoSpectralSolver& s,
-                                 const cufftDoubleComplex* omega_hat_in,
-                                 cufftDoubleComplex* rhs_hat_out) {
-    int B = 256;
-    int Gh = (s.ncplx + B - 1) / B;
-    int Gc = (s.ncell + B - 1) / B;
-    cufftDoubleComplex* tmp = s.d_tmp_hat;
-
-    // 共通: 得到 u, v, ∂ω/∂x, ∂ω/∂y, ω (物理) ---------------
+    // 獨立 FFT 版(預設)
     k_spec_uv<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
                          tmp, rhs_hat_out, s.nx, s.nh);
     spec_to_phys(s.plan_c2r, tmp,         s.d_u, s.ncell);
@@ -155,81 +151,156 @@ static void compute_rhs_adv_only(PseudoSpectralSolver& s,
     spec_to_phys(s.plan_c2r, tmp,         s.d_dwx, s.ncell);
     spec_to_phys(s.plan_c2r, rhs_hat_out, s.d_dwy, s.ncell);
 
-    // Conservative (rotational) form: 只需 2 次 R2C FFT
-    // N_C = ∂(uω)/∂x + ∂(vω)/∂y  (∇·u=0 下 ≡ N_A)
+    k_compute_convection<<<Gc, B>>>(s.d_u, s.d_v, s.d_dwx, s.d_dwy, s.d_Nphys, s.ncell);
+    phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
+    k_form_rhs_hat<<<Gh, B>>>(tmp, omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
+                              rhs_hat_out, s.nu, s.drag_alpha, s.hyper_p,
+                              s.nx, s.nh);
+}
+
+// IFRK 專用:只算 -N̂,黏性在 IFRK combine 裡解析處理。
+// ---- Batched FFT 版(opt-in,4070 實測慢 13-16%,保留給 A100/H100) ----
+//   skew: 2 個 batched FFT/stage(5-C2R + 3-R2C)
+//   adv : 2 個 batched FFT/stage(4-C2R + 1-R2C)
+static void compute_rhs_adv_only_batched(PseudoSpectralSolver& s,
+                                         const cufftDoubleComplex* omega_hat_in,
+                                         cufftDoubleComplex* rhs_hat_out) {
+    int B = 256;
+    int Gh = (s.ncplx + B - 1) / B;
+    int Gc = (s.ncell + B - 1) / B;
+
+    // skew / conservative 兩路徑都需要 ω 物理場 → 用 5-field batched pipeline
+    bool need_omega_phys = s.use_skew || s.use_conservative;
+
+    if (need_omega_phys) {
+        // === SKEW / CONSERVATIVE PATH ===
+        // Stage A: 單一 fused kernel 生成 5 個譜 field
+        k_build_5fields_spec<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky,
+                                        s.d_dealias,
+                                        s.d_specbatch, s.nx, s.nh);
+        // Stage B: 一次 5-batch C2R IFFT → d_physbatch (u, v, dwx, dwy, ω)
+        spec_to_phys_batch(s.plan_c2r_b5, s.d_specbatch,
+                           s.d_physbatch, s.ncell, 5);
+
+        if (s.use_skew) {
+            // Stage C: fused nonlinear → d_physbatch2 (N_A, uω, vω)
+            k_compute_skew_nonlinear<<<Gc, B>>>(s.d_physbatch,
+                                                s.d_physbatch2, s.ncell);
+            // Stage D: 一次 3-batch R2C FFT → d_specbatch2 (N̂_A, (uω)^, (vω)^)
+            CUFFT_CHECK(cufftExecD2Z(s.plan_r2c_b3,
+                                     s.d_physbatch2, s.d_specbatch2));
+            // Stage E: skew 組合 rhs = -½(N̂_A + N̂_C),N̂_C = i·kx(uω)^ + i·ky(vω)^
+            cufftDoubleComplex* NA_hat = s.d_specbatch2 + 0 * (size_t)s.ncplx;
+            cufftDoubleComplex* uw_hat = s.d_specbatch2 + 1 * (size_t)s.ncplx;
+            cufftDoubleComplex* vw_hat = s.d_specbatch2 + 2 * (size_t)s.ncplx;
+            k_form_rhs_skew<<<Gh, B>>>(NA_hat, uw_hat, vw_hat,
+                                       s.d_kx, s.d_ky, s.d_dealias,
+                                       rhs_hat_out, s.nx, s.nh);
+        } else {
+            // Conservative: 只算 uω, vω;N_C = ∂(uω)/∂x + ∂(vω)/∂y
+            k_compute_conservative_nonlinear<<<Gc, B>>>(s.d_physbatch,
+                                                        s.d_physbatch2, s.ncell);
+            // 2-batch R2C → d_specbatch2(前 2 個槽即可)
+            CUFFT_CHECK(cufftExecD2Z(s.plan_r2c_b2,
+                                     s.d_physbatch2, s.d_specbatch2));
+            cufftDoubleComplex* uw_hat = s.d_specbatch2 + 0 * (size_t)s.ncplx;
+            cufftDoubleComplex* vw_hat = s.d_specbatch2 + 1 * (size_t)s.ncplx;
+            k_form_rhs_conservative<<<Gh, B>>>(uw_hat, vw_hat,
+                                               s.d_kx, s.d_ky, s.d_dealias,
+                                               rhs_hat_out, s.nx, s.nh);
+        }
+        return;
+    }
+
+    // === ADVECTIVE PATH ===(不需要 ω 物理,只需 u, v, dwx, dwy)
+    // Stage A: fused 4-field 譜生成
+    k_build_4fields_spec<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky,
+                                    s.d_dealias,
+                                    s.d_specbatch, s.nx, s.nh);
+    // Stage B: 4-batch C2R IFFT
+    spec_to_phys_batch(s.plan_c2r_b4, s.d_specbatch,
+                       s.d_physbatch, s.ncell, 4);
+    // Stage C: N_A = u·dwx + v·dwy(寫回 d_physbatch2[0] = d_Nphys)
+    k_compute_adv_nonlinear<<<Gc, B>>>(s.d_physbatch, s.d_Nphys, s.ncell);
+    // Stage D: 1 次 R2C(N_A),用單 plan(效果等於 plan_r2c_b3 只做 1 個,
+    //   但直接用既有 plan_r2c 省得另外配 plan)
+    CUFFT_CHECK(cufftExecD2Z(s.plan_r2c, s.d_Nphys, s.d_tmp_hat));
+    // Stage E: rhs = -N̂_A · mask
+    k_form_rhs_adv_only<<<Gh, B>>>(s.d_tmp_hat, s.d_dealias, rhs_hat_out, s.ncplx);
+}
+
+// ---- 獨立 FFT 版(預設,消費卡最佳) ----
+//   skew: 8 獨立 FFT/stage(4 C2R + 3 R2C + 1 C2R for ω);adv: 5 個
+// 雖然 kernel launch 數較多,但消費卡 cuFFT 單 plan 吞吐比 planMany 好。
+static void compute_rhs_adv_only_single(PseudoSpectralSolver& s,
+                                        const cufftDoubleComplex* omega_hat_in,
+                                        cufftDoubleComplex* rhs_hat_out) {
+    int B = 256;
+    int Gh = (s.ncplx + B - 1) / B;
+    int Gc = (s.ncell + B - 1) / B;
+    cufftDoubleComplex* tmp = s.d_tmp_hat;
+
+    k_spec_uv<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
+                         tmp, rhs_hat_out, s.nx, s.nh);
+    spec_to_phys(s.plan_c2r, tmp,         s.d_u, s.ncell);
+    spec_to_phys(s.plan_c2r, rhs_hat_out, s.d_v, s.ncell);
+
+    k_spec_grad_omega<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
+                                 tmp, rhs_hat_out, s.nx, s.nh);
+    spec_to_phys(s.plan_c2r, tmp,         s.d_dwx, s.ncell);
+    spec_to_phys(s.plan_c2r, rhs_hat_out, s.d_dwy, s.ncell);
+
+    // Conservative form
     if (s.use_conservative && !s.use_skew) {
-        // 先把 ω 物理搞到 d_Nphys (借用為 ω scratch)
         CUDA_CHECK(cudaMemcpy(tmp, omega_hat_in,
                               s.ncplx * sizeof(cufftDoubleComplex),
                               cudaMemcpyDeviceToDevice));
-        spec_to_phys(s.plan_c2r, tmp, s.d_Nphys, s.ncell);  // d_Nphys ← ω
-        // uω, vω → d_dwx, d_dwy (覆寫,之後不再需要)
+        spec_to_phys(s.plan_c2r, tmp, s.d_Nphys, s.ncell);
         k_compute_u_omega<<<Gc, B>>>(s.d_u, s.d_v, s.d_Nphys,
                                      s.d_dwx, s.d_dwy, s.ncell);
-        phys_to_spec(s.plan_r2c, s.d_dwx, tmp);              // (uω)^
-        phys_to_spec(s.plan_r2c, s.d_dwy, s.d_skew_hat);     // (vω)^
+        phys_to_spec(s.plan_r2c, s.d_dwx, tmp);
+        phys_to_spec(s.plan_r2c, s.d_dwy, s.d_skew_hat);
         k_form_rhs_conservative<<<Gh, B>>>(tmp, s.d_skew_hat,
                                            s.d_kx, s.d_ky, s.d_dealias,
                                            rhs_hat_out, s.nx, s.nh);
         return;
     }
 
-    // N_A (物理) = u·∂ω/∂x + v·∂ω/∂y
     k_compute_convection<<<Gc, B>>>(s.d_u, s.d_v, s.d_dwx, s.d_dwy, s.d_Nphys, s.ncell);
 
     if (!s.use_skew) {
-        // Advective: rhs = -N̂_A (dealiased)
         phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
         k_form_rhs_adv_only<<<Gh, B>>>(tmp, s.d_dealias, rhs_hat_out, s.ncplx);
         return;
     }
 
-    // Skew-symmetric: 再計算 N_C = ∇·(uω)
-    // 1. N̂_A 譜 (放 tmp)
+    // Skew: 另外 IFFT ω 和兩個 R2C
     phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
-    // tmp 現在 = N̂_A;但接下來要做 (uω)^、(vω)^,會覆寫 tmp。
-    // 所以先把 N̂_A 挪到 rhs_hat_out (一會兒 k_form_rhs_skew 會再讀寫它)
     CUDA_CHECK(cudaMemcpy(rhs_hat_out, tmp,
                           s.ncplx * sizeof(cufftDoubleComplex),
                           cudaMemcpyDeviceToDevice));
-
-    // 2. uω, vω 物理 → 覆寫 d_u, d_v (advective rhs 已算完,不再需要 u/v)
-    // 但 ω 的物理空間值我們有嗎? 沒有 — d_omega 保留的是上一步的值。
-    // 注意:本函式只接收 ω̂ (omega_hat_in),物理 ω 要另外算。
-    // 幸好 d_dwx (即 ∂ω/∂x) 和 ∂ω/∂y 不需要,可以挪作它用?
-    // 更乾淨:直接做一次 ω̂ → ω 的 IFFT 到一個 buffer。
-    // 我們借用 d_Nphys 存 ω (因為 N_A 已轉成 N̂_A 存在 rhs_hat_out)。
-    // 為此要 ω̂ 的一份拷貝進 tmp:
     CUDA_CHECK(cudaMemcpy(tmp, omega_hat_in,
                           s.ncplx * sizeof(cufftDoubleComplex),
                           cudaMemcpyDeviceToDevice));
-    spec_to_phys(s.plan_c2r, tmp, s.d_Nphys, s.ncell);  // d_Nphys ← ω
-
-    // uω → d_dwx, vω → d_dwy  (這兩個 array 現在不再需要)
+    spec_to_phys(s.plan_c2r, tmp, s.d_Nphys, s.ncell);
     k_compute_u_omega<<<Gc, B>>>(s.d_u, s.d_v, s.d_Nphys,
                                  s.d_dwx, s.d_dwy, s.ncell);
-
-    // 3. FFT uω → tmp,   FFT vω → d_tmp_hat? tmp 又被佔
-    // 需要兩個 hat scratch。當前狀態:
-    //   rhs_hat_out = N̂_A
-    //   tmp = 可用 (ω̂ 拷貝已被 C2R 消耗)
-    //   d_k1_hat = RK 循環狀態 (不可碰)
-    // 方案: 用 tmp 當 (uω)^,再借 d_rhs_hat 本身 — 不,那就是 rhs_hat_out。
-    // 只能分兩階段:
-    //   (a) FFT uω → tmp;保留 (uω)^ 在 tmp
-    //       FFT vω → ???  (無 hat scratch 可用)
-    // 解法:先把 N̂_A 轉存 host? 太慢。
-    // 最乾淨:再開一個持久 hat scratch d_skew_hat (solver init 時配)。
-    // ——這裡採用這個方案,呼叫 s.d_skew_hat (下方補在 struct 裡)。
-    phys_to_spec(s.plan_r2c, s.d_dwx, tmp);              // tmp ← (uω)^
-    phys_to_spec(s.plan_r2c, s.d_dwy, s.d_skew_hat);     // skew_hat ← (vω)^
-
-    // 4. rhs = -N̂_S = -½ (N̂_A + N̂_C),  N̂_C = i·kx·(uω)^ + i·ky·(vω)^
-    k_form_rhs_skew<<<Gh, B>>>(rhs_hat_out,             // N̂_A in
-                               tmp, s.d_skew_hat,       // (uω)^, (vω)^
+    phys_to_spec(s.plan_r2c, s.d_dwx, tmp);
+    phys_to_spec(s.plan_r2c, s.d_dwy, s.d_skew_hat);
+    k_form_rhs_skew<<<Gh, B>>>(rhs_hat_out, tmp, s.d_skew_hat,
                                s.d_kx, s.d_ky, s.d_dealias,
-                               rhs_hat_out,             // out
-                               s.nx, s.nh);
+                               rhs_hat_out, s.nx, s.nh);
+}
+
+// Dispatch wrapper
+static void compute_rhs_adv_only(PseudoSpectralSolver& s,
+                                 const cufftDoubleComplex* omega_hat_in,
+                                 cufftDoubleComplex* rhs_hat_out) {
+    if (s.use_batched_fft) {
+        compute_rhs_adv_only_batched(s, omega_hat_in, rhs_hat_out);
+    } else {
+        compute_rhs_adv_only_single(s, omega_hat_in, rhs_hat_out);
+    }
 }
 
 // ============================================================
@@ -247,18 +318,25 @@ void PseudoSpectralSolver::init(int nx_, int ny_, double Lx_, double Ly_,
     nu = nu_;
     cfl = cfl_;
 
-    CUDA_CHECK(cudaMalloc(&d_omega, ncell * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_u,     ncell * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_v,     ncell * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_dwx,   ncell * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_dwy,   ncell * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_Nphys, ncell * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_omega,      ncell * sizeof(double)));
+    // Batched 物理 buffers(連續記憶體,避免 4 個獨立 cudaMalloc 的 alignment gap)
+    CUDA_CHECK(cudaMalloc(&d_physbatch,  5 * (size_t)ncell * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_physbatch2, 3 * (size_t)ncell * sizeof(double)));
+    // 兼容別名,指向 d_physbatch 偏移
+    d_u     = d_physbatch + 0 * (size_t)ncell;
+    d_v     = d_physbatch + 1 * (size_t)ncell;
+    d_dwx   = d_physbatch + 2 * (size_t)ncell;
+    d_dwy   = d_physbatch + 3 * (size_t)ncell;
+    d_Nphys = d_physbatch2 + 0 * (size_t)ncell;    // skew/adv 的 N_A 也存這裡
 
-    CUDA_CHECK(cudaMalloc(&d_omega_hat, ncplx * sizeof(cufftDoubleComplex)));
-    CUDA_CHECK(cudaMalloc(&d_rhs_hat,   ncplx * sizeof(cufftDoubleComplex)));
-    CUDA_CHECK(cudaMalloc(&d_tmp_hat,   ncplx * sizeof(cufftDoubleComplex)));
-    CUDA_CHECK(cudaMalloc(&d_k1_hat,    ncplx * sizeof(cufftDoubleComplex)));
-    CUDA_CHECK(cudaMalloc(&d_skew_hat,  ncplx * sizeof(cufftDoubleComplex)));
+    CUDA_CHECK(cudaMalloc(&d_omega_hat,  ncplx * sizeof(cufftDoubleComplex)));
+    CUDA_CHECK(cudaMalloc(&d_rhs_hat,    ncplx * sizeof(cufftDoubleComplex)));
+    CUDA_CHECK(cudaMalloc(&d_tmp_hat,    ncplx * sizeof(cufftDoubleComplex)));
+    CUDA_CHECK(cudaMalloc(&d_k1_hat,     ncplx * sizeof(cufftDoubleComplex)));
+    // Batched 譜 buffers
+    CUDA_CHECK(cudaMalloc(&d_specbatch,  5 * (size_t)ncplx * sizeof(cufftDoubleComplex)));
+    CUDA_CHECK(cudaMalloc(&d_specbatch2, 3 * (size_t)ncplx * sizeof(cufftDoubleComplex)));
+    d_skew_hat = d_specbatch2 + 2 * (size_t)ncplx;   // 兼容:舊程式指向的位置
 
     CUDA_CHECK(cudaMalloc(&d_kx,      nx * sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_ky,      nh * sizeof(double)));
@@ -272,6 +350,34 @@ void PseudoSpectralSolver::init(int nx_, int ny_, double Lx_, double Ly_,
     // R2C 輸出形狀 (nx, ny/2+1) → index = ic*nh + jc.
     CUFFT_CHECK(cufftPlan2d(&plan_r2c, nx, ny, CUFFT_D2Z));
     CUFFT_CHECK(cufftPlan2d(&plan_c2r, nx, ny, CUFFT_Z2D));
+
+    // Batched plans — cufftPlanMany:
+    //   batched 2D R2C / C2R,batch 間距離 idist / odist 固定。
+    //   n = (nx, ny), inembed = (nx, nh/ny), onembed 同理。
+    int rank = 2;
+    int n_rc[2]      = { nx, ny };
+    int inembed_r[2] = { nx, ny };     // real layout
+    int onembed_c[2] = { nx, nh };     // complex layout
+    // 5-batch C2R(û → u, etc):input complex, output real
+    CUFFT_CHECK(cufftPlanMany(&plan_c2r_b5, rank, n_rc,
+                              onembed_c, 1, ncplx,  // idist
+                              inembed_r, 1, ncell,  // odist
+                              CUFFT_Z2D, 5));
+    // 4-batch C2R
+    CUFFT_CHECK(cufftPlanMany(&plan_c2r_b4, rank, n_rc,
+                              onembed_c, 1, ncplx,
+                              inembed_r, 1, ncell,
+                              CUFFT_Z2D, 4));
+    // 3-batch R2C(N_A, uω, vω → 譜)
+    CUFFT_CHECK(cufftPlanMany(&plan_r2c_b3, rank, n_rc,
+                              inembed_r, 1, ncell,  // idist (real)
+                              onembed_c, 1, ncplx,  // odist (complex)
+                              CUFFT_D2Z, 3));
+    // 2-batch R2C(conservative: uω, vω → 譜)
+    CUFFT_CHECK(cufftPlanMany(&plan_r2c_b2, rank, n_rc,
+                              inembed_r, 1, ncell,
+                              onembed_c, 1, ncplx,
+                              CUFFT_D2Z, 2));
 
     reduce_blocks = (ncell + B - 1) / B;
     CUDA_CHECK(cudaMalloc(&d_reduce, 4 * reduce_blocks * sizeof(double)));
@@ -290,14 +396,22 @@ void PseudoSpectralSolver::init(int nx_, int ny_, double Lx_, double Ly_,
 }
 
 void PseudoSpectralSolver::destroy() {
-    if (plan_r2c) { cufftDestroy(plan_r2c); plan_r2c = 0; }
-    if (plan_c2r) { cufftDestroy(plan_c2r); plan_c2r = 0; }
+    if (plan_r2c)     { cufftDestroy(plan_r2c);     plan_r2c = 0; }
+    if (plan_c2r)     { cufftDestroy(plan_c2r);     plan_c2r = 0; }
+    if (plan_c2r_b5)  { cufftDestroy(plan_c2r_b5);  plan_c2r_b5 = 0; }
+    if (plan_c2r_b4)  { cufftDestroy(plan_c2r_b4);  plan_c2r_b4 = 0; }
+    if (plan_r2c_b3)  { cufftDestroy(plan_r2c_b3);  plan_r2c_b3 = 0; }
+    if (plan_r2c_b2)  { cufftDestroy(plan_r2c_b2);  plan_r2c_b2 = 0; }
     auto F = [](void*& p) { if (p) { cudaFree(p); p = nullptr; } };
-    F((void*&)d_omega); F((void*&)d_u); F((void*&)d_v);
-    F((void*&)d_dwx);   F((void*&)d_dwy); F((void*&)d_Nphys);
+    F((void*&)d_omega);
+    F((void*&)d_physbatch);
+    F((void*&)d_physbatch2);
+    // 兼容別名設 null(它們不擁有記憶體)
+    d_u = d_v = d_dwx = d_dwy = d_Nphys = nullptr;
     F((void*&)d_omega_hat); F((void*&)d_rhs_hat);
     F((void*&)d_tmp_hat);   F((void*&)d_k1_hat);
-    F((void*&)d_skew_hat);
+    F((void*&)d_specbatch); F((void*&)d_specbatch2);
+    d_skew_hat = nullptr;
     F((void*&)d_kx); F((void*&)d_ky); F((void*&)d_dealias);
     F((void*&)d_reduce);
     F((void*&)d_forcing_idx);
@@ -647,14 +761,23 @@ double PseudoSpectralSolver::step() {
     // DC mode 強制歸零(浮點 + forcing + IC 殘影可能累積非零 spurious mean vorticity)
     k_clear_dc<<<1, 1>>>(d_omega_hat);
 
-    // 同步物理場 (供輸出與下一步 dt)。
-    // cuFFT Z2D 預設會破壞輸入,所以對 d_omega_hat 做 C2R 前必須先拷貝。
-    copy_hat(d_tmp_hat, d_omega_hat, ncplx);
-    spec_to_phys(plan_c2r, d_tmp_hat, d_omega, ncell);
-    k_spec_uv<<<Gh, B>>>(d_omega_hat, d_kx, d_ky, d_dealias,
-                         d_tmp_hat, d_rhs_hat, nx, nh);
-    spec_to_phys(plan_c2r, d_tmp_hat, d_u, ncell);
-    spec_to_phys(plan_c2r, d_rhs_hat, d_v, ncell);
+    // 同步物理場 (供輸出與下一步 dt)。cuFFT Z2D 會破壞輸入,先拷貝。
+    if (use_batched_fft) {
+        // Batched: 4-field IFFT + 單 ω IFFT
+        k_build_4fields_spec<<<Gh, B>>>(d_omega_hat, d_kx, d_ky, d_dealias,
+                                        d_specbatch, nx, nh);
+        spec_to_phys_batch(plan_c2r_b4, d_specbatch, d_physbatch, ncell, 4);
+        copy_hat(d_tmp_hat, d_omega_hat, ncplx);
+        spec_to_phys(plan_c2r, d_tmp_hat, d_omega, ncell);
+    } else {
+        // 獨立 FFT:ω + u + v 三個 C2R(d_dwx/d_dwy 下一步首 rhs 會覆寫)
+        copy_hat(d_tmp_hat, d_omega_hat, ncplx);
+        spec_to_phys(plan_c2r, d_tmp_hat, d_omega, ncell);
+        k_spec_uv<<<Gh, B>>>(d_omega_hat, d_kx, d_ky, d_dealias,
+                             d_tmp_hat, d_rhs_hat, nx, nh);
+        spec_to_phys(plan_c2r, d_tmp_hat, d_u, ncell);
+        spec_to_phys(plan_c2r, d_rhs_hat, d_v, ncell);
+    }
 
     dt_prev = dt;
     step_count++;

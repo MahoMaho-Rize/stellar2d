@@ -108,6 +108,131 @@ __global__ void k_spec_grad_omega(const cufftDoubleComplex* omega_hat,
 }
 
 // ============================================================
+// Fused:從 ω̂ 一次生成 5 個譜 field 到連續 batch buffer
+//   out[0] = û    = i·ky·ω̂ / |k|²
+//   out[1] = v̂    = -i·kx·ω̂ / |k|²
+//   out[2] = (∂ω/∂x)^  = i·kx·ω̂
+//   out[3] = (∂ω/∂y)^  = i·ky·ω̂
+//   out[4] = ω̂  (dealiased copy)
+// dealias mask apply 在所有 5 個輸出上(ω̂ 輸入保持未污染 state)
+// 每個 thread 處理 1 個 (ic, jc),讀一次 ω̂ 寫 5 個 complex → 大幅減少
+// memory bandwidth 壓力(舊版 2 個獨立 kernel 各讀一次 ω̂ + 寫 2 個,共 4 讀 4 寫)。
+// ============================================================
+__global__ void k_build_5fields_spec(const cufftDoubleComplex* omega_hat,
+                                     const double* kx, const double* ky,
+                                     const double* dealias,
+                                     cufftDoubleComplex* out,    // 5 * ncplx 連續
+                                     int nx, int nh) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = nx * nh;
+    if (gid >= total) return;
+    int ic = gid / nh;
+    int jc = gid - ic * nh;
+    double kxv = kx[ic];
+    double kyv = ky[jc];
+    double k2  = kxv * kxv + kyv * kyv;
+    double inv_k2 = (k2 > 0.0) ? 1.0 / k2 : 0.0;
+    double mask = dealias[gid];
+
+    cufftDoubleComplex w = omega_hat[gid];
+    double wr = w.x, wi = w.y;
+
+    // ψ̂ = ω̂ / k²
+    double psi_r = wr * inv_k2;
+    double psi_i = wi * inv_k2;
+
+    // û = i·ky·ψ̂
+    out[0 * total + gid].x = -kyv * psi_i * mask;
+    out[0 * total + gid].y =  kyv * psi_r * mask;
+    // v̂ = -i·kx·ψ̂
+    out[1 * total + gid].x =  kxv * psi_i * mask;
+    out[1 * total + gid].y = -kxv * psi_r * mask;
+    // (∂ω/∂x)^ = i·kx·ω̂
+    out[2 * total + gid].x = -kxv * wi * mask;
+    out[2 * total + gid].y =  kxv * wr * mask;
+    // (∂ω/∂y)^ = i·ky·ω̂
+    out[3 * total + gid].x = -kyv * wi * mask;
+    out[3 * total + gid].y =  kyv * wr * mask;
+    // ω̂ (dealiased)
+    out[4 * total + gid].x = wr * mask;
+    out[4 * total + gid].y = wi * mask;
+}
+
+// Fused 4-field variant(advective/conservative 不需要 ω 物理空間):
+//   out[0..3] = û, v̂, (∂ω/∂x)^, (∂ω/∂y)^
+__global__ void k_build_4fields_spec(const cufftDoubleComplex* omega_hat,
+                                     const double* kx, const double* ky,
+                                     const double* dealias,
+                                     cufftDoubleComplex* out,
+                                     int nx, int nh) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = nx * nh;
+    if (gid >= total) return;
+    int ic = gid / nh;
+    int jc = gid - ic * nh;
+    double kxv = kx[ic], kyv = ky[jc];
+    double k2 = kxv * kxv + kyv * kyv;
+    double inv_k2 = (k2 > 0.0) ? 1.0 / k2 : 0.0;
+    double mask = dealias[gid];
+    cufftDoubleComplex w = omega_hat[gid];
+    double wr = w.x, wi = w.y;
+    double psi_r = wr * inv_k2;
+    double psi_i = wi * inv_k2;
+    out[0 * total + gid].x = -kyv * psi_i * mask;
+    out[0 * total + gid].y =  kyv * psi_r * mask;
+    out[1 * total + gid].x =  kxv * psi_i * mask;
+    out[1 * total + gid].y = -kxv * psi_r * mask;
+    out[2 * total + gid].x = -kxv * wi * mask;
+    out[2 * total + gid].y =  kxv * wr * mask;
+    out[3 * total + gid].x = -kyv * wi * mask;
+    out[3 * total + gid].y =  kyv * wr * mask;
+}
+
+// Fused 物理空間對流 + skew 輔助:一次讀 5 場(u, v, dwx, dwy, ω),寫 3 場(N_A, uω, vω)
+// batched R2C 友好 layout:output 在連續 3-batch buffer [N_A | uω | vω]
+__global__ void k_compute_skew_nonlinear(const double* phys5,    // (u, v, dwx, dwy, ω) × ncell
+                                         double* phys3,          // (N_A, uω, vω) × ncell
+                                         int ncell) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= ncell) return;
+    double u  = phys5[0 * ncell + gid];
+    double v  = phys5[1 * ncell + gid];
+    double dx = phys5[2 * ncell + gid];
+    double dy = phys5[3 * ncell + gid];
+    double w  = phys5[4 * ncell + gid];
+    phys3[0 * ncell + gid] = u * dx + v * dy;   // N_A
+    phys3[1 * ncell + gid] = u * w;             // uω
+    phys3[2 * ncell + gid] = v * w;             // vω
+}
+
+// Advective variant (無 skew):4 場進 → 1 場出(N_A)
+__global__ void k_compute_adv_nonlinear(const double* phys4,
+                                        double* N_A, int ncell) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= ncell) return;
+    double u  = phys4[0 * ncell + gid];
+    double v  = phys4[1 * ncell + gid];
+    double dx = phys4[2 * ncell + gid];
+    double dy = phys4[3 * ncell + gid];
+    N_A[gid] = u * dx + v * dy;
+}
+
+// Conservative variant:4 場進(u, v, dwx, dwy)+ ω 單獨 → 2 場出(uω, vω)
+// 為了和 4-batch pipeline 配合,ω 由 caller 另算一次 IFFT 存入 phys5[4] 之類位置。
+// 不過 conservative 路徑我們選 5-batch IFFT(同 skew),只差最後 compute 不同。
+__global__ void k_compute_conservative_nonlinear(const double* phys5,
+                                                 double* phys2,   // (uω, vω)
+                                                 int ncell) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= ncell) return;
+    double u = phys5[0 * ncell + gid];
+    double v = phys5[1 * ncell + gid];
+    double w = phys5[4 * ncell + gid];
+    phys2[0 * ncell + gid] = u * w;
+    phys2[1 * ncell + gid] = v * w;
+}
+
+// ============================================================
 // 物理空間對流項 (advective form)  N_A(x,y) = u·∂ω/∂x + v·∂ω/∂y
 // ============================================================
 __global__ void k_compute_convection(const double* u, const double* v,

@@ -55,6 +55,12 @@ struct PseudoSpectralSolver {
     //   連續條件下 N_C ≡ N_A (∇·u=0 時);離散下也守 enstrophy,但只要 2 次 R2C。
     //   use_conservative 與 use_skew 互斥 (後者優先);兩者都 false 回到 advective。
     bool   use_conservative = false;
+    // Batched FFT pipeline(cufftPlanMany + 連續 batch buffer + fused kernels)。
+    // 實測 @ 4070 消費卡:1024² 慢 16%,2048² 慢 13%(cuFFT planMany 對消費卡無
+    // 額外調度優化 + 連續 5/3 batch buffer 超過 L2 48MB → TLB 壓力上升)。
+    // 保留作為 opt-in,將來換 A100/H100 datacenter 卡可能成為 winner。
+    // 預設 false,--ps-batched-fft 啟用。
+    bool   use_batched_fft = false;
     // PI controller (Söderlind 2003):dt 跟隨 max|v| 變化平滑調節,避免 CFL overshoot。
     // 預設 false (保當前可重現性);啟用後 dt_prev / err_prev 被維護。
     bool   use_pi_dt = false;
@@ -62,19 +68,33 @@ struct PseudoSpectralSolver {
     double pi_cfl_target = 0.0;   // 啟用時自動設為 cfl;<=0 走預設。
 
     // ---- 物理空間 (double, ncell) ----
-    double* d_omega = nullptr;   // ω
-    double* d_u     = nullptr;   // u = +∂ψ/∂y
-    double* d_v     = nullptr;   // v = -∂ψ/∂x
-    double* d_dwx   = nullptr;   // ∂ω/∂x
-    double* d_dwy   = nullptr;   // ∂ω/∂y
-    double* d_Nphys = nullptr;   // 對流項 N(ω) = u·∂ω/∂x + v·∂ω/∂y
+    // d_physbatch:連續 5-batch buffer,layout = [u | v | dwx | dwy | ω] × ncell
+    //   offset: u=0, v=ncell, dwx=2*ncell, dwy=3*ncell, ω_copy=4*ncell
+    // d_physbatch2:連續 3-batch buffer for skew,layout = [N_A | uω | vω] × ncell
+    // 原始 d_omega 保留(物理 ω 的權威拷貝,供 diagnostic / checkpoint / VTK)
+    double* d_physbatch  = nullptr;   // 5 * ncell
+    double* d_physbatch2 = nullptr;   // 3 * ncell
+    double* d_omega = nullptr;        // ω(權威)
+
+    // 兼容舊 API 的指標別名(指向 d_physbatch 內偏移,不另外分配)
+    double* d_u     = nullptr;   // = d_physbatch + 0*ncell
+    double* d_v     = nullptr;   // = d_physbatch + 1*ncell
+    double* d_dwx   = nullptr;   // = d_physbatch + 2*ncell
+    double* d_dwy   = nullptr;   // = d_physbatch + 3*ncell
+    double* d_Nphys = nullptr;   // = d_physbatch2 + 0*ncell (fused skew 時)
 
     // ---- 譜空間 (cufftDoubleComplex, ncplx) ----
-    cufftDoubleComplex* d_omega_hat = nullptr;
+    // d_specbatch:連續 5-batch buffer,layout = [û | v̂ | (dω/dx)^ | (dω/dy)^ | ω̂_derived] × ncplx
+    //   對應物理 d_physbatch 的 5 個 field(batched IFFT)
+    // d_specbatch2:連續 3-batch buffer,layout = [N̂_A | (uω)^ | (vω)^]  × ncplx
+    //   對應物理 d_physbatch2(batched FFT)
+    cufftDoubleComplex* d_specbatch  = nullptr;   // 5 * ncplx
+    cufftDoubleComplex* d_specbatch2 = nullptr;   // 3 * ncplx
+    cufftDoubleComplex* d_omega_hat = nullptr;    // ω̂ 權威
     cufftDoubleComplex* d_rhs_hat   = nullptr;    // 當前級 rhs
-    cufftDoubleComplex* d_tmp_hat   = nullptr;    // scratch (ψ, du, dv 等)
-    cufftDoubleComplex* d_k1_hat    = nullptr;    // RK3 中間暫存
-    cufftDoubleComplex* d_skew_hat  = nullptr;    // skew-symmetric 額外 scratch ((vω)^)
+    cufftDoubleComplex* d_tmp_hat   = nullptr;    // scratch
+    cufftDoubleComplex* d_k1_hat    = nullptr;    // RK3 y_orig 存檔
+    cufftDoubleComplex* d_skew_hat  = nullptr;    // 舊名保留,現不再使用(等價 d_specbatch2+2·ncplx)
 
     // ---- 波數 / dealias 遮罩 ----
     //  kx 大小 nx (含負頻率, frequency-shifted 的 R2C 約定: 0,1,..,nx/2,-nx/2+1,..,-1)
@@ -88,8 +108,19 @@ struct PseudoSpectralSolver {
     int reduce_blocks = 0;
 
     // ---- cuFFT plans ----
-    cufftHandle plan_r2c = 0;    // d_omega  → d_omega_hat
-    cufftHandle plan_c2r = 0;    // hat      → physical
+    cufftHandle plan_r2c = 0;    // single field (IC upload / forcing injection diag)
+    cufftHandle plan_c2r = 0;    // single field (同上)
+    // Batched plans(核心性能路徑):
+    //   plan_c2r_b5  一次做 5 個 C2R (u, v, dwx, dwy, ω)
+    //   plan_r2c_b3  一次做 3 個 R2C (N_A, uω, vω)        (skew path)
+    //   plan_c2r_b4  一次做 4 個 C2R (u, v, dwx, dwy)      (advective/conservative)
+    //   plan_r2c_b1  = plan_r2c(為了 symmetry)
+    //   plan_c2r_b1_omega  單 ω̂ IFFT (conservative 要 ω 做 uω/vω, 物理空間)
+    //   plan_r2c_b2  一次做 2 個 R2C (uω, vω)              (conservative path)
+    cufftHandle plan_c2r_b5 = 0;
+    cufftHandle plan_r2c_b3 = 0;
+    cufftHandle plan_c2r_b4 = 0;
+    cufftHandle plan_r2c_b2 = 0;
 
     // ---- 隨機相位強迫 (Lilly 1969 / Boffetta-Ecke 2012 風格) ----
     //   在薄殼 |k| ∈ [(kf-dk)·2π/L, (kf+dk)·2π/L] 注入 white-noise 相位,
