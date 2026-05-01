@@ -12,6 +12,8 @@
 } while(0)
 
 #ifdef __CUDACC__
+#include "../eos.h"
+
 __device__ __forceinline__
 int fas_idx(int i, int j, int nt, int ng) {
     return (i + ng) * (nt + 2 * ng) + (j + ng);
@@ -37,7 +39,7 @@ __global__ void k_fas_residual(
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
     double* res,
-    int nr, int nt, int ng, double gam, double atm_thresh,
+    int nr, int nt, int ng, EOS eos, double atm_thresh,
     int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only);
 
 __global__ void k_fas_residual_origin(
@@ -48,14 +50,14 @@ __global__ void k_fas_residual_origin(
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
     double* res,
-    int nr, int nt, int ng, double gam, double atm_thresh,
+    int nr, int nt, int ng, EOS eos, double atm_thresh,
     int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only);
 
 __global__ void k_fas_cfl(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* dr, const double* r_center, const double* dtheta,
     const double* rho0, double* out,
-    int nr, int nt, int ng, double gam, double atm_thresh,
+    int nr, int nt, int ng, EOS eos, double atm_thresh,
     int n_angular_avg, int radial_only);
 
 // Zero the theta-momentum channel everywhere (used to enforce v_theta=0 invariant)
@@ -63,12 +65,12 @@ __global__ void k_fas_zero_mt(double* mt, int nr, int nt, int ng);
 
 __global__ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
     const double* rho0, const double* P0,
-    double atm_thresh, double gam_m1_inv,
+    double atm_thresh, EOS eos,
     int nr, int nt, int ng, int strict_atm_only);
 
 __global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
     const double* rho0, const double* P0,
-    double gam_m1_inv,
+    EOS eos,
     int nr, int nt, int ng);
 
 __global__ void k_fas_angular_avg(double* rho, double* mr, double* mt, double* rhoE,

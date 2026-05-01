@@ -3,6 +3,7 @@
 #include "fas_solver.cuh"
 #include "fas_hllc.cuh"
 #include "fas_linalg.cuh"
+#include "../eos.h"
 #include <cmath>
 #include <vector>
 #include <algorithm>
@@ -29,17 +30,18 @@ __global__ void k_fas_ghost_r_out(double* rho, double* mr, double* mt, double* r
 
 __global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
                                        const double* rho0, const double* P0,
-                                       double gam_m1_inv,
+                                       EOS eos,
                                        int nr, int nt, int ng) {
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y;
     if (j >= nt || g >= ng) return;
     int kg = fas_idx(nr+g, j, nt, ng);
     int flat_last = (nr-1)*nt + j;
-    rho[kg]  = fmax(rho0[flat_last], 1e-20);
+    double rho_r = fmax(rho0[flat_last], 1e-20);
+    rho[kg]  = rho_r;
     mr[kg]   = 0.0;
     mt[kg]   = 0.0;
-    rhoE[kg] = fmax(P0[flat_last] * gam_m1_inv, 1e-20);
+    rhoE[kg] = fmax(rho_r * eos.internal_energy(rho_r, P0[flat_last]), 1e-20);
 }
 
 __global__ void k_fas_ghost_t_n(double* rho, double* mr, double* mt, double* rhoE,
@@ -76,7 +78,7 @@ void FasSolver::launch_ghost(int l) {
     if (use_hse_outer_bc && hse_set) {
         dim3 g((lev.nt+B-1)/B, lev.ng);
         k_fas_ghost_r_out_hse<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
-            lev.d_rho0, lev.d_P0, 1.0/(gamma-1.0), lev.nr,lev.nt,lev.ng);
+            lev.d_rho0, lev.d_P0, eos, lev.nr,lev.nt,lev.ng);
     } else {
         dim3 g((lev.nt+B-1)/B, lev.ng);
         k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng);
@@ -168,7 +170,7 @@ void k_fas_residual(
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
     double* res,
-    int nr, int nt, int ng, double gam, double atm_thresh,
+    int nr, int nt, int ng, EOS eos, double atm_thresh,
     int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -188,7 +190,8 @@ void k_fas_residual(
     double vr_c = mr[k] / rho_c;
     double vt_c = mt[k] / rho_c;
     double KE_c = 0.5 * rho_c * (vr_c*vr_c + vt_c*vt_c);
-    double P_c = fmax((gam - 1.0) * (rhoE[k] - KE_c), 1e-30);
+    double e_c = fmax((rhoE[k] - KE_c) / rho_c, 1e-30);
+    double P_c = fmax(eos.pressure(rho_c, e_c), 1e-30);
     double r = r_center[i];
 
     // ===== Flux-level WB-MUSCL+HLLC =====
@@ -197,11 +200,12 @@ void k_fas_residual(
         int kk = fas_idx(ii,jj,nt,ng);
         double r_ = fmax(rho[kk], 1e-20);
         double vr_ = mr[kk] / r_, vt_ = mt[kk] / r_;
+        double e_ = fmax((rhoE[kk] - 0.5*r_*(vr_*vr_ + vt_*vt_)) / r_, 1e-30);
         FPrim w;
         w.rho = r_;
         w.vr = vr_;
         w.vt = vt_;
-        w.P = fmax((gam - 1.0) * (rhoE[kk] - 0.5*r_*(vr_*vr_ + vt_*vt_)), 1e-30);
+        w.P = fmax(eos.pressure(r_, e_), 1e-30);
         return w;
     };
     int wb = use_wellbalance;
@@ -222,7 +226,7 @@ void k_fas_residual(
         fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
         wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
         wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-        return use_lm_hllc ? fas_hllc_lm(wl, wr, gam, true) : fas_hllc(wl, wr, gam, true);
+        return use_lm_hllc ? fas_hllc_lm(wl, wr, eos, true) : fas_hllc(wl, wr, eos, true);
     };
     FFlux4 fr_hi = hllc_r_face(i+1);
     FFlux4 fr_lo = hllc_r_face(i);
@@ -252,7 +256,7 @@ void k_fas_residual(
             fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
             wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
             wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-            return use_lm_hllc ? fas_hllc_lm(wl, wr, gam, false) : fas_hllc(wl, wr, gam, false);
+            return use_lm_hllc ? fas_hllc_lm(wl, wr, eos, false) : fas_hllc(wl, wr, eos, false);
         };
         FFlux4 ft_hi = hllc_t_face(j+1);
         FFlux4 ft_lo = hllc_t_face(j);
@@ -305,7 +309,7 @@ void k_fas_residual_origin(
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
     double* res,
-    int nr, int nt, int ng, double gam, double atm_thresh,
+    int nr, int nt, int ng, EOS eos, double atm_thresh,
     int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only) {
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     if (j >= nt) return;
@@ -320,7 +324,8 @@ void k_fas_residual_origin(
     double vr_c = mr[k] / rho_c;
     double vt_c = mt[k] / rho_c;
     double KE_c = 0.5 * rho_c * (vr_c*vr_c + vt_c*vt_c);
-    double P_c = fmax((gam - 1.0) * (rhoE[k] - KE_c), 1e-30);
+    double e_c = fmax((rhoE[k] - KE_c) / rho_c, 1e-30);
+    double P_c = fmax(eos.pressure(rho_c, e_c), 1e-30);
 
     double Ar_hi = ar[1*nt + j];
     double At_hi = at[0*(nt+1) + j+1], At_lo = at[0*(nt+1) + j];
@@ -330,8 +335,9 @@ void k_fas_residual_origin(
         int kk = fas_idx(ii,jj,nt,ng);
         double r_ = fmax(rho[kk], 1e-20);
         double vr_ = mr[kk]/r_, vt_ = mt[kk]/r_;
+        double e_ = fmax((rhoE[kk] - 0.5*r_*(vr_*vr_+vt_*vt_)) / r_, 1e-30);
         FPrim w; w.rho = r_; w.vr = vr_; w.vt = vt_;
-        w.P = fmax((gam-1.0)*(rhoE[kk] - 0.5*r_*(vr_*vr_+vt_*vt_)), 1e-30); return w;
+        w.P = fmax(eos.pressure(r_, e_), 1e-30); return w;
     };
     int wb = use_wellbalance;
     auto P0r = [&](int ii) -> double { return wb ? P0[max(0,min(ii,nr-1))*nt+j] : 0.0; };
@@ -347,7 +353,7 @@ void k_fas_residual_origin(
         wr.P = fmax(P0f + (wr.P - P0r(1)), 1e-30);
         wl.rho = fmax(r0f + (wl.rho - r0r(0)), 1e-20);
         wr.rho = fmax(r0f + (wr.rho - r0r(1)), 1e-20);
-        FFlux4 fr_hi = use_lm_hllc ? fas_hllc_lm(wl, wr, gam, true) : fas_hllc(wl, wr, gam, true);
+        FFlux4 fr_hi = use_lm_hllc ? fas_hllc_lm(wl, wr, eos, true) : fas_hllc(wl, wr, eos, true);
 
         // θ-face fluxes: computed for symmetry with k_fas_residual but unused in origin cell
         // (origin cell is a wedge touching r=0; all θ-cells share the same point).
@@ -364,7 +370,7 @@ void k_fas_residual_origin(
                 fas_recon(wa_.vt, wb_.vt, wc_.vt, wd_.vt, wll.vt, wrr.vt, lim_type);
                 wll.rho = fmax(r0ff+rpL, 1e-20); wrr.rho = fmax(r0ff+rpR, 1e-20);
                 wll.P = fmax(P0ff+ppL, 1e-30); wrr.P = fmax(P0ff+ppR, 1e-30);
-                return use_lm_hllc ? fas_hllc_lm(wll, wrr, gam, false) : fas_hllc(wll, wrr, gam, false);
+                return use_lm_hllc ? fas_hllc_lm(wll, wrr, eos, false) : fas_hllc(wll, wrr, eos, false);
             };
             (void)hllc_t_face(j+1);
             (void)hllc_t_face(j);
@@ -417,7 +423,7 @@ void k_fas_transport_step(
     const double* dr, const double* r_center, const double* r_face,
     const double* dtheta,
     const double* rho0, double atm_thresh,
-    int nr, int nt, int ng, double gam, double omega_cfl) {
+    int nr, int nt, int ng, EOS eos, double omega_cfl) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;
@@ -429,8 +435,9 @@ void k_fas_transport_step(
     double vr = fabs(mr[k] / rho_c);
     double vt = fabs(mt[k] / rho_c);
     double KE = 0.5 * rho_c * (vr*vr + vt*vt);
-    double P = fmax((gam-1.0)*(rhoE[k] - KE), 1e-30);
-    double cs = sqrt(gam * P / rho_c);
+    double e_c = fmax((rhoE[k] - KE) / rho_c, 1e-30);
+    double P = fmax(eos.pressure(rho_c, e_c), 1e-30);
+    double cs = eos.sound_speed(rho_c, P);
     double r_eff = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
     double dt_r = dr[i] / (vr + cs);
     double dt_t = r_eff * dtheta[j] / (vt + cs);
@@ -455,7 +462,7 @@ void FasSolver::compute_residual(int l) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+        lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
         (int)radial_only);
     if (!use_core_excision) {
         k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
@@ -465,7 +472,7 @@ void FasSolver::compute_residual(int l) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
             (int)radial_only);
     }
     // Subtract pre-computed HSE defect: R_corrected(U) = R(U) - R(U₀)
@@ -549,7 +556,7 @@ void k_fas_zero_mt(double* mt, int nr, int nt, int ng) {
 __global__
 void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
                      const double* rho0, const double* P0,
-                     double atm_thresh, double gam_m1_inv,
+                     double atm_thresh, EOS eos,
                      int nr, int nt, int ng, int strict_atm_only) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -568,7 +575,8 @@ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
     if (!is_atm && !evacuated) {
         double rho_c = fmax(rho[k], 1e-20);
         double vr = mr[k] / rho_c, vt = mt[k] / rho_c;
-        double P_c = fmax((rhoE[k] - 0.5*rho_c*(vr*vr+vt*vt)) / gam_m1_inv, 0.0);
+        double e_c = fmax((rhoE[k] - 0.5*rho_c*(vr*vr+vt*vt)) / rho_c, 1e-30);
+        double P_c = fmax(eos.pressure(rho_c, e_c), 0.0);
         double T_ratio = (P_c * rho0[flat]) / fmax(P0[flat] * rho_c, 1e-30);
         hot_vacuum = (T_ratio > 100.0) || (T_ratio < 1e-4);
     }
@@ -577,7 +585,8 @@ void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
     rho[k]  = fmax(rho0[flat], 1e-20);
     mr[k]   = 0.0;
     mt[k]   = 0.0;
-    rhoE[k] = fmax(P0[flat] * gam_m1_inv, 1e-20);
+    double rho_r = fmax(rho0[flat], 1e-20);
+    rhoE[k] = fmax(rho_r * eos.internal_energy(rho_r, P0[flat]), 1e-20);
 }
 
 // ========================= Conservation helpers ==============================
@@ -868,7 +877,7 @@ __global__
 void k_fas_cfl(const double* rho, const double* mr, const double* mt, const double* rhoE,
                const double* dr, const double* r_center, const double* dtheta,
                const double* rho0, double* out,
-               int nr, int nt, int ng, double gam, double atm_thresh,
+               int nr, int nt, int ng, EOS eos, double atm_thresh,
                int n_angular_avg, int radial_only) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -880,8 +889,9 @@ void k_fas_cfl(const double* rho, const double* mr, const double* mt, const doub
     double vr = fabs(mr[k] / rho_c);
     double vt = fabs(mt[k] / rho_c);
     double KE = 0.5 * rho_c * (vr*vr + vt*vt);
-    double P = fmax((gam-1.0)*(rhoE[k] - KE), 1e-30);
-    double cs = sqrt(gam * P / rho_c);
+    double e_c = fmax((rhoE[k] - KE) / rho_c, 1e-30);
+    double P = fmax(eos.pressure(rho_c, e_c), 1e-30);
+    double cs = eos.sound_speed(rho_c, P);
     double dt_r = dr[i] / (vr + cs);
     // Radial-only mode or angular-averaged shells: skip theta CFL
     if (radial_only || i < n_angular_avg) {
@@ -899,7 +909,7 @@ double FasSolver::compute_cfl_dt() {
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_dr, lev.d_r_center, lev.d_dtheta,
         lev.d_rho0, lev.d_res,
-        lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, n_angular_avg, (int)radial_only);
+        lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, n_angular_avg, (int)radial_only);
     return cfl_num * gpu_reduce_min(lev.d_res, lev.d_poisson_rhs, n);
 }
 

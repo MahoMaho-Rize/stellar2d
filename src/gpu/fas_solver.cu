@@ -147,7 +147,8 @@ void FasSolver::build_level(int l, int nr, int nt, int ng,
     lev.pressure_gmg.init(nr, nt, h_rf, h_tf);
 }
 
-void FasSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
+void FasSolver::init(const Grid& grid, const EOS& eos_in, double G, double cfl) {
+    eos = eos_in;
     gamma = eos.gamma;
     G_const = G;
     cfl_num = cfl;
@@ -742,7 +743,7 @@ double FasSolver::step(double t, double t_end) {
     k_fas_atm_reset<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_mr, finest.d_mt, finest.d_rhoE,
         finest.d_rho0, finest.d_P0,
-        atm_rho_thresh, 1.0/(gamma-1.0),
+        atm_rho_thresh, eos,
         finest.nr, finest.nt, finest.ng, (int)radial_only);
 
     // Measure after and distribute deficit back to interior cells
@@ -848,7 +849,7 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_dr, lev.d_r_center, lev.d_dtheta,
             lev.d_rho0, lev.d_dp,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, n_angular_avg, (int)radial_only);
+            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, n_angular_avg, (int)radial_only);
         dt_current = cfl_num * gpu_reduce_min(lev.d_dp, lev.d_poisson_rhs, n);
     }
     double dt = dt_current;
@@ -873,7 +874,7 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
             (int)radial_only);
         if (!use_core_excision) {
             k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
@@ -883,7 +884,7 @@ double FasSolver::step_explicit(double t, double t_end) {
                 lev.d_dr, lev.d_dtheta,
                 lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
                 lev.d_res,
-                lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+                lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
             (int)radial_only);
         }
         k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
@@ -905,7 +906,7 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
             (int)radial_only);
         if (!use_core_excision) {
             k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
@@ -915,7 +916,7 @@ double FasSolver::step_explicit(double t, double t_end) {
                 lev.d_dr, lev.d_dtheta,
                 lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
                 lev.d_res,
-                lev.nr, lev.nt, lev.ng, gamma, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+                lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
             (int)radial_only);
         }
         k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
@@ -954,7 +955,7 @@ double FasSolver::step_explicit(double t, double t_end) {
         k_fas_atm_reset<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_rho0, lev.d_P0,
-            atm_rho_thresh, 1.0/(gamma-1.0),
+            atm_rho_thresh, eos,
             lev.nr, lev.nt, lev.ng, (int)radial_only);
 
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(

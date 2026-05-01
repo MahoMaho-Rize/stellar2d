@@ -61,6 +61,10 @@ struct SimConfig {
     Limiter limiter = Limiter::MINMOD;
     double perturb_amplitude = 1e-3;  // density perturbation for lane_emden_perturbed
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
+    // EOS selection
+    std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
+    double eos_mu = 1.0;
+    double eos_rad_a = 0.1;           // radiation constant (code units)
     // cart_ale --test hse_bubble parameters
     double bubble_xc = 0.5;
     double bubble_yc = 0.3;
@@ -197,6 +201,12 @@ int main(int argc, char** argv) {
             cfg.precond = argv[++i];
         else if (std::strcmp(argv[i], "--perturb") == 0 && i + 1 < argc)
             cfg.perturb_amplitude = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--eos") == 0 && i + 1 < argc)
+            cfg.eos_type = argv[++i];
+        else if (std::strcmp(argv[i], "--eos-mu") == 0 && i + 1 < argc)
+            cfg.eos_mu = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--eos-rad-a") == 0 && i + 1 < argc)
+            cfg.eos_rad_a = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -381,7 +391,13 @@ int main(int argc, char** argv) {
         grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
     }
 
-    EOS eos(cfg.gamma);
+    EOS eos = (cfg.eos_type == "ideal_rad")
+        ? EOS::ideal_rad(cfg.gamma, cfg.eos_mu, cfg.eos_rad_a)
+        : EOS::ideal(cfg.gamma, cfg.eos_mu);
+    if (cfg.eos_type == "ideal_rad") {
+        std::printf("EOS: ideal + radiation (γ=%.3f, μ=%.3f, a=%.3e)\n",
+                    cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
+    }
 
     State state;
     state.allocate(grid);

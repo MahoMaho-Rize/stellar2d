@@ -29,6 +29,7 @@ struct ProjSolver {
     int nr, nt, ng;
     int total, phys;
     double gamma, G_const, cfl_num;
+    EOS eos;
     double atm_rho_thresh = 0.0;
     double sponge_r_start = 0.0, sponge_r_top = 0.0, sponge_kappa = 100.0;
     bool use_hse_outer_bc = false;

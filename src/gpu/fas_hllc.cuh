@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../eos.h"
+
 struct FPrim { double rho, vr, vt, P; };
 struct FFlux4 { double f_rho, f_mr, f_mt, f_E; };
 
@@ -40,14 +42,14 @@ void fas_recon(double vm1, double v0, double vp1, double vp2,
 }
 
 __device__
-inline FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
+inline FFlux4 fas_hllc(FPrim wl, FPrim wr, EOS eos, bool radial) {
     double rhol=wl.rho, rhor=wr.rho, pl=wl.P, pr=wr.P;
     double ul = radial ? wl.vr : wl.vt;
     double ur = radial ? wr.vr : wr.vt;
     double vtl = radial ? wl.vt : wl.vr;
     double vtr = radial ? wr.vt : wr.vr;
 
-    double cl = sqrt(gamma*pl/rhol), cr = sqrt(gamma*pr/rhor);   // Eq. (1.3)
+    double cl = eos.sound_speed(rhol, pl), cr = eos.sound_speed(rhor, pr);
     double sl = fmin(ul-cl, ur-cr), sr = fmax(ul+cl, ur+cr);     // Eq. (4.1)
     double denom = rhol*(sl-ul) - rhor*(sr-ur);
     if (fabs(denom) < 1e-300) denom = -1e-300;
@@ -55,7 +57,7 @@ inline FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
     double s_star = (pr-pl + rhol*ul*(sl-ul) - rhor*ur*(sr-ur)) / denom;
 
     auto phys_flux = [&](double rho, double u, double vt, double p) -> FFlux4 {
-        double E = p/(gamma-1.0) + 0.5*rho*(u*u + vt*vt);
+        double E = rho * eos.internal_energy(rho, p) + 0.5*rho*(u*u + vt*vt);
         FFlux4 f;
         f.f_rho = rho*u;
         if (radial) { f.f_mr = rho*u*u+p; f.f_mt = rho*u*vt; }
@@ -66,7 +68,7 @@ inline FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
 
     auto star_flux = [&](double rho, double u, double vt, double p,
                          double sk, FFlux4 fk) -> FFlux4 {
-        double E = p/(gamma-1.0) + 0.5*rho*(u*u+vt*vt);
+        double E = rho * eos.internal_energy(rho, p) + 0.5*rho*(u*u+vt*vt);
         double ratio = rho*(sk-u)/(sk-s_star);
         double E_star = ratio*(E/rho + (s_star-u)*(s_star + p/(rho*(sk-u))));
         FFlux4 f;
@@ -86,19 +88,25 @@ inline FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
     else if (s_star >= 0.0) { auto fl=phys_flux(rhol,ul,vtl,pl); return star_flux(rhol,ul,vtl,pl,sl,fl); }
     else if (sr >= 0.0) { auto fr=phys_flux(rhor,ur,vtr,pr); return star_flux(rhor,ur,vtr,pr,sr,fr); }
     else return phys_flux(rhor,ur,vtr,pr);
+} // end fas_hllc(EOS)
+
+// Backward-compatible overload for ideal-gas callers (wb2d etc.) that pass a bare γ.
+__device__
+inline FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
+    return fas_hllc(wl, wr, EOS::ideal(gamma), radial);
 }
 
 // Low-Mach corrected HLLC (Rieper 2011): reduces pressure dissipation when M→0.
 // Scales pressure jump by local Mach number to prevent O(1/M) viscosity.
 __device__
-inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
+inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, EOS eos, bool radial) {
     double rhol=wl.rho, rhor=wr.rho, pl=wl.P, pr=wr.P;
     double ul = radial ? wl.vr : wl.vt;
     double ur = radial ? wr.vr : wr.vt;
     double vtl = radial ? wl.vt : wl.vr;
     double vtr = radial ? wr.vt : wr.vr;
 
-    double cl = sqrt(gamma*pl/rhol), cr = sqrt(gamma*pr/rhor);    // Eq. (1.3)
+    double cl = eos.sound_speed(rhol, pl), cr = eos.sound_speed(rhor, pr);
     double c_avg = 0.5*(cl+cr);
     double M_face = fmax(fabs(ul), fabs(ur)) / fmax(c_avg, 1e-30); // Eq. (14.1)
     double f = fmin(1.0, M_face);                                   // Eq. (14.2)
@@ -117,7 +125,7 @@ inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
     double s_star = (pr_mod-pl_mod + rhol*ul*(sl-ul) - rhor*ur*(sr-ur)) / denom;
 
     auto phys_flux = [&](double rho, double u, double vt, double p) -> FFlux4 {
-        double E = p/(gamma-1.0) + 0.5*rho*(u*u + vt*vt);
+        double E = rho * eos.internal_energy(rho, p) + 0.5*rho*(u*u + vt*vt);
         FFlux4 ff;
         ff.f_rho = rho*u;
         if (radial) { ff.f_mr = rho*u*u+p; ff.f_mt = rho*u*vt; }
@@ -128,7 +136,7 @@ inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
 
     auto star_flux = [&](double rho, double u, double vt, double p,
                          double sk, FFlux4 fk) -> FFlux4 {
-        double E = p/(gamma-1.0) + 0.5*rho*(u*u+vt*vt);
+        double E = rho * eos.internal_energy(rho, p) + 0.5*rho*(u*u+vt*vt);
         double ratio = rho*(sk-u)/(sk-s_star);
         double E_star = ratio*(E/rho + (s_star-u)*(s_star + p/(rho*(sk-u))));
         FFlux4 ff;
@@ -148,4 +156,9 @@ inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
     else if (s_star >= 0.0) { auto fl=phys_flux(rhol,ul,vtl,pl); return star_flux(rhol,ul,vtl,pl,sl,fl); }
     else if (sr >= 0.0) { auto fr=phys_flux(rhor,ur,vtr,pr); return star_flux(rhor,ur,vtr,pr,sr,fr); }
     else return phys_flux(rhor,ur,vtr,pr);
+} // end fas_hllc_lm(EOS)
+
+__device__
+inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
+    return fas_hllc_lm(wl, wr, EOS::ideal(gamma), radial);
 }
