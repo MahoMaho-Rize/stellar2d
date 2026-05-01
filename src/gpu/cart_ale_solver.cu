@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 #include <algorithm>
 
@@ -67,6 +68,8 @@ __global__ void k_cale_remap_north_2nd(const double*, const double*, const doubl
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int, int, double, double);
+__global__ void k_cale_snapshot(const double*, const double*, const double*,
+    const double*, const double*, double*, int, int);
 
 // Stash Lx/Ly at module scope (used by non-member IC loaders).
 static double g_Lx = 0.0, g_Ly = 0.0;
@@ -142,6 +145,7 @@ void CartAleSolver::init(int nx_in, int ny_in, double Lx, double Ly,
 }
 
 void CartAleSolver::destroy() {
+    free_frame_buffer();
     auto f = [](double* p) { if (p) cudaFree(p); };
     f(d_X); f(d_Y); f(d_X0); f(d_Y0); f(d_vX); f(d_vY);
     f(d_FX); f(d_FY); f(d_mnode); f(d_dX); f(d_dY);
@@ -582,4 +586,219 @@ void CartAleSolver::write_vtk_2d(const char* filename, double Lx, double Ly) {
         }
 
     std::fclose(fp);
+}
+
+// ============================================================
+// VRAM-buffered frame dump
+//
+// Sizing: use (free VRAM − headroom_mb) / (5·ncell·8B) frames.
+// We keep the whole pool resident; when it fills we copy-out the
+// whole batch in one cudaMemcpy, write VTK binary files sequentially,
+// then reset the count.
+// ============================================================
+void CartAleSolver::alloc_frame_buffer(int headroom_mb) {
+    size_t free_b = 0, total_b = 0;
+    cudaMemGetInfo(&free_b, &total_b);
+    size_t headroom_b = (size_t)headroom_mb * 1024ull * 1024ull;
+    if (free_b <= headroom_b) {
+        std::fprintf(stderr,
+            "  CartAle frame buffer: only %.2f GB free, %.2f GB headroom — disabling VRAM buffer\n",
+            free_b / 1.0e9, headroom_b / 1.0e9);
+        frame_capacity = 0;
+        return;
+    }
+    size_t pool_b = free_b - headroom_b;
+    size_t per_frame_b = (size_t)ncell * 5ull * sizeof(double);
+    frame_capacity = (int)(pool_b / per_frame_b);
+    if (frame_capacity < 4) frame_capacity = 4;
+    size_t actual_b = (size_t)frame_capacity * per_frame_b;
+    if (cudaMalloc(&d_frame_pool, actual_b) != cudaSuccess) {
+        // fallback: try smaller
+        frame_capacity = (int)(((size_t)(free_b * 0.5)) / per_frame_b);
+        if (frame_capacity < 4) frame_capacity = 4;
+        actual_b = (size_t)frame_capacity * per_frame_b;
+        CUDA_CHECK(cudaMalloc(&d_frame_pool, actual_b));
+    }
+    frame_count = 0;
+    total_frames = 0;
+    frame_times.clear();
+    frame_steps.clear();
+    std::fprintf(stderr,
+        "  CartAle frame buffer: %d frames × %.2f MB = %.2f GB "
+        "(free was %.2f GB, headroom %.2f GB)\n",
+        frame_capacity, per_frame_b / 1.0e6, actual_b / 1.0e9,
+        free_b / 1.0e9, headroom_b / 1.0e9);
+}
+
+void CartAleSolver::capture_frame(double t, int step) {
+    if (!d_frame_pool || frame_capacity == 0) return;
+    if (frame_count >= frame_capacity) {
+        // Caller is expected to flush before capturing more; guard anyway.
+        flush_frames_to_disk(frame_out_dir, 1.0, 1.0);
+    }
+    int B = 256;
+    int BCell = (ncell + B - 1) / B;
+    double* slot = d_frame_pool + (size_t)frame_count * 5ull * (size_t)ncell;
+    k_cale_snapshot<<<BCell, B>>>(d_rho, d_P, d_e_int, d_vX, d_vY,
+                                  slot, nx, ny);
+    frame_times.push_back(t);
+    frame_steps.push_back(step);
+    frame_count++;
+}
+
+// Write one frame (5 fields) from a host pointer to binary VTK.
+// Big-endian required by VTK legacy binary — swap on little-endian hosts.
+static void write_vtk_binary_frame(const char* path, int nx, int ny,
+                                   double Lx, double Ly,
+                                   const double* rho, const double* P,
+                                   const double* e_int, const double* vx,
+                                   const double* vy, double gamma) {
+    std::FILE* fp = std::fopen(path, "wb");
+    if (!fp) return;
+    int nnx = nx + 1, nny = ny + 1;
+    std::fprintf(fp, "# vtk DataFile Version 3.0\n");
+    std::fprintf(fp, "cart_ale binary frame\n");
+    std::fprintf(fp, "BINARY\n");
+    std::fprintf(fp, "DATASET STRUCTURED_GRID\n");
+    std::fprintf(fp, "DIMENSIONS %d %d 1\n", nnx, nny);
+    std::fprintf(fp, "POINTS %d double\n", nnx * nny);
+
+    auto bswap8 = [](double v) {
+        union { double d; uint64_t u; } x; x.d = v;
+        x.u = ((x.u & 0x00000000000000FFULL) << 56) |
+              ((x.u & 0x000000000000FF00ULL) << 40) |
+              ((x.u & 0x0000000000FF0000ULL) << 24) |
+              ((x.u & 0x00000000FF000000ULL) <<  8) |
+              ((x.u & 0x000000FF00000000ULL) >>  8) |
+              ((x.u & 0x0000FF0000000000ULL) >> 24) |
+              ((x.u & 0x00FF000000000000ULL) >> 40) |
+              ((x.u & 0xFF00000000000000ULL) >> 56);
+        return x.d;
+    };
+
+    // Points in i-fastest, j-next order (consistent with existing ASCII writer).
+    std::vector<double> pts(3 * nnx * nny);
+    size_t k = 0;
+    for (int jn = 0; jn < nny; ++jn) {
+        double y = Ly * (double)jn / (double)(nny - 1);
+        for (int in = 0; in < nnx; ++in) {
+            double x = Lx * (double)in / (double)(nnx - 1);
+            pts[k++] = bswap8(x);
+            pts[k++] = bswap8(y);
+            pts[k++] = bswap8(0.0);
+        }
+    }
+    std::fwrite(pts.data(), sizeof(double), pts.size(), fp);
+    std::fputc('\n', fp);
+
+    int nc = nx * ny;
+    std::fprintf(fp, "CELL_DATA %d\n", nc);
+
+    auto write_scalar = [&](const char* name, const double* arr) {
+        std::fprintf(fp, "SCALARS %s double 1\nLOOKUP_TABLE default\n", name);
+        std::vector<double> buf(nc);
+        // rearrange from ic-outer, jc-inner (flat=ic*ny+jc) to jc-outer, ic-inner
+        // to match VTK cell-data order (x-fastest).
+        size_t idx = 0;
+        for (int jc = 0; jc < ny; ++jc)
+            for (int ic = 0; ic < nx; ++ic)
+                buf[idx++] = bswap8(arr[ic*ny + jc]);
+        std::fwrite(buf.data(), sizeof(double), buf.size(), fp);
+        std::fputc('\n', fp);
+    };
+    write_scalar("density",  rho);
+    write_scalar("pressure", P);
+    write_scalar("e_int",    e_int);
+
+    std::fprintf(fp, "VECTORS velocity double\n");
+    std::vector<double> vbuf(3 * nc);
+    {
+        size_t idx = 0;
+        for (int jc = 0; jc < ny; ++jc)
+            for (int ic = 0; ic < nx; ++ic) {
+                int c = ic*ny + jc;
+                vbuf[idx++] = bswap8(vx[c]);
+                vbuf[idx++] = bswap8(vy[c]);
+                vbuf[idx++] = bswap8(0.0);
+            }
+        std::fwrite(vbuf.data(), sizeof(double), vbuf.size(), fp);
+        std::fputc('\n', fp);
+    }
+
+    // mach = |v| / cs,  cs = sqrt(γ·P/ρ)
+    std::fprintf(fp, "SCALARS mach double 1\nLOOKUP_TABLE default\n");
+    std::vector<double> mbuf(nc);
+    {
+        size_t idx = 0;
+        for (int jc = 0; jc < ny; ++jc)
+            for (int ic = 0; ic < nx; ++ic) {
+                int c = ic*ny + jc;
+                double rhoc = std::fmax(rho[c], 1e-30);
+                double pc   = std::fmax(P[c],   1e-30);
+                double cs   = std::sqrt(gamma * pc / rhoc);
+                double sp   = std::sqrt(vx[c]*vx[c] + vy[c]*vy[c]);
+                mbuf[idx++] = bswap8(sp / std::fmax(cs, 1e-30));
+            }
+        std::fwrite(mbuf.data(), sizeof(double), mbuf.size(), fp);
+        std::fputc('\n', fp);
+    }
+
+    std::fclose(fp);
+}
+
+void CartAleSolver::flush_frames_to_disk(const std::string& run_dir,
+                                        double Lx, double Ly) {
+    if (frame_count == 0 || !d_frame_pool) return;
+    frame_out_dir = run_dir;
+    size_t per_frame = (size_t)ncell * 5ull;
+    std::vector<double> host((size_t)frame_count * per_frame);
+    CUDA_CHECK(cudaMemcpy(host.data(), d_frame_pool,
+                          host.size() * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+    std::fprintf(stderr, "  CartAle flushing %d buffered frames → %s ...",
+                 frame_count, run_dir.c_str());
+    std::fflush(stderr);
+    // frames.csv: cumulative index of every frame ever written, with its
+    // exact physical time and step number. Enables the renderer to show
+    // true-t in the title and (optionally) resample to strict uniform-t.
+    char csv_path[512];
+    std::snprintf(csv_path, sizeof(csv_path), "%s/frames.csv", run_dir.c_str());
+    bool first_batch = (total_frames == 0);
+    std::FILE* fcsv = std::fopen(csv_path, first_batch ? "w" : "a");
+    if (fcsv && first_batch) std::fprintf(fcsv, "index,step,t\n");
+    // frame_times/frame_steps hold the *currently buffered* frames;
+    // pair them with a running total index.
+    int base_idx = total_frames;
+    for (int f = 0; f < frame_count; ++f) {
+        ++total_frames;
+        const double* base = host.data() + (size_t)f * per_frame;
+        const double* rho_p = base;
+        const double* P_p   = base + ncell;
+        const double* e_p   = base + 2*ncell;
+        const double* vx_p  = base + 3*ncell;
+        const double* vy_p  = base + 4*ncell;
+        char path[512];
+        std::snprintf(path, sizeof(path),
+                      "%s/output_%04d.vtk", run_dir.c_str(), total_frames);
+        write_vtk_binary_frame(path, nx, ny, Lx, Ly,
+                               rho_p, P_p, e_p, vx_p, vy_p, gamma);
+        if (fcsv) {
+            int idx = base_idx + f + 1;   // match %04d filename
+            std::fprintf(fcsv, "%d,%d,%.10e\n",
+                         idx, frame_steps[f], frame_times[f]);
+        }
+    }
+    if (fcsv) std::fclose(fcsv);
+    std::fprintf(stderr, " done (%d total)\n", total_frames);
+    frame_count = 0;
+    frame_times.clear();
+    frame_steps.clear();
+}
+
+void CartAleSolver::free_frame_buffer() {
+    if (d_frame_pool) cudaFree(d_frame_pool);
+    d_frame_pool = nullptr;
+    frame_capacity = frame_count = total_frames = 0;
+    frame_times.clear();
+    frame_steps.clear();
 }

@@ -73,6 +73,9 @@ struct SimConfig {
     std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
     int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
     int vtk_interval  = 0;   // cart_ale: step interval for VTK dump; 0 = follow output_interval
+    bool frame_buffer = false;   // cart_ale: buffer frames in VRAM, dump at wall/end
+    int frame_headroom_mb = 1024; // cart_ale: leave this much free VRAM when sizing the pool
+    double vtk_dt = 0.0;         // cart_ale: capture every T physical time; 0 = use vtk_interval (step count)
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -213,6 +216,12 @@ int main(int argc, char** argv) {
             cfg.diag_interval = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--vtk-interval") == 0 && i + 1 < argc)
             cfg.vtk_interval = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--frame-buffer") == 0)
+            cfg.frame_buffer = true;
+        else if (std::strcmp(argv[i], "--frame-headroom-mb") == 0 && i + 1 < argc)
+            cfg.frame_headroom_mb = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--vtk-dt") == 0 && i + 1 < argc)
+            cfg.vtk_dt = std::atof(argv[++i]);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -751,8 +760,21 @@ int main(int argc, char** argv) {
 
         int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
         int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
-        std::fprintf(stderr, "  CartAle diag every %d steps, VTK every %d steps\n",
-                     diag_every, vtk_every);
+        bool vtk_by_time = cfg.vtk_dt > 0.0;
+        double next_vtk_t = 0.0;   // first capture at t=0+dt (after first step)
+        if (vtk_by_time) {
+            std::fprintf(stderr,
+                "  CartAle diag every %d steps, VTK every dt=%g (physical time)%s\n",
+                diag_every, cfg.vtk_dt,
+                cfg.frame_buffer ? " (VRAM buffered)" : "");
+        } else {
+            std::fprintf(stderr, "  CartAle diag every %d steps, VTK every %d steps%s\n",
+                         diag_every, vtk_every,
+                         cfg.frame_buffer ? " (VRAM buffered)" : "");
+        }
+        if (cfg.frame_buffer) {
+            cale.alloc_frame_buffer(cfg.frame_headroom_mb);
+        }
 
         int frame = 0;
         while (t < cfg.t_end && !g_interrupted) {
@@ -761,7 +783,13 @@ int main(int argc, char** argv) {
             step++;
             if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
             bool do_diag = (step % diag_every == 0) || t >= cfg.t_end;
-            bool do_vtk  = (step % vtk_every  == 0) || t >= cfg.t_end;
+            bool do_vtk;
+            if (vtk_by_time) {
+                do_vtk = (t >= next_vtk_t) || t >= cfg.t_end;
+                if (do_vtk) next_vtk_t = t + cfg.vtk_dt;
+            } else {
+                do_vtk = (step % vtk_every == 0) || t >= cfg.t_end;
+            }
             if (do_diag) {
                 auto d = cale.compute_diagnostics();
                 std::fprintf(stderr, "\n");
@@ -774,11 +802,21 @@ int main(int argc, char** argv) {
                 std::fflush(csv);
             }
             if (do_vtk) {
-                ++frame;
-                char path[512];
-                std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), frame);
-                cale.write_vtk_2d(path, Lx, Ly);
+                if (cfg.frame_buffer && cale.frame_capacity > 0) {
+                    if (cale.frame_count >= cale.frame_capacity) {
+                        cale.flush_frames_to_disk(run_dir, Lx, Ly);
+                    }
+                    cale.capture_frame(t, step);
+                } else {
+                    ++frame;
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), frame);
+                    cale.write_vtk_2d(path, Lx, Ly);
+                }
             }
+        }
+        if (cfg.frame_buffer) {
+            cale.flush_frames_to_disk(run_dir, Lx, Ly);
         }
         std::fclose(csv);
         std::fprintf(stderr, "\n");
