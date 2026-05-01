@@ -85,6 +85,10 @@ struct SimConfig {
     std::string cart_ale2_bc_x = "reflect";  // cart_ale2: reflect / periodic
     std::string cart_ale2_bc_y = "reflect";
     bool cart_ale2_ppm = false;   // cart_ale2: PPM-in-remap (default OFF; falls back to MUSCL)
+    std::string cart_ale2_ppm_limiter = "cs"; // cart_ale2: PPM limiter (cs | cw)
+    std::string cart_ale2_ppm_space = "prim"; // cart_ale2: PPM recon space (prim | cons)
+    bool cart_ale2_ppm_char = true;  // cart_ale2: project to characteristic variables (prim space only)
+    int cart_ale2_kh_k = 0;   // cart_ale2: KH mode number (0 = IC default: k=2 shear, k=1 Lecoanet)
     // pseudo-spectral (偽譜法) 專用
     double ps_nu = 1e-4;          // 運動黏度
     double ps_Lx = 1.0;
@@ -256,6 +260,16 @@ int main(int argc, char** argv) {
             cfg.cart_ale2_bc_y = argv[++i];
         else if (std::strcmp(argv[i], "--ppm") == 0)
             cfg.cart_ale2_ppm = true;
+        else if (std::strcmp(argv[i], "--ppm-limiter") == 0 && i + 1 < argc)
+            cfg.cart_ale2_ppm_limiter = argv[++i];
+        else if (std::strcmp(argv[i], "--ppm-space") == 0 && i + 1 < argc)
+            cfg.cart_ale2_ppm_space = argv[++i];
+        else if (std::strcmp(argv[i], "--no-ppm-char") == 0)
+            cfg.cart_ale2_ppm_char = false;
+        else if (std::strcmp(argv[i], "--ppm-char") == 0)
+            cfg.cart_ale2_ppm_char = true;
+        else if (std::strcmp(argv[i], "--cart-ale2-kh-k") == 0 && i + 1 < argc)
+            cfg.cart_ale2_kh_k = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
             cfg.ps_nu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)
@@ -406,7 +420,8 @@ int main(int argc, char** argv) {
         init_evrard(grid, state, ep, cfg.gamma);
     } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
                || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
-               || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb") {
+               || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb"
+               || cfg.test_case == "kh_lecoanet") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -854,8 +869,13 @@ int main(int argc, char** argv) {
         bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
                        || cfg.test_case == "hse_bubble");
         bool is_kh = (cfg.test_case == "kh_shear");
+        bool is_kh_lec = (cfg.test_case == "kh_lecoanet");
         double Lx = 1.0;
-        double Ly = (is_hse || is_kh) ? 1.0 : 0.2;
+        // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
+        // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
+        double Ly = is_kh_lec ? 2.0
+                  : (is_hse || is_kh) ? 1.0
+                  : 0.2;
         double gam = is_hse ? cfg.gamma : 1.4;
         cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
         cale.remap_order = cfg.cart_ale_remap_order;
@@ -867,6 +887,15 @@ int main(int argc, char** argv) {
         if (cfg.cart_ale2_bc_y == "periodic") bcm |= 2;
         cale.bc_mode = bcm;
         cale.ppm_enabled = cfg.cart_ale2_ppm ? 1 : 0;
+        if      (cfg.cart_ale2_ppm_limiter == "cs") cale.ppm_cs_limiter = 1;
+        else if (cfg.cart_ale2_ppm_limiter == "cw") cale.ppm_cs_limiter = 0;
+        else { std::fprintf(stderr, "unknown --ppm-limiter %s; using cs\n",
+                            cfg.cart_ale2_ppm_limiter.c_str()); cale.ppm_cs_limiter = 1; }
+        if      (cfg.cart_ale2_ppm_space == "prim") cale.ppm_primitive = 1;
+        else if (cfg.cart_ale2_ppm_space == "cons") cale.ppm_primitive = 0;
+        else { std::fprintf(stderr, "unknown --ppm-space %s; using prim\n",
+                            cfg.cart_ale2_ppm_space.c_str()); cale.ppm_primitive = 1; }
+        cale.ppm_char = cfg.cart_ale2_ppm_char ? 1 : 0;
         if      (cfg.cart_ale_limiter == "minmod")  cale.remap_limiter = 0;
         else if (cfg.cart_ale_limiter == "vanleer") cale.remap_limiter = 1;
         else if (cfg.cart_ale_limiter == "mc")      cale.remap_limiter = 2;
@@ -874,9 +903,12 @@ int main(int argc, char** argv) {
                             cfg.cart_ale_limiter.c_str()); cale.remap_limiter = 1; }
         const char* lim_name = cale.remap_limiter == 0 ? "minmod"
                              : cale.remap_limiter == 1 ? "vanleer" : "mc";
-        const char* recon_name = (cale.remap_order < 2) ? "donor-cell"
-                               : cale.ppm_enabled       ? "PPM"
-                                                        : "MUSCL-in-remap";
+        const char* recon_name;
+        if (cale.remap_order < 2)      recon_name = "donor-cell";
+        else if (!cale.ppm_enabled)    recon_name = "MUSCL-in-remap";
+        else if (!cale.ppm_primitive)  recon_name = cale.ppm_cs_limiter ? "PPM/CS/cons" : "PPM/CW/cons";
+        else if (cale.ppm_char)        recon_name = cale.ppm_cs_limiter ? "PPM/CS/char" : "PPM/CW/char";
+        else                           recon_name = cale.ppm_cs_limiter ? "PPM/CS/prim" : "PPM/CW/prim";
         std::fprintf(stderr,
             "  CartAle2 remap_order = %d (%s)  limiter = %s  CQ_lin=%g CQ_quad=%g  shear_aware_av=%d  bc=(%s,%s)\n",
             cale.remap_order, recon_name,
@@ -899,6 +931,18 @@ int main(int argc, char** argv) {
         } else if (cfg.test_case == "kh_shear") {
             double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 0.1;
             cale.init_kh_shear(1.0, 2.0, 2.5, 0.5, amp, 2);
+        } else if (cfg.test_case == "kh_lecoanet") {
+            // Athena++ pgen/kh.cpp iprob=4 canonical parameters:
+            //   vflow=1, amp=0.01, drho_rho0=0 (unstratified), P0=10.
+            // --perturb overrides amp. Requires periodic BC in both x and y.
+            double amp = (cfg.perturb_amplitude >= 0) ? cfg.perturb_amplitude : 0.01;
+            if (cale.bc_mode != 3) {
+                std::fprintf(stderr,
+                    "  [warn] kh_lecoanet expects --bc-x periodic --bc-y periodic; "
+                    "current bc_mode=%d\n", cale.bc_mode);
+            }
+            int k = (cfg.cart_ale2_kh_k > 0) ? cfg.cart_ale2_kh_k : 1;
+            cale.init_kh_lecoanet(1.0, amp, 0.0, 10.0, k);
         } else {
             cale.init_sod();
         }

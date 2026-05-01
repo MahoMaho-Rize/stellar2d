@@ -193,10 +193,11 @@ void k_lm_residual(
 
     // ===== Geometric source =====
     double inv_r = 1.0 / r;
-    double S_mr = rho_c * vt_c * vt_c * inv_r;
-    double S_mt = -rho_c * vr_c * vt_c * inv_r;
+    double S_mr = rho_c * vt_c * vt_c * inv_r;   // Eq. (5.1)
+    double S_mt = -rho_c * vr_c * vt_c * inv_r;  // Eq. (5.2)
 
-    // Well-balanced radial force: -∇P' + ρ'·g₀ + ρ·g'
+    // Eq. (10.5): well-balanced radial force — split as −∇P' + ρ'·g₀ + ρ·g'
+    // so that the HSE component −∇P₀ + ρ₀·g₀ vanishes analytically.
     double force_r = -dPp_dr + rhop_c*g0_r + rho_c*gp_r;
     // Theta: only pressure (no gravity component)
     double force_t = -dPp_dt_r;

@@ -1026,7 +1026,7 @@ double StrangSolver::compute_dt()
         max_inv_dt = std::fmax(max_inv_dt, h[i]);
 
     if (max_inv_dt < 1e-30) max_inv_dt = 1e-30;
-    return cfl_number / max_inv_dt;
+    return cfl_number / max_inv_dt;   // Eq. (13.9)
 }
 
 double StrangSolver::step(double t, double t_end)
@@ -1034,7 +1034,7 @@ double StrangSolver::step(double t, double t_end)
     double dt = compute_dt();
     if (t + dt > t_end) dt = t_end - t;
 
-    // Strang splitting: X(dt/2) → Y(dt/2) → Y(dt/2) → X(dt/2)
+    // Eq. (13.7): Strang splitting X(Δt/2) → Y(Δt/2) → Y(Δt/2) → X(Δt/2).
     double half = 0.5 * dt;
 
     fill_ghost_x();   sweep_x(half);
