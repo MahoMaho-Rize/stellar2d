@@ -52,6 +52,21 @@ __global__ void k_cale_remap_finalize_cells(const double*, const double*, double
 __global__ void k_cale_rebuild_node_v(const double*, const double*, const double*,
     double*, double*, int, int);
 __global__ void k_cale_bc_velocity(double*, double*, int, int);
+__global__ void k_cale_cell_densities(const double*, const double*, const double*, const double*,
+    const double*, double*, double*, double*, double*, int);
+__global__ void k_cale_slopes_minmod(const double*, const double*, const double*, const double*,
+    double*, double*, double*, double*, double*, double*, double*, double*,
+    int, int, double, double);
+__global__ void k_cale_remap_east_2nd(const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    double*, double*, double*, double*, int, int, double, double);
+__global__ void k_cale_remap_north_2nd(const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    double*, double*, double*, double*, int, int, double, double);
 
 // Stash Lx/Ly at module scope (used by non-member IC loaders).
 static double g_Lx = 0.0, g_Ly = 0.0;
@@ -97,6 +112,18 @@ void CartAleSolver::init(int nx_in, int ny_in, double Lx, double Ly,
     mal(&d_px_new,  ncell*sizeof(double));
     mal(&d_py_new,  ncell*sizeof(double));
 
+    mal(&d_rho_dens,  ncell*sizeof(double));
+    mal(&d_rhoE_dens, ncell*sizeof(double));
+    mal(&d_pxd_dens,  ncell*sizeof(double));
+    mal(&d_pyd_dens,  ncell*sizeof(double));
+    mal(&d_rho_sx,  ncell*sizeof(double)); mal(&d_rho_sy,  ncell*sizeof(double));
+    mal(&d_rhoE_sx, ncell*sizeof(double)); mal(&d_rhoE_sy, ncell*sizeof(double));
+    mal(&d_pxd_sx,  ncell*sizeof(double)); mal(&d_pxd_sy,  ncell*sizeof(double));
+    mal(&d_pyd_sx,  ncell*sizeof(double)); mal(&d_pyd_sy,  ncell*sizeof(double));
+
+    dx_u = Lx / (double)nx;
+    dy_u = Ly / (double)ny;
+
     mal(&d_FSX, nsub*sizeof(double));
     mal(&d_FSY, nsub*sizeof(double));
 
@@ -122,6 +149,9 @@ void CartAleSolver::destroy() {
     f(d_P); f(d_Q); f(d_cs); f(d_minheight); f(d_strain_rate);
     f(d_px_cell); f(d_py_cell);
     f(d_dm_new); f(d_ie_new); f(d_px_new); f(d_py_new);
+    f(d_rho_dens); f(d_rhoE_dens); f(d_pxd_dens); f(d_pyd_dens);
+    f(d_rho_sx); f(d_rho_sy); f(d_rhoE_sx); f(d_rhoE_sy);
+    f(d_pxd_sx); f(d_pxd_sy); f(d_pyd_sx); f(d_pyd_sy);
     f(d_FSX); f(d_FSY);
     f(d_dt_cell); f(d_reduce_buf);
     std::memset(this, 0, sizeof(*this));
@@ -338,17 +368,57 @@ double CartAleSolver::step(double t, double t_end) {
 
     int n_east = (nx - 1) * ny;
     int n_north = nx * (ny - 1);
-    if (n_east > 0) {
-        int BE = (n_east + B - 1) / B;
-        k_cale_remap_east<<<BE, B>>>(d_X0, d_Y0, d_X, d_Y,
-                                     d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
-                                     d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny);
-    }
-    if (n_north > 0) {
-        int BN = (n_north + B - 1) / B;
-        k_cale_remap_north<<<BN, B>>>(d_X0, d_Y0, d_X, d_Y,
-                                      d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
-                                      d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny);
+
+    if (remap_order >= 2) {
+        // Prepare cell-average densities + minmod-limited slopes on the
+        // (uniform) reference mesh, then 2nd-order swept-edge remap.
+        k_cale_cell_densities<<<BCell, B>>>(
+            d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
+            d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens, ncell);
+        k_cale_slopes_minmod<<<BCell, B>>>(
+            d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
+            d_rho_sx,  d_rho_sy,
+            d_rhoE_sx, d_rhoE_sy,
+            d_pxd_sx,  d_pxd_sy,
+            d_pyd_sx,  d_pyd_sy,
+            nx, ny, dx_u, dy_u);
+        if (n_east > 0) {
+            int BE = (n_east + B - 1) / B;
+            k_cale_remap_east_2nd<<<BE, B>>>(
+                d_X0, d_Y0, d_X, d_Y,
+                d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
+                d_rho_sx,  d_rho_sy,
+                d_rhoE_sx, d_rhoE_sy,
+                d_pxd_sx,  d_pxd_sy,
+                d_pyd_sx,  d_pyd_sy,
+                d_dm_new, d_ie_new, d_px_new, d_py_new,
+                nx, ny, dx_u, dy_u);
+        }
+        if (n_north > 0) {
+            int BN = (n_north + B - 1) / B;
+            k_cale_remap_north_2nd<<<BN, B>>>(
+                d_X0, d_Y0, d_X, d_Y,
+                d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
+                d_rho_sx,  d_rho_sy,
+                d_rhoE_sx, d_rhoE_sy,
+                d_pxd_sx,  d_pxd_sy,
+                d_pyd_sx,  d_pyd_sy,
+                d_dm_new, d_ie_new, d_px_new, d_py_new,
+                nx, ny, dx_u, dy_u);
+        }
+    } else {
+        if (n_east > 0) {
+            int BE = (n_east + B - 1) / B;
+            k_cale_remap_east<<<BE, B>>>(d_X0, d_Y0, d_X, d_Y,
+                                         d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
+                                         d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny);
+        }
+        if (n_north > 0) {
+            int BN = (n_north + B - 1) / B;
+            k_cale_remap_north<<<BN, B>>>(d_X0, d_Y0, d_X, d_Y,
+                                          d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
+                                          d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny);
+        }
     }
 
     // Finalize dm, e_int from accumulators

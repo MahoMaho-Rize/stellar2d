@@ -591,6 +591,232 @@ void k_cale_rebuild_node_v(const double* px_new, const double* py_new,
     }
 }
 
+// ============================================================
+// 2nd-order MUSCL-in-remap (Kucharik & Shashkov 2012, JCP 231).
+//
+// Idea: instead of using the donor's cell-average as the swept value,
+// fit a minmod-limited linear reconstruction inside each donor cell
+//   f(x,y) = f_bar + s_x · (x − x_c) + s_y · (y − y_c)
+// and evaluate it at the swept-region centroid. This raises the
+// formal order of the remap from 1st to 2nd in smooth regions
+// while minmod kills slopes near discontinuities — preserving
+// monotonicity and TVD behavior.
+//
+// Because the rezone target is the uniform reference mesh,
+//   donor cell volume V0 is constant Area0
+//   donor cell centroid is (x_c, y_c) on the uniform lattice
+// so both are trivially known from (ic, jc, dx_u, dy_u).
+//
+// The 4 conserved "densities" (per unit reference volume) are:
+//   ρ     = dm / V0
+//   ρE    = (dm·e_int) / V0
+//   px_d  = px / V0
+//   py_d  = py / V0
+// Transported increment per swept region = f_donor(centroid) · V_sweep.
+// ============================================================
+
+// Build reference-volume densities from (dm, dm·e, px, py).
+__global__
+void k_cale_cell_densities(const double* dm, const double* e_int,
+                           const double* px, const double* py,
+                           const double* Area0,
+                           double* rho_d, double* rhoE_d,
+                           double* pxd, double* pyd,
+                           int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    double V = fmax(Area0[c], 1e-30);
+    rho_d[c]  = dm[c] / V;
+    rhoE_d[c] = dm[c] * e_int[c] / V;
+    pxd[c]    = px[c] / V;
+    pyd[c]    = py[c] / V;
+}
+
+__device__ __forceinline__ double minmod(double a, double b) {
+    if (a * b <= 0.0) return 0.0;
+    double aa = fabs(a), ab = fabs(b);
+    return (aa < ab) ? a : b;
+}
+
+// Per-cell minmod slopes on the uniform reference mesh.
+// Boundary cells use a one-sided slope if only one neighbor exists,
+// but we keep it simple and zero them (donor-cell limit near walls).
+__global__
+void k_cale_slopes_minmod(const double* rho_d, const double* rhoE_d,
+                          const double* pxd,   const double* pyd,
+                          double* rho_sx,  double* rho_sy,
+                          double* rhoE_sx, double* rhoE_sy,
+                          double* pxd_sx,  double* pxd_sy,
+                          double* pyd_sx,  double* pyd_sy,
+                          int nx, int ny, double dx_u, double dy_u) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nx*ny) return;
+    int ic = flat / ny, jc = flat % ny;
+
+    auto slopes = [&](const double* f, double& sx, double& sy) {
+        double fc = f[flat];
+        if (ic > 0 && ic < nx - 1) {
+            double dfL = (fc - f[(ic-1)*ny + jc]) / dx_u;
+            double dfR = (f[(ic+1)*ny + jc] - fc) / dx_u;
+            sx = minmod(dfL, dfR);
+        } else {
+            sx = 0.0;
+        }
+        if (jc > 0 && jc < ny - 1) {
+            double dfD = (fc - f[ic*ny + (jc-1)]) / dy_u;
+            double dfU = (f[ic*ny + (jc+1)] - fc) / dy_u;
+            sy = minmod(dfD, dfU);
+        } else {
+            sy = 0.0;
+        }
+    };
+
+    slopes(rho_d,  rho_sx[flat],  rho_sy[flat]);
+    slopes(rhoE_d, rhoE_sx[flat], rhoE_sy[flat]);
+    slopes(pxd,    pxd_sx[flat],  pxd_sy[flat]);
+    slopes(pyd,    pyd_sx[flat],  pyd_sy[flat]);
+}
+
+// 2nd-order swept-edge remap — east edges.
+//
+// Geometry is identical to the 1st-order version: swept quad is
+// (A_old, A_new, B_new, B_old). Difference: we evaluate each donor
+// field at the *swept centroid* (4-point average of the quad vertices),
+// using the minmod-limited linear reconstruction.
+__global__
+void k_cale_remap_east_2nd(const double* X0, const double* Y0,
+                           const double* X,  const double* Y,
+                           const double* rho_d,  const double* rhoE_d,
+                           const double* pxd,    const double* pyd,
+                           const double* rho_sx, const double* rho_sy,
+                           const double* rhoE_sx,const double* rhoE_sy,
+                           const double* pxd_sx, const double* pxd_sy,
+                           const double* pyd_sx, const double* pyd_sy,
+                           double* dm_new, double* ie_new,
+                           double* px_new, double* py_new,
+                           int nx, int ny, double dx_u, double dy_u) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n_edges = (nx - 1) * ny;
+    if (flat >= n_edges) return;
+    int ic = flat / ny, jc = flat % ny;
+    int nny = ny + 1;
+
+    int nA = caln(ic+1, jc,   nny);
+    int nB = caln(ic+1, jc+1, nny);
+    double Ax = X0[nA], Ay = Y0[nA];
+    double Bx = X0[nB], By = Y0[nB];
+    double Anx = X[nA], Any = Y[nA];
+    double Bnx = X[nB], Bny = Y[nB];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+
+    int cL = calc(ic,   jc, ny);
+    int cR = calc(ic+1, jc, ny);
+    int donor = (As > 0.0) ? cL : cR;
+    double V_sweep = fabs(As);
+
+    // Swept-region centroid (4-point average — OK for small skinny quads).
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+
+    // Donor cell centroid on the uniform reference mesh.
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double ex = cx - xd, ey = cy - yd;
+
+    double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
+    double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
+    double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
+    double d_py = (pyd[donor]    + pyd_sx[donor]*ex  + pyd_sy[donor]*ey)  * V_sweep;
+
+    if (As > 0.0) {
+        atomicAdd(&dm_new[cL], -d_dm);
+        atomicAdd(&ie_new[cL], -d_ie);
+        atomicAdd(&px_new[cL], -d_px);
+        atomicAdd(&py_new[cL], -d_py);
+        atomicAdd(&dm_new[cR],  d_dm);
+        atomicAdd(&ie_new[cR],  d_ie);
+        atomicAdd(&px_new[cR],  d_px);
+        atomicAdd(&py_new[cR],  d_py);
+    } else {
+        atomicAdd(&dm_new[cR], -d_dm);
+        atomicAdd(&ie_new[cR], -d_ie);
+        atomicAdd(&px_new[cR], -d_px);
+        atomicAdd(&py_new[cR], -d_py);
+        atomicAdd(&dm_new[cL],  d_dm);
+        atomicAdd(&ie_new[cL],  d_ie);
+        atomicAdd(&px_new[cL],  d_px);
+        atomicAdd(&py_new[cL],  d_py);
+    }
+}
+
+__global__
+void k_cale_remap_north_2nd(const double* X0, const double* Y0,
+                            const double* X,  const double* Y,
+                            const double* rho_d,  const double* rhoE_d,
+                            const double* pxd,    const double* pyd,
+                            const double* rho_sx, const double* rho_sy,
+                            const double* rhoE_sx,const double* rhoE_sy,
+                            const double* pxd_sx, const double* pxd_sy,
+                            const double* pyd_sx, const double* pyd_sy,
+                            double* dm_new, double* ie_new,
+                            double* px_new, double* py_new,
+                            int nx, int ny, double dx_u, double dy_u) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n_edges = nx * (ny - 1);
+    if (flat >= n_edges) return;
+    int ic = flat / (ny - 1), jc = flat % (ny - 1);
+    int nny = ny + 1;
+
+    int nW = caln(ic,   jc+1, nny);
+    int nE = caln(ic+1, jc+1, nny);
+    double Ax = X0[nE], Ay = Y0[nE];
+    double Anx = X[nE],  Any = Y[nE];
+    double Bx = X0[nW], By = Y0[nW];
+    double Bnx = X[nW],  Bny = Y[nW];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+
+    int cD = calc(ic, jc,   ny);
+    int cU = calc(ic, jc+1, ny);
+    int donor = (As > 0.0) ? cD : cU;
+    double V_sweep = fabs(As);
+
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double ex = cx - xd, ey = cy - yd;
+
+    double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
+    double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
+    double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
+    double d_py = (pyd[donor]    + pyd_sx[donor]*ex  + pyd_sy[donor]*ey)  * V_sweep;
+
+    if (As > 0.0) {
+        atomicAdd(&dm_new[cD], -d_dm);
+        atomicAdd(&ie_new[cD], -d_ie);
+        atomicAdd(&px_new[cD], -d_px);
+        atomicAdd(&py_new[cD], -d_py);
+        atomicAdd(&dm_new[cU],  d_dm);
+        atomicAdd(&ie_new[cU],  d_ie);
+        atomicAdd(&px_new[cU],  d_px);
+        atomicAdd(&py_new[cU],  d_py);
+    } else {
+        atomicAdd(&dm_new[cU], -d_dm);
+        atomicAdd(&ie_new[cU], -d_ie);
+        atomicAdd(&px_new[cU], -d_px);
+        atomicAdd(&py_new[cU], -d_py);
+        atomicAdd(&dm_new[cD],  d_dm);
+        atomicAdd(&ie_new[cD],  d_ie);
+        atomicAdd(&px_new[cD],  d_px);
+        atomicAdd(&py_new[cD],  d_py);
+    }
+}
+
 // Clamp edge-aligned node velocities AFTER rebuild (reflective BC)
 __global__
 void k_cale_bc_velocity(double* vX, double* vY, int nnx, int nny) {
