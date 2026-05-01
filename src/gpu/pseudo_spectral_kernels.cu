@@ -35,10 +35,12 @@ __global__ void k_init_wavenumbers(double* kx, double* ky, double* dealias,
     if (jc == 0) kx[ic] = kxv;
     if (ic == 0) ky[jc] = kyv;
 
-    int cut_x = nx / 3;
-    int cut_y = ny / 3;
-    int i_mag = (i_shift < 0) ? -i_shift : i_shift;
-    dealias[gid] = (i_mag <= cut_x && jc <= cut_y) ? 1.0 : 0.0;
+    // 圓形 2/3 dealias: |k|² ≤ (N/3·2π/L)²  各向同性、無 corner 偽跡
+    // (原方形 dealias: max(|kx|,|ky|) ≤ N/3 會偏向座標軸方向)
+    double k_cut = 2.0 * M_PI * (double)(nx < ny ? nx : ny) / 3.0
+                 / (Lx < Ly ? Lx : Ly);
+    double k_mag2 = kxv * kxv + kyv * kyv;
+    dealias[gid] = (k_mag2 <= k_cut * k_cut) ? 1.0 : 0.0;
 }
 
 // ============================================================
@@ -104,7 +106,7 @@ __global__ void k_spec_grad_omega(const cufftDoubleComplex* omega_hat,
 }
 
 // ============================================================
-// 物理空間對流項  N(x,y) = u·∂ω/∂x + v·∂ω/∂y
+// 物理空間對流項 (advective form)  N_A(x,y) = u·∂ω/∂x + v·∂ω/∂y
 // ============================================================
 __global__ void k_compute_convection(const double* u, const double* v,
                                      const double* dwx, const double* dwy,
@@ -114,11 +116,73 @@ __global__ void k_compute_convection(const double* u, const double* v,
     Nphys[gid] = u[gid] * dwx[gid] + v[gid] * dwy[gid];
 }
 
+// ============================================================
+// 物理空間流積 (for conservative form): uω(x,y), vω(x,y)
+// 寫回 u_out, v_out 空間 (呼叫者必須確保 u_out, v_out 可以被覆寫;
+// 通常就是 d_u, d_v 本身 —— 因為 advective N_A 已算完,u/v 本輪
+// 不再需要保留)。
+// ============================================================
+__global__ void k_compute_u_omega(const double* u, const double* v,
+                                  const double* omega,
+                                  double* uomega, double* vomega, int ncell) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= ncell) return;
+    double w = omega[gid];
+    uomega[gid] = u[gid] * w;
+    vomega[gid] = v[gid] * w;
+}
+
+// ============================================================
+// 譜空間組 skew-symmetric convection:
+//   N̂_S = ½ (N̂_A + N̂_C)
+//   其中 N̂_C = i·kx·(uω)^ + i·ky·(vω)^
+// 輸入: N̂_A (已在 N_A_hat 裡), (uω)^, (vω)^
+// 輸出: rhs_hat 以 -N̂_S 形式 (配合 k_form_rhs_adv_only 的慣例不同,這裡
+//      直接寫 rhs = -N̂_S (dealiased);粘性由 IFRK 處理)
+// ============================================================
+__global__ void k_form_rhs_skew(const cufftDoubleComplex* N_A_hat,
+                                const cufftDoubleComplex* uw_hat,
+                                const cufftDoubleComplex* vw_hat,
+                                const double* kx, const double* ky,
+                                const double* dealias,
+                                cufftDoubleComplex* rhs_hat,
+                                int nx, int nh) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = nx * nh;
+    if (gid >= total) return;
+    int ic = gid / nh;
+    int jc = gid - ic * nh;
+    double kxv = kx[ic], kyv = ky[jc];
+    double m = dealias[gid];
+
+    // N̂_C = i·kx·(uω)^ + i·ky·(vω)^
+    //     = (-kx·uw.y - ky·vw.y, kx·uw.x + ky·vw.x)
+    cufftDoubleComplex uw = uw_hat[gid];
+    cufftDoubleComplex vw = vw_hat[gid];
+    double NC_r = -(kxv * uw.y + kyv * vw.y);
+    double NC_i =  (kxv * uw.x + kyv * vw.x);
+
+    cufftDoubleComplex NA = N_A_hat[gid];
+    // N̂_S = ½ (N̂_A + N̂_C) , rhs = -N̂_S
+    rhs_hat[gid].x = -0.5 * (NA.x + NC_r) * m;
+    rhs_hat[gid].y = -0.5 * (NA.y + NC_i) * m;
+}
+
 // cuFFT C2R 輸出需除以 N = nx·ny
 __global__ void k_scale_inplace(double* x, double s, int n) {
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     if (gid >= n) return;
     x[gid] *= s;
+}
+
+// 套 dealias mask (用於 IC 後清除高 k Gibbs 殘餘 / 強制 k≥kmax 為 0)
+__global__ void k_apply_dealias(cufftDoubleComplex* hat,
+                                const double* dealias, int n) {
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid >= n) return;
+    double m = dealias[gid];
+    hat[gid].x *= m;
+    hat[gid].y *= m;
 }
 
 // ============================================================
@@ -269,6 +333,41 @@ __global__ void k_reduce_diag(const double* u, const double* v,
         out[4 * blockIdx.x + 2] = s_sum_ke[0];
         out[4 * blockIdx.x + 3] = s_sum_enst[0];
     }
+}
+
+// ============================================================
+// 譜耗散率 reduction:   ε_spec = 2ν · Σ_k k² |ω̂(k)|²  / N²
+//   對 R2C 佈局,jc=0 與 jc=nh-1 (若 ny 偶) 模只出現一次,其餘模要 ×2。
+//   輸出 out[blockIdx] 為 block 內加和,host 再求總和。
+// 這裡我們忽略 jc=0/末 的半計數 (差 O(1/N)),實用足夠。
+// ============================================================
+__global__ void k_reduce_k2E(const cufftDoubleComplex* omega_hat,
+                             const double* kx, const double* ky,
+                             double* out, int ncplx, int nx, int nh,
+                             double scale /* = 2/N² for Hermitian doubling + normalization */) {
+    extern __shared__ double shm_k2[];
+    int tid = threadIdx.x;
+    int gid = blockIdx.x * blockDim.x + tid;
+
+    double s = 0.0;
+    if (gid < ncplx) {
+        int ic = gid / nh;
+        int jc = gid - ic * nh;
+        double kxv = kx[ic], kyv = ky[jc];
+        double k2 = kxv * kxv + kyv * kyv;
+        cufftDoubleComplex w = omega_hat[gid];
+        double mag2 = w.x * w.x + w.y * w.y;
+        // jc = 0 (和 ny 偶時 jc = nh-1) 不重複,其他 ×2 (Hermitian 對稱)
+        double weight = (jc == 0 || jc == nh - 1) ? 1.0 : 2.0;
+        s = scale * weight * k2 * mag2;
+    }
+    shm_k2[tid] = s;
+    __syncthreads();
+    for (int off = blockDim.x / 2; off > 0; off >>= 1) {
+        if (tid < off) shm_k2[tid] += shm_k2[tid + off];
+        __syncthreads();
+    }
+    if (tid == 0) out[blockIdx.x] = shm_k2[0];
 }
 
 // ============================================================

@@ -38,6 +38,10 @@ struct PseudoSpectralSolver {
     // 積分因子 RK3 (IFRK3):黏性在譜空間解析積分為 exp(-νk²Δt)。
     // 啟用後 dt 只受對流 CFL 限制,可大幅放寬。預設 true。
     bool   use_ifrk = true;
+    // Skew-symmetric 對流形式 N_S = ½(N_A + N_C) 取代 advective N_A。
+    // 離散下嚴格保持能量+enstrophy (Orszag 1971)。代價:每級多 1 次 R2C FFT。
+    // 預設 true;--ps-adv-only 強制回到 advective。
+    bool   use_skew = true;
 
     // ---- 物理空間 (double, ncell) ----
     double* d_omega = nullptr;   // ω
@@ -52,6 +56,7 @@ struct PseudoSpectralSolver {
     cufftDoubleComplex* d_rhs_hat   = nullptr;    // 當前級 rhs
     cufftDoubleComplex* d_tmp_hat   = nullptr;    // scratch (ψ, du, dv 等)
     cufftDoubleComplex* d_k1_hat    = nullptr;    // RK3 中間暫存
+    cufftDoubleComplex* d_skew_hat  = nullptr;    // skew-symmetric 額外 scratch ((vω)^)
 
     // ---- 波數 / dealias 遮罩 ----
     //  kx 大小 nx (含負頻率, frequency-shifted 的 R2C 約定: 0,1,..,nx/2,-nx/2+1,..,-1)
@@ -110,12 +115,18 @@ struct PseudoSpectralSolver {
     void flush_frames_to_disk(const std::string& run_dir);
     void free_frame_buffer();
 
-    // 診斷量
+    // 診斷量。2D 不可壓 NS 下:
+    //   d(KE)/dt = -2ν·Ω               (動能耗散率 = 2ν × enstrophy)
+    //   d(Ω)/dt  = -ν·∫|∇ω|² dA        (enstrophy 耗散率,對譜 2ν·∫k²·½|ω̂|²)
+    // 後者可診斷 ν_eff:比較 d(Ω)/dt 的實測值 (由 Ω 數值微分) 和 ν·∫|∇ω|² dA,
+    //   若兩者接近 → 數值粘性低;若實測遠大 → 有顯著數值耗散。
     struct Diagnostics {
         double total_KE;        // ∫½(u²+v²) dA
         double total_enstrophy; // ∫½ω² dA
         double max_v;
         double max_omega;
+        double eps_KE;          // 動能耗散率 = 2ν·Ω
+        double eps_enstrophy;   // enstrophy 耗散率 = ν·∫|∇ω|² dA (譜空間算)
     };
     Diagnostics compute_diagnostics();
 };

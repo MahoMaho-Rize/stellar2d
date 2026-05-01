@@ -91,6 +91,7 @@ struct SimConfig {
     double ps_vshear = 0.5;       // KH 基流速度
     int    ps_k = 4;              // KH 擾動模數
     bool   ps_explicit = false;   // 預設用 IFRK3 隱式黏性;此旗標強制改回全顯式 SSP-RK3
+    bool   ps_adv_only = false;   // 預設用 skew-symmetric;此旗標強制回到 advective-only 對流
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -261,6 +262,8 @@ int main(int argc, char** argv) {
             cfg.ps_k = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-explicit") == 0)
             cfg.ps_explicit = true;
+        else if (std::strcmp(argv[i], "--ps-adv-only") == 0)
+            cfg.ps_adv_only = true;
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -1003,6 +1006,7 @@ int main(int argc, char** argv) {
         }
         PseudoSpectralSolver ps;
         ps.use_ifrk = !cfg.ps_explicit;
+        ps.use_skew = !cfg.ps_adv_only;
         ps.init(cfg.nr, cfg.ntheta, cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
         double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
         ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
@@ -1013,7 +1017,7 @@ int main(int argc, char** argv) {
         char csv_path[512];
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
-        std::fprintf(csv, "step,t,dt,KE,enstrophy,max_v,max_omega\n");
+        std::fprintf(csv, "step,t,dt,KE,enstrophy,max_v,max_omega,eps_KE,eps_enstrophy\n");
 
         int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
         int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
@@ -1048,12 +1052,12 @@ int main(int argc, char** argv) {
             if (do_diag) {
                 auto d = ps.compute_diagnostics();
                 std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ω|=%.3e\n",
+                std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ω|=%.3e εKE=%.3e εΩ=%.3e\n",
                             step, t, dt, d.total_KE, d.total_enstrophy,
-                            d.max_v, d.max_omega);
-                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e\n",
+                            d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e\n",
                              step, t, dt, d.total_KE, d.total_enstrophy,
-                             d.max_v, d.max_omega);
+                             d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy);
                 std::fflush(csv);
             }
             if (do_vtk) {

@@ -32,11 +32,17 @@ __global__ void k_spec_grad_omega(const cufftDoubleComplex*, const double*, cons
 __global__ void k_compute_convection(const double*, const double*, const double*, const double*,
     double*, int);
 __global__ void k_scale_inplace(double*, double, int);
+__global__ void k_apply_dealias(cufftDoubleComplex*, const double*, int);
 __global__ void k_form_rhs_hat(const cufftDoubleComplex*, const cufftDoubleComplex*,
     const double*, const double*, const double*,
     cufftDoubleComplex*, double, int, int);
 __global__ void k_form_rhs_adv_only(const cufftDoubleComplex*, const double*,
     cufftDoubleComplex*, int);
+__global__ void k_compute_u_omega(const double*, const double*, const double*,
+    double*, double*, int);
+__global__ void k_form_rhs_skew(const cufftDoubleComplex*, const cufftDoubleComplex*,
+    const cufftDoubleComplex*, const double*, const double*, const double*,
+    cufftDoubleComplex*, int, int);
 __global__ void k_rk_combine(cufftDoubleComplex*, const cufftDoubleComplex*,
     const cufftDoubleComplex*, const cufftDoubleComplex*,
     double, double, double, int);
@@ -47,6 +53,8 @@ __global__ void k_ifrk_combine(cufftDoubleComplex*, const cufftDoubleComplex*,
     int, int);
 __global__ void k_reduce_diag(const double*, const double*, const double*,
     double*, int, double);
+__global__ void k_reduce_k2E(const cufftDoubleComplex*, const double*, const double*,
+    double*, int, int, int, double);
 __global__ void k_snapshot_frame(const double*, const double*, const double*, double*, int);
 
 #define CUFFT_CHECK(call) do {                                                   \
@@ -110,6 +118,8 @@ static void compute_rhs_hat(PseudoSpectralSolver& s,
 // IFRK 專用:只算 -N̂,黏性在 IFRK combine 裡解析處理。
 // 輸入/scratch 用量與 compute_rhs_hat 一致 (d_u, d_v, d_dwx, d_dwy, d_Nphys,
 // d_tmp_hat),不碰 d_k1_hat。
+// 若 s.use_skew = true,採 skew-symmetric form N_S = ½(N_A + N_C);
+// 否則採 advective form N_A。
 static void compute_rhs_adv_only(PseudoSpectralSolver& s,
                                  const cufftDoubleComplex* omega_hat_in,
                                  cufftDoubleComplex* rhs_hat_out) {
@@ -118,6 +128,7 @@ static void compute_rhs_adv_only(PseudoSpectralSolver& s,
     int Gc = (s.ncell + B - 1) / B;
     cufftDoubleComplex* tmp = s.d_tmp_hat;
 
+    // 共通: 得到 u, v, ∂ω/∂x, ∂ω/∂y, ω (物理) ---------------
     k_spec_uv<<<Gh, B>>>(omega_hat_in, s.d_kx, s.d_ky, s.d_dealias,
                          tmp, rhs_hat_out, s.nx, s.nh);
     spec_to_phys(s.plan_c2r, tmp,         s.d_u, s.ncell);
@@ -128,12 +139,62 @@ static void compute_rhs_adv_only(PseudoSpectralSolver& s,
     spec_to_phys(s.plan_c2r, tmp,         s.d_dwx, s.ncell);
     spec_to_phys(s.plan_c2r, rhs_hat_out, s.d_dwy, s.ncell);
 
+    // N_A (物理) = u·∂ω/∂x + v·∂ω/∂y
     k_compute_convection<<<Gc, B>>>(s.d_u, s.d_v, s.d_dwx, s.d_dwy, s.d_Nphys, s.ncell);
 
-    phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
+    if (!s.use_skew) {
+        // Advective: rhs = -N̂_A (dealiased)
+        phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
+        k_form_rhs_adv_only<<<Gh, B>>>(tmp, s.d_dealias, rhs_hat_out, s.ncplx);
+        return;
+    }
 
-    // rhs = -N̂  (dealiased)
-    k_form_rhs_adv_only<<<Gh, B>>>(tmp, s.d_dealias, rhs_hat_out, s.ncplx);
+    // Skew-symmetric: 再計算 N_C = ∇·(uω)
+    // 1. N̂_A 譜 (放 tmp)
+    phys_to_spec(s.plan_r2c, s.d_Nphys, tmp);
+    // tmp 現在 = N̂_A;但接下來要做 (uω)^、(vω)^,會覆寫 tmp。
+    // 所以先把 N̂_A 挪到 rhs_hat_out (一會兒 k_form_rhs_skew 會再讀寫它)
+    CUDA_CHECK(cudaMemcpy(rhs_hat_out, tmp,
+                          s.ncplx * sizeof(cufftDoubleComplex),
+                          cudaMemcpyDeviceToDevice));
+
+    // 2. uω, vω 物理 → 覆寫 d_u, d_v (advective rhs 已算完,不再需要 u/v)
+    // 但 ω 的物理空間值我們有嗎? 沒有 — d_omega 保留的是上一步的值。
+    // 注意:本函式只接收 ω̂ (omega_hat_in),物理 ω 要另外算。
+    // 幸好 d_dwx (即 ∂ω/∂x) 和 ∂ω/∂y 不需要,可以挪作它用?
+    // 更乾淨:直接做一次 ω̂ → ω 的 IFFT 到一個 buffer。
+    // 我們借用 d_Nphys 存 ω (因為 N_A 已轉成 N̂_A 存在 rhs_hat_out)。
+    // 為此要 ω̂ 的一份拷貝進 tmp:
+    CUDA_CHECK(cudaMemcpy(tmp, omega_hat_in,
+                          s.ncplx * sizeof(cufftDoubleComplex),
+                          cudaMemcpyDeviceToDevice));
+    spec_to_phys(s.plan_c2r, tmp, s.d_Nphys, s.ncell);  // d_Nphys ← ω
+
+    // uω → d_dwx, vω → d_dwy  (這兩個 array 現在不再需要)
+    k_compute_u_omega<<<Gc, B>>>(s.d_u, s.d_v, s.d_Nphys,
+                                 s.d_dwx, s.d_dwy, s.ncell);
+
+    // 3. FFT uω → tmp,   FFT vω → d_tmp_hat? tmp 又被佔
+    // 需要兩個 hat scratch。當前狀態:
+    //   rhs_hat_out = N̂_A
+    //   tmp = 可用 (ω̂ 拷貝已被 C2R 消耗)
+    //   d_k1_hat = RK 循環狀態 (不可碰)
+    // 方案: 用 tmp 當 (uω)^,再借 d_rhs_hat 本身 — 不,那就是 rhs_hat_out。
+    // 只能分兩階段:
+    //   (a) FFT uω → tmp;保留 (uω)^ 在 tmp
+    //       FFT vω → ???  (無 hat scratch 可用)
+    // 解法:先把 N̂_A 轉存 host? 太慢。
+    // 最乾淨:再開一個持久 hat scratch d_skew_hat (solver init 時配)。
+    // ——這裡採用這個方案,呼叫 s.d_skew_hat (下方補在 struct 裡)。
+    phys_to_spec(s.plan_r2c, s.d_dwx, tmp);              // tmp ← (uω)^
+    phys_to_spec(s.plan_r2c, s.d_dwy, s.d_skew_hat);     // skew_hat ← (vω)^
+
+    // 4. rhs = -N̂_S = -½ (N̂_A + N̂_C),  N̂_C = i·kx·(uω)^ + i·ky·(vω)^
+    k_form_rhs_skew<<<Gh, B>>>(rhs_hat_out,             // N̂_A in
+                               tmp, s.d_skew_hat,       // (uω)^, (vω)^
+                               s.d_kx, s.d_ky, s.d_dealias,
+                               rhs_hat_out,             // out
+                               s.nx, s.nh);
 }
 
 // ============================================================
@@ -162,6 +223,7 @@ void PseudoSpectralSolver::init(int nx_, int ny_, double Lx_, double Ly_,
     CUDA_CHECK(cudaMalloc(&d_rhs_hat,   ncplx * sizeof(cufftDoubleComplex)));
     CUDA_CHECK(cudaMalloc(&d_tmp_hat,   ncplx * sizeof(cufftDoubleComplex)));
     CUDA_CHECK(cudaMalloc(&d_k1_hat,    ncplx * sizeof(cufftDoubleComplex)));
+    CUDA_CHECK(cudaMalloc(&d_skew_hat,  ncplx * sizeof(cufftDoubleComplex)));
 
     CUDA_CHECK(cudaMalloc(&d_kx,      nx * sizeof(double)));
     CUDA_CHECK(cudaMalloc(&d_ky,      nh * sizeof(double)));
@@ -181,8 +243,9 @@ void PseudoSpectralSolver::init(int nx_, int ny_, double Lx_, double Ly_,
 
     std::fprintf(stderr,
         "  PseudoSpectral init: %dx%d (nh=%d, cells=%d, cplx=%d), "
-        "L=(%.3g,%.3g), ν=%.3g, cfl=%.3g, ifrk=%d\n",
-        nx, ny, nh, ncell, ncplx, Lx, Ly, nu, cfl, use_ifrk ? 1 : 0);
+        "L=(%.3g,%.3g), ν=%.3g, cfl=%.3g, ifrk=%d, skew=%d\n",
+        nx, ny, nh, ncell, ncplx, Lx, Ly, nu, cfl,
+        use_ifrk ? 1 : 0, use_skew ? 1 : 0);
 }
 
 void PseudoSpectralSolver::destroy() {
@@ -193,6 +256,7 @@ void PseudoSpectralSolver::destroy() {
     F((void*&)d_dwx);   F((void*&)d_dwy); F((void*&)d_Nphys);
     F((void*&)d_omega_hat); F((void*&)d_rhs_hat);
     F((void*&)d_tmp_hat);   F((void*&)d_k1_hat);
+    F((void*&)d_skew_hat);
     F((void*&)d_kx); F((void*&)d_ky); F((void*&)d_dealias);
     F((void*&)d_reduce);
     free_frame_buffer();
@@ -205,7 +269,9 @@ void PseudoSpectralSolver::destroy() {
 // 解析求 ω = ∂vy/∂x - ∂vx/∂y 後 FFT → ω̂。
 // ============================================================
 void PseudoSpectralSolver::init_kh_shear(double vshear, double amp, int k) {
-    double delta   = 2.0 * dy;
+    // 剪切層厚度: 用 max(4·dy, 0.01·Ly) 保證 Gibbs ringing 被光譜可解析
+    // (舊設 2·dy 在 1024² 下只佔 2 格,高 k 會有顯著 IC 能量污染)
+    double delta   = std::fmax(4.0 * dy, 0.01 * Ly);
     double y_low   = 0.25 * Ly;
     double y_high  = 0.75 * Ly;
     double sigma   = 0.05 * Ly;
@@ -229,6 +295,11 @@ void PseudoSpectralSolver::init_kh_shear(double vshear, double amp, int k) {
     CUDA_CHECK(cudaMemcpy(d_omega, h_omega.data(),
                           ncell * sizeof(double), cudaMemcpyHostToDevice));
     phys_to_spec(plan_r2c, d_omega, d_omega_hat);
+
+    // 套 2/3 圓形 dealias mask 清掉 tanh IC 的 Gibbs 高 k 能量
+    int B = 256;
+    int Gh = (ncplx + B - 1) / B;
+    k_apply_dealias<<<Gh, B>>>(d_omega_hat, d_dealias, ncplx);
 
     dt_current = 0.0;
     step_count = 0;
@@ -359,6 +430,23 @@ PseudoSpectralSolver::Diagnostics PseudoSpectralSolver::compute_diagnostics() {
         d.total_KE       += h[4 * i + 2];
         d.total_enstrophy+= h[4 * i + 3];
     }
+
+    // ε_KE (動能耗散率) = 2ν·Ω = 2ν·total_enstrophy
+    d.eps_KE = 2.0 * nu * d.total_enstrophy;
+
+    // ε_Ω (enstrophy 耗散率) = ν·∫|∇ω|² dA
+    //   譜: ∫|∇ω|² dA = (Lx·Ly/N²)·Σ_k (Hermitian 對稱因子)·k²·|ω̂|²
+    int Gk = (ncplx + B - 1) / B;
+    size_t shm2 = (size_t)B * sizeof(double);
+    double scale = (Lx * Ly) / ((double)ncell * (double)ncell);
+    k_reduce_k2E<<<Gk, B, shm2>>>(d_omega_hat, d_kx, d_ky,
+                                   d_reduce, ncplx, nx, nh, scale);
+    std::vector<double> h2(Gk);
+    CUDA_CHECK(cudaMemcpy(h2.data(), d_reduce, Gk * sizeof(double), cudaMemcpyDeviceToHost));
+    double sum_k2E = 0.0;
+    for (int i = 0; i < Gk; ++i) sum_k2E += h2[i];
+    d.eps_enstrophy = nu * sum_k2E;
+
     return d;
 }
 
