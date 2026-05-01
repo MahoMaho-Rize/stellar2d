@@ -22,6 +22,12 @@
 #include "gpu/simple_solver.cuh"
 #include "gpu/projection_solver.cuh"
 #include "gpu/radial1d_solver.cuh"
+#include "gpu/wb2d_solver.cuh"
+#include "gpu/ale2d_solver.cuh"
+#include "gpu/cart_lag_solver.cuh"
+#include "gpu/cart_ale_solver.cuh"
+#include "gpu/cart_ale2_solver.cuh"
+#include "gpu/pseudo_spectral_solver.cuh"
 #endif
 
 #include <cstdio>
@@ -29,6 +35,8 @@
 #include <string>
 #include <cstring>
 #include <ctime>
+#include <array>
+#include <vector>
 #include <csignal>
 #include <functional>
 #include <sys/stat.h>
@@ -53,8 +61,43 @@ struct SimConfig {
     Limiter limiter = Limiter::MINMOD;
     double perturb_amplitude = 1e-3;  // density perturbation for lane_emden_perturbed
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
+    // cart_ale --test hse_bubble parameters
+    double bubble_xc = 0.5;
+    double bubble_yc = 0.3;
+    double bubble_rb = 0.1;
+    double bubble_alpha = -0.5;   // density multiplier: ρ = ρ_HSE·(1+α·exp(-r²/rb²))
+    double bubble_beta  = 0.0;    // pressure multiplier
+    // Multi-bubble: each --bubble "xc,yc,rb,alpha,beta" appends one bubble.
+    // If none given, falls back to the single --bubble-* defaults.
+    std::vector<std::array<double, 5>> bubbles;
     bool no_sponge = false;
     bool lm_hllc = false;
+    int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
+    std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
+    int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
+    int vtk_interval  = 0;   // cart_ale: step interval for VTK dump; 0 = follow output_interval
+    bool frame_buffer = false;   // cart_ale: buffer frames in VRAM, dump at wall/end
+    int frame_headroom_mb = 1024; // cart_ale: leave this much free VRAM when sizing the pool
+    double vtk_dt = 0.0;         // cart_ale: capture every T physical time; 0 = use vtk_interval (step count)
+    double cart_ale_cq_lin  = 0.5;   // cart_ale: AV linear coefficient (default Caramana)
+    double cart_ale_cq_quad = 2.0;   // cart_ale: AV quadratic coefficient
+    bool   cart_ale_shear_aware = false; // cart_ale: reduce Q in shear-dominated cells
+    std::string cart_ale2_bc_x = "reflect";  // cart_ale2: reflect / periodic
+    std::string cart_ale2_bc_y = "reflect";
+    bool cart_ale2_ppm = false;   // cart_ale2: PPM-in-remap (default OFF; falls back to MUSCL)
+    // pseudo-spectral (偽譜法) 專用
+    double ps_nu = 1e-4;          // 運動黏度
+    double ps_Lx = 1.0;
+    double ps_Ly = 1.0;
+    double ps_vshear = 0.5;       // KH 基流速度
+    int    ps_k = 4;              // KH 擾動模數
+    bool   ps_explicit = false;   // 預設用 IFRK3 隱式黏性;此旗標強制改回全顯式 SSP-RK3
+    bool   ps_adv_only = false;   // 預設用 skew-symmetric;此旗標強制回到 advective-only 對流
+    // forced turbulence (Lilly/Alvelius-style stochastic forcing)
+    double ps_forcing_eps = 0.0;  // 能量注入率 ε_inj (0 = 停用 forcing)
+    int    ps_forcing_kf  = 32;   // forcing 中心波數 (mode 整數)
+    int    ps_forcing_dk  = 1;    // forcing 殼半寬 (mode)
+    uint64_t ps_forcing_seed = 0x5a5a5a5aULL;
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;
@@ -150,6 +193,27 @@ int main(int argc, char** argv) {
             cfg.precond = argv[++i];
         else if (std::strcmp(argv[i], "--perturb") == 0 && i + 1 < argc)
             cfg.perturb_amplitude = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
+            cfg.bubble_xc = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
+            cfg.bubble_yc = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-rb") == 0 && i + 1 < argc)
+            cfg.bubble_rb = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-alpha") == 0 && i + 1 < argc)
+            cfg.bubble_alpha = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble-beta") == 0 && i + 1 < argc)
+            cfg.bubble_beta = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bubble") == 0 && i + 1 < argc) {
+            // --bubble "xc,yc,rb,alpha,beta"  — may be repeated
+            std::array<double, 5> b{};
+            int n = std::sscanf(argv[++i], "%lf,%lf,%lf,%lf,%lf",
+                                &b[0], &b[1], &b[2], &b[3], &b[4]);
+            if (n < 5) {
+                std::fprintf(stderr, "ERROR: --bubble needs xc,yc,rb,alpha,beta\n");
+                return 1;
+            }
+            cfg.bubbles.push_back(b);
+        }
         else if (std::strcmp(argv[i], "--limiter") == 0 && i + 1 < argc) {
             std::string lim = argv[++i];
             if (lim == "vanleer") cfg.limiter = Limiter::VAN_LEER;
@@ -166,6 +230,54 @@ int main(int argc, char** argv) {
             cfg.radial_only = true;
         else if (std::strcmp(argv[i], "--r-inner") == 0 && i + 1 < argc)
             cfg.r_inner = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--remap-order") == 0 && i + 1 < argc)
+            cfg.cart_ale_remap_order = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--remap-limiter") == 0 && i + 1 < argc)
+            cfg.cart_ale_limiter = argv[++i];
+        else if (std::strcmp(argv[i], "--diag-interval") == 0 && i + 1 < argc)
+            cfg.diag_interval = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--vtk-interval") == 0 && i + 1 < argc)
+            cfg.vtk_interval = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--frame-buffer") == 0)
+            cfg.frame_buffer = true;
+        else if (std::strcmp(argv[i], "--frame-headroom-mb") == 0 && i + 1 < argc)
+            cfg.frame_headroom_mb = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--vtk-dt") == 0 && i + 1 < argc)
+            cfg.vtk_dt = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--cq-lin") == 0 && i + 1 < argc)
+            cfg.cart_ale_cq_lin = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--cq-quad") == 0 && i + 1 < argc)
+            cfg.cart_ale_cq_quad = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-aware-av") == 0)
+            cfg.cart_ale_shear_aware = true;
+        else if (std::strcmp(argv[i], "--bc-x") == 0 && i + 1 < argc)
+            cfg.cart_ale2_bc_x = argv[++i];
+        else if (std::strcmp(argv[i], "--bc-y") == 0 && i + 1 < argc)
+            cfg.cart_ale2_bc_y = argv[++i];
+        else if (std::strcmp(argv[i], "--ppm") == 0)
+            cfg.cart_ale2_ppm = true;
+        else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
+            cfg.ps_nu = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)
+            cfg.ps_Lx = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-Ly") == 0 && i + 1 < argc)
+            cfg.ps_Ly = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-vshear") == 0 && i + 1 < argc)
+            cfg.ps_vshear = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-k") == 0 && i + 1 < argc)
+            cfg.ps_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-explicit") == 0)
+            cfg.ps_explicit = true;
+        else if (std::strcmp(argv[i], "--ps-adv-only") == 0)
+            cfg.ps_adv_only = true;
+        else if (std::strcmp(argv[i], "--ps-forcing-eps") == 0 && i + 1 < argc)
+            cfg.ps_forcing_eps = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-forcing-kf") == 0 && i + 1 < argc)
+            cfg.ps_forcing_kf = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-forcing-dk") == 0 && i + 1 < argc)
+            cfg.ps_forcing_dk = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-forcing-seed") == 0 && i + 1 < argc)
+            cfg.ps_forcing_seed = std::strtoull(argv[++i], nullptr, 0);
     }
 
     if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
@@ -292,6 +404,11 @@ int main(int argc, char** argv) {
         EvrardParams ep;
         ep.M = 1.0; ep.R = 1.0; ep.G = cfg.G;
         init_evrard(grid, state, ep, cfg.gamma);
+    } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
+               || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
+               || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb") {
+        // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
+        // cart_lag solver branch handles its own IC.
     } else {
         std::fprintf(stderr, "Unknown test case: %s\n", cfg.test_case.c_str());
         return 1;
@@ -374,13 +491,16 @@ int main(int argc, char** argv) {
     };
 
     if (cfg.solver_type == "radial1d") {
+        // ===== 1D Lagrangian radial solver (MESA RSP-inspired) =====
+        // Ignores the 2D Grid; uses nr as number of Lagrangian zones.
+        // Lane-Emden specific; other test cases not supported yet.
         if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
             std::fprintf(stderr, "ERROR: radial1d solver only supports lane_emden / lane_emden_perturbed\n");
             return 1;
         }
         Radial1DSolver r1d;
         r1d.init(cfg.nr, cfg.gamma, cfg.G, cfg.cfl);
-        r1d.init_lane_emden(1.0, 1.0, 1.5);
+        r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
         r1d.snapshot_hse();
         if (cfg.test_case == "lane_emden_perturbed")
             r1d.apply_perturbation(cfg.perturb_amplitude);
@@ -388,6 +508,7 @@ int main(int argc, char** argv) {
         std::timespec wall_start;
         clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
+        // Simple text output (CSV format) for radial1d mode
         char csv_path[512];
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
@@ -412,6 +533,7 @@ int main(int argc, char** argv) {
                              d.total_grav_E, d.total_E, d.max_mach, d.max_vr);
                 std::fflush(csv);
 
+                // Dump profile as simple text
                 std::vector<double> r_face, v_face, rho_cell, P_cell, e_cell;
                 r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
                 char path[512];
@@ -422,6 +544,7 @@ int main(int argc, char** argv) {
                     std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
                                  k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k]);
                 }
+                // last face
                 std::fprintf(fp, "%d %.10e %.10e - - -\n", r1d.lev.nz, r_face[r1d.lev.nz], v_face[r1d.lev.nz]);
                 std::fclose(fp);
             }
@@ -477,7 +600,7 @@ int main(int argc, char** argv) {
 
         // GPU snapshot buffer: store frames in VRAM, write all at end
         FasLevel& fl = fas.levels[0];
-        int snap_size = fl.total;
+        int snap_size = fl.total;  // per-variable size (with ghost)
         int max_snaps = static_cast<int>(cfg.t_end / (cfg.output_interval * 1e-5)) + 100;
         long long bytes_per_snap = 4LL * snap_size * sizeof(double);
         size_t mem_free = 0, mem_total = 0;
@@ -541,7 +664,517 @@ int main(int argc, char** argv) {
         };
         run_time_loop(ops);
 
+    } else if (cfg.solver_type == "cart_lag") {
+        // ===== Cartesian 2D Lagrangian (Caramana compatible, planar) =====
+        // Runs independent of Grid/State: uses [0,Lx]×[0,Ly] box = [1,1].
+        // IC: Sod shock tube (default) or uniform.
+        CartLagSolver clag;
+        // For HSE: square box. For Sod: thin strip.
+        bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed");
+        double Lx = is_hse ? 1.0 : 1.0;
+        double Ly = is_hse ? 1.0 : 0.2;
+        double gam = is_hse ? cfg.gamma : 1.4;  // Sod expects γ=1.4 by default
+        clag.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
+        if (is_hse) {
+            // Two-step: first build HSE unperturbed, snapshot its discrete
+            // force defect, then (if hse_perturbed) layer the perturbation on top.
+            clag.init_hse_polytrope(1.0, 1.0, 0.0);
+            clag.snapshot_hse_force();
+            if (cfg.test_case == "hse_perturbed") {
+                clag.init_hse_polytrope(1.0, 1.0, cfg.perturb_amplitude);
+            }
+        } else {
+            clag.init_sod();
+        }
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach\n");
+
+        int frame = 0;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = clag.step(t, cfg.t_end);
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+            if (step % cfg.output_interval == 0 || t >= cfg.t_end) {
+                auto d = clag.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e KE=%.4e IE=%.10e PE=%.10e E=%.10e |v|=%.3e\n",
+                            step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                            d.total_PE, d.total_E, d.max_v);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                             d.total_PE, d.total_E, d.max_v, d.max_mach);
+                std::fflush(csv);
+                std::vector<double> xv, rhov, Pv, vxv, ev;
+                clag.download_xslice(xv, rhov, Pv, vxv, ev);
+                char path[512];
+                std::snprintf(path, sizeof(path), "%s/xslice_%04d.txt", run_dir.c_str(), ++frame);
+                std::FILE* fp = std::fopen(path, "w");
+                std::fprintf(fp, "# t=%.10e step=%d\n# x rho P vx e\n", t, step);
+                for (int i = 0; i < (int)xv.size(); ++i)
+                    std::fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n",
+                                 xv[i], rhov[i], Pv[i], vxv[i], ev[i]);
+                std::fclose(fp);
+            }
+        }
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        clag.destroy();
+    } else if (cfg.solver_type == "cart_ale") {
+        // ===== Cartesian 2D ALE (Caramana Lagrangian + Eulerian rezone + swept remap) =====
+        CartAleSolver cale;
+        bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
+                       || cfg.test_case == "hse_bubble");
+        bool is_kh = (cfg.test_case == "kh_shear");
+        double Lx = 1.0;
+        double Ly = (is_hse || is_kh) ? 1.0 : 0.2;
+        double gam = is_hse ? cfg.gamma : 1.4;
+        cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
+        cale.remap_order = cfg.cart_ale_remap_order;
+        cale.CQ_lin  = cfg.cart_ale_cq_lin;
+        cale.CQ_quad = cfg.cart_ale_cq_quad;
+        cale.shear_aware_av = cfg.cart_ale_shear_aware ? 1 : 0;
+        if      (cfg.cart_ale_limiter == "minmod")  cale.remap_limiter = 0;
+        else if (cfg.cart_ale_limiter == "vanleer") cale.remap_limiter = 1;
+        else if (cfg.cart_ale_limiter == "mc")      cale.remap_limiter = 2;
+        else { std::fprintf(stderr, "unknown --remap-limiter %s; using vanleer\n",
+                            cfg.cart_ale_limiter.c_str()); cale.remap_limiter = 1; }
+        const char* lim_name = cale.remap_limiter == 0 ? "minmod"
+                             : cale.remap_limiter == 1 ? "vanleer" : "mc";
+        std::fprintf(stderr,
+            "  CartAle remap_order = %d (%s)  limiter = %s  CQ_lin=%g CQ_quad=%g  shear_aware_av=%d\n",
+            cale.remap_order,
+            cale.remap_order >= 2 ? "MUSCL-in-remap" : "donor-cell",
+            lim_name, cale.CQ_lin, cale.CQ_quad, cale.shear_aware_av);
+        if (cfg.test_case == "hse_bubble") {
+            std::vector<CartAleSolver::Bubble> blist;
+            if (!cfg.bubbles.empty()) {
+                for (const auto& b : cfg.bubbles)
+                    blist.push_back({b[0], b[1], b[2], b[3], b[4]});
+            } else {
+                blist.push_back({cfg.bubble_xc, cfg.bubble_yc, cfg.bubble_rb,
+                                 cfg.bubble_alpha, cfg.bubble_beta});
+            }
+            cale.init_hse_bubbles(1.0, 1.0, blist);
+        } else if (cfg.test_case == "hse_perturbed") {
+            cale.init_hse_polytrope(1.0, 1.0, cfg.perturb_amplitude);
+        } else if (cfg.test_case == "hse") {
+            cale.init_hse_polytrope(1.0, 1.0, 0.0);
+        } else if (cfg.test_case == "kh_shear") {
+            // Canonical KH (Athena++ parity): ρ_heavy/ρ_light=2, P0=2.5,
+            // |vx|=0.5, amp=0.1 (fully nonlinear seed), k=2 (2 vortices
+            // per interface — 256 cells resolve each vortex). --perturb
+            // overrides amplitude.
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 0.1;
+            cale.init_kh_shear(1.0, 2.0, 2.5, 0.5, amp, 2);
+        } else {
+            cale.init_sod();
+        }
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach\n");
+
+        int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
+        int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
+        bool vtk_by_time = cfg.vtk_dt > 0.0;
+        double next_vtk_t = 0.0;   // first capture at t=0+dt (after first step)
+        if (vtk_by_time) {
+            std::fprintf(stderr,
+                "  CartAle diag every %d steps, VTK every dt=%g (physical time)%s\n",
+                diag_every, cfg.vtk_dt,
+                cfg.frame_buffer ? " (VRAM buffered)" : "");
+        } else {
+            std::fprintf(stderr, "  CartAle diag every %d steps, VTK every %d steps%s\n",
+                         diag_every, vtk_every,
+                         cfg.frame_buffer ? " (VRAM buffered)" : "");
+        }
+        if (cfg.frame_buffer) {
+            cale.alloc_frame_buffer(cfg.frame_headroom_mb);
+        }
+
+        int frame = 0;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = cale.step(t, cfg.t_end);
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+            bool do_diag = (step % diag_every == 0) || t >= cfg.t_end;
+            bool do_vtk;
+            if (vtk_by_time) {
+                do_vtk = (t >= next_vtk_t) || t >= cfg.t_end;
+                if (do_vtk) next_vtk_t = t + cfg.vtk_dt;
+            } else {
+                do_vtk = (step % vtk_every == 0) || t >= cfg.t_end;
+            }
+            if (do_diag) {
+                auto d = cale.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e KE=%.4e IE=%.10e PE=%.10e E=%.10e |v|=%.3e\n",
+                            step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                            d.total_PE, d.total_E, d.max_v);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                             d.total_PE, d.total_E, d.max_v, d.max_mach);
+                std::fflush(csv);
+            }
+            if (do_vtk) {
+                if (cfg.frame_buffer && cale.frame_capacity > 0) {
+                    if (cale.frame_count >= cale.frame_capacity) {
+                        cale.flush_frames_to_disk(run_dir, Lx, Ly);
+                    }
+                    cale.capture_frame(t, step);
+                } else {
+                    ++frame;
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), frame);
+                    cale.write_vtk_2d(path, Lx, Ly);
+                }
+            }
+        }
+        if (cfg.frame_buffer) {
+            cale.flush_frames_to_disk(run_dir, Lx, Ly);
+        }
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        cale.destroy();
+    } else if (cfg.solver_type == "cart_ale2") {
+        // ===== cart_ale2: full periodic BC + PPM-in-remap (in development) =====
+        CartAle2Solver cale;
+        bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
+                       || cfg.test_case == "hse_bubble");
+        bool is_kh = (cfg.test_case == "kh_shear");
+        double Lx = 1.0;
+        double Ly = (is_hse || is_kh) ? 1.0 : 0.2;
+        double gam = is_hse ? cfg.gamma : 1.4;
+        cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
+        cale.remap_order = cfg.cart_ale_remap_order;
+        cale.CQ_lin  = cfg.cart_ale_cq_lin;
+        cale.CQ_quad = cfg.cart_ale_cq_quad;
+        cale.shear_aware_av = cfg.cart_ale_shear_aware ? 1 : 0;
+        int bcm = 0;
+        if (cfg.cart_ale2_bc_x == "periodic") bcm |= 1;
+        if (cfg.cart_ale2_bc_y == "periodic") bcm |= 2;
+        cale.bc_mode = bcm;
+        cale.ppm_enabled = cfg.cart_ale2_ppm ? 1 : 0;
+        if      (cfg.cart_ale_limiter == "minmod")  cale.remap_limiter = 0;
+        else if (cfg.cart_ale_limiter == "vanleer") cale.remap_limiter = 1;
+        else if (cfg.cart_ale_limiter == "mc")      cale.remap_limiter = 2;
+        else { std::fprintf(stderr, "unknown --remap-limiter %s; using vanleer\n",
+                            cfg.cart_ale_limiter.c_str()); cale.remap_limiter = 1; }
+        const char* lim_name = cale.remap_limiter == 0 ? "minmod"
+                             : cale.remap_limiter == 1 ? "vanleer" : "mc";
+        const char* recon_name = (cale.remap_order < 2) ? "donor-cell"
+                               : cale.ppm_enabled       ? "PPM"
+                                                        : "MUSCL-in-remap";
+        std::fprintf(stderr,
+            "  CartAle2 remap_order = %d (%s)  limiter = %s  CQ_lin=%g CQ_quad=%g  shear_aware_av=%d  bc=(%s,%s)\n",
+            cale.remap_order, recon_name,
+            lim_name, cale.CQ_lin, cale.CQ_quad, cale.shear_aware_av,
+            cfg.cart_ale2_bc_x.c_str(), cfg.cart_ale2_bc_y.c_str());
+        if (cfg.test_case == "hse_bubble") {
+            std::vector<CartAle2Solver::Bubble> blist;
+            if (!cfg.bubbles.empty()) {
+                for (const auto& b : cfg.bubbles)
+                    blist.push_back({b[0], b[1], b[2], b[3], b[4]});
+            } else {
+                blist.push_back({cfg.bubble_xc, cfg.bubble_yc, cfg.bubble_rb,
+                                 cfg.bubble_alpha, cfg.bubble_beta});
+            }
+            cale.init_hse_bubbles(1.0, 1.0, blist);
+        } else if (cfg.test_case == "hse_perturbed") {
+            cale.init_hse_polytrope(1.0, 1.0, cfg.perturb_amplitude);
+        } else if (cfg.test_case == "hse") {
+            cale.init_hse_polytrope(1.0, 1.0, 0.0);
+        } else if (cfg.test_case == "kh_shear") {
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 0.1;
+            cale.init_kh_shear(1.0, 2.0, 2.5, 0.5, amp, 2);
+        } else {
+            cale.init_sod();
+        }
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach\n");
+
+        int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
+        int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
+        bool vtk_by_time = cfg.vtk_dt > 0.0;
+        double next_vtk_t = 0.0;
+        if (vtk_by_time) {
+            std::fprintf(stderr,
+                "  CartAle2 diag every %d steps, VTK every dt=%g (physical time)%s\n",
+                diag_every, cfg.vtk_dt,
+                cfg.frame_buffer ? " (VRAM buffered)" : "");
+        } else {
+            std::fprintf(stderr, "  CartAle2 diag every %d steps, VTK every %d steps%s\n",
+                         diag_every, vtk_every,
+                         cfg.frame_buffer ? " (VRAM buffered)" : "");
+        }
+        if (cfg.frame_buffer) cale.alloc_frame_buffer(cfg.frame_headroom_mb);
+
+        int frame = 0;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = cale.step(t, cfg.t_end);
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+            bool do_diag = (step % diag_every == 0) || t >= cfg.t_end;
+            bool do_vtk;
+            if (vtk_by_time) {
+                do_vtk = (t >= next_vtk_t) || t >= cfg.t_end;
+                if (do_vtk) next_vtk_t = t + cfg.vtk_dt;
+            } else {
+                do_vtk = (step % vtk_every == 0) || t >= cfg.t_end;
+            }
+            if (do_diag) {
+                auto d = cale.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e KE=%.4e IE=%.10e PE=%.10e E=%.10e |v|=%.3e\n",
+                            step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                            d.total_PE, d.total_E, d.max_v);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                             d.total_PE, d.total_E, d.max_v, d.max_mach);
+                std::fflush(csv);
+            }
+            if (do_vtk) {
+                if (cfg.frame_buffer && cale.frame_capacity > 0) {
+                    if (cale.frame_count >= cale.frame_capacity)
+                        cale.flush_frames_to_disk(run_dir, Lx, Ly);
+                    cale.capture_frame(t, step);
+                } else {
+                    ++frame;
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), frame);
+                    cale.write_vtk_2d(path, Lx, Ly);
+                }
+            }
+        }
+        if (cfg.frame_buffer) cale.flush_frames_to_disk(run_dir, Lx, Ly);
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        cale.destroy();
+    } else if (cfg.solver_type == "pseudo_spectral") {
+        // ===== 偽譜法 2D 不可壓 NS (渦度-流函數, cuFFT) =====
+        if (cfg.test_case != "kh_shear" && cfg.test_case != "forced_turb") {
+            std::fprintf(stderr,
+                "ERROR: pseudo_spectral supports --test {kh_shear, forced_turb}\n");
+            return 1;
+        }
+        PseudoSpectralSolver ps;
+        ps.use_ifrk = !cfg.ps_explicit;
+        ps.use_skew = !cfg.ps_adv_only;
+        ps.init(cfg.nr, cfg.ntheta, cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
+        if (cfg.test_case == "kh_shear") {
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
+            ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
+        } else {
+            // forced_turb: zero IC + stochastic forcing
+            ps.init_zero();
+            if (cfg.ps_forcing_eps <= 0.0) {
+                std::fprintf(stderr,
+                    "ERROR: --test forced_turb requires --ps-forcing-eps > 0\n");
+                return 1;
+            }
+        }
+        if (cfg.ps_forcing_eps > 0.0) {
+            ps.init_forcing(cfg.ps_forcing_kf, cfg.ps_forcing_dk,
+                            cfg.ps_forcing_eps, cfg.ps_forcing_seed);
+        }
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,KE,enstrophy,max_v,max_omega,eps_KE,eps_enstrophy\n");
+
+        int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
+        int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
+        bool vtk_by_time = cfg.vtk_dt > 0.0;
+        double next_vtk_t = 0.0;
+        if (cfg.frame_buffer) ps.alloc_frame_buffer(cfg.frame_headroom_mb);
+
+        int frame = 0;
+        // t=0 幀 (便於 renderer 取首幀參考)
+        if (cfg.frame_buffer && ps.frame_capacity > 0) ps.capture_frame(0.0, 0);
+        else {
+            char path[512];
+            std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), ++frame);
+            ps.write_vtk_2d(path);
+        }
+
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = ps.step();
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            bool do_diag = (step % diag_every == 0) || t >= cfg.t_end;
+            bool do_vtk;
+            if (vtk_by_time) {
+                do_vtk = (t >= next_vtk_t) || t >= cfg.t_end;
+                if (do_vtk) next_vtk_t = t + cfg.vtk_dt;
+            } else {
+                do_vtk = (step % vtk_every == 0) || t >= cfg.t_end;
+            }
+
+            if (do_diag) {
+                auto d = ps.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e KE=%.6e Ω=%.6e |v|=%.3e |ω|=%.3e εKE=%.3e εΩ=%.3e\n",
+                            step, t, dt, d.total_KE, d.total_enstrophy,
+                            d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e\n",
+                             step, t, dt, d.total_KE, d.total_enstrophy,
+                             d.max_v, d.max_omega, d.eps_KE, d.eps_enstrophy);
+                std::fflush(csv);
+            }
+            if (do_vtk) {
+                if (cfg.frame_buffer && ps.frame_capacity > 0) {
+                    if (ps.frame_count >= ps.frame_capacity)
+                        ps.flush_frames_to_disk(run_dir);
+                    ps.capture_frame(t, step);
+                } else {
+                    ++frame;
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/output_%04d.vtk",
+                                  run_dir.c_str(), frame);
+                    ps.write_vtk_2d(path);
+                }
+            }
+        }
+        if (cfg.frame_buffer) ps.flush_frames_to_disk(run_dir);
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        ps.destroy();
+    } else if (cfg.solver_type == "ale2d") {
+        // ===== 2D axisymmetric Lagrangian (Caramana compatible) =====
+        if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
+            std::fprintf(stderr, "ERROR: ale2d currently supports lane_emden / lane_emden_perturbed only\n");
+            return 1;
+        }
+        Ale2DSolver ale;
+        ale.init(grid, eos, cfg.G, cfg.cfl);
+        ale.init_lane_emden(1.0, 1.0, 1.5);
+        ale.snapshot_hse();
+        if (cfg.test_case == "lane_emden_perturbed")
+            ale.apply_perturbation(cfg.perturb_amplitude);
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_v\n");
+
+        int frame = 0;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = ale.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                auto d = ale.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
+                            step, t, dt, d.total_mass, d.total_E, d.max_v, d.max_mach);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                             d.total_grav_E, d.total_E, d.max_mach, d.max_v);
+                std::fflush(csv);
+
+                std::vector<double> rp, rhop, Pp, ep, vrp;
+                ale.download_radial_profile(rp, rhop, Pp, ep, vrp);
+                char path[512];
+                std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
+                std::FILE* fp = std::fopen(path, "w");
+                std::fprintf(fp, "# t = %.10e  step = %d\n# ic r rho P e_int v_r\n", t, step);
+                for (int ic = 0; ic < ale.nr; ++ic)
+                    std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
+                                 ic, rp[ic], rhop[ic], Pp[ic], ep[ic], vrp[ic]);
+                std::fclose(fp);
+            }
+        }
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        ale.destroy();
+    } else if (cfg.solver_type == "wb2d") {
+        // ===== Well-Balanced 2D Eulerian (MESA-stabilized) =====
+        Wb2DSolver wb;
+        wb.limiter_type = static_cast<int>(cfg.limiter);
+        wb.use_lm_hllc = cfg.lm_hllc ? 1 : 0;
+        wb.init(grid, eos, cfg.G, cfg.cfl);
+        if (cfg.mesh_type == "mass") {
+            wb.n_pole_avg = cfg.ntheta / 2;
+            if (cfg.r_inner <= 0) {
+                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
+                wb.n_angular_avg = n_uni;
+                wb.central_damp_r = 0.15 * cfg.R_outer;
+            }
+        }
+        if (!cfg.no_sponge) wb.sponge_kappa = 100.0;
+
+        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
+            State state_hse;
+            state_hse.allocate(grid);
+            LaneEmdenParams lep;
+            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
+            init_lane_emden(grid, state_hse, lep, cfg.gamma);
+            wb.upload_state(grid, state_hse);
+            wb.snapshot_hse();
+        }
+        wb.upload_state(grid, state);
+        if (!(cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble"))
+            wb.snapshot_hse();
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = wb.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                wb.download_state(grid, state);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk",
+                              run_dir.c_str(), step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
+        }
+        std::fprintf(stderr, "\n");
+        wb.download_state(grid, state);
+        wb.destroy();
     } else if (cfg.solver_type == "lowmach") {
+        // ===== GPU low-Mach path =====
         PrecondType pc = PrecondType::LINE_JACOBI;
         if (cfg.precond == "none")          pc = PrecondType::NONE;
         else if (cfg.precond == "block_jacobi") pc = PrecondType::BLOCK_JACOBI;
@@ -558,14 +1191,48 @@ int main(int argc, char** argv) {
         snapshot_hse_if_needed(lm);
         lm.upload_state(grid, state);
 
-        SolverOps ops;
-        ops.step = [&](double t_, double te) { return lm.step(t_, te); };
-        ops.download = [&](const Grid& g, State& s, double) { lm.download_state(g, s); };
-        ops.destroy = [&]() { lm.destroy(); };
-        run_time_loop(ops);
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = lm.step(t, cfg.t_end);
+            t += dt;
+            step++;
+
+            if (step % 200 == 0)
+                print_progress(t, cfg.t_end, step, dt, wall_start);
+
+            if (step % cfg.output_interval == 0) {
+                lm.download_state(grid, state);
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+
+                double max_vr = 0, max_vt = 0;
+                double rho_thresh = lm.atm_rho_thresh;
+                for (int i = 0; i < grid.nr; i++)
+                    for (int j = 0; j < grid.ntheta; j++) {
+                        int k = grid.idx(i, j);
+                        if (state.rho[k] < rho_thresh) continue;
+                        double rho = state.rho[k];
+                        max_vr = std::max(max_vr, std::fabs(state.mr[k] / rho));
+                        max_vt = std::max(max_vt, std::fabs(state.mtheta[k] / rho));
+                    }
+
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e  |vr|=%.3e |vt|=%.3e\n",
+                            step, t, dt, diag.total_mass, diag.total_energy, max_vr, max_vt);
+
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
+        }
+        std::fprintf(stderr, "\n");
+
+        lm.download_state(grid, state);
+        lm.destroy();
     } else {
 #ifdef USE_AMGX
+        // ===== GPU compressible path (HLLC + JFNK) =====
         GpuSolver gpu;
         gpu.init(grid, eos, cfg.G, cfg.cfl, cfg.limiter);
         gpu.upload_state(grid, state);

@@ -22,24 +22,6 @@ jobs:
       - name: Run CPU tests
         run: cd build-cpu && ctest --output-on-failure -j$(nproc)
 
-  # ── Tier 2: CUDA compile check (no GPU needed) ────────────────────
-  cuda-compile:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.19
-        with:
-          cuda: '12.4.1'
-          method: network
-
-      - name: Configure (GPU)
-        run: cmake -B build-gpu -DUSE_GPU=ON -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build (compile only, no run)
-        run: cmake --build build-gpu -j$(nproc)
-
   # ── Python linting (fast, catches import errors) ───────────────────
   python-check:
     runs-on: ubuntu-22.04

@@ -43,6 +43,18 @@ if(USE_GPU)
         src/gpu/lowmach_solver.cu
         src/gpu/gmg_gpu.cu
         src/gpu/radial1d_solver.cu
+        src/gpu/wb2d_solver.cu
+        src/gpu/wb2d_kernels.cu
+        src/gpu/ale2d_solver.cu
+        src/gpu/ale2d_kernels.cu
+        src/gpu/cart_lag_solver.cu
+        src/gpu/cart_lag_kernels.cu
+        src/gpu/cart_ale_solver.cu
+        src/gpu/cart_ale_kernels.cu
+        src/gpu/cart_ale2_solver.cu
+        src/gpu/cart_ale2_kernels.cu
+        src/gpu/pseudo_spectral_solver.cu
+        src/gpu/pseudo_spectral_kernels.cu
     )
     set(LOWMACH_SOURCES
         src/gpu/lm_residual.cu
@@ -77,6 +89,7 @@ if(USE_GPU)
 
     target_link_libraries(stellar2d PRIVATE
         CUDA::cudart
+        CUDA::cufft
     )
 
     # AmgX is optional: only needed for --solver compressible (GpuSolver)

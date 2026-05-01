@@ -589,7 +589,6 @@ Applied to all 4 polar solvers: FAS (implicit + explicit), SIMPLE, projection.
 **Test strategy**: Run Lane-Emden perturbed for 1000 steps. Assert `|M_final - M_initial| / M_initial < 1e-12` (machine precision for compensated sum). Without the fix, expect ~1e-4 drift.
 
 ---
-
 ## Summary: Regression Test Priority
 
 ### Tier 1 — Correctness fundamentals (must pass for any commit)
