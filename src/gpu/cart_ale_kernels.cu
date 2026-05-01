@@ -47,6 +47,7 @@ void k_cale_geometry(const double* X, const double* Y,
     int i3 = caln(ic,   jc+1, nny);
     double X0=X[i0], X1=X[i1], X2=X[i2], X3=X[i3];
     double Y0=Y[i0], Y1=Y[i1], Y2=Y[i2], Y3=Y[i3];
+    // Eq. (15.2): shoelace formula for quadrilateral signed area.
     double A2 = 0.5 * ((X0*Y1 - X1*Y0) + (X1*Y2 - X2*Y1)
                      + (X2*Y3 - X3*Y2) + (X3*Y0 - X0*Y3));
     Vol[flat] = fabs(A2);
@@ -88,9 +89,9 @@ void k_cale_eos_and_q(const double* X, const double* Y,
     double r_ = dm[flat] / V;
     rho[flat] = r_;
     double e = e_int[flat];
-    double p = fmax((gam - 1.0) * r_ * e, 1e-30);
+    double p = fmax((gam - 1.0) * r_ * e, 1e-30);   // Eq. (1.2)
     P[flat] = p;
-    cs[flat] = sqrt(gam * p / r_);
+    cs[flat] = sqrt(gam * p / r_);                   // Eq. (1.3)
 
     int i0 = caln(ic,   jc,   nny);
     int i1 = caln(ic+1, jc,   nny);
@@ -107,6 +108,7 @@ void k_cale_eos_and_q(const double* X, const double* Y,
         double vXm = 0.5*(vXa + vXb), vYm = 0.5*(vYa + vYb);
         return vXm * dy - vYm * dx;
     };
+    // Eq. (15.3): divergence-consistent strain rate.
     double dAdt = edge_dAdt(X0,Y0,X1,Y1,vX0,vY0,vX1,vY1)
                 + edge_dAdt(X1,Y1,X2,Y2,vX1,vY1,vX2,vY2)
                 + edge_dAdt(X2,Y2,X3,Y3,vX2,vY2,vX3,vY3)
@@ -151,6 +153,7 @@ void k_cale_eos_and_q(const double* X, const double* Y,
         shear_weight = csum / tot;
     }
 
+    // Eq. (15.4): compression-only von Neumann-Richtmyer AV.
     double q = 0.0;
     if (s > 0.0) {
         double q_quad = CQ_quad * s * L * s * L;
@@ -181,6 +184,7 @@ void k_cale_node_forces(const double* X, const double* Y,
     double Yk[4] = {Y[I[0]], Y[I[1]], Y[I[2]], Y[I[3]]};
     double PQ = P[flat] + Q[flat];
 
+    // Eq. (15.5): edge-normal integrated force.
     double aX[4], aY[4];
     for (int k = 0; k < 4; ++k) {
         int kp = (k + 1) & 3;
@@ -189,6 +193,7 @@ void k_cale_node_forces(const double* X, const double* Y,
         aX[k] =  PQ * dy;
         aY[k] = -PQ * dx;
     }
+    // Eq. (15.6): corner subcell force.
     for (int k = 0; k < 4; ++k) {
         int km = (k + 3) & 3;
         double sx = 0.5 * (aX[km] + aX[k]);
@@ -262,6 +267,7 @@ void k_cale_node_update(double* X, double* Y,
                         double dt, int nnode) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= nnode) return;
+    // Eq. (15.7): kick-drift-kick.
     double mm = fmax(mnode[i], 1e-30);
     double dvX = FX[i] / mm * dt;
     double dvY = FY[i] / mm * dt;
@@ -294,6 +300,7 @@ void k_cale_energy_update(int nx, int ny,
                  caln(ic+1, jc,   nny),
                  caln(ic+1, jc+1, nny),
                  caln(ic,   jc+1, nny) };
+    // Eq. (15.8): compatible energy update.
     double W = 0.0;
     for (int k = 0; k < 4; ++k) {
         W += FSX[flat*4 + k] * dX_node[I[k]] + FSY[flat*4 + k] * dY_node[I[k]];
@@ -324,6 +331,7 @@ void k_cale_cfl(const double* minheight, const double* cs,
         double vv = sqrt(vX[I[k]]*vX[I[k]] + vY[I[k]]*vY[I[k]]);
         vmax = fmax(vmax, vv);
     }
+    // Eq. (15.9): minimum-height CFL.
     double L = minheight[flat];
     double dt_s = L / (cs[flat] + vmax + 1e-30);
     double s = strain_rate[flat];
@@ -371,6 +379,7 @@ void k_cale_node_mass(const double* dm, double* mnode,
     int n = nnx * nny;
     if (flat >= n) return;
     int in = flat / nny, jn = flat % nny;
+    // Eq. (15.1): node mass = ¼ Σ adjacent cell masses.
     double m = 0.0;
     for (int di = -1; di <= 0; ++di) {
         for (int dj = -1; dj <= 0; ++dj) {
@@ -433,7 +442,7 @@ void k_cale_cell_momentum(const double* vX, const double* vY,
 // We use first-order donor-cell upwind: transported scalar = ρ_donor·V_sweep.
 // ============================================================
 
-// Signed swept area of quad (A_old → A_new → B_new → B_old).
+// Eq. (16.1): signed swept area of quad (A_old → A_new → B_new → B_old).
 // Positive = quad oriented CCW = the sweep region is on the
 // "forward" side of the edge.
 __device__ __forceinline__
@@ -486,6 +495,7 @@ void k_cale_remap_east(const double* X0, const double* Y0,
     // Actual volume transferred:
     double V = frac * V_donor;
 
+    // Eq. (16.2): first-order donor-cell upwind flux.
     double d_dm = (dm[donor] / V_donor) * V;
     double d_ie = (dm[donor] * e_int[donor] / V_donor) * V;
     double d_px = (px[donor] / V_donor) * V;
@@ -549,6 +559,7 @@ void k_cale_remap_north(const double* X0, const double* Y0,
     double frac = fmin(V_sweep / V_donor, 0.5);
     double V = frac * V_donor;
 
+    // Eq. (16.2): first-order donor-cell upwind flux.
     double d_dm = (dm[donor] / V_donor) * V;
     double d_ie = (dm[donor] * e_int[donor] / V_donor) * V;
     double d_px = (px[donor] / V_donor) * V;
@@ -728,6 +739,7 @@ void k_cale_slopes_minmod(const double* rho_d, const double* rhoE_d,
     if (flat >= nx*ny) return;
     int ic = flat / ny, jc = flat % ny;
 
+    // Eq. (16.3): limited left/right slope.
     auto slopes = [&](const double* f, double& sx, double& sy) {
         double fc = f[flat];
         if (ic > 0 && ic < nx - 1) {

@@ -118,6 +118,22 @@ struct CartAle2Solver {
     // Use PPM (Colella-Woodward 1984) piecewise parabolic reconstruction
     // instead of MUSCL linear. Only applies when remap_order >= 2.
     int ppm_enabled = 0;
+    // PPM limiter: 0 = classical Colella-Woodward monotonization
+    // (clamps smooth extrema), 1 = Colella-Sekora 2008 extremum-preserving
+    // (default, matches Athena ppm.cpp uniform-mesh path).
+    int ppm_cs_limiter = 1;
+    // PPM reconstruction variable space: 0 = conservative (ρ, ρe, ρvx, ρvy),
+    // 1 = primitive (ρ, P, vx, vy) — default. Primitive-space PPM is robust
+    // to tanh shear interfaces where px=ρvx crosses zero; conservative PPM
+    // overshoots there and crashes.
+    int ppm_primitive = 1;
+    // PPM characteristic projection (only meaningful when ppm_primitive=1):
+    // 0 = reconstruct primitives directly,
+    // 1 = project to (slow-acoustic, entropy, shear, fast-acoustic) wave
+    //     modes, reconstruct each independently, project back. Required
+    //     for smooth tanh shear layers (Lecoanet KH). Follows Athena
+    //     ppm.cpp + characteristic.cpp (Stone+08 Appendix A, adiabatic hydro).
+    int ppm_char = 1;
 
     // ---- Bookkeeping ----
     double dt_current = 0.0;
@@ -149,6 +165,15 @@ struct CartAle2Solver {
     // g_y is set to 0 inside this IC — ideal for watching pure KH roll-up.
     void init_kh_shear(double rho_light, double rho_heavy, double P0,
                        double vshear, double amp, int k);
+
+    // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
+    // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
+    // Athena inputs/hydro/athinput.lecoanet_kh: vflow=1, amp=0.01,
+    // drho_rho0=0 (unstratified), k=1 (single mode per interface). Larger
+    // k (e.g. 7) trades canonical fidelity for richer Kraichnan-like cascade.
+    // Requires --bc-x periodic --bc-y periodic.
+    void init_kh_lecoanet(double vflow, double amp,
+                          double drho_rho0 = 0.0, double P0 = 10.0, int k = 1);
 
     // One ALE step: Lagrangian → Rezone → Remap
     double step(double t, double t_end);

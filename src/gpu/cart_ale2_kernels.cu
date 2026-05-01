@@ -47,6 +47,7 @@ void k_cale2_geometry(const double* X, const double* Y,
     int i3 = caln(ic,   jc+1, nny);
     double X0=X[i0], X1=X[i1], X2=X[i2], X3=X[i3];
     double Y0=Y[i0], Y1=Y[i1], Y2=Y[i2], Y3=Y[i3];
+    // Eq. (15.2): shoelace formula for quadrilateral signed area.
     double A2 = 0.5 * ((X0*Y1 - X1*Y0) + (X1*Y2 - X2*Y1)
                      + (X2*Y3 - X3*Y2) + (X3*Y0 - X0*Y3));
     Vol[flat] = fabs(A2);
@@ -88,9 +89,9 @@ void k_cale2_eos_and_q(const double* X, const double* Y,
     double r_ = dm[flat] / V;
     rho[flat] = r_;
     double e = e_int[flat];
-    double p = fmax((gam - 1.0) * r_ * e, 1e-30);
+    double p = fmax((gam - 1.0) * r_ * e, 1e-30);   // Eq. (1.2)
     P[flat] = p;
-    cs[flat] = sqrt(gam * p / r_);
+    cs[flat] = sqrt(gam * p / r_);                   // Eq. (1.3)
 
     int i0 = caln(ic,   jc,   nny);
     int i1 = caln(ic+1, jc,   nny);
@@ -107,6 +108,8 @@ void k_cale2_eos_and_q(const double* X, const double* Y,
         double vXm = 0.5*(vXa + vXb), vYm = 0.5*(vYa + vYb);
         return vXm * dy - vYm * dx;
     };
+    // Eq. (15.3): divergence-consistent strain rate from edge-averaged velocity
+    // dotted with outward normal, summed over 4 edges; s = -div(v).
     double dAdt = edge_dAdt(X0,Y0,X1,Y1,vX0,vY0,vX1,vY1)
                 + edge_dAdt(X1,Y1,X2,Y2,vX1,vY1,vX2,vY2)
                 + edge_dAdt(X2,Y2,X3,Y3,vX2,vY2,vX3,vY3)
@@ -151,6 +154,8 @@ void k_cale2_eos_and_q(const double* X, const double* Y,
         shear_weight = csum / tot;
     }
 
+    // Eq. (15.4): compression-only von Neumann-Richtmyer AV with optional
+    // shear-aware tensor weighting.
     double q = 0.0;
     if (s > 0.0) {
         double q_quad = CQ_quad * s * L * s * L;
@@ -181,6 +186,7 @@ void k_cale2_node_forces(const double* X, const double* Y,
     double Yk[4] = {Y[I[0]], Y[I[1]], Y[I[2]], Y[I[3]]};
     double PQ = P[flat] + Q[flat];
 
+    // Eq. (15.5): edge-normal integrated force (P+Q)·(Δy, −Δx) per cell edge.
     double aX[4], aY[4];
     for (int k = 0; k < 4; ++k) {
         int kp = (k + 1) & 3;
@@ -189,6 +195,9 @@ void k_cale2_node_forces(const double* X, const double* Y,
         aX[k] =  PQ * dy;
         aY[k] = -PQ * dx;
     }
+    // Eq. (15.6): corner subcell force = ½(edge_{k−1} + edge_k); atomicAdd
+    // to the 4 node forces. Also stash per-corner value in FSX/FSY for the
+    // compatible energy update (Eq. 15.8).
     for (int k = 0; k < 4; ++k) {
         int km = (k + 3) & 3;
         double sx = 0.5 * (aX[km] + aX[k]);
@@ -262,6 +271,8 @@ void k_cale2_node_update(double* X, double* Y,
                         double dt, int nnode) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= nnode) return;
+    // Eq. (15.7): kick-drift-kick — v_half with ½Δv, drift X with v_half·Δt,
+    // full Δv applied to v so it exits at t+Δt.
     double mm = fmax(mnode[i], 1e-30);
     double dvX = FX[i] / mm * dt;
     double dvY = FY[i] / mm * dt;
@@ -294,6 +305,8 @@ void k_cale2_energy_update(int nx, int ny,
                  caln(ic+1, jc,   nny),
                  caln(ic+1, jc+1, nny),
                  caln(ic,   jc+1, nny) };
+    // Eq. (15.8): compatible energy update — cell internal energy decreases
+    // by exactly the work the cell does on its 4 corner nodes (F_sub · dX).
     double W = 0.0;
     for (int k = 0; k < 4; ++k) {
         W += FSX[flat*4 + k] * dX_node[I[k]] + FSY[flat*4 + k] * dY_node[I[k]];
@@ -324,6 +337,8 @@ void k_cale2_cfl(const double* minheight, const double* cs,
         double vv = sqrt(vX[I[k]]*vX[I[k]] + vY[I[k]]*vY[I[k]]);
         vmax = fmax(vmax, vv);
     }
+    // Eq. (15.9): minimum-height CFL — min(sound-wave crossing, compression
+    // strain) on the possibly-deformed quadrilateral.
     double L = minheight[flat];
     double dt_s = L / (cs[flat] + vmax + 1e-30);
     double s = strain_rate[flat];
@@ -373,12 +388,14 @@ void k_cale2_node_mass(const double* dm, double* mnode,
     int in = flat / nny, jn = flat % nny;
     bool x_per = (bc_mode & 1) != 0;
     bool y_per = (bc_mode & 2) != 0;
+    // Eq. (15.1): node mass = ¼ Σ of adjacent cell masses. Periodic wrap
+    // makes in=0 and in=nnx-1 each independently see 4 cells (same physical
+    // point) — diagnostics (compute_diagnostics) must skip one duplicate
+    // when summing to avoid double counting (see P31).
     double m = 0.0;
     for (int di = -1; di <= 0; ++di) {
         for (int dj = -1; dj <= 0; ++dj) {
             int ic = in + di, jc = jn + dj;
-            // Periodic wrap: treat in=nnx-1 as same as in=0; node 0 sees
-            // cells (-1, *) through wrap to (nx-1, *).
             if (x_per) {
                 if (ic < 0)  ic = nx - 1;
                 if (ic >= nx) ic = 0;
@@ -448,7 +465,7 @@ void k_cale2_cell_momentum(const double* vX, const double* vY,
 // We use first-order donor-cell upwind: transported scalar = ρ_donor·V_sweep.
 // ============================================================
 
-// Signed swept area of quad (A_old → A_new → B_new → B_old).
+// Eq. (16.1): signed swept area of quad (A_old → A_new → B_new → B_old).
 // Positive = quad oriented CCW = the sweep region is on the
 // "forward" side of the edge.
 __device__ __forceinline__
@@ -475,14 +492,21 @@ void k_cale2_remap_east(const double* X0, const double* Y0,
                        const double* Vol0,             // old cell volume
                        double* dm_new, double* ie_new,
                        double* px_new, double* py_new,
-                       int nx, int ny) {
-    // Thread indexes one interior east edge: (ic, jc), ic in [0..nx-2], jc in [0..ny-1].
+                       int nx, int ny, int bc_mode) {
+    // Thread indexes one east edge: (ic, jc), ic in [0..nx-1], jc in [0..ny-1].
+    // When bc_mode & 1 (x-periodic), edge ic=nx-1 connects cell nx-1 to cell 0
+    // via wrap; otherwise that edge is skipped (reflective walls handle it).
+    bool x_per = (bc_mode & 1) != 0;
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    int n_edges = (nx - 1) * ny;
+    int n_edges = x_per ? nx * ny : (nx - 1) * ny;
     if (flat >= n_edges) return;
     int ic = flat / ny, jc = flat % ny;
     int nny = ny + 1;
 
+    // Node indices on the east face of cell ic: nodes (ic+1, jc) and (ic+1, jc+1).
+    // For the wrap edge (ic=nx-1 under periodic BC), those are nodes (nx, *) —
+    // the right-edge duplicates of nodes (0, *). Because periodic_sync keeps
+    // both copies bit-identical, using (ic+1) is correct either way.
     int nA = caln(ic+1, jc,   nny);
     int nB = caln(ic+1, jc+1, nny);
     double Ax = X0[nA], Ay = Y0[nA];
@@ -493,7 +517,9 @@ void k_cale2_remap_east(const double* X0, const double* Y0,
     if (As == 0.0) return;
 
     int cL = calc(ic,   jc, ny);
-    int cR = calc(ic+1, jc, ny);
+    int cR_idx = ic + 1;
+    if (x_per && cR_idx >= nx) cR_idx = 0;
+    int cR = calc(cR_idx, jc, ny);
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
     double V_donor = fmax(Vol0[donor], 1e-30);
@@ -501,11 +527,14 @@ void k_cale2_remap_east(const double* X0, const double* Y0,
     // Actual volume transferred:
     double V = frac * V_donor;
 
+    // Eq. (16.2): first-order donor-cell upwind flux — transported scalar
+    // equals the donor-cell density times the swept volume.
     double d_dm = (dm[donor] / V_donor) * V;
     double d_ie = (dm[donor] * e_int[donor] / V_donor) * V;
     double d_px = (px[donor] / V_donor) * V;
     double d_py = (py[donor] / V_donor) * V;
 
+    // Eq. (16.5): donor subtracts, acceptor adds the same value.
     if (As > 0.0) {
         // donor = L, receiver = R
         atomicAdd(&dm_new[cL], -d_dm);
@@ -538,11 +567,13 @@ void k_cale2_remap_north(const double* X0, const double* Y0,
                         const double* Vol0,
                         double* dm_new, double* ie_new,
                         double* px_new, double* py_new,
-                        int nx, int ny) {
+                        int nx, int ny, int bc_mode) {
+    bool y_per = (bc_mode & 2) != 0;
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    int n_edges = nx * (ny - 1);
+    int ny_eff = y_per ? ny : (ny - 1);
+    int n_edges = nx * ny_eff;
     if (flat >= n_edges) return;
-    int ic = flat / (ny - 1), jc = flat % (ny - 1);
+    int ic = flat / ny_eff, jc = flat % ny_eff;
     int nny = ny + 1;
 
     int nW = caln(ic,   jc+1, nny);
@@ -557,7 +588,9 @@ void k_cale2_remap_north(const double* X0, const double* Y0,
     if (As == 0.0) return;
 
     int cD = calc(ic, jc,   ny);     // down
-    int cU = calc(ic, jc+1, ny);     // up
+    int cU_idx = jc + 1;
+    if (y_per && cU_idx >= ny) cU_idx = 0;
+    int cU = calc(ic, cU_idx, ny);     // up (wraps under y-periodic)
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
     double V_donor = fmax(Vol0[donor], 1e-30);
@@ -661,6 +694,7 @@ void k_cale2_rebuild_node_v(const double* px_new, const double* py_new,
             sm  += 0.25 * dm_new[c];
         }
     }
+    // Eq. (16.6): mass-weighted rebuild — momentum-conservative.
     if (sm > 1e-30) {
         vX[flat] = spx / sm;
         vY[flat] = spy / sm;
@@ -706,6 +740,34 @@ void k_cale2_cell_densities(const double* dm, const double* e_int,
     rhoE_d[c] = dm[c] * e_int[c] / V;
     pxd[c]    = px[c] / V;
     pyd[c]    = py[c] / V;
+}
+
+// Build primitive variables (ρ, P, vx, vy) for primitive-space PPM.
+// Reuses the 4 "density" buffers (rho_dens, rhoE_dens, pxd_dens, pyd_dens)
+// as scratch — kernel output is:
+//   rho_d  ← ρ        (unchanged semantics)
+//   rhoE_d ← P        (pressure, γ-1)·ρ·e_int  [semantic reuse]
+//   pxd    ← vx       [semantic reuse]
+//   pyd    ← vy       [semantic reuse]
+// PPM then reconstructs smooth primitives, avoiding the px=ρvx sign flip
+// pathology that crashes conserved-variable PPM on tanh shear layers.
+__global__
+void k_cale2_cell_primitives(const double* dm, const double* e_int,
+                            const double* px, const double* py,
+                            const double* Area0,
+                            double* rho_out, double* P_out,
+                            double* vx_out, double* vy_out,
+                            int ncell, double gam) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    double V   = fmax(Area0[c], 1e-30);
+    double m   = dm[c];
+    double rho = m / V;
+    double inv_m = 1.0 / fmax(m, 1e-30);
+    rho_out[c] = rho;
+    P_out[c]   = (gam - 1.0) * rho * e_int[c];
+    vx_out[c]  = px[c] * inv_m;
+    vy_out[c]  = py[c] * inv_m;
 }
 
 __device__ __forceinline__ double minmod(double a, double b) {
@@ -758,9 +820,9 @@ void k_cale2_slopes_minmod(const double* rho_d, const double* rhoE_d,
     bool x_per = (bc_mode & 1) != 0;
     bool y_per = (bc_mode & 2) != 0;
 
+    // Eq. (16.3): limited left/right slope using minmod / van Leer / MC.
     auto slopes = [&](const double* f, double& sx, double& sy) {
         double fc = f[flat];
-        // X-direction neighbors (wrap in periodic, zero at wall)
         bool has_left  = (ic > 0) || x_per;
         bool has_right = (ic < nx - 1) || x_per;
         if (has_left && has_right) {
@@ -808,9 +870,11 @@ void k_cale2_remap_east_2nd(const double* X0, const double* Y0,
                            const double* pyd_sx, const double* pyd_sy,
                            double* dm_new, double* ie_new,
                            double* px_new, double* py_new,
-                           int nx, int ny, double dx_u, double dy_u) {
+                           int nx, int ny, double dx_u, double dy_u,
+                           int bc_mode) {
+    bool x_per = (bc_mode & 1) != 0;
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    int n_edges = (nx - 1) * ny;
+    int n_edges = x_per ? nx * ny : (nx - 1) * ny;
     if (flat >= n_edges) return;
     int ic = flat / ny, jc = flat % ny;
     int nny = ny + 1;
@@ -825,7 +889,9 @@ void k_cale2_remap_east_2nd(const double* X0, const double* Y0,
     if (As == 0.0) return;
 
     int cL = calc(ic,   jc, ny);
-    int cR = calc(ic+1, jc, ny);
+    int cR_idx = ic + 1;
+    if (x_per && cR_idx >= nx) cR_idx = 0;
+    int cR = calc(cR_idx, jc, ny);
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
 
@@ -838,7 +904,16 @@ void k_cale2_remap_east_2nd(const double* X0, const double* Y0,
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
     double ex = cx - xd, ey = cy - yd;
+    // Periodic wrap correction: if donor was folded via periodic wrap, the
+    // swept centroid is on the opposite side of the domain. Subtract the
+    // full box width to measure ex relative to the (virtual) unwrapped donor.
+    if (x_per) {
+        double Lx_full = nx * dx_u;
+        if      (ex >  0.5 * Lx_full) ex -= Lx_full;
+        else if (ex < -0.5 * Lx_full) ex += Lx_full;
+    }
 
+    // Eq. (16.4): MUSCL linear reconstruction at swept-region centroid.
     double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
     double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
     double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
@@ -876,11 +951,14 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
                             const double* pyd_sx, const double* pyd_sy,
                             double* dm_new, double* ie_new,
                             double* px_new, double* py_new,
-                            int nx, int ny, double dx_u, double dy_u) {
+                            int nx, int ny, double dx_u, double dy_u,
+                            int bc_mode) {
+    bool y_per = (bc_mode & 2) != 0;
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    int n_edges = nx * (ny - 1);
+    int ny_eff = y_per ? ny : (ny - 1);
+    int n_edges = nx * ny_eff;
     if (flat >= n_edges) return;
-    int ic = flat / (ny - 1), jc = flat % (ny - 1);
+    int ic = flat / ny_eff, jc = flat % ny_eff;
     int nny = ny + 1;
 
     int nW = caln(ic,   jc+1, nny);
@@ -893,7 +971,9 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
     if (As == 0.0) return;
 
     int cD = calc(ic, jc,   ny);
-    int cU = calc(ic, jc+1, ny);
+    int cU_idx = jc + 1;
+    if (y_per && cU_idx >= ny) cU_idx = 0;
+    int cU = calc(ic, cU_idx, ny);
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
@@ -904,7 +984,13 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
     double ex = cx - xd, ey = cy - yd;
+    if (y_per) {
+        double Ly_full = ny * dy_u;
+        if      (ey >  0.5 * Ly_full) ey -= Ly_full;
+        else if (ey < -0.5 * Ly_full) ey += Ly_full;
+    }
 
+    // Eq. (16.4): MUSCL linear reconstruction at swept-region centroid.
     double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
     double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
     double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
@@ -937,20 +1023,22 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
 // Per cell, store left/right face values in x and bottom/top in y.
 // The 4-cell centered interpolant:
 //   f_{i+1/2} = (7(f_i + f_{i+1}) - (f_{i-1} + f_{i+2})) / 12
-// then monotonicity:
-//   if (f_L - f)(f - f_R) ≤ 0  : f_L = f_R = f       (local extremum)
-//   else if |Δf| · 6|f - ½(f_L+f_R)| > Δf²  : clip f_L or f_R
-// where Δf = f_R - f_L.
-//
-// We apply it separately in x and y (direction-splitting at the
-// reconstruction level — a simplification; proper 2D PPM would use
-// the full biparabolic profile, but for Cartesian uniform mesh this
-// is already a strict improvement over MUSCL slopes).
+// For limiting we have two paths:
+//   (a) ppm_monotonize — classical CW84 local-extremum clamp
+//       (aggressive; flattens smooth extrema).
+//   (b) ppm_cs_limit   — Colella-Sekora (2008) extremum-preserving
+//       limiter, per Athena ppm.cpp:138-279. Two-stage: (Stage 1)
+//       interface-value correction at smooth extrema using adjacent
+//       second-derivative coincidence tests; (Stage 2) parabolic
+//       coefficient limiting distinguishing smooth extrema, over-
+//       shoot, and roundoff-sensitive cases.
+// Direction-split: applied separately in x and y on uniform Cartesian
+// mesh. C2=1.25 matches Athena's convention.
 // ============================================================
 
+// Eq. (17.2): classical Colella-Woodward 1984 monotonization.
 __device__ __forceinline__
 void ppm_monotonize(double f_c, double& f_L, double& f_R) {
-    // Test for local extremum.
     double d1 = (f_L - f_c) * (f_c - f_R);
     if (d1 <= 0.0) {
         f_L = f_c;
@@ -969,6 +1057,300 @@ void ppm_monotonize(double f_c, double& f_L, double& f_R) {
     }
 }
 
+__device__ __forceinline__
+double ppm_cs_sign(double x) { return (x > 0.0) - (x < 0.0); }
+
+// Eq. (17.3-17.5): Colella-Sekora 2008 extremum-preserving PPM limiter
+// (two-stage: face-value correction at smooth extrema + parabolic-
+// coefficient limiting with smooth/shock discrimination).
+// Inputs: 5-point stencil (fm2, fm1, fc, fp1, fp2) plus unlimited face
+// reconstructions fL at i-½ and fR at i+½. Output: (fL, fR) limited.
+// Mirrors Athena uniform-mesh path (ppm.cpp:138-279).
+__device__ __forceinline__
+void ppm_cs_limit(double fm2, double fm1, double fc, double fp1, double fp2,
+                  double& fL, double& fR) {
+    const double C2 = 1.25;
+
+    // Second-derivative stencils at cell centers.
+    double d2_m1 = fm2 + fc  - 2.0 * fm1;   // d2qc_im1
+    double d2_c  = fm1 + fp1 - 2.0 * fc;    // d2qc
+    double d2_p1 = fc  + fp2 - 2.0 * fp1;   // d2qc_ip1
+
+    // ---- Stage 1a: correct fL (i-½ face) if it violates monotonicity ----
+    {
+        double qa_tmp = fL  - fm1;    // CD 84a: face - left cell avg
+        double qb_tmp = fc  - fL;     // CD 84b: right cell avg - face
+        if (qa_tmp * qb_tmp < 0.0) {
+            double qa = 3.0 * (fm1 + fc - 2.0 * fL);  // CD 85b: face curvature
+            double qb = d2_m1;                         // CD 85a
+            double qc = d2_c;                          // CD 85c
+            double qd = 0.0;
+            double sa = ppm_cs_sign(qa);
+            if (sa == ppm_cs_sign(qb) && sa == ppm_cs_sign(qc)) {
+                double aqa = fabs(qa), aqb = fabs(qb), aqc = fabs(qc);
+                qd = sa * fmin(C2 * aqb, fmin(C2 * aqc, aqa));
+            }
+            fL = 0.5 * (fm1 + fc) - qd / 6.0;
+        }
+    }
+
+    // ---- Stage 1b: correct fR (i+½ face) ----
+    {
+        double qa_tmp = fR  - fc;
+        double qb_tmp = fp1 - fR;
+        if (qa_tmp * qb_tmp < 0.0) {
+            double qa = 3.0 * (fc + fp1 - 2.0 * fR);
+            double qb = d2_c;
+            double qc = d2_p1;
+            double qd = 0.0;
+            double sa = ppm_cs_sign(qa);
+            if (sa == ppm_cs_sign(qb) && sa == ppm_cs_sign(qc)) {
+                double aqa = fabs(qa), aqb = fabs(qb), aqc = fabs(qc);
+                qd = sa * fmin(C2 * aqb, fmin(C2 * aqc, aqa));
+            }
+            fR = 0.5 * (fc + fp1) - qd / 6.0;
+        }
+    }
+
+    // ---- Stage 2: parabolic coefficient limiting (CS eq 22-23) ----
+    double dqf_m = fc - fL;
+    double dqf_p = fR - fc;
+    double qa_tmp = dqf_m * dqf_p;              // <0 iff local extremum inside cell
+    double qb_tmp = (fp1 - fc) * (fc - fm1);    // <0 iff local extremum in 3-pt avg
+    double d2qf = 6.0 * (fL + fR - 2.0 * fc);   // -2·a6 of limited parabola
+
+    double qe = 0.0;
+    double sd = ppm_cs_sign(d2qf);
+    if (sd == ppm_cs_sign(d2_m1) && sd == ppm_cs_sign(d2_c) && sd == ppm_cs_sign(d2_p1)) {
+        double aqa = fabs(d2_m1), aqb = fabs(d2_c), aqc = fabs(d2_p1), aqd = fabs(d2qf);
+        qe = sd * fmin(fmin(C2 * aqa, C2 * aqb), fmin(C2 * aqc, aqd));
+    }
+
+    // Roundoff sensitivity guard.
+    double rnorm_a = fmax(fabs(fm1), fabs(fm2));
+    double rnorm_b = fmax(fmax(fabs(fc), fabs(fp1)), fabs(fp2));
+    double rho = 0.0;
+    if (fabs(d2qf) > 1.0e-12 * fmax(rnorm_a, rnorm_b)) {
+        rho = qe / d2qf;
+    }
+
+    if (qa_tmp <= 0.0 || qb_tmp <= 0.0) {
+        // Smooth extremum: scale parabola by rho (CS eq 23). If rho≈1 leave alone.
+        if (rho <= 1.0 - 1.0e-12) {
+            fL = fc - rho * dqf_m;
+            fR = fc + rho * dqf_p;
+        }
+    } else {
+        // No extremum: classical CW overshoot clamp.
+        if (fabs(dqf_m) >= 2.0 * fabs(dqf_p)) {
+            fL = fc - 2.0 * dqf_p;
+        }
+        if (fabs(dqf_p) >= 2.0 * fabs(dqf_m)) {
+            fR = fc + 2.0 * dqf_m;
+        }
+    }
+}
+
+// ============================================================
+// Characteristic-variable PPM (Athena ppm.cpp + characteristic.cpp).
+//
+// For each cell i we project its 5-point primitive stencil
+//   W_k = (ρ, P, vx, vy)_k,  k ∈ {i-2, i-1, i, i+1, i+2}
+// into the local characteristic basis using cell i's (ρ_i, a_i),
+// where a = √(γ P_i / ρ_i). The 4 wave modes are
+//   w0 = ½(P/a² − ρ·vx/a)          left-going acoustic
+//   w1 = ρ − P/a²                   entropy
+//   w2 = vy                         shear
+//   w3 = ½(P/a² + ρ·vx/a)          right-going acoustic
+// PPM+CS limiting is performed independently on each wave. Then
+// face values are projected back to primitives using the same
+// (ρ_i, a_i) basis:
+//   ρ_f  = w0_f + w1_f + w3_f
+//   vx_f = a·(w3_f − w0_f)/ρ_i
+//   vy_f = w2_f
+//   P_f  = a²·(w0_f + w3_f)
+//
+// The y-direction sweep uses vy as the sweep-normal velocity:
+// swap the roles of vx and vy in the L/R projection.
+//
+// Reference: Stone, Gardiner, Teuben, Hawley, Simon 2008 Appendix A
+// (equations A3/A4). Implementation mirrors Athena's adiabatic hydro
+// non-MHD branch in characteristic.cpp (lines 235-256, 470-492).
+// ============================================================
+
+// Eq. (17.7): project primitives (ρ, P, vx, vy) → characteristic
+// variables (w0 left-acoustic, w1 entropy, w2 shear, w3 right-acoustic),
+// using cell-i basis (ρ_i, a_i). Used for x-direction sweep.
+__device__ __forceinline__
+void char_project_x(double rho_i, double a_i,
+                    double drho, double dP, double dvx, double dvy,
+                    double& dw0, double& dw1, double& dw2, double& dw3) {
+    double asq   = a_i * a_i;
+    double dP_a2 = dP / asq;
+    double rho_dvx_a = rho_i * dvx / a_i;
+    dw0 = 0.5 * (dP_a2 - rho_dvx_a);
+    dw1 = drho - dP_a2;
+    dw2 = dvy;
+    dw3 = 0.5 * (dP_a2 + rho_dvx_a);
+}
+
+// Eq. (17.8): project characteristic → primitives back using the same
+// cell-i basis.
+__device__ __forceinline__
+void char_unproject_x(double rho_i, double a_i,
+                      double dw0, double dw1, double dw2, double dw3,
+                      double& drho, double& dP, double& dvx, double& dvy) {
+    double asq = a_i * a_i;
+    drho = dw0 + dw1 + dw3;
+    dvx  = a_i * (dw3 - dw0) / rho_i;
+    dvy  = dw2;
+    dP   = asq * (dw0 + dw3);
+}
+
+__global__
+void k_cale2_ppm_reconstruct_char(const double* rho_d, const double* P_d,
+                                  const double* vx_d,  const double* vy_d,
+                                  double* rho_xL, double* rho_xR,
+                                  double* rho_yD, double* rho_yU,
+                                  double* P_xL,   double* P_xR,
+                                  double* P_yD,   double* P_yU,
+                                  double* vx_xL,  double* vx_xR,
+                                  double* vx_yD,  double* vx_yU,
+                                  double* vy_xL,  double* vy_xR,
+                                  double* vy_yD,  double* vy_yU,
+                                  int nx, int ny, int bc_mode, int limiter_mode,
+                                  double gam) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nx*ny) return;
+    int ic = flat / ny, jc = flat % ny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+
+    auto idx_x = [&](int i) -> int {
+        if (x_per) {
+            if (i < 0)   i += nx;
+            if (i >= nx) i -= nx;
+        } else {
+            if (i < 0)   i = 0;
+            if (i >= nx) i = nx - 1;
+        }
+        return i * ny + jc;
+    };
+    auto idx_y = [&](int j) -> int {
+        if (y_per) {
+            if (j < 0)   j += ny;
+            if (j >= ny) j -= ny;
+        } else {
+            if (j < 0)   j = 0;
+            if (j >= ny) j = ny - 1;
+        }
+        return ic * ny + j;
+    };
+
+    // Eq. (17.1): PPM 4-point face interpolant.
+    auto interp_face = [](double fm1, double fc, double fp1, double fp2) {
+        return (7.0 * (fc + fp1) - (fm1 + fp2)) / 12.0;
+    };
+
+    // Cell-i primitive state and local sound speed.
+    double rho_i = rho_d[flat];
+    double P_i   = P_d[flat];
+    double vx_i  = vx_d[flat];
+    double vy_i  = vy_d[flat];
+    double a_i   = sqrt(fmax(gam * P_i / fmax(rho_i, 1e-30), 1e-30));
+
+    // -------- X direction --------
+    {
+        // Load 5-point primitive stencil.
+        double r[5], p[5], u[5], v[5];
+        r[0] = rho_d[idx_x(ic-2)]; r[1] = rho_d[idx_x(ic-1)];
+        r[2] = rho_i;              r[3] = rho_d[idx_x(ic+1)];
+        r[4] = rho_d[idx_x(ic+2)];
+        p[0] = P_d[idx_x(ic-2)];   p[1] = P_d[idx_x(ic-1)];
+        p[2] = P_i;                p[3] = P_d[idx_x(ic+1)];
+        p[4] = P_d[idx_x(ic+2)];
+        u[0] = vx_d[idx_x(ic-2)];  u[1] = vx_d[idx_x(ic-1)];
+        u[2] = vx_i;               u[3] = vx_d[idx_x(ic+1)];
+        u[4] = vx_d[idx_x(ic+2)];
+        v[0] = vy_d[idx_x(ic-2)];  v[1] = vy_d[idx_x(ic-1)];
+        v[2] = vy_i;               v[3] = vy_d[idx_x(ic+1)];
+        v[4] = vy_d[idx_x(ic+2)];
+
+        // Project each stencil point to characteristic variables using cell-i basis.
+        double w[5][4];
+        for (int k = 0; k < 5; ++k) {
+            char_project_x(rho_i, a_i, r[k], p[k], u[k], v[k],
+                           w[k][0], w[k][1], w[k][2], w[k][3]);
+        }
+
+        // PPM reconstruct + CS limit each characteristic field independently.
+        double wL[4], wR[4];
+        for (int n = 0; n < 4; ++n) {
+            double fm2 = w[0][n], fm1 = w[1][n], fc = w[2][n];
+            double fp1 = w[3][n], fp2 = w[4][n];
+            wL[n] = interp_face(fm2, fm1, fc, fp1);
+            wR[n] = interp_face(fm1, fc, fp1, fp2);
+            if (limiter_mode == 1) ppm_cs_limit(fm2, fm1, fc, fp1, fp2, wL[n], wR[n]);
+            else                   ppm_monotonize(fc, wL[n], wR[n]);
+        }
+
+        // Project face values back to primitives.
+        double rL, pL, uL, vL, rR, pR, uR, vR;
+        char_unproject_x(rho_i, a_i, wL[0], wL[1], wL[2], wL[3], rL, pL, uL, vL);
+        char_unproject_x(rho_i, a_i, wR[0], wR[1], wR[2], wR[3], rR, pR, uR, vR);
+
+        rho_xL[flat] = rL;  rho_xR[flat] = rR;
+        P_xL  [flat] = pL;  P_xR  [flat] = pR;
+        vx_xL [flat] = uL;  vx_xR [flat] = uR;
+        vy_xL [flat] = vL;  vy_xR [flat] = vR;
+    }
+
+    // -------- Y direction (swap roles: vy is the normal velocity) --------
+    {
+        double r[5], p[5], u[5], v[5];
+        r[0] = rho_d[idx_y(jc-2)]; r[1] = rho_d[idx_y(jc-1)];
+        r[2] = rho_i;              r[3] = rho_d[idx_y(jc+1)];
+        r[4] = rho_d[idx_y(jc+2)];
+        p[0] = P_d[idx_y(jc-2)];   p[1] = P_d[idx_y(jc-1)];
+        p[2] = P_i;                p[3] = P_d[idx_y(jc+1)];
+        p[4] = P_d[idx_y(jc+2)];
+        u[0] = vx_d[idx_y(jc-2)];  u[1] = vx_d[idx_y(jc-1)];
+        u[2] = vx_i;               u[3] = vx_d[idx_y(jc+1)];
+        u[4] = vx_d[idx_y(jc+2)];
+        v[0] = vy_d[idx_y(jc-2)];  v[1] = vy_d[idx_y(jc-1)];
+        v[2] = vy_i;               v[3] = vy_d[idx_y(jc+1)];
+        v[4] = vy_d[idx_y(jc+2)];
+
+        // For y-sweep the "normal" velocity is vy; reuse char_project_x by
+        // passing (vy, vx) in place of (vx, vy) — the shear channel just
+        // swaps which component is along/transverse.
+        double w[5][4];
+        for (int k = 0; k < 5; ++k) {
+            char_project_x(rho_i, a_i, r[k], p[k], v[k], u[k],
+                           w[k][0], w[k][1], w[k][2], w[k][3]);
+        }
+
+        double wL[4], wR[4];
+        for (int n = 0; n < 4; ++n) {
+            double fm2 = w[0][n], fm1 = w[1][n], fc = w[2][n];
+            double fp1 = w[3][n], fp2 = w[4][n];
+            wL[n] = interp_face(fm2, fm1, fc, fp1);
+            wR[n] = interp_face(fm1, fc, fp1, fp2);
+            if (limiter_mode == 1) ppm_cs_limit(fm2, fm1, fc, fp1, fp2, wL[n], wR[n]);
+            else                   ppm_monotonize(fc, wL[n], wR[n]);
+        }
+
+        double rL, pL, VyL, VxL, rR, pR, VyR, VxR;
+        char_unproject_x(rho_i, a_i, wL[0], wL[1], wL[2], wL[3], rL, pL, VyL, VxL);
+        char_unproject_x(rho_i, a_i, wR[0], wR[1], wR[2], wR[3], rR, pR, VyR, VxR);
+
+        rho_yD[flat] = rL;  rho_yU[flat] = rR;
+        P_yD  [flat] = pL;  P_yU  [flat] = pR;
+        vx_yD [flat] = VxL; vx_yU [flat] = VxR;
+        vy_yD [flat] = VyL; vy_yU [flat] = VyR;
+    }
+}
+
 __global__
 void k_cale2_ppm_reconstruct(const double* rho_d, const double* rhoE_d,
                              const double* pxd,   const double* pyd,
@@ -980,7 +1362,9 @@ void k_cale2_ppm_reconstruct(const double* rho_d, const double* rhoE_d,
                              double* pxd_yD, double* pxd_yU,
                              double* pyd_xL, double* pyd_xR,
                              double* pyd_yD, double* pyd_yU,
-                             int nx, int ny, int bc_mode) {
+                             int nx, int ny, int bc_mode, int limiter_mode) {
+    // limiter_mode: 0 = classical Colella-Woodward (ppm_monotonize),
+    //               1 = Colella-Sekora extremum-preserving (ppm_cs_limit).
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nx*ny) return;
     int ic = flat / ny, jc = flat % ny;
@@ -1009,31 +1393,34 @@ void k_cale2_ppm_reconstruct(const double* rho_d, const double* rhoE_d,
     };
 
     // Interpolate f at face i+1/2 given f_{i-1}, f_i, f_{i+1}, f_{i+2}.
+    // Eq. (17.1): PPM 4-point face interpolant.
     auto interp_face = [](double fm1, double fc, double fp1, double fp2) {
         return (7.0 * (fc + fp1) - (fm1 + fp2)) / 12.0;
     };
 
     auto do_x = [&](const double* f, double& fL, double& fR) {
+        double fm2 = f[idx_x(ic-2)];
         double fm1 = f[idx_x(ic-1)];
         double fc  = f[flat];
         double fp1 = f[idx_x(ic+1)];
         double fp2 = f[idx_x(ic+2)];
-        double fm2 = f[idx_x(ic-2)];
         // left face: interp at i-1/2 using (i-2, i-1, i, i+1)
         fL = interp_face(fm2, fm1, fc, fp1);
         // right face: interp at i+1/2 using (i-1, i, i+1, i+2)
         fR = interp_face(fm1, fc, fp1, fp2);
-        ppm_monotonize(fc, fL, fR);
+        if (limiter_mode == 1) ppm_cs_limit(fm2, fm1, fc, fp1, fp2, fL, fR);
+        else                   ppm_monotonize(fc, fL, fR);
     };
     auto do_y = [&](const double* f, double& fD, double& fU) {
+        double fm2 = f[idx_y(jc-2)];
         double fm1 = f[idx_y(jc-1)];
         double fc  = f[flat];
         double fp1 = f[idx_y(jc+1)];
         double fp2 = f[idx_y(jc+2)];
-        double fm2 = f[idx_y(jc-2)];
         fD = interp_face(fm2, fm1, fc, fp1);
         fU = interp_face(fm1, fc, fp1, fp2);
-        ppm_monotonize(fc, fD, fU);
+        if (limiter_mode == 1) ppm_cs_limit(fm2, fm1, fc, fp1, fp2, fD, fU);
+        else                   ppm_monotonize(fc, fD, fU);
     };
 
     do_x(rho_d,  rho_xL[flat],  rho_xR[flat]);
@@ -1083,9 +1470,11 @@ void k_cale2_remap_east_ppm(const double* X0, const double* Y0,
                             const double* pyd_yD, const double* pyd_yU,
                             double* dm_new, double* ie_new,
                             double* px_new, double* py_new,
-                            int nx, int ny, double dx_u, double dy_u) {
+                            int nx, int ny, double dx_u, double dy_u,
+                            int bc_mode) {
+    bool x_per = (bc_mode & 1) != 0;
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    int n_edges = (nx - 1) * ny;
+    int n_edges = x_per ? nx * ny : (nx - 1) * ny;
     if (flat >= n_edges) return;
     int ic = flat / ny, jc = flat % ny;
     int nny = ny + 1;
@@ -1100,7 +1489,9 @@ void k_cale2_remap_east_ppm(const double* X0, const double* Y0,
     if (As == 0.0) return;
 
     int cL = calc(ic,   jc, ny);
-    int cR = calc(ic+1, jc, ny);
+    int cR_idx = ic + 1;
+    if (x_per && cR_idx >= nx) cR_idx = 0;
+    int cR = calc(cR_idx, jc, ny);
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
 
@@ -1111,6 +1502,12 @@ void k_cale2_remap_east_ppm(const double* X0, const double* Y0,
     double yd = (djc + 0.5) * dy_u;
     double sx = (cx - xd) / dx_u;  // normalised ∈ [-½, ½]
     double sy = (cy - yd) / dy_u;
+    // Wrap sx/sy if donor was folded via periodic BC — swept quad ends up
+    // near domain boundary, unwrap relative to donor centroid.
+    if (x_per) {
+        if (sx >  0.5) sx -= nx;   // -0.5 after wrap
+        if (sx < -0.5) sx += nx;
+    }
     // Clamp in case of slight overshoot (should be tiny for Eulerian rezone).
     if (sx < -0.5) sx = -0.5; else if (sx > 0.5) sx = 0.5;
     if (sy < -0.5) sy = -0.5; else if (sy > 0.5) sy = 0.5;
@@ -1160,11 +1557,14 @@ void k_cale2_remap_north_ppm(const double* X0, const double* Y0,
                              const double* pyd_yD, const double* pyd_yU,
                              double* dm_new, double* ie_new,
                              double* px_new, double* py_new,
-                             int nx, int ny, double dx_u, double dy_u) {
+                             int nx, int ny, double dx_u, double dy_u,
+                             int bc_mode) {
+    bool y_per = (bc_mode & 2) != 0;
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    int n_edges = nx * (ny - 1);
+    int ny_eff = y_per ? ny : (ny - 1);
+    int n_edges = nx * ny_eff;
     if (flat >= n_edges) return;
-    int ic = flat / (ny - 1), jc = flat % (ny - 1);
+    int ic = flat / ny_eff, jc = flat % ny_eff;
     int nny = ny + 1;
 
     int nW = caln(ic,   jc+1, nny);
@@ -1177,7 +1577,9 @@ void k_cale2_remap_north_ppm(const double* X0, const double* Y0,
     if (As == 0.0) return;
 
     int cD = calc(ic, jc,   ny);
-    int cU = calc(ic, jc+1, ny);
+    int cU_idx = jc + 1;
+    if (y_per && cU_idx >= ny) cU_idx = 0;
+    int cU = calc(ic, cU_idx, ny);
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
@@ -1188,6 +1590,10 @@ void k_cale2_remap_north_ppm(const double* X0, const double* Y0,
     double yd = (djc + 0.5) * dy_u;
     double sx = (cx - xd) / dx_u;
     double sy = (cy - yd) / dy_u;
+    if (y_per) {
+        if (sy >  0.5) sy -= ny;
+        if (sy < -0.5) sy += ny;
+    }
     if (sx < -0.5) sx = -0.5; else if (sx > 0.5) sx = 0.5;
     if (sy < -0.5) sy = -0.5; else if (sy > 0.5) sy = 0.5;
 
@@ -1206,6 +1612,208 @@ void k_cale2_remap_north_ppm(const double* X0, const double* Y0,
                           pxd_yD[donor], pxd_yU[donor], sx, sy) * V_sweep;
     double d_py = eval_2d(pyd[donor],    pyd_xL[donor],  pyd_xR[donor],
                           pyd_yD[donor], pyd_yU[donor], sx, sy) * V_sweep;
+
+    if (As > 0.0) {
+        atomicAdd(&dm_new[cD], -d_dm);  atomicAdd(&ie_new[cD], -d_ie);
+        atomicAdd(&px_new[cD], -d_px);  atomicAdd(&py_new[cD], -d_py);
+        atomicAdd(&dm_new[cU],  d_dm);  atomicAdd(&ie_new[cU],  d_ie);
+        atomicAdd(&px_new[cU],  d_px);  atomicAdd(&py_new[cU],  d_py);
+    } else {
+        atomicAdd(&dm_new[cU], -d_dm);  atomicAdd(&ie_new[cU], -d_ie);
+        atomicAdd(&px_new[cU], -d_px);  atomicAdd(&py_new[cU], -d_py);
+        atomicAdd(&dm_new[cD],  d_dm);  atomicAdd(&ie_new[cD],  d_ie);
+        atomicAdd(&px_new[cD],  d_px);  atomicAdd(&py_new[cD],  d_py);
+    }
+}
+
+// ============================================================
+// Primitive-space PPM remap. Input field buffers have semantics:
+//   rho_d  = ρ   ;  rhoE_d = P  ;  pxd = vx  ;  pyd = vy   (per-cell averages)
+//   *_xL/xR/yD/yU are face reconstructions of those same primitives.
+// At the swept centroid we evaluate (ρ̂, P̂, v̂x, v̂y) and convert to
+// conserved fluxes:
+//     d_dm = ρ̂·V_sweep
+//     d_px = ρ̂·v̂x·V_sweep
+//     d_py = ρ̂·v̂y·V_sweep
+//     d_ie = P̂·V_sweep / (γ-1)        (internal energy only, no KE term)
+// Donor-cell subtracts, acceptor-cell adds — discrete conservation is
+// exact because both sides reference the same flux value.
+// ============================================================
+
+__global__
+void k_cale2_remap_east_ppm_prim(const double* X0, const double* Y0,
+                                 const double* X,  const double* Y,
+                                 const double* rho_d,  const double* P_d,
+                                 const double* vx_d,   const double* vy_d,
+                                 const double* rho_xL, const double* rho_xR,
+                                 const double* rho_yD, const double* rho_yU,
+                                 const double* P_xL,   const double* P_xR,
+                                 const double* P_yD,   const double* P_yU,
+                                 const double* vx_xL,  const double* vx_xR,
+                                 const double* vx_yD,  const double* vx_yU,
+                                 const double* vy_xL,  const double* vy_xR,
+                                 const double* vy_yD,  const double* vy_yU,
+                                 double* dm_new, double* ie_new,
+                                 double* px_new, double* py_new,
+                                 int nx, int ny, double dx_u, double dy_u,
+                                 double gam, int bc_mode) {
+    bool x_per = (bc_mode & 1) != 0;
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n_edges = x_per ? nx * ny : (nx - 1) * ny;
+    if (flat >= n_edges) return;
+    int ic = flat / ny, jc = flat % ny;
+    int nny = ny + 1;
+
+    int nA = caln(ic+1, jc,   nny);
+    int nB = caln(ic+1, jc+1, nny);
+    double Ax = X0[nA], Ay = Y0[nA];
+    double Bx = X0[nB], By = Y0[nB];
+    double Anx = X[nA], Any = Y[nA];
+    double Bnx = X[nB], Bny = Y[nB];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+
+    int cL = calc(ic,   jc, ny);
+    int cR_idx = ic + 1;
+    if (x_per && cR_idx >= nx) cR_idx = 0;
+    int cR = calc(cR_idx, jc, ny);
+    int donor = (As > 0.0) ? cL : cR;
+    double V_sweep = fabs(As);
+
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double sx = (cx - xd) / dx_u;
+    double sy = (cy - yd) / dy_u;
+    if (x_per) {
+        if (sx >  0.5) sx -= nx;
+        if (sx < -0.5) sx += nx;
+    }
+    if (sx < -0.5) sx = -0.5; else if (sx > 0.5) sx = 0.5;
+    if (sy < -0.5) sy = -0.5; else if (sy > 0.5) sy = 0.5;
+
+    auto eval_2d = [](double f_bar, double fL, double fR,
+                      double fD, double fU, double sx, double sy) {
+        double fx = ppm_eval(f_bar, fL, fR, sx);
+        double fy = ppm_eval(f_bar, fD, fU, sy);
+        return fx + fy - f_bar;
+    };
+
+    double rho_face = eval_2d(rho_d[donor], rho_xL[donor], rho_xR[donor],
+                              rho_yD[donor], rho_yU[donor], sx, sy);
+    double P_face   = eval_2d(P_d[donor],   P_xL[donor],   P_xR[donor],
+                              P_yD[donor],   P_yU[donor],   sx, sy);
+    double vx_face  = eval_2d(vx_d[donor],  vx_xL[donor],  vx_xR[donor],
+                              vx_yD[donor],  vx_yU[donor],  sx, sy);
+    double vy_face  = eval_2d(vy_d[donor],  vy_xL[donor],  vy_xR[donor],
+                              vy_yD[donor],  vy_yU[donor],  sx, sy);
+
+    // Positivity safety: clamp ρ, P against non-positive values (PPM
+    // in primitive space is robust, but machine-precision overshoot is
+    // still possible at sharp interfaces).
+    rho_face = fmax(rho_face, 1e-30);
+    P_face   = fmax(P_face,   1e-30);
+
+    // Eq. (17.6): primitive → conservative flux at swept centroid.
+    double d_dm = rho_face * V_sweep;
+    double d_px = d_dm * vx_face;
+    double d_py = d_dm * vy_face;
+    double d_ie = P_face * V_sweep / (gam - 1.0);
+
+    if (As > 0.0) {
+        atomicAdd(&dm_new[cL], -d_dm);  atomicAdd(&ie_new[cL], -d_ie);
+        atomicAdd(&px_new[cL], -d_px);  atomicAdd(&py_new[cL], -d_py);
+        atomicAdd(&dm_new[cR],  d_dm);  atomicAdd(&ie_new[cR],  d_ie);
+        atomicAdd(&px_new[cR],  d_px);  atomicAdd(&py_new[cR],  d_py);
+    } else {
+        atomicAdd(&dm_new[cR], -d_dm);  atomicAdd(&ie_new[cR], -d_ie);
+        atomicAdd(&px_new[cR], -d_px);  atomicAdd(&py_new[cR], -d_py);
+        atomicAdd(&dm_new[cL],  d_dm);  atomicAdd(&ie_new[cL],  d_ie);
+        atomicAdd(&px_new[cL],  d_px);  atomicAdd(&py_new[cL],  d_py);
+    }
+}
+
+__global__
+void k_cale2_remap_north_ppm_prim(const double* X0, const double* Y0,
+                                  const double* X,  const double* Y,
+                                  const double* rho_d,  const double* P_d,
+                                  const double* vx_d,   const double* vy_d,
+                                  const double* rho_xL, const double* rho_xR,
+                                  const double* rho_yD, const double* rho_yU,
+                                  const double* P_xL,   const double* P_xR,
+                                  const double* P_yD,   const double* P_yU,
+                                  const double* vx_xL,  const double* vx_xR,
+                                  const double* vx_yD,  const double* vx_yU,
+                                  const double* vy_xL,  const double* vy_xR,
+                                  const double* vy_yD,  const double* vy_yU,
+                                  double* dm_new, double* ie_new,
+                                  double* px_new, double* py_new,
+                                  int nx, int ny, double dx_u, double dy_u,
+                                  double gam, int bc_mode) {
+    bool y_per = (bc_mode & 2) != 0;
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int ny_eff = y_per ? ny : (ny - 1);
+    int n_edges = nx * ny_eff;
+    if (flat >= n_edges) return;
+    int ic = flat / ny_eff, jc = flat % ny_eff;
+    int nny = ny + 1;
+
+    int nW = caln(ic,   jc+1, nny);
+    int nE = caln(ic+1, jc+1, nny);
+    double Ax = X0[nE], Ay = Y0[nE];
+    double Anx = X[nE],  Any = Y[nE];
+    double Bx = X0[nW], By = Y0[nW];
+    double Bnx = X[nW],  Bny = Y[nW];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+
+    int cD = calc(ic, jc,   ny);
+    int cU_idx = jc + 1;
+    if (y_per && cU_idx >= ny) cU_idx = 0;
+    int cU = calc(ic, cU_idx, ny);
+    int donor = (As > 0.0) ? cD : cU;
+    double V_sweep = fabs(As);
+
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double sx = (cx - xd) / dx_u;
+    double sy = (cy - yd) / dy_u;
+    if (y_per) {
+        if (sy >  0.5) sy -= ny;
+        if (sy < -0.5) sy += ny;
+    }
+    if (sx < -0.5) sx = -0.5; else if (sx > 0.5) sx = 0.5;
+    if (sy < -0.5) sy = -0.5; else if (sy > 0.5) sy = 0.5;
+
+    auto eval_2d = [](double f_bar, double fL, double fR,
+                      double fD, double fU, double sx, double sy) {
+        double fx = ppm_eval(f_bar, fL, fR, sx);
+        double fy = ppm_eval(f_bar, fD, fU, sy);
+        return fx + fy - f_bar;
+    };
+
+    double rho_face = eval_2d(rho_d[donor], rho_xL[donor], rho_xR[donor],
+                              rho_yD[donor], rho_yU[donor], sx, sy);
+    double P_face   = eval_2d(P_d[donor],   P_xL[donor],   P_xR[donor],
+                              P_yD[donor],   P_yU[donor],   sx, sy);
+    double vx_face  = eval_2d(vx_d[donor],  vx_xL[donor],  vx_xR[donor],
+                              vx_yD[donor],  vx_yU[donor],  sx, sy);
+    double vy_face  = eval_2d(vy_d[donor],  vy_xL[donor],  vy_xR[donor],
+                              vy_yD[donor],  vy_yU[donor],  sx, sy);
+
+    rho_face = fmax(rho_face, 1e-30);
+    P_face   = fmax(P_face,   1e-30);
+
+    // Eq. (17.6): primitive → conservative flux at swept centroid.
+    double d_dm = rho_face * V_sweep;
+    double d_px = d_dm * vx_face;
+    double d_py = d_dm * vy_face;
+    double d_ie = P_face * V_sweep / (gam - 1.0);
 
     if (As > 0.0) {
         atomicAdd(&dm_new[cD], -d_dm);  atomicAdd(&ie_new[cD], -d_ie);
@@ -1267,9 +1875,20 @@ void k_cale2_snapshot(const double* rho, const double* P, const double* e_int,
 // BOTH sides, but only the "master" thread does the write. This
 // eliminates write races because each non-master partner is never the
 // source of a write — only the master computes and writes to all copies.
+//
+// mode = 0: copy — writes (average of partners) to all partners. Correct for
+//          STATE variables (velocity, positions): periodic duplicates must
+//          hold the same value, and averaging cancels FP roundoff between
+//          partners that were independently rebuilt.
+// mode = 1: sum — writes (sum of partners) to all partners. Correct for
+//          FORCE and MASS-like accumulators: each ghost copy only received
+//          partial contributions from its local-side cells, so the full
+//          physical quantity is the sum across partners. After sync, all
+//          partners hold the full quantity (so that F/m in node_update is
+//          computed correctly and symmetrically).
 __global__
 void k_cale2_periodic_sync_node(double* fX, double* fY,
-                               int nnx, int nny, int bc_mode) {
+                               int nnx, int nny, int bc_mode, int mode) {
     bool x_per = (bc_mode & 1) != 0;
     bool y_per = (bc_mode & 2) != 0;
     if (!x_per && !y_per) return;
@@ -1279,15 +1898,50 @@ void k_cale2_periodic_sync_node(double* fX, double* fY,
     if (flat >= n) return;
     int in = flat / nny, jn = flat % nny;
 
-    // Determine if this thread is a MASTER (smallest representative).
+    // Node is a MASTER iff it is NOT a periodic duplicate. Duplicates are
+    // at in=nnx-1 (under x-periodic) or jn=nny-1 (under y-periodic); both
+    // edges are duplicates under x+y periodic.
+    bool x_dup = x_per && (in == nnx - 1);
+    bool y_dup = y_per && (jn == nny - 1);
+    if (x_dup || y_dup) return;
+
+    // Identify partners in the equivalence class (self + wrap copies).
+    int partners[4];
+    int np = 0;
+    partners[np++] = in * nny + jn;                          // self
+    if (x_per && in == 0)
+        partners[np++] = (nnx - 1) * nny + jn;               // east duplicate
+    if (y_per && jn == 0)
+        partners[np++] = in * nny + (nny - 1);               // north duplicate
+    if (x_per && y_per && in == 0 && jn == 0)
+        partners[np++] = (nnx - 1) * nny + (nny - 1);        // far corner duplicate
+
+    double sx = 0.0, sy = 0.0;
+    for (int k = 0; k < np; ++k) { sx += fX[partners[k]]; sy += fY[partners[k]]; }
+    if (mode == 0) { sx /= np; sy /= np; }
+    for (int k = 0; k < np; ++k) { fX[partners[k]] = sx; fY[partners[k]] = sy; }
+}
+
+// Convenience: scalar-field sync (e.g. mass). Same mode semantics as the
+// 2-component version above.
+__global__
+void k_cale2_periodic_sync_scalar(double* f, int nnx, int nny, int bc_mode, int mode) {
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    if (!x_per && !y_per) return;
+
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n = nnx * nny;
+    if (flat >= n) return;
+    int in = flat / nny, jn = flat % nny;
+
     bool x_master = !x_per || (in == 0);
     bool y_master = !y_per || (jn == 0);
     if (!(x_master && y_master)) return;
 
-    // Identify partner nodes in the periodic equivalence class (up to 4).
     int partners[4];
     int np = 0;
-    partners[np++] = in * nny + jn;   // self (master)
+    partners[np++] = in * nny + jn;
     if (x_per && in == 0)
         partners[np++] = (nnx - 1) * nny + jn;
     if (y_per && jn == 0)
@@ -1295,11 +1949,10 @@ void k_cale2_periodic_sync_node(double* fX, double* fY,
     if (x_per && y_per && in == 0 && jn == 0)
         partners[np++] = (nnx - 1) * nny + (nny - 1);
 
-    // Average over partners and write back to all of them.
-    double sx = 0.0, sy = 0.0;
-    for (int k = 0; k < np; ++k) { sx += fX[partners[k]]; sy += fY[partners[k]]; }
-    sx /= np; sy /= np;
-    for (int k = 0; k < np; ++k) { fX[partners[k]] = sx; fY[partners[k]] = sy; }
+    double s = 0.0;
+    for (int k = 0; k < np; ++k) s += f[partners[k]];
+    if (mode == 0) s /= np;
+    for (int k = 0; k < np; ++k) f[partners[k]] = s;
 }
 
 // Clamp edge-aligned node velocities AFTER rebuild (reflective walls only).
