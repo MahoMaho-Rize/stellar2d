@@ -8,7 +8,7 @@
 
 #ifdef __CUDACC__
 
-// ---- MC (Monotonized Central) limiter ----
+// Eq. (13.3): MC (Monotonized Central) limiter.
 __device__ __forceinline__
 double d_mc_limit(double a, double b)
 {
@@ -20,7 +20,7 @@ double d_mc_limit(double a, double b)
     return s * fmin(av, fmin(ta, tb));
 }
 
-// ---- HSE background evaluated at arbitrary y ----
+// Eq. (13.2): isentropic HSE background evaluated at arbitrary y.
 __device__ __forceinline__
 double d_hse_rho(double y, double rho0_gm1, double coeff, double inv_gm1)
 {
@@ -28,13 +28,14 @@ double d_hse_rho(double y, double rho0_gm1, double coeff, double inv_gm1)
     return pow(fmax(arg, 1e-20), inv_gm1);
 }
 
+// Eq. (13.2): P_HSE = K · ρ_HSE^γ.
 __device__ __forceinline__
 double d_hse_p(double rho, double K, double gamma)
 {
     return K * pow(rho, gamma);
 }
 
-// ---- Conserved to Primitive (total values) ----
+// Eq. (1.1): conserved → primitive (total values, not perturbation).
 __device__ __forceinline__
 void d_cons2prim(double rho, double mx, double my, double E_tot,
                  double gm1,
@@ -43,7 +44,7 @@ void d_cons2prim(double rho, double mx, double my, double E_tot,
     double inv_rho = 1.0 / fmax(rho, 1e-30);
     u = mx * inv_rho;
     v = my * inv_rho;
-    P = gm1 * (E_tot - 0.5 * rho * (u*u + v*v));
+    P = gm1 * (E_tot - 0.5 * rho * (u*u + v*v));   // Eq. (1.2)
     P = fmax(P, 1e-30);
 }
 
@@ -98,16 +99,16 @@ void d_lmhllc(double rhoL, double unL, double utL, double PL,
     double cL = sqrt(gamma * PL / fmax(rhoL, 1e-30));
     double cR = sqrt(gamma * PR / fmax(rhoR, 1e-30));
 
-    // Davis wave speed estimates
+    // Eq. (4.1): Davis wave-speed estimates.
     double SL = fmin(unL - cL, unR - cR);
     double SR = fmax(unL + cL, unR + cR);
 
-    // ---- Low-Mach correction factor f(M) ----
+    // Eq. (14.1-14.2): local Mach number + blending factor f(M).
     double M_cutoff = 1e-3;
     double M_local  = (fabs(unL) + fabs(unR)) / fmax(cL + cR, 1e-30);
     double fM       = fmin(1.0, fmax(M_local, M_cutoff));
 
-    // Contact wave speed S* with LM correction on pressure jump
+    // Eq. (14.3): contact wave S* with LM-corrected pressure jump.
     double denom = rhoL * (SL - unL) - rhoR * (SR - unR);
     if (fabs(denom) < 1e-300) denom = copysign(1e-300, denom);
     double S_star = (fM * (PR - PL) + rhoL * unL * (SL - unL)

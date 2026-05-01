@@ -6,6 +6,7 @@ symptom, root cause, fix, and how to write a regression test.
 
 P01–P22: Low-Mach implicit solver (`lowmach_solver.cu`).
 P23–P29: FAS solver and Strang Cartesian solver.
+P30–P31: cart_ale2 周期邊界與力/速度同步(`cart_ale2_solver.cu`, `cart_ale2_kernels.cu`)。
 
 ---
 
@@ -40,6 +41,8 @@ P23–P29: FAS solver and Strang Cartesian solver.
 27. [P27: Smooth floor returns exact zero for large negative inputs](#p27)
 28. [P28: Entropy wave convergence masked by nonlinear O(A²) error](#p28)
 29. [P29: LM-HLLC acoustic suppression foils sound-wave convergence test](#p29)
+30. [P30: cart_ale2 remap skipped periodic wrap edge](#p30)
+31. [P31: cart_ale2 periodic sync master missed x-only / y-only duplicate classes + wrong accumulator semantics](#p31)
 
 ---
 
@@ -563,6 +566,42 @@ The acoustic suppression is a **feature** for stellar convection simulations whe
 
 ---
 
+<a id="p30"></a>
+## P30: cart_ale2 remap skipped periodic wrap edge
+
+**Symptom**: 在 `--bc-x periodic` 或 `--bc-y periodic` 下,**均勻 advection**(uniform ρ, uniform P, uniform vx=1,vy=0)也會被破壞:|v|_max 從 1.000 漂到 1.079(64²,一步之內),KE 漂 0.03%/step,E 漂 0.004/step,**不是機器精度數值噪聲**。Lecoanet KH 在 t≈0.043 `dt` 塌到 1e-12,所有 PPM 變體(CW/CS,prim/cons,char)都一樣。
+
+**Root cause**: `k_cale2_remap_east` 的 edge 並行範圍是 `(nx-1)*ny`,對應內部 east face `ic ∈ [0, nx-2]`。在 reflective BC 下正確(ic=nx-1 的 east face 是牆壁),**但 x-periodic 下它是 cell nx-1 ↔ cell 0 的 wrap face**,必須算 swept flux。整條 wrap edge 沒處理 → 一整列 mass/momentum/energy 每步不交換,在 cell 0 和 cell nx-1 堆積差異 → 虛假 pressure gradient → 虛假 force → 虛假 vy → 連鎖崩塌。同問題存在於所有 6 個 remap kernel(donor-cell `east/north`、MUSCL `east/north_2nd`、conservative PPM `east/north_ppm`、primitive PPM `east/north_ppm_prim`)。
+
+**Fix**: 所有 remap kernel 加 `bc_mode` 參數,週期時把 `n_edges` 從 `(nx-1)*ny` 擴到 `nx*ny`(y 方向同理),kernel 內 `cR_idx = (ic+1) % nx`(只在 x_per 時),PPM 版的 donor-relative `sx = (cx - xd) / dx_u` 在 wrap 時 `sx -= nx` 或 `+= nx` 展開(MUSCL 2nd 版同理,對 `ex = cx - xd` 做 `-= nx·dx_u`)。solver dispatch 的 `n_east` / `n_north` 同步切換為 `nx*ny`。
+
+**Files**: `src/gpu/cart_ale2_kernels.cu`(6 個 remap kernel 簽名和內部 wrap 邏輯),`src/gpu/cart_ale2_solver.cu`(forward decl + dispatch 傳 `bc_mode` + `n_east/n_north` 計算)。
+
+**Test strategy**: Uniform-advection 守恆測試 — 設 vx=vflow(uniform)、ρ/P uniform、vy=0、gravity=0、bc=periodic。`FORCE_UNIFORM_VX=1` 環境變量已加到 `init_kh_lecoanet`,跑一步後應有 `|KE(t=0) - KE(t=dt)| < 1e-14`、`|v|_max` 變化 ≤ 機器精度。diag 要先排除周期重複 node(見 P31),否則噪聲掩蓋信號。
+
+---
+
+<a id="p31"></a>
+## P31: cart_ale2 periodic sync master missed x-only / y-only duplicate classes + wrong accumulator semantics
+
+**Symptom**: 修了 P30 後 uniform advection 仍漂:64² 一步 |v|_max 1.000 → 1.079 沒變。AV 關了(`--cq-lin 0 --cq-quad 0`)、remap-order 降 0 都沒改善。加 debug 發現 `k_cale2_node_forces` 對 **uniform P 輸出** `|FX|=1.25`(應該 = 0),而 `ΔP = 0`,`Q = 0`。
+
+**Root cause**: 兩個獨立 bug 疊在一起。
+
+(a) **Master 選擇錯**。`k_cale2_periodic_sync_node` 判斷 `x_master = !x_per || (in == 0)`,`y_master = !y_per || (jn == 0)`,`return if (!(x_master && y_master))`。當 `bc_mode = 3`(x + y 都周期),**只 (in=0, jn=0) 通過**,所有 x-only-duplicate node(`in=0, jn∈(0, nny-1)`)和 y-only-duplicate node(`jn=0, in∈(0, nnx-1)`)**從未被 sync**。結果:內部邊界 node 的 F_x = -1.25(因為 cell ic=0 的 SW+NW corner 推出去的力)和 F_x = +1.25(cell nx-1 的 SE+NE 推出去)之和應該是 0,但 sync 不做就維持兩個非零值,node_update 用各自 ±1.25 計算 dv,產生真實運動。
+
+(b) **sync 語義混亂**。原 kernel 對所有欄位都**平均**(`s /= np`)。但 `node_forces` 是 cell-parallel + `atomicAdd`:邊界 node 只收到**自己那半** domain 的 cells 的 subcell force contribution(2/4 cells),所以 partner 之和 = full force,**要 sum 不要 avg**;而 state (velocity, dX) 在兩個副本上本應相等,應 copy/avg。混用一個 sync 函數把 force 也平均,意味著每個 partner 只拿到**一半** of its physically correct force。
+
+**Fix**:
+1. master 判斷改為 `x_dup = x_per && (in == nnx-1)`; `y_dup = y_per && (jn == nny-1)`; `return if (x_dup || y_dup)`。canonical 代表是 `in=0` 和 `jn=0` 線(x-only、y-only、角的 4 副本皆為 master 的子 partner)。
+2. kernel 加 `int mode` 參數:**mode=1 (sum) 給 force**,**mode=0 (copy/avg) 給 velocity/dX**。diagnostics 計算 Σ KE/PE 時也要 **skip `in=nnx-1` 和 `jn=nny-1` 的 duplicate**(否則 Σ m_node 雙計,KE 虛高)。
+
+**Files**: `src/gpu/cart_ale2_kernels.cu:k_cale2_periodic_sync_node`(master 判斷 + mode 參數),`src/gpu/cart_ale2_solver.cu`(3 處 sync 呼叫加 mode;`compute_diagnostics` 的 KE 累加循環 skip duplicates)。
+
+**Test strategy**: 同 P30 的 uniform-advection test,但要求 KE 變化 ≤ 1e-10(比 P30 嚴 5 個數量級,因為兩個 bug 疊起來時漂移很明顯,單獨修一個會看到另一個殘餘)。Lecoanet KH t=5 長跑下 `|E(t) - E(0)| / E(0) < 1.5%`,`IE` 要守到 10 位精度。兩個 bug 都修好後,`dt` 不再塌到 1e-12,可以跑完 5 time units。
+
+---
+
 ## Summary: Regression Test Priority
 
 ### Tier 1 — Correctness fundamentals (must pass for any commit)
@@ -571,6 +610,7 @@ The acoustic suppression is a **feature** for stellar convection simulations whe
 |------|-----------|---------------|
 | HSE zero residual (polar) | P07, P08, P09, P19, P23 | `\|\|R_fluid(U_HSE)\|\|_2 < 1e-20` |
 | HSE zero residual (Cartesian) | P24, P25, P26 | `max\|v\| < 1e-3` after 50 steps |
+| Uniform advection (cart_ale2 periodic) | P30, P31 | `\|KE(dt) - KE(0)\| < 1e-10`, `\|v\|_max` 不變 |
 | Mass conservation | P01 | `\|M_numerical - M_analytic\| < 1e-6` |
 | Floor enforcement | P05, P27 | `rho >= 0`, `P >= floor`, no NaN |
 | Gravity Phi(R) | P01, P02 | `\|Phi(R) + GM/R\| < tol` |

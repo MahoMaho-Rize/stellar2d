@@ -1153,6 +1153,344 @@ because the dynamics are buoyancy-dominated.
 
 ---
 
+## §15 Cartesian Compatible Lagrangian (`cart_lag`)
+
+Staggered quadrilateral mesh on $[0, L_x] \times [0, L_y]$. Cell-centered
+thermodynamic variables $(\rho, P, Q, e_\text{int})$; node-centered kinematic
+variables $(X, Y, v_x, v_y, F_x, F_y)$. Subcell forces distribute the cell's
+pressure + AV work to its 4 corner nodes, then `atomicAdd` to the node
+force buffer. Energy is updated from node displacements dotted with subcell
+forces (Caramana-Shashkov-Whalen 1998, JCP 144) — **compatible** in the sense
+that cell internal energy change equals the work that the cell does on its
+4 corner nodes, to the bit.
+
+### Node mass
+
+$$
+m_n = \tfrac{1}{4} \sum_{c\ \text{adj}\ n} m_c
+\tag{15.1}
+$$
+
+Under periodic BC the adjacent-cell wrap uses modular indexing; node
+copies at `in = nnx-1` and `jn = nny-1` receive `m_n` equal to their
+origin (0-indexed) partner, because they each independently iterate over
+the same wrap set. **Diagnostics must skip those duplicates** when
+computing $\sum m_n$ to avoid double counting (see P31).
+
+### Cell area via shoelace (for pre-Lagrangian volume)
+
+$$
+V_c = \tfrac{1}{2}\left| \sum_{k=0}^{3} X_k Y_{k+1} - X_{k+1} Y_k \right|
+\tag{15.2}
+$$
+
+indices modulo 4.
+
+### Divergence-consistent strain rate
+
+$$
+s = -\frac{1}{V_c} \sum_\text{edges} \tfrac{1}{2}(v_a + v_b) \cdot \hat n_{ab}\,\ell_{ab}
+\tag{15.3}
+$$
+
+Compression-only (`s > 0`) triggers artificial viscosity; dilation
+`s < 0` yields $Q = 0$.
+
+### von Neumann–Richtmyer artificial viscosity
+
+$$
+Q = \rho\left( C_\text{quad}\, (sL)^2 + C_\text{lin}\, c_s\, sL \right) \cdot w_\text{shear}
+\tag{15.4}
+$$
+
+with $L = \sqrt{V_c}$. The shear weight $w_\text{shear} \in [0, 1]$ (default 1)
+optionally reduces $Q$ in shear-dominated cells using an estimate of
+$\partial u/\partial x$, $\partial v/\partial y$ from corner velocity
+differences (`--shear-aware-av`). Defaults $C_\text{quad} = 2$, $C_\text{lin} = 0.5$.
+
+### Subcell edge normal force (per cell, per edge $k$)
+
+$$
+\mathbf{a}_k = (P + Q)\,(\Delta y_k,\; -\Delta x_k), \qquad
+\Delta x_k = X_{k+1} - X_k,\; \Delta y_k = Y_{k+1} - Y_k
+\tag{15.5}
+$$
+
+### Corner subcell force (contributes to node via `atomicAdd`)
+
+$$
+\mathbf{F}_\text{sub}^{(k)} = \tfrac{1}{2}(\mathbf{a}_{k-1} + \mathbf{a}_k)
+\tag{15.6}
+$$
+
+indices modulo 4. For uniform $P$ on a Cartesian cell the four corner
+subcell forces sum to zero around every interior node — this is the
+basis of the uniform-advection invariance check (P30, P31).
+
+### Kick-drift-kick node update
+
+$$
+\begin{aligned}
+\tfrac{1}{2}\Delta v &= \frac{F_n}{m_n} \tfrac{1}{2}\Delta t \\
+\Delta X &= (v_n + \tfrac{1}{2}\Delta v) \Delta t \\
+v_n^{n+1} &= v_n^n + \Delta v
+\end{aligned}
+\tag{15.7}
+$$
+
+### Compatible energy update (per cell)
+
+$$
+m_c \Delta e_c = -\sum_{k=0}^{3} \mathbf{F}_\text{sub}^{(k)} \cdot \Delta X_k^{(\text{node})}
+\tag{15.8}
+$$
+
+Energy removed from node KE equals energy deposited in cell IE, modulo machine epsilon.
+
+### Minimum-height CFL
+
+$$
+\Delta t = \mathrm{CFL} \cdot \min_c \frac{h_c}{c_s + |\mathbf{v}|} \cdot \min\!\left(1, \frac{1}{f_\text{comp}\, s L / c_s}\right)
+\tag{15.9}
+$$
+
+where $h_c$ is the minimum perpendicular height in the (possibly deformed)
+quadrilateral, and $f_\text{comp}$ is a compression-strain safety fraction
+(default 0.25) to avoid grid inversion under strong shocks.
+
+---
+
+## §16 Eulerian Rezone + Swept-Edge Remap (`cart_ale`, `cart_ale2`)
+
+ALE step = Lagrangian substep (§15) → rezone → remap. Rezone: snap every
+node back to its uniform Cartesian position $(X_0, Y_0)$. Remap: transfer
+cell-centered conserved quantities $\{dm, dm \cdot e_\text{int}, p_x, p_y\}$
+across each edge via the **signed swept area** between the Lagrangian-
+displaced edge and the original edge.
+
+### Swept-region signed area (east face of cell $(i,j)$)
+
+$$
+A_\text{sw} = \tfrac{1}{2} \sum_{k=0}^{3} (X_k Y_{k+1} - X_{k+1} Y_k),\quad
+\text{vertices}\ (A_\text{old}, A_\text{new}, B_\text{new}, B_\text{old})
+\tag{16.1}
+$$
+
+$A_\text{sw} > 0$: sweep moved into cell $R$ (donor = $L$);
+$A_\text{sw} < 0$: sweep moved into cell $L$ (donor = $R$).
+
+### First-order donor-cell flux
+
+$$
+\Delta f = \frac{f_\text{donor}}{V_\text{donor}}\,|A_\text{sw}|,\quad
+f \in \{dm,\ dm \cdot e_\text{int},\ p_x,\ p_y\}
+\tag{16.2}
+$$
+
+with a safety clamp $|A_\text{sw}|/V_\text{donor} \le 1/2$.
+
+### MUSCL 2nd-order reconstruction (Kucharik–Shashkov 2012)
+
+Per-cell limited slopes on the reference mesh:
+
+$$
+\partial_x f_c = \phi\!\left(\frac{f_{c+\hat x} - f_c}{\Delta x},\; \frac{f_c - f_{c-\hat x}}{\Delta x}\right)
+\tag{16.3}
+$$
+
+same for $\partial_y f_c$. Limiter $\phi$: `minmod`, van Leer (default),
+or MC (`--remap-limiter`). Face-centroid evaluation:
+
+$$
+\hat f(\xi, \eta) = f_c + \partial_x f_c \cdot (\xi - x_c) + \partial_y f_c \cdot (\eta - y_c)
+\tag{16.4}
+$$
+
+evaluated at the swept-region centroid $(\xi, \eta) = \tfrac{1}{4}\sum A_k$.
+
+### Remap update
+
+$$
+\Delta f_\text{donor} = -\Delta f, \quad \Delta f_\text{acceptor} = +\Delta f
+\tag{16.5}
+$$
+
+Discrete conservation is **exact** because the same flux value is
+subtracted from donor and added to acceptor.
+
+### Periodic BC wrap edge
+
+Under `--bc-x periodic`, the east-face edge $ic = n_x - 1$ is **not** a
+wall but a wrap connecting cell $n_x - 1$ with cell $0$. Remap kernels
+extend their edge count from $(n_x - 1) \cdot n_y$ to $n_x \cdot n_y$
+(and similarly in $y$), with `cR_idx = (ic + 1) \bmod n_x`. The
+face-centroid-relative coordinate $s_x = (c_x - x_\text{donor})/\Delta x$
+must be wrapped: if $s_x > 0.5$ then $s_x \mathrel{-}= n_x$, else if $s_x
+< -0.5$ then $s_x \mathrel{+}= n_x$ (see P30).
+
+### Node velocity rebuild (mass-weighted)
+
+Post-remap node velocity is built from new cell-centered momentum and
+mass density:
+
+$$
+v_n = \frac{\sum_{c\ \text{adj}\ n} \tfrac{1}{4} p_c}{\sum_{c\ \text{adj}\ n} \tfrac{1}{4} m_c}
+\tag{16.6}
+$$
+
+Momentum-conservative: $\sum_n m_n v_n = \sum_c p_c$ to machine precision.
+
+---
+
+## §17 Cart_ale2 PPM Reconstruction Variants
+
+Extends §16 to piecewise-parabolic remap (Colella-Woodward 1984) with
+optional extremum-preserving limiter (Colella-Sekora 2008), primitive-
+variable space, and characteristic-variable projection (Stone et al.
+2008 Appendix A, adiabatic hydro branch of `athena/reconstruct/ppm.cpp`).
+
+### PPM 4-point interpolant
+
+$$
+f_{i+1/2} = \tfrac{1}{12}\bigl(7(f_i + f_{i+1}) - (f_{i-1} + f_{i+2})\bigr)
+\tag{17.1}
+$$
+
+Yielding initial left/right face values $f_L = f_{i-1/2}$, $f_R = f_{i+1/2}$.
+
+### Classical CW monotonization
+
+$$
+\begin{aligned}
+&\text{if } (f_L - f_c)(f_c - f_R) \le 0:\ f_L = f_R = f_c \\
+&\text{else if } \Delta f \cdot \Delta_6 > (\Delta f)^2:\ f_L = 3 f_c - 2 f_R \\
+&\text{else if } \Delta f \cdot \Delta_6 < -(\Delta f)^2:\ f_R = 3 f_c - 2 f_L
+\end{aligned}
+\tag{17.2}
+$$
+
+with $\Delta f = f_R - f_L$, $\Delta_6 = 6(f_c - \tfrac{1}{2}(f_L + f_R))$.
+CW clamps smooth extrema (penalizes KH roll-up).
+
+### Colella-Sekora extremum-preserving limiter
+
+Two stages (`--ppm-limiter cs`, default):
+
+**Stage 1** — face-value correction at smooth extrema, using five-point
+second-derivative stencils:
+$d^2_{i-1} = f_{i-2} + f_i - 2 f_{i-1}$ and likewise $d^2_i$, $d^2_{i+1}$.
+At face $f_{L}$ (i.e. $f_{i-1/2}$), if $(f_L - f_{i-1})(f_i - f_L) < 0$:
+
+$$
+f_L \leftarrow \tfrac{1}{2}(f_{i-1} + f_i) - q_d / 6
+\tag{17.3}
+$$
+
+where $q_a = 3(f_{i-1} + f_i - 2 f_L)$ and
+
+$$
+q_d = \begin{cases}
+\operatorname{sgn}(q_a)\,\min(C_2 |d^2_{i-1}|, C_2 |d^2_i|, |q_a|) & \text{if signs agree} \\
+0 & \text{otherwise}
+\end{cases}
+\tag{17.4}
+$$
+
+with $C_2 = 1.25$. Analogous at $f_R$.
+
+**Stage 2** — parabolic coefficient limiting with smooth-vs-shock
+discrimination. Let $d^2_f = 6(f_L + f_R - 2 f_c)$. If signs of $d^2_{i-1},
+d^2_i, d^2_{i+1}, d^2_f$ all agree,
+
+$$
+q_e = \operatorname{sgn}(d^2_f)\,\min(C_2|d^2_{i-1}|, C_2|d^2_i|, C_2|d^2_{i+1}|, |d^2_f|),\quad
+\rho_r = q_e / d^2_f
+\tag{17.5}
+$$
+
+At a local extremum $(f_c - f_L)(f_R - f_c) \le 0$ and $\rho_r < 1 -
+\epsilon$: scale parabola smoothly ($f_L \leftarrow f_c - \rho_r(f_c - f_L)$,
+$f_R \leftarrow f_c + \rho_r(f_R - f_c)$). Otherwise apply classical CW
+overshoot clamp. The result: smooth peaks survive, true shocks still
+clamp.
+
+### Primitive vs conservative variable space
+
+`--ppm-space cons`: reconstruct the 4 conserved densities
+$\{\rho, \rho e_\text{int}, \rho v_x, \rho v_y\}$. Unstable on smooth shear
+layers where $\rho v_x$ crosses zero (overshoot → negative mass × negative
+velocity → negative pressure).
+
+`--ppm-space prim` (default): reconstruct the 4 primitives
+$\{\rho, P, v_x, v_y\}$. At swept centroid evaluate primitives then
+convert to conserved flux:
+
+$$
+\begin{aligned}
+\Delta \widehat{dm}  &= \hat\rho\,|A_\text{sw}| \\
+\Delta \widehat{p_x} &= \hat\rho\,\hat v_x\,|A_\text{sw}| \\
+\Delta \widehat{p_y} &= \hat\rho\,\hat v_y\,|A_\text{sw}| \\
+\Delta \widehat{ie}  &= \hat P\,|A_\text{sw}| / (\gamma - 1)
+\end{aligned}
+\tag{17.6}
+$$
+
+The same flux value is subtracted from donor and added to acceptor,
+preserving discrete conservation exactly.
+
+### Characteristic projection (default on, `--ppm-char`)
+
+Before PPM reconstruction, project the 5-point primitive stencil into
+local characteristic variables using cell-$i$'s $(\rho_i, a_i)$ where
+$a_i = \sqrt{\gamma P_i / \rho_i}$. For x-direction sweep:
+
+$$
+\begin{aligned}
+w_0 &= \tfrac{1}{2}(P/a^2 - \rho_i\, v_x / a_i)      & \text{(left acoustic)}\\
+w_1 &= \rho - P/a^2                                   & \text{(entropy)}\\
+w_2 &= v_y                                            & \text{(shear)}\\
+w_3 &= \tfrac{1}{2}(P/a^2 + \rho_i\, v_x / a_i)      & \text{(right acoustic)}
+\end{aligned}
+\tag{17.7}
+$$
+
+Apply PPM + CS limiter to each $w_n$ independently. Project back using
+the same $(\rho_i, a_i)$ basis:
+
+$$
+\begin{aligned}
+\rho_f  &= w_0^f + w_1^f + w_3^f \\
+v_x^f   &= a_i(w_3^f - w_0^f)/\rho_i \\
+v_y^f   &= w_2^f \\
+P_f     &= a_i^2(w_0^f + w_3^f)
+\end{aligned}
+\tag{17.8}
+$$
+
+For y-direction sweep, swap the role of $v_x$ and $v_y$ in the projection
+(i.e. pass $v_y$ where $v_x$ appears in Eq. 17.7 and vice versa), then
+unpack with the same swap.
+
+Rationale: in a smooth shear layer, acoustic and shear modes are
+independent — projecting and limiting each mode separately prevents
+shear gradients from triggering pressure overshoots. Mirrors Athena
+`ppm.cpp:99-107` + `characteristic.cpp:235-256, 470-492`.
+
+### KH benchmark (reality check)
+
+The stack (17.1)–(17.8) keeps the Lecoanet canonical KH (Athena iprob=4
+geometry, $k = 1$, $v_\text{flow} = 1$, $P_0 = 10$) stable to $t = 5$ at
+256×512, with IE conserved to 10 digits and total $E$ drift ~1.2%.
+**However**: the kinetic-energy spectrum at $k = 7$, 512×1024 falls as
+$\sim k^{-10}$ past the injection scale, not $k^{-3}$. The effective
+Reynolds number of this ALE stack is bounded by the Caramana subcell
+force dissipation, which is tens of times stronger than an HLLC
+face flux. `cart_ale2` is therefore a **compressible stellar
+convection / PdV pulsation** tool, not a 2D turbulence benchmark
+tool. For Kraichnan cascade studies use the `pseudo_spectral` branch.
+
+---
+
 ## Equation Index
 
 | Eq. | Description | Source file(s) |
@@ -1205,3 +1543,22 @@ because the dynamics are buoyancy-dominated.
 | 14.1–14.2 | LM-HLLC Mach blending | `strang_device.cuh:d_lmhllc`, `fas_hllc.cuh:fas_hllc_lm` |
 | 14.3 | LM-HLLC $S^*$ (Strang) | `strang_device.cuh:d_lmhllc` |
 | 14.4 | LM-HLLC $S^*$ (FAS) | `fas_hllc.cuh:fas_hllc_lm` |
+| 15.1 | Node mass (cart_lag/ale) | `cart_lag_kernels.cu:k_clag_node_mass`, `cart_ale2_kernels.cu:k_cale2_node_mass` |
+| 15.2 | Shoelace cell area | `cart_ale_kernels.cu:k_cale_geometry`, `cart_ale2_kernels.cu:k_cale2_geometry` |
+| 15.3 | Divergence-consistent strain | `cart_ale2_kernels.cu:k_cale2_eos_and_q` |
+| 15.4 | Artificial viscosity | `cart_ale2_kernels.cu:k_cale2_eos_and_q` |
+| 15.5–15.6 | Subcell edge / corner force | `cart_ale2_kernels.cu:k_cale2_node_forces` |
+| 15.7 | Kick-drift-kick node update | `cart_ale2_kernels.cu:k_cale2_node_update` |
+| 15.8 | Compatible energy update | `cart_ale2_kernels.cu:k_cale2_energy_update` |
+| 15.9 | Minimum-height CFL | `cart_ale2_kernels.cu:k_cale2_cfl` |
+| 16.1 | Swept-region signed area | `cart_ale2_kernels.cu:swept_quad_signed` |
+| 16.2 | Donor-cell flux | `cart_ale2_kernels.cu:k_cale2_remap_east`/`north` |
+| 16.3 | Limited slopes | `cart_ale2_kernels.cu:k_cale2_slopes_minmod` |
+| 16.4 | Face centroid MUSCL eval | `cart_ale2_kernels.cu:k_cale2_remap_*_2nd` |
+| 16.5 | Conservative remap update | `cart_ale2_kernels.cu:k_cale2_remap_*` (all variants) |
+| 16.6 | Mass-weighted rebuild | `cart_ale2_kernels.cu:k_cale2_rebuild_node_v` |
+| 17.1 | PPM 4-point interpolant | `cart_ale2_kernels.cu:k_cale2_ppm_reconstruct` |
+| 17.2 | CW monotonization | `cart_ale2_kernels.cu:ppm_monotonize` |
+| 17.3–17.5 | Colella-Sekora limiter | `cart_ale2_kernels.cu:ppm_cs_limit` |
+| 17.6 | Primitive→conservative flux | `cart_ale2_kernels.cu:k_cale2_remap_*_ppm_prim` |
+| 17.7–17.8 | Characteristic projection | `cart_ale2_kernels.cu:char_project_x`, `char_unproject_x`, `k_cale2_ppm_reconstruct_char` |

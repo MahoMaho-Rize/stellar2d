@@ -4,11 +4,13 @@ struct FPrim { double rho, vr, vt, P; };
 struct FFlux4 { double f_rho, f_mr, f_mt, f_E; };
 
 // limiter_type: 0=minmod, 1=van_leer, 2=MC
+// Eq. (3.1): minmod limiter.
 __device__ __forceinline__
 double fas_minmod(double a, double b) {
     return (a*b <= 0.0) ? 0.0 : (fabs(a) < fabs(b) ? a : b);
 }
 
+// Eq. (3.2): van Leer harmonic limiter.
 __device__ __forceinline__
 double fas_van_leer(double a, double b) {
     return (a*b <= 0.0) ? 0.0 : 2.0*a*b/(a+b);
@@ -29,6 +31,7 @@ double fas_limit(double a, double b, int lim_type) {
     return fas_minmod(a, b);
 }
 
+// Eq. (3.3-3.5): MUSCL reconstruction at face i+1/2.
 __device__ __forceinline__
 void fas_recon(double vm1, double v0, double vp1, double vp2,
                double& L, double& R, int lim_type = 0) {
@@ -44,10 +47,11 @@ inline FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
     double vtl = radial ? wl.vt : wl.vr;
     double vtr = radial ? wr.vt : wr.vr;
 
-    double cl = sqrt(gamma*pl/rhol), cr = sqrt(gamma*pr/rhor);
-    double sl = fmin(ul-cl, ur-cr), sr = fmax(ul+cl, ur+cr);
+    double cl = sqrt(gamma*pl/rhol), cr = sqrt(gamma*pr/rhor);   // Eq. (1.3)
+    double sl = fmin(ul-cl, ur-cr), sr = fmax(ul+cl, ur+cr);     // Eq. (4.1)
     double denom = rhol*(sl-ul) - rhor*(sr-ur);
     if (fabs(denom) < 1e-300) denom = -1e-300;
+    // Eq. (4.2): contact wave speed S*.
     double s_star = (pr-pl + rhol*ul*(sl-ul) - rhor*ur*(sr-ur)) / denom;
 
     auto phys_flux = [&](double rho, double u, double vt, double p) -> FFlux4 {
@@ -94,21 +98,22 @@ inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
     double vtl = radial ? wl.vt : wl.vr;
     double vtr = radial ? wr.vt : wr.vr;
 
-    double cl = sqrt(gamma*pl/rhol), cr = sqrt(gamma*pr/rhor);
+    double cl = sqrt(gamma*pl/rhol), cr = sqrt(gamma*pr/rhor);    // Eq. (1.3)
     double c_avg = 0.5*(cl+cr);
-    double M_face = fmax(fabs(ul), fabs(ur)) / fmax(c_avg, 1e-30);
-    double f = fmin(1.0, M_face);
+    double M_face = fmax(fabs(ul), fabs(ur)) / fmax(c_avg, 1e-30); // Eq. (14.1)
+    double f = fmin(1.0, M_face);                                   // Eq. (14.2)
 
-    // Scale pressure difference and wave speeds
+    // Eq. (14.4a): modified left/right pressures P_{L,mod}, P_{R,mod}.
     double p_avg = 0.5*(pl+pr);
     double p_diff = 0.5*f*(pl-pr);
     double pl_mod = p_avg + p_diff;
     double pr_mod = p_avg - p_diff;
 
-    double sl = fmin(ul - cl, ur - cr);
-    double sr = fmax(ul + cl, ur + cr);
+    double sl = fmin(ul - cl, ur - cr);                   // Eq. (4.1)
+    double sr = fmax(ul + cl, ur + cr);                   // Eq. (4.1)
     double denom = rhol*(sl-ul) - rhor*(sr-ur);
     if (fabs(denom) < 1e-300) denom = -1e-300;
+    // Eq. (14.4b): LM-HLLC contact wave (FAS form).
     double s_star = (pr_mod-pl_mod + rhol*ul*(sl-ul) - rhor*ur*(sr-ur)) / denom;
 
     auto phys_flux = [&](double rho, double u, double vt, double p) -> FFlux4 {

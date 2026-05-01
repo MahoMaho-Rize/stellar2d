@@ -45,15 +45,15 @@ __global__ void k_cale2_remap_init(const double*, const double*, const double*, 
     double*, double*, double*, double*, int);
 __global__ void k_cale2_remap_east(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
-    double*, double*, double*, double*, int, int);
+    double*, double*, double*, double*, int, int, int);
 __global__ void k_cale2_remap_north(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
-    double*, double*, double*, double*, int, int);
+    double*, double*, double*, double*, int, int, int);
 __global__ void k_cale2_remap_finalize_cells(const double*, const double*, double*, double*, int);
 __global__ void k_cale2_rebuild_node_v(const double*, const double*, const double*,
     double*, double*, int, int, int);
 __global__ void k_cale2_bc_velocity(double*, double*, int, int, int);
-__global__ void k_cale2_periodic_sync_node(double*, double*, int, int, int);
+__global__ void k_cale2_periodic_sync_node(double*, double*, int, int, int, int);
 __global__ void k_cale2_cell_densities(const double*, const double*, const double*, const double*,
     const double*, double*, double*, double*, double*, int);
 __global__ void k_cale2_slopes_minmod(const double*, const double*, const double*, const double*,
@@ -63,12 +63,12 @@ __global__ void k_cale2_remap_east_2nd(const double*, const double*, const doubl
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, double*, double*, double*, int, int, double, double);
+    double*, double*, double*, double*, int, int, double, double, int);
 __global__ void k_cale2_remap_north_2nd(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, double*, double*, double*, int, int, double, double);
+    double*, double*, double*, double*, int, int, double, double, int);
 __global__ void k_cale2_snapshot(const double*, const double*, const double*,
     const double*, const double*, double*, int, int);
 __global__ void k_cale2_ppm_reconstruct(const double*, const double*, const double*, const double*,
@@ -76,21 +76,43 @@ __global__ void k_cale2_ppm_reconstruct(const double*, const double*, const doub
     double*, double*, double*, double*,
     double*, double*, double*, double*,
     double*, double*, double*, double*,
-    int, int, int);
+    int, int, int, int);
+__global__ void k_cale2_cell_primitives(const double*, const double*, const double*, const double*,
+    const double*, double*, double*, double*, double*, int, double);
+__global__ void k_cale2_ppm_reconstruct_char(const double*, const double*, const double*, const double*,
+    double*, double*, double*, double*,
+    double*, double*, double*, double*,
+    double*, double*, double*, double*,
+    double*, double*, double*, double*,
+    int, int, int, int, double);
+__global__ void k_cale2_remap_east_ppm_prim(const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    double*, double*, double*, double*, int, int, double, double, double, int);
+__global__ void k_cale2_remap_north_ppm_prim(const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, const double*,
+    double*, double*, double*, double*, int, int, double, double, double, int);
 __global__ void k_cale2_remap_east_ppm(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, double*, double*, double*, int, int, double, double);
+    double*, double*, double*, double*, int, int, double, double, int);
 __global__ void k_cale2_remap_north_ppm(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, double*, double*, double*, int, int, double, double);
+    double*, double*, double*, double*, int, int, double, double, int);
 
 // Stash Lx/Ly at module scope (used by non-member IC loaders).
 static double g_Lx = 0.0, g_Ly = 0.0;
@@ -423,6 +445,92 @@ void CartAle2Solver::init_kh_shear(double rho_light, double rho_heavy,
 }
 
 // ============================================================
+// Lecoanet (2015) canonical KH test — dual tanh shear layers,
+// fully periodic in x and y, zero gravity. Mirrors Athena
+// src/pgen/kh.cpp iprob=4 up to coordinate origin shift.
+//
+// Shear layer centres at y = ¼·Ly and ¾·Ly (zones z1, z2).
+// Profiles (with a = thickness, σ = perturbation width):
+//   ρ(y)  = 1 + ½·drho_rho0 · [tanh((y-z1)/a) - tanh((y-z2)/a)]
+//   vx(y) = vflow · [tanh((y-z1)/a) - tanh((y-z2)/a) - 1]
+//   vy(x,y) = -amp·ave_sin(x) · [exp(-(y-z1)²/σ²) + exp(-(y-z2)²/σ²)]
+// where ave_sin averages sin(2π·x/Lx) with its x-shifted counterpart
+// to suppress FP-asymmetry over long integrations (Athena kh.cpp:348).
+// Pressure uniform P0 ⇒ e_int = P0/((γ-1)·ρ). g_y forced to 0.
+// Recommended BC: x and y periodic (--bc-x periodic --bc-y periodic).
+// ============================================================
+void CartAle2Solver::init_kh_lecoanet(double vflow, double amp,
+                                      double drho_rho0, double P0, int k) {
+    g_y = 0.0;
+    double Lx = g_Lx, Ly = g_Ly;
+
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    const double z1 = 0.25 * Ly;
+    const double z2 = 0.75 * Ly;
+    const double a_width = 0.05 * Ly;    // Athena uses 0.05
+    const double sigma   = 0.2  * Ly;    // Athena uses 0.2
+    const double x_mid   = 0.5  * Lx;    // symmetry axis for FP-symmetric sin
+
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double dT = std::tanh((Yc - z1)/a_width) - std::tanh((Yc - z2)/a_width);
+            double rho = 1.0 + 0.5 * drho_rho0 * dT;
+            double e   = P0 / ((gamma - 1.0) * rho);
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = e;
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+
+    // DIAGNOSTIC: force uniform vx to isolate whether the tanh(y) vx profile
+    // is the source of |v| accumulation. Set FORCE_UNIFORM_VX=1 → vx=vflow
+    // everywhere; otherwise normal Lecoanet dual-tanh profile.
+    bool force_uniform = (std::getenv("FORCE_UNIFORM_VX") != nullptr);
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double x = h_X[f], y = h_Y[f];
+            double dT = std::tanh((y - z1)/a_width) - std::tanh((y - z2)/a_width);
+            double vx = force_uniform ? vflow : vflow * (dT - 1.0);
+            // FP-symmetric sin centred on x_mid: average sin at x and at shifted partner.
+            double x_shift = x - x_mid;
+            double phase = k * 2.0 * M_PI * x_shift / Lx;
+            double ave_sin = std::sin(phase);
+            double x_partner = (x_shift > 0.0)
+                              ? (x_shift - 0.5 * Lx)
+                              : (x_shift + 0.5 * Lx);
+            ave_sin -= std::sin(k * 2.0 * M_PI * x_partner / Lx);
+            ave_sin *= 0.5;
+            double env = std::exp(-(y - z1)*(y - z1) / (sigma*sigma))
+                       + std::exp(-(y - z2)*(y - z2) / (sigma*sigma));
+            double vy = -amp * ave_sin * env;
+            h_vX[f] = vx;
+            h_vY[f] = vy;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+
+    std::fprintf(stderr,
+        "  CartAle2 KH Lecoanet: vflow=%g, amp=%g, drho_rho0=%g, P0=%g, "
+        "k=%d, z1=%g, z2=%g, a=%g, σ=%g (g=0, requires periodic BC)\n",
+        vflow, amp, drho_rho0, P0, k, z1, z2, a_width, sigma);
+}
+
+// ============================================================
 // One ALE step
 // ============================================================
 double CartAle2Solver::step(double t, double t_end) {
@@ -456,8 +564,11 @@ double CartAle2Solver::step(double t, double t_end) {
 
     k_cale2_bc_reflective<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, d_vX, d_vY,
                                        d_FX, d_FY, nnode_x, nnode_y, bc_mode);
+    // Forces accumulated via cell-parallel atomicAdd — periodic duplicates
+    // only received contributions from their local-side cells, so sum
+    // across partners to recover the full physical force on each node.
     if (bc_mode) k_cale2_periodic_sync_node<<<BNode, B>>>(d_FX, d_FY,
-                                                         nnode_x, nnode_y, bc_mode);
+                                                         nnode_x, nnode_y, bc_mode, /*mode=sum*/ 1);
 
     k_cale2_node_update<<<BNode, B>>>(d_X, d_Y, d_vX, d_vY, d_FX, d_FY,
                                      d_mnode, d_dX, d_dY, dt, nnode);
@@ -465,8 +576,10 @@ double CartAle2Solver::step(double t, double t_end) {
     k_cale2_bc_reflective<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, d_vX, d_vY,
                                        d_FX, d_FY, nnode_x, nnode_y, bc_mode);
     if (bc_mode) {
-        k_cale2_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode);
-        k_cale2_periodic_sync_node<<<BNode, B>>>(d_dX, d_dY, nnode_x, nnode_y, bc_mode);
+        // State variables — average partners to keep duplicates bit-identical
+        // (FP roundoff cancellation); sum would incorrectly double the value.
+        k_cale2_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode, /*mode=copy*/ 0);
+        k_cale2_periodic_sync_node<<<BNode, B>>>(d_dX, d_dY, nnode_x, nnode_y, bc_mode, /*mode=copy*/ 0);
     }
 
     k_cale2_energy_update<<<BCell, B>>>(nx, ny, d_FSX, d_FSY,
@@ -482,24 +595,74 @@ double CartAle2Solver::step(double t, double t_end) {
     k_cale2_remap_init<<<BCell, B>>>(d_dm, d_e_int, d_px_cell, d_py_cell,
                                     d_dm_new, d_ie_new, d_px_new, d_py_new, ncell);
 
-    int n_east = (nx - 1) * ny;
-    int n_north = nx * (ny - 1);
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    int n_east  = x_per ? nx * ny       : (nx - 1) * ny;
+    int n_north = y_per ? nx * ny       : nx * (ny - 1);
 
     if (remap_order >= 2) {
-        // Build per-cell densities once (used by both MUSCL and PPM paths).
-        k_cale2_cell_densities<<<BCell, B>>>(
-            d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
-            d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens, ncell);
-
-        if (ppm_enabled) {
-            // PPM piecewise-parabolic reconstruction of the 4 density fields.
+        if (ppm_enabled && ppm_primitive) {
+            // Primitive-space PPM: reconstruct (ρ, P, vx, vy) instead of
+            // (ρ, ρe, ρvx, ρvy). Avoids the px=ρvx sign-flip overshoot
+            // pathology at smooth shear interfaces (e.g. Lecoanet KH).
+            // Semantically reuse the density buffers as primitive storage:
+            //   d_rho_dens ← ρ, d_rhoE_dens ← P, d_pxd_dens ← vx, d_pyd_dens ← vy.
+            k_cale2_cell_primitives<<<BCell, B>>>(
+                d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
+                d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens, ncell, gamma);
+            if (ppm_char) {
+                k_cale2_ppm_reconstruct_char<<<BCell, B>>>(
+                    d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
+                    d_rho_xL,  d_rho_xR,  d_rho_yD,  d_rho_yU,
+                    d_rhoE_xL, d_rhoE_xR, d_rhoE_yD, d_rhoE_yU,
+                    d_pxd_xL,  d_pxd_xR,  d_pxd_yD,  d_pxd_yU,
+                    d_pyd_xL,  d_pyd_xR,  d_pyd_yD,  d_pyd_yU,
+                    nx, ny, bc_mode, ppm_cs_limiter, gamma);
+            } else {
+                k_cale2_ppm_reconstruct<<<BCell, B>>>(
+                    d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
+                    d_rho_xL,  d_rho_xR,  d_rho_yD,  d_rho_yU,
+                    d_rhoE_xL, d_rhoE_xR, d_rhoE_yD, d_rhoE_yU,
+                    d_pxd_xL,  d_pxd_xR,  d_pxd_yD,  d_pxd_yU,
+                    d_pyd_xL,  d_pyd_xR,  d_pyd_yD,  d_pyd_yU,
+                    nx, ny, bc_mode, ppm_cs_limiter);
+            }
+            if (n_east > 0) {
+                int BE = (n_east + B - 1) / B;
+                k_cale2_remap_east_ppm_prim<<<BE, B>>>(
+                    d_X0, d_Y0, d_X, d_Y,
+                    d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
+                    d_rho_xL,  d_rho_xR,  d_rho_yD,  d_rho_yU,
+                    d_rhoE_xL, d_rhoE_xR, d_rhoE_yD, d_rhoE_yU,
+                    d_pxd_xL,  d_pxd_xR,  d_pxd_yD,  d_pxd_yU,
+                    d_pyd_xL,  d_pyd_xR,  d_pyd_yD,  d_pyd_yU,
+                    d_dm_new, d_ie_new, d_px_new, d_py_new,
+                    nx, ny, dx_u, dy_u, gamma, bc_mode);
+            }
+            if (n_north > 0) {
+                int BN = (n_north + B - 1) / B;
+                k_cale2_remap_north_ppm_prim<<<BN, B>>>(
+                    d_X0, d_Y0, d_X, d_Y,
+                    d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
+                    d_rho_xL,  d_rho_xR,  d_rho_yD,  d_rho_yU,
+                    d_rhoE_xL, d_rhoE_xR, d_rhoE_yD, d_rhoE_yU,
+                    d_pxd_xL,  d_pxd_xR,  d_pxd_yD,  d_pxd_yU,
+                    d_pyd_xL,  d_pyd_xR,  d_pyd_yD,  d_pyd_yU,
+                    d_dm_new, d_ie_new, d_px_new, d_py_new,
+                    nx, ny, dx_u, dy_u, gamma, bc_mode);
+            }
+        } else if (ppm_enabled) {
+            // Legacy conservative-variable PPM (retained for A/B comparison).
+            k_cale2_cell_densities<<<BCell, B>>>(
+                d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
+                d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens, ncell);
             k_cale2_ppm_reconstruct<<<BCell, B>>>(
                 d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
                 d_rho_xL,  d_rho_xR,  d_rho_yD,  d_rho_yU,
                 d_rhoE_xL, d_rhoE_xR, d_rhoE_yD, d_rhoE_yU,
                 d_pxd_xL,  d_pxd_xR,  d_pxd_yD,  d_pxd_yU,
                 d_pyd_xL,  d_pyd_xR,  d_pyd_yD,  d_pyd_yU,
-                nx, ny, bc_mode);
+                nx, ny, bc_mode, ppm_cs_limiter);
             if (n_east > 0) {
                 int BE = (n_east + B - 1) / B;
                 k_cale2_remap_east_ppm<<<BE, B>>>(
@@ -510,7 +673,7 @@ double CartAle2Solver::step(double t, double t_end) {
                     d_pxd_xL,  d_pxd_xR,  d_pxd_yD,  d_pxd_yU,
                     d_pyd_xL,  d_pyd_xR,  d_pyd_yD,  d_pyd_yU,
                     d_dm_new, d_ie_new, d_px_new, d_py_new,
-                    nx, ny, dx_u, dy_u);
+                    nx, ny, dx_u, dy_u, bc_mode);
             }
             if (n_north > 0) {
                 int BN = (n_north + B - 1) / B;
@@ -522,9 +685,13 @@ double CartAle2Solver::step(double t, double t_end) {
                     d_pxd_xL,  d_pxd_xR,  d_pxd_yD,  d_pxd_yU,
                     d_pyd_xL,  d_pyd_xR,  d_pyd_yD,  d_pyd_yU,
                     d_dm_new, d_ie_new, d_px_new, d_py_new,
-                    nx, ny, dx_u, dy_u);
+                    nx, ny, dx_u, dy_u, bc_mode);
             }
         } else {
+            // MUSCL path uses conservative densities — build them here.
+            k_cale2_cell_densities<<<BCell, B>>>(
+                d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
+                d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens, ncell);
             // MUSCL path (original).
             k_cale2_slopes_minmod<<<BCell, B>>>(
                 d_rho_dens, d_rhoE_dens, d_pxd_dens, d_pyd_dens,
@@ -543,7 +710,7 @@ double CartAle2Solver::step(double t, double t_end) {
                     d_pxd_sx,  d_pxd_sy,
                     d_pyd_sx,  d_pyd_sy,
                     d_dm_new, d_ie_new, d_px_new, d_py_new,
-                    nx, ny, dx_u, dy_u);
+                    nx, ny, dx_u, dy_u, bc_mode);
             }
             if (n_north > 0) {
                 int BN = (n_north + B - 1) / B;
@@ -555,7 +722,7 @@ double CartAle2Solver::step(double t, double t_end) {
                     d_pxd_sx,  d_pxd_sy,
                     d_pyd_sx,  d_pyd_sy,
                     d_dm_new, d_ie_new, d_px_new, d_py_new,
-                    nx, ny, dx_u, dy_u);
+                    nx, ny, dx_u, dy_u, bc_mode);
             }
         }
     } else {
@@ -563,13 +730,13 @@ double CartAle2Solver::step(double t, double t_end) {
             int BE = (n_east + B - 1) / B;
             k_cale2_remap_east<<<BE, B>>>(d_X0, d_Y0, d_X, d_Y,
                                          d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
-                                         d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny);
+                                         d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny, bc_mode);
         }
         if (n_north > 0) {
             int BN = (n_north + B - 1) / B;
             k_cale2_remap_north<<<BN, B>>>(d_X0, d_Y0, d_X, d_Y,
                                           d_dm, d_e_int, d_px_cell, d_py_cell, d_Area0,
-                                          d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny);
+                                          d_dm_new, d_ie_new, d_px_new, d_py_new, nx, ny, bc_mode);
         }
     }
 
@@ -581,7 +748,7 @@ double CartAle2Solver::step(double t, double t_end) {
                                         d_vX, d_vY, nx, ny, bc_mode);
     k_cale2_bc_velocity<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode);
     if (bc_mode) k_cale2_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY,
-                                                         nnode_x, nnode_y, bc_mode);
+                                                         nnode_x, nnode_y, bc_mode, /*mode=copy*/ 0);
 
     // --- Phase R: snap mesh back to uniform ------------------
     k_cale2_reset_mesh<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, nnode);
@@ -615,11 +782,44 @@ CartAle2Solver::Diagnostics CartAle2Solver::compute_diagnostics() {
     CUDA_CHECK(cudaMemcpy(h_vY.data(), d_vY,    nnode*sizeof(double), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(h_m.data(),  d_mnode, nnode*sizeof(double), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(h_Y.data(),  d_Y,     nnode*sizeof(double), cudaMemcpyDeviceToHost));
-    for (int n = 0; n < nnode; ++n) {
-        double v2 = h_vX[n]*h_vX[n] + h_vY[n]*h_vY[n];
-        d.total_KE += 0.5 * h_m[n] * v2;
-        d.max_v = std::max(d.max_v, std::sqrt(v2));
-        d.total_PE += h_m[n] * g_y * h_Y[n];
+    // Periodic BC: nodes at in=nnode_x-1 are the same physical point as in=0
+    // (and ditto for jn). Skip the duplicate copies when accumulating KE/PE
+    // to avoid double-counting.
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    double max_vy = 0.0;
+    for (int in = 0; in < nnode_x; ++in) {
+        if (x_per && in == nnode_x - 1) continue;
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            if (y_per && jn == nnode_y - 1) continue;
+            int n = in * nnode_y + jn;
+            double v2 = h_vX[n]*h_vX[n] + h_vY[n]*h_vY[n];
+            d.total_KE += 0.5 * h_m[n] * v2;
+            d.max_v = std::max(d.max_v, std::sqrt(v2));
+            max_vy = std::max(max_vy, std::fabs(h_vY[n]));
+            d.total_PE += h_m[n] * g_y * h_Y[n];
+        }
+    }
+    // Temporary diagnostic: print max |vy| to stderr to help trace spurious
+    // cross-stream velocity accumulation in uniform-advection tests.
+    if (std::getenv("DEBUG_MAXVY") != nullptr) {
+        std::vector<double> h_P(ncell), h_Q(ncell), h_FX(nnode), h_FY(nnode);
+        CUDA_CHECK(cudaMemcpy(h_P.data(),  d_P,  ncell*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_Q.data(),  d_Q,  ncell*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_FX.data(), d_FX, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_FY.data(), d_FY, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+        double Pmin=h_P[0], Pmax=h_P[0], Qmin=h_Q[0], Qmax=h_Q[0];
+        for (int c = 0; c < ncell; ++c) {
+            Pmin = std::min(Pmin, h_P[c]); Pmax = std::max(Pmax, h_P[c]);
+            Qmin = std::min(Qmin, h_Q[c]); Qmax = std::max(Qmax, h_Q[c]);
+        }
+        double FXmax=0, FYmax=0;
+        for (int n=0;n<nnode;++n) {
+            FXmax = std::max(FXmax, std::fabs(h_FX[n]));
+            FYmax = std::max(FYmax, std::fabs(h_FY[n]));
+        }
+        std::fprintf(stderr, "  [diag] max|vy|=%.6e P=[%.6e,%.6e] ΔP=%.2e Q=[%.6e,%.6e] |FX|=%.3e |FY|=%.3e\n",
+                     max_vy, Pmin, Pmax, Pmax-Pmin, Qmin, Qmax, FXmax, FYmax);
     }
     d.total_E = d.total_KE + d.total_internal_E + d.total_PE;
     double cs_max = 0.0;
