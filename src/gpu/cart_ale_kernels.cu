@@ -638,9 +638,35 @@ __device__ __forceinline__ double minmod(double a, double b) {
     return (aa < ab) ? a : b;
 }
 
-// Per-cell minmod slopes on the uniform reference mesh.
+// van Leer harmonic limiter: smoother than minmod near smooth extrema.
+// Returns 2ab/(a+b) when a*b > 0, else 0.
+__device__ __forceinline__ double vanleer(double a, double b) {
+    double ab = a * b;
+    if (ab <= 0.0) return 0.0;
+    return 2.0 * ab / (a + b);
+}
+
+// MC (monotonized central) limiter: limit[minmod(2a, 2b, (a+b)/2)].
+// Slightly sharper than van Leer, still TVD.
+__device__ __forceinline__ double mc_lim(double a, double b) {
+    if (a * b <= 0.0) return 0.0;
+    double ctr = 0.5 * (a + b);
+    double two_a = 2.0 * a, two_b = 2.0 * b;
+    double sgn = (a > 0.0) ? 1.0 : -1.0;
+    double amin = fmin(fmin(fabs(ctr), fabs(two_a)), fabs(two_b));
+    return sgn * amin;
+}
+
+__device__ __forceinline__ double apply_limiter(double a, double b, int id) {
+    if (id == 1) return vanleer(a, b);
+    if (id == 2) return mc_lim(a, b);
+    return minmod(a, b);
+}
+
+// Per-cell limited slopes on the uniform reference mesh.
 // Boundary cells use a one-sided slope if only one neighbor exists,
 // but we keep it simple and zero them (donor-cell limit near walls).
+// limiter_id: 0=minmod (default), 1=van Leer, 2=MC.
 __global__
 void k_cale_slopes_minmod(const double* rho_d, const double* rhoE_d,
                           const double* pxd,   const double* pyd,
@@ -648,7 +674,8 @@ void k_cale_slopes_minmod(const double* rho_d, const double* rhoE_d,
                           double* rhoE_sx, double* rhoE_sy,
                           double* pxd_sx,  double* pxd_sy,
                           double* pyd_sx,  double* pyd_sy,
-                          int nx, int ny, double dx_u, double dy_u) {
+                          int nx, int ny, double dx_u, double dy_u,
+                          int limiter_id) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nx*ny) return;
     int ic = flat / ny, jc = flat % ny;
@@ -658,14 +685,14 @@ void k_cale_slopes_minmod(const double* rho_d, const double* rhoE_d,
         if (ic > 0 && ic < nx - 1) {
             double dfL = (fc - f[(ic-1)*ny + jc]) / dx_u;
             double dfR = (f[(ic+1)*ny + jc] - fc) / dx_u;
-            sx = minmod(dfL, dfR);
+            sx = apply_limiter(dfL, dfR, limiter_id);
         } else {
             sx = 0.0;
         }
         if (jc > 0 && jc < ny - 1) {
             double dfD = (fc - f[ic*ny + (jc-1)]) / dy_u;
             double dfU = (f[ic*ny + (jc+1)] - fc) / dy_u;
-            sy = minmod(dfD, dfU);
+            sy = apply_limiter(dfD, dfU, limiter_id);
         } else {
             sy = 0.0;
         }

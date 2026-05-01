@@ -89,8 +89,10 @@ struct CartAleSolver {
     double comp_dt_frac = 0.25;
     double g_y = 0.0;                // downward gravity magnitude (pulls −y)
     // Remap order: 1 = donor-cell (legacy, kept for regression), 2 = MUSCL-in-remap
-    // with minmod limiter (Kucharik-Shashkov 2012). Default is 2.
+    // with slope limiter (Kucharik-Shashkov 2012). Default is 2.
     int remap_order = 2;
+    // Limiter for 2nd-order remap: 0=minmod, 1=van Leer (default), 2=MC.
+    int remap_limiter = 1;
 
     // ---- Bookkeeping ----
     double dt_current = 0.0;
