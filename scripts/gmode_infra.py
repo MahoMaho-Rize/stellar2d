@@ -296,6 +296,93 @@ def solve_gmode_cowling_spherical(r, N2, ell, n_modes):
     return omega_sq, psi
 
 
+def solve_gmode_cowling_spherical_regular(r, N2, ell, n_modes):
+    """Spherical scalar reduction with GYRE-style regular-at-origin BC.
+
+    Same equation as `solve_gmode_cowling_spherical`:
+        -ψ'' + ell(ell+1)/r² · ψ = omega^{-2} · ell(ell+1) · N²/r² · ψ,
+        ψ = rho_0 r² xi_r
+
+    but at the inner boundary we enforce the Frobenius regularity
+    condition  ψ ∼ r^{ell+1}  (i.e.  xi_r  is finite at r=0) rather than
+    Dirichlet ψ(r_lo) = 0.  Translating the condition onto the FD stencil:
+
+        ψ'(r_lo) = (ell+1)/r_lo · ψ(r_lo)
+    →   (ψ_1 - ψ_0) / dr = (ell+1)/r_lo · ψ_0
+    →   ψ_0 = κ · ψ_1,    κ = 1 / (1 + (ell+1)·dr / r_lo)
+
+    We eliminate ψ_0 from the interior problem by patching row i=1 of the
+    tridiagonal, absorbing the coupling to ψ_0 into the diagonal entry.
+
+    The outer boundary keeps the Dirichlet ψ(r_hi) = 0 (GYRE's VACUUM BC
+    corresponds to p' = 0 at the stellar surface; for the scalar
+    reduction ψ = rho_0 r² xi_r this does NOT map to ψ = 0 in general,
+    but if r_hi is safely inside the cavity where N² ≈ 0 already, the
+    Dirichlet approximation is adequate -- the eigenfunctions have
+    small amplitude there regardless).
+    """
+    r = np.asarray(r, dtype=float)
+    N = len(r)
+    dr = r[1] - r[0]
+    if not np.allclose(np.diff(r), dr, rtol=1e-10):
+        raise ValueError("uniform r required")
+    if np.min(r) <= 0:
+        raise ValueError("r must be strictly positive")
+
+    # Interior indices run from i=1..N-2; we eliminate ψ_0 via the regular
+    # condition and enforce ψ_{N-1} = 0 via Dirichlet.
+    M = N - 2
+    r_int = r[1:-1]
+    r_lo = r[0]
+
+    # Regular-at-origin: ψ_0 = κ ψ_1
+    kappa = 1.0 / (1.0 + (ell + 1.0) * dr / r_lo)
+
+    # FD second derivative on interior points, normally
+    #    ψ''_i ≈ (ψ_{i-1} - 2ψ_i + ψ_{i+1}) / dr²
+    # Row i=1 references ψ_0 = κ ψ_1; substitute and absorb into the
+    # diagonal of row 1:
+    #    ψ''_1 ≈ (κ ψ_1 - 2 ψ_1 + ψ_2) / dr² = ((κ - 2) ψ_1 + ψ_2) / dr²
+    # Compared to the standard stencil, the diagonal changes from -2 to
+    # (κ - 2) and the sub-diagonal off-diagonal coupling to ψ_0 is gone.
+    A_op = np.zeros((M, M))
+    for i in range(M):
+        A_op[i, i] = 2.0 / dr ** 2 + ell * (ell + 1.0) / (r_int[i] ** 2)
+        if i > 0:
+            A_op[i, i - 1] = -1.0 / dr ** 2
+        if i < M - 1:
+            A_op[i, i + 1] = -1.0 / dr ** 2
+    # Patch row 0 (i.e. i=1 in the global index): replace diag 2 → 2 - κ
+    A_op[0, 0] = (2.0 - kappa) / dr ** 2 + ell * (ell + 1.0) / (r_int[0] ** 2)
+
+    # Weight B = diag(ell(ell+1) N²/r²)
+    w = ell * (ell + 1.0) * N2[1:-1] / (r_int ** 2)
+    B_op = np.diag(w)
+
+    lam, vec = scipy.linalg.eig(A_op, B_op)
+    lam_r = lam.real
+    lam_r[np.abs(lam.imag) > 1e-6 * np.abs(lam_r)] = np.nan
+    mask = np.isfinite(lam_r) & (lam_r > 0)
+    lam_r = lam_r[mask]
+    vec = vec.real[:, mask]
+
+    order = np.argsort(lam_r)[:n_modes]
+    lam_sel = lam_r[order]
+    vec_sel = vec[:, order]
+    omega_sq = 1.0 / lam_sel
+
+    # Reconstruct full-grid ψ: ψ_0 = κ ψ_1, ψ_{N-1} = 0.
+    psi = np.zeros((N, vec_sel.shape[1]))
+    psi[1:-1, :] = vec_sel
+    psi[0, :] = kappa * vec_sel[0, :]
+    for i in range(psi.shape[1]):
+        norm = np.sqrt(np.sum(psi[:, i] ** 2) * dr)
+        if norm > 0:
+            psi[:, i] /= norm
+
+    return omega_sq, psi
+
+
 def cheb(N):
     """Chebyshev-Gauss-Lobatto points on [-1,1] and the differentiation matrix D.
 
