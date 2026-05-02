@@ -525,7 +525,8 @@ int main(int argc, char** argv) {
                || cfg.test_case == "sl_poisson_test"
                || cfg.test_case == "sl_poisson_test_boussinesq"
                || cfg.test_case == "kh_shear_boussinesq"
-               || cfg.test_case == "gmode_pulsation") {
+               || cfg.test_case == "gmode_pulsation"
+               || cfg.test_case == "gmode_2d_evp") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -1265,11 +1266,12 @@ int main(int argc, char** argv) {
             && cfg.test_case != "sl_poisson_test"
             && cfg.test_case != "sl_poisson_test_boussinesq"
             && cfg.test_case != "kh_shear_boussinesq"
-            && cfg.test_case != "gmode_pulsation") {
+            && cfg.test_case != "gmode_pulsation"
+            && cfg.test_case != "gmode_2d_evp") {
             std::fprintf(stderr,
                 "ERROR: anelastic_sl supports --test {sl_basis_check, "
                 "sl_poisson_test[_boussinesq], kh_shear_boussinesq, "
-                "gmode_pulsation}\n");
+                "gmode_pulsation, gmode_2d_evp}\n");
             return 1;
         }
         AnelasticSLSolver ansl;
@@ -1277,14 +1279,62 @@ int main(int argc, char** argv) {
         ansl.init(cfg.ntheta, cfg.nr, n_modes,
                   cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
 
-        std::string bg = (cfg.test_case == "kh_shear_boussinesq"
-                          || cfg.test_case == "sl_poisson_test_boussinesq")
-                         ? "boussinesq" : "lane_emden_1_5";
-        ansl.set_background(bg, 0.01);
+        std::string bg;
+        double bg_arg = 0.01;
+        if (cfg.test_case == "kh_shear_boussinesq"
+            || cfg.test_case == "sl_poisson_test_boussinesq") {
+            bg = "boussinesq";
+        } else if (cfg.test_case == "gmode_pulsation"
+                   || cfg.test_case == "gmode_2d_evp") {
+            bg = "stratified_n2";
+            // Re-use ps_vshear as the N² value knob for this test (default 1.0).
+            bg_arg = (cfg.ps_vshear > 0.0) ? cfg.ps_vshear : 1.0;
+        } else {
+            bg = "lane_emden_1_5";
+        }
+        ansl.set_background(bg, bg_arg);
 
         if (cfg.test_case == "sl_poisson_test"
             || cfg.test_case == "sl_poisson_test_boussinesq") {
             ansl.manufactured_test();
+        }
+
+        if (cfg.test_case == "gmode_2d_evp") {
+            int kx_int = (cfg.ps_k > 0) ? cfg.ps_k : 1;
+            double kx_phys = kx_int * 2.0 * M_PI / ansl.Lx;
+            int n_modes_req = 10;
+            std::vector<double> omega_sq, v_modes;
+            ansl.compute_2d_gmode_evp(kx_phys, n_modes_req, omega_sq, v_modes);
+            double N2 = bg_arg;
+            std::fprintf(stderr,
+                "  2D g-mode EVP at k_x_int=%d  (k_x_phys=%g, N²=%g)\n",
+                kx_int, kx_phys, N2);
+            std::fprintf(stderr,
+                "  %3s  %16s  %14s  %12s\n",
+                "n", "ω²_CUDA", "ω²_analytic", "rel err");
+            for (size_t n = 0; n < omega_sq.size(); ++n) {
+                double ky = (double)(n + 1) * M_PI / ansl.Ly;
+                double ex = N2 * kx_phys * kx_phys /
+                            (kx_phys * kx_phys + ky * ky);
+                double rel = std::fabs(omega_sq[n] - ex) / ex;
+                std::fprintf(stderr,
+                    "  %3zu  %16.10e  %14.10e  %12.3e\n",
+                    n + 1, omega_sq[n], ex, rel);
+            }
+
+            // Dump ω² and eigenvectors to CSV for downstream use.
+            char csv_path[512];
+            std::snprintf(csv_path, sizeof(csv_path), "%s/gmode_2d_evp.csv",
+                          run_dir.c_str());
+            FILE* fp = std::fopen(csv_path, "w");
+            std::fprintf(fp, "# ny=%d, Lx=%g, Ly=%g, kx_int=%d, N2=%g\n",
+                         ansl.ny, ansl.Lx, ansl.Ly, kx_int, N2);
+            std::fprintf(fp, "# omega_sq (n_modes values):\n");
+            for (double w : omega_sq) std::fprintf(fp, "%.15e\n", w);
+            std::fprintf(fp, "# v_modes ((ny-2) × n_modes column-major):\n");
+            for (double x : v_modes) std::fprintf(fp, "%.15e\n", x);
+            std::fclose(fp);
+            std::fprintf(stderr, "  2D EVP written to %s\n", csv_path);
         }
 
         if (cfg.test_case == "gmode_pulsation") {
@@ -1292,6 +1342,20 @@ int main(int argc, char** argv) {
             double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-3;
             int k_y = (cfg.ps_k > 0) ? cfg.ps_k : 1;
             ansl.init_gmode_pulsation(amp, k_y);
+            if (std::getenv("ANSL_DUMP_STEP1")) {
+                // Run exactly ONE step and dump v, b at y=Ly/2 for Python compare.
+                double dt1 = ansl.step();
+                std::vector<double> hv, hu;
+                ansl.download_uv(hu, hv);
+                std::vector<double> hb;
+                ansl.download_b(hb);
+                int jy = ansl.ny / 2, ix = ansl.nx / 4;
+                int k = jy * ansl.nx + ix;
+                std::fprintf(stderr,
+                    "  [STEP1 DUMP] dt=%.6e  v[jy=%d,ix=%d]=%.6e  b[]=%.6e  u[]=%.6e\n",
+                    dt1, jy, ix, hv[k], hb[k], hu[k]);
+                std::exit(0);
+            }
             std::fprintf(stderr,
                 "  AnelasticSL gmode run: tend=%g, cfl=%g, amp=%g, k_y=%d\n",
                 cfg.t_end, cfg.cfl, amp, k_y);

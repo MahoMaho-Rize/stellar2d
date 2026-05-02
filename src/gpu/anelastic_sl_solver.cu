@@ -341,6 +341,12 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
             h_rho[k] = rho_fine[j] + a * (rho_fine[j + 1] - rho_fine[j]);
             if (h_rho[k] < rho_cut) h_rho[k] = rho_cut;
         }
+    } else if (kind == "stratified_n2") {
+        // Uniform ρ₀ = 1 with a separate, user-supplied constant N² (stored
+        // in the `rho_cut` argument for this kind).  This is the analytically
+        // tractable Boussinesq-stratified limit: g-modes have the exact
+        // dispersion ω² = N²·k_x²/(k_x² + k_y²).
+        for (int k = 0; k < ny; ++k) h_rho[k] = 1.0;
     } else {
         std::fprintf(stderr, "AnelasticSL: unknown background '%s'.\n", kind.c_str());
         std::exit(1);
@@ -369,6 +375,9 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     // In other words, the col-major d_Dy IS the row-major D transposed.  We
     // store D_scaled (which is row-major) directly:
     //   d_Dy[jy' + jy*ny] = D_scaled[jy*ny + jy']     (values match, layout differs)
+    // Host-side row-major copy (for 2D EVP assembly etc.)
+    h_Dy_row.assign(D_scaled.begin(), D_scaled.end());
+
     std::vector<double> h_Dy_col((size_t)ny * ny);
     for (int i = 0; i < ny; ++i) {
         for (int j = 0; j < ny; ++j) {
@@ -387,7 +396,7 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     }
 
     // ρ₀'(y) on CGL = D · ρ₀  (used by anelastic continuity and N²).
-    std::vector<double> h_rho_prime(ny, 0.0);
+    h_rho_prime.assign(ny, 0.0);
     for (int i = 0; i < ny; ++i) {
         double s = 0.0;
         for (int j = 0; j < ny; ++j) s += D_scaled[(size_t)i * ny + j] * h_rho[j];
@@ -402,12 +411,17 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     // (convectively stable where ρ decreases with height).  g=1 by default.
     // Boussinesq background sets N² ≡ 0.
     is_anelastic = (kind != "boussinesq");
-    std::vector<double> h_N2(ny, 0.0);
-    if (is_anelastic) {
+    h_N2.assign(ny, 0.0);
+    if (kind == "stratified_n2") {
+        // Constant N² supplied via the rho_cut argument (reused as N²-value
+        // channel for this branch; ρ₀ is uniform so no surface cutoff needed).
+        for (int i = 0; i < ny; ++i) h_N2[i] = rho_cut;
+    } else if (is_anelastic) {
+        // Lane-Emden proxy: N² ≈ g·max(0, −ρ'/ρ) (convectively stable where ρ↓).
         const double g_const = 1.0;
         for (int i = 0; i < ny; ++i) {
             double dlnrho = h_rho_prime[i] / std::max(h_rho[i], 1e-12);
-            double n2 = -g_const * dlnrho;        // positive if ρ decreases
+            double n2 = -g_const * dlnrho;
             h_N2[i] = std::max(0.0, n2);
         }
     }
@@ -778,33 +792,65 @@ void AnelasticSLSolver::init_kh_shear(double vshear, double amp, int k) {
         vshear, amp, k, delta, sigma);
 }
 
-// ── Phase 1d IC: g-mode-like sinusoid in y ──────────────────────────────
-// Sets u = 0, v = amp · sin(k_y · π · y / Ly) · sin(kx_0 · x),  b = 0.
-// The eigenmodes of the linearised anelastic system are SL modes; here we
-// seed a pure sine (which is the exact g-mode shape for Boussinesq) and
-// let the anelastic operator respond — in a real run it evolves into the
-// correct eigenmode within one oscillation period.
+// ── Phase 1d IC: internal-gravity-wave eigenmode seed ───────────────────
+// Seeds u = v = 0, b = amp · sin(k_x · 2π · x/Lx) · sin(k_y · π · y/Ly).
+// Linearised about ρ₀ = 1, constant N², this is the exact eigenmode of
+// the incompressible Boussinesq-stratified system with analytic frequency
+//     ω² = N² · k_x² / (k_x² + k_y²)
+// where k_x (per-x) = k_x_int · 2π/Lx  and  k_y = k_y_int · π/Ly
+// (sin on [0, Ly] matches Dirichlet wall BC).
 void AnelasticSLSolver::init_gmode_pulsation(double amp, int k_y) {
-    std::vector<double> h_u(ncell, 0.0);
+    // Debug mode (env ANSL_PROJECT_TEST=1): seed v = sin(k_x x)·sin(k_y π y/Ly)
+    // instead of b, then run a single projection to check the analytic
+    // correction  v → v · k_x²/(k_x² + k_y²).
+    const bool projection_test = (std::getenv("ANSL_PROJECT_TEST") != nullptr);
+    std::vector<double> h_b(ncell, 0.0);
     std::vector<double> h_v(ncell, 0.0);
-    const double kx_phys = 2.0 * M_PI / Lx;   // k_x = 1 mode in x
+    const double kx_phys = 2.0 * M_PI / Lx;    // x-wavenumber: k_x_int = 1
     for (int jy = 0; jy < ny; ++jy) {
         double y = h_y_cgl[jy];
         double shape = std::sin((double)k_y * M_PI * y / Ly);
         for (int ix = 0; ix < nx; ++ix) {
             double x = ix * dx;
-            h_v[jy * nx + ix] = amp * shape * std::sin(kx_phys * x);
+            double f = amp * shape * std::sin(kx_phys * x);
+            if (projection_test) h_v[jy * nx + ix] = f;
+            else                 h_b[jy * nx + ix] = f;
         }
     }
-    CUDA_CHECK(cudaMemcpy(d_u, h_u.data(), sizeof(double) * ncell, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_v, h_v.data(), sizeof(double) * ncell, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemset(d_b, 0, sizeof(double) * ncell));
+    CUDA_CHECK(cudaMemset(d_u, 0, sizeof(double) * ncell));
+    CUDA_CHECK(cudaMemcpy(d_v, h_v.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_b, h_b.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
     dt_current = 0.0;
     step_count = 0;
-    project_div_free();
+    if (projection_test) {
+        // Capture v BEFORE projection, run projection, compute expected ratio
+        std::vector<double> v_before(ncell), v_after(ncell);
+        CUDA_CHECK(cudaMemcpy(v_before.data(), d_v, sizeof(double) * ncell,
+                              cudaMemcpyDeviceToHost));
+        project_div_free();
+        CUDA_CHECK(cudaMemcpy(v_after.data(), d_v, sizeof(double) * ncell,
+                              cudaMemcpyDeviceToHost));
+        double ky_phys = k_y * M_PI / Ly;
+        double expected_ratio = kx_phys * kx_phys /
+                                (kx_phys * kx_phys + ky_phys * ky_phys);
+        // Probe at (jy_mid, ix_mid) where sin is largest
+        int jy = ny / 2, ix = nx / 4;
+        double vb = v_before[jy * nx + ix];
+        double va = v_after[jy * nx + ix];
+        double actual_ratio = va / vb;
+        std::fprintf(stderr,
+            "  [PROJECT TEST] v_before=%.6e, v_after=%.6e, ratio=%.6f, expected=%.6f, diff=%.3e\n",
+            vb, va, actual_ratio, expected_ratio,
+            std::fabs(actual_ratio - expected_ratio));
+    } else {
+        project_div_free();
+    }
     std::fprintf(stderr,
-        "  AnelasticSL gmode IC: amp=%g, k_y=%d, anelastic=%d\n",
-        amp, k_y, (int)is_anelastic);
+        "  AnelasticSL gmode IC: amp=%g, k_y=%d, kx_int=1, anelastic=%d%s\n",
+        amp, k_y, (int)is_anelastic,
+        projection_test ? ", PROJECTION TEST" : "");
 }
 
 double AnelasticSLSolver::probe_v_center() {
@@ -820,6 +866,199 @@ double AnelasticSLSolver::probe_v_center() {
 void AnelasticSLSolver::download_b(std::vector<double>& h_b) {
     h_b.resize(ncell);
     CUDA_CHECK(cudaMemcpy(h_b.data(), d_b, sizeof(double) * ncell, cudaMemcpyDeviceToHost));
+}
+
+// ── 2D anelastic g-mode EVP (single k_x, cuSOLVER Xgeev) ────────────────
+// Builds scalar operator  A v = ω² B v  with
+//     A = k_x² diag(N² ρ₀)         (diagonal, ny-2)
+//     B = -D diag(ρ₀) D + k_x² diag(ρ₀)   (dense, ny-2)
+// on interior CGL nodes.  Solves via M = B⁻¹ A followed by cusolverDnXgeev.
+// All steps on device (getrf, getrs, Xgeev).  Host only for light indexing.
+void AnelasticSLSolver::compute_2d_gmode_evp(double kx_phys,
+                                             int n_modes_out,
+                                             std::vector<double>& omega_sq_out,
+                                             std::vector<double>& v_modes_out) {
+    if (h_Dy_row.empty()) {
+        std::fprintf(stderr,
+            "compute_2d_gmode_evp: call set_background() first.\n");
+        std::exit(1);
+    }
+    const int M_int = ny - 2;
+    const double kx2 = kx_phys * kx_phys;
+
+    // ---------- Host-side assembly (col-major for cuBLAS/cuSOLVER) ---------
+    // We must build B on the FULL ny × ny grid, then slice to interior.
+    // Otherwise the discrete operator -∂y(ρ∂y) loses its coupling to the
+    // boundary nodes (Python reference does exactly this full-then-slice).
+    //
+    // h_Dy_row is row-major:  D_full[i,j] = h_Dy_row[i*ny + j].
+    // Build T_full = diag(ρ)·D_full  and  B_full = -D·T + k²·diag(ρ)
+    // in row-major to match h_Dy_row, then slice interior into col-major.
+
+    std::vector<double> T_full((size_t)ny * ny, 0.0);
+    for (int i = 0; i < ny; ++i) {
+        for (int j = 0; j < ny; ++j) {
+            T_full[(size_t)i * ny + j] = h_rho[i] * h_Dy_row[(size_t)i * ny + j];
+        }
+    }
+    std::vector<double> B_full((size_t)ny * ny, 0.0);
+    for (int i = 0; i < ny; ++i) {
+        for (int j = 0; j < ny; ++j) {
+            double s = 0.0;
+            for (int k = 0; k < ny; ++k) {
+                s += h_Dy_row[(size_t)i * ny + k] * T_full[(size_t)k * ny + j];
+            }
+            B_full[(size_t)i * ny + j] = -s;
+        }
+        B_full[(size_t)i * ny + i] += kx2 * h_rho[i];
+    }
+
+    // Slice interior (row-major) and store col-major for cuSOLVER/cuBLAS.
+    std::vector<double> B_cm((size_t)M_int * M_int, 0.0);
+    for (int i = 0; i < M_int; ++i) {
+        for (int j = 0; j < M_int; ++j) {
+            // col-major B_cm(i, j) = B_full(i+1, j+1)
+            B_cm[(size_t)i + (size_t)j * M_int] =
+                B_full[(size_t)(i + 1) * ny + (j + 1)];
+        }
+    }
+
+    // A is diagonal: A = k_x² N² ρ  on interior nodes (col-major dense).
+    std::vector<double> A_cm((size_t)M_int * M_int, 0.0);
+    for (int i = 0; i < M_int; ++i) {
+        A_cm[(size_t)i + (size_t)i * M_int] = kx2 * h_N2[i + 1] * h_rho[i + 1];
+    }
+
+    // ---------- Solve B · M = A for M  (cuSOLVER DnDgetrf + DnDgetrs) ------
+    cusolverDnHandle_t solver = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreate(&solver));
+
+    double *d_B = nullptr, *d_A = nullptr;
+    int *d_ipiv = nullptr, *d_info = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_B,    sizeof(double) * (size_t)M_int * M_int));
+    CUDA_CHECK(cudaMalloc(&d_A,    sizeof(double) * (size_t)M_int * M_int));
+    CUDA_CHECK(cudaMalloc(&d_ipiv, sizeof(int) * M_int));
+    CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
+    CUDA_CHECK(cudaMemcpy(d_B, B_cm.data(),
+                          sizeof(double) * (size_t)M_int * M_int,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_A, A_cm.data(),
+                          sizeof(double) * (size_t)M_int * M_int,
+                          cudaMemcpyHostToDevice));
+
+
+    int getrf_work_size = 0;
+    CUSOLVER_CHECK(cusolverDnDgetrf_bufferSize(solver, M_int, M_int,
+                                               d_B, M_int, &getrf_work_size));
+    double* d_getrf_work = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_getrf_work, sizeof(double) * getrf_work_size));
+    CUSOLVER_CHECK(cusolverDnDgetrf(solver, M_int, M_int, d_B, M_int,
+                                    d_getrf_work, d_ipiv, d_info));
+    int h_info = 0;
+    CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+    if (h_info != 0) {
+        std::fprintf(stderr,
+            "compute_2d_gmode_evp: getrf info=%d (B not invertible).\n", h_info);
+        std::exit(1);
+    }
+    CUSOLVER_CHECK(cusolverDnDgetrs(solver, CUBLAS_OP_N, M_int, M_int,
+                                    d_B, M_int, d_ipiv, d_A, M_int, d_info));
+    // d_A now holds M = B⁻¹ A  (col-major, M_int × M_int).
+
+    // ---------- Solve standard EVP  M u = λ u  with cusolverDnXgeev -------
+    cusolverDnParams_t params = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreateParams(&params));
+
+    cuDoubleComplex *d_Mc = nullptr, *d_W = nullptr, *d_VR = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_Mc, sizeof(cuDoubleComplex) * (size_t)M_int * M_int));
+    CUDA_CHECK(cudaMalloc(&d_W,  sizeof(cuDoubleComplex) * M_int));
+    CUDA_CHECK(cudaMalloc(&d_VR, sizeof(cuDoubleComplex) * (size_t)M_int * M_int));
+
+    // Pack real M into complex (Im=0).  Reuse k_real_to_cplx_local from file.
+    int block = 256;
+    int total = M_int * M_int;
+    int grid = (total + block - 1) / block;
+    k_real_to_cplx_local<<<grid, block>>>(d_Mc, d_A, total);
+
+    size_t work_device = 0, work_host = 0;
+    CUSOLVER_CHECK(cusolverDnXgeev_bufferSize(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)M_int,
+        CUDA_C_64F, d_Mc, (int64_t)M_int,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)M_int,    // VL unused
+        CUDA_C_64F, d_VR,    (int64_t)M_int,
+        CUDA_C_64F, &work_device, &work_host));
+    void *d_work = nullptr, *h_work = nullptr;
+    if (work_device) CUDA_CHECK(cudaMalloc(&d_work, work_device));
+    if (work_host) h_work = std::malloc(work_host);
+    CUSOLVER_CHECK(cusolverDnXgeev(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)M_int,
+        CUDA_C_64F, d_Mc, (int64_t)M_int,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)M_int,
+        CUDA_C_64F, d_VR,    (int64_t)M_int,
+        CUDA_C_64F, d_work, work_device, h_work, work_host, d_info));
+    CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+    if (h_info != 0) {
+        std::fprintf(stderr,
+            "compute_2d_gmode_evp: Xgeev info=%d.\n", h_info);
+        std::exit(1);
+    }
+
+    // Download eigenvalues + eigenvectors, filter real-positive.
+    std::vector<cuDoubleComplex> h_W(M_int);
+    std::vector<cuDoubleComplex> h_VR((size_t)M_int * M_int);
+    CUDA_CHECK(cudaMemcpy(h_W.data(),  d_W,  sizeof(cuDoubleComplex) * M_int,
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_VR.data(), d_VR,
+                          sizeof(cuDoubleComplex) * (size_t)M_int * M_int,
+                          cudaMemcpyDeviceToHost));
+
+    struct EigPair { double omega_sq; int idx; };
+    std::vector<EigPair> good;
+    int n_dropped_imag = 0, n_dropped_neg = 0;
+    double max_imag_ratio = 0.0;
+    for (int k = 0; k < M_int; ++k) {
+        double re = h_W[k].x;
+        double im = h_W[k].y;
+        if (!std::isfinite(re)) continue;
+        double ratio = std::fabs(im) / (std::fabs(re) + 1e-30);
+        if (ratio > max_imag_ratio) max_imag_ratio = ratio;
+        if (ratio > 1e-8) { ++n_dropped_imag; continue; }
+        if (re <= 0.0) { ++n_dropped_neg; continue; }
+        good.push_back({re, k});
+    }
+    std::fprintf(stderr,
+        "  [2D EVP] total=%d, kept=%zu, dropped imag=%d neg=%d, max_imag_ratio=%.3e\n",
+        M_int, good.size(), n_dropped_imag, n_dropped_neg, max_imag_ratio);
+    std::sort(good.begin(), good.end(),
+              [](const EigPair& a, const EigPair& b) {
+                  return a.omega_sq > b.omega_sq;
+              });
+    int n_out = std::min(n_modes_out, (int)good.size());
+    omega_sq_out.resize(n_out);
+    v_modes_out.assign((size_t)M_int * n_out, 0.0);
+    for (int k = 0; k < n_out; ++k) {
+        omega_sq_out[k] = good[k].omega_sq;
+        int col = good[k].idx;
+        for (int i = 0; i < M_int; ++i) {
+            v_modes_out[(size_t)i + (size_t)k * M_int] =
+                h_VR[(size_t)i + (size_t)col * M_int].x;
+        }
+    }
+
+    // Cleanup
+    std::free(h_work);
+    cudaFree(d_work);
+    cudaFree(d_Mc); cudaFree(d_W); cudaFree(d_VR);
+    cudaFree(d_getrf_work);
+    cudaFree(d_B); cudaFree(d_A); cudaFree(d_ipiv); cudaFree(d_info);
+    cusolverDnDestroyParams(params);
+    cusolverDnDestroy(solver);
 }
 
 // ── GPU-resident max|f| reduction ───────────────────────────────────────

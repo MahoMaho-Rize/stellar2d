@@ -57,6 +57,9 @@ struct AnelasticSLSolver {
     std::vector<double> h_mu;          // SL eigenvalues μ_n (ascending)
     std::vector<double> h_Psi;         // (ny, n_modes) column-major, CGL-grid eigenfunctions
     std::vector<double> h_cc_weights;  // Clenshaw-Curtis quadrature weights
+    std::vector<double> h_Dy_row;      // D (row-major, ny × ny) on [0, Ly] — kept for 2D EVP assembly
+    std::vector<double> h_rho_prime;   // ρ₀'(y) on CGL nodes
+    std::vector<double> h_N2;          // N²(y) on CGL nodes (0 for Boussinesq)
 
     // ── Device-side buffers ──────────────────────────────────────────────
     // Physical fields (row-major ny × nx: y is slow, x is fast — consistent
@@ -168,6 +171,28 @@ struct AnelasticSLSolver {
     double probe_v_center();
 
     void download_b(std::vector<double>& h_b);
+
+    // ────────────────────────────────────────────────────────────────────
+    // 2D anelastic g-mode EVP  (Phase 1e foundation)
+    // Solves, for a single x-mode k_x (physical wavenumber, not index):
+    //     A v = ω² B v,      A = k_x² diag(N² ρ₀),
+    //     B = -∂_y (ρ₀ ∂_y) + k_x² diag(ρ₀),
+    // on interior CGL nodes (Dirichlet v = 0 at both walls).
+    //
+    // Requires init() + set_background() already called so that D_scaled,
+    // ρ₀(y), N²(y) are all in place.
+    //
+    // Outputs are host-side:
+    //   omega_sq  : descending ω²  (length n_modes)
+    //   v_modes   : (ny-2, n_modes) column-major, real eigenvectors on
+    //               interior CGL nodes (extend by zero at walls to reconstruct)
+    //
+    // Uses cuSOLVER's 64-bit API (cusolverDnXgeev) on M = B⁻¹ A.  Host
+    // inversion keeps the GPU path to a single Xgeev of a complex matrix.
+    void compute_2d_gmode_evp(double kx_phys,
+                              int n_modes,
+                              std::vector<double>& omega_sq,
+                              std::vector<double>& v_modes);
 
     // Manufactured-solution self-test (Phase 1b).  Constructs a known π_exact,
     // computes the analytic RHS, runs the pipeline, measures L2 error.

@@ -17,6 +17,12 @@ import numpy as np
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("csv", type=Path)
+    ap.add_argument("--N2",  type=float, default=None,
+                    help="Brunt-Väisälä² (compare ω² to N²·k_x²/(k_x²+k_y²))")
+    ap.add_argument("--Lx",  type=float, default=None)
+    ap.add_argument("--Ly",  type=float, default=None)
+    ap.add_argument("--kx",  type=int, default=1, help="x-mode integer (default 1)")
+    ap.add_argument("--ky",  type=int, default=1, help="y-mode integer (default 1)")
     args = ap.parse_args()
 
     data = np.loadtxt(args.csv, comments="#")
@@ -59,6 +65,23 @@ def main():
     if not np.isfinite(omega_peak) or omega_peak <= 0:
         print("FAIL: invalid peak frequency.")
         sys.exit(1)
+
+    if args.N2 is not None and args.Lx is not None and args.Ly is not None:
+        kx_phys = args.kx * 2 * np.pi / args.Lx
+        ky_phys = args.ky * np.pi / args.Ly       # Dirichlet in y → half-period sine
+        omega_sq_analytic = args.N2 * kx_phys**2 / (kx_phys**2 + ky_phys**2)
+        rel_err = abs(omega_sq_peak - omega_sq_analytic) / omega_sq_analytic
+        print()
+        print(f"  analytic ω² = N²·k_x²/(k_x²+k_y²)")
+        print(f"       N² = {args.N2:.4f}, k_x = {kx_phys:.4f}, k_y = {ky_phys:.4f}")
+        print(f"       ω²_analytic = {omega_sq_analytic:.6f}")
+        print(f"       ω²_measured = {omega_sq_peak:.6f}")
+        print(f"       rel err     = {rel_err:.3e}")
+        if rel_err < 5e-3:
+            print("PASS: g-mode dispersion matches analytic prediction to <5e-3.")
+        else:
+            print(f"WARN: rel err {rel_err:.2e} > 5e-3 (expected for low resolution).")
+
     print("OK")
 
 
