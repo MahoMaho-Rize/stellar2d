@@ -25,15 +25,18 @@ header-includes: |
 
 # 0. About this document
 
-This document consolidates four prior technical notes
-(`anelastic_SL_spectral_design.md`,
-`liouville_SL_spectral_derivation.md`,
-`reduced_pressure_liouville.md`,
-`liouville_singularity_causality.md`) produced during 2026-05-01..03 into
-a single integrated reference, updated with the post-Phase-0-ext+
-conclusions.  The four original files are retained in the repository as
-a record of the reasoning trajectory; each one now carries a prominent
-header pointing the reader here and to the formal report.
+This document consolidates four prior technical notes produced during
+2026-05-01..03 into a single integrated reference, updated with the
+post-Phase-0-ext+ conclusions.  The four predecessors are:
+
+- `anelastic_SL_spectral_design.md`
+- `liouville_SL_spectral_derivation.md`
+- `reduced_pressure_liouville.md`
+- `liouville_singularity_causality.md`
+
+All four original files are retained in the repository as a record of
+the reasoning trajectory; each one now carries a prominent header
+pointing the reader here and to the formal report.
 
 **Relationship to the formal report**.  The formal English report
 `docs/spectral_stratified_poisson_report_2026-05-03.md` is the
@@ -61,7 +64,7 @@ intended starting point for a developer joining the project.
 
 The existing `pseudo_spectral` solver handles uniform-density,
 doubly-periodic, two-dimensional incompressible Navier--Stokes
-($\rho = \mathrm{const}$, $\nabla\cdot\bm{u} = 0$) in
+($\rho = \mathrm{const}$, $\nabla\cdot u = 0$) in
 vorticity--streamfunction form.  Stellar convection requires stratified
 density $\rhob(y)$, which promotes the pressure equation to a
 **variable-coefficient elliptic problem**.  Fourier modes are no longer
@@ -72,7 +75,7 @@ This document integrates two technical strategies:
 
 1. **Liouville--SL basis (Parts II-III)**.  The substitution
    $\hat p = \sqrt{\rhob}\,q$ reduces the variable-coefficient Poisson
-   operator to a Schr\"odinger form whose Sturm--Liouville
+   operator to a Schrödinger form whose Sturm--Liouville
    eigenfunctions are common to all $k_x$.  The Poisson solve becomes a
    pipeline "cuFFT + GEMM + pointwise division + GEMM + cuFFT".
 2. **Direct Chebyshev collocation (Part IV)**.  The Phase 0 ext+
@@ -93,11 +96,11 @@ Phase 2+ optional backend.
 Dividing the variable-density incompressible momentum equation by
 $\rhob$ and taking the divergence gives
 
-$$\nabla \cdot \left(\frac{1}{\rhob(y)} \nabla p\right) = f(\bm{x})
+$$\nabla \cdot \left(\frac{1}{\rhob(y)} \nabla p\right) = f(x)
 \tag{2.1}$$
 
 where $\rhob(y)$ is the background stratified density, depending only
-on $y$.  For the anelastic system $\nabla\cdot(\rhob\bm{u}) = 0$, the
+on $y$.  For the anelastic system $\nabla\cdot(\rhob u) = 0$, the
 same operator appears after the analogous projection; the mathematical
 structure is identical.
 
@@ -120,6 +123,8 @@ The two resolutions of this issue — the Liouville substitution
 (Parts II-III) and direct Chebyshev collocation (Part IV) — are what
 this document develops.
 
+
+\clearpage
 
 # Part II  Liouville Normal-Form Reduction
 
@@ -151,7 +156,7 @@ I_1 &= \left[\frac{\rhob''}{2\,\rhob^{3/2}} - \frac{3(\rhob')^{2}}{4\,\rhob^{5/2
 I_2 &= -\frac{\rhob'}{2\,\rhob^{3/2}}\,q' + \frac{q''}{\sqrt{\rhob}}.
 \end{align*}
 The $q'$ contributions cancel, leaving
-$$I_1 + I_2 = \frac{1}{\sqrt{\rhob}}\left[q'' + W(y)\,q\right]. \qed$$
+$$I_1 + I_2 = \frac{1}{\sqrt{\rhob}}\left[q'' + W(y)\,q\right].$$
 \end{proof}
 
 ### 3.2 The reduced equation
@@ -161,7 +166,7 @@ $\sqrt{\rhob}$:
 
 $$\boxed{q'' + W(y)\,q - k_x^{2}\,q = g(y), \qquad g \equiv \sqrt{\rhob}\,\fhat.}\tag{3.4}$$
 
-Defining the **Liouville--Schr\"odinger operator**
+Defining the **Liouville--Schrödinger operator**
 $$\mathcal{T} \equiv \frac{\dd^{2}}{\dd y^{2}} + W(y),\tag{3.5}$$
 (3.4) reads
 $$\bigl[\mathcal{T} - k_x^{2}\bigr]\,q = g. \tag{3.6}$$
@@ -177,7 +182,7 @@ $k_x$ simultaneously.
 ### 4.1 The eigenvalue problem
 
 Consider the Sturm--Liouville (equivalently, time-independent
-Schr\"odinger) eigenvalue problem
+Schrödinger) eigenvalue problem
 
 $$\mathcal{T}\,\psi_n \;=\; \psi_n'' + W(y)\,\psi_n \;=\; -\mu_n\,\psi_n,
 \qquad n = 0, 1, 2, \ldots \tag{4.1}$$
@@ -209,7 +214,7 @@ $$\boxed{a_n(k_x) = -\frac{g_n(k_x)}{\mu_n + k_x^{2}}.} \tag{4.3}$$
 encoded in the eigendata $\{(\mu_n, \psi_n)\}$.  Each $(k_x, n)$ solve
 is a scalar division, structurally identical to the uniform-density
 Fourier--Poisson solve
-$\phat(\bm{k}) = -\fhat(\bm{k})/|\bm{k}|^{2}$.
+$\phat(k) = -\fhat(k)/|k|^{2}$.
 
 
 ## 5. Complete SL-GEMM algorithm
@@ -217,7 +222,7 @@ $\phat(\bm{k}) = -\fhat(\bm{k})/|\bm{k}|^{2}$.
 ### 5.1 Precomputation (once, or whenever $\rhob$ changes)
 
 1. Compute $W(y)$ from $\rhob(y)$ via (3.3).
-2. Solve the 1D Schr\"odinger eigenvalue problem (4.1) for
+2. Solve the 1D Schrödinger eigenvalue problem (4.1) for
    $\{\mu_n, \psi_n\}$.
 3. Form the transform matrix $\Psi_{in} = \psi_n(y_i)$,
    $\Psi \in \mathbb{R}^{N_y \times N_y}$.
@@ -249,7 +254,7 @@ solve.
 Method & $y$ direction & Total ($N\times N$) & GPU characteristics\\\midrule
 Fourier ($\rhob=\mathrm{const}$) & division & $N^{2}\log N$ & cuFFT (optimal)\\
 Chebyshev + tridiagonal & Thomas alg.\ & $N^{2}$ & serial per column\\
-\textbf{SL-GEMM}   & \textbf{GEMM} & $\bm{N^{3}}$ & \textbf{cuBLAS batched (tensor cores)}\\
+\textbf{SL-GEMM}   & \textbf{GEMM} & $N^{3}$ & \textbf{cuBLAS batched (tensor cores)}\\
 Iterative (CG / MG) & SpMV $\times k$ & $N^{2}k$ & convergence-dependent\\\bottomrule
 \end{tabular}
 \end{center}
@@ -260,6 +265,8 @@ arithmetic intensity, fully parallel, tensor-core compatible).  For
 $N_y \lesssim 4096$, batched DGEMM wall-clock time is competitive with
 latency-bound Thomas, and often faster.
 
+
+\clearpage
 
 # Part III  Reduced-Pressure Formulation
 
@@ -306,7 +313,7 @@ For Lane--Emden $n = 3/2$, $\rhob \propto (R-y)^{3/2}$:
 \begin{tabular}{lccc}\toprule
 Formulation & Operator & Surface potential & $|C|$\\\midrule
 Original & $\nabla\cdot(\rhob^{-1}\nabla p)$ & $W \approx -21/(16t^{2})$ & $1.3125$\\
-\textbf{Reduced pressure} & $\nabla\cdot(\rhob\nabla\pi)$ & $\widetilde W \approx +3/(16t^{2})$ & $\bm{0.1875}$\\\bottomrule
+\textbf{Reduced pressure} & $\nabla\cdot(\rhob\nabla\pi)$ & $\widetilde W \approx +3/(16t^{2})$ & $0.1875$\\\bottomrule
 \end{tabular}
 \end{center}
 
@@ -332,6 +339,8 @@ a polynomial), raw Chebyshev collocation reaches machine precision
 directly, and this optimisation offers no operational value.  See
 Part IV.
 
+
+\clearpage
 
 # Part IV  Direct Chebyshev Collocation (Phase 1 main route)
 
@@ -436,6 +445,8 @@ implementation with `eigvalsh` produced spurious eigenvalues.  See
 `docs/spectral_experiments.md` §19.
 
 
+\clearpage
+
 # Part V  Unified Basis Claim — Critical Examination
 
 ## 10. "g-mode as a free by-product" revisited
@@ -475,6 +486,8 @@ The engineering benefit is preserved; the "free mathematical
 by-product" claim is demoted.  This is the central conclusion of
 Phase 0 ext+ experiments E5 and E6.
 
+
+\clearpage
 
 # Part VI  Liouville Singularity — A Physical Interpretation
 
@@ -537,6 +550,8 @@ Jacobi-weighted basis (Dedalus) is the only additional machinery
 needed.
 
 
+\clearpage
+
 # Part VII  Phase Roadmap
 
 ## 12. Current status and forward plan
@@ -576,7 +591,7 @@ when Phase 1 starts in earnest.
 
 ### 12.3 Phase 2: Anelastic upgrade
 
-- Upgrade from Boussinesq to anelastic: $\nabla\cdot(\rhob\bm{u}) = 0$.
+- Upgrade from Boussinesq to anelastic: $\nabla\cdot(\rhob u) = 0$.
 - Chebyshev handles the variable-density Poisson directly (raw or
   reduced-pressure form).
 - **SL-GEMM backend as an optional optimisation**: activated only if
@@ -607,13 +622,15 @@ The applications paper carries the real novelty; the methods paper
 functions as supporting citation.
 
 
+\clearpage
+
 # Appendix A  GPU implementation considerations
 
 ## A.1 Batched GEMM formulation
 
 Steps 3 and 5 of §5.2 are a single matrix--matrix multiplication:
-$$\bm{G} = \Psi^{\!\top}\bm{g}, \qquad \bm{q} = \Psi\bm{Q},$$
-with $\bm{g}, \bm{G}, \bm{Q}, \bm{q} \in \mathbb{R}^{N_y \times N_x}$.
+$$G = \Psi^{\!\top}g, \qquad q = \PsiQ,$$
+with $g, G, Q, q \in \mathbb{R}^{N_y \times N_x}$.
 On modern NVIDIA Ampere/Hopper GPUs, FP64 GEMM exceeds 1 TFLOP/s, and
 the $\mathcal{O}(N)$ arithmetic intensity (flops per byte read) ensures
 compute-bound execution for $N_y \ge 256$.
@@ -622,7 +639,7 @@ compute-bound execution for $N_y \ge 256$.
 
 The SL-GEMM Poisson solver slots into an existing pseudo-spectral time
 integrator (e.g.\ IFRK3 + cuFFT) by replacing the spectral-space
-division $\phat = -\fhat/|\bm{k}|^{2}$ with the sequence:
+division $\phat = -\fhat/|k|^{2}$ with the sequence:
 
 $$\text{cuFFT (R2C in }x\text{)} \to \text{cuBLAS DGEMM} \to \text{pointwise divide} \to \text{cuBLAS DGEMM} \to \text{cuFFT (C2R in }x\text{)}.$$
 
@@ -637,6 +654,8 @@ $N_y = 2048$, which is modest compared with the flow-field arrays
 ($\sim 100$ MiB each at $2048^{2}$) and the VRAM frame buffer
 ($\sim 10$ GiB).
 
+
+\clearpage
 
 # Appendix B  Related methods and literature positioning
 
@@ -674,6 +693,8 @@ with GYRE (the mature 1D stellar-pulsation code) or Dedalus (the
 general-purpose spectral-PDE framework) in the 1D pulsation-benchmark
 arena.
 
+
+\clearpage
 
 # Appendix C  Historical record — mapping to the four predecessor documents
 

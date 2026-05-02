@@ -121,7 +121,7 @@ $N_\text{modes}$ & $\text{err}_{L^{2}}$ & improvement\\\midrule
 40  & $2.18\times 10^{-4}$  & 6.3$\times$\\
 80  & $3.27\times 10^{-5}$  & 6.7$\times$\\
 160 & $5.99\times 10^{-6}$  & 5.5$\times$\\
-\textbf{256} & $\bm{3.74\times 10^{-6}}$ & converged to FD floor\\\bottomrule
+\textbf{256} & $3.74\times 10^{-6}$ & converged to FD floor\\\bottomrule
 \end{tabular}
 \end{center}
 
@@ -169,7 +169,7 @@ Publication-level summary:
 > attributable to the surface singularity $\rho(R_\star) = 0$,
 > quantifiable via cutoff scaling analysis."
 
-### 2.6 Brunt--V\"ais\"al\"a $N^{2}(r)$ vs.\ Liouville $W(r)$ — physical division of labour (E4)
+### 2.6 Brunt--Väisälä $N^{2}(r)$ vs.\ Liouville $W(r)$ — physical division of labour (E4)
 
 \begin{center}
 \begin{tabular}{lll}\toprule
@@ -204,6 +204,8 @@ Phase 0 gate was originally PASS.  Phase 0 ext+ subsequently demoted
 the "SL as optimal basis" angle to "same-mesh independent EVP" (see
 `docs/spectral_solver_design.md` Part V).
 
+
+\clearpage
 
 # Part II  Reduced-pressure follow-up (2026-05-02)
 
@@ -289,6 +291,8 @@ $$\frac{1}{\sqrt{\rhob}}\frac{\dd}{\dd y}\!\left[\rhob\frac{\dd}{\dd y}\!\left(\
 with $t = R - y$.  This confirms $C = +3/16$, in agreement with §3.
 The parent report has been corrected.
 
+
+\clearpage
 
 # Part III  g-mode infrastructure and validation (Exps A-K)
 
@@ -465,7 +469,7 @@ After correction the residual drops by four orders of magnitude:
 \begin{center}
 \begin{tabular}{rlll}\toprule
 $n_g$ & $\omega^{2}_\text{GYRE(full)}$ & $\omega^{2}_\text{ours(full)}$ & rel.\ diff.\\\midrule
-1  & $2.51593$ & $2.51593$ & $\bm{5.9\times 10^{-7}}$\\
+1  & $2.51593$ & $2.51593$ & $5.9\times 10^{-7}$\\
 2  & $1.28571$ & $1.28571$ & $2.7\times 10^{-5}$\\
 5  & $0.36993$ & $0.36992$ & $2.0\times 10^{-4}$\\
 10 & $0.11807$ & $0.11801$ & $5.3\times 10^{-4}$\\\bottomrule
@@ -511,11 +515,13 @@ Operator & Method & $n_g = 1$ err vs.\ GYRE full\\\midrule
 `solve_gmode_cowling_spherical`                & FD, scalar reduction  & $120\%$\\
 `solve_anelastic_2var`                         & FD, no $V/U/\Gamma_1$ & $120\%$\\
 `solve_gmode_cowling_gyre_compat` (2-var)      & FD, Cowling           & $13.4\%$ (Cowling limit)\\
-\textbf{`solve\_gmode\_full\_gyre\_compat` (4-var)}     & FD, full gravity & $\bm{5.9\times 10^{-7}}$ (FD production ref)\\
-\textbf{`solve\_gmode\_full\_chebyshev` (Exp K)}        & Chebyshev, full  & $\bm{5.9\times 10^{-7}}$ (spectral production, $21\times$ less DOF)\\\bottomrule
+\textbf{`solve\_gmode\_full\_gyre\_compat` (4-var)}     & FD, full gravity & $5.9\times 10^{-7}$ (FD production ref)\\
+\textbf{`solve\_gmode\_full\_chebyshev` (Exp K)}        & Chebyshev, full  & $5.9\times 10^{-7}$ (spectral production, $21\times$ less DOF)\\\bottomrule
 \end{tabular}
 \end{center}
 
+
+\clearpage
 
 # Part IV  Polytropic-index convergence dichotomy
 
@@ -649,6 +655,8 @@ a GL6 integrator at $\sim 10^{4}$ nodes and relative tolerance
 $10^{-14}$.
 
 
+\clearpage
+
 # Part V  Barycentric interpolation — resolution vs.\ representation
 
 ## 20. The spectral representation is a continuous function
@@ -683,6 +691,8 @@ resolution without loss**.  The real resolution ceiling is the 2/3
 dealiasing cutoff ($2N/3 \approx 1365^{2}$), not the grid itself.
 
 
+\clearpage
+
 # Part VI  Frozen regression assets
 
 ## 21. Frozen 1D g-mode operators
@@ -714,6 +724,8 @@ dealiasing cutoff ($2N/3 \approx 1365^{2}$), not the grid itself.
 - `spectral_resolution_demo.py` — barycentric demo.
 
 
+\clearpage
+
 # Appendix A  Five central findings of Phase 0 ext+ (F1-F5)
 
 The following five points, surfaced during the Phase 0 ext+ conversation,
@@ -737,6 +749,8 @@ extend beyond the tabulated experimental data:
   Poisson and g-mode" fails ($\alpha_\star \ne \beta_\star$); what
   survives is "same-mesh independent EVP".
 
+
+\clearpage
 
 # Appendix B  Mapping to the four predecessor documents
 
