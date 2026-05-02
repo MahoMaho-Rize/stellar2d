@@ -441,16 +441,21 @@ void Radial1DSolver::jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, do
         v_scaled = d_gmres_w;
     }
 
-    // Unit-normalize v̂
+    // Pick FD step. Standard Knoll-Keyes: ε = √εₘ · ||U|| / ||v||,
+    // with a typical-value floor to avoid ||U||=0 pathology. This yields
+    // per-component relative perturbation ≈ √εₘ, which is safe across
+    // cgs-scale ||U|| ~ 1e15 and code-unit ||U|| ~ 1.
     double norm_U = gpu_norm_r1di(d_Un, N);
     double norm_v = gpu_norm_r1di(v_scaled, N);
-    double floor = 1e-15 * (1.0 + norm_U);
-    if (norm_v < floor) {
+    const double sqrt_eps_mach = std::sqrt(1e-15);
+    const double u_floor = 1.0;   // typical magnitude fallback
+    double u_ref = (norm_U > u_floor) ? norm_U : u_floor;
+    if (norm_v < 1e-30 * u_ref) {
         CUDA_CHECK(cudaMemset(d_Jv, 0, N*sizeof(double)));
         return;
     }
-    double eps_hat = std::sqrt(1e-15) * (1.0 + norm_U);
-    double alpha = eps_hat / norm_v;
+    double alpha = sqrt_eps_mach * u_ref / norm_v;
+    double eps_hat = alpha * norm_v;  // kept for back-scaling: eps_hat = α·||v||
 
     // Save U, perturb
     k_r1di_copy<<<(N+B-1)/B, B>>>(d_Ubak, d_U, N);
@@ -478,6 +483,100 @@ void Radial1DSolver::jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, do
 void Radial1DSolver::apply_precond_implicit(const double* d_v_in, double* d_Mv, double /*inv_dt*/) {
     int N = N_dof, B = 256;
     k_r1di_copy<<<(N+B-1)/B, B>>>(d_Mv, d_v_in, N);
+}
+
+// ---------------------------------------------------------------------
+// Diagnostic: FD Jacobian vs. JFNK matvec consistency check.
+//
+// For a list of "probe" DOF indices (0..N_dof-1), perturb U by a unit vector
+// e_i scaled by ε (absolute FD), recompute F, and compare (F(U+ε·e_i) −
+// F_k)/ε  —  that's column i of J. Then run jfnk_matvec with v = e_i and see
+// if the result matches. If the two disagree by much, something in the matvec
+// path (Viallet scaling order, ε_hat unit-normalize, or primitives refresh)
+// is wrong.
+//
+// Called by set_implicit_diag_probe = true in main; prints to stderr once.
+// ---------------------------------------------------------------------
+void radial1d_implicit_diag_probe(Radial1DSolver& S, double inv_dt,
+                                  const std::vector<int>& probes,
+                                  double eps_fd)
+{
+    int N = S.N_dof, B = 256;
+    double* d_ei;
+    CUDA_CHECK(cudaMalloc(&d_ei, N*sizeof(double)));
+    std::vector<double> h_ei(N, 0.0);
+    std::vector<double> h_Fk(N), h_Fpert(N), h_col_fd(N), h_col_mv(N), h_Ubak(N);
+
+    // Cache F_k from current state (Newton outer already did, but re-do locally)
+    S.compute_F_implicit(inv_dt);
+    cudaMemcpy(h_Fk.data(), S.d_F, N*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_Ubak.data(), S.d_U, N*sizeof(double), cudaMemcpyDeviceToHost);
+
+    // Save Fk into S.d_Fk for matvec
+    k_r1di_copy<<<(N+B-1)/B, B>>>(S.d_Fk, S.d_F, N);
+
+    std::fprintf(stderr,
+        "  ---- FD-vs-matvec Jacobian probe (eps_fd=%.1e, Viallet=%s) ----\n",
+        eps_fd, S.use_viallet_scaling ? "on" : "off");
+
+    for (int probe : probes) {
+        if (probe < 0 || probe >= N) continue;
+        // Build e_i on device
+        std::fill(h_ei.begin(), h_ei.end(), 0.0);
+        h_ei[probe] = 1.0;
+        cudaMemcpy(d_ei, h_ei.data(), N*sizeof(double), cudaMemcpyHostToDevice);
+
+        // Scale the FD step by the absolute magnitude of U[probe] so that a
+        // relative perturbation of eps_fd is achieved even when ||U|| is huge
+        // (cgs e_int ~ 1e15).
+        double u_i = std::fabs(h_Ubak[probe]);
+        double fd_step = eps_fd * (u_i > 1.0 ? u_i : 1.0);
+
+        // FD column: U := U_k + fd_step·e_i; F(·); col = (F − F_k)/fd_step
+        cudaMemcpy(S.d_U, h_Ubak.data(), N*sizeof(double), cudaMemcpyHostToDevice);
+        k_r1di_axpy<<<(N+B-1)/B, B>>>(S.d_U, fd_step, d_ei, N);
+        S.unpack_state_to_device();
+        S.compute_F_implicit(inv_dt);
+        cudaMemcpy(h_Fpert.data(), S.d_F, N*sizeof(double), cudaMemcpyDeviceToHost);
+        for (int i = 0; i < N; ++i) {
+            h_col_fd[i] = (h_Fpert[i] - h_Fk[i]) / fd_step;
+        }
+
+        // Restore U, then matvec with v = e_i
+        cudaMemcpy(S.d_U, h_Ubak.data(), N*sizeof(double), cudaMemcpyHostToDevice);
+        S.unpack_state_to_device();
+        // Matvec will itself perturb/restore; d_Fk is still valid
+        S.jfnk_matvec_implicit(d_ei, S.d_gmres_w, inv_dt);
+        cudaMemcpy(h_col_mv.data(), S.d_gmres_w, N*sizeof(double), cudaMemcpyDeviceToHost);
+
+        // Restore U one more time
+        cudaMemcpy(S.d_U, h_Ubak.data(), N*sizeof(double), cudaMemcpyHostToDevice);
+        S.unpack_state_to_device();
+
+        // Compare: norm of diff, max elementwise diff, location of max
+        double n_fd = 0, n_mv = 0, n_df = 0, max_abs = 0;
+        int max_i = -1;
+        for (int i = 0; i < N; ++i) {
+            n_fd += h_col_fd[i]*h_col_fd[i];
+            n_mv += h_col_mv[i]*h_col_mv[i];
+            double d = h_col_fd[i] - h_col_mv[i];
+            n_df += d*d;
+            double ad = std::fabs(d);
+            if (ad > max_abs) { max_abs = ad; max_i = i; }
+        }
+        n_fd = std::sqrt(n_fd); n_mv = std::sqrt(n_mv); n_df = std::sqrt(n_df);
+        double rel = (n_fd > 1e-30) ? n_df / n_fd : 0.0;
+        // Decode probe: field (0=v, 1=r, 2=e), zone index in that field
+        int nz = S.lev.nz;
+        int field = probe / nz, zidx = probe % nz;
+        const char* fname[] = {"v_face", "r_face", "e_zone"};
+        std::fprintf(stderr,
+            "   probe[%d] = %s[%d]: ||col_FD||=%.3e, ||col_MV||=%.3e, ||diff||=%.3e (rel=%.2e), max|Δ|=%.3e at row %d\n",
+            probe, fname[field], zidx, n_fd, n_mv, n_df, rel, max_abs, max_i);
+    }
+
+    cudaFree(d_ei);
+    std::fprintf(stderr, "  ---- end probe ----\n");
 }
 
 // ---------------------------------------------------------------------
@@ -548,6 +647,10 @@ int Radial1DSolver::gmres_solve_implicit(double* d_x, const double* d_b,
 // ---------------------------------------------------------------------
 // Newton outer loop
 // ---------------------------------------------------------------------
+extern void radial1d_implicit_diag_probe(Radial1DSolver& S, double inv_dt,
+                                         const std::vector<int>& probes,
+                                         double eps_fd);
+
 int Radial1DSolver::newton_solve_implicit(double dt) {
     int N = N_dof, B = 256;
     double inv_dt = 1.0 / dt;
@@ -559,6 +662,24 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
         k_r1di_copy<<<(N+B-1)/B, B>>>(d_Fk, d_F, N);
         double res_norm = residual_norm_implicit();
         if (it == 0) init_res = res_norm;
+
+        // Run Jacobian probe once at step 0 iter 0 to diagnose matvec.
+        if (step_count == 0 && it == 0) {
+            int nz = lev.nz;
+            // Probe middle-of-star DOFs in each field
+            std::vector<int> probes = {
+                nz/2,              // v_face mid
+                nz + nz/2,         // r_face mid
+                2*nz + nz/2,       // e_zone mid
+                nz/4,              // v_face quarter
+                2*nz + 1,          // e_zone near center
+                2*nz + nz - 2      // e_zone near surface
+            };
+            radial1d_implicit_diag_probe(*this, inv_dt, probes, 1e-4);
+            // Re-compute F after probe (probe restores U but we want fresh F_k)
+            compute_F_implicit(inv_dt);
+            k_r1di_copy<<<(N+B-1)/B, B>>>(d_Fk, d_F, N);
+        }
         if (step_count < 2) {
             std::fprintf(stderr, "  r1di_newton ENTRY: step=%d iter=%d dt=%.2e ||F||=%.3e tol=%.1e\n",
                          step_count, it, dt, res_norm, newton_tol);
