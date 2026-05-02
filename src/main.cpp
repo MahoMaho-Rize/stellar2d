@@ -75,6 +75,7 @@ struct SimConfig {
     bool implicit_mode = false;      // radial1d: use BE + JFNK (step_implicit) instead of explicit RK2
     double dt_implicit = 0.0;        // fixed dt for --implicit;<=0 uses acoustic CFL × scale
     double dt_implicit_scale = 1.0;  // multiplier on CFL dt when dt_implicit<=0
+    bool no_viallet = false;         // dev toggle: disable Viallet L/R scaling in implicit
     bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
     double ic_rho_c = -1.0;          // override central density; <0 = test default
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
@@ -266,6 +267,8 @@ int main(int argc, char** argv) {
             cfg.dt_implicit = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--dt-implicit-scale") == 0 && i + 1 < argc)
             cfg.dt_implicit_scale = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--no-viallet") == 0)
+            cfg.no_viallet = true;
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -714,6 +717,14 @@ int main(int argc, char** argv) {
         if (r1d.species_enabled) {
             r1d.init_species_uniform(r1d.nuc_X, r1d.nuc_Y);
         }
+        // Capture R(U_hse) BEFORE any perturbation so the well-balanced
+        // subtraction references the true HSE, not the perturbed state.
+        if (cfg.implicit_mode) {
+            r1d.implicit_enabled = true;
+            if (cfg.no_viallet) r1d.use_viallet_scaling = false;
+            r1d.init_implicit();
+            r1d.snapshot_hse_implicit();
+        }
         if (cfg.test_case == "lane_emden_perturbed")
             r1d.apply_perturbation(cfg.perturb_amplitude);
 
@@ -732,10 +743,6 @@ int main(int argc, char** argv) {
 
         int frame = 0;
         if (cfg.implicit_mode) {
-            r1d.implicit_enabled = true;
-            r1d.init_implicit();
-            // Capture R(U_hse) now that the state is HSE-consistent
-            r1d.snapshot_hse_implicit();
             std::printf("radial1d: IMPLICIT mode ON (Viallet=%s, Newton tol=%.1e, GMRES tol=%.1e)\n",
                         r1d.use_viallet_scaling ? "on" : "off",
                         r1d.newton_tol, r1d.gmres_tol);

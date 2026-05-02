@@ -581,21 +581,46 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
             k_r1di_mul_diag<<<(N+B-1)/B, B>>>(d_gmres_w, d_scale_R, N);
         }
 
-        // U ← U + δU, refresh device state
-        k_r1di_axpy<<<(N+B-1)/B, B>>>(d_U, 1.0, d_gmres_w, N);
-        unpack_state_to_device();
-
-        // Post-update residual
-        compute_F_implicit(inv_dt);
-        double new_res = residual_norm_implicit();
-        if (!std::isfinite(new_res)) {
-            std::fprintf(stderr, "  r1di_newton iter %d: NaN after update\n", it);
+        // ---- Armijo backtracking line search (ported from MESA mod_newton.f90 ----
+        // Keep U_k in d_Ubak so we can restore; trial α starting at 1.
+        // If every α ∈ {1, 0.5, 0.25, …, 0.001} produces a worse residual,
+        // we must NOT leave the state at the last-tried (worst) α.
+        k_r1di_copy<<<(N+B-1)/B, B>>>(d_Ubak, d_U, N);
+        double alpha = 1.0;
+        double new_res = res_norm;  // placeholder
+        bool ls_ok = false;
+        int ls_tries = 0;
+        const int ls_max = 10;
+        const double ls_shrink = 0.5;
+        const double ls_accept = 0.99;   // accept if ||F(U+αδ)|| < 0.99 · ||F(U)||
+        for (ls_tries = 0; ls_tries < ls_max; ++ls_tries) {
+            k_r1di_copy<<<(N+B-1)/B, B>>>(d_U, d_Ubak, N);
+            k_r1di_axpy<<<(N+B-1)/B, B>>>(d_U, alpha, d_gmres_w, N);
+            unpack_state_to_device();
+            compute_F_implicit(inv_dt);
+            new_res = residual_norm_implicit();
+            if (std::isfinite(new_res) && new_res < ls_accept * res_norm) {
+                ls_ok = true;
+                break;
+            }
+            alpha *= ls_shrink;
+        }
+        if (!ls_ok) {
+            // Restore U_k (reject the step) and bail out so outer step_implicit
+            // can halve dt.
+            k_r1di_copy<<<(N+B-1)/B, B>>>(d_U, d_Ubak, N);
+            unpack_state_to_device();
+            if (step_count < 3) {
+                std::fprintf(stderr,
+                    "  r1di_newton iter %d: line search FAILED (α shrank to %.1e, still worse); bail\n",
+                    it, alpha);
+            }
             return -1;
         }
         if (step_count < 3 && it < 4) {
             std::fprintf(stderr,
-                "  r1di_newton iter %d: ||F||=%.3e → %.3e, GMRES=%d\n",
-                it, res_norm, new_res, gm);
+                "  r1di_newton iter %d: ||F||=%.3e → %.3e, GMRES=%d, α=%.3e (ls=%d)\n",
+                it, res_norm, new_res, gm, alpha, ls_tries);
         }
         bool abs_ok = (new_res < newton_tol);
         bool rel_ok = (init_res > 0 && new_res < 0.5 * init_res);
@@ -623,12 +648,9 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
     if (!hse_set) snapshot_hse();           // legacy state snapshot (d_rho0, d_P0)
     // Ensure implicit scratch is allocated
     if (d_U == nullptr) init_implicit();
-    // Ensure R_hse is available
-    static bool hse_implicit_set = false;
-    if (!hse_implicit_set) {
-        snapshot_hse_implicit();
-        hse_implicit_set = true;
-    }
+    // R_hse is captured by the caller BEFORE any perturbation is applied.
+    // Do NOT auto-snapshot here — it would freeze the perturbed state as
+    // the HSE reference, making F(U)=0 for all perturbations.
 
     // Guard dt and save Uⁿ from current device state
     if (dt_try <= 0.0) dt_try = 1.0;
