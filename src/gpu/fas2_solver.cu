@@ -734,7 +734,7 @@ double FasSolver2::step(double t, double t_end) {
 
     int max_dt_cuts = 4;
     int max_cycles = 12;
-    double tol = 0.1;
+    double tol = 1e-6;  // was 0.1 — was too loose, Newton would bypass on ||F||~1e-2
     double dt = std::min({dt_current, dt_cap, cfl_max_factor * dt_cfl, t_end - t});
 
     FasLevel2& finest = levels[0];
