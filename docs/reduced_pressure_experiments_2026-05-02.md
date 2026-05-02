@@ -193,7 +193,9 @@ serves all $N_x$ horizontal Fourier modes through two GEMMs.
 # 4. Experiment A — Chebyshev collocation breaking the FD floor
 
 > **Provenance.**  All numbers in this section were produced by
-> `scripts/reduced_pressure_chebyshev.py` at commit `f8fcf96`.  To reproduce
+> `scripts/reduced_pressure_chebyshev.py` at commit `5803b6a`
+> (previous commit `f8fcf96` had a sign bug in `W_from_rho`; see §4.3 note).
+> To reproduce
 > and verify:
 > ```bash
 > python scripts/reduced_pressure_chebyshev.py
