@@ -76,6 +76,11 @@ static void alloc_fas_level(FasLevel2& lev) {
     CUDA_CHECK(cudaMalloc(&lev.d_Fk, 4*phys*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&lev.d_gmres_w, 4*phys*sizeof(double)));
 
+    // Viallet 2016 eq 72 scaling buffers
+    CUDA_CHECK(cudaMalloc(&lev.d_scale_L, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_scale_R, 4*phys*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&lev.d_scale_invL, 4*phys*sizeof(double)));
+
     // Zero everything
     CUDA_CHECK(cudaMemset(lev.d_rho, 0, total*sizeof(double)));
     CUDA_CHECK(cudaMemset(lev.d_mr, 0, total*sizeof(double)));
@@ -443,6 +448,21 @@ void FasSolver2::jfnk_matvec(const double* d_v, double* d_Jv, double dt, double 
     FasLevel2& lev = levels[0];
     int n = lev.nr * lev.nt, N4 = 4*n, B = 256;
 
+    // Viallet 2016 eq 72 scaled matvec: output is invL · J · (R · v).
+    // v is in δV-space (R-scaled correction). We compute R·v into d_save,
+    // perturb with that, FD-matvec, then invL-scale result.
+    //
+    // When use_music_scaling=false, R=invL=I and this reduces to plain J·v.
+
+    // Step 1: w_unscaled = R · v (stored in d_save as scratch; d_save is FAS
+    // multigrid prolongation buffer, idle during top-level JFNK).
+    const double* v_for_perturb = d_v;
+    if (use_music_scaling) {
+        k_fas_copy<<<(N4+B-1)/B,B>>>(lev.d_save, d_v, N4);
+        k_fas2_scale_by_diag<<<(N4+B-1)/B,B>>>(lev.d_save, lev.d_scale_R, N4);
+        v_for_perturb = lev.d_save;
+    }
+
     // FIX (Trilinos NOX style): unit-normalize v before FD perturbation.
     //
     // The failure mode without this: Arnoldi's later basis vectors v_j often
@@ -459,7 +479,7 @@ void FasSolver2::jfnk_matvec(const double* d_v, double* d_Jv, double dt, double 
     // Clamp ‖v‖ at floor to prevent amplification of pure round-off noise.
 
     double norm_U = gpu_norm(lev.d_Un, N4);
-    double norm_v = gpu_norm(d_v, N4);
+    double norm_v = gpu_norm(v_for_perturb, N4);
     double norm_v_floor = 1e-15 * (1.0 + norm_U);  // round-off floor
     if (norm_v < norm_v_floor) {
         CUDA_CHECK(cudaMemset(d_Jv, 0, N4*sizeof(double)));
@@ -467,29 +487,34 @@ void FasSolver2::jfnk_matvec(const double* d_v, double* d_Jv, double dt, double 
     }
 
     double eps_hat = std::sqrt(1e-15) * (1.0 + norm_U);  // desired perturbation magnitude
-    double alpha_v = eps_hat / norm_v;                   // scale on raw v
+    double alpha_v = eps_hat / norm_v;                   // scale on (R·v) or raw v
 
     // Save state
     k_fas_pack_flat<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
 
-    // Perturb: U += alpha_v · v = U + eps_hat · v̂
+    // Perturb: U += alpha_v · (R·v)
     k_fas_perturb<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        d_v, alpha_v, lev.nr, lev.nt, lev.ng);
+        v_for_perturb, alpha_v, lev.nr, lev.nt, lev.ng);
     apply_floor(0);
     launch_ghost(0);
 
-    // F(U + eps_hat · v̂)
+    // F(U + eps_hat · (R·v)/‖R·v‖)
     compute_F(0, g0_over_dt);
     k_fas_copy<<<(N4+B-1)/B,B>>>(d_Jv, lev.d_res, N4);
 
-    // J·v̂ = (F(U+eps_hat·v̂) - F(U)) / eps_hat
-    // J·v  = ‖v‖ · J·v̂
+    // J·(R·v) = (F - F_k) · ‖R·v‖ / eps_hat
     k_fas_axpy_v<<<(N4+B-1)/B,B>>>(d_Jv, -1.0, lev.d_Fk, N4);
-    double scale_Jv = norm_v / eps_hat;  // == 1/alpha_v
+    double scale_Jv = norm_v / eps_hat;
     k_fas_scale<<<(N4+B-1)/B,B>>>(d_Jv, scale_Jv, N4);
+
+    // Apply invL: output becomes invL · J · (R·v), which is the scaled operator.
+    if (use_music_scaling) {
+        k_fas2_scale_by_diag<<<(N4+B-1)/B,B>>>(
+            d_Jv, lev.d_scale_invL, N4);
+    }
 
     // Restore state
     k_fas_unpack_flat<<<(n+B-1)/B,B>>>(
@@ -600,6 +625,17 @@ int FasSolver2::solve(double dt, double g0_over_dt, int max_cycles, double tol) 
     int gmres_restart = std::min(20, (int)FasLevel2::GMRES_K);
 
     for (int newton = 0; newton < max_cycles; ++newton) {
+        // Build Viallet 2016 eq 72 scaling from current state + HSE reference.
+        // Rebuilt each Newton iter because the R-side uses current |v| (velocity floor).
+        if (use_music_scaling) {
+            k_fas2_build_scaling<<<(n+B-1)/B,B>>>(
+                lev.d_rho, lev.d_mr, lev.d_mt,
+                lev.d_rho0, lev.d_P0,
+                lev.d_scale_L, lev.d_scale_R, lev.d_scale_invL,
+                eos, music_alpha1, music_alpha2,
+                lev.nr, lev.nt, lev.ng);
+        }
+
         // Assemble block-Jacobi at current state (used as preconditioner)
         assemble_smoother(0, g0_over_dt);
 
@@ -616,9 +652,24 @@ int FasSolver2::solve(double dt, double g0_over_dt, int max_cycles, double tol) 
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
 
-        // Solve J·δU ≈ -F(U) via GMRES with block-Jacobi preconditioner
+        // Scale residual for GMRES: -F → invL·(-F).
+        // GMRES will solve (invL·J·R)·δV = invL·(-F), recover δU = R·δV.
+        // The invL·(-) sign flip is folded into gmres_solve's initial residual = -b,
+        // so here we pass invL·F (positive) and gmres returns δV.
+        if (use_music_scaling) {
+            k_fas2_scale_by_diag<<<(N4+B-1)/B,B>>>(
+                lev.d_res, lev.d_scale_invL, N4);
+        }
+
+        // Solve (invL·J·R)·δV ≈ invL·(-F) — result in d_gmres_w is δV (scaled)
         int iters = gmres_solve(lev.d_gmres_w, lev.d_res, dt, g0_over_dt,
                                 0.3, gmres_restart);
+
+        // Recover δU from δV: δU = R · δV
+        if (use_music_scaling) {
+            k_fas2_scale_by_diag<<<(N4+B-1)/B,B>>>(
+                lev.d_gmres_w, lev.d_scale_R, N4);
+        }
 
         // Apply correction with backtracking line search
         // Try full step first; if ||F|| increases, halve step size

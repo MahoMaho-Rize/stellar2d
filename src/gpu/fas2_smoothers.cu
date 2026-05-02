@@ -757,3 +757,66 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
         }
     }
 }
+
+// ========================= Viallet 2016 eq 72 scaling ========================
+//
+// Build cell-local diagonal scaling L (residual side) and R (correction side).
+// Using HSE reference state ρ₀, P₀ for stability across Newton iterations,
+// plus current |v| for the velocity-floor asymmetry.
+//
+//   L[ρ]  = ρ₀                             R[ρ]  = ρ₀
+//   L[mr] = ρ₀·max(|v_r|, α₁·c_s)          R[mr] = max(|v_r|, α₂·c_s)
+//   L[mt] = ρ₀·max(|v_θ|, α₁·c_s)          R[mt] = max(|v_θ|, α₂·c_s)
+//   L[E]  = ρ₀·c_s²                        R[E]  = c_s²
+//
+// The residual F has dimensions of (unknown)/time, so we scale L_i = scale(U_i)/dt.
+// The correction δU has dimensions of (unknown), so R_i = scale(U_i).
+// We also pre-compute invL = 1/L.
+__global__ void k_fas2_build_scaling(
+    const double* rho, const double* mr, const double* mt,
+    const double* rho0, const double* P0,
+    double* L, double* R, double* invL,
+    EOS eos, double alpha1, double alpha2,
+    int nr, int nt, int ng) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nr*nt) return;
+    int i = flat / nt, j = flat % nt;
+    int k = fas_idx(i, j, nt, ng);
+    int n = nr * nt;
+
+    double rho_ref = fmax(rho0[flat], 1e-20);
+    double P_ref   = fmax(P0[flat], 1e-30);
+    double cs_ref  = eos.sound_speed(rho_ref, P_ref);
+
+    double rho_c = fmax(rho[k], 1e-20);
+    double vr = fabs(mr[k] / rho_c);
+    double vt = fabs(mt[k] / rho_c);
+
+    // L (residual side) — small α₁ floor: don't wash out low-Mach signal
+    double L_rho = rho_ref;
+    double L_mr  = rho_ref * fmax(vr, alpha1 * cs_ref);
+    double L_mt  = rho_ref * fmax(vt, alpha1 * cs_ref);
+    double L_E   = rho_ref * cs_ref * cs_ref;
+
+    // R (correction side) — large α₂ floor: don't let tiny δU pass convergence test
+    double R_rho = rho_ref;
+    double R_mr  = fmax(vr, alpha2 * cs_ref);
+    double R_mt  = fmax(vt, alpha2 * cs_ref);
+    double R_E   = cs_ref * cs_ref;
+
+    L[0*n + flat] = L_rho;     L[1*n + flat] = L_mr;
+    L[2*n + flat] = L_mt;      L[3*n + flat] = L_E;
+    R[0*n + flat] = R_rho;     R[1*n + flat] = R_mr;
+    R[2*n + flat] = R_mt;      R[3*n + flat] = R_E;
+    invL[0*n + flat] = 1.0 / L_rho;
+    invL[1*n + flat] = 1.0 / L_mr;
+    invL[2*n + flat] = 1.0 / L_mt;
+    invL[3*n + flat] = 1.0 / L_E;
+}
+
+// Multiply vector d_x by diagonal d_D in place: d_x[i] *= d_D[i]
+__global__ void k_fas2_scale_by_diag(double* d_x, const double* d_D, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    d_x[i] *= d_D[i];
+}

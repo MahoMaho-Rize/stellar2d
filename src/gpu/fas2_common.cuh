@@ -76,4 +76,14 @@ __global__ void k_fas2_rhoV_EV(const double*, const double*, const double*,
 __global__ void k_fas2_conserve_correct(double*, double*,
     const double*, double, double, double, int, int, int);
 
+// Viallet 2016 eq 72 scaling (fas2 fix 3/4)
+__global__ void k_fas2_build_scaling(
+    const double* rho, const double* mr, const double* mt,
+    const double* rho0, const double* P0,
+    double* L, double* R, double* invL,
+    EOS eos, double alpha1, double alpha2,
+    int nr, int nt, int ng);
+
+__global__ void k_fas2_scale_by_diag(double* d_x, const double* d_D, int N);
+
 #endif
