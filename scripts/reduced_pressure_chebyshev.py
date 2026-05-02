@@ -24,7 +24,11 @@ Notes:
 Usage:
   python scripts/reduced_pressure_chebyshev.py
 """
+import argparse
+import datetime
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +41,40 @@ import matplotlib.pyplot as plt
 REPO = Path(__file__).resolve().parent.parent
 VID = REPO / "videos"
 VID.mkdir(exist_ok=True)
+
+# ── Reference values bound to docs/reduced_pressure_experiments_2026-05-02.md ──
+# Keys: N_Cheb -> (err_orig @ max N_modes, err_redu @ max N_modes).
+# Experiment A reports q-norm errors at rho_cut=0.01, N_modes=320 (except N=64
+# which caps at N_modes=40 for stability).
+EXPECTED = {
+    64:  (5.098e-6,  3.678e-6),
+    128: (2.648e-7,  2.008e-7),
+    256: (1.240e-8,  9.536e-9),
+    512: (5.584e-10, 4.310e-10),
+}
+# Chebyshev converges much faster than FD; small drift floors are OK, but
+# N_Cheb=512 at 4e-10 is at float64 limit, so we relax tol for that row.
+REL_TOL_DEFAULT = 0.05
+REL_TOL_HIGH = 0.20   # for N_Cheb=512 row (double-precision noise floor)
+REF_DOC = "docs/reduced_pressure_experiments_2026-05-02.md"
+
+
+def git_head():
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(REPO), "rev-parse", "--short=7", "HEAD"],
+            stderr=subprocess.DEVNULL)
+        return out.decode().strip()
+    except Exception:
+        return "unknown"
+
+
+def print_provenance(script_name):
+    print("#" * 72)
+    print(f"#  {script_name}")
+    print(f"#  git HEAD: {git_head()}    date: {datetime.date.today().isoformat()}")
+    print(f"#  reference doc: {REF_DOC}")
+    print("#" * 72)
 
 
 # ── Lane-Emden ──────────────────────────────────────────────────────────
@@ -205,8 +243,8 @@ def fit_slope(errs):
 
 
 # ── Main ────────────────────────────────────────────────────────────────
-def main():
-    print("=" * 72)
+def main(verify=False):
+    print_provenance("scripts/reduced_pressure_chebyshev.py")
     print(" Experiment A: Chebyshev collocation SL solver")
     print("=" * 72)
 
@@ -299,6 +337,40 @@ def main():
         print(f"{N_cheb:>8}  {eo:18.3e}  {er:18.3e}  {ratio:8.2f}x")
     print("=" * 75)
 
+    # ── Verify against EXPECTED ──────────────────────────────────────────
+    if verify:
+        print("\n--- VERIFY against EXPECTED (see docs/reduced_pressure_experiments_2026-05-02.md) ---")
+        n_ok = 0
+        n_fail = 0
+        for N_cheb, (eo_ref, er_ref) in EXPECTED.items():
+            if N_cheb not in all_results:
+                continue
+            errs_o, errs_r, _, _ = all_results[N_cheb]
+            if not errs_o or not errs_r:
+                continue
+            eo = errs_o[-1][1]
+            er = errs_r[-1][1]
+            tol = REL_TOL_HIGH if N_cheb >= 512 else REL_TOL_DEFAULT
+            do = abs(eo - eo_ref) / max(abs(eo_ref), 1e-300)
+            dr = abs(er - er_ref) / max(abs(er_ref), 1e-300)
+            ok = do < tol and dr < tol
+            mark = "OK" if ok else "DRIFT"
+            print(f"  [{mark:<5}] N_Cheb={N_cheb:>4}  "
+                  f"orig {eo:.3e} vs {eo_ref:.3e} ({do*100:.2f}%)  "
+                  f"redu {er:.3e} vs {er_ref:.3e} ({dr*100:.2f}%)  [tol {tol*100:.0f}%]")
+            if ok:
+                n_ok += 1
+            else:
+                n_fail += 1
+        print(f"\n  {n_ok} passed, {n_fail} drifted")
+        if n_fail:
+            sys.exit(1)
+        print("  all reference values reproduced.")
+
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--verify", action="store_true",
+                    help="compare results against EXPECTED and exit nonzero on drift")
+    args = ap.parse_args()
+    main(verify=args.verify)

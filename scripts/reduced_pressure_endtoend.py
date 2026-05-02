@@ -28,7 +28,11 @@ each solver to measure the final L2 error on the recovered field.
 Usage:
   python scripts/reduced_pressure_endtoend.py
 """
+import argparse
+import datetime
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -42,6 +46,39 @@ import matplotlib.pyplot as plt
 REPO = Path(__file__).resolve().parent.parent
 VID = REPO / "videos"
 VID.mkdir(exist_ok=True)
+
+# ── Reference values bound to docs/reduced_pressure_experiments_2026-05-02.md ──
+# Keys: (rho_cut, N_modes) -> (err_orig, err_redu).  Any drift >REL_TOL in
+# --verify mode exits nonzero and tells you which row changed.
+EXPECTED = {
+    (0.1,   20): (1.742e-4, 1.746e-4),
+    (0.01,  20): (5.673e-4, 5.891e-4),
+    (0.001, 20): (1.114e-3, 1.567e-3),
+    (0.1,   80): (6.245e-6, 6.247e-6),
+    (0.01,  80): (2.372e-5, 2.380e-5),
+    (0.001, 80): (7.854e-5, 8.265e-5),
+}
+REL_TOL = 0.02   # 2% relative tolerance
+
+REF_DOC = "docs/reduced_pressure_experiments_2026-05-02.md"
+
+
+def git_head():
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(REPO), "rev-parse", "--short=7", "HEAD"],
+            stderr=subprocess.DEVNULL)
+        return out.decode().strip()
+    except Exception:
+        return "unknown"
+
+
+def print_provenance(script_name):
+    print("#" * 72)
+    print(f"#  {script_name}")
+    print(f"#  git HEAD: {git_head()}    date: {datetime.date.today().isoformat()}")
+    print(f"#  reference doc: {REF_DOC}")
+    print("#" * 72)
 
 
 # ── Shared infrastructure (matched to reduced_pressure_sl_convergence.py) ──
@@ -190,8 +227,8 @@ def fit_slope(errs):
 
 
 # ── Main ─────────────────────────────────────────────────────────────────
-def main():
-    print("=" * 72)
+def main(verify=False):
+    print_provenance("scripts/reduced_pressure_endtoend.py")
     print(" Experiment B: end-to-end Poisson convergence")
     print("   pi_exact = sin(pi (y-y0)/L),  p_exact = rho(y) * pi_exact")
     print("=" * 72)
@@ -316,6 +353,40 @@ def main():
         print(f"{cut:<10.3g}  {eo:14.3e}  {er:14.3e}  {ratio:10.1f}x  {res['slope_orig']:8.2f}  {res['slope_redu']:8.2f}")
     print("=" * 85)
 
+    # ── Verify against EXPECTED ──────────────────────────────────────────
+    if verify:
+        print("\n--- VERIFY against EXPECTED (see docs/reduced_pressure_experiments_2026-05-02.md) ---")
+        n_ok = 0
+        n_fail = 0
+        for (cut, Nm), (eo_ref, er_ref) in EXPECTED.items():
+            res = results.get(cut)
+            if not res:
+                continue
+            eo_hit = [e for n, e in res["orig"] if n == Nm]
+            er_hit = [e for n, e in res["redu"] if n == Nm]
+            if not eo_hit or not er_hit:
+                continue
+            eo, er = eo_hit[0], er_hit[0]
+            do = abs(eo - eo_ref) / max(abs(eo_ref), 1e-300)
+            dr = abs(er - er_ref) / max(abs(er_ref), 1e-300)
+            ok = do < REL_TOL and dr < REL_TOL
+            mark = "OK" if ok else "DRIFT"
+            print(f"  [{mark:<5}] rho_cut={cut:<6} N={Nm:3d}  "
+                  f"orig {eo:.3e} vs {eo_ref:.3e} ({do*100:.2f}%)  "
+                  f"redu {er:.3e} vs {er_ref:.3e} ({dr*100:.2f}%)")
+            if ok:
+                n_ok += 1
+            else:
+                n_fail += 1
+        print(f"\n  {n_ok} passed, {n_fail} drifted (tol={REL_TOL*100:.0f}%)")
+        if n_fail:
+            sys.exit(1)
+        print("  all reference values reproduced.")
+
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--verify", action="store_true",
+                    help="compare results against EXPECTED and exit nonzero on drift")
+    args = ap.parse_args()
+    main(verify=args.verify)

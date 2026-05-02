@@ -18,7 +18,11 @@ Both formulations are tested and compared on the same k_x sweep.
 Usage:
   python scripts/reduced_pressure_kx_independence.py
 """
+import argparse
+import datetime
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +36,35 @@ import matplotlib.pyplot as plt
 REPO = Path(__file__).resolve().parent.parent
 VID = REPO / "videos"
 VID.mkdir(exist_ok=True)
+
+# ── Reference values bound to docs/reduced_pressure_experiments_2026-05-02.md ──
+# Bound params: Ny=512, N_modes=80, rho_cut=0.01.
+# Claim: error is independent of k_x; we verify the spread stays within tolerance.
+EXPECTED = {
+    "err_orig_mean": 2.3722e-5,
+    "err_redu_mean": 2.3800e-5,
+    "max_spread":    1.01,       # max/min across k_x in [2pi, 256pi]
+}
+REL_TOL = 0.02
+REF_DOC = "docs/reduced_pressure_experiments_2026-05-02.md"
+
+
+def git_head():
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(REPO), "rev-parse", "--short=7", "HEAD"],
+            stderr=subprocess.DEVNULL)
+        return out.decode().strip()
+    except Exception:
+        return "unknown"
+
+
+def print_provenance(script_name):
+    print("#" * 72)
+    print(f"#  {script_name}")
+    print(f"#  git HEAD: {git_head()}    date: {datetime.date.today().isoformat()}")
+    print(f"#  reference doc: {REF_DOC}")
+    print("#" * 72)
 
 
 # ── Shared infrastructure ───────────────────────────────────────────────
@@ -127,8 +160,8 @@ def solve_pipeline(y, rho, W, pi_ex, kind, k_x, mu, psi):
 
 
 # ── Main ────────────────────────────────────────────────────────────────
-def main():
-    print("=" * 72)
+def main(verify=False):
+    print_provenance("scripts/reduced_pressure_kx_independence.py")
     print(" Experiment C: k_x-independence of the SL eigenbasis")
     print("=" * 72)
 
@@ -207,6 +240,34 @@ def main():
     print(f"\n  => {out}")
     plt.close(fig)
 
+    # ── Verify against EXPECTED ──────────────────────────────────────────
+    if verify:
+        print("\n--- VERIFY against EXPECTED (see docs/reduced_pressure_experiments_2026-05-02.md) ---")
+        eo_mean = float(np.mean(errs_o))
+        er_mean = float(np.mean(errs_r))
+        spread = max(rel_o, rel_r)
+        checks = [
+            ("err_orig mean", eo_mean, EXPECTED["err_orig_mean"]),
+            ("err_redu mean", er_mean, EXPECTED["err_redu_mean"]),
+            ("max spread (k_x-indep)", spread, EXPECTED["max_spread"]),
+        ]
+        n_fail = 0
+        for name, val, ref in checks:
+            d = abs(val - ref) / max(abs(ref), 1e-300)
+            ok = d < REL_TOL
+            mark = "OK" if ok else "DRIFT"
+            print(f"  [{mark:<5}] {name:<24}  {val:.4e} vs {ref:.4e}  ({d*100:.2f}%)")
+            if not ok:
+                n_fail += 1
+        if n_fail:
+            print(f"\n  {n_fail} check(s) drifted (tol={REL_TOL*100:.0f}%)")
+            sys.exit(1)
+        print("\n  all reference values reproduced.")
+
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--verify", action="store_true",
+                    help="compare results against EXPECTED and exit nonzero on drift")
+    args = ap.parse_args()
+    main(verify=args.verify)

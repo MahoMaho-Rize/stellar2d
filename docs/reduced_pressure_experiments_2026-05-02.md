@@ -25,6 +25,25 @@ In addition, a **sign error** in the original derivation of $\widetilde{W}$
 All three scripts are self-contained in `scripts/`, produce plots in `videos/`,
 and can be rerun without rebuilding any C++ / CUDA code.
 
+**Reproducibility protocol.** Every numeric table in §§2–4 is traceable to one
+script.  Each script:
+
+1. Prints a **provenance banner** on startup (script path + git HEAD + date).
+2. Embeds its published reference values as an `EXPECTED` constant.
+3. Accepts `--verify` to compare a fresh run against `EXPECTED` within a
+   stated relative tolerance and exit nonzero on drift.
+
+So the workflow for checking any claim here is:
+
+```bash
+python scripts/reduced_pressure_<experiment>.py --verify
+```
+
+A green run reproduces the report's numbers; a red run points at exactly which
+row drifted.  Updating the reference values after an intentional change
+requires editing `EXPECTED` in the script and the matching table in this
+document in the same commit.
+
 
 # 1. Correction to eq (12) of the parent document
 
@@ -58,8 +77,17 @@ All scripts in this supplement use (12').
 
 # 2. Experiment B — end-to-end Poisson convergence on $\pi$
 
-**Script:** `scripts/reduced_pressure_endtoend.py`,
-**Plot:** `videos/reduced_pressure_endtoend.png`.
+> **Provenance.**  All numbers in this section were produced by
+> `scripts/reduced_pressure_endtoend.py` at commit `f8fcf96`.  To reproduce
+> and verify:
+> ```bash
+> python scripts/reduced_pressure_endtoend.py            # fresh run
+> python scripts/reduced_pressure_endtoend.py --verify   # compare against EXPECTED
+> ```
+> The script embeds the numbers below in its `EXPECTED` dict; `--verify`
+> exits nonzero on drift beyond tolerance.
+>
+> **Plot:** `videos/reduced_pressure_endtoend.png`.
 
 ## 2.1 Setup
 
@@ -114,8 +142,15 @@ corresponding $q$-norm physical justification.
 
 # 3. Experiment C — $k_x$-independence verification
 
-**Script:** `scripts/reduced_pressure_kx_independence.py`,
-**Plot:** `videos/reduced_pressure_kx_independence.png`.
+> **Provenance.**  All numbers in this section were produced by
+> `scripts/reduced_pressure_kx_independence.py` at commit `f8fcf96`.  To
+> reproduce and verify:
+> ```bash
+> python scripts/reduced_pressure_kx_independence.py
+> python scripts/reduced_pressure_kx_independence.py --verify
+> ```
+>
+> **Plot:** `videos/reduced_pressure_kx_independence.png`.
 
 ## 3.1 Setup
 
@@ -157,8 +192,15 @@ serves all $N_x$ horizontal Fourier modes through two GEMMs.
 
 # 4. Experiment A — Chebyshev collocation breaking the FD floor
 
-**Script:** `scripts/reduced_pressure_chebyshev.py`,
-**Plot:** `videos/reduced_pressure_chebyshev.png`.
+> **Provenance.**  All numbers in this section were produced by
+> `scripts/reduced_pressure_chebyshev.py` at commit `f8fcf96`.  To reproduce
+> and verify:
+> ```bash
+> python scripts/reduced_pressure_chebyshev.py
+> python scripts/reduced_pressure_chebyshev.py --verify
+> ```
+>
+> **Plot:** `videos/reduced_pressure_chebyshev.png`.
 
 ## 4.1 Setup
 
