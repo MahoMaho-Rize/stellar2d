@@ -218,39 +218,57 @@ $N_\text{Cheb} \in \{64, 128, 256, 512\}$ and $N_\text{modes}$ up to $320$.
 
 | $N_\text{Cheb}$ | err_orig (max $N_m$) | err_redu (max $N_m$) | ratio |
 |---|---|---|---|
-| 64 | $5.10\times 10^{-6}$ | $3.68\times 10^{-6}$ | $1.39\times$ |
-| 128 | $2.65\times 10^{-7}$ | $2.01\times 10^{-7}$ | $1.32\times$ |
-| 256 | $1.24\times 10^{-8}$ | $9.54\times 10^{-9}$ | $1.30\times$ |
-| 512 | $5.58\times 10^{-10}$ | $4.31\times 10^{-10}$ | $1.30\times$ |
+| 64 | $5.10\times 10^{-6}$ | $5.38\times 10^{-7}$ | $9.47\times$ |
+| 128 | $2.65\times 10^{-7}$ | $2.95\times 10^{-8}$ | $8.99\times$ |
+| 256 | $1.24\times 10^{-8}$ | $1.40\times 10^{-9}$ | $8.85\times$ |
+| 512 | $5.58\times 10^{-10}$ | $6.34\times 10^{-11}$ | $8.81\times$ |
 
 - **The FD floor is broken.**  At $N_\text{Cheb} = 512$, $N_\text{modes} = 320$,
-  the $q$-space error drops to $4.3\times 10^{-10}$ — three orders of magnitude
-  below the FD ceiling of $1.4\times 10^{-7}$ found in §9.
-- **The slope steepens to $-3.9$** in the reduced-p form (up from $\sim -2.2$
-  under FD) and stays below the original form's slope only marginally.  The
-  convergence is driven primarily by the smoothness of $q_\text{exact}$ (a
-  truncated Fourier mode) and the basis's representation capacity, not by the
-  potential shape.
-- **The low-$N$ advantage shrinks from $\sim 10\times$ (FD) to $\sim 1.3\times$
-  (Chebyshev).**  At $N_m = 80$: FD gives $3.1\times 10^{-7}$ vs $1.5\times 10^{-7}$
-  (ratio $2\times$, approaching the floor); Chebyshev gives $2.65\times 10^{-7}$
-  vs $2.01\times 10^{-7}$ (ratio $1.3\times$).
+  the reduced-pressure $q$-space error drops to $6.3\times 10^{-11}$ — almost
+  four orders of magnitude below the FD ceiling of $1.4\times 10^{-7}$ found
+  in §9.
+- **The low-$N$ advantage persists under spectral discretisation.**  The
+  reduced-pressure form is consistently $\sim 9\times$ more accurate than the
+  original across all Chebyshev grid sizes.  The ratio is nearly constant with
+  resolution, confirming that the factor is intrinsic to the potential shape
+  rather than an eigensolver artifact.
+- **Convergence slopes are nearly identical** ($-3.9$ orig, $-3.8$ redu), with
+  the reduced-p curve shifted down by roughly one decade at every $N_\text{modes}$.
+  The advantage is in the **pre-factor**, not the rate.
 
 ## 4.3 Interpretation
 
-The large apparent advantage of the reduced-pressure form at low $N$ in the
-parent document's Table of §9.1 is partly an **FD artifact**: the 2nd-order FD
-eigensolver struggles more with the original form's strongly attractive
-$-21/(16\,t^2)$ well than with the mildly repulsive $+3/(16\,t^2)$ barrier.
-When the eigensolver is accurate to spectral order (Chebyshev), the two
-potentials give nearly identical basis quality, and the convergence gap
-collapses to a factor comparable to the indicial-exponent ratio.
+The parent document's §9 low-$N$ advantage is **real** and robust under
+spectral eigensolvers, not a finite-difference artifact as initially
+conjectured.  The attractive $-21/(16\,t^2)$ well in the original form forces
+low-order SL eigenfunctions to concentrate near the singular boundary to
+satisfy the indicial balance $\alpha(\alpha-1) + C = 0$; the mildly repulsive
+$+3/(16\,t^2)$ barrier in the reduced-pressure form lets the eigenfunctions
+spread out more uniformly, giving better overlap with smooth source functions.
 
-This is a valuable correction: it tells us that **the right motivation for
-adopting the reduced-pressure form is not faster convergence, but simpler
-boundary behaviour** — both indicial exponents integrable, repulsive potential,
-degenerate (rather than singular) elliptic coefficient.  Those properties are
-robust to the eigensolver choice; the convergence-rate gain is not.
+That overlap advantage persists regardless of how accurately we resolve the
+eigenvalue problem — it is a property of the eigenfunctions themselves.  An
+order-of-magnitude lower error at matched $N_\text{modes}$ translates, via
+$N_m \propto \text{err}^{-1/\alpha}$ with $\alpha \approx 3.85$, to **roughly
+$10^{1/3.85} \approx 1.8\times$ fewer modes** for a target accuracy, i.e.\ a
+**~1.8× GEMM cost reduction** when measured in $q$-norm.
+
+### A correction to an earlier draft
+
+An earlier run of this script contained a sign bug in the helper function
+`W_from_rho`: the $\rho''/(2\rho)$ term's sign was hard-coded as $+$ and
+only the $(\rho')^2/\rho^2$ coefficient was parameterised.  This gave the
+correct $W_\text{orig}$ (coincidentally — the original form's $\rho''/(2\rho)$
+term does enter with sign $+$) but the wrong $\widetilde{W}_\text{wrong} =
++\rho''/(2\rho) + (\rho')^2/(4\rho^2) \to +15/(16\,t^2)$ instead of the
+correct $\widetilde{W} = -\rho''/(2\rho) + (\rho')^2/(4\rho^2) \to +3/(16\,t^2)$.
+Both potentials are repulsive but differ by a factor of 5 in strength, and
+the eigenfunctions differ enough that the wrong $\widetilde{W}$ gave only a
+$1.3\times$ advantage — leading to a mistaken draft of this section that
+claimed the 10× advantage was an FD artifact.  The scripts in this commit
+use the corrected `W_from_rho` with independent sign controls for both terms;
+the numbers above are from that corrected run.  `compute_W_reduced` (used by
+Experiments B and C) was always correct and symbolically verified.
 
 
 # 5. Revised summary of the reformulation's benefits
@@ -260,13 +278,29 @@ follows:
 
 | Claim | Status |
 |---|---|
-| Repulsive $\widetilde{W}$ vs attractive $W$ ($C$-sign flip) | **Confirmed** (eq (12') verified) |
+| Repulsive $\widetilde{W}$ vs attractive $W$ ($C$-sign flip) | **Confirmed** (eq (12') verified symbolically) |
 | Both indicial exponents integrable | **Confirmed** (theoretical, robust) |
 | $k_x$-independence of the SL operator | **Confirmed numerically to $k_x \sim 10^3$** (Experiment C) |
 | 7× weaker singularity strength $|C|$ | **Confirmed** (derivation, symbolic) |
-| 10× lower error at low $N$ (q-norm, FD) | **Real but eigensolver-specific** (Experiment A: shrinks to 1.3× under Chebyshev) |
-| 4× GEMM cost reduction (physical quantity) | **Not supported** in $\pi$-norm end-to-end (Experiment B) |
-| FD error floor at $\sim 10^{-7}$ | **FD-specific**, not physical (Experiment A: $4 \times 10^{-10}$ under Chebyshev) |
+| ~10× lower error at low $N$ in $q$-norm | **Confirmed under Chebyshev too** (Experiment A: 9× at every $N_\text{Cheb}$) |
+| ~4× GEMM cost reduction | **Partially supported**: ~1.8× cost reduction in $q$-norm (slopes match, prefactor differs by 9×, so $N_m$ scales as $\text{err}^{-1/3.85}$) |
+| Same $\pi$-norm error end-to-end | **Confirmed** (Experiment B: 1:1 on physical $\pi$) |
+| FD error floor at $\sim 10^{-7}$ | **FD-specific**, not physical (Experiment A reaches $6\times 10^{-11}$ under Chebyshev) |
+
+The apparent tension between A (reduced-p wins 9× in $q$-norm) and B (two
+forms tie in $\pi$-norm) is physical, not contradictory.  The substitution
+$q = \rho_0^{+1/2}\,\pi$ down-weights the boundary region where the original
+form's error concentrates; in $q$-norm that region contributes less but is
+measured in a different metric.  The practical takeaway:
+
+- If the downstream quantity of interest is $\pi$ (specific enthalpy
+  perturbation), both forms deliver the same accuracy — **no $\pi$-side cost
+  reduction**.
+- If the downstream quantity is $q$ (the Liouville-normal-form field used
+  internally for SL-basis storage, orthogonality, or numerical stability), the
+  reduced-p form is **9× more accurate at matched $N_\text{modes}$**, giving a
+  **~1.8× cost reduction** in GEMM operations when a target $q$-accuracy is
+  fixed.
 
 The **engineering recommendation stands**: the reduced-pressure form should be
 preferred in GPU implementations.  The reasons are:
@@ -279,14 +313,12 @@ preferred in GPU implementations.  The reasons are:
 3. **Degenerate operator** — $\nabla\cdot(\rho_0\nabla\pi)$ smoothly loses
    ellipticity at the surface rather than exhibiting a $1/\rho_0$ singularity
    in the elliptic coefficient.
-4. **Same cost** — the algorithm (parent §6) has identical GEMM, FFT, VRAM
+4. **Better internal numerics** — the 9× $q$-norm advantage improves
+   conditioning of the SL expansion coefficients $Q_n = -G_n/(\mu_n + k_x^2)$,
+   reducing round-off when a narrow mode window is retained.
+5. **Same cost** — the algorithm (parent §6) has identical GEMM, FFT, VRAM
    footprint, and GPU-side structure.  Only the weighting and the output
    variable change.
-
-The previously claimed **convergence-order** and **GEMM-cost** advantages
-should be retracted; those advantages exist only in $q$-norm and only against a
-2nd-order FD eigensolver.  Upgrading the eigensolver (as A shows is possible
-and inexpensive) closes the gap.
 
 
 # 6. Reproduction

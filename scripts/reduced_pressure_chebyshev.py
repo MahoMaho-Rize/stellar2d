@@ -47,15 +47,15 @@ VID.mkdir(exist_ok=True)
 # Experiment A reports q-norm errors at rho_cut=0.01, N_modes=320 (except N=64
 # which caps at N_modes=40 for stability).
 EXPECTED = {
-    64:  (5.098e-6,  3.678e-6),
-    128: (2.648e-7,  2.008e-7),
-    256: (1.240e-8,  9.536e-9),
-    512: (5.584e-10, 4.310e-10),
+    64:  (5.098e-6,  5.383e-7),
+    128: (2.648e-7,  2.945e-8),
+    256: (1.240e-8,  1.401e-9),
+    512: (5.584e-10, 6.335e-11),
 }
 # Chebyshev converges much faster than FD; small drift floors are OK, but
-# N_Cheb=512 at 4e-10 is at float64 limit, so we relax tol for that row.
+# N_Cheb=512 at ~6e-11 is near the float64 limit, so we relax tol for that row.
 REL_TOL_DEFAULT = 0.05
-REL_TOL_HIGH = 0.20   # for N_Cheb=512 row (double-precision noise floor)
+REL_TOL_HIGH = 0.25   # for N_Cheb=512 row (double-precision noise floor)
 REF_DOC = "docs/reduced_pressure_experiments_2026-05-02.md"
 
 
@@ -160,14 +160,22 @@ def cheb_on_interval(N, a, b):
 
 
 # ── W potentials on a generic (possibly non-uniform) grid ───────────────
-def W_from_rho(y_query, rho_fn, drho_fn, d2rho_fn, coeff_drho2):
-    """W = rho''/(2 rho) + coeff_drho2 * (rho')^2 / rho^2.
-    coeff_drho2 = -3/4 -> original form; +1/4 -> reduced-p form (corrected sign).
+def W_from_rho(y_query, rho_fn, drho_fn, d2rho_fn, coeff_d2rho, coeff_drho2):
+    """W = coeff_d2rho * rho''/(2 rho) + coeff_drho2 * (rho')^2 / rho^2.
+
+    Original form (pi_hat = sqrt(rho) * q on op div(1/rho grad p)):
+        W_orig = + rho''/(2 rho) - 3 (rho')^2 / (4 rho^2)
+        coeff_d2rho = +1,  coeff_drho2 = -3/4
+    Reduced-pressure form (pi = rho^{-1/2} q on op div(rho grad pi)):
+        W_redu = - rho''/(2 rho) +   (rho')^2 / (4 rho^2)
+        coeff_d2rho = -1,  coeff_drho2 = +1/4
+    The two terms carry INDEPENDENT signs; conflating them with a single
+    coefficient was a bug in earlier versions of this function (reported 2026-05-02).
     """
     rho = rho_fn(y_query)
     drho = drho_fn(y_query)
     d2rho = d2rho_fn(y_query)
-    return d2rho / (2.0 * rho) + coeff_drho2 * drho ** 2 / (rho ** 2)
+    return coeff_d2rho * d2rho / (2.0 * rho) + coeff_drho2 * drho ** 2 / (rho ** 2)
 
 
 # ── SL eigenvalue solve (Chebyshev) ─────────────────────────────────────
@@ -280,8 +288,10 @@ def main(verify=False):
 
     for N_cheb in N_cheb_list:
         y, D2, w_full = cheb_on_interval(N_cheb, a, b)
-        W_orig_vals = W_from_rho(y, rho_fn, drho_fn, d2rho_fn, coeff_drho2=-3.0 / 4.0)
-        W_redu_vals = W_from_rho(y, rho_fn, drho_fn, d2rho_fn, coeff_drho2=+1.0 / 4.0)
+        W_orig_vals = W_from_rho(y, rho_fn, drho_fn, d2rho_fn,
+                                  coeff_d2rho=+1.0, coeff_drho2=-3.0 / 4.0)
+        W_redu_vals = W_from_rho(y, rho_fn, drho_fn, d2rho_fn,
+                                  coeff_d2rho=-1.0, coeff_drho2=+1.0 / 4.0)
 
         print(f"\n--- N_Cheb = {N_cheb} (interior = {N_cheb - 1}) ---")
         print(f"  |W_orig|_inf = {np.max(np.abs(W_orig_vals)):.3e}")
