@@ -19,6 +19,7 @@ from mesa_kap import (  # noqa: E402
     list_type1_families,
     parse_kap_file,
 )
+from mesa_local import detect_kap_data_dir  # noqa: E402
 
 
 def verify_one(family: str, Z: float, ascii_paths, bin_path: Path) -> tuple[int, int]:
@@ -53,9 +54,11 @@ def verify_one(family: str, Z: float, ascii_paths, bin_path: Path) -> tuple[int,
 
 
 def main() -> int:
-    src = Path(sys.argv[1] if len(sys.argv) > 1
-               else "/home/kiriko/mesa-ref/data/kap_data")
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else detect_kap_data_dir()
     dst = Path(sys.argv[2] if len(sys.argv) > 2 else "third_party/mesa_kap")
+    if src is None:
+        print("ERROR: could not auto-detect local MESA kap_data", file=sys.stderr)
+        return 1
 
     groups = list_type1_families(src)
     if not groups:

@@ -6,7 +6,7 @@ Usage:
 
 Examples:
     python3 scripts/inspect_mesa_kap.py
-    python3 scripts/inspect_mesa_kap.py /home/kiriko/mesa-ref/data/kap_data gs98_z0.02
+    python3 scripts/inspect_mesa_kap.py "$MESA_DIR/data/kap_data" gs98_z0.02
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from mesa_kap import (  # noqa: E402
     list_type1_families,
     parse_kap_file,
 )
+from mesa_local import detect_kap_data_dir  # noqa: E402
 
 
 def summarize(tables: list[KapTable]) -> None:
@@ -75,9 +76,12 @@ def summarize(tables: list[KapTable]) -> None:
 
 def main() -> int:
     args = sys.argv[1:]
-    root = Path(args[0]) if args else Path("/home/kiriko/mesa-ref/data/kap_data")
+    root = Path(args[0]) if args else detect_kap_data_dir()
     prefix = args[1] if len(args) > 1 else "gs98_z0.02"
 
+    if root is None:
+        print("ERROR: could not auto-detect local MESA kap_data", file=sys.stderr)
+        return 1
     if not root.exists():
         print(f"ERROR: {root} not found", file=sys.stderr)
         return 1

@@ -9,12 +9,16 @@ float64 tensor of log₁₀ κ_R [cm²/g], with a 128-byte self-describing heade
 ## Regenerating
 
 ```bash
-# default: /home/kiriko/mesa-ref/data/kap_data -> third_party/mesa_kap/
+# default: auto-detect local MESA ($MESA_DIR, then ~/MESA/mesa-*)
 python3 scripts/convert_mesa_kap.py
 
-# one family only
+# one / two families only
+python3 scripts/convert_mesa_kap.py --families gs98 lowT_fa05_gs98
+
+# explicit source
 python3 scripts/convert_mesa_kap.py \
-    /home/kiriko/mesa-ref/data/kap_data third_party/mesa_kap gs98
+    --src "$MESA_DIR/data/kap_data" --dst third_party/mesa_kap \
+    --families gs98
 
 # verify round-trip against ASCII
 python3 scripts/verify_mesa_kapbin.py

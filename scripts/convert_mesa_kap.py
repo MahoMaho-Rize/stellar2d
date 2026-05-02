@@ -27,9 +27,11 @@ Binary layout (little-endian, all doubles are float64, all ints are int32):
                      (X outer, logR inner-fastest)
 
 Usage:
-    python3 scripts/convert_mesa_kap.py [src] [dst] [family1 family2 ...]
+    python3 scripts/convert_mesa_kap.py
+    python3 scripts/convert_mesa_kap.py --families gs98 lowT_fa05_gs98
+    python3 scripts/convert_mesa_kap.py --src "$MESA_DIR/data/kap_data" --dst third_party/mesa_kap
 
-Default src: /home/kiriko/mesa-ref/data/kap_data
+Default src: auto-detect local MESA (`$MESA_DIR/data/kap_data`, then `~/MESA/mesa-*/data/kap_data`)
 Default dst: third_party/mesa_kap/
 Default families: all Type-1 (ignore _co, kR_*, oplib_* if not requested).
 
@@ -39,6 +41,7 @@ refuses to write otherwise.
 """
 from __future__ import annotations
 
+import argparse
 import struct
 import sys
 from pathlib import Path
@@ -52,6 +55,7 @@ from mesa_kap import (  # noqa: E402
     list_type1_families,
     parse_kap_file,
 )
+from mesa_local import detect_kap_data_dir  # noqa: E402
 
 MAGIC = b"KAPv1\0\0\0"
 HEADER_SIZE = 128
@@ -181,11 +185,39 @@ def convert_group(
 
 
 def main() -> int:
-    args = sys.argv[1:]
-    src = Path(args[0]) if len(args) >= 1 else Path("/home/kiriko/mesa-ref/data/kap_data")
-    dst = Path(args[1]) if len(args) >= 2 else Path("third_party/mesa_kap")
-    families_filter = set(args[2:]) if len(args) >= 3 else None
+    ap = argparse.ArgumentParser(
+        description="Convert local MESA Type-1 opacity tables into KAPv1 binaries."
+    )
+    ap.add_argument(
+        "--src",
+        type=Path,
+        help="Source kap_data directory. Defaults to auto-detected local MESA.",
+    )
+    ap.add_argument(
+        "--dst",
+        type=Path,
+        default=Path("third_party/mesa_kap"),
+        help="Output directory for .kapbin files (default: third_party/mesa_kap).",
+    )
+    ap.add_argument(
+        "--families",
+        nargs="*",
+        default=None,
+        help="Optional family filter, e.g. gs98 lowT_fa05_gs98.",
+    )
+    ns = ap.parse_args()
 
+    src = ns.src if ns.src is not None else detect_kap_data_dir()
+    dst = ns.dst
+    families_filter = set(ns.families) if ns.families else None
+
+    if src is None:
+        print(
+            "ERROR: could not auto-detect local MESA kap_data.\n"
+            "Set MESA_DIR or pass --src /path/to/mesa/data/kap_data",
+            file=sys.stderr,
+        )
+        return 1
     if not src.is_dir():
         print(f"ERROR: {src} not found", file=sys.stderr)
         return 1

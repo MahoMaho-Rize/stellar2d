@@ -4,6 +4,11 @@ A GPU-accelerated 2D compressible Euler + self-gravity solver for stellar
 convection and related astrophysical flows. Multiple solvers share the same
 CLI entry point; each has its own intended use domain.
 
+Quick doc links:
+
+- Overall manual: [docs/manual.md](docs/manual.md)
+- Local MESA opacity workflow: [docs/mesa_opacity_workflow.md](docs/mesa_opacity_workflow.md)
+
 ## Coordinate systems
 
 | Coordinate | Grid | Solver families |
