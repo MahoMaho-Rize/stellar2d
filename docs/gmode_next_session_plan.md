@@ -1,9 +1,26 @@
 ---
 title: g-mode Validation — Next Session Plan (GYRE-Compatible Operator)
 date: 2026-05-02 (late evening, pre-compact)
+status: COMPLETED — see docs/gmode_experiments_2026-05-02.md §§13-15
 ---
 
-# Why this doc exists
+# STATUS (2026-05-02, next day)
+
+All items in this plan are DONE:
+
+- Exp I (2-var Cowling GYRE-compat): PASS, max_rel 5.6e-4 (commit `953d49f`).
+- Exp J (4-var full-gravity GYRE-compat): PASS, max_rel 5.3e-4, n_g=1 to
+  6 significant digits (commit `be94af9`).  This is the production
+  reference for CUDA port.
+- `solve_gmode_full_gyre_compat` in `gmode_infra.py` is the finalised
+  operator; both `--verify` regressions are frozen and must exit zero.
+
+This document is retained for historical context on how the diagnosis
+and fix path proceeded.  For current state read
+`docs/gmode_experiments_2026-05-02.md` §§12-15.
+
+
+# Why this doc exists (original)
 
 Context is about to be compacted.  This document records:
 

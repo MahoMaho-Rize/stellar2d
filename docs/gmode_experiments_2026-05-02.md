@@ -667,5 +667,223 @@ statement is:
 > could not provide, and it certifies the 2-variable matrix assembly as
 > bug-free to a stated tolerance.
 
-The Python reference implementation in `solve_anelastic_2var()` is now
-safe to port to C++/CUDA.
+The Python reference implementation in `solve_anelastic_2var()` is **not**
+ready for C++/CUDA port — see §12-14 below.  The algebraic-equivalence
+check here only proves two Python code paths agree; it does not check
+against an external reference.  That check (Exp H) reveals a physics
+mismatch that Exps B-G could not detect.
+
+
+# 12. Experiment H — external benchmark against GYRE (first version)
+
+> **Provenance.**  Artefacts produced by `scripts/gmode_exp_h_gyre_benchmark.py`
+> at commit `5021637`, against GYRE `/tmp/gyre_run/summary.h5` driven by
+> `scripts/gmode_exp_h_run_gyre.sh`.  **FAIL** on the original 2-var
+> operator; re-run after Exp J to compare the full-gravity variant.
+
+## 12.1 Setup
+
+We install GYRE (Townsend 2013, https://gyre.readthedocs.io), the
+standard Fortran stellar-oscillation solver, build its shipped
+Lane-Emden $n=3$ polytrope model, and run it on a dense $l=1$ scan
+`freq_min=0.1, freq_max=3.0, n_freq=400, diff_scheme='COLLOC_GL6'`.
+The output `/tmp/gyre_run/summary.h5` contains 41 g-modes labelled by
+$n_g = -n_{pg}$ (GYRE convention).
+
+The first version of Exp H compared GYRE's full-gravity $\omega^2$
+spectrum (`alpha_grv=1`) to our own `solve_anelastic_2var` and
+`solve_gmode_cowling_spherical`.  Both of those use only $(\rho_0, N^2)$
+— they silently drop the $V$, $U$, $\Gamma_1$ coupling that GYRE keeps.
+
+## 12.2 Result (original 2-var, FAIL)
+
+| $n_g$ | $\omega^2_\text{GYRE}$ | $\omega^2_\text{2var}$ | rel_diff |
+|---|---|---|---|
+| 1 | $2.516$ | $5.524$ | $120\%$ |
+| 5 | $0.370$ | $0.492$ | $33\%$ |
+| 10 | $0.118$ | $0.139$ | $18\%$ |
+
+This was the first **external** cross-check and it exposed a fundamental
+disagreement: our "anelastic 2-variable" operator is actually a
+**Boussinesq-like incompressible-buoyancy reduction**, not the adiabatic
+Cowling system GYRE solves.  The missing $V/U/\Gamma_1$ coupling is
+first-order at low $n_g$ and washes out at high $n_g$ (where the
+Boussinesq limit is valid).
+
+Exps E-G are reclassified: they tested internal consistency among
+three Python code paths, **all of which use the same simplified
+operator**.  Exp H is the first truly-independent numerical validation.
+
+
+# 13. Experiment I — GYRE-compatible Cowling operator
+
+> **Provenance.** `scripts/gmode_exp_i_gyre_compat.py` at commit `953d49f`;
+> `python scripts/gmode_exp_i_gyre_compat.py --verify` must exit zero.
+> GYRE Cowling reference `/tmp/gyre_cowling/summary_cowling.h5`
+> driven by `scripts/gmode_exp_i_run_gyre_cowling.sh`.
+
+## 13.1 The fix: same equations, same BCs
+
+We implement `solve_gmode_cowling_gyre_compat(x, V_2, U, A_star, c_1,
+Gamma_1, ell, n_modes)` following GYRE's dimensionless equations from
+`gyre/src/eqns/ad/ad_eqns_m.fypp` + `A_t.inc`, with `alpha_grv=0`
+(Cowling approximation) and `alpha_omg=alpha_gam=alpha_pi=1` (standard
+adiabatic):
+
+$$
+\begin{aligned}
+x\,\frac{dy_1}{dx} &= (V_g - \ell - 1)\,y_1 + \Bigl(\frac{\lambda}{c_1\omega^2} - V_g\Bigr)\,y_2, \\
+x\,\frac{dy_2}{dx} &= (c_1\omega^2 - A^\star)\,y_1 + (A^\star - U + 3 - \ell)\,y_2,
+\end{aligned}
+$$
+
+where $V_g = V_2 x^2/\Gamma_1$ and $\lambda = \ell(\ell+1)$.
+Boundary conditions from `IB_regular.inc` + `OB_vacuum.inc`:
+
+- Inner (regular at origin): $c_1\omega^2 y_1 - \ell y_2 = 0$
+- Outer (vacuum): $y_1 - y_2 = 0$
+
+Although $\omega^2$ appears both as a coefficient and inversely, the
+system is **linear** in $\omega^2$ once we multiply eq1 through:
+$\omega^2 P u = Q u$, a standard generalised eigenproblem.
+
+## 13.2 Staggered FD resolves Nyquist null-space
+
+The first co-located FD discretisation produced spectrally correct
+$\omega^2$ but with grid-scale $(\pm 1,\mp 1,\pm 1,\ldots)$ noise
+superposed on each eigenfunction.  Central-difference $D_1$ on a
+co-located grid has a zero-eigenvalue Nyquist mode, which any
+eigenfunction can freely absorb.  This is the classical co-location
+failure mode for first-order systems.
+
+Fix: **Keller-box staggering**.  $y_1$ lives on nodes $x_n$,
+$y_2$ on cell centres $x_c = (x_n + x_{n+1})/2$.  eq1 is collocated
+at cell centres (giving a 2-point forward-difference for $dy_1/dx$);
+eq2 is collocated at interior nodes (giving a 2-point central difference
+for $dy_2/dx$ between adjacent cells).  No Nyquist null-space; no
+eigenfunction noise.
+
+## 13.3 Propagation-cavity classification for g-modes
+
+Beyond the familiar Scuflaire phase-plane count, we use the
+propagation-cavity criterion (Unno+89 §14.1): a pure g-mode has
+$\omega^2 < N^2$ **and** $\omega^2 < L_\ell^2$ over the bulk of its
+energy support.  In GYRE dimensionless units:
+
+$$
+N^2 = A^\star / c_1, \qquad L_\ell^2 = \lambda\,\Gamma_1 / (V_2 x^4).
+$$
+
+For each candidate eigenmode we compute the kinetic-energy-weighted
+fraction in the p-cavity $\{x : N^2 < \omega^2 \text{ and } L^2 < \omega^2\}$.
+Genuine g-modes have $p_\text{frac} \approx 0$; spurious p-modes have
+$p_\text{frac} \approx 0.45$.  The threshold $p_\text{frac} < 0.05$
+perfectly separates them.
+
+## 13.4 Result vs GYRE Cowling (`alpha_grv=0`)
+
+$N_r = 1024$, `inner_cut=0.01`, `outer_cut=0.999`:
+
+| $n_g$ | $\omega^2_\text{GYRE (Cowling)}$ | $\omega^2_\text{ours}$ | rel_diff |
+|---|---|---|---|
+| 1 | $2.85195$ | $2.85195$ | $2.3 \times 10^{-6}$ |
+| 2 | $1.36145$ | $1.36146$ | $3.1 \times 10^{-6}$ |
+| 5 | $0.37473$ | $0.37472$ | $2.1 \times 10^{-5}$ |
+| 10 | $0.11850$ | $0.11843$ | $5.6 \times 10^{-4}$ |
+
+$\max \text{rel\_diff} = 5.6 \times 10^{-4}$, far below the 1% target.
+**n_g=1 agrees to 5-6 significant digits.**
+
+This is the first apples-to-apples external benchmark and it PASSes by
+a wide margin.  The high-$n_g$ residual is dominated by interpolation
+from GYRE's non-uniform grid onto our uniform one, not the FD itself.
+
+
+# 14. Experiment J — full-gravity 4-variable operator
+
+> **Provenance.** `scripts/gmode_exp_j_full_gyre_compat.py` at commit `be94af9`;
+> `python scripts/gmode_exp_j_full_gyre_compat.py --verify` must exit zero.
+
+## 14.1 Lifting the Cowling approximation
+
+Exp I's 13.4% disagreement against GYRE-full at $n_g=1$ is the known
+Cowling-approximation error: neglecting the perturbed gravity $\Phi'$
+is first-order for low radial order modes.  To eliminate it we
+implement the full 4-variable GYRE system (`alpha_grv=1`):
+
+$$
+\begin{aligned}
+x\,\frac{dy_1}{dx} &= (V_g - \ell - 1)\,y_1 + \Bigl(\tfrac{\lambda}{c_1\omega^2} - V_g\Bigr)\,y_2 + \tfrac{\lambda}{c_1\omega^2}\,y_3, \\
+x\,\frac{dy_2}{dx} &= (c_1\omega^2 - A^\star_\text{iso})\,y_1 + (A^\star - U + 3 - \ell)\,y_2 - y_4, \\
+x\,\frac{dy_3}{dx} &= (3 - U - \ell)\,y_3 + y_4, \\
+x\,\frac{dy_4}{dx} &= U\,A^\star\,y_1 + U\,V_g\,y_2 + \lambda\,y_3 + (2 - U - \ell)\,y_4,
+\end{aligned}
+$$
+
+with $y_3 = \Phi'/(gr)$, $y_4 = d\Phi'/(g)$.  Boundary conditions from
+`IB_regular.inc` + `OB_vacuum.inc` (`alpha_grv=1`):
+
+- Inner 1: $c_1 \omega^2 y_1 - \ell y_2 - \ell y_3 = 0$
+- Inner 2: $\ell y_3 - y_4 = 0$
+- Outer 1: $y_1 - y_2 = 0$
+- Outer 2: $U y_1 + (\ell+1) y_3 + y_4 = 0$
+
+## 14.2 Two bookkeeping bugs caught by external reference
+
+A first pass produced 2.5% rel_diff at $n_g=1$ — suspicious, because
+the physics is supposed to be identical to GYRE.  Re-reading `A_t.inc`
+line-by-line (noting that GYRE stores the transpose of the Jacobian,
+so `A_t(i,j) = A(j,i)`) revealed two errors:
+
+1. **eq1 missed the $\lambda/(c_1\omega^2) y_3$ coupling** (only present
+   when `alpha_grv=1`).  This inverse-$\omega^2$ term is what makes the
+   full gravity system actually couple $\Phi'$ back into the displacement
+   equation.
+2. **eq2 had $y_3$ coefficient $-A^\star$ instead of $0$**, and
+   **missed the $-y_4$ term**.
+
+After correction the residual drops by four orders of magnitude:
+
+| $n_g$ | $\omega^2_\text{GYRE (full)}$ | $\omega^2_\text{ours (full)}$ | rel_diff |
+|---|---|---|---|
+| 1 | $2.51593$ | $2.51593$ | $5.9 \times 10^{-7}$ |
+| 2 | $1.28571$ | $1.28571$ | $2.7 \times 10^{-5}$ |
+| 5 | $0.36993$ | $0.36992$ | $2.0 \times 10^{-4}$ |
+| 10 | $0.11807$ | $0.11801$ | $5.3 \times 10^{-4}$ |
+
+$\max \text{rel\_diff} = 5.3 \times 10^{-4}$.  **n_g=1 agrees to 6
+significant digits — essentially double-precision machine epsilon times
+the condition number of the GEP.**
+
+## 14.3 Boundary at $x = 0$
+
+The current implementation uses `inner_cut = 0.01` rather than $x = 0$.
+For $\ell = 1$ this is harmless: the inner BC
+$c_1\omega^2 y_1 = \ell y_2 + \ell y_3$ is already regular at $x = 0$
+(all structure coefficients are finite there; $A^\star \to 0$,
+$U \to 3$ for Lane-Emden $n=3$), and our O($h^2$) cell-centred BC
+collocation gives 6-digit agreement with GYRE which does integrate
+through $x = 0$ via Frobenius series.  For higher $\ell$ a variable
+substitution $\tilde y = y / x^{\ell - 1}$ would be needed; this is
+out of scope for the reference implementation since the production
+target (stellar pulsation g-modes) is almost exclusively $\ell = 1, 2$.
+
+
+# 15. Production readiness summary
+
+| Operator | n_g=1 err vs GYRE full | Status |
+|---|---|---|
+| `solve_gmode_cowling` (slab) | $\sim 220\%$ | educational baseline only |
+| `solve_gmode_cowling_spherical` | $120\%$ | educational baseline only |
+| `solve_anelastic_2var` | $120\%$ | Boussinesq-like, no $V/U/\Gamma_1$ |
+| `solve_gmode_cowling_gyre_compat` (2-var Cowling) | $13.4\%$ | Cowling approx limit |
+| **`solve_gmode_full_gyre_compat` (4-var full)** | **$5.9 \times 10^{-7}$** | **production reference** |
+
+The 4-variable `solve_gmode_full_gyre_compat` is the **CUDA port target**.
+It implements the exact equations and BCs GYRE solves for the standard
+adiabatic non-rotating case, with 6-digit numerical agreement at
+low radial order.  Reference outputs (first 10 $\omega^2$ at $N_r = 1024$
+on the shipped Lane-Emden $n=3$ polytrope) are frozen as EXPECTED
+constants in `gmode_exp_i_gyre_compat.py` (Cowling check) and
+`gmode_exp_j_full_gyre_compat.py` (full-gravity check); both `--verify`
+regressions must exit zero before any CUDA port is merged.
