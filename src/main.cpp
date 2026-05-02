@@ -79,6 +79,8 @@ struct SimConfig {
     int hse_resnap_interval = 0;     // implicit: re-snapshot R_hse every N steps (0=off)
     double nuc_compress_frac = 0.0;  // dynamic nuc scale: ε·dt/(cv·T) ≤ this (0=off)
     bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
+    bool mlt_enabled = false;        // Böhm-Vitense MLT convection in BE rad solve
+    double mlt_alpha = 1.5;          // mixing length / pressure scale height
     double ic_rho_c = -1.0;          // override central density; <0 = test default
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
     double ic_n_poly = 1.5;          // polytropic index for --ic-solar
@@ -275,6 +277,10 @@ int main(int argc, char** argv) {
             cfg.hse_resnap_interval = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--nuc-compress") == 0 && i + 1 < argc)
             cfg.nuc_compress_frac = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--mlt") == 0)
+            cfg.mlt_enabled = true;
+        else if (std::strcmp(argv[i], "--mlt-alpha") == 0 && i + 1 < argc)
+            cfg.mlt_alpha = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -695,6 +701,11 @@ int main(int argc, char** argv) {
             r1d.species_enabled = true;
             std::printf("radial1d: species tracking ON (X→Y burn-up)\n");
         }
+        if (cfg.mlt_enabled) {
+            r1d.mlt_enabled = true;
+            r1d.mlt_alpha = cfg.mlt_alpha;
+            std::printf("radial1d: MLT convection ON (α=%.2f)\n", cfg.mlt_alpha);
+        }
         if (cfg.ic_solar) {
             // Physical cgs Lane-Emden IC with user-specified (ρ_c, R_star, n).
             // Derive K so that α·ξ_1 = R_star exactly.
@@ -744,9 +755,9 @@ int main(int argc, char** argv) {
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
         if (cfg.species_enabled) {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,mass_H,mass_He,X_core,X_surf,L_surf\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,mass_H,mass_He,X_core,X_surf,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
         } else {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,L_surf\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
         }
 
         int frame = 0;
@@ -797,9 +808,15 @@ int main(int argc, char** argv) {
 
             if (step % cfg.output_interval == 0) {
                 auto d = r1d.compute_diagnostics();
+                auto mlt = r1d.compute_convection_diag();
                 std::fprintf(stderr, "\n");
                 std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
                             step, t, dt, d.total_mass, d.total_E, d.max_vr, d.max_mach);
+                if (mlt.n_conv_zones > 0) {
+                    std::printf("    MLT: conv_mass_frac=%.4f  r_conv=[%.3e,%.3e]  n_conv=%d  max_super=%.3e\n",
+                                mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer,
+                                mlt.n_conv_zones, mlt.max_superadiab);
+                }
                 if (r1d.species_enabled) {
                     std::vector<double> X_c, Y_c;
                     r1d.download_species(X_c, Y_c);
@@ -816,14 +833,16 @@ int main(int argc, char** argv) {
                     }
                     double X_core = X_c.front();
                     double X_surf = X_c.back();
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
                                  d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
-                                 mH, mHe, X_core, X_surf, r1d.rad_impl_L_surf);
+                                 mH, mHe, X_core, X_surf, r1d.rad_impl_L_surf,
+                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab);
                 } else {
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
-                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr, r1d.rad_impl_L_surf);
+                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr, r1d.rad_impl_L_surf,
+                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab);
                 }
                 std::fflush(csv);
 

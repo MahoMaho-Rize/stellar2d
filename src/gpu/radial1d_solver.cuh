@@ -200,6 +200,29 @@ struct Radial1DSolver {
     double rad_impl_L_surf = 0.0;     // diagnostic: surface luminosity last call
 
     // ============================================================
+    // MLT convection — Phase 6
+    // ============================================================
+    // Schwarzschild criterion: zone is convective if ∇_rad > ∇_ad.
+    //   ∇_rad = d ln T / d ln P from radiative flux (3 κ ρ L P) / (16 π a c G M T⁴)
+    //   ∇_ad  = (γ-1)/γ for ideal gas (corrected per EOS)
+    // Compute on GPU each time diagnostics are requested. NOT fed back into
+    // the solver yet — that's task #25.
+    struct ConvectionDiag {
+        double conv_mass_frac;   // Σ dm[k where ∇_rad > ∇_ad] / M_total
+        double r_conv_inner;     // innermost radius of convection zone
+        double r_conv_outer;     // outermost radius
+        double max_superadiab;   // max_k (∇_rad − ∇_ad)
+        int    n_conv_zones;     // count of convective zones
+    };
+    ConvectionDiag compute_convection_diag();
+
+    // MLT is OFF by default (only diagnostic). Setting true wires MLT flux
+    // into the radiation BE solve — implemented in task #25.
+    bool mlt_enabled = false;
+    double mlt_alpha = 1.5;    // Böhm-Vitense mixing-length / pressure scale height
+    double* d_K_conv = nullptr; // (nz) per-zone MLT conductivity scratch
+
+    // ============================================================
     // Phase 4: Implicit Backward-Euler + JFNK
     // ============================================================
     // State packed as (v[1..nz], r[1..nz], e[0..nz-1]); total DOF = 3·nz.

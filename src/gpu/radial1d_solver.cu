@@ -136,7 +136,8 @@ void Radial1DSolver::destroy() {
     f(lev.d_dt_cell); f(lev.d_scratch);
     f(d_T_work); f(d_F_work); f(d_dt_rad);
     f(d_X); f(d_Y);
-    d_X = nullptr; d_Y = nullptr;
+    f(d_K_conv);
+    d_X = nullptr; d_Y = nullptr; d_K_conv = nullptr;
     std::memset(&lev, 0, sizeof(lev));
 }
 
@@ -512,6 +513,146 @@ Radial1DSolver::Diagnostics Radial1DSolver::compute_diagnostics() {
 }
 
 // ============================================================
+// MLT Schwarzschild diagnostic (Phase 6)
+//
+// For each zone k compute:
+//   ∇_rad = d ln T / d ln P |_rad, from radiative flux balance:
+//           ∇_rad = (3 κ ρ L_rad P) / (16π a c G M T⁴)   (diffusion limit)
+//   ∇_ad  = (γ-1)/γ  (approximate; ideal gas; corrections for radiation
+//                     pressure & ionization handled by real EOS later).
+//   super = ∇_rad − ∇_ad    (positive ⇒ convective by Schwarzschild)
+//
+// L_rad[k] at zone k is the luminosity across the *outer* face (face k+1).
+// We estimate it from local grad aT⁴ using the same formula as the BE rad
+// diffusion kernel — this keeps the diagnostic consistent with the solver.
+// ============================================================
+__global__ static void k_rad1d_mlt_diag(
+    const double* r,          // (nz+1)
+    const double* rho,        // (nz)
+    const double* P,          // (nz)
+    const double* e_int,      // (nz)
+    const double* M,          // (nz+1)
+    const double* dm,         // (nz)
+    double* out_super,        // (nz) ∇_rad − ∇_ad
+    double* out_isconv,       // (nz) 1 if convective, 0 else
+    double* out_conv_mass,    // (nz) dm if convective, 0 else
+    double* out_rad_L,        // (nz) L_rad at outer face
+    int nz, EOS eos,
+    double a_rad, double c_light, double G_const,
+    OpacityParams opa)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+
+    double rho_k = fmax(rho[k], 1e-30);
+    double e_k   = fmax(e_int[k], 1e-30);
+    double T_k   = fmax(eos.temperature_from_rho_e(rho_k, e_k), 1e-12);
+    double P_k   = fmax(P[k], 1e-30);
+    double kap   = grey_opacity(rho_k, T_k, opa);
+
+    // L_rad at outer face k+1 using diffusion formula, consistent with BE
+    // solver. L = -4πr² · D · a · ∂T⁴/∂r  where D = c/(3κρ).
+    double L_rad = 0.0;
+    double r_kp1 = r[k+1];
+    if (k < nz - 1) {
+        double rho_kp1 = fmax(rho[k+1], 1e-30);
+        double e_kp1   = fmax(e_int[k+1], 1e-30);
+        double T_kp1   = fmax(eos.temperature_from_rho_e(rho_kp1, e_kp1), 1e-12);
+        double T_face  = 0.5 * (T_k + T_kp1);
+        double rho_face= 0.5 * (rho_k + rho_kp1);
+        double kap_f   = grey_opacity(rho_face, T_face, opa);
+        double D       = c_light / (3.0 * kap_f * rho_face);
+        double A_face  = 4.0 * 3.14159265358979323846 * r_kp1 * r_kp1;
+        double rc_lo   = 0.5 * (r[k]   + r[k+1]);
+        double rc_hi   = 0.5 * (r[k+1] + r[k+2]);
+        double dr_zc   = fmax(rc_hi - rc_lo, 1e-30);
+        double T_k_4   = T_k*T_k*T_k*T_k;
+        double T_kp1_4 = T_kp1*T_kp1*T_kp1*T_kp1;
+        L_rad = A_face * D * a_rad * (T_k_4 - T_kp1_4) / dr_zc;
+    } else {
+        // At surface, L_rad = photospheric σ T⁴ A (same as BE surface BC).
+        double A_s = 4.0 * 3.14159265358979323846 * r_kp1 * r_kp1;
+        double sigma_sb = c_light * a_rad / 4.0;
+        double T_k_4 = T_k*T_k*T_k*T_k;
+        L_rad = A_s * sigma_sb * T_k_4;
+    }
+    out_rad_L[k] = L_rad;
+
+    // Enclosed mass at outer face for this zone's L_rad balance.
+    double M_k = M[k+1];
+    if (M_k < 1e-30) M_k = 1e-30;
+    double T_k_4 = T_k*T_k*T_k*T_k;
+    // ∇_rad = (3 κ ρ L P) / (16π a c G M T⁴)
+    double denom = 16.0 * 3.14159265358979323846 * a_rad * c_light * G_const * M_k * T_k_4;
+    double grad_rad = (denom > 1e-300) ? (3.0 * kap * rho_k * L_rad * P_k) / denom : 0.0;
+    // ∇_ad from EOS γ. For ideal_rad this is γ-1/γ; for PRE_MS use cv()
+    // derived γ — close enough for diagnostic.
+    double gam = eos.gamma;
+    double grad_ad = (gam - 1.0) / gam;
+
+    double super = grad_rad - grad_ad;
+    out_super[k]     = super;
+    out_isconv[k]    = (super > 0.0) ? 1.0 : 0.0;
+    out_conv_mass[k] = (super > 0.0) ? dm[k] : 0.0;
+}
+
+Radial1DSolver::ConvectionDiag Radial1DSolver::compute_convection_diag() {
+    ConvectionDiag d{};
+    if (!use_eos) return d;  // need EOS for T from e
+    int nz = lev.nz, B = 256;
+
+    // Refresh primitives + enclosed mass
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
+    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+
+    std::vector<double*> sc(4);
+    for (int i = 0; i < 4; ++i) CUDA_CHECK(cudaMalloc(&sc[i], nz*sizeof(double)));
+
+    OpacityParams opa;
+    opa.kappa_es     = rad_kappa_es;
+    opa.kappa_ff_0   = rad_kappa_ff_0;
+    opa.kappa_dust_0 = rad_kappa_dust_0;
+    opa.kappa_Hm_0   = rad_kappa_Hm_0;
+    opa.T_dust_off   = rad_T_dust_off;
+
+    k_rad1d_mlt_diag<<<(nz+B-1)/B, B>>>(
+        lev.d_r, lev.d_rho, lev.d_P, lev.d_e_int, lev.d_M, lev.d_dm,
+        sc[0], sc[1], sc[2], sc[3],
+        nz, eos, rad_a_rad, rad_c_light, G_const, opa);
+
+    // Host-side reductions + r_conv_inner/outer from host array
+    std::vector<double> h_super(nz), h_isc(nz), h_cmass(nz);
+    CUDA_CHECK(cudaMemcpy(h_super.data(), sc[0], nz*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_isc.data(),   sc[1], nz*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_cmass.data(), sc[2], nz*sizeof(double), cudaMemcpyDeviceToHost));
+
+    std::vector<double> h_r(nz+1), h_dm(nz);
+    CUDA_CHECK(cudaMemcpy(h_r.data(),  lev.d_r,  (nz+1)*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_dm.data(), lev.d_dm, nz*sizeof(double),     cudaMemcpyDeviceToHost));
+
+    double M_tot = 0.0, M_conv = 0.0, max_super = -1e300;
+    int first = -1, last = -1, n_conv = 0;
+    for (int k = 0; k < nz; ++k) {
+        M_tot += h_dm[k];
+        M_conv += h_cmass[k];
+        if (h_super[k] > max_super) max_super = h_super[k];
+        if (h_isc[k] > 0.5) {
+            if (first < 0) first = k;
+            last = k;
+            ++n_conv;
+        }
+    }
+    d.conv_mass_frac = (M_tot > 0) ? M_conv / M_tot : 0.0;
+    d.max_superadiab = max_super;
+    d.n_conv_zones   = n_conv;
+    d.r_conv_inner   = (first >= 0) ? h_r[first]      : 0.0;
+    d.r_conv_outer   = (last  >= 0) ? h_r[last + 1]   : 0.0;
+
+    for (int i = 0; i < 4; ++i) cudaFree(sc[i]);
+    return d;
+}
+
+// ============================================================
 // Species init + download
 // ============================================================
 void Radial1DSolver::init_species_uniform(double X0, double Y0) {
@@ -547,6 +688,91 @@ void Radial1DSolver::download_species(std::vector<double>& X_cell,
 // previous Picard iterate T_p. This gives a tridiag system in δT, then
 // T_{p+1} = T_p + δT. 2-4 Picard iterations converge for reasonable dt.
 // ============================================================
+
+// ============================================================
+// MLT conductivity per zone (Böhm-Vitense simplified).
+// We use a "diffusive MLT" formulation (Eggleton 1971 / Henyey):
+//   F_conv = -K_conv · dT/dr
+// where
+//   K_conv = ρ cp · ℓ_m · v_conv
+//   ℓ_m    = α · H_P       (H_P = P / (ρ g))
+//   v_conv = sqrt( g δ H_P (∇-∇_ad) ) / 2        (δ ≈ 1 for ideal gas)
+// This is enabled only if ∇_rad > ∇_ad (Schwarzschild).
+//
+// Picard-lagged: K_conv is computed from T_p and treated as constant in
+// the tridiag linear solve. This keeps the BE Jacobian clean — MLT flux
+// is then linear in T (no T⁴ nonlinearity) and shows up as a standard
+// conduction diffusion term.
+// ============================================================
+__global__ static void k_rad1d_mlt_cond(
+    const double* T_p,       // (nz)
+    const double* rho,       // (nz)
+    const double* P,         // (nz)
+    const double* M,         // (nz+1) enclosed mass at faces
+    const double* r,         // (nz+1)
+    double* K_conv,          // (nz)   output
+    int nz, EOS eos, double G_const, double alpha_mlt,
+    double a_rad, double c_light,
+    OpacityParams opa)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+
+    double rho_k = fmax(rho[k], 1e-30);
+    double P_k   = fmax(P[k],   1e-30);
+    double T_k   = fmax(T_p[k], 1e-12);
+    double cv    = eos.cv();
+    double gam   = eos.gamma;
+    double cp    = gam * cv;
+    // Cell-centre radius + gravity
+    double r_c   = 0.5 * (r[k] + r[k+1]);
+    double M_c   = 0.5 * (M[k] + M[k+1]);
+    double g     = (r_c > 1e-30) ? G_const * M_c / (r_c * r_c) : 0.0;
+    if (g <= 0.0) { K_conv[k] = 0.0; return; }
+
+    // Pressure scale height H_P = P / (ρ g)
+    double HP = P_k / (rho_k * g);
+    double ell = alpha_mlt * HP;
+
+    // Recover ∇_rad and ∇_ad — identical formulas to k_rad1d_mlt_diag.
+    // Compute local L_rad at outer face of zone k (needed for ∇_rad).
+    double kap_k = grey_opacity(rho_k, T_k, opa);
+    double T_k_4 = T_k*T_k*T_k*T_k;
+    double L_rad = 0.0;
+    if (k < nz - 1) {
+        double rho_kp1 = fmax(rho[k+1], 1e-30);
+        double T_kp1   = fmax(T_p[k+1], 1e-12);
+        double T_face  = 0.5 * (T_k + T_kp1);
+        double rho_face= 0.5 * (rho_k + rho_kp1);
+        double kap_f   = grey_opacity(rho_face, T_face, opa);
+        double D       = c_light / (3.0 * kap_f * rho_face);
+        double A_face  = 4.0 * 3.14159265358979323846 * r[k+1] * r[k+1];
+        double rc_lo   = 0.5 * (r[k]   + r[k+1]);
+        double rc_hi   = 0.5 * (r[k+1] + r[k+2]);
+        double dr_zc   = fmax(rc_hi - rc_lo, 1e-30);
+        double T_kp1_4 = T_kp1*T_kp1*T_kp1*T_kp1;
+        L_rad = A_face * D * a_rad * (T_k_4 - T_kp1_4) / dr_zc;
+    } else {
+        double A_s = 4.0 * 3.14159265358979323846 * r[k+1] * r[k+1];
+        double sigma_sb = c_light * a_rad / 4.0;
+        L_rad = A_s * sigma_sb * T_k_4;
+    }
+    double M_out = M[k+1];
+    double denom = 16.0 * 3.14159265358979323846 * a_rad * c_light * G_const * fmax(M_out, 1e-30) * T_k_4;
+    double grad_rad = (denom > 1e-300) ? (3.0 * kap_k * rho_k * L_rad * P_k) / denom : 0.0;
+    double grad_ad  = (gam - 1.0) / gam;
+    double super    = grad_rad - grad_ad;
+    if (super <= 0.0) { K_conv[k] = 0.0; return; }
+
+    // v_conv from Böhm-Vitense:  v² = (g·δ·HP/8) · (∇−∇_ad)
+    // δ ≈ 1 for ideal gas without ionization; factor 1/8 from (α/2)²/2.
+    double v_conv = sqrt(fmax(g * HP * super / 8.0, 0.0));
+    // Cap v_conv at c_s (Mach=1) so BE doesn't produce runaway transport.
+    double cs = eos.sound_speed(rho_k, P_k);
+    if (v_conv > cs) v_conv = cs;
+
+    K_conv[k] = rho_k * cp * ell * v_conv;
+}
 
 // Kernel: compute T from (ρ, e) into T_work (used both for init + Picard)
 __global__ static void k_rad1d_T_from_rhoe(
@@ -585,7 +811,8 @@ __global__ static void k_rad1d_be_assemble(
     int nz, EOS eos,
     double c_light, double a_rad, OpacityParams opa,
     double sigma_sb,        // σ_SB in code units (=c·a/4)
-    double dt)
+    double dt,
+    const double* K_conv)   // (nz) MLT conductivity, nullptr ⇒ no MLT
 {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k >= nz) return;
@@ -640,6 +867,19 @@ __global__ static void k_rad1d_be_assemble(
         L_face_in    = coef * (Tkm1_4 - Tk_4);
         dL_in_dTkm1  =  4.0 * coef * Tkm1_3;
         dL_in_dTk    = -4.0 * coef * Tk_3;
+
+        // ---- MLT convective flux at inner face k ----
+        // F_conv_face = A · K_face · (T_{k-1} − T_k) / dr_zc
+        // Linear in T ⇒ constant Jacobian (after Picard lag on K_face).
+        if (K_conv != nullptr) {
+            double K_face = 0.5 * (K_conv[k-1] + K_conv[k]);
+            if (K_face > 0.0) {
+                double cf = A_face * K_face / dr_zc;
+                L_face_in    += cf * (Tkm1 - Tk);
+                dL_in_dTkm1  +=  cf;
+                dL_in_dTk    += -cf;
+            }
+        }
     }
 
     // Outer face (k+1)
@@ -662,6 +902,17 @@ __global__ static void k_rad1d_be_assemble(
         L_face_out   = coef * (Tk_4 - Tkp1_4);
         dL_out_dTk   =  4.0 * coef * Tk_3;
         dL_out_dTkp1 = -4.0 * coef * Tkp1_3;
+
+        // ---- MLT convective flux at outer face k+1 ----
+        if (K_conv != nullptr) {
+            double K_face = 0.5 * (K_conv[k] + K_conv[k+1]);
+            if (K_face > 0.0) {
+                double cf = A_face * K_face / dr_zc;
+                L_face_out   += cf * (Tk - Tkp1);
+                dL_out_dTk   +=  cf;
+                dL_out_dTkp1 += -cf;
+            }
+        }
     } else {
         // Surface face: L_surf = A_surf · σ_SB · T_surf⁴  (Stefan-Boltzmann)
         // Take T_surf = T[nz-1] (last zone) as photospheric temperature — crude
@@ -760,6 +1011,16 @@ int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
         a(&d_A); a(&d_Bm); a(&d_Cm); a(&d_R); a(&d_Tp); a(&d_Tn); a(&d_dT);
         cached_nz = nz;
     }
+    // Allocate d_K_conv lazily when MLT is enabled (persists in struct).
+    if (mlt_enabled && d_K_conv == nullptr) {
+        CUDA_CHECK(cudaMalloc(&d_K_conv, nz*sizeof(double)));
+    }
+    const double* K_conv_ptr = mlt_enabled ? d_K_conv : nullptr;
+
+    // Refresh enclosed mass for MLT gravity
+    if (mlt_enabled) {
+        k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    }
 
     // Compute T^n from current (ρ, e_int)
     k_rad1d_T_from_rhoe<<<(nz+B-1)/B, B>>>(lev.d_rho, lev.d_e_int, d_Tn, nz, eos);
@@ -772,10 +1033,17 @@ int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
     int it = 0;
     double last_rel = 0.0;
     for (it = 0; it < max_picard; ++it) {
+        if (mlt_enabled) {
+            k_rad1d_mlt_cond<<<(nz+B-1)/B, B>>>(
+                d_Tp, lev.d_rho, lev.d_P, lev.d_M, lev.d_r,
+                d_K_conv, nz, eos, G_const, mlt_alpha,
+                rad_a_rad, rad_c_light, opa);
+        }
         k_rad1d_be_assemble<<<(nz+B-1)/B, B>>>(
             d_Tp, d_Tn, lev.d_rho, lev.d_r, lev.d_dm,
             d_A, d_Bm, d_Cm, d_R,
-            nz, eos, rad_c_light, rad_a_rad, opa, sigma_sb, dt_total);
+            nz, eos, rad_c_light, rad_a_rad, opa, sigma_sb, dt_total,
+            K_conv_ptr);
 
         CUDA_CHECK(cudaMemcpy(h_a.data(),   d_A,  nz*sizeof(double), cudaMemcpyDeviceToHost));
         CUDA_CHECK(cudaMemcpy(h_b.data(),   d_Bm, nz*sizeof(double), cudaMemcpyDeviceToHost));
