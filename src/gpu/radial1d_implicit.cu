@@ -323,29 +323,37 @@ __global__ static void k_r1di_build_scaling(
     double cs_f = sqrt(fmax(eos.gamma * P_bar / rho_bar, 1e-30));
     double R_s = fmax(R_star, 1e-30);
 
-    // ---- Left scaling only (row normalization); R = identity ----
-    // Why identity R: forward-scaling δX = R⁻¹ δU and back-scaling
-    // δU = R δX requires R to be balanced against the column magnitudes of
-    // J. A "typical-U" R overshoots because ∂R_e/∂e is O(cs²), not O(1/dt).
-    // Instead of trying to guess column scales, only normalize rows so F
-    // components are O(1), and let GMRES work in δU space directly.
+    // Two-sided Viallet scaling. L_i normalizes row i (F-space); R_i carries
+    // the characteristic magnitude of U-component i (column scale).
     //
-    // Row scale L_i = typical |F_i|:
-    //   F_v ~ g ~ cs²/R_star     (momentum imbalance)
-    //   F_r ~ cs                  (kinematic, R_r = v)
-    //   F_e ~ P·v/ρ ~ cs² · (cs/R) = cs³/R_star
-    // Use HSE reference cs (per zone) so scaling is state-independent.
+    // The column scale matters for JFNK finite difference: with unit-norm
+    // GMRES basis v_in ∈ δX space, the physical perturbation is v_scaled =
+    // R·v_in. For a single global α = √ε_m to produce linear FD response
+    // across all fields, each R_i must be O(U_typ_i). In cgs, U magnitudes
+    // span 10 orders (U_v=0 initially ≪ U_r≈R_star ≪ U_e≈c²). Without R,
+    // FD simultaneously over-perturbs v (since |U_v|=0) and under-perturbs
+    // r,e. This is what breaks line search at step 0.
+    //
+    // Choices (HSE-reference, state-independent):
+    //   R_v = cs_f                  (characteristic flow speed at the face)
+    //   R_r = R_star                (radius scale)
+    //   R_e = cs_c²                 (specific internal energy scale)
+    //
+    // Row scales L_i = typical |F_i|:
+    //   F_v ~ g ~ cs²/R_star        (momentum imbalance per dt)
+    //   F_r ~ cs                     (R_r = v)
+    //   F_e ~ cs³/R_star             (P·v/ρ · 1/R)
 
     // ---- face v ----
     double Lv  = cs_f * cs_f / R_s;
     L[i]       = Lv;
-    R[i]       = 1.0;
+    R[i]       = cs_f;                    // was 1.0 — fatal in cgs when U_v=0
     invL[i]    = 1.0 / fmax(Lv, 1e-30);
 
     // ---- face r ----
     double Lr  = cs_f;
     L[nz + i]   = Lr;
-    R[nz + i]   = 1.0;
+    R[nz + i]   = R_s;                    // was 1.0
     invL[nz + i]= 1.0 / fmax(Lr, 1e-30);
 
     // ---- zone e ----
@@ -354,7 +362,7 @@ __global__ static void k_r1di_build_scaling(
     double cs_c  = sqrt(fmax(eos.gamma * P_c / rho_c, 1e-30));
     double Le  = cs_c * cs_c * cs_c / R_s;
     L[2*nz + i]    = Le;
-    R[2*nz + i]    = 1.0;
+    R[2*nz + i]    = cs_c * cs_c;         // was 1.0; O(e_typ)
     invL[2*nz + i] = 1.0 / fmax(Le, 1e-30);
 }
 
@@ -777,6 +785,38 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
         if (step_count < 2) {
             std::fprintf(stderr, "  r1di_newton ENTRY: step=%d iter=%d dt=%.2e ||F||=%.3e tol=%.1e\n",
                          step_count, it, dt, res_norm, newton_tol);
+            if (it == 0) {
+                int nz = lev.nz;
+                std::vector<double> h_F(N);
+                cudaMemcpy(h_F.data(), d_F, N*sizeof(double), cudaMemcpyDeviceToHost);
+                double f_v=0, f_r=0, f_e=0, f_v_max=0, f_r_max=0, f_e_max=0;
+                for (int i = 0; i < nz; ++i) {
+                    f_v += h_F[i]*h_F[i];
+                    if (std::fabs(h_F[i]) > f_v_max) f_v_max = std::fabs(h_F[i]);
+                }
+                for (int i = 0; i < nz; ++i) {
+                    f_r += h_F[nz+i]*h_F[nz+i];
+                    if (std::fabs(h_F[nz+i]) > f_r_max) f_r_max = std::fabs(h_F[nz+i]);
+                }
+                for (int i = 0; i < nz; ++i) {
+                    f_e += h_F[2*nz+i]*h_F[2*nz+i];
+                    if (std::fabs(h_F[2*nz+i]) > f_e_max) f_e_max = std::fabs(h_F[2*nz+i]);
+                }
+                std::vector<double> h_U(N);
+                cudaMemcpy(h_U.data(), d_U, N*sizeof(double), cudaMemcpyDeviceToHost);
+                double u_v=0, u_r=0, u_e=0;
+                for (int i = 0; i < nz; ++i) u_v += h_U[i]*h_U[i];
+                for (int i = 0; i < nz; ++i) u_r += h_U[nz+i]*h_U[nz+i];
+                for (int i = 0; i < nz; ++i) u_e += h_U[2*nz+i]*h_U[2*nz+i];
+                std::fprintf(stderr,
+                    "    ||F|| breakdown: v=%.2e(max=%.2e) r=%.2e(max=%.2e) e=%.2e(max=%.2e)\n",
+                    std::sqrt(f_v), f_v_max,
+                    std::sqrt(f_r), f_r_max,
+                    std::sqrt(f_e), f_e_max);
+                std::fprintf(stderr,
+                    "    ||U|| breakdown: v=%.2e r=%.2e e=%.2e\n",
+                    std::sqrt(u_v), std::sqrt(u_r), std::sqrt(u_e));
+            }
         }
         if (it == 0 && res_norm < newton_tol) return 0;
         if (!std::isfinite(res_norm)) {
