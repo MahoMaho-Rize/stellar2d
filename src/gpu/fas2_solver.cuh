@@ -153,6 +153,12 @@ struct FasSolver2 {
     double music_alpha2 = 1.0;
     bool use_music_scaling = true;  // set false to mimic pre-fix FAS behavior
 
+    // Line-implicit-in-r preconditioner (fas2 fix 4/4). When true, replaces
+    // point-block-Jacobi M⁻¹ with a block-tri-diagonal solve along each
+    // θ column. Captures the radial stiff eigendirection exactly — essential
+    // on log-spaced radial meshes where innermost cells drive spectral radius.
+    bool use_line_precond_r = false;  // set true to enable
+
     static constexpr int NU1 = 4;     // pre-smooth iterations
     static constexpr int NU2 = 4;     // post-smooth iterations
     static constexpr double OMEGA = 0.8;  // damping factor

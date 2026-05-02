@@ -634,6 +634,8 @@ int main(int argc, char** argv) {
         //   - Line-implicit-in-r preconditioner (cherry-pick from line-jacobi-precond)
         FasSolver2 fas;
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
+        // fas2-specific: --precond line_r toggles line-implicit-in-r JFNK preconditioner
+        fas.use_line_precond_r = (cfg.precond == "line_r");
         fas.limiter_type = static_cast<int>(cfg.limiter);
         fas.hllc_variant = cfg.hllc_variant;
         fas.radial_only = cfg.radial_only;

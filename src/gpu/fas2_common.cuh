@@ -86,4 +86,16 @@ __global__ void k_fas2_build_scaling(
 
 __global__ void k_fas2_scale_by_diag(double* d_x, const double* d_D, int N);
 
+// Line-implicit-in-r preconditioner (fas2 fix 4/4, cherry-picked from
+// line-jacobi-precond branch). One CUDA block per θ column; block-Thomas
+// along the radial direction with 4×4 blocks.
+__global__ void k_fas2_line_solve(
+    const double* rho, const double* mr, const double* mt, const double* rhoE,
+    const double* vol, const double* ar, const double* at,
+    const double* r_center, const double* r_face, const double* theta_face,
+    const double* dr, const double* dtheta,
+    const double* gr0,
+    const double* v_in, double* Mv_out,
+    int nr, int nt, int ng, EOS eos, double inv_dt);
+
 #endif

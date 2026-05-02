@@ -531,7 +531,26 @@ void FasSolver2::apply_preconditioner(const double* d_v, double* d_Mv,
     FasLevel2& lev = levels[0];
     int n = lev.nr * lev.nt, B = 256;
     int N4 = 4 * n;
-    k_fas_precond<<<(n+B-1)/B, B>>>(d_v, lev.d_blk_inv, d_Mv, N4);
+
+    if (use_line_precond_r) {
+        // Line-implicit-in-r: block-tri-diagonal solve along each θ column.
+        // shmem: L, D, U blocks (each nr * 16 doubles) + rhs, x (each nr * 4).
+        size_t smem_bytes = lev.nr * (3*16 + 2*4) * sizeof(double);
+        int threads = std::min(128, lev.nr);  // threads assemble blocks in parallel
+        // Relax shmem limit (need up to ~nr*56*8 bytes — for nr=256 that's 114 KB)
+        cudaFuncSetAttribute(k_fas2_line_solve,
+            cudaFuncAttributeMaxDynamicSharedMemorySize, 227 * 1024);
+        k_fas2_line_solve<<<lev.nt, threads, smem_bytes>>>(
+            lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+            lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
+            lev.d_r_center, lev.d_r_face, lev.d_theta_face,
+            lev.d_dr, lev.d_dtheta, lev.d_gr0,
+            d_v, d_Mv,
+            lev.nr, lev.nt, lev.ng, eos, g0_over_dt);
+    } else {
+        // Point-block-Jacobi preconditioner (original)
+        k_fas_precond<<<(n+B-1)/B, B>>>(d_v, lev.d_blk_inv, d_Mv, N4);
+    }
 }
 
 // ========================= FGMRES ========================

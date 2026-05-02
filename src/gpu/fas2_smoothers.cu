@@ -820,3 +820,4 @@ __global__ void k_fas2_scale_by_diag(double* d_x, const double* d_D, int N) {
     if (i >= N) return;
     d_x[i] *= d_D[i];
 }
+
