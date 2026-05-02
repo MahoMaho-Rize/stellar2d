@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include "../eos.h"
 
 // Device kernels for 1D Lagrangian radial stellar hydrodynamics.
 // All kernels operate on Radial1DLevel's device arrays.
@@ -40,6 +41,29 @@ void k_rad1d_zone_primitives(
     rho[k] = rho_k;
     double e_k = fmax(e_int[k], 1e-30);
     P[k] = (gam - 1.0) * rho_k * e_k;
+}
+
+// EOS-aware primitives kernel (overload). Uses EOS.pressure(ρ, e).
+__global__
+void k_rad1d_zone_primitives_eos(
+    const double* r,
+    const double* dm,
+    const double* e_int,
+    double* Vol,
+    double* rho,
+    double* P,
+    int nz, EOS eos)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rL = r[k], rR = r[k+1];
+    double Vk = PI43 * (rR*rR*rR - rL*rL*rL);
+    Vk = fmax(Vk, 1e-30);
+    Vol[k] = Vk;
+    double rho_k = dm[k] / Vk;
+    rho[k] = rho_k;
+    double e_k = fmax(e_int[k], 1e-30);
+    P[k] = eos.pressure(rho_k, e_k);
 }
 
 // ========================================================================
@@ -308,6 +332,27 @@ void k_rad1d_cfl(
     dt_cell[k] = fmin(dt_acoustic, dt_comp);
 }
 
+__global__
+void k_rad1d_cfl_eos(
+    const double* r, const double* v, const double* rho, const double* P,
+    double* dt_cell,
+    int nz, EOS eos, double comp_fraction)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double dr = r[k+1] - r[k];
+    dr = fmax(dr, 1e-30);
+    double Pk = fmax(P[k], 1e-30);
+    double rho_k = fmax(rho[k], 1e-30);
+    double cs = eos.sound_speed(rho_k, Pk);
+    double vmax = fmax(fabs(v[k]), fabs(v[k+1]));
+    double dt_acoustic = dr / (vmax + cs);
+    double dv_compress = v[k] - v[k+1];
+    double dt_comp = 1e30;
+    if (dv_compress > 1e-20) dt_comp = comp_fraction * dr / dv_compress;
+    dt_cell[k] = fmin(dt_acoustic, dt_comp);
+}
+
 // ========================================================================
 // Diagnostics:
 //   total_mass = Σ dm[k]                         (constant, sanity check)
@@ -349,6 +394,32 @@ void k_rad1d_diag_per_zone(
     double Pk = fmax(P[k], 1e-30);
     double rho_k = fmax(rho[k], 1e-30);
     double cs = sqrt(gam * Pk / rho_k);
+    double vmag = fmax(fabs(v[k]), fabs(v[k+1]));
+    out_mach[k] = vmag / fmax(cs, 1e-30);
+    out_vmax[k] = vmag;
+}
+
+__global__
+void k_rad1d_diag_per_zone_eos(
+    const double* dm, const double* e_int, const double* rho, const double* P,
+    const double* v, const double* M, const double* r,
+    double* out_mass, double* out_KE, double* out_IE, double* out_PE,
+    double* out_mach, double* out_vmax,
+    int nz, EOS eos, double G_const)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double dm_k = dm[k];
+    out_mass[k] = dm_k;
+    double vk = 0.5 * (v[k] + v[k+1]);
+    out_KE[k] = 0.5 * dm_k * vk * vk;
+    out_IE[k] = dm_k * e_int[k];
+    double r_cell = 0.5 * (r[k] + r[k+1]);
+    double M_cell = 0.5 * (M[k] + M[k+1]);
+    out_PE[k] = (r_cell > 1e-20) ? -G_const * M_cell * dm_k / r_cell : 0.0;
+    double Pk = fmax(P[k], 1e-30);
+    double rho_k = fmax(rho[k], 1e-30);
+    double cs = eos.sound_speed(rho_k, Pk);
     double vmag = fmax(fabs(v[k]), fabs(v[k+1]));
     out_mach[k] = vmag / fmax(cs, 1e-30);
     out_vmax[k] = vmag;

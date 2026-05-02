@@ -438,12 +438,22 @@ int main(int argc, char** argv) {
         grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
     }
 
-    EOS eos = (cfg.eos_type == "ideal_rad")
-        ? EOS::ideal_rad(cfg.gamma, cfg.eos_mu, cfg.eos_rad_a)
-        : EOS::ideal(cfg.gamma, cfg.eos_mu);
+    EOS eos;
     if (cfg.eos_type == "ideal_rad") {
+        eos = EOS::ideal_rad(cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
         std::printf("EOS: ideal + radiation (γ=%.3f, μ=%.3f, a=%.3e)\n",
                     cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
+    } else if (cfg.eos_type == "pre_ms") {
+        PreMsParams p;
+        // Use reasonable defaults; override via CLI later if needed.
+        // R_gas in code units: keep 1.0 (consistent with rest of code).
+        p.R_gas = 1.0 / cfg.eos_mu;  // inverse μ for code-unit consistency
+        p.a_rad = cfg.eos_rad_a;
+        eos = EOS::pre_ms(p);
+        std::printf("EOS: pre-MS Chabrier-Baraffe (T_diss=%.0f, T_ion=%.0f, μ_cold=%.2f → μ_hot=%.2f)\n",
+                    p.T_diss, p.T_ion, p.mu_cold, p.mu_hot);
+    } else {
+        eos = EOS::ideal(cfg.gamma, cfg.eos_mu);
     }
 
     State state;
@@ -582,6 +592,12 @@ int main(int argc, char** argv) {
         }
         Radial1DSolver r1d;
         r1d.init(cfg.nr, cfg.gamma, cfg.G, cfg.cfl);
+        // Wire EOS: if user picked anything other than ideal, use EOS-aware kernels.
+        if (cfg.eos_type != "ideal") {
+            r1d.use_eos = true;
+            r1d.eos = eos;
+            std::printf("radial1d: EOS-aware kernels enabled (%s)\n", cfg.eos_type.c_str());
+        }
         r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
         r1d.snapshot_hse();
         if (cfg.test_case == "lane_emden_perturbed")

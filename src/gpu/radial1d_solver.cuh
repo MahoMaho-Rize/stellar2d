@@ -76,6 +76,12 @@ struct Radial1DSolver {
     double G_const = 1.0;
     double cfl = 0.4;
 
+    // Optional EOS. If use_eos == true, all primitive/CFL/diagnostic kernels
+    // use the EOS struct (supporting ideal_rad, PRE_MS, etc.). Otherwise they
+    // fall back to P = (γ-1)·ρ·e and cs = √(γP/ρ).
+    bool use_eos = false;
+    EOS eos;
+
     // Artificial viscosity (Tscharnuter-Winkler)
     double CQ = 2.0;      // viscosity coefficient
     double ZSH = 0.1;     // shock-detection threshold (fraction of sound crossing speed)

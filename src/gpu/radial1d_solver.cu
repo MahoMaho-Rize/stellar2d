@@ -272,13 +272,24 @@ void Radial1DSolver::apply_perturbation(double amplitude) {
 
 // ============================================================
 // Snapshot current state as HSE reference
+// Helper: dispatch primitives to γ or EOS kernel
+static void launch_primitives(const Radial1DLevel& lev, int nz, bool use_eos,
+                              double gamma, EOS eos, int B)
+{
+    if (use_eos) {
+        k_rad1d_zone_primitives_eos<<<(nz+B-1)/B, B>>>(
+            lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, eos);
+    } else {
+        launch_primitives(lev, nz, use_eos, gamma, eos, B);
+    }
+}
+
 // ============================================================
 void Radial1DSolver::snapshot_hse() {
     int nz = lev.nz;
     // compute primitives so d_rho, d_P are fresh
     int B = 256;
-    k_rad1d_zone_primitives<<<(nz+B-1)/B, B>>>(
-        lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
     CUDA_CHECK(cudaMemcpy(lev.d_rho0, lev.d_rho, nz*sizeof(double), cudaMemcpyDeviceToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_P0,   lev.d_P,   nz*sizeof(double), cudaMemcpyDeviceToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_r0,   lev.d_r,   (nz+1)*sizeof(double), cudaMemcpyDeviceToDevice));
@@ -297,11 +308,16 @@ void Radial1DSolver::snapshot_hse() {
 double Radial1DSolver::compute_dt() {
     int nz = lev.nz, B = 256;
     // Ensure primitives (V, ρ, P) are fresh
-    k_rad1d_zone_primitives<<<(nz+B-1)/B, B>>>(
-        lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
-    k_rad1d_cfl<<<(nz+B-1)/B, B>>>(
-        lev.d_r, lev.d_v, lev.d_rho, lev.d_P, lev.d_dt_cell,
-        nz, gamma, comp_dt_fraction);
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
+    if (use_eos) {
+        k_rad1d_cfl_eos<<<(nz+B-1)/B, B>>>(
+            lev.d_r, lev.d_v, lev.d_rho, lev.d_P, lev.d_dt_cell,
+            nz, eos, comp_dt_fraction);
+    } else {
+        k_rad1d_cfl<<<(nz+B-1)/B, B>>>(
+            lev.d_r, lev.d_v, lev.d_rho, lev.d_P, lev.d_dt_cell,
+            nz, gamma, comp_dt_fraction);
+    }
     return cfl * gpu_reduce_min_simple(lev.d_dt_cell, nz);
 }
 
@@ -339,8 +355,7 @@ double Radial1DSolver::step(double t, double t_end) {
     // Volumes/densities with new r (but keep old P, Pvsc for energy work)
     {
         int B_ = B;
-        k_rad1d_zone_primitives<<<(nz+B_-1)/B_, B_>>>(
-            lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
+        launch_primitives(lev, nz, use_eos, gamma, eos, B_);
     }
     // ^ This overwrote P. For a perfectly adiabatic update we should use
     // the PRE-step P (saved in d_P before position move). Since ZonePrimitives
@@ -351,8 +366,7 @@ double Radial1DSolver::step(double t, double t_end) {
     k_rad1d_energy_update<<<(nz+B-1)/B, B>>>(
         lev.d_Vol, lev.d_Vol_prev, lev.d_P, lev.d_Pvsc, lev.d_dm, lev.d_e_int, nz, dt);
     // Refresh primitives with new e_int
-    k_rad1d_zone_primitives<<<(nz+B-1)/B, B>>>(
-        lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
 
     // ===== RK2 Stage 2: recompute R at U*, apply dt again =====
     k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
@@ -367,8 +381,7 @@ double Radial1DSolver::step(double t, double t_end) {
         lev.d_r, lev.d_dm, lev.d_P, lev.d_Pvsc, lev.d_gr, lev.d_v,
         nz, P_surf_floor, dt);
     k_rad1d_position_update<<<(nf+B-1)/B, B>>>(lev.d_v, lev.d_r, nz, dt);
-    k_rad1d_zone_primitives<<<(nz+B-1)/B, B>>>(
-        lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
     k_rad1d_energy_update<<<(nz+B-1)/B, B>>>(
         lev.d_Vol, lev.d_Vol_prev, lev.d_P, lev.d_Pvsc, lev.d_dm, lev.d_e_int, nz, dt);
 
@@ -378,8 +391,7 @@ double Radial1DSolver::step(double t, double t_end) {
     k_rad1d_rk_average_cells<<<(nz+B-1)/B, B>>>(lev.d_e_prev, lev.d_e_int, nz);
 
     // Final primitives
-    k_rad1d_zone_primitives<<<(nz+B-1)/B, B>>>(
-        lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
 
     step_count++;
     dt_current = dt;
@@ -415,18 +427,24 @@ void Radial1DSolver::download_profile(
 Radial1DSolver::Diagnostics Radial1DSolver::compute_diagnostics() {
     int nz = lev.nz, B = 256;
     // Make sure primitives + enclosed mass are fresh
-    k_rad1d_zone_primitives<<<(nz+B-1)/B, B>>>(
-        lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
     k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
 
     // 5 scratch arrays of size nz — reuse existing buffers where safe
     std::vector<double*> scratch(6);
     for (int i = 0; i < 6; ++i) CUDA_CHECK(cudaMalloc(&scratch[i], nz*sizeof(double)));
 
-    k_rad1d_diag_per_zone<<<(nz+B-1)/B, B>>>(
-        lev.d_dm, lev.d_e_int, lev.d_rho, lev.d_P, lev.d_v, lev.d_M, lev.d_r,
-        scratch[0], scratch[1], scratch[2], scratch[3], scratch[4], scratch[5],
-        nz, gamma, G_const);
+    if (use_eos) {
+        k_rad1d_diag_per_zone_eos<<<(nz+B-1)/B, B>>>(
+            lev.d_dm, lev.d_e_int, lev.d_rho, lev.d_P, lev.d_v, lev.d_M, lev.d_r,
+            scratch[0], scratch[1], scratch[2], scratch[3], scratch[4], scratch[5],
+            nz, eos, G_const);
+    } else {
+        k_rad1d_diag_per_zone<<<(nz+B-1)/B, B>>>(
+            lev.d_dm, lev.d_e_int, lev.d_rho, lev.d_P, lev.d_v, lev.d_M, lev.d_r,
+            scratch[0], scratch[1], scratch[2], scratch[3], scratch[4], scratch[5],
+            nz, gamma, G_const);
+    }
 
     Diagnostics d;
     d.total_mass      = gpu_reduce_sum_simple(scratch[0], nz);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include "physics/eos_pre_ms.h"
 
 #ifdef __CUDACC__
 #define EOS_HD __host__ __device__
@@ -12,25 +13,28 @@
 // Represents either:
 //   EosType::IDEAL       — P = (γ-1)·ρ·e
 //   EosType::IDEAL_RAD   — P = ρ·R_gas·T + a·T⁴/3, e = cv·T + a·T⁴/ρ
+//   EosType::PRE_MS      — Chabrier-Baraffe style pre-MS EOS with H₂
+//                          dissociation and H ionization (see physics/eos_pre_ms.h)
 //
 // For ideal gas, radiation_a is ignored (treated as 0).
 // Newton solve for T(ρ,e) uses bounded fixed iteration count, GPU-safe.
 
-enum class EosType { IDEAL = 0, IDEAL_RAD = 1 };
+enum class EosType { IDEAL = 0, IDEAL_RAD = 1, PRE_MS = 2 };
 
 struct EOS {
     double gamma;
     double mu;            // mean molecular weight (R_gas = 1/mu in code units)
     double radiation_a;   // radiation constant a (code units); 0 ⇒ pure ideal
     int type;             // EosType as int for trivial POD copy
+    PreMsParams pms;      // pre-MS EOS parameters (only used when type == PRE_MS)
 
     EOS_HD EOS()
         : gamma(5.0/3.0), mu(1.0), radiation_a(0.0),
-          type(static_cast<int>(EosType::IDEAL)) {}
+          type(static_cast<int>(EosType::IDEAL)), pms() {}
 
     EOS_HD explicit EOS(double gamma_, double mu_ = 1.0)
         : gamma(gamma_), mu(mu_), radiation_a(0.0),
-          type(static_cast<int>(EosType::IDEAL)) {}
+          type(static_cast<int>(EosType::IDEAL)), pms() {}
 
     static EOS_HD EOS ideal(double gamma_, double mu_ = 1.0) {
         EOS e(gamma_, mu_);
@@ -45,10 +49,24 @@ struct EOS {
         return e;
     }
 
+    static EOS_HD EOS pre_ms(const PreMsParams& p) {
+        EOS e;
+        e.gamma = 5.0/3.0;     // fallback value; real γ₁ varies with state
+        e.mu    = p.mu_cold;   // rough representative
+        e.radiation_a = p.a_rad;
+        e.type  = static_cast<int>(EosType::PRE_MS);
+        e.pms   = p;
+        return e;
+    }
+
     EOS_HD double gas_constant() const { return 1.0 / mu; }
     EOS_HD double cv() const { return gas_constant() / (gamma - 1.0); }
 
     EOS_HD double pressure(double rho, double e_int) const {
+        if (type == (int)EosType::PRE_MS) {
+            double T = pms_T_from_rho_e(rho, e_int, pms);
+            return pms_pressure(rho, T, pms);
+        }
         if (type == (int)EosType::IDEAL_RAD) {
             double T = temperature_from_rho_e(rho, e_int);
             return rho * gas_constant() * T + radiation_a * T * T * T * T / 3.0;
@@ -57,6 +75,19 @@ struct EOS {
     }
 
     EOS_HD double internal_energy(double rho, double P) const {
+        if (type == (int)EosType::PRE_MS) {
+            // Solve T from P inversion, then get e from T.
+            // Bracketed search (no closed-form for PRE_MS).
+            double T_lo = 1.0, T_hi = 1.0e7;
+            for (int it = 0; it < 50; ++it) {
+                double T_mid = 0.5 * (T_lo + T_hi);
+                double P_mid = pms_pressure(rho, T_mid, pms);
+                if (P_mid > P) T_hi = T_mid; else T_lo = T_mid;
+                if ((T_hi - T_lo) < 1e-6 * (T_hi + T_lo)) break;
+            }
+            double T = 0.5 * (T_lo + T_hi);
+            return pms_energy(rho, T, pms);
+        }
         if (type == (int)EosType::IDEAL_RAD) {
             double T = temperature_from_rho_p(rho, P);
             return cv() * T + radiation_a * T * T * T * T / rho;
@@ -65,6 +96,11 @@ struct EOS {
     }
 
     EOS_HD double sound_speed(double rho, double P) const {
+        if (type == (int)EosType::PRE_MS) {
+            // Recover e from P, then use pms_sound_speed (expects e).
+            double e = internal_energy(rho, P);
+            return pms_sound_speed(rho, e, pms);
+        }
         if (type == (int)EosType::IDEAL_RAD) {
             double T = temperature_from_rho_p(rho, P);
             double Pgas = rho * gas_constant() * T;
@@ -85,6 +121,13 @@ struct EOS {
 
     // ∂P/∂(ρe) at fixed ρ — critical for FAS SIMPLE smoother Jacobian
     EOS_HD double dP_drhoe(double rho, double e_int) const {
+        if (type == (int)EosType::PRE_MS) {
+            // Numerical finite difference, since pms_pressure is implicit in T.
+            double de = 1e-4 * fabs(e_int) + 1e-10;
+            double P_p = pressure(rho, e_int + de);
+            double P_m = pressure(rho, e_int - de);
+            return (P_p - P_m) / (2.0 * de * rho);
+        }
         if (type == (int)EosType::IDEAL_RAD) {
             double T = temperature_from_rho_e(rho, e_int);
             double aT3 = radiation_a * T * T * T;
@@ -98,6 +141,8 @@ struct EOS {
 
     // Temperature from (ρ, e) — used internally and for diagnostics
     EOS_HD double temperature_from_rho_e(double rho, double e_int) const {
+        if (type == (int)EosType::PRE_MS)
+            return pms_T_from_rho_e(rho, e_int, pms);
         if (type != (int)EosType::IDEAL_RAD)
             return e_int / cv();
         double cv_gas = cv();
