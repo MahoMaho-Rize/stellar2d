@@ -744,9 +744,9 @@ int main(int argc, char** argv) {
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
         if (cfg.species_enabled) {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,mass_H,mass_He,X_core,X_surf\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,mass_H,mass_He,X_core,X_surf,L_surf\n");
         } else {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,L_surf\n");
         }
 
         int frame = 0;
@@ -758,27 +758,33 @@ int main(int argc, char** argv) {
         while (t < cfg.t_end && !g_interrupted) {
             double dt;
             if (cfg.implicit_mode) {
-                // Adaptive dt: start from target, retry with halvings if implicit
-                // fails. We keep it fully implicit — never fall back to
-                // explicit because explicit would blow up accelerated nuclear
-                // source terms.
+                // Adaptive dt control optimised for crossing τ_KH:
+                //   - Start from --dt-implicit (seed).
+                //   - On success, grow ×2 per accepted step; cap at --dt-implicit
+                //     if given (explicit ceiling) or at 10·τ_dyn otherwise.
+                //   - On failure, cut ×0.1 (not ×0.5) — aggressive because
+                //     stiff nuclear flashes usually need a big reset.
+                //   - Never fall back to explicit: accelerated nuclear would
+                //     blow up.
                 static double dt_req_state = 0.0;
-                double target = (cfg.dt_implicit > 0) ? cfg.dt_implicit : cfg.dt_implicit_scale * r1d.compute_dt();
-                if (dt_req_state == 0.0) dt_req_state = target;
-                // After success, ramp back up towards target aggressively.
-                if (dt_req_state < target) dt_req_state = std::min(target, dt_req_state * 4.0);
+                double dt_seed = (cfg.dt_implicit > 0) ? cfg.dt_implicit
+                                                       : cfg.dt_implicit_scale * r1d.compute_dt();
+                if (dt_req_state <= 0.0) dt_req_state = dt_seed;
+                // Ceiling: explicit --dt-implicit if provided, else let it grow
+                // unbounded (user controls via --tend).
+                double dt_cap = (cfg.dt_implicit > 0) ? cfg.dt_implicit : 1e30;
 
                 dt = r1d.step_implicit(t, cfg.t_end, dt_req_state);
                 if (dt <= 0.0) {
-                    // All internal cuts failed — halve outer dt request and
-                    // retry. Never fall back to explicit (accelerated nuclear
-                    // would blow up).
                     dt_req_state *= 0.1;
-                    if (dt_req_state < 1.0) dt_req_state = 1.0;
+                    if (dt_req_state < 1e-30) dt_req_state = 1e-30;
                     std::fprintf(stderr,
                         "  step %d: implicit FAILED, outer dt reset to %.3e\n",
                         step, dt_req_state);
-                    dt = 0.0;  // don't advance time, just retry
+                    dt = 0.0;
+                } else {
+                    // Geometric growth on success — cross many τ_dyn fast.
+                    dt_req_state = std::min(dt_cap, dt_req_state * 2.0);
                 }
             } else {
                 dt = r1d.step(t, cfg.t_end);
@@ -810,14 +816,14 @@ int main(int argc, char** argv) {
                     }
                     double X_core = X_c.front();
                     double X_surf = X_c.back();
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
                                  d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
-                                 mH, mHe, X_core, X_surf);
+                                 mH, mHe, X_core, X_surf, r1d.rad_impl_L_surf);
                 } else {
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
-                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr);
+                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr, r1d.rad_impl_L_surf);
                 }
                 std::fflush(csv);
 

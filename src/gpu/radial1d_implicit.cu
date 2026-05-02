@@ -916,6 +916,15 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
         }
         int iters = newton_solve_implicit(dt);
         if (iters >= 0) {
+            // Radiation diffusion: BE tridiag solve with photosphere BC.
+            // Run AFTER Newton so hydro is consistent, then let energy flow
+            // to space. This is the mechanism that drives τ_KH.
+            if (radiation_enabled && use_eos) {
+                apply_radiation_diffusion_implicit(dt);
+                // Refresh primitives after e_int update
+                prims_and_visc(*this);
+            }
+
             // Species burn-up: Newton has updated e_int implicitly (R_e
             // contains ε_pp source). Now update X, Y explicitly from the
             // converged ρ, T of this step. This is operator-split *only

@@ -531,6 +531,306 @@ void Radial1DSolver::download_species(std::vector<double>& X_cell,
 }
 
 // ============================================================
+// Implicit (BE) radiation diffusion — tridiagonal solve with Picard
+// linearization of T⁴ and Stefan-Boltzmann photosphere BC.
+//
+// Energy eq (Lagrangian, zone k):
+//   ρ cv · ∂T/∂t = -(1/dm) · ∂L/∂m      (in spherical Lagrangian form)
+// where L = -4πr² D ∂(aT⁴)/∂r is the luminosity across the face.
+//
+// Discretize face k (between zones k-1 and k):
+//   L_k = A_k · D_k · a · (T_{k-1}⁴ − T_k⁴) / Δr_zc_k         (interior)
+//   L_0 = 0                                                    (center)
+//   L_nz = A_nz · c · a · T_nz⁴ / 4   (Stefan-Boltzmann photosphere)
+//
+// For BE + Picard we linearize T⁴ ≈ T_p⁴ + 4 T_p³ (T − T_p) around the
+// previous Picard iterate T_p. This gives a tridiag system in δT, then
+// T_{p+1} = T_p + δT. 2-4 Picard iterations converge for reasonable dt.
+// ============================================================
+
+// Kernel: compute T from (ρ, e) into T_work (used both for init + Picard)
+__global__ static void k_rad1d_T_from_rhoe(
+    const double* rho, const double* e_int, double* T, int nz, EOS eos)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double r = fmax(rho[k], 1e-30);
+    double e = fmax(e_int[k], 1e-30);
+    T[k] = fmax(eos.temperature_from_rho_e(r, e), 1e-12);
+}
+
+// Kernel: assemble tridiag for BE rad diffusion with Picard T⁴ linearization.
+// Unknowns: δT[k] for k=0..nz-1 (zone-centered). Solves
+//   A[k]·δT[k-1] + B[k]·δT[k] + C[k]·δT[k+1] = R[k]
+// where the residual R[k] is the BE energy equation evaluated at T_p.
+//
+// Rearranging the BE eq in specific internal energy form:
+//   ρ_k cv (T_k^{n+1} − T_k^n) · V_k / dt = -(L_{k+1} − L_k)
+// => dm_k cv (T_k^{n+1} − T_k^n)/dt = L_k − L_{k+1}
+// Picard: T_k^{n+1} ≈ T_p + δT_k, linearize T⁴ around T_p.
+//
+// k_face_factor_k = 4π r_k² · D_k · a · 4 T_p_{k-1}³  (coefficient on T_{k-1})
+// etc. We split coefficient on T_{k-1} vs T_k since T⁴ linearization uses
+// each zone's T_p.
+__global__ static void k_rad1d_be_assemble(
+    const double* T_p,      // (nz) current Picard iterate
+    const double* T_n,      // (nz) T^n (start of BE step)
+    const double* rho,      // (nz)
+    const double* r,        // (nz+1)
+    const double* dm,       // (nz)
+    double* A_diag,         // (nz)  lower diag
+    double* B_diag,         // (nz)  main diag
+    double* C_diag,         // (nz)  upper diag
+    double* rhs,            // (nz)
+    int nz, EOS eos,
+    double c_light, double a_rad, OpacityParams opa,
+    double sigma_sb,        // σ_SB in code units (=c·a/4)
+    double dt)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+
+    double r_k   = r[k];           // inner face of zone k
+    double r_k1  = r[k+1];         // outer face
+    double dmk   = fmax(dm[k], 1e-30);
+    double rho_k = fmax(rho[k],1e-30);
+    double Tk    = fmax(T_p[k], 1e-12);
+    double Tkn   = fmax(T_n[k], 1e-12);
+    double cv_k  = eos.cv();
+
+    // ---- Inner face L_k (between k-1 and k) ----
+    // L_k = A_k · D_k · a · (T_{k-1}⁴ − T_k⁴) / Δr_zc_k
+    // Linearize about (T_p_{k-1}, T_p_k):
+    //   L_k ≈ L_k(T_p) + 4 A D a T_p_{k-1}³/Δr · δT_{k-1}  -  4 A D a T_p_k³/Δr · δT_k
+    // Coefficient in eq for δT_k picks up -(-) sign...
+    //
+    // BE residual: dmk cv (Tkn+δTk − Tkn)/dt - (L_k − L_{k+1}) = 0
+    // i.e. (dmk cv / dt) δT_k = L_k(T_p+δT) − L_{k+1}(T_p+δT) − (dmk cv / dt)(T_p - T_n)
+    //
+    // Sign convention: rhs[k] = -F_k + correction, where F_k is residual at T_p.
+
+    double A_coef = 0.0, C_coef = 0.0;
+    double L_face_in = 0.0;        // L_k at T_p
+    double L_face_out = 0.0;       // L_{k+1} at T_p
+    double dL_in_dTkm1 = 0.0;      // ∂L_k/∂T_{k-1}
+    double dL_in_dTk   = 0.0;      // ∂L_k/∂T_k
+    double dL_out_dTk  = 0.0;      // ∂L_{k+1}/∂T_k
+    double dL_out_dTkp1= 0.0;      // ∂L_{k+1}/∂T_{k+1}
+
+    // Inner face (k): exists for k >= 1, closed at k == 0
+    if (k >= 1) {
+        double Tkm1 = 1.0;  // placeholder, we can't read T_p[k-1] in kernel w/o shared — do coalesced read
+        // direct read is fine for nz up to a few thousand
+        Tkm1 = fmax(T_p[k-1], 1e-12);
+        double rho_km1 = fmax(rho[k-1], 1e-30);
+        double T_face = 0.5 * (Tkm1 + Tk);
+        double rho_face = 0.5 * (rho_km1 + rho_k);
+        double kap = grey_opacity(rho_face, T_face, opa);
+        double D = c_light / (3.0 * kap * rho_face);
+        double A_face = 4.0 * 3.14159265358979323846 * r_k * r_k;
+        // Zone-center spacing
+        double rc_lo = 0.5 * (r[k-1] + r[k]);
+        double rc_hi = 0.5 * (r[k]   + r[k+1]);
+        double dr_zc = fmax(rc_hi - rc_lo, 1e-30);
+        double coef  = A_face * D * a_rad / dr_zc;
+        double Tkm1_3 = Tkm1*Tkm1*Tkm1;
+        double Tk_3   = Tk*Tk*Tk;
+        double Tkm1_4 = Tkm1_3 * Tkm1;
+        double Tk_4   = Tk_3   * Tk;
+        L_face_in    = coef * (Tkm1_4 - Tk_4);
+        dL_in_dTkm1  =  4.0 * coef * Tkm1_3;
+        dL_in_dTk    = -4.0 * coef * Tk_3;
+    }
+
+    // Outer face (k+1)
+    if (k < nz - 1) {
+        double Tkp1 = fmax(T_p[k+1], 1e-12);
+        double rho_kp1 = fmax(rho[k+1], 1e-30);
+        double T_face = 0.5 * (Tk + Tkp1);
+        double rho_face = 0.5 * (rho_k + rho_kp1);
+        double kap = grey_opacity(rho_face, T_face, opa);
+        double D = c_light / (3.0 * kap * rho_face);
+        double A_face = 4.0 * 3.14159265358979323846 * r_k1 * r_k1;
+        double rc_lo = 0.5 * (r[k]   + r[k+1]);
+        double rc_hi = 0.5 * (r[k+1] + r[k+2]);
+        double dr_zc = fmax(rc_hi - rc_lo, 1e-30);
+        double coef  = A_face * D * a_rad / dr_zc;
+        double Tkp1_3 = Tkp1*Tkp1*Tkp1;
+        double Tk_3   = Tk*Tk*Tk;
+        double Tkp1_4 = Tkp1_3 * Tkp1;
+        double Tk_4   = Tk_3   * Tk;
+        L_face_out   = coef * (Tk_4 - Tkp1_4);
+        dL_out_dTk   =  4.0 * coef * Tk_3;
+        dL_out_dTkp1 = -4.0 * coef * Tkp1_3;
+    } else {
+        // Surface face: L_surf = A_surf · σ_SB · T_surf⁴  (Stefan-Boltzmann)
+        // Take T_surf = T[nz-1] (last zone) as photospheric temperature — crude
+        // but standard for grey 1D stellar models. A more accurate τ=2/3 boundary
+        // would find T at optical depth 2/3; we can refine later.
+        double A_surf = 4.0 * 3.14159265358979323846 * r_k1 * r_k1;
+        double Tk_3   = Tk*Tk*Tk;
+        double Tk_4   = Tk_3 * Tk;
+        L_face_out   = A_surf * sigma_sb * Tk_4;
+        dL_out_dTk   = 4.0 * A_surf * sigma_sb * Tk_3;
+        dL_out_dTkp1 = 0.0;
+    }
+
+    // Assemble tridiag row
+    // LHS: (dmk cv/dt) δT_k - (∂L_k/∂T) term + (∂L_{k+1}/∂T) term
+    // The BE eq with δT:  dmk cv (Tp+δTk − Tkn)/dt = L_k(Tp+δT) − L_{k+1}(Tp+δT)
+    // Collect δT terms:
+    //   (dmk cv / dt) δT_k - dL_in_dTkm1 δT_{k-1} - dL_in_dTk δT_k
+    //    + dL_out_dTk δT_k + dL_out_dTkp1 δT_{k+1}
+    //   = [-dmk cv(Tp-Tkn)/dt + L_in(Tp) − L_out(Tp)]
+    //
+    double a_ = -dL_in_dTkm1;
+    double c_ =  dL_out_dTkp1;
+    double b_ = (dmk * cv_k / dt) - dL_in_dTk + dL_out_dTk;
+    double rhs_val = -dmk * cv_k * (Tk - Tkn) / dt + L_face_in - L_face_out;
+
+    A_diag[k] = a_;
+    B_diag[k] = b_;
+    C_diag[k] = c_;
+    rhs[k]    = rhs_val;
+}
+
+// Host-side Thomas algorithm (nz is typically 128-2048 — trivial).
+static void thomas_solve(std::vector<double>& a, std::vector<double>& b,
+                         std::vector<double>& c, std::vector<double>& d,
+                         std::vector<double>& x)
+{
+    int n = (int)b.size();
+    std::vector<double> cp(n), dp(n);
+    cp[0] = c[0] / b[0];
+    dp[0] = d[0] / b[0];
+    for (int i = 1; i < n; ++i) {
+        double m = b[i] - a[i] * cp[i-1];
+        if (std::fabs(m) < 1e-300) m = 1e-300;
+        cp[i] = (i < n - 1) ? c[i] / m : 0.0;
+        dp[i] = (d[i] - a[i] * dp[i-1]) / m;
+    }
+    x[n-1] = dp[n-1];
+    for (int i = n - 2; i >= 0; --i) x[i] = dp[i] - cp[i] * x[i+1];
+}
+
+// Kernel: update e_int from ΔT (ρ cv ΔT = Δe per mass)
+__global__ static void k_rad1d_apply_dT(
+    double* e_int, const double* T_new, const double* T_start,
+    int nz, EOS eos)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double cv = eos.cv();
+    double dT = T_new[k] - T_start[k];
+    e_int[k] = fmax(e_int[k] + cv * dT, 1e-30);
+}
+
+// Kernel: apply δT onto T_p (Picard update)
+__global__ static void k_rad1d_apply_delta_T(
+    double* T_p, const double* dT, int nz, double damp)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double newT = T_p[k] + damp * dT[k];
+    if (newT < 1e-12) newT = 1e-12;
+    T_p[k] = newT;
+}
+
+int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
+    if (!radiation_enabled || !use_eos) return 0;
+    int nz = lev.nz, B = 256;
+
+    OpacityParams opa;
+    opa.kappa_es     = rad_kappa_es;
+    opa.kappa_ff_0   = rad_kappa_ff_0;
+    opa.kappa_dust_0 = rad_kappa_dust_0;
+    opa.kappa_Hm_0   = rad_kappa_Hm_0;
+    opa.T_dust_off   = rad_T_dust_off;
+    double sigma_sb = rad_c_light * rad_a_rad / 4.0;
+
+    // Allocate tridiag scratch (tiny)
+    static double *d_A = nullptr, *d_Bm = nullptr, *d_Cm = nullptr,
+                  *d_R = nullptr, *d_Tp = nullptr, *d_Tn = nullptr,
+                  *d_dT = nullptr;
+    static int cached_nz = 0;
+    if (cached_nz != nz) {
+        auto f = [](double* p){ if (p) cudaFree(p); };
+        f(d_A); f(d_Bm); f(d_Cm); f(d_R); f(d_Tp); f(d_Tn); f(d_dT);
+        auto a = [nz](double** p){ CUDA_CHECK(cudaMalloc(p, nz*sizeof(double))); };
+        a(&d_A); a(&d_Bm); a(&d_Cm); a(&d_R); a(&d_Tp); a(&d_Tn); a(&d_dT);
+        cached_nz = nz;
+    }
+
+    // Compute T^n from current (ρ, e_int)
+    k_rad1d_T_from_rhoe<<<(nz+B-1)/B, B>>>(lev.d_rho, lev.d_e_int, d_Tn, nz, eos);
+    // Initial Picard iterate: T_p = T_n
+    CUDA_CHECK(cudaMemcpy(d_Tp, d_Tn, nz*sizeof(double), cudaMemcpyDeviceToDevice));
+
+    const int max_picard = 6;
+    const double tol_rel = 1e-4;
+    std::vector<double> h_a(nz), h_b(nz), h_c(nz), h_rhs(nz), h_dT(nz);
+    int it = 0;
+    double last_rel = 0.0;
+    for (it = 0; it < max_picard; ++it) {
+        k_rad1d_be_assemble<<<(nz+B-1)/B, B>>>(
+            d_Tp, d_Tn, lev.d_rho, lev.d_r, lev.d_dm,
+            d_A, d_Bm, d_Cm, d_R,
+            nz, eos, rad_c_light, rad_a_rad, opa, sigma_sb, dt_total);
+
+        CUDA_CHECK(cudaMemcpy(h_a.data(),   d_A,  nz*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_b.data(),   d_Bm, nz*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_c.data(),   d_Cm, nz*sizeof(double), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(h_rhs.data(), d_R,  nz*sizeof(double), cudaMemcpyDeviceToHost));
+        thomas_solve(h_a, h_b, h_c, h_rhs, h_dT);
+
+        // Compute relative change, upload δT, apply with damping if T would go <= 0
+        double max_rel = 0.0;
+        std::vector<double> h_Tp(nz);
+        CUDA_CHECK(cudaMemcpy(h_Tp.data(), d_Tp, nz*sizeof(double), cudaMemcpyDeviceToHost));
+        double damp = 1.0;
+        for (int k = 0; k < nz; ++k) {
+            double Tnew = h_Tp[k] + h_dT[k];
+            if (Tnew <= 0.5 * h_Tp[k]) {
+                double d_allow = 0.5 * h_Tp[k] - h_Tp[k];     // allow T to drop at most 50%
+                if (h_dT[k] < 0) {
+                    double local_damp = d_allow / h_dT[k];
+                    if (local_damp < damp) damp = local_damp;
+                }
+            }
+            if (h_Tp[k] > 1.0) {
+                double rel = std::fabs(h_dT[k]) / h_Tp[k];
+                if (rel > max_rel) max_rel = rel;
+            }
+        }
+        if (damp < 0.1) damp = 0.1;
+        CUDA_CHECK(cudaMemcpy(d_dT, h_dT.data(), nz*sizeof(double), cudaMemcpyHostToDevice));
+        k_rad1d_apply_delta_T<<<(nz+B-1)/B, B>>>(d_Tp, d_dT, nz, damp);
+
+        last_rel = max_rel;
+        if (max_rel < tol_rel && damp >= 0.99) { it++; break; }
+    }
+
+    // Apply final ΔT back to e_int: Δe = cv · (T_final − T_n)
+    k_rad1d_apply_dT<<<(nz+B-1)/B, B>>>(lev.d_e_int, d_Tp, d_Tn, nz, eos);
+
+    // Diagnostic: surface luminosity L = A_surf · σ · T_surf⁴
+    {
+        double T_surf;
+        CUDA_CHECK(cudaMemcpy(&T_surf, d_Tp + nz - 1, sizeof(double), cudaMemcpyDeviceToHost));
+        double r_surf;
+        CUDA_CHECK(cudaMemcpy(&r_surf, lev.d_r + nz, sizeof(double), cudaMemcpyDeviceToHost));
+        double A_s = 4.0 * M_PI * r_surf * r_surf;
+        rad_impl_L_surf = A_s * sigma_sb * T_surf * T_surf * T_surf * T_surf;
+    }
+    rad_impl_last_picard = it;
+    if (step_count < 3 || (step_count % 200 == 0)) {
+        std::fprintf(stderr, "  [BE-rad] step=%d picard=%d dt=%.2e L_surf=%.3e\n",
+                     step_count, it, dt_total, rad_impl_L_surf);
+    }
+    return it;
+}
+
+// ============================================================
 // Explicit radiation diffusion: subcycle at parabolic CFL
 // ============================================================
 int Radial1DSolver::apply_radiation_diffusion(double dt_total) {

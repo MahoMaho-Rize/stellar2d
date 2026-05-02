@@ -190,6 +190,15 @@ struct Radial1DSolver {
     // subcycles at the parabolic radiation CFL. Returns number of subcycles.
     int apply_radiation_diffusion(double dt_total);
 
+    // Implicit (BE) radiation diffusion: single backward-Euler step with
+    // Picard linearization of T⁴, tridiagonal solve. Includes Stefan-Boltzmann
+    // photosphere BC at the outer face (F_surf = σ T_surf⁴ · A).
+    // Unconditionally stable → can take arbitrary dt, suitable for τ_KH.
+    // Returns number of Picard iterations.
+    int apply_radiation_diffusion_implicit(double dt_total);
+    int rad_impl_last_picard = 0;     // diagnostic: iterations last call
+    double rad_impl_L_surf = 0.0;     // diagnostic: surface luminosity last call
+
     // ============================================================
     // Phase 4: Implicit Backward-Euler + JFNK
     // ============================================================
