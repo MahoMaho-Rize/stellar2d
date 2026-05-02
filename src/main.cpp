@@ -139,6 +139,10 @@ struct SimConfig {
     std::string cart_ale2_ppm_space = "prim"; // cart_ale2: PPM recon space (prim | cons)
     bool cart_ale2_ppm_char = true;  // cart_ale2: project to characteristic variables (prim space only)
     int cart_ale2_kh_k = 0;   // cart_ale2: KH mode number (0 = IC default: k=2 shear, k=1 Lecoanet)
+    std::string cart_ale2_slab_file;   // cart_ale2 --test local_convection: slab stratification
+    double cart_ale2_slab_perturb = 0.01;  // entropy seed amplitude at slab bottom
+    int cart_ale2_slab_seed_k = 4;     // horizontal mode of entropy seed
+    double cart_ale2_cool_tau = 0.0;   // cart_ale2: Newton-cooling timescale (s). 0 = disabled.
     // pseudo-spectral (偽譜法) 專用
     double ps_nu = 1e-4;          // 運動黏度
     double ps_Lx = 1.0;
@@ -406,6 +410,14 @@ int main(int argc, char** argv) {
             cfg.cart_ale2_ppm_char = true;
         else if (std::strcmp(argv[i], "--cart-ale2-kh-k") == 0 && i + 1 < argc)
             cfg.cart_ale2_kh_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-slab") == 0 && i + 1 < argc)
+            cfg.cart_ale2_slab_file = argv[++i];
+        else if (std::strcmp(argv[i], "--slab-perturb") == 0 && i + 1 < argc)
+            cfg.cart_ale2_slab_perturb = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--slab-seed-k") == 0 && i + 1 < argc)
+            cfg.cart_ale2_slab_seed_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--cool-tau") == 0 && i + 1 < argc)
+            cfg.cart_ale2_cool_tau = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
             cfg.ps_nu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)
@@ -664,7 +676,8 @@ int main(int argc, char** argv) {
     } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
                || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
                || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb"
-               || cfg.test_case == "kh_lecoanet") {
+               || cfg.test_case == "kh_lecoanet"
+               || cfg.test_case == "local_convection") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -1483,6 +1496,7 @@ int main(int argc, char** argv) {
                        || cfg.test_case == "hse_bubble");
         bool is_kh = (cfg.test_case == "kh_shear");
         bool is_kh_lec = (cfg.test_case == "kh_lecoanet");
+        bool is_loc_conv = (cfg.test_case == "local_convection");
         double Lx = 1.0;
         // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
         // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
@@ -1490,6 +1504,34 @@ int main(int argc, char** argv) {
                   : (is_hse || is_kh) ? 1.0
                   : 0.2;
         double gam = is_hse ? cfg.gamma : 1.4;
+        // local_convection: read slab header to get real Ly, Lx, γ in cgs.
+        if (is_loc_conv) {
+            if (cfg.cart_ale2_slab_file.empty()) {
+                std::fprintf(stderr,
+                    "local_convection requires --ic-slab <file>\n");
+                return 1;
+            }
+            std::FILE* fp = std::fopen(cfg.cart_ale2_slab_file.c_str(), "r");
+            if (!fp) {
+                std::fprintf(stderr,
+                    "cannot open slab file %s\n", cfg.cart_ale2_slab_file.c_str());
+                return 1;
+            }
+            char line[512];
+            while (std::fgets(line, sizeof(line), fp)) {
+                const char* s = line;
+                while (*s == ' ' || *s == '\t') ++s;
+                if (*s == '#' || *s == '\0' || *s == '\n') continue;
+                double Ly_f, Lx_f, gy_f, gamma_f, rho_t, P_t, T_t, mu_f;
+                if (std::sscanf(line, "%lf %lf %lf %lf %lf %lf %lf %lf",
+                                &Ly_f, &Lx_f, &gy_f, &gamma_f,
+                                &rho_t, &P_t, &T_t, &mu_f) == 8) {
+                    Ly = Ly_f; Lx = Lx_f; gam = gamma_f;
+                    break;
+                }
+            }
+            std::fclose(fp);
+        }
         cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
         cale.remap_order = cfg.cart_ale_remap_order;
         cale.CQ_lin  = cfg.cart_ale_cq_lin;
@@ -1556,6 +1598,20 @@ int main(int argc, char** argv) {
             }
             int k = (cfg.cart_ale2_kh_k > 0) ? cfg.cart_ale2_kh_k : 1;
             cale.init_kh_lecoanet(1.0, amp, 0.0, 10.0, k);
+        } else if (cfg.test_case == "local_convection") {
+            // Recommend --bc-x periodic --bc-y reflect.
+            if (!((cale.bc_mode & 1) && !(cale.bc_mode & 2))) {
+                std::fprintf(stderr,
+                    "  [warn] local_convection prefers --bc-x periodic --bc-y reflect; "
+                    "current bc_mode=%d\n", cale.bc_mode);
+            }
+            cale.init_local_convection(cfg.cart_ale2_slab_file,
+                                       cfg.cart_ale2_slab_perturb,
+                                       cfg.cart_ale2_slab_seed_k);
+            cale.tau_cool = cfg.cart_ale2_cool_tau;
+            if (cale.tau_cool > 0.0)
+                std::fprintf(stderr,
+                    "    Newton cooling ON: τ_cool=%.3e s\n", cale.tau_cool);
         } else {
             cale.init_sod();
         }

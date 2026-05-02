@@ -135,6 +135,18 @@ struct CartAle2Solver {
     //     ppm.cpp + characteristic.cpp (Stone+08 Appendix A, adiabatic hydro).
     int ppm_char = 1;
 
+    // ---- Newton cooling (optional; only used by local_convection) ----
+    // Relaxes e_int(y) toward a reference profile e_ref(y) with timescale
+    // tau_cool.  Same mechanic Nordlund & Stein used in their 1980s box
+    // convection papers to bleed off compressive heating so v_conv saturates
+    // at physical values instead of running up to Mach ~0.1.
+    //   e ← e + (e_ref(y) − e)·(1 − exp(−dt / τ_cool))
+    // Density is untouched (so mass and HSE are preserved exactly).
+    double *d_e_ref_y = nullptr;   // per-row (ny) reference e_int, cell-centered
+    double tau_cool = 0.0;         // 0 = disabled
+    void alloc_cooling_ref(const std::vector<double>& e_ref_per_row);
+    void apply_cooling(double dt);
+
     // ---- Bookkeeping ----
     double dt_current = 0.0;
     int step_count = 0;
@@ -165,6 +177,19 @@ struct CartAle2Solver {
     // g_y is set to 0 inside this IC — ideal for watching pure KH roll-up.
     void init_kh_shear(double rho_light, double rho_heavy, double P0,
                        double vshear, double amp, int k);
+
+    // Plane-parallel stratified slab from a MESA envelope strip.  Loads a
+    // slab file emitted by scripts/make_local_convection_slab.py containing:
+    //   header line:  Ly Lx g_y gamma rho_top P_top T_top mu
+    //   data lines:   (ny+1) × (y, rho, P, T)   face-centered
+    // Sets g_y from the file and pairs naturally with --bc-x periodic
+    // --bc-y reflect.  Seeds a small entropy perturbation at the bottom to
+    // trigger overturning convection.
+    //   perturb_amp — δs/s relative bump (0.01 is plenty)
+    //   seed_k      — horizontal mode for the perturbation (default 4)
+    void init_local_convection(const std::string& slab_file,
+                               double perturb_amp = 0.01,
+                               int seed_k = 4);
 
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
