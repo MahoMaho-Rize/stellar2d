@@ -2,6 +2,9 @@
 
 #include <cmath>
 #include "physics/eos_pre_ms.h"
+#ifdef __CUDACC__
+#include "physics/helmholtz_eos.cuh"
+#endif
 
 #ifdef __CUDACC__
 #define EOS_HD __host__ __device__
@@ -19,7 +22,7 @@
 // For ideal gas, radiation_a is ignored (treated as 0).
 // Newton solve for T(ρ,e) uses bounded fixed iteration count, GPU-safe.
 
-enum class EosType { IDEAL = 0, IDEAL_RAD = 1, PRE_MS = 2 };
+enum class EosType { IDEAL = 0, IDEAL_RAD = 1, PRE_MS = 2, HELMHOLTZ = 3 };
 
 struct EOS {
     double gamma;
@@ -27,6 +30,9 @@ struct EOS {
     double radiation_a;   // radiation constant a (code units); 0 ⇒ pure ideal
     int type;             // EosType as int for trivial POD copy
     PreMsParams pms;      // pre-MS EOS parameters (only used when type == PRE_MS)
+#ifdef __CUDACC__
+    HelmholtzTableView helm;  // only used when type == HELMHOLTZ
+#endif
 
     EOS_HD EOS()
         : gamma(5.0/3.0), mu(1.0), radiation_a(0.0),
@@ -59,10 +65,31 @@ struct EOS {
         return e;
     }
 
+#ifdef __CUDACC__
+    // Helmholtz EOS with pre-loaded table view. Abar/Zbar live inside
+    // HelmholtzTableView (can be overridden before copy).
+    static EOS_HD EOS helmholtz(const HelmholtzTableView& v) {
+        EOS e;
+        e.gamma = 5.0/3.0;     // fallback; real Γ₁ returned by helm_eval
+        e.mu    = v.Abar;       // best-effort scalar analog
+        e.radiation_a = 7.5657e-15;   // cgs; helm_eval uses its own constant
+        e.type  = static_cast<int>(EosType::HELMHOLTZ);
+        e.helm  = v;
+        return e;
+    }
+#endif
+
     EOS_HD double gas_constant() const { return 1.0 / mu; }
     EOS_HD double cv() const { return gas_constant() / (gamma - 1.0); }
 
     EOS_HD double pressure(double rho, double e_int) const {
+#ifdef __CUDACC__
+        if (type == (int)EosType::HELMHOLTZ) {
+            double T = helm_T_from_rho_e(rho, e_int, helm);
+            HelmState s = helm_eval(rho, T, helm);
+            return s.P;
+        }
+#endif
         if (type == (int)EosType::PRE_MS) {
             double T = pms_T_from_rho_e(rho, e_int, pms);
             return pms_pressure(rho, T, pms);
@@ -75,6 +102,20 @@ struct EOS {
     }
 
     EOS_HD double internal_energy(double rho, double P) const {
+#ifdef __CUDACC__
+        if (type == (int)EosType::HELMHOLTZ) {
+            // Bracketed search over T to invert P(ρ, T) = target.
+            double T_lo = 1e3, T_hi = 1e10;
+            for (int it = 0; it < 60; ++it) {
+                double T_mid = sqrt(T_lo * T_hi);
+                HelmState s = helm_eval(rho, T_mid, helm);
+                if (s.P > P) T_hi = T_mid; else T_lo = T_mid;
+                if ((T_hi - T_lo) < 1e-6 * (T_hi + T_lo)) break;
+            }
+            HelmState s = helm_eval(rho, sqrt(T_lo * T_hi), helm);
+            return s.e;
+        }
+#endif
         if (type == (int)EosType::PRE_MS) {
             // Solve T from P inversion, then get e from T.
             // Bracketed search (no closed-form for PRE_MS).
@@ -96,6 +137,14 @@ struct EOS {
     }
 
     EOS_HD double sound_speed(double rho, double P) const {
+#ifdef __CUDACC__
+        if (type == (int)EosType::HELMHOLTZ) {
+            double e = internal_energy(rho, P);
+            double T = helm_T_from_rho_e(rho, e, helm);
+            HelmState s = helm_eval(rho, T, helm);
+            return s.cs;
+        }
+#endif
         if (type == (int)EosType::PRE_MS) {
             // Recover e from P, then use pms_sound_speed (expects e).
             double e = internal_energy(rho, P);
@@ -121,6 +170,14 @@ struct EOS {
 
     // ∂P/∂(ρe) at fixed ρ — critical for FAS SIMPLE smoother Jacobian
     EOS_HD double dP_drhoe(double rho, double e_int) const {
+#ifdef __CUDACC__
+        if (type == (int)EosType::HELMHOLTZ) {
+            double T = helm_T_from_rho_e(rho, e_int, helm);
+            HelmState s = helm_eval(rho, T, helm);
+            // dP/d(ρe)|ρ  =  dP/de|ρ / ρ
+            return s.dPde_rho / (rho > 1e-30 ? rho : 1e-30);
+        }
+#endif
         if (type == (int)EosType::PRE_MS) {
             // Numerical finite difference, since pms_pressure is implicit in T.
             double de = 1e-4 * fabs(e_int) + 1e-10;
@@ -141,6 +198,11 @@ struct EOS {
 
     // Temperature from (ρ, e) — used internally and for diagnostics
     EOS_HD double temperature_from_rho_e(double rho, double e_int) const {
+#ifdef __CUDACC__
+        if (type == (int)EosType::HELMHOLTZ) {
+            return helm_T_from_rho_e(rho, e_int, helm);
+        }
+#endif
         if (type == (int)EosType::PRE_MS)
             return pms_T_from_rho_e(rho, e_int, pms);
         if (type != (int)EosType::IDEAL_RAD)

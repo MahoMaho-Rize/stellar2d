@@ -312,6 +312,13 @@ if(USE_GPU)
     target_link_libraries(test_helm_l2 PRIVATE CUDA::cudart)
     add_test(NAME helm_l2 COMMAND test_helm_l2)
 
+    add_executable(test_helm_eos tests/test_helm_eos.cu)
+    target_include_directories(test_helm_eos PRIVATE src)
+    target_compile_definitions(test_helm_eos PRIVATE USE_GPU)
+    set_target_properties(test_helm_eos PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_helm_eos PRIVATE CUDA::cudart)
+    add_test(NAME helm_eos COMMAND test_helm_eos)
+
     add_executable(test_coverage_critical tests/test_coverage_critical.cu
         ${TEST_COMMON_SOURCES}
         ${FAS_GPU_SOURCES}
