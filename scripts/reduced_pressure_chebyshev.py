@@ -77,86 +77,16 @@ def print_provenance(script_name):
     print("#" * 72)
 
 
-# ── Lane-Emden ──────────────────────────────────────────────────────────
-def solve_lane_emden(n=1.5, xi_max=10.0, n_pts=5000):
-    def rhs(xi, y):
-        theta, dtheta = y
-        if xi < 1e-10:
-            return [dtheta, -theta ** n / 3.0]
-        theta_pow = np.sign(theta) * np.abs(theta) ** n if theta >= 0 else 0.0
-        return [dtheta, -2.0 / xi * dtheta - theta_pow]
-
-    def event_zero(xi, y):
-        return y[0]
-    event_zero.terminal = True
-    event_zero.direction = -1
-
-    sol = scipy.integrate.solve_ivp(
-        rhs, [1e-6, xi_max], [1.0 - 1e-12, 0.0],
-        events=event_zero, max_step=0.01, rtol=1e-10, atol=1e-12,
-        dense_output=True,
-    )
-    xi_1 = sol.t_events[0][0] if sol.t_events[0].size else sol.t[-1]
-    xi = np.linspace(1e-5, xi_1 * 0.999, n_pts)
-    theta = sol.sol(xi)[0]
-    return xi, theta, xi_1
-
-
-# ── Chebyshev machinery (Trefethen, "Spectral Methods in MATLAB", cheb.m) ──
-def cheb(N):
-    """
-    Chebyshev-Gauss-Lobatto points on [-1, 1] and the differentiation matrix D.
-    Returns D (N+1, N+1) and x (N+1,), x[0] = 1, x[-1] = -1 (Trefethen order).
-    """
-    if N == 0:
-        return np.zeros((1, 1)), np.array([1.0])
-    x = np.cos(np.pi * np.arange(N + 1) / N)
-    c = np.ones(N + 1); c[0] = 2; c[-1] = 2
-    c *= (-1.0) ** np.arange(N + 1)
-    X = np.tile(x, (N + 1, 1)).T
-    dX = X - X.T
-    D = np.outer(c, 1.0 / c) / (dX + np.eye(N + 1))
-    D -= np.diag(D.sum(axis=1))
-    return D, x
-
-
-def clenshaw_curtis_weights(N):
-    """Quadrature weights for CGL grid on [-1, 1] (Trefethen, Spectral
-    Methods in MATLAB, p. 128). Total sum = 2.
-    """
-    theta = np.pi * np.arange(N + 1) / N
-    w = np.zeros(N + 1)
-    v = np.ones(N - 1)
-    for k in range(2, N, 2):
-        v -= 2.0 * np.cos(k * theta[1:N]) / (k * k - 1)
-    if N % 2 == 0:
-        v -= np.cos(N * theta[1:N]) / (N * N - 1)
-    w[1:N] = 2.0 * v / N
-    w[0] = w[-1] = 1.0 / (N * N - 1 + (N % 2))
-    # Correct endpoint weights (Fejer-style): see Trefethen eq (12.8-ish).
-    # The formula above is known-correct for N >= 2.
-    return w
-
-
-def cheb_on_interval(N, a, b):
-    """CGL grid + D2 operator mapped to [a, b]. Returns y (ascending),
-    D2 (on interior points after Dirichlet strip), w_int (Clenshaw-Curtis
-    interior weights), and the full-grid transform from interior values
-    back to full grid (adds zero at the endpoints)."""
-    D, x = cheb(N)          # x descending from +1 to -1
-    scale = 2.0 / (b - a)
-    D_scaled = D * scale
-    D2 = D_scaled @ D_scaled
-    w_full = clenshaw_curtis_weights(N) * (b - a) / 2.0
-
-    # Reorder ascending so y[0] = a, y[-1] = b.
-    idx = np.argsort(x)
-    y_full = a + (x[idx] + 1.0) * (b - a) / 2.0
-    P = np.zeros_like(D2)
-    P[np.arange(N + 1), idx] = 1.0
-    D2 = P @ D2 @ P.T
-    w_full = w_full[idx]
-    return y_full, D2, w_full
+# Shared infrastructure (Lane-Emden + Chebyshev machinery) lives in
+# gmode_infra.py to maintain a single source of truth across the
+# reduced-pressure and g-mode experiment suites.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gmode_infra import (
+    solve_lane_emden,
+    cheb,
+    clenshaw_curtis_weights,
+    cheb_on_interval,
+)
 
 
 # ── W potentials on a generic (possibly non-uniform) grid ───────────────
