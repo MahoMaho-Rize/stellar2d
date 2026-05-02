@@ -4,103 +4,77 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <vector>
 #include <cuda_runtime.h>
 
 // ---------------------------------------------------------------------
-// ASCII → binary conversion.
-//
-// The cococubed "helm_table.dat" file format (verified against helmeos.f):
-//   Loop j = 1..jmax:        (log rho index)
-//     Loop i = 1..imax:      (log T index)
-//       read 9 doubles:  f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt
-//
-// Grid is implicit (not stored): log T ∈ [3.0, 13.0], log ρ ∈ [-12, 15].
-// dt = (thi-tlo)/(imax-1), dd = (dhi-dlo)/(jmax-1).
-//
-// We cache the parsed table as raw little-endian float64 in bin_cache_path
-// so subsequent launches skip the ASCII parse (~100 ms → 5 ms).
+// Binary table loader. The ASCII helm_table.dat must be preprocessed by
+// tools/helm_convert into a 64-byte-header + 21 × imax × jmax float64
+// payload (~17 MB for twice-dense resolution). See tools/helm_convert.cpp
+// for the format spec.
 // ---------------------------------------------------------------------
-static bool helm_parse_ascii(const char* path, std::vector<double>& out_concat) {
-    std::FILE* fp = std::fopen(path, "r");
-    if (!fp) return false;
 
-    const int NFIELDS = 9;
-    const size_t NENT  = (size_t)HELM_JMAX * HELM_IMAX;
-    out_concat.assign(NFIELDS * NENT, 0.0);
-    // Layout in out_concat: field_k * NENT + (j*IMAX + i)
-
-    // f is the outer (j=1..jmax, i=1..imax) order; Timmes reads 9 values
-    // per record. We pipe straight through.
-    for (int j = 0; j < HELM_JMAX; ++j) {
-        for (int i = 0; i < HELM_IMAX; ++i) {
-            double v[9];
-            int n = std::fscanf(fp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf",
-                                &v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7],&v[8]);
-            if (n != 9) {
-                std::fprintf(stderr, "helm_parse_ascii: short read at j=%d i=%d (%d of 9)\n", j, i, n);
-                std::fclose(fp);
-                return false;
-            }
-            size_t ij = (size_t)j * HELM_IMAX + i;
-            for (int k = 0; k < 9; ++k) out_concat[(size_t)k * NENT + ij] = v[k];
-        }
+int HelmholtzTable::load(const char* /*ascii_path*/, const char* bin_cache_path, cudaStream_t s) {
+    if (!bin_cache_path) {
+        std::fprintf(stderr, "helmholtz: no binary path given\n");
+        return 1;
     }
-    std::fclose(fp);
-    return true;
-}
-
-static bool helm_read_bin(const char* path, std::vector<double>& out_concat) {
-    std::FILE* fp = std::fopen(path, "rb");
-    if (!fp) return false;
-    const size_t NENT = (size_t)HELM_JMAX * HELM_IMAX;
-    out_concat.assign(9 * NENT, 0.0);
-    size_t got = std::fread(out_concat.data(), sizeof(double), 9 * NENT, fp);
-    std::fclose(fp);
-    return got == 9 * NENT;
-}
-
-static bool helm_write_bin(const char* path, const std::vector<double>& v) {
-    std::FILE* fp = std::fopen(path, "wb");
-    if (!fp) return false;
-    size_t wrote = std::fwrite(v.data(), sizeof(double), v.size(), fp);
-    std::fclose(fp);
-    return wrote == v.size();
-}
-
-int HelmholtzTable::load(const char* ascii_path, const char* bin_cache_path, cudaStream_t s) {
-    const size_t NENT = (size_t)HELM_JMAX * HELM_IMAX;
-    std::vector<double> host_concat;
-
-    // Try binary cache first.
-    bool loaded = false;
-    if (bin_cache_path && helm_read_bin(bin_cache_path, host_concat)) {
-        std::fprintf(stderr, "helmholtz: loaded binary cache %s (%.2f MB)\n",
-                     bin_cache_path, host_concat.size() * 8.0 / 1048576.0);
-        loaded = true;
-    }
-    if (!loaded) {
-        if (!ascii_path) {
-            std::fprintf(stderr,
-                "helmholtz: no cache and no ASCII path given. Download\n"
-                "  http://cococubed.com/codes/eos/helm_table.dat → third_party/helmholtz/\n");
-            return 1;
-        }
-        if (!helm_parse_ascii(ascii_path, host_concat)) {
-            std::fprintf(stderr, "helmholtz: ASCII parse failed (%s)\n", ascii_path);
-            return 2;
-        }
-        std::fprintf(stderr, "helmholtz: parsed ASCII %s (%d×%d = %zu × 9 doubles)\n",
-                     ascii_path, HELM_JMAX, HELM_IMAX, NENT);
-        if (bin_cache_path) helm_write_bin(bin_cache_path, host_concat);
+    std::FILE* fp = std::fopen(bin_cache_path, "rb");
+    if (!fp) {
+        std::fprintf(stderr,
+            "helmholtz: cannot open %s — run tools/helm_convert first:\n"
+            "  tools/helm_convert third_party/helmholtz/helm_table.dat "
+            "third_party/helmholtz/helm_table.bin\n", bin_cache_path);
+        return 2;
     }
 
-    // Allocate + upload contiguous 9·NENT doubles.
+    // --- Read + validate 64-byte header ---
+    char header[64];
+    if (std::fread(header, 1, 64, fp) != 64) {
+        std::fprintf(stderr, "helmholtz: short header read\n");
+        std::fclose(fp); return 3;
+    }
+    if (std::memcmp(header, "HELMv1\0\0", 8) != 0) {
+        std::fprintf(stderr, "helmholtz: bad magic (expected HELMv1)\n");
+        std::fclose(fp); return 4;
+    }
+    int32_t imax, jmax;
+    std::memcpy(&imax, header + 8, 4);
+    std::memcpy(&jmax, header + 12, 4);
+    if (imax != HELM_IMAX || jmax != HELM_JMAX) {
+        std::fprintf(stderr, "helmholtz: dim mismatch (file %dx%d, code %dx%d)\n",
+                     imax, jmax, HELM_IMAX, HELM_JMAX);
+        std::fclose(fp); return 5;
+    }
+    double tlo, thi, dlo, dhi;
+    std::memcpy(&tlo, header + 16, 8);
+    std::memcpy(&thi, header + 24, 8);
+    std::memcpy(&dlo, header + 32, 8);
+    std::memcpy(&dhi, header + 40, 8);
+
+    // --- Read payload: 21 fields × imax × jmax doubles ---
+    const int N_FIELDS = 21;
+    const size_t NENT  = (size_t)HELM_IMAX * HELM_JMAX;
+    std::vector<double> host_concat((size_t)N_FIELDS * NENT);
+    size_t got = std::fread(host_concat.data(), sizeof(double), host_concat.size(), fp);
+    std::fclose(fp);
+    if (got != host_concat.size()) {
+        std::fprintf(stderr, "helmholtz: short payload read (%zu / %zu)\n",
+                     got, host_concat.size());
+        return 6;
+    }
+    std::fprintf(stderr, "helmholtz: loaded %s (%.2f MB, %d fields × %dx%d)\n",
+                 bin_cache_path, host_concat.size() * 8.0 / 1048576.0,
+                 N_FIELDS, HELM_IMAX, HELM_JMAX);
+
+    // --- Allocate + upload ---
     bytes = host_concat.size() * sizeof(double);
     CUDA_CHECK(cudaMalloc(&d_data, bytes));
     CUDA_CHECK(cudaMemcpy(d_data, host_concat.data(), bytes, cudaMemcpyHostToDevice));
 
-    // Wire up table view pointers.
+    // --- Wire up table view pointers (layout matches helm_convert output) ---
+    // Fields 0..8: f family
     view.f     = d_data + 0 * NENT;
     view.fd    = d_data + 1 * NENT;
     view.ft    = d_data + 2 * NENT;
@@ -110,16 +84,31 @@ int HelmholtzTable::load(const char* ascii_path, const char* bin_cache_path, cud
     view.fddt  = d_data + 6 * NENT;
     view.fdtt  = d_data + 7 * NENT;
     view.fddtt = d_data + 8 * NENT;
+    // Fields 9..12: dpdf family
+    view.dpdf   = d_data +  9 * NENT;
+    view.dpdfd  = d_data + 10 * NENT;
+    view.dpdft  = d_data + 11 * NENT;
+    view.dpdfdt = d_data + 12 * NENT;
+    // Fields 13..16: ef family
+    view.ef   = d_data + 13 * NENT;
+    view.efd  = d_data + 14 * NENT;
+    view.eft  = d_data + 15 * NENT;
+    view.efdt = d_data + 16 * NENT;
+    // Fields 17..20: xf family
+    view.xf   = d_data + 17 * NENT;
+    view.xfd  = d_data + 18 * NENT;
+    view.xft  = d_data + 19 * NENT;
+    view.xfdt = d_data + 20 * NENT;
 
-    // Fixed cococubed grid
-    view.tlo = 3.0; view.thi = 13.0;
-    view.dt  = (view.thi - view.tlo) / (HELM_IMAX - 1);
+    // Grid bookkeeping (from header, not hard-coded)
+    view.tlo = tlo; view.thi = thi;
+    view.dt  = (thi - tlo) / (HELM_JMAX - 1);
     view.dti = 1.0 / view.dt;
-    view.dlo = -12.0; view.dhi = 15.0;
-    view.dd  = (view.dhi - view.dlo) / (HELM_JMAX - 1);
+    view.dlo = dlo; view.dhi = dhi;
+    view.dd  = (dhi - dlo) / (HELM_IMAX - 1);
     view.ddi = 1.0 / view.dd;
 
-    // Composition: will be set by caller (or left at pure H default).
+    // Composition: caller can override.
     view.Abar = 1.0;
     view.Zbar = 1.0;
 

@@ -33,30 +33,58 @@
 #endif
 
 // Resolution of the cococubed table.
-static constexpr int HELM_JMAX = 71;    // log rho points
-static constexpr int HELM_IMAX = 211;   // log T points
+// NOTE Timmes convention: i indexes log ρ (inner loop), j indexes log T
+// (outer loop). Two resolutions ship with helmholtz.tbz:
+//   "standard"    : imax=271, jmax=101    (file ~15 MB)
+//   "twice dense" : imax=541, jmax=201    (file ~60 MB, current default)
+// We hard-code the twice-dense resolution since that is what the
+// distributed helm_table.dat provides.
+static constexpr int HELM_IMAX = 541;   // log ρ points (inner)
+static constexpr int HELM_JMAX = 201;   // log T points (outer)
 
 // POD view of table arrays on device. Passed by value to kernels.
 // Pointers live in GPU memory; lifetime owned by HelmholtzTable (below).
+//
+// Layout: each 2D table stored row-major as [j * IMAX + i] where
+//   i ∈ [0, IMAX) indexes log ρ (inner loop on read)
+//   j ∈ [0, JMAX) indexes log T (outer loop on read)
+// This matches Timmes' Fortran helm_table.dat file order directly.
 struct HelmholtzTableView {
-    // 2D tables stored row-major as [rho_idx * IMAX + T_idx]
-    const double* f;       // free energy / (N k T)       — dimensionless
-    const double* fd;      // ∂f/∂(log ρ)
-    const double* ft;      // ∂f/∂(log T)
-    const double* fdd;     // ∂²f/∂(log ρ)²
-    const double* ftt;     // ∂²f/∂(log T)²
-    const double* fdt;     // ∂²f/∂(log ρ) ∂(log T)
-    const double* fddt;    // ∂³f/∂(log ρ)² ∂(log T)
-    const double* fdtt;    // ∂³f/∂(log ρ) ∂(log T)²
-    const double* fddtt;   // ∂⁴f/∂(log ρ)² ∂(log T)²
+    // ---- Table 1: Helmholtz free energy (9 entries per grid point) ----
+    const double* f;       // free energy
+    const double* fd;      // ∂f/∂ρ
+    const double* ft;      // ∂f/∂T
+    const double* fdd;     // ∂²f/∂ρ²
+    const double* ftt;     // ∂²f/∂T²
+    const double* fdt;     // ∂²f/∂ρ ∂T
+    const double* fddt;    // ∂³f/∂ρ² ∂T
+    const double* fdtt;    // ∂³f/∂ρ ∂T²
+    const double* fddtt;   // ∂⁴f/∂ρ² ∂T²
+    // ---- Table 2: dP/dρ and its derivatives (4 entries) ----
+    const double* dpdf;
+    const double* dpdfd;
+    const double* dpdft;
+    const double* dpdfdt;
+    // ---- Table 3: electron chemical potential (4 entries) ----
+    const double* ef;
+    const double* efd;
+    const double* eft;
+    const double* efdt;
+    // ---- Table 4: electron-positron number density (4 entries) ----
+    const double* xf;
+    const double* xfd;
+    const double* xft;
+    const double* xfdt;
 
-    // Grid bookkeeping (1/dT, 1/dρ in log space)
-    double tlo, thi, dt, dti;   // log10 T grid
-    double dlo, dhi, dd, ddi;   // log10 ρ grid
+    // Grid bookkeeping — Timmes helmholtz.f90 uses:
+    //   log T ∈ [3, 13]  with jmax points (outer index j)
+    //   log ρ ∈ [-12, 15] with imax points (inner index i)
+    double tlo, thi, dt, dti;   // log10 T grid (j axis)
+    double dlo, dhi, dd, ddi;   // log10 ρ grid (i axis)
 
-    // Composition defaults (single Abar, Zbar for now).
-    // Helmholtz is agnostic to composition; these multiply the ion + coulomb
-    // parts. For pure ionized H:  Abar=1, Zbar=1.  Solar ~0.73X+0.25Y+Z:
+    // Composition. Helmholtz is composition-agnostic; Abar/Zbar only appear
+    // in the ion + coulomb parts we layer on top of the electron table.
+    // For pure ionized H:  Abar=1, Zbar=1.  Solar ~0.73X+0.25Y+Z:
     // Abar≈1.25, Zbar≈1.14.
     double Abar;
     double Zbar;
@@ -99,6 +127,7 @@ HE_HD inline int helm_index_log_rho(const HelmholtzTableView& tv, double log_rho
     if (j > HELM_JMAX - 2) j = HELM_JMAX - 2;
     return j;
 }
+// Row-major index: j (log T) is the outer axis, i (log ρ) inner.
 HE_HD inline int helm_idx2d(int j, int i) { return j * HELM_IMAX + i; }
 
 // Placeholder scalar pressure — full Helmholtz physics will land in a

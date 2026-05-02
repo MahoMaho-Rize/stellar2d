@@ -31,12 +31,22 @@ License: cococubed pages explicitly state code + tables are free to use
 
 ## Binary conversion
 
-Because the ASCII file is slow to parse (nested loops of Fortran
-formatted reads), we convert once to little-endian binary on first run:
-  third_party/helmholtz/helm_table.bin   (~5 MB, float64)
+The ASCII file is ~60 MB and slow to parse (Fortran free-format nested
+loops). We preprocess once with a standalone C++ tool into a clean
+little-endian binary with a 64-byte magic+metadata header:
 
-The conversion utility lives in `src/physics/helmholtz_eos.cu` under
-`helm_convert_ascii_to_binary()`.
+```
+g++ -O2 tools/helm_convert.cpp -o tools/helm_convert
+tools/helm_convert \
+    third_party/helmholtz/helm_table.dat \
+    third_party/helmholtz/helm_table.bin
+```
+
+Resulting `helm_table.bin` is ~17 MB (twice-dense resolution,
+imax=541, jmax=201, 21 tabulated fields × float64). The CUDA loader
+in `src/physics/helmholtz_eos.cu` **only reads the binary** — no ASCII
+parsing in the build. The ASCII path argument to `HelmholtzTable::load`
+is unused (retained for API compatibility).
 
 ## GPU placement strategy
 
@@ -45,6 +55,12 @@ L2 persisting cache via `cudaAccessPolicyWindow` with
 `cudaAccessPropertyPersisting`. This gives us ~50× bandwidth vs. DRAM
 for every EOS table lookup inside JFNK GMRES iterations.
 
-RTX 4090: L2 = 72 MB
-H100:     L2 = 60 MB
-Our table: 5 MB — fits comfortably alongside other persisting state.
+RTX 4090:       L2 = 72 MB,  persisting cap ~48 MB
+RTX 4080 Super: L2 = 64 MB,  persisting cap 44 MB   ← our dev box
+H100:           L2 = 60 MB,  persisting cap ~40 MB
+Our table:      17 MB — fits comfortably.
+
+Verified working on 4080 Super (sm_89):
+```
+helmholtz: pinned 17.42 MB to L2 persisting cache (cap 17.4 MB, device max 44.0 MB)
+```
