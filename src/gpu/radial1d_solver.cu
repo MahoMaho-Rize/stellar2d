@@ -119,6 +119,9 @@ void Radial1DSolver::init(int nz_in, double gam, double G, double cfl_in) {
     mal(&d_T_work, nz);
     mal(&d_F_work, nf);
     mal(&d_dt_rad, nz);
+    // Species arrays (allocated regardless; only used when species_enabled)
+    mal(&d_X, nz);
+    mal(&d_Y, nz);
 
     std::fprintf(stderr, "Radial1DSolver initialized: nz=%d zones, γ=%g, CFL=%g, CQ=%g, ZSH=%g\n",
                  nz, gamma, cfl, CQ, ZSH);
@@ -132,6 +135,8 @@ void Radial1DSolver::destroy() {
     f(lev.d_rho0); f(lev.d_P0); f(lev.d_r0);
     f(lev.d_dt_cell); f(lev.d_scratch);
     f(d_T_work); f(d_F_work); f(d_dt_rad);
+    f(d_X); f(d_Y);
+    d_X = nullptr; d_Y = nullptr;
     std::memset(&lev, 0, sizeof(lev));
 }
 
@@ -196,7 +201,15 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
         h_dm[k] = dm;
         h_rho[k] = dm / V_k;
         h_P[k] = K_poly * std::pow(h_rho[k], 1.0 + 1.0/n_poly);
-        h_e[k] = h_P[k] / ((gamma - 1.0) * h_rho[k]);  // specific internal energy
+        // Specific internal energy must be consistent with the EOS actually
+        // in use. For ideal gas this is P/((γ−1)ρ); for ideal_rad / PRE_MS
+        // we invert the EOS (P, ρ) → e. Otherwise the γ-only guess produces
+        // grossly wrong T in the radiation-dominated regime.
+        if (use_eos) {
+            h_e[k] = eos.internal_energy(h_rho[k], h_P[k]);
+        } else {
+            h_e[k] = h_P[k] / ((gamma - 1.0) * h_rho[k]);
+        }
     }
 
     // Upload
@@ -287,7 +300,8 @@ static void launch_primitives(const Radial1DLevel& lev, int nz, bool use_eos,
         k_rad1d_zone_primitives_eos<<<(nz+B-1)/B, B>>>(
             lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, eos);
     } else {
-        launch_primitives(lev, nz, use_eos, gamma, eos, B);
+        k_rad1d_zone_primitives<<<(nz+B-1)/B, B>>>(
+            lev.d_r, lev.d_dm, lev.d_e_int, lev.d_Vol, lev.d_rho, lev.d_P, nz, gamma);
     }
 }
 
@@ -405,9 +419,16 @@ double Radial1DSolver::step(double t, double t_end) {
         NuclearPPParams npars;
         npars.X_hydrogen = nuc_X;
         npars.T_floor = nuc_T_floor;
+        npars.T_scale = nuc_T_scale;
         npars.epsilon_scale = nuc_epsilon_scale;
-        k_rad1d_nuclear_pp<<<(nz+B-1)/B, B>>>(
-            lev.d_e_int, lev.d_rho, nz, eos, npars, dt);
+        npars.q_burn = nuc_q_burn;
+        if (species_enabled) {
+            k_rad1d_nuclear_pp_species<<<(nz+B-1)/B, B>>>(
+                lev.d_e_int, d_X, d_Y, lev.d_rho, nz, eos, npars, dt);
+        } else {
+            k_rad1d_nuclear_pp<<<(nz+B-1)/B, B>>>(
+                lev.d_e_int, lev.d_rho, nz, eos, npars, dt);
+        }
         launch_primitives(lev, nz, use_eos, gamma, eos, B);
     }
 
@@ -488,6 +509,25 @@ Radial1DSolver::Diagnostics Radial1DSolver::compute_diagnostics() {
 
     for (int i = 0; i < 6; ++i) cudaFree(scratch[i]);
     return d;
+}
+
+// ============================================================
+// Species init + download
+// ============================================================
+void Radial1DSolver::init_species_uniform(double X0, double Y0) {
+    int nz = lev.nz;
+    std::vector<double> hX(nz, X0), hY(nz, Y0);
+    CUDA_CHECK(cudaMemcpy(d_X, hX.data(), nz*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Y, hY.data(), nz*sizeof(double), cudaMemcpyHostToDevice));
+    std::fprintf(stderr, "  Species init: X0=%.3f, Y0=%.3f (uniform)\n", X0, Y0);
+}
+
+void Radial1DSolver::download_species(std::vector<double>& X_cell,
+                                      std::vector<double>& Y_cell) {
+    int nz = lev.nz;
+    X_cell.resize(nz); Y_cell.resize(nz);
+    CUDA_CHECK(cudaMemcpy(X_cell.data(), d_X, nz*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(Y_cell.data(), d_Y, nz*sizeof(double), cudaMemcpyDeviceToHost));
 }
 
 // ============================================================

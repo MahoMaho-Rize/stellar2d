@@ -26,27 +26,44 @@
 #endif
 
 struct NuclearPPParams {
-    double X_hydrogen = 0.7;       // hydrogen mass fraction
-    double T_floor = 1.0e6;         // below this, ε = 0 (avoid divide-by-small)
+    double X_hydrogen = 0.7;       // default / initial hydrogen mass fraction
+    double T_floor = 1.0e6;         // below this (in Kelvin), ε = 0
     double epsilon_scale = 1.0;     // code-unit scaling factor (ε_code = ε_cgs · scale)
-    // If running in physical cgs, epsilon_scale = 1. Otherwise user sets so that
-    // d e_int / dt [code units] = ε_pp * rho in code units consistently.
+    // T_scale converts code-unit T to Kelvin:  T_K = T_code · T_scale.
+    // When running in physical cgs (T already in K) this is 1.0.
+    // When running in Lane-Emden code units with T~0.1, set T_scale ~ 1e8 to
+    // place the core in the T~1e7 K ignition regime.
+    double T_scale = 1.0;
+    // Heat release per unit hydrogen burnt (erg per gram of H).
+    // pp net: 4p → ⁴He releases 26.73 MeV per cycle; per gram of H burnt
+    // that is (26.73 MeV) / (4 m_p) ≈ 6.4e18 erg/g.
+    // Users running in code units should rescale together with epsilon_scale.
+    double q_burn = 6.4e18;
 };
 
-// Specific energy generation rate ε_pp(ρ, T) in whatever units rho/T are in
+// Specific energy generation rate ε_pp(ρ, T, X) in whatever units rho/T are in
 // (results need epsilon_scale to convert to code units).
-NUC_HD inline double nuclear_pp_epsilon(double rho, double T, const NuclearPPParams& p) {
-    if (T < p.T_floor) return 0.0;
-    double T9 = T * 1.0e-9;
+NUC_HD inline double nuclear_pp_epsilon_X(double rho, double T, double X,
+                                          const NuclearPPParams& p) {
+    // T here is in code units; rescale to Kelvin for the rate formula.
+    double T_K = T * p.T_scale;
+    if (T_K < p.T_floor) return 0.0;
+    if (X <= 0.0) return 0.0;
+    double T9 = T_K * 1.0e-9;
     if (T9 < 1.0e-6) return 0.0;
     double T9_13 = pow(T9, 1.0/3.0);
     double T9_m23 = pow(T9, -2.0/3.0);
     double exp_arg = -3.381 / T9_13;
     // Underflow guard
     if (exp_arg < -700.0) return 0.0;
-    double eps = 2.57e4 * p.X_hydrogen * p.X_hydrogen
+    double eps = 2.57e4 * X * X
                * rho * T9_m23 * exp(exp_arg);
     return eps * p.epsilon_scale;
+}
+
+// Legacy scalar-X form (uses p.X_hydrogen). Kept for backward-compat.
+NUC_HD inline double nuclear_pp_epsilon(double rho, double T, const NuclearPPParams& p) {
+    return nuclear_pp_epsilon_X(rho, T, p.X_hydrogen, p);
 }
 
 // Approximate d ε / d T (for implicit stability / info only)
@@ -58,6 +75,15 @@ NUC_HD inline double nuclear_pp_dedT(double rho, double T, const NuclearPPParams
     // net: d ln ε / dT ≈ (−2/3 + 3.381/(3·T₉^{1/3})) / T
     double d_ln_eps = (-2.0/3.0 + 3.381 / (3.0 * pow(T9, 1.0/3.0))) / T;
     return eps * d_ln_eps;
+}
+
+// dX/dt from pp-burning: per gram, energy release = X-burn-rate · q_burn
+// so  dX/dt = -ε_pp / q_burn  (X is mass fraction of hydrogen).
+NUC_HD inline double nuclear_pp_dXdt(double rho, double T, double X,
+                                     const NuclearPPParams& p) {
+    if (p.q_burn <= 0.0) return 0.0;
+    double eps = nuclear_pp_epsilon_X(rho, T, X, p);
+    return -eps / p.q_burn;
 }
 
 #undef NUC_HD

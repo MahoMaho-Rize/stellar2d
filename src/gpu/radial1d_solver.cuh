@@ -86,11 +86,23 @@ struct Radial1DSolver {
     EOS eos;
 
     // Nuclear burning (pp-chain, simplified). If enabled, every hydro step adds
-    // ε_pp(ρ, T) · dt to internal energy.
+    // ε_pp(ρ, T, X) · dt to internal energy, and optionally burns X → Y when
+    // species_enabled == true.
     bool nuclear_enabled = false;
-    double nuc_X = 0.7;
+    double nuc_X = 0.7;              // initial hydrogen mass fraction (fallback if no species)
+    double nuc_Y = 0.28;             // initial helium mass fraction
     double nuc_T_floor = 1.0e6;
+    double nuc_T_scale = 1.0;        // T_K = T_code · T_scale (1 for cgs, e.g. 1e8 for code units)
     double nuc_epsilon_scale = 1.0;
+    double nuc_q_burn = 6.4e18;      // erg/g per gram of H burnt (26.73 MeV / 4 m_p)
+
+    // Species tracking. When enabled, per-zone X (hydrogen) and Y (helium) are
+    // evolved by the nuclear kernel. In Lagrangian coords there is no advection
+    // (mass parcels don't mix unless we add diffusion), so species evolve only
+    // via burning.
+    bool species_enabled = false;
+    double* d_X = nullptr;           // (nz) hydrogen mass fraction
+    double* d_Y = nullptr;           // (nz) helium mass fraction
 
     // Radiation diffusion (explicit subcycled). If enabled, every hydro step
     // calls apply_radiation_diffusion(dt) which subcycles at the parabolic
@@ -174,4 +186,11 @@ struct Radial1DSolver {
     // Apply radiation diffusion for total time dt_total using explicit
     // subcycles at the parabolic radiation CFL. Returns number of subcycles.
     int apply_radiation_diffusion(double dt_total);
+
+    // Initialize uniform X/Y profiles (called after species buffers allocated).
+    void init_species_uniform(double X0, double Y0);
+
+    // Download species profile (size nz zones).
+    void download_species(std::vector<double>& X_cell,
+                          std::vector<double>& Y_cell);
 };

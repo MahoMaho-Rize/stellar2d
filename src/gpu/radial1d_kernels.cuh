@@ -401,8 +401,12 @@ void k_rad1d_diag_per_zone(
 }
 
 // ========================================================================
-// Nuclear energy source: pp-chain heat release.
-// Updates e_int in place: e += dt · ε_pp(ρ, T)
+// Nuclear energy source: pp-chain heat release + hydrogen burn-up.
+// Updates e_int in place: e += dt · ε_pp(ρ, T, X)
+// Updates X in place:    X -= dt · ε_pp / q_burn  (clamped ≥ 0)
+// Updates Y in place:    Y += (X_old - X_new)    (helium bookkeeping)
+// If d_X / d_Y are nullptr, falls back to scalar pars.X_hydrogen and no
+// species evolution (legacy Phase 3 behavior).
 // ========================================================================
 __global__
 inline void k_rad1d_nuclear_pp(
@@ -419,6 +423,38 @@ inline void k_rad1d_nuclear_pp(
     double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
     double eps = nuclear_pp_epsilon(rho_k, T_k, pars);
     e_int[k] += dt * eps;
+}
+
+__global__
+inline void k_rad1d_nuclear_pp_species(
+    double* e_int,
+    double* X,              // (nz) hydrogen mass fraction (in/out)
+    double* Y,              // (nz) helium mass fraction   (in/out)
+    const double* rho,
+    int nz,
+    EOS eos,
+    NuclearPPParams pars,
+    double dt)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double Xk = fmax(X[k], 0.0);
+    double eps = nuclear_pp_epsilon_X(rho_k, T_k, Xk, pars);
+    // Energy release:
+    e_int[k] += dt * eps;
+    // Burn rate: dX/dt = -ε / q_burn. Clamp so X doesn't go negative within the step.
+    double dX = -dt * eps / fmax(pars.q_burn, 1e-30);
+    double Xnew = Xk + dX;
+    if (Xnew < 0.0) {
+        // Too aggressive for this step: re-scale so X lands at 0 exactly
+        // (conservation of mass: Y += Xk − Xnew = Xk)
+        dX = -Xk;
+        Xnew = 0.0;
+    }
+    X[k] = Xnew;
+    Y[k] = fmin(1.0, Y[k] + (-dX));
 }
 
 __global__

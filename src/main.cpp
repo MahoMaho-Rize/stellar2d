@@ -66,8 +66,16 @@ struct SimConfig {
     double rad_c_light = 100.0;       // reduced speed of light (code units); full c = very slow
     bool nuclear_enabled = false;
     double nuc_X = 0.7;
+    double nuc_Y = 0.28;
     double nuc_epsilon_scale = 1.0;
     double nuc_T_floor = 1.0e6;
+    double nuc_T_scale = 1.0;
+    double nuc_q_burn = 6.4e18;
+    bool species_enabled = false;
+    bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
+    double ic_rho_c = -1.0;          // override central density; <0 = test default
+    double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
+    double ic_n_poly = 1.5;          // polytropic index for --ic-solar
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     // EOS selection
     std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
@@ -231,6 +239,24 @@ int main(int argc, char** argv) {
             cfg.nuc_epsilon_scale = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--nuc-t-floor") == 0 && i + 1 < argc)
             cfg.nuc_T_floor = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-y") == 0 && i + 1 < argc)
+            cfg.nuc_Y = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-q") == 0 && i + 1 < argc)
+            cfg.nuc_q_burn = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-t-scale") == 0 && i + 1 < argc)
+            cfg.nuc_T_scale = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--species") == 0)
+            cfg.species_enabled = true;
+        else if (std::strcmp(argv[i], "--ic-solar") == 0)
+            cfg.ic_solar = true;
+        else if (std::strcmp(argv[i], "--ic-rho-c") == 0 && i + 1 < argc)
+            cfg.ic_rho_c = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-rstar") == 0 && i + 1 < argc)
+            cfg.ic_R_star = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-n-poly") == 0 && i + 1 < argc)
+            cfg.ic_n_poly = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--G") == 0 && i + 1 < argc)
+            cfg.G = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -628,13 +654,57 @@ int main(int argc, char** argv) {
         if (cfg.nuclear_enabled) {
             r1d.nuclear_enabled = true;
             r1d.nuc_X = cfg.nuc_X;
+            r1d.nuc_Y = cfg.nuc_Y;
             r1d.nuc_epsilon_scale = cfg.nuc_epsilon_scale;
             r1d.nuc_T_floor = cfg.nuc_T_floor;
-            std::printf("radial1d: pp-chain nuclear burning ON (X=%.2f, scale=%.3e, T_floor=%.3e)\n",
-                        r1d.nuc_X, r1d.nuc_epsilon_scale, r1d.nuc_T_floor);
+            r1d.nuc_T_scale = cfg.nuc_T_scale;
+            r1d.nuc_q_burn = cfg.nuc_q_burn;
+            std::printf("radial1d: pp-chain nuclear burning ON (X=%.2f, scale=%.3e, T_floor=%.3eK, T_scale=%.3e, q=%.3e)\n",
+                        r1d.nuc_X, r1d.nuc_epsilon_scale, r1d.nuc_T_floor, r1d.nuc_T_scale, r1d.nuc_q_burn);
         }
-        r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
+        // Wire species tracking (requires --nuclear)
+        if (cfg.species_enabled) {
+            if (!cfg.nuclear_enabled) {
+                std::fprintf(stderr, "WARN: --species without --nuclear has no effect; enabling nuclear\n");
+                r1d.nuclear_enabled = true;
+                r1d.nuc_X = cfg.nuc_X;
+                r1d.nuc_Y = cfg.nuc_Y;
+                r1d.nuc_epsilon_scale = cfg.nuc_epsilon_scale;
+                r1d.nuc_T_floor = cfg.nuc_T_floor;
+                r1d.nuc_T_scale = cfg.nuc_T_scale;
+                r1d.nuc_q_burn = cfg.nuc_q_burn;
+            }
+            r1d.species_enabled = true;
+            std::printf("radial1d: species tracking ON (X→Y burn-up)\n");
+        }
+        if (cfg.ic_solar) {
+            // Physical cgs Lane-Emden IC with user-specified (ρ_c, R_star, n).
+            // Derive K so that α·ξ_1 = R_star exactly.
+            //   α² = (n+1) K ρ_c^(1/n − 1) / (4πG)
+            //   ⇒ K = α² · 4πG · ρ_c^(1 − 1/n) / (n+1),  α = R_star / ξ_1
+            // Pre-computed ξ_1 for common n:
+            double n_pol = cfg.ic_n_poly;
+            // crude ξ_1 table: n=1.5 → 3.65375; n=3.0 → 6.89685
+            double xi1 = (std::fabs(n_pol - 1.5) < 1e-3) ? 3.65375
+                       : (std::fabs(n_pol - 3.0) < 1e-3) ? 6.89685
+                       : 3.65375;
+            double rho_c = (cfg.ic_rho_c > 0) ? cfg.ic_rho_c : 80.0;     // g/cc
+            double R_star = (cfg.ic_R_star > 0) ? cfg.ic_R_star : 7.0e10; // cm
+            double G_cgs = cfg.G; // user must pass --G 6.674e-8 or equivalent
+            double alpha = R_star / xi1;
+            double K_poly = alpha * alpha * 4.0 * M_PI * G_cgs
+                            * std::pow(rho_c, 1.0 - 1.0/n_pol)
+                            / (n_pol + 1.0);
+            std::printf("radial1d: solar polytrope IC  n=%.2f  ρ_c=%.3e g/cc  R⋆=%.3e cm  K=%.3e  G=%.3e\n",
+                        n_pol, rho_c, R_star, K_poly, G_cgs);
+            r1d.init_lane_emden(rho_c, K_poly, n_pol);
+        } else {
+            r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
+        }
         r1d.snapshot_hse();
+        if (r1d.species_enabled) {
+            r1d.init_species_uniform(r1d.nuc_X, r1d.nuc_Y);
+        }
         if (cfg.test_case == "lane_emden_perturbed")
             r1d.apply_perturbation(cfg.perturb_amplitude);
 
@@ -645,7 +715,11 @@ int main(int argc, char** argv) {
         char csv_path[512];
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
-        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr\n");
+        if (cfg.species_enabled) {
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,mass_H,mass_He,X_core,X_surf\n");
+        } else {
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr\n");
+        }
 
         int frame = 0;
         while (t < cfg.t_end && !g_interrupted) {
@@ -661,21 +735,55 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "\n");
                 std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
                             step, t, dt, d.total_mass, d.total_E, d.max_vr, d.max_mach);
-                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
-                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
-                             d.total_grav_E, d.total_E, d.max_mach, d.max_vr);
+                if (r1d.species_enabled) {
+                    std::vector<double> X_c, Y_c;
+                    r1d.download_species(X_c, Y_c);
+                    // Mass-weighted totals over zones: need dm; use e_cell/P_cell buffers via profile
+                    std::vector<double> r_f, v_f, rho_c2, P_c2, e_c2;
+                    r1d.download_profile(r_f, v_f, rho_c2, P_c2, e_c2);
+                    const double PI43 = 4.188790204786391;
+                    double mH = 0.0, mHe = 0.0;
+                    for (int k = 0; k < r1d.lev.nz; ++k) {
+                        double rL = r_f[k], rR = r_f[k+1];
+                        double dmk = rho_c2[k] * PI43 * (rR*rR*rR - rL*rL*rL);
+                        mH  += dmk * X_c[k];
+                        mHe += dmk * Y_c[k];
+                    }
+                    double X_core = X_c.front();
+                    double X_surf = X_c.back();
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e\n",
+                                 step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
+                                 mH, mHe, X_core, X_surf);
+                } else {
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                                 step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr);
+                }
                 std::fflush(csv);
 
                 // Dump profile as simple text
                 std::vector<double> r_face, v_face, rho_cell, P_cell, e_cell;
                 r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
+                std::vector<double> X_cell, Y_cell;
+                if (r1d.species_enabled) r1d.download_species(X_cell, Y_cell);
                 char path[512];
                 std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
                 std::FILE* fp = std::fopen(path, "w");
-                std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int\n", t, step);
+                if (r1d.species_enabled) {
+                    std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int X Y\n", t, step);
+                } else {
+                    std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int\n", t, step);
+                }
                 for (int k = 0; k < r1d.lev.nz; ++k) {
-                    std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
-                                 k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k]);
+                    if (r1d.species_enabled) {
+                        std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e %.6e %.6e\n",
+                                     k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k],
+                                     X_cell[k], Y_cell[k]);
+                    } else {
+                        std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
+                                     k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k]);
+                    }
                 }
                 // last face
                 std::fprintf(fp, "%d %.10e %.10e - - -\n", r1d.lev.nz, r_face[r1d.lev.nz], v_face[r1d.lev.nz]);
