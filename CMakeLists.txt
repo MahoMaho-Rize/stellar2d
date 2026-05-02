@@ -48,6 +48,7 @@ if(USE_GPU)
         src/gpu/gmg_gpu.cu
         src/gpu/radial1d_solver.cu
         src/gpu/radial1d_implicit.cu
+        src/physics/helmholtz_eos.cu
         src/gpu/wb2d_solver.cu
         src/gpu/wb2d_kernels.cu
         src/gpu/ale2d_solver.cu
@@ -303,6 +304,13 @@ if(USE_GPU)
     target_compile_definitions(test_fas_diagnose PRIVATE USE_GPU)
     set_target_properties(test_fas_diagnose PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_fas_diagnose PRIVATE CUDA::cudart)
+
+    add_executable(test_helm_l2 tests/test_helm_l2.cu)
+    target_include_directories(test_helm_l2 PRIVATE src)
+    target_compile_definitions(test_helm_l2 PRIVATE USE_GPU)
+    set_target_properties(test_helm_l2 PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_helm_l2 PRIVATE CUDA::cudart)
+    add_test(NAME helm_l2 COMMAND test_helm_l2)
 
     add_executable(test_coverage_critical tests/test_coverage_critical.cu
         ${TEST_COMMON_SOURCES}
