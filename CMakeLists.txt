@@ -55,6 +55,7 @@ if(USE_GPU)
         src/gpu/cart_ale2_kernels.cu
         src/gpu/pseudo_spectral_solver.cu
         src/gpu/pseudo_spectral_kernels.cu
+        src/gpu/anelastic_sl_solver.cu
         src/gpu/sph_transforms.cu
         src/gpu/sph2d_spectral_solver.cu
         src/gpu/sph2d_spectral_kernels.cu
@@ -93,6 +94,8 @@ if(USE_GPU)
     target_link_libraries(stellar2d PRIVATE
         CUDA::cudart
         CUDA::cufft
+        CUDA::cublas
+        CUDA::cusolver
     )
 
     # AmgX is optional: only needed for --solver compressible (GpuSolver)
@@ -100,7 +103,7 @@ if(USE_GPU)
         target_compile_definitions(stellar2d PRIVATE USE_AMGX)
         target_include_directories(stellar2d PRIVATE ${AMGX_DIR}/include)
         target_link_directories(stellar2d PRIVATE ${AMGX_DIR}/lib)
-        target_link_libraries(stellar2d PRIVATE amgx CUDA::cublas CUDA::cusparse CUDA::cusolver)
+        target_link_libraries(stellar2d PRIVATE amgx CUDA::cusparse)
     endif()
 endif()
 

@@ -1,0 +1,125 @@
+#pragma once
+
+#include <cufft.h>
+#include <cublas_v2.h>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+// 2D anelastic / Boussinesq solver with Sturm-Liouville (SL) spectral
+// diagonalisation of the variable-density pressure Poisson equation.
+//
+// Geometry: periodic in x, Dirichlet (bounded) in y.  Domain [0, Lx] × [0, Ly].
+//
+// Pressure PDE (reduced-pressure form, π = p / ρ_0):
+//
+//     ∇ · (ρ_0(y) ∇π) = ∇ · (ρ_0 F),
+//
+// discretised as
+//
+//     FFT_x → weight by ρ_0^{-1/2} → DGEMM(Ψ^T) → divide by (μ_n + k_x²)
+//         → DGEMM(Ψ) → weight by ρ_0^{-1/2} → IFFT_x.
+//
+// The SL basis {(μ_n, ψ_n)} diagonalises T = d²/dy² + W̃(y) once and for all,
+// where W̃ = (ρ_0')² / (4 ρ_0²) − ρ_0'' / (2 ρ_0).
+//
+// For the Boussinesq limit (ρ_0 = const), W̃ ≡ 0 and the SL basis degenerates
+// to sin(n π y / L_y), i.e.\ a Fourier basis.  This is a sanity-check test.
+//
+// Design: brand-new struct, brand-new file.  Reuses ideas (IFRK3, VRAM frame
+// buffer, R2C-in-x) from pseudo_spectral_solver but shares no state.
+
+struct AnelasticSLSolver {
+    // ── Grid ─────────────────────────────────────────────────────────────
+    int nx = 0;              // x-direction grid points (periodic)
+    int ny = 0;              // y-direction grid points (includes both Dirichlet endpoints)
+    int nh = 0;              // nx/2 + 1, R2C-in-x complex samples
+    int ncell = 0;           // nx * ny
+    int ncplx = 0;           // nh * ny  (y is the slow axis for GEMM efficiency)
+    int n_modes = 0;         // number of SL modes retained for the Poisson solve
+
+    double Lx = 1.0, Ly = 1.0;
+    double dx = 0.0, dy_ref = 0.0;   // dy_ref is only a reference spacing (non-uniform CGL)
+
+    // ── Physics ──────────────────────────────────────────────────────────
+    double nu        = 1e-4;       // kinematic viscosity
+    double cfl       = 0.5;
+    double dt_max    = 5e-3;
+    double dt_min    = 1e-12;
+    double dt_current = 0.0;
+    int    hyper_p   = 1;
+
+    // ── Background stratification ρ_0(y) (host-side reference) ──────────
+    //   Uploaded to device as d_rho, d_rho_sqrt_inv (= 1/√ρ_0), d_W (Liouville).
+    std::vector<double> h_y_cgl;       // Chebyshev-Gauss-Lobatto nodes on [0, Ly]  (ascending)
+    std::vector<double> h_rho;         // ρ_0 at CGL nodes
+    std::vector<double> h_W_tilde;     // reduced-pressure Liouville potential
+    std::vector<double> h_mu;          // SL eigenvalues μ_n (ascending)
+    std::vector<double> h_Psi;         // (ny, n_modes) column-major, CGL-grid eigenfunctions
+    std::vector<double> h_cc_weights;  // Clenshaw-Curtis quadrature weights
+
+    // ── Device-side buffers ──────────────────────────────────────────────
+    // Physical fields (column-major: y is the fastest varying, ny × nx)
+    // Using ny-major layout so a DGEMM on Psi acts on the y dimension naturally.
+    double* d_u         = nullptr;   // velocity_x
+    double* d_v         = nullptr;   // velocity_y
+    double* d_omega     = nullptr;   // vorticity
+    double* d_rhs_pi    = nullptr;   // RHS of Poisson for π (temporary)
+
+    // Weight vectors (ny)
+    double* d_rho               = nullptr;
+    double* d_rho_sqrt_inv      = nullptr;  // 1/√ρ_0 on CGL nodes
+
+    // SL basis (device)
+    double* d_Psi = nullptr;   // (ny, n_modes) column-major
+    double* d_mu  = nullptr;   // (n_modes,)
+    double* d_cc_weights = nullptr;  // (ny,) Clenshaw-Curtis weights for SL inner product
+
+    // Spectral buffers (complex, R2C in x): layout (nh, ny) row-major in nh
+    //   outer index: y, inner: k_x (fast)
+    cufftDoubleComplex* d_fhat       = nullptr;  // RHS after FFT_x
+    cufftDoubleComplex* d_ghat       = nullptr;  // weighted RHS: 1/√ρ · fhat
+    cufftDoubleComplex* d_Ghat       = nullptr;  // coefficients after Ψ^T GEMM  ((n_modes, nh))
+    cufftDoubleComplex* d_Qhat       = nullptr;  // after diagonal divide
+    cufftDoubleComplex* d_qhat       = nullptr;  // after inverse SL GEMM        ((ny, nh))
+    cufftDoubleComplex* d_pihat      = nullptr;  // pi_hat in (k_x, y)
+
+    // k_x array (nh,)
+    double* d_kx = nullptr;
+
+    // ── Handles ──────────────────────────────────────────────────────────
+    cufftHandle plan_r2c_x = 0;   // batched 1D R2C along x, batch = ny
+    cufftHandle plan_c2r_x = 0;   // batched 1D C2R along x
+    cublasHandle_t cublas = nullptr;
+
+    // ── Diagnostics & frame buffer (VRAM pool, binary VTK flush) ─────────
+    double* d_reduce = nullptr;
+    int reduce_blocks = 0;
+
+    int step_count = 0;
+
+    // ── API ──────────────────────────────────────────────────────────────
+    void init(int nx_, int ny_, int n_modes_,
+              double Lx_, double Ly_,
+              double nu_, double cfl_);
+    void free_all();
+    ~AnelasticSLSolver() { free_all(); }
+
+    // Background profile setup.  Call before init_*.
+    //   kind = "boussinesq" (ρ_0 ≡ 1) | "lane_emden_1_5" (Lane-Emden n = 3/2)
+    //   rho_cut: surface truncation for Lane-Emden (ignored otherwise)
+    void set_background(const std::string& kind, double rho_cut = 0.01);
+
+    // Test-case initial conditions (zero velocity unless otherwise noted)
+    void init_zero();
+    void init_kh_shear(double vshear, double amp, int k);
+
+    // Main API
+    double step();
+    void download_uv(std::vector<double>& h_u, std::vector<double>& h_v);
+    void download_omega(std::vector<double>& h_omega);
+    void download_y(std::vector<double>& y_out) const { y_out = h_y_cgl; }
+
+    // Internal: SL-Poisson solve from RHS in d_rhs_pi, result written to d_pihat
+    void sl_poisson_solve();
+};

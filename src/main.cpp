@@ -28,6 +28,7 @@
 #include "gpu/cart_ale_solver.cuh"
 #include "gpu/cart_ale2_solver.cuh"
 #include "gpu/pseudo_spectral_solver.cuh"
+#include "gpu/anelastic_sl_solver.cuh"
 #include "gpu/sph2d_spectral_solver.cuh"
 #endif
 
@@ -517,8 +518,11 @@ int main(int argc, char** argv) {
                || cfg.test_case == "taylor_green"
                || cfg.test_case == "double_shear_layer"
                || cfg.test_case == "vortex_merger"
+               || cfg.test_case == "quad_vortex_merger"
                || cfg.test_case == "rossby_wave"
-               || cfg.test_case == "jovian_bands") {
+               || cfg.test_case == "jovian_bands"
+               || cfg.test_case == "sl_basis_check"
+               || cfg.test_case == "kh_shear_boussinesq") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -1252,6 +1256,41 @@ int main(int argc, char** argv) {
         std::fclose(csv);
         std::fprintf(stderr, "\n");
         ps.destroy();
+    } else if (cfg.solver_type == "anelastic_sl") {
+        // ===== Anelastic SL-spectral solver (Phase 1a: basis precompute only) =====
+        if (cfg.test_case != "sl_basis_check"
+            && cfg.test_case != "kh_shear_boussinesq") {
+            std::fprintf(stderr,
+                "ERROR: anelastic_sl supports --test {sl_basis_check, kh_shear_boussinesq}\n");
+            return 1;
+        }
+        AnelasticSLSolver ansl;
+        int n_modes = (cfg.nr > 0 ? cfg.nr / 2 : 128);
+        ansl.init(cfg.ntheta, cfg.nr, n_modes,
+                  cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
+
+        std::string bg = (cfg.test_case == "kh_shear_boussinesq")
+                         ? "boussinesq" : "lane_emden_1_5";
+        ansl.set_background(bg, 0.01);
+
+        // Phase 1a: dump SL basis to CSV for offline verification.
+        char basis_path[512];
+        std::snprintf(basis_path, sizeof(basis_path), "%s/sl_basis.csv", run_dir.c_str());
+        FILE* bf = std::fopen(basis_path, "w");
+        std::fprintf(bf, "# ny=%d, n_modes=%d, Ly=%g, background=%s\n",
+                     ansl.ny, ansl.n_modes, ansl.Ly, bg.c_str());
+        std::fprintf(bf, "# mu_n (n_modes values):\n");
+        for (int m = 0; m < ansl.n_modes; ++m)
+            std::fprintf(bf, "%.15e\n", ansl.h_mu[m]);
+        std::fprintf(bf, "# y_cgl (ny values):\n");
+        for (int i = 0; i < ansl.ny; ++i)
+            std::fprintf(bf, "%.15e\n", ansl.h_y_cgl[i]);
+        std::fprintf(bf, "# W_tilde (ny values):\n");
+        for (int i = 0; i < ansl.ny; ++i)
+            std::fprintf(bf, "%.15e\n", ansl.h_W_tilde[i]);
+        std::fclose(bf);
+        std::fprintf(stderr, "  SL basis written to %s\n", basis_path);
+        std::fprintf(stderr, "\n");
     } else if (cfg.solver_type == "sph2d_spectral") {
         // ===== 2D 薄球殼 barotropic 偽譜 =====
         if (cfg.test_case != "rossby_wave" && cfg.test_case != "jovian_bands") {
