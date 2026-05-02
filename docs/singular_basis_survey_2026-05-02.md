@@ -1,8 +1,54 @@
 ---
 title: "Spectral methods for singular boundaries: a survey"
 subtitle: "Comparing GYRE (stellar pulsation) and Dedalus v3 (general spectral) against the Liouville SL-anelastic design"
-author: "stellar2d project / Kiriko"
-date: "2026-05-02"
+author: "Kiriko, Tsinghua University"
+date: "2026-05-02 (原稿); 2026-05-03 更新"
+---
+
+# 0. Update (2026-05-03) — Phase 0 ext+ 後的結論
+
+本調查在 2026-05-02 撰寫時提出 Path A / B / C 三條路線,
+並於 §6.3 建議執行兩個並行驗證實驗. 後續 Phase 0 ext+ 執行了這些
+實驗, 結果如下:
+
+**U1. Path A 的風險評估(§5.1, §6.2)偏樂觀 — Path A 對分數 $\sigma$ 失敗**.
+$\sigma=3/2$ 下**任何**前因子 $\pi=r^\alpha u$ 都只能改變預漸近誤差
+常數, 無法將 $N^{-2}$ 代數收斂提升為譜收斂. SymPy 推導的
+$\alpha^\star_2 = 1-\sigma/2$ 在 Liouville-Schrödinger 形式下消除
+$t^{-2}$ 奇點, 但在 raw self-adjoint 形式下無效 — 因為我們離散的是
+係數 $\rhob(r)$ 本身, 而 $(1-r)^{\sigma}$ 的分數冪在 Chebyshev
+展開下係數只以 $N^{-\sigma-1/2}$ 衰減(Trefethen Thm 7.2).
+
+**U2. 整數 vs 分數 $\sigma$ 斷崖: 項目最關鍵的 non-trivial 發現**.
+$\sigma\in\mathbb{Z}$(如 $n=3$ Eddington)下 $(1-r)^{\sigma}$ 是多項式,
+raw Chebyshev 直接**譜收斂到機器精度**. 這使 Path A 對 $n=3$ 情境
+退化為 "raw Chebyshev, 無需任何變換"(最簡方案), 而對 $n=3/2$ 情境
+仍需 Path B. 詳見
+`docs/polytropic_index_spectral_convergence_2026-05-03.md`.
+
+**U3. 主路線最終定為 Path A 簡化版**:
+- y 方向: **raw Chebyshev collocation**(非 SL 展開, 非 Jacobi)
+- 背景: Eddington $n=3$ polytrope
+- Path B (Jacobi) 保留為未來擴展 $n=3/2$ 卷積區時的升級選項
+- Path C (方法對比論文) 不做, 因為 angle 已從 "1D 譜法 benchmark"
+  轉向 "2D anelastic DNS + 線上模式投影"(見 U4).
+
+**U4. Paper angle 修正(§6.1 表格作廢)**.
+原 "Unified spectral basis for Poisson + g-mode spectroscopy" angle
+因 Poisson 與 g-mode 奇點位置不同(見 `docs/reduced_pressure_liouville.md`
+與 `docs/anelastic_SL_spectral_design.md` 更新區 NC1)不成立.
+真正 angle: "GPU anelastic pseudo-spectral DNS with live eigenmode
+projection for convection-pulsation coupling"
+(見 `docs/spectral_stratified_poisson_report_2026-05-03.md` §8).
+
+**U5. §6.3 建議的執行順序 — Dedalus Lane-Emden 驗證未執行, 已不必要**.
+E6/E7 已用 raw Chebyshev 對 Lane-Emden $n=3$ 打到 $1.5\times 10^{-6}$
+(對 GYRE full-gravity 4-var), 精度綽綽有餘, Dedalus Jacobi 對照
+留作未來 benchmark 優化項目.
+
+以下原始調查內容保留. GYRE / Dedalus 的技術描述(§2, §3)準確且
+仍有參考價值; §5 Path 定義與 §6 路線建議以上述 U1-U5 為準.
+
 ---
 
 # 1. Background and problem statement
@@ -316,11 +362,19 @@ $L\phi = \omega^2 M\phi$. It is no longer a by-product of the basis. The
 
 ## 6.2 Technical risk assessment
 
-**Path A risk.** The substitution $\phi \to r^\beta\phi$ requires $\beta$ to
-match the Lane--Emden surface decay exponent of 1.5 with high accuracy. If
-mismatched, the singularity residue remains and the convergence is still
-algebraic. **Recommended: run a Python verification first to confirm that
-$\beta = 1.5$ restores exponential convergence.**
+**Path A risk.** *(Original 2026-05-02)* The substitution $\phi \to r^\beta\phi$
+requires $\beta$ to match the Lane--Emden surface decay exponent of 1.5 with
+high accuracy. If mismatched, the singularity residue remains and the
+convergence is still algebraic. **Recommended: run a Python verification first
+to confirm that $\beta = 1.5$ restores exponential convergence.**
+
+**Updated 2026-05-03 (U1)**: 實驗證明 Path A 的 $r^\beta$ 前因子
+對 $\sigma\notin\mathbb{Z}$ **完全無效**. 無論 $\beta=1/4, -1/2, -3/4$
+或 SymPy 推導的最優 $\alpha^\star_2=1-\sigma/2$, $\sigma=3/2$ 下都停在
+$N^{-2}$ 代數收斂. 根本原因是 $(1-r)^{3/2}$ 的分數分支點無法被
+Chebyshev 多項式基底以指數速率逼近(Trefethen Thm 7.2,
+$|a_n|\sim n^{-\sigma-1/2}$). Path A 只對**整數** $\sigma$ 有效, 此時
+不需要任何前因子, raw Chebyshev 已譜收斂.
 
 **Path B risk.** Dedalus's EVP solver may need careful tau-parameter tuning on
 stiff variable-coefficient problems. That said, Dedalus ships a Lane--Emden
@@ -389,16 +443,30 @@ Proposed revisions:
 
 ## 7.3 Direction forward
 
-**Short term (Phase 0 ext+, 1--2 days)**: execute section 6.3 -- Dedalus
-Lane--Emden validation plus Liouville + $r^\beta$ substitution experiments.
+**Updated 2026-05-03 (見文首 U3, U5)**. Phase 0 ext+ 已完成, 以下是
+實際走向:
 
-**Medium term (Phase 1 decision point)**: based on Phase 0 ext+ results,
-choose A / B / C.
+**已完成 (Phase 0 ext+, 2026-05-02..03)**: 使用 raw Chebyshev collocation
+對 Lane-Emden $n=3$ 的 GYRE full-gravity 4-var adiabatic 系統 benchmark,
+$N=48$ ($192$ DOF) 達到 max_rd $1.5\times 10^{-6}$ vs GYRE, 21× 少於
+staggered FD $N_r=1024$ 的 DOF. Dedalus Path B 沒有執行(不再需要).
 
-**Long term (Phase 2-3)**: Boussinesq to anelastic physics extension,
-independent of basis choice. g-mode spectrum cross-validation against GYRE
-(using Lane--Emden $n=1.5$ as a common benchmark) will provide the final
-physical fidelity check.
+**主路線 (Phase 1, 進行中)**: 2D Fourier-Chebyshev Boussinesq 求解器.
+x 方向 Fourier(沿用 `pseudo_spectral` cuFFT), y 方向 raw Chebyshev
+collocation 在 Eddington $n=3$ 背景上. Rayleigh-Bénard Nu-Ra baseline.
+
+**中期 (Phase 2)**: Boussinesq → anelastic 升級, 加入背景密度
+$\rho_0(y)$ 於 continuity 約束. 如果 $n=3/2$ 對流核區變得 operationally
+重要, 此時才引入 Jacobi 加權基底(Path B).
+
+**長期 (Phase 3)**: 同網格獨立 EVP 求 g-mode/p-mode, 將瞬時流場投影
+到模式空間作為 runtime diagnostic — **這是項目真正的 novelty**
+(對流-脈動耦合的 2D 非線性 DNS + 線上模式投影).
+
+**(作廢)** 原建議: execute section 6.3 -- Dedalus Lane--Emden validation plus
+Liouville + $r^\beta$ substitution experiments.
+→ Dedalus 驗證未執行(raw Chebyshev 對 $n=3$ 已足夠);
+$r^\beta$ 實驗執行了(E6), 結果是**對分數 $\sigma$ 無效**.
 
 ---
 
