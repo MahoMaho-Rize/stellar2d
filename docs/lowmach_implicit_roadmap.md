@@ -207,9 +207,46 @@ F step0 nw1 @ (5, 0) = 1.92e+7          — 幾何爆炸
 
 ---
 
+## 既有 branch 盤點(2026-05-02 追加)
+
+在正式寫新代碼前,發現**兩個 branch 已有可用實作**:
+
+### `line-jacobi-precond`
+- **`k_fas_line_solve` kernel 已存在**(`src/gpu/fas_smoothers.cu`),theta-line Thomas solver 和 ADLR alternating sweep
+- 最後活躍 `965aef0 Add theta-line Thomas solver and ADLR alternating sweep for FAS smoother`
+- **狀態**:比主線舊(硬編 `gamma` 而非 EOS POD)、缺 cart_ale2 / pseudo_spectral / radiation EOS 系列改動
+- **如何用**:不 merge 整 branch(會打掉現有資產),改為**cherry-pick `k_fas_line_solve` 的 kernel 碼**到主線 `fas_smoothers.cu`,同時 port 成 EOS 接口
+
+### `feature/pbp-preconditioner`
+- **Park PBP preconditioner 已實作**(Viallet 2016 選項 B)
+- 最後活躍 `9ce35bb Make AmgX optional: USE_GPU=ON no longer requires AmgX`
+- 若干關鍵 commit:
+  - `63e852a Add Physics-Based Block Preconditioner (PBP) for JFNK`
+  - `047d3ab Implement Physics-Based Preconditioner (PBP) for JFNK solver`
+  - `240ff06 Consolidate PBP: use upstream 2-DOF kernel under PrecondType::PBP, restore LINE_JACOBI`
+- **狀態**:同 `line-jacobi-precond`,比主線舊
+- **如何用**:同上策略,cherry-pick + port EOS
+
+### 修正後的路線建議
+
+**三條路線都不是從零寫**,而是:
+
+1. **選項 A (`fas2_solver`)**:
+   - CGS2 Gram-Schmidt + JFNK matvec normalize + Viallet eq 72 scaling —— **新代碼**,20-50 行
+   - Line-implicit-in-r —— **從 `line-jacobi-precond` cherry-pick** `k_fas_line_solve`,port EOS
+   - 新開 `fas2_solver.{cuh,cu}` 組合這些
+
+2. **選項 B (`pbp_solver`)**:
+   - **從 `feature/pbp-preconditioner` cherry-pick** PBP 相關 kernels(63e852a, 047d3ab, 240ff06)
+   - Port EOS 接口
+   - 新開 `pbp_solver.{cuh,cu}`
+
+3. **選項 C (`slh_solver`)**:
+   - 這個沒既有實作,真的從零寫(Miczek-Roe flux 矩陣公式 OK,不複雜)
+
 ## 推薦起點
 
-**從選項 A 開始**,理由:
+**修正後:從選項 A 開始**,理由:
 - 4 個 fix 都有文獻 pinpoint,不是空中樓閣
 - 1-2 週工作量最小,風險最可控
 - 如果失敗,證據明確指向「必須換 flux / 換 preconditioner」,**縮小路線選擇**
