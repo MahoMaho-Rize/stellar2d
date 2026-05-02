@@ -48,8 +48,14 @@ OPA_HD inline double grey_opacity(double rho, double T, const OpacityParams& p) 
                     ? p.kappa_dust_0 * T_use * T_use
                     : 0.0;
 
-    // H⁻ bound-free (intermediate T, rough fit)
-    double kap_Hm = p.kappa_Hm_0 * sqrt(rho_use) * pow(T_use, 7.7);
+    // H⁻ bound-free (intermediate T, rough fit). Only valid while H⁻
+    // survives (T ≲ 10⁴ K); above that it rapidly photoionises. Cut the
+    // tail aggressively so the T^7.7 power doesn't go to infinity at
+    // stellar interior temperatures (where Kramers/Thomson dominate).
+    double kap_Hm = 0.0;
+    if (T_use < 1.2e4) {
+        kap_Hm = p.kappa_Hm_0 * sqrt(rho_use) * pow(T_use, 7.7);
+    }
 
     // Kramers free-free (hot T)
     double kap_ff = p.kappa_ff_0 * rho_use * pow(T_use, -3.5);
