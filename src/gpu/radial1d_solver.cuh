@@ -187,6 +187,63 @@ struct Radial1DSolver {
     // subcycles at the parabolic radiation CFL. Returns number of subcycles.
     int apply_radiation_diffusion(double dt_total);
 
+    // ============================================================
+    // Phase 4: Implicit Backward-Euler + JFNK
+    // ============================================================
+    // State packed as (v[1..nz], r[1..nz], e[0..nz-1]); total DOF = 3·nz.
+    // k=0 face pinned (v=0, r=0). Surface face k=nz uses P_surf_floor ghost.
+    //
+    // F(U) = (U - U^n)/dt - (R(U) - R_hse) = 0
+    //
+    // N_dof = n_fields · nz.  n_fields = 3 (v, r, e); species stays
+    // operator-split for now (burn after Newton converges).
+    bool implicit_enabled = false;
+    int n_fields = 3;                  // (v, r, e); reserved 4 if species fold in
+    int N_dof = 0;                     // n_fields · nz
+
+    // Newton-Krylov scratch
+    double* d_U = nullptr;             // current packed state, size N_dof
+    double* d_Un = nullptr;            // U^n (saved at step start), size N_dof
+    double* d_Ubak = nullptr;          // backup for JFNK perturbation, size N_dof
+    double* d_R = nullptr;             // R(U), size N_dof
+    double* d_R_hse = nullptr;         // R(U_hse), size N_dof (well-balanced)
+    double* d_F = nullptr;             // F(U), size N_dof
+    double* d_Fk = nullptr;            // F(U_k) cached during Newton, size N_dof
+    double* d_scale_L = nullptr;       // Viallet L, size N_dof
+    double* d_scale_R = nullptr;       // Viallet R, size N_dof
+    double* d_scale_invL = nullptr;    // Viallet 1/L, size N_dof
+
+    // GMRES(K)
+    static constexpr int GMRES_K = 30;
+    double* d_V[GMRES_K + 1] = {};     // Krylov basis
+    double* d_Z[GMRES_K] = {};         // preconditioned directions
+    double* d_gmres_w = nullptr;
+
+    // Params
+    bool use_viallet_scaling = true;
+    double viallet_alpha1 = 1e-5;
+    double viallet_alpha2 = 1.0;
+    double newton_tol = 1e-8;
+    int newton_max_iter = 15;
+    double gmres_tol = 1e-3;
+    int gmres_max_iter = GMRES_K;
+
+    // Public API (when implicit_enabled)
+    void init_implicit();              // allocates implicit scratch, called from init() when needed
+    void destroy_implicit();
+    void pack_state_from_device();     // writes (d_v, d_r, d_e_int) → d_U
+    void unpack_state_to_device();     // writes d_U → (d_v, d_r, d_e_int) + refreshes primitives
+    void snapshot_hse_implicit();      // computes d_R_hse from current HSE state
+    double step_implicit(double t, double t_end, double dt_try);  // returns dt actually taken
+    int    newton_solve_implicit(double dt);
+    int    gmres_solve_implicit(double* d_x, const double* d_b, double inv_dt, double tol, int max_iter);
+    void   jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, double inv_dt);
+    void   apply_precond_implicit(const double* d_v_in, double* d_Mv, double inv_dt);
+    void   compute_R_implicit();       // evaluates R(U) into d_R using current (d_v,d_r,d_e_int)
+    void   compute_F_implicit(double inv_dt);  // d_F = (d_U - d_Un)/dt - (d_R - d_R_hse)
+    double residual_norm_implicit();
+    void   build_scaling_implicit();
+
     // Initialize uniform X/Y profiles (called after species buffers allocated).
     void init_species_uniform(double X0, double Y0);
 

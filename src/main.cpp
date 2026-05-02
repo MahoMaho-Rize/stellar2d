@@ -72,6 +72,9 @@ struct SimConfig {
     double nuc_T_scale = 1.0;
     double nuc_q_burn = 6.4e18;
     bool species_enabled = false;
+    bool implicit_mode = false;      // radial1d: use BE + JFNK (step_implicit) instead of explicit RK2
+    double dt_implicit = 0.0;        // fixed dt for --implicit;<=0 uses acoustic CFL × scale
+    double dt_implicit_scale = 1.0;  // multiplier on CFL dt when dt_implicit<=0
     bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
     double ic_rho_c = -1.0;          // override central density; <0 = test default
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
@@ -257,6 +260,12 @@ int main(int argc, char** argv) {
             cfg.ic_n_poly = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--G") == 0 && i + 1 < argc)
             cfg.G = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--implicit") == 0)
+            cfg.implicit_mode = true;
+        else if (std::strcmp(argv[i], "--dt-implicit") == 0 && i + 1 < argc)
+            cfg.dt_implicit = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--dt-implicit-scale") == 0 && i + 1 < argc)
+            cfg.dt_implicit_scale = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -722,8 +731,28 @@ int main(int argc, char** argv) {
         }
 
         int frame = 0;
+        if (cfg.implicit_mode) {
+            r1d.implicit_enabled = true;
+            r1d.init_implicit();
+            // Capture R(U_hse) now that the state is HSE-consistent
+            r1d.snapshot_hse_implicit();
+            std::printf("radial1d: IMPLICIT mode ON (Viallet=%s, Newton tol=%.1e, GMRES tol=%.1e)\n",
+                        r1d.use_viallet_scaling ? "on" : "off",
+                        r1d.newton_tol, r1d.gmres_tol);
+        }
         while (t < cfg.t_end && !g_interrupted) {
-            double dt = r1d.step(t, cfg.t_end);
+            double dt;
+            if (cfg.implicit_mode) {
+                double dt_req = cfg.dt_implicit;
+                if (dt_req <= 0.0) dt_req = cfg.dt_implicit_scale * r1d.compute_dt();
+                dt = r1d.step_implicit(t, cfg.t_end, dt_req);
+                if (dt <= 0.0) {
+                    std::fprintf(stderr, "  step %d: implicit failed, fallback explicit\n", step);
+                    dt = r1d.step(t, cfg.t_end);
+                }
+            } else {
+                dt = r1d.step(t, cfg.t_end);
+            }
             t += dt;
             step++;
 
@@ -792,6 +821,7 @@ int main(int argc, char** argv) {
         }
         std::fclose(csv);
         std::fprintf(stderr, "\n");
+        if (cfg.implicit_mode) r1d.destroy_implicit();
         r1d.destroy();
 
     } else if (cfg.solver_type == "projection") {
