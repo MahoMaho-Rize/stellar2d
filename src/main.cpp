@@ -522,6 +522,8 @@ int main(int argc, char** argv) {
                || cfg.test_case == "rossby_wave"
                || cfg.test_case == "jovian_bands"
                || cfg.test_case == "sl_basis_check"
+               || cfg.test_case == "sl_poisson_test"
+               || cfg.test_case == "sl_poisson_test_boussinesq"
                || cfg.test_case == "kh_shear_boussinesq") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
@@ -1257,11 +1259,14 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "\n");
         ps.destroy();
     } else if (cfg.solver_type == "anelastic_sl") {
-        // ===== Anelastic SL-spectral solver (Phase 1a: basis precompute only) =====
+        // ===== Anelastic SL-spectral solver (Phase 1b: Poisson + self-test) =====
         if (cfg.test_case != "sl_basis_check"
+            && cfg.test_case != "sl_poisson_test"
+            && cfg.test_case != "sl_poisson_test_boussinesq"
             && cfg.test_case != "kh_shear_boussinesq") {
             std::fprintf(stderr,
-                "ERROR: anelastic_sl supports --test {sl_basis_check, kh_shear_boussinesq}\n");
+                "ERROR: anelastic_sl supports --test {sl_basis_check, "
+                "sl_poisson_test[_boussinesq], kh_shear_boussinesq}\n");
             return 1;
         }
         AnelasticSLSolver ansl;
@@ -1269,9 +1274,15 @@ int main(int argc, char** argv) {
         ansl.init(cfg.ntheta, cfg.nr, n_modes,
                   cfg.ps_Lx, cfg.ps_Ly, cfg.ps_nu, cfg.cfl);
 
-        std::string bg = (cfg.test_case == "kh_shear_boussinesq")
+        std::string bg = (cfg.test_case == "kh_shear_boussinesq"
+                          || cfg.test_case == "sl_poisson_test_boussinesq")
                          ? "boussinesq" : "lane_emden_1_5";
         ansl.set_background(bg, 0.01);
+
+        if (cfg.test_case == "sl_poisson_test"
+            || cfg.test_case == "sl_poisson_test_boussinesq") {
+            ansl.manufactured_test();
+        }
 
         // Phase 1a: dump SL basis to CSV for offline verification.
         char basis_path[512];

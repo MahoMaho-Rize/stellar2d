@@ -70,19 +70,22 @@ struct AnelasticSLSolver {
     double* d_rho               = nullptr;
     double* d_rho_sqrt_inv      = nullptr;  // 1/√ρ_0 on CGL nodes
 
-    // SL basis (device)
-    double* d_Psi = nullptr;   // (ny, n_modes) column-major
+    // SL basis (device).  Stored as ZGEMM-compatible complex matrices
+    // (imaginary part zero) to keep the Poisson pipeline branch-free.
+    cufftDoubleComplex* d_Psi_fwd = nullptr;  // (ny, n_modes) col-major, diag(w_cc) @ Psi
+    cufftDoubleComplex* d_Psi_inv = nullptr;  // (ny, n_modes) col-major, Psi (plain)
     double* d_mu  = nullptr;   // (n_modes,)
-    double* d_cc_weights = nullptr;  // (ny,) Clenshaw-Curtis weights for SL inner product
+    double* d_cc_weights = nullptr;  // (ny,) Clenshaw-Curtis weights (kept for diagnostics)
 
-    // Spectral buffers (complex, R2C in x): layout (nh, ny) row-major in nh
-    //   outer index: y, inner: k_x (fast)
-    cufftDoubleComplex* d_fhat       = nullptr;  // RHS after FFT_x
-    cufftDoubleComplex* d_ghat       = nullptr;  // weighted RHS: 1/√ρ · fhat
-    cufftDoubleComplex* d_Ghat       = nullptr;  // coefficients after Ψ^T GEMM  ((n_modes, nh))
-    cufftDoubleComplex* d_Qhat       = nullptr;  // after diagonal divide
-    cufftDoubleComplex* d_qhat       = nullptr;  // after inverse SL GEMM        ((ny, nh))
-    cufftDoubleComplex* d_pihat      = nullptr;  // pi_hat in (k_x, y)
+    // Spectral buffers (complex, R2C in x), layout matches cuFFT output:
+    //   index offset jy*nh + kx  (row-major: y slow, kx fast)
+    cufftDoubleComplex* d_fhat       = nullptr;  // ny × nh RHS after FFT_x
+    cufftDoubleComplex* d_ghat       = nullptr;  // ny × nh weighted RHS
+    cufftDoubleComplex* d_Ghat       = nullptr;  // n_modes × nh coefficients
+    cufftDoubleComplex* d_Qhat       = nullptr;  // n_modes × nh after diag divide
+    cufftDoubleComplex* d_qhat       = nullptr;  // ny × nh after inverse SL
+    cufftDoubleComplex* d_pihat      = nullptr;  // ny × nh weighted again (= π̂(kx, y))
+    double* d_pi                     = nullptr;  // ny × nx physical result
 
     // k_x array (nh,)
     double* d_kx = nullptr;
@@ -120,6 +123,13 @@ struct AnelasticSLSolver {
     void download_omega(std::vector<double>& h_omega);
     void download_y(std::vector<double>& y_out) const { y_out = h_y_cgl; }
 
-    // Internal: SL-Poisson solve from RHS in d_rhs_pi, result written to d_pihat
+    // SL-Poisson solve.  Reads from d_rhs_pi (ny × nx physical RHS) and writes
+    // the solution π (for reduced-pressure form) to d_pi.
     void sl_poisson_solve();
+
+    // Manufactured-solution self-test (Phase 1b).  Constructs a known π_exact,
+    // computes the analytic RHS, runs the pipeline, measures L2 error.
+    // Returns err_L2 and prints a breakdown.  Works for Boussinesq and
+    // Lane-Emden backgrounds.
+    double manufactured_test();
 };

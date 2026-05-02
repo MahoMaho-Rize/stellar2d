@@ -13,6 +13,7 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -66,6 +67,22 @@
         }                                                                        \
     } while (0)
 #endif
+
+// ── Small local kernel: pack real A into complex for cuSOLVER Xgeev. ───
+static __global__ void k_real_to_cplx_local(cufftDoubleComplex* dst,
+                                             const double* src, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) { dst[i].x = src[i]; dst[i].y = 0.0; }
+}
+
+// ── Kernel declarations from anelastic_sl_kernels.cu ───────────────────
+extern "C" {
+    __global__ void k_weight_fhat_inplace(cufftDoubleComplex*, const cufftDoubleComplex*,
+                                          const double*, int, int);
+    __global__ void k_diag_divide_sl(cufftDoubleComplex*, const cufftDoubleComplex*,
+                                     const double*, const double*, int, int);
+    __global__ void k_normalize(double*, int, double);
+}
 
 // ============================================================================
 // Host helpers: Chebyshev-Gauss-Lobatto grid, differentiation matrix D,
@@ -229,9 +246,10 @@ static void lane_emden_n32(std::vector<double>& r_norm,
 void AnelasticSLSolver::free_all() {
     auto free_ptr = [](double*& p){ if (p) { cudaFree(p); p = nullptr; } };
     auto free_cptr = [](cufftDoubleComplex*& p){ if (p) { cudaFree(p); p = nullptr; } };
-    free_ptr(d_u); free_ptr(d_v); free_ptr(d_omega); free_ptr(d_rhs_pi);
+    free_ptr(d_u); free_ptr(d_v); free_ptr(d_omega); free_ptr(d_rhs_pi); free_ptr(d_pi);
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
-    free_ptr(d_Psi); free_ptr(d_mu); free_ptr(d_cc_weights);
+    free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
+    free_ptr(d_mu); free_ptr(d_cc_weights);
     free_cptr(d_fhat); free_cptr(d_ghat); free_cptr(d_Ghat);
     free_cptr(d_Qhat); free_cptr(d_qhat); free_cptr(d_pihat);
     free_ptr(d_kx);
@@ -253,22 +271,21 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     std::vector<double> x_cheb, D_raw;
     cheb_diffmat(N, x_cheb, D_raw);
 
-    // Map CGL x ∈ [1, -1] descending → y ∈ [0, Ly] ascending.
-    // y_k = (1 - x_k) * Ly / 2.  Note D on y = -2/Ly * D (chain rule).
+    // Map CGL x ∈ [1, -1] descending → y ∈ [0, Ly] ascending via y = (1 + x) · Ly/2.
+    //   x_cheb[0] = +1 → y = Ly (want ascending, so reverse)
+    //   x_cheb[N] = -1 → y = 0
+    // idx[k] = N - k reorders so y_asc[0] = 0, y_asc[N] = Ly.
     h_y_cgl.resize(ny);
-    std::vector<double> perm(ny);
-    for (int k = 0; k <= N; ++k) perm[k] = k;
-    // Already descending, so reverse → ascending.
     std::vector<int> idx(ny);
     for (int k = 0; k <= N; ++k) idx[k] = N - k;
 
     std::vector<double> y_asc(ny), D_scaled((size_t)ny * ny);
     for (int k = 0; k < ny; ++k)
-        y_asc[k] = (1.0 - x_cheb[idx[k]]) * Ly / 2.0;
+        y_asc[k] = (1.0 + x_cheb[idx[k]]) * Ly / 2.0;  // ascending [0, Ly]
     h_y_cgl = y_asc;
 
-    // Permute D to ascending order and apply chain rule scaling.
-    double scale = -2.0 / Ly;  // dy/dx = -Ly/2, so d/dy = -2/Ly * d/dx
+    // Chain rule: y = (1 + x) · Ly / 2  ⇒  dy/dx = Ly/2  ⇒  d/dy = (2/Ly) d/dx.
+    double scale = 2.0 / Ly;
     for (int i = 0; i < ny; ++i) {
         for (int j = 0; j < ny; ++j) {
             D_scaled[(size_t)i * ny + j] = scale * D_raw[(size_t)idx[i] * (N + 1) + idx[j]];
@@ -330,66 +347,131 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
             D2[(size_t)i * ny + j] = s;
         }
     }
-    std::vector<double> A((size_t)M * M, 0.0);
+    // Build A in COLUMN-MAJOR layout for cuSOLVER: A_cm[i + j*M] = A(i, j).
+    std::vector<double> A_cm((size_t)M * M, 0.0);
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j < M; ++j) {
             double val = -D2[(size_t)(i + 1) * ny + (j + 1)];
             if (i == j) val -= h_W_tilde[i + 1];
-            A[(size_t)i * M + j] = val;
-        }
-    }
-    // Symmetrise (the interior D² is not exactly symmetric in collocation;
-    // the SL eigenproblem is formally self-adjoint so we average).
-    for (int i = 0; i < M; ++i) {
-        for (int j = i + 1; j < M; ++j) {
-            double avg = 0.5 * (A[(size_t)i * M + j] + A[(size_t)j * M + i]);
-            A[(size_t)i * M + j] = avg;
-            A[(size_t)j * M + i] = avg;
+            A_cm[(size_t)i + (size_t)j * M] = val;
         }
     }
 
-    // Dense symmetric eigensolver on device via cuSOLVER.
+    // Use cusolverDnXgeev (non-symmetric eigensolver) — the Chebyshev
+    // collocation operator is self-adjoint under the CC-weighted inner
+    // product but NOT in Euclidean, so we cannot use dsyevd.
     cusolverDnHandle_t solver = nullptr;
     CUSOLVER_CHECK(cusolverDnCreate(&solver));
+    cusolverDnParams_t params = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreateParams(&params));
 
     double* d_A = nullptr;
-    double* d_W = nullptr;
+    cuDoubleComplex* d_W = nullptr;         // complex eigenvalues
+    cuDoubleComplex* d_VR = nullptr;         // right eigenvectors (complex)
     CUDA_CHECK(cudaMalloc(&d_A, sizeof(double) * (size_t)M * M));
-    CUDA_CHECK(cudaMalloc(&d_W, sizeof(double) * (size_t)M));
-    CUDA_CHECK(cudaMemcpy(d_A, A.data(), sizeof(double) * (size_t)M * M,
+    CUDA_CHECK(cudaMalloc(&d_W, sizeof(cuDoubleComplex) * (size_t)M));
+    CUDA_CHECK(cudaMalloc(&d_VR, sizeof(cuDoubleComplex) * (size_t)M * M));
+    CUDA_CHECK(cudaMemcpy(d_A, A_cm.data(), sizeof(double) * (size_t)M * M,
                           cudaMemcpyHostToDevice));
 
-    int lwork = 0;
-    CUSOLVER_CHECK(cusolverDnDsyevd_bufferSize(
-        solver, CUSOLVER_EIG_MODE_VECTOR, CUBLAS_FILL_MODE_UPPER,
-        M, d_A, M, d_W, &lwork));
-    double* d_work = nullptr; int* d_info = nullptr;
-    CUDA_CHECK(cudaMalloc(&d_work, sizeof(double) * lwork));
+    size_t work_dev = 0, work_host = 0;
+    // Note: cusolverDnXgeev requires A, W, VL, VR, computeType all CUDA_C_64F.
+    // Convert the real A into complex (real part only) via a small kernel.
+    cuDoubleComplex* d_Ac = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_Ac, sizeof(cuDoubleComplex) * (size_t)M * M));
+    {
+        int block = 256;
+        int total = M * M;
+        int grid = (total + block - 1) / block;
+        k_real_to_cplx_local<<<grid, block>>>(d_Ac, d_A, total);
+    }
+
+    CUSOLVER_CHECK(cusolverDnXgeev_bufferSize(
+        solver, params, CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)M,
+        CUDA_C_64F, d_Ac, (int64_t)M,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)M,    // VL unused
+        CUDA_C_64F, d_VR,    (int64_t)M,
+        CUDA_C_64F, &work_dev, &work_host));
+    void* d_work = nullptr; void* h_work = nullptr;
+    if (work_dev) CUDA_CHECK(cudaMalloc(&d_work, work_dev));
+    if (work_host) h_work = std::malloc(work_host);
+    int* d_info = nullptr;
     CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
-    CUSOLVER_CHECK(cusolverDnDsyevd(
-        solver, CUSOLVER_EIG_MODE_VECTOR, CUBLAS_FILL_MODE_UPPER,
-        M, d_A, M, d_W, d_work, lwork, d_info));
+
+    CUSOLVER_CHECK(cusolverDnXgeev(
+        solver, params, CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)M,
+        CUDA_C_64F, d_Ac, (int64_t)M,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)M,
+        CUDA_C_64F, d_VR,    (int64_t)M,
+        CUDA_C_64F, d_work, work_dev, h_work, work_host, d_info));
     int info = 0;
     CUDA_CHECK(cudaMemcpy(&info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
     if (info != 0) {
-        std::fprintf(stderr, "AnelasticSL: cusolverDnDsyevd info=%d\n", info);
+        std::fprintf(stderr, "AnelasticSL: cusolverDnXgeev info=%d\n", info);
         std::exit(1);
     }
 
-    std::vector<double> mu_all(M), V_all((size_t)M * M);
-    CUDA_CHECK(cudaMemcpy(mu_all.data(), d_W, sizeof(double) * (size_t)M,
+    std::vector<cuDoubleComplex> W_cplx(M), VR_cplx((size_t)M * M);
+    CUDA_CHECK(cudaMemcpy(W_cplx.data(), d_W, sizeof(cuDoubleComplex) * M,
                           cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(V_all.data(), d_A, sizeof(double) * (size_t)M * M,
-                          cudaMemcpyDeviceToHost));  // column-major eigenvectors
+    CUDA_CHECK(cudaMemcpy(VR_cplx.data(), d_VR, sizeof(cuDoubleComplex) * (size_t)M * M,
+                          cudaMemcpyDeviceToHost));
 
     CUDA_CHECK(cudaFree(d_A));
+    CUDA_CHECK(cudaFree(d_Ac));
     CUDA_CHECK(cudaFree(d_W));
-    CUDA_CHECK(cudaFree(d_work));
+    CUDA_CHECK(cudaFree(d_VR));
     CUDA_CHECK(cudaFree(d_info));
+    if (d_work) cudaFree(d_work);
+    if (h_work) std::free(h_work);
+    cusolverDnDestroyParams(params);
     cusolverDnDestroy(solver);
 
+    // Take real parts (complex components should be ≤ 1e-10 for a well-
+    // posed SL operator).  Warn if any imaginary component is large.
+    std::vector<double> mu_all(M), V_all((size_t)M * M);
+    double max_imag = 0.0;
+    for (int i = 0; i < M; ++i) {
+        mu_all[i] = W_cplx[i].x;
+        max_imag = std::max(max_imag, std::abs(W_cplx[i].y));
+    }
+    for (size_t k = 0; k < (size_t)M * M; ++k) {
+        V_all[k] = VR_cplx[k].x;
+        max_imag = std::max(max_imag, std::abs(VR_cplx[k].y));
+    }
+    if (max_imag > 1e-6) {
+        std::fprintf(stderr,
+            "  AnelasticSL WARNING: eigenpair has significant imag part (%.3e).\n",
+            max_imag);
+    }
+
+    // Sort by real part (ascending).
+    std::vector<int> sort_idx(M);
+    for (int i = 0; i < M; ++i) sort_idx[i] = i;
+    std::sort(sort_idx.begin(), sort_idx.end(),
+              [&](int a, int b){ return mu_all[a] < mu_all[b]; });
+    std::vector<double> mu_sorted(M), V_sorted((size_t)M * M);
+    for (int i = 0; i < M; ++i) {
+        mu_sorted[i] = mu_all[sort_idx[i]];
+        for (int j = 0; j < M; ++j)
+            V_sorted[(size_t)j + (size_t)i * M] =
+                V_all[(size_t)j + (size_t)sort_idx[i] * M];
+    }
+    mu_all = mu_sorted;
+    V_all = V_sorted;
+
     // Build Psi (ny × n_modes) column-major, with Dirichlet zeros at endpoints.
-    int Nm = std::min(n_modes, M);
+    int Nm = n_modes;
+    if (Nm > M) {
+        std::fprintf(stderr,
+            "  AnelasticSL: requested n_modes=%d exceeds interior points M=%d; "
+            "reduce n_modes or increase ny.\n", Nm, M);
+        std::exit(1);
+    }
     h_mu.assign(mu_all.begin(), mu_all.begin() + Nm);
     h_Psi.assign((size_t)ny * Nm, 0.0);
     for (int m = 0; m < Nm; ++m) {
@@ -415,6 +497,61 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
         kind.c_str(), ny, n_modes,
         [&]{ double m=0; for (double v : h_W_tilde) m = std::max(m, std::abs(v)); return m; }(),
         h_mu[0], n_modes - 1, h_mu.back());
+
+    // ── Upload to device (init() must have been called already) ─────────
+    if (d_rho == nullptr) {
+        std::fprintf(stderr,
+            "  AnelasticSL: set_background called before init(); buffers not allocated.\n");
+        std::exit(1);
+    }
+
+    // ρ_0 and 1/√ρ_0 on CGL grid
+    std::vector<double> h_rho_sqrt_inv(ny);
+    for (int k = 0; k < ny; ++k) h_rho_sqrt_inv[k] = 1.0 / std::sqrt(h_rho[k]);
+    CUDA_CHECK(cudaMemcpy(d_rho, h_rho.data(),
+                          sizeof(double) * ny, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_rho_sqrt_inv, h_rho_sqrt_inv.data(),
+                          sizeof(double) * ny, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_cc_weights, h_cc_weights.data(),
+                          sizeof(double) * ny, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mu, h_mu.data(),
+                          sizeof(double) * n_modes, cudaMemcpyHostToDevice));
+
+    // CC-normalized spectral-Galerkin basis (matches scripts/reduced_pressure_chebyshev.py).
+    // Note: the h_Psi currently contains cuSOLVER's Euclidean-orthonormal eigenvectors.
+    // Re-normalize to CC inner product: <ψ_m, ψ_n>_cc = Σ_j w_cc,j ψ_m[j] ψ_n[j] = δ_mn.
+    // (Already done above, but the Euclidean normalisation happened in eigh.)
+    for (int m = 0; m < n_modes; ++m) {
+        double s = 0.0;
+        for (int i = 0; i < ny; ++i) {
+            double v = h_Psi[(size_t)m * ny + i];
+            s += h_cc_weights[i] * v * v;
+        }
+        double nrm = std::sqrt(std::max(s, 1e-300));
+        for (int i = 0; i < ny; ++i)
+            h_Psi[(size_t)m * ny + i] /= nrm;
+    }
+
+    // Psi_fwd = diag(w_cc) · Psi (forward: G_n = Σ_j w_cc,j · ψ_n[j] · g[j]).
+    // Psi_inv = Psi.
+    std::vector<cufftDoubleComplex> h_Psi_fwd((size_t)ny * n_modes);
+    std::vector<cufftDoubleComplex> h_Psi_inv((size_t)ny * n_modes);
+    for (int m = 0; m < n_modes; ++m) {
+        for (int i = 0; i < ny; ++i) {
+            double psi = h_Psi[(size_t)m * ny + i];
+            size_t off = (size_t)m * ny + i;
+            h_Psi_inv[off].x = psi;
+            h_Psi_inv[off].y = 0.0;
+            h_Psi_fwd[off].x = h_cc_weights[i] * psi;
+            h_Psi_fwd[off].y = 0.0;
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_Psi_fwd, h_Psi_fwd.data(),
+                          sizeof(cufftDoubleComplex) * (size_t)ny * n_modes,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Psi_inv, h_Psi_inv.data(),
+                          sizeof(cufftDoubleComplex) * (size_t)ny * n_modes,
+                          cudaMemcpyHostToDevice));
 }
 
 void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
@@ -429,11 +566,12 @@ void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
     dx = Lx / nx;
     dy_ref = Ly / (ny - 1);
 
-    // Physical fields (y-major: double precision, ny × nx column-major)
+    // Physical fields (row-major ny × nx, y slow, x fast).
     CUDA_CHECK(cudaMalloc(&d_u,       sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_v,       sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_omega,   sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_rhs_pi,  sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_pi,      sizeof(double) * ncell));
 
     CUDA_CHECK(cudaMalloc(&d_rho,          sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_rho_sqrt_inv, sizeof(double) * ny));
@@ -447,6 +585,9 @@ void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
     CUDA_CHECK(cudaMalloc(&d_Ghat,  sizeof(cufftDoubleComplex) * (size_t)nh * n_modes));
     CUDA_CHECK(cudaMalloc(&d_qhat,  sizeof(cufftDoubleComplex) * ncplx));
     CUDA_CHECK(cudaMalloc(&d_pihat, sizeof(cufftDoubleComplex) * ncplx));
+    CUDA_CHECK(cudaMalloc(&d_Psi_fwd, sizeof(cufftDoubleComplex) * (size_t)ny * n_modes));
+    CUDA_CHECK(cudaMalloc(&d_Psi_inv, sizeof(cufftDoubleComplex) * (size_t)ny * n_modes));
+    CUDA_CHECK(cudaMalloc(&d_mu,      sizeof(double) * n_modes));
 
     // cuFFT R2C/C2R along x, batched over ny rows.
     // layout: d_u is (ny × nx) row-major in y, so each row is contiguous in x.
@@ -492,17 +633,201 @@ void AnelasticSLSolver::init_zero() {
 }
 
 void AnelasticSLSolver::init_kh_shear(double /*vshear*/, double /*amp*/, int /*k*/) {
-    // TODO Phase 1b
+    // TODO Phase 1c (needs full time integrator)
     init_zero();
 }
 
 double AnelasticSLSolver::step() {
-    // TODO Phase 1b
+    // TODO Phase 1c
     return 0.0;
 }
 
+
+// 7-step SL-Poisson pipeline (reduced-pressure form):
+//   in:  d_rhs_pi (ny × nx physical RHS tilde_f)
+//   out: d_pi    (ny × nx physical reduced pressure π)
+//
+// Steps:
+//   1. FFT_x:      f(x,y)   → f̂(kx,y)         [d_rhs_pi  → d_fhat]
+//   2. weight:     ĝ(kx,y)  = (1/√ρ) · f̂      [d_fhat    → d_ghat, with d_rho_sqrt_inv]
+//   3. fwd SL:     Ĝ(kx,n)  = Σ_y ψ_n(y)·w_cc(y)·ĝ(kx,y)
+//                           = Psi_fwd^T · ĝ   [d_ghat    → d_Ghat]
+//   4. diag solve: Q̂(kx,n)  = -Ĝ / (μ_n + kx²) [d_Ghat   → d_Qhat]
+//   5. inv SL:     q̂(kx,y)  = Σ_n ψ_n(y) · Q̂(kx,n)
+//                           = Psi_inv · Q̂    [d_Qhat    → d_qhat]
+//   6. weight:     π̂(kx,y)  = (1/√ρ) · q̂      [d_qhat    → d_pihat]
+//   7. IFFT_x:     π(x,y)   ← π̂              [d_pihat   → d_pi, scale 1/nx]
 void AnelasticSLSolver::sl_poisson_solve() {
-    // TODO Phase 1a: implement 7-step pipeline here.
+    // Step 1: FFT in x  (d_rhs_pi is the physical RHS of size ncell)
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_rhs_pi, d_fhat));
+
+    // Layout helper: d_fhat, d_ghat are (ny × nh) row-major complex.
+    // cuBLAS ZGEMM treats them as column-major (nh × ny).
+    dim3 block2d(32, 8);
+    dim3 grid_ny_nh((nh + block2d.x - 1) / block2d.x,
+                    (ny + block2d.y - 1) / block2d.y);
+    dim3 grid_nm_nh((nh + block2d.x - 1) / block2d.x,
+                    (n_modes + block2d.y - 1) / block2d.y);
+
+    // Step 2: weight by 1/√ρ_0 along y  (d_fhat → d_ghat)
+    k_weight_fhat_inplace<<<grid_ny_nh, block2d>>>(
+        d_ghat, d_fhat, d_rho_sqrt_inv, ny, nh);
+
+    // Step 3: forward SL transform.
+    // Want:  Ghat[n, kx] = Σ_y Psi_fwd[y, n] * ghat[y, kx]    (n_modes × nh)
+    //
+    // In col-major view: ghat = (nh × ny), lda = nh
+    //                    Psi_fwd = (ny × n_modes), col-major, lda = ny
+    //                    Ghat = (nh × n_modes), lda = nh
+    // We need Ghat = ghat · Psi_fwd    (nh × ny) * (ny × n_modes) → (nh × n_modes)
+    // i.e. op(A) = N, op(B) = N, m = nh, n = n_modes, k = ny.
+    cuDoubleComplex one  = { 1.0, 0.0 };
+    cuDoubleComplex zero = { 0.0, 0.0 };
+    CUBLAS_CHECK(cublasZgemm(
+        cublas, CUBLAS_OP_N, CUBLAS_OP_N,
+        nh, n_modes, ny,
+        &one,
+        d_ghat, nh,                 // A: (nh × ny) col-major, lda=nh
+        d_Psi_fwd, ny,              // B: (ny × n_modes) col-major, lda=ny
+        &zero,
+        d_Ghat, nh));               // C: (nh × n_modes) col-major, lda=nh
+    // Storage: d_Ghat is (n_modes × nh) in row-major == (nh × n_modes) in col-major. ✓
+
+    // Step 4: diagonal divide  Qhat[n, kx] = -Ghat[n, kx] / (mu[n] + kx²)
+    k_diag_divide_sl<<<grid_nm_nh, block2d>>>(
+        d_Qhat, d_Ghat, d_mu, d_kx, n_modes, nh);
+
+    // Step 5: inverse SL transform.
+    // Want:  qhat[y, kx] = Σ_n Psi_inv[y, n] * Qhat[n, kx]    (ny × nh)
+    //
+    // In col-major view: Qhat = (nh × n_modes), lda = nh
+    //                    Psi_inv = (ny × n_modes), col-major, lda = ny
+    //                    qhat = (nh × ny), lda = nh
+    // We need qhat = Qhat · Psi_inv^T   (nh × n_modes) * (n_modes × ny) → (nh × ny)
+    // i.e. op(A) = N (Qhat nh × n_modes), op(B) = T (Psi_inv^T n_modes × ny).
+    CUBLAS_CHECK(cublasZgemm(
+        cublas, CUBLAS_OP_N, CUBLAS_OP_T,
+        nh, ny, n_modes,
+        &one,
+        d_Qhat, nh,                 // A: (nh × n_modes) col-major, lda=nh
+        d_Psi_inv, ny,              // B: (ny × n_modes) col-major (= (n_modes×ny)^T), lda=ny
+        &zero,
+        d_qhat, nh));               // C: (nh × ny) col-major, lda=nh
+
+    // Step 6: weight by 1/√ρ_0  (d_qhat → d_pihat)
+    k_weight_fhat_inplace<<<grid_ny_nh, block2d>>>(
+        d_pihat, d_qhat, d_rho_sqrt_inv, ny, nh);
+
+    // Step 7: IFFT_x with cuFFT (unnormalised).
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_pihat, d_pi));
+
+    // Normalise by 1/nx (cuFFT does not scale C2R output).
+    int block1d = 256;
+    int grid1d = (ncell + block1d - 1) / block1d;
+    k_normalize<<<grid1d, block1d>>>(d_pi, ncell, 1.0 / (double)nx);
+}
+
+// Manufactured-solution self-test.
+//   pi_exact(x, y) = sin(k_x · x) · sin(π (y / Ly))
+//   RHS (for reduced-pressure form div(ρ ∇π)):
+//     f = ρ · (∂xx + ∂yy) π + ρ' · ∂y π
+//       = ρ · (-kx² + d²_y) [sin(kx·x) · sin(π y/Ly)]
+//         + ρ' · (π/Ly) cos(π y/Ly) · sin(kx·x)
+// Returns the L2 error on π (with boundary zeros excluded where appropriate).
+double AnelasticSLSolver::manufactured_test() {
+    if (nx == 0 || ny == 0 || n_modes == 0) {
+        std::fprintf(stderr, "AnelasticSL: manufactured_test requires init+set_background.\n");
+        return -1.0;
+    }
+
+    const double kx_test = 2.0 * M_PI * 2.0 / Lx;  // k = 2
+    std::vector<double> h_pi_exact(ncell), h_rhs(ncell);
+
+    // Precompute analytic derivatives of phi(y) = sin(π y/Ly) on CGL grid
+    std::vector<double> phi(ny), dphi_dy(ny), d2phi_dy2(ny);
+    for (int jy = 0; jy < ny; ++jy) {
+        double y = h_y_cgl[jy];
+        double eta = y / Ly;
+        phi[jy]      =  std::sin(M_PI * eta);
+        dphi_dy[jy]  =  (M_PI / Ly) * std::cos(M_PI * eta);
+        d2phi_dy2[jy] = -(M_PI / Ly) * (M_PI / Ly) * phi[jy];
+    }
+    // Compute ρ' on CGL grid (finite diff for sanity; set_background stored ρ).
+    // Use central differences on (possibly non-uniform) grid.
+    std::vector<double> drho(ny, 0.0);
+    for (int jy = 1; jy < ny - 1; ++jy) {
+        double hL = h_y_cgl[jy]   - h_y_cgl[jy - 1];
+        double hR = h_y_cgl[jy + 1] - h_y_cgl[jy];
+        drho[jy] = (h_rho[jy + 1] * hL * hL - h_rho[jy - 1] * hR * hR
+                    + h_rho[jy] * (hR * hR - hL * hL))
+                   / (hL * hR * (hL + hR));
+    }
+    drho[0]    = (h_rho[1]     - h_rho[0])     / (h_y_cgl[1]     - h_y_cgl[0]);
+    drho[ny-1] = (h_rho[ny-1]  - h_rho[ny-2])  / (h_y_cgl[ny-1]  - h_y_cgl[ny-2]);
+
+    // Physical grid uses ascending CGL for y, uniform for x (x_i = i·dx).
+    for (int jy = 0; jy < ny; ++jy) {
+        double rho_y  = h_rho[jy];
+        double drho_y = drho[jy];
+        double phi_y  = phi[jy];
+        double dphi_y = dphi_dy[jy];
+        double d2phi_y = d2phi_dy2[jy];
+        for (int ix = 0; ix < nx; ++ix) {
+            double x = ix * dx;
+            double sn = std::sin(kx_test * x);
+            double cs = std::cos(kx_test * x);  // unused but kept for clarity
+            (void)cs;
+            int k = jy * nx + ix;
+            h_pi_exact[k] = sn * phi_y;
+            // f = ρ·(-kx²·sn·phi_y + sn·d2phi_y) + ρ'·sn·dphi_y
+            //   = sn · [ρ·(-kx²·phi_y + d2phi_y) + ρ'·dphi_y]
+            h_rhs[k] = sn * (rho_y * (-kx_test * kx_test * phi_y + d2phi_y)
+                             + drho_y * dphi_y);
+        }
+    }
+
+    // Upload RHS, run pipeline, download π.
+    CUDA_CHECK(cudaMemcpy(d_rhs_pi, h_rhs.data(),
+                          sizeof(double) * ncell, cudaMemcpyHostToDevice));
+    sl_poisson_solve();
+
+    std::vector<double> h_pi(ncell);
+    CUDA_CHECK(cudaMemcpy(h_pi.data(), d_pi,
+                          sizeof(double) * ncell, cudaMemcpyDeviceToHost));
+
+    // L2 error (exclude y boundary points where Dirichlet BC is imposed).
+    double num = 0.0, den = 0.0;
+    int count = 0;
+    double max_pi = 0.0, max_exact = 0.0, max_diff = 0.0;
+    for (int jy = 1; jy < ny - 1; ++jy) {
+        double w = h_cc_weights[jy];
+        for (int ix = 0; ix < nx; ++ix) {
+            int k = jy * nx + ix;
+            double d = h_pi[k] - h_pi_exact[k];
+            num += w * d * d;
+            den += w * h_pi_exact[k] * h_pi_exact[k];
+            ++count;
+            max_pi   = std::max(max_pi,   std::abs(h_pi[k]));
+            max_exact= std::max(max_exact,std::abs(h_pi_exact[k]));
+            max_diff = std::max(max_diff, std::abs(d));
+        }
+    }
+    double err_L2 = std::sqrt(num / std::max(den, 1e-300));
+    double err_abs = std::sqrt(num / (double)count);
+    // Ratio at a sample point near the centre: diagnoses constant scaling errors.
+    // Pick a point where sin(kx x) is large: kx=4π, x=1/8 -> 4π/8=π/2 -> sin=1.
+    int jy_c = ny / 2, ix_c = nx / 8;
+    double pi_c = h_pi[jy_c * nx + ix_c];
+    double ex_c = h_pi_exact[jy_c * nx + ix_c];
+    std::fprintf(stderr,
+        "  AnelasticSL manufactured test: kx_mode=2, ny=%d, n_modes=%d, Ly=%g\n"
+        "    rel err_L2 = %.3e,  abs err_L2 = %.3e\n"
+        "    |π|_max = %.4e,  |π_exact|_max = %.4e,  |diff|_max = %.3e\n"
+        "    sample (jy=%d,ix=%d): π=%.6e, exact=%.6e, ratio=%.4f\n",
+        ny, n_modes, Ly, err_L2, err_abs,
+        max_pi, max_exact, max_diff,
+        jy_c, ix_c, pi_c, ex_c, pi_c / (ex_c + 1e-30));
+    return err_L2;
 }
 
 void AnelasticSLSolver::download_uv(std::vector<double>& h_u, std::vector<double>& h_v) {

@@ -56,6 +56,7 @@ if(USE_GPU)
         src/gpu/pseudo_spectral_solver.cu
         src/gpu/pseudo_spectral_kernels.cu
         src/gpu/anelastic_sl_solver.cu
+        src/gpu/anelastic_sl_kernels.cu
         src/gpu/sph_transforms.cu
         src/gpu/sph2d_spectral_solver.cu
         src/gpu/sph2d_spectral_kernels.cu
