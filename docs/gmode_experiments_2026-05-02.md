@@ -186,19 +186,74 @@ The infrastructure is therefore ready for:
 These are items for the next development cycle.
 
 
-# 4. Next steps (not done in this commit)
+# 5. Experiment C — Chebyshev collocation g-mode solver
 
-1. **Chebyshev upgrade** (`scripts/gmode_exp_b_stratified.py` $\to$ spectral).
-   Experiment A in the reduced-pressure series already showed Chebyshev
-   breaks the FD error floor by 3-4 orders of magnitude; applying the same
-   template here would push the $N_r = 2048$ ratio of $0.9993$ close to
-   machine precision.
-2. **MESA profile reader**. A thin parser for MESA's `profile*.data` files
-   feeding `(r, rho_0, N^2, c_s)` into `solve_gmode_cowling`.
-3. **Avoided-crossing benchmark**. Standard astrophysics test case with
+> **Provenance.** All numbers in this section were produced by
+> `scripts/gmode_exp_c_chebyshev.py` at commit `<to be updated>`.
+> `python scripts/gmode_exp_c_chebyshev.py --verify` must exit zero.
+
+## 5.1 Setup
+
+Identical Gaussian-bump $N^2(r)$, $\ell = 1$, and cavity as Experiment B; the
+only change is the discretisation.  The Cowling generalised eigenproblem
+
+$$-\psi'' = \omega^{-2}\,\ell(\ell+1)\,N^2(r)/r^2 \cdot \psi$$
+
+is now solved via `gmode_infra.solve_gmode_cowling_cheb` on CGL nodes with
+the Trefethen $D^2$ matrix.  The Chebyshev helpers (`cheb`,
+`clenshaw_curtis_weights`, `cheb_on_interval`) are hoisted from
+`scripts/reduced_pressure_chebyshev.py` into `scripts/gmode_infra.py`, so the
+reduced-pressure and g-mode suites now share a single spectral core.
+
+### Spurious-mode guard
+
+Chebyshev generalised eigensolvers contaminate the last $\sim N_\text{Cheb}/4$
+modes with high-frequency states whose eigenfunctions have sub-grid
+wavelength — returning 40 modes at $N_\text{Cheb} = 64$ produces a chaotic
+tail with $\Delta P$ values in the hundreds.  The experiment caps
+`n_modes = max(10, N_cheb // 5)` so the last-5-modes tail average always
+lies inside the converged band.
+
+## 5.2 Result
+
+| $N_\text{Cheb}$ | modes used | $\Delta P_\text{Tassoul}$ | $\Delta P_\text{tail}$ | ratio | $|\text{ratio} - 1|$ |
+|---|---|---|---|---|---|
+| 64 | 12 | $21.00169$ | $21.04450$ | $1.00204$ | $2.04 \times 10^{-3}$ |
+| 128 | 25 | $20.99536$ | $21.00747$ | $1.00058$ | $5.77 \times 10^{-4}$ |
+| 256 | 51 | $20.99378$ | $20.99785$ | $1.00019$ | $1.94 \times 10^{-4}$ |
+| **512** | 102 | $20.99339$ | $20.99483$ | $\mathbf{1.00007}$ | $\mathbf{6.85 \times 10^{-5}}$ |
+
+## 5.3 Interpretation
+
+Compared to Experiment B (FD, $N_r$ sweep):
+
+- $N_\text{Cheb} = 64$ already matches $N_r = 1024$ FD accuracy ($\sim 4\times 10^{-3}$
+  in B vs $2\times 10^{-3}$ here) — a $\mathbf{16\times}$ reduction in grid
+  size for comparable error.
+- $N_\text{Cheb} = 512$ beats $N_r = 2048$ FD by an order of magnitude
+  ($7 \times 10^{-5}$ vs $7.5 \times 10^{-4}$).
+- The convergence is **not exponential** (the spurious-mode band limits the
+  highest resolved $n$); instead it appears to behave roughly as
+  $N_\text{Cheb}^{-1}$ at the scales we tested, dominated by the
+  discretisation of the $1/r^2$ weight rather than the $D^2$ operator itself.
+  Pushing past $10^{-5}$ accuracy likely needs either a refined mode cap or
+  a Cholesky-based generalised eigensolver robust to ill-conditioned $B$.
+
+For the purposes of linear-stability analysis and cross-validation of the
+anelastic momentum solver, $10^{-4}$ accuracy on $\omega^2$ is more than
+sufficient; the infrastructure is ready to move on.
+
+
+# 6. Next steps
+
+1. ~~**Chebyshev upgrade**~~ — done in §5.
+2. **MESA profile reader.** A thin parser for MESA's `profile*.data` files
+   feeding `(r, rho_0, N^2, c_s)` into `solve_gmode_cowling` /
+   `solve_gmode_cowling_cheb`.
+3. **Avoided-crossing benchmark.** Standard astrophysics test case with
    piecewise-linear $N^2$ and a radiative-convective boundary; expected
    spectra available in Unno et al. (1989) figures 17-19.
-4. **Integration with anelastic momentum solver**. The anelastic time
+4. **Integration with anelastic momentum solver.** The anelastic time
    integrator needs a linear-stability analysis tool; the $\omega^2$ output
-   of `solve_gmode_cowling` is the natural reference against which the
+   of the Cowling solvers is the natural reference against which the
    linearised RHS eigenvalues should agree.

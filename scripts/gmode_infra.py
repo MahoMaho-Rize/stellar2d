@@ -223,6 +223,108 @@ def solve_gmode_cowling(r, N2, ell, n_modes):
 # ─────────────────────────────────────────────────────────────────────────
 # Tassoul (1980) asymptotic period spacing
 # ─────────────────────────────────────────────────────────────────────────
+def cheb(N):
+    """Chebyshev-Gauss-Lobatto points on [-1,1] and the differentiation matrix D.
+
+    Trefethen, "Spectral Methods in MATLAB", `cheb.m`.  Returns (D, x) with
+    D shape (N+1, N+1) and x descending from +1 to -1 in Trefethen's order.
+    """
+    if N == 0:
+        return np.zeros((1, 1)), np.array([1.0])
+    x = np.cos(np.pi * np.arange(N + 1) / N)
+    c = np.ones(N + 1); c[0] = 2; c[-1] = 2
+    c *= (-1.0) ** np.arange(N + 1)
+    X = np.tile(x, (N + 1, 1)).T
+    dX = X - X.T
+    D = np.outer(c, 1.0 / c) / (dX + np.eye(N + 1))
+    D -= np.diag(D.sum(axis=1))
+    return D, x
+
+
+def clenshaw_curtis_weights(N):
+    """Quadrature weights for the CGL grid on [-1,1]; sum = 2.
+
+    Trefethen p. 128.  Correct for N >= 2.
+    """
+    theta = np.pi * np.arange(N + 1) / N
+    w = np.zeros(N + 1)
+    v = np.ones(N - 1)
+    for k in range(2, N, 2):
+        v -= 2.0 * np.cos(k * theta[1:N]) / (k * k - 1)
+    if N % 2 == 0:
+        v -= np.cos(N * theta[1:N]) / (N * N - 1)
+    w[1:N] = 2.0 * v / N
+    w[0] = w[-1] = 1.0 / (N * N - 1 + (N % 2))
+    return w
+
+
+def cheb_on_interval(N, a, b):
+    """CGL grid + D2 operator mapped to [a, b], reordered ascending.
+
+    Returns (y_full, D2, w_full) with:
+      y_full[0] = a, y_full[-1] = b, uniform-in-theta CGL clustering;
+      D2 the second-derivative matrix acting on the FULL grid (endpoints
+        included — callers that need Dirichlet strip the boundary rows/cols);
+      w_full the Clenshaw-Curtis weights on [a, b] (sum = b - a).
+    """
+    D, x = cheb(N)
+    scale = 2.0 / (b - a)
+    D_scaled = D * scale
+    D2 = D_scaled @ D_scaled
+    w_full = clenshaw_curtis_weights(N) * (b - a) / 2.0
+
+    idx = np.argsort(x)
+    y_full = a + (x[idx] + 1.0) * (b - a) / 2.0
+    P = np.zeros_like(D2)
+    P[np.arange(N + 1), idx] = 1.0
+    D2 = P @ D2 @ P.T
+    w_full = w_full[idx]
+    return y_full, D2, w_full
+
+
+def solve_gmode_cowling_cheb(r, D2, w_full, N2, ell, n_modes):
+    """Chebyshev-collocation version of solve_gmode_cowling.
+
+    Same generalised eigenproblem as the FD routine:
+        -ψ''(r) = ω^{-2} · ℓ(ℓ+1) · N²(r)/r² · ψ(r),  ψ(r_lo)=ψ(r_hi)=0
+
+    but with D2 built from `cheb_on_interval` so spectral accuracy is
+    achievable on smooth N² profiles.  Eigenfunctions are L2-normalised in
+    the Clenshaw-Curtis inner product: Σ w * ψ² = 1.
+    """
+    r = np.asarray(r, dtype=float)
+    N = len(r)
+    inner = slice(1, N - 1)
+    if np.min(r) <= 0:
+        raise ValueError("r must be strictly positive (1/r² weight)")
+
+    A = -D2[inner, inner]
+    w_weight = ell * (ell + 1) * N2[1:-1] / (r[1:-1] ** 2)
+    B = np.diag(w_weight)
+
+    lam, vec = scipy.linalg.eig(A, B)
+    lam_r = lam.real
+    lam_r[np.abs(lam.imag) > 1e-6 * np.abs(lam_r)] = np.nan
+    mask = np.isfinite(lam_r) & (lam_r > 0)
+    lam_r = lam_r[mask]
+    vec = vec.real[:, mask]
+
+    # ascending lam = descending omega²; n=1 (highest frequency) has smallest lam.
+    order = np.argsort(lam_r)[:n_modes]
+    lam_sel = lam_r[order]
+    vec_sel = vec[:, order]
+    omega_sq = 1.0 / lam_sel
+
+    psi = np.zeros((N, vec_sel.shape[1]))
+    psi[inner, :] = vec_sel
+    for i in range(psi.shape[1]):
+        norm = np.sqrt(np.sum(w_full * psi[:, i] ** 2))
+        if norm > 0:
+            psi[:, i] /= norm
+
+    return omega_sq, psi
+
+
 def tassoul_dP(r, N2, ell):
     """ΔP = 2π² / [sqrt(ell*(ell+1)) · ∫ N/r dr].
 
