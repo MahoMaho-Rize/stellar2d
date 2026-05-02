@@ -49,6 +49,7 @@ if(USE_GPU)
         src/gpu/radial1d_solver.cu
         src/gpu/radial1d_implicit.cu
         src/physics/helmholtz_eos.cu
+        src/physics/opacity_table.cu
         src/gpu/wb2d_solver.cu
         src/gpu/wb2d_kernels.cu
         src/gpu/ale2d_solver.cu
@@ -318,6 +319,13 @@ if(USE_GPU)
     set_target_properties(test_helm_eos PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_helm_eos PRIVATE CUDA::cudart)
     add_test(NAME helm_eos COMMAND test_helm_eos)
+
+    add_executable(test_kap_table tests/test_kap_table.cu)
+    target_include_directories(test_kap_table PRIVATE src)
+    target_compile_definitions(test_kap_table PRIVATE USE_GPU)
+    set_target_properties(test_kap_table PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_kap_table PRIVATE CUDA::cudart)
+    add_test(NAME kap_table COMMAND test_kap_table)
 
     add_executable(test_coverage_critical tests/test_coverage_critical.cu
         ${TEST_COMMON_SOURCES}
