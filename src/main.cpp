@@ -400,7 +400,40 @@ int main(int argc, char** argv) {
                     cfg.R_outer, r_inner, cfg.M_core);
     } else if (cfg.mesh_type == "uniform") {
         grid.init_uniform(cfg.nr, cfg.ntheta, cfg.R_outer);
-        std::printf("Using uniform radial mesh\n");
+        // TEMP (sphere_impl preview): if --r-inner > 0 on uniform mesh, compute
+        // M_core the same way as mass mesh so pole_avg + core_excision wire up.
+        if (cfg.r_inner > 0 && (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed")) {
+            double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
+            auto le_sol = solve_lane_emden(n_poly);
+            double alpha2 = (n_poly + 1.0) * K_poly
+                            * std::pow(rho_c, 1.0 / n_poly - 1.0) / (4.0 * M_PI * G);
+            double alpha = std::sqrt(alpha2);
+            auto rho_func = [&](double r) -> double {
+                double xi = r / alpha;
+                if (xi >= le_sol.xi_1) return 1e-20;
+                auto it = std::lower_bound(le_sol.xi.begin(), le_sol.xi.end(), xi);
+                int idx = static_cast<int>(it - le_sol.xi.begin());
+                if (idx <= 0) return rho_c;
+                if (idx >= static_cast<int>(le_sol.xi.size())) return 1e-20;
+                double x0 = le_sol.xi[idx - 1], x1 = le_sol.xi[idx];
+                double t0 = le_sol.theta_le[idx - 1], t1 = le_sol.theta_le[idx];
+                double frac = (xi - x0) / (x1 - x0);
+                double theta_val = t0 + frac * (t1 - t0);
+                return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
+            };
+            const int nfine = 20000;
+            double dr_f = cfg.r_inner / nfine;
+            double m = 0.0;
+            for (int ii = 0; ii < nfine; ++ii) {
+                double r = (ii + 0.5) * dr_f;
+                m += 4.0 * M_PI * rho_func(r) * r * r * dr_f;
+            }
+            cfg.M_core = m;
+            std::printf("Using uniform radial mesh with r_inner=%.4f, M_core=%.5f (sphere_impl preview)\n",
+                        cfg.r_inner, cfg.M_core);
+        } else {
+            std::printf("Using uniform radial mesh\n");
+        }
     } else {
         grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
     }
@@ -495,7 +528,11 @@ int main(int argc, char** argv) {
     };
 
     auto configure_mass_mesh = [&](auto& solver) {
-        if (cfg.mesh_type != "mass") return;
+        // TEMP: extend to uniform mesh with --r-inner > 0 (sphere_impl preview test).
+        // Treat "uniform + r_inner>0" like mass mesh for pole_avg / core_excision wiring.
+        bool is_mass = (cfg.mesh_type == "mass");
+        bool is_uniform_with_rinner = (cfg.mesh_type == "uniform" && cfg.r_inner > 0);
+        if (!is_mass && !is_uniform_with_rinner) return;
         solver.use_hse_outer_bc = true;
         solver.use_core_excision = (cfg.r_inner > 0);
         solver.M_core = cfg.M_core;
