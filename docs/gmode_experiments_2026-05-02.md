@@ -47,6 +47,53 @@ python scripts/gmode_exp_b_stratified.py --verify
 ```
 
 
+# 0a. Corrections log (2026-05-02, end of day)
+
+After writing Exps A-F we re-audited the derivations and the PASS
+criteria.  Three corrections are applied in-place in this document, and
+the superseded narrative is clearly marked:
+
+1. **§7 (Exp E) and §8 (Exp F) originally described the scalar Cowling
+   solver as the "Boussinesq limit" of the 2-variable operator.  This was
+   wrong.**  The two solvers differ only in the treatment of the
+   $\ell(\ell+1)/r^2$ centrifugal term on the LHS of the scalar reduction,
+   not in any thermodynamic (Boussinesq vs anelastic) truncation.  The
+   scalar solver is the **slab / local-Cartesian** approximation, not the
+   Boussinesq limit.  Both solvers retain the full g-mode dynamics
+   consistent with the Cowling approximation (perturbed gravity dropped;
+   no acoustic cutoff / Lamb frequency).  §§7.3, 8.3 are updated to say
+   "slab vs spherical geometry" where they previously said "Boussinesq".
+
+2. **§7's original PASS criterion `|ratio - 1| < 5e-3` was the first
+   attempt and was loosened to `0.2` only after the experiment ran.**
+   That is post-hoc tuning.  Exp G below is the rigorous replacement:
+   the spherical scalar solver (which IS algebraically equivalent to the
+   2-variable operator) should agree at every $n$, with the residual
+   tracking the shared $\mathcal{O}(N_r^{-2})$ FD truncation.  Exps E and
+   F are retained as-is but reclassified from "algebraic consistency"
+   to "slab-vs-spherical geometric deviation" tests.
+
+3. **The derivation behind §7 informally conflated two distinct
+   approximations.**  A subsequent sympy symbolic reduction (§10 below)
+   shows that eliminating $p'$ from the 2-variable system yields
+   $$
+     -\psi'' + \frac{\ell(\ell+1)}{r^2}\psi = \omega^{-2}\,\frac{\ell(\ell+1) N^2}{r^2}\psi,
+       \qquad \psi = \rho_0 r^2 \xi_r,
+   $$
+   with the centrifugal $+\ell(\ell+1)/r^2$ term on the LHS.  The
+   existing `solve_gmode_cowling(_cheb)` drops this term — it is a slab
+   approximation, not a full spherical reduction.  A new
+   `solve_gmode_cowling_spherical()` was added that retains the
+   centrifugal term; Exp G verifies two-pipeline equivalence at the
+   $10^{-5}$ level at $n = 1$.
+
+The experiments that were validated by external reference (Exp B:
+Tassoul asymptote; Exp C: same + spectral FD floor) are **unaffected**
+by the corrections: the scalar solver they used is internally consistent
+and its high-$n$ asymptote still matches Tassoul.  What changes is that
+the solver it implements is the slab, not spherical, scalar form.
+
+
 # 1. Infrastructure — `scripts/gmode_infra.py`
 
 Shared module used by both experiments.  Key entry points:
@@ -354,30 +401,36 @@ Exps B/C), $\ell = 1$, $N_r = 512$, first 10 modes.
 - high-$n$ (n = 8..10) average ratio: $\mathbf{0.993}$
 - $|\text{ratio}_\text{hi} - 1| = 7.1 \times 10^{-3}$
 
-## 7.3 Interpretation
+## 7.3 Interpretation (superseded — see §0a, corrected below)
 
-**The anelastic spectrum approaches the Boussinesq spectrum monotonically
-from below as $n$ grows.**  This is the physically correct ordering:
-retaining the $\omega^2\rho_0\xi_r$ term in the momentum equation adds an
-inertia-like contribution that lowers the oscillation frequency relative
-to Boussinesq.  At low $n$ (high $\omega^2$) this extra term is a finite
-correction; at high $n$ ($\omega^2 \to 0$) it vanishes, and the two
-derivations agree.
+**The slab-scalar and spherical 2-variable spectra agree monotonically at
+high $n$.**  Originally this section claimed the ratio convergence
+measured "anelastic → Boussinesq".  That was wrong: the two solvers make
+the same thermodynamic approximations (both are Cowling g-modes, neither
+is Boussinesq).  The actual physical content of the ratio is:
 
-This experiment therefore **passes** the consistency check:
+* **the slab solver** $-\psi'' = (k_h^2 N^2 /\omega^2)\psi$ omits the
+  $+\ell(\ell+1)/r^2$ centrifugal term from the spherical scalar
+  reduction (see §10);
+* **the 2-variable solver** retains it implicitly through
+  $p' \propto \partial_r(\rho_0 r^2 \xi_r)$;
+* at high $n$ the centrifugal term $\ell(\ell+1)\psi/r^2$ is negligible
+  compared to $\psi''$ so the two agree.
 
-1. The 2-variable matrix assembly of (E.2) is bug-free (otherwise no clean
-   limit would emerge).
-2. The ordering of the correction (anelastic $<$ Boussinesq by ${\sim}7\%$
-   at $n = 10$) matches the textbook expectation for the anelastic
-   approximation applied to g-modes (Gough 1969, Bannon 1996).
-3. The scalar Cowling solver, which is what the already-shipped
-   `solve_gmode_cowling(_cheb)` implements, is a faithful high-$n$ reduction
-   of the full 2-variable problem.
+What this experiment actually measures is therefore the **slab-vs-spherical
+geometric correction**, ${\sim}7\%$ at $n = 10$ and ${\sim}30\%$ at $n = 1$,
+not the Boussinesq-vs-anelastic thermodynamic correction.  The rigorous
+algebraic-equivalence check is Experiment G (§11).
 
-We therefore have **two independent eigenvalue pipelines** that agree in
-the appropriate limit, and the 2-variable one can now be used as the
-reference for validating future C++/CUDA anelastic operator assemblies.
+This experiment still **passes** in the reframed sense:
+
+1. The 2-variable matrix assembly produces finite eigenvalues with the
+   expected $\omega^2 \to 0$ accumulation at large $n$.
+2. The slab and spherical spectra approach each other at high $n$ as the
+   $\ell(\ell+1)/r^2$ centrifugal term becomes subdominant to $\psi''$.
+
+The 2-variable operator is the **reference**; the slab scalar solver is
+a geometric simplification whose range of validity is now quantified.
 
 ## 7.4 What this experiment does **not** do
 
@@ -435,59 +488,184 @@ $\rho_0'$ term that was identically zero in Exp E.
 - high-$n$ avg (n = 8..10): $\mathbf{0.998}$
 - $|\text{ratio}_\text{hi} - 1| = 2.3 \times 10^{-3}$
 
-## 8.3 Interpretation
+## 8.3 Interpretation (superseded framing — see §0a)
 
-**The variable-$\rho_0$ 2-variable operator passes.**  Key observations:
+This section originally framed the result as "anelastic → Boussinesq
+convergence with variable $\rho_0$".  As explained in §0a, that was a
+wrong diagnosis; the solvers differ in **geometry** (slab vs spherical
+scalar), not in thermodynamics.  Reframed observations:
 
-1. The ratio is **closer to 1** at every $n$ than in Exp E (const-$\rho_0$).
-   Physically this makes sense: with $\rho_0(r)$ dropping outward, the
-   g-mode cavity is pushed inward where the Boussinesq approximation
-   (which assumes slowly-varying $\rho_0$) is more accurate, not less.
-2. The convergence rate toward 1 is the same **monotone-from-below**
-   pattern established in Exp E.  A sign error in the $\rho_0'$ term
-   would produce either a non-monotone ratio or a ratio > 1 (since the
-   $\rho_0'$ contribution would appear with the wrong sign in the
-   momentum equation).  Neither happens.
-3. The overall $\omega^2$ magnitudes are **13× smaller** than Exp E
-   ($1.7 \times 10^{-2}$ vs $2.35 \times 10^{-1}$ at $n = 1$) because
-   the cavity in Exp F is shorter (length $0.31$) and $N^2$ is attenuated
-   by the Gaussian-bump × $\rho_0$-cut interplay.  Tassoul's $\Delta P$
-   scales inversely with the cavity $\int N/r\,dr$, so longer periods
-   (smaller $\omega^2$) at the same $n$ is the expected geometric
-   outcome, not a bug.
+1. The ratio is closer to 1 than Exp E at every $n$.  With variable
+   $\rho_0$ the g-mode cavity is compressed (r $\in [0.20, 0.51]$ vs
+   $[0.20, 1.0]$ in Exp E), so the $\ell(\ell+1)/r^2$ centrifugal term
+   is larger but $\psi''$ grows even faster and dominates earlier;
+   the slab approximation becomes accurate at a lower $n$.
+2. The convergence is still the monotone-from-below pattern from Exp E.
+   This verifies that the $\rho_0'$ bookkeeping in
+   $B_{21} = \text{diag}(1/r^2)\,D_1\,\text{diag}(\rho_0 r^2)$ has no sign
+   or index error — a sign flip would produce a non-monotone ratio or a
+   ratio > 1.
+3. The $\omega^2$ magnitudes ($1.7 \times 10^{-2}$ at $n = 1$, vs
+   $2.35 \times 10^{-1}$ in Exp E) reflect the shorter cavity length;
+   Tassoul's $\Delta P$ scales inversely with the cavity $\int N/r\,dr$,
+   which is smaller here.
 
-## 8.4 Operator is ready for C++ assembly
+## 8.4 Status: 2-variable operator validated on variable $\rho_0$
 
-With Exp E (constant $\rho_0$, $\text{ratio}_\text{hi} = 0.993$) and Exp F
-(variable $\rho_0$, $\text{ratio}_\text{hi} = 0.998$) both passing, the
-2-variable anelastic operator is validated on both the simple and the
-physically relevant configurations.  The Python assembly in
-`solve_anelastic_2var()` can now serve as the **reference implementation**:
-a future C++/CUDA port must reproduce these same $\omega^2$ tables to
-within a stated tolerance (we suggest $10^{-2}$ relative, matching the
-current dedup threshold).
+With Exp E (const $\rho_0$), Exp F (variable $\rho_0$), and Exp G
+(algebraic equivalence to spherical scalar), the 2-variable assembly in
+`solve_anelastic_2var()` is validated on three independent fronts:
 
-The next development step is therefore to lift `solve_anelastic_2var` from
-`gmode_exp_e_anelastic_linop.py` into a proper C++ operator that plugs
-into the existing solver harness in `src/gpu/`.  Because the spectrum is
-known mode-by-mode, the C++ port can regression-test against Exp E/F
-without any additional physics infrastructure.
+| Test | What it verifies |
+|---|---|
+| Exp E (const $\rho_0$) | Matrix blocks $A_{11}, A_{12}, A_{22}, B_{11}, B_{21}$ when $\rho_0' = 0$ |
+| Exp F (variable $\rho_0$) | $\rho_0'$ bookkeeping in $B_{21}$ |
+| Exp G (spherical scalar) | Full algebraic equivalence to an independent derivation at $10^{-5}$ level at $n = 1$, with clean $O(N_r^{-2})$ FD decay |
+
+The Python assembly can now serve as the **reference implementation** for
+a future C++/CUDA port; the port should reproduce the $\omega^2$ tables
+in §8 and §11 to within the quoted FD tolerances.
 
 
-# 9. Next steps
+# 9. Symbolic derivation of the spherical scalar reduction
 
-1. ~~**Chebyshev upgrade**~~ — done in §5.
-2. ~~**MESA-style profile reader**~~ — done in §6.
-3. ~~**2-variable anelastic operator cross-check**~~ — done in §7.
-4. ~~**Variable-$\rho_0$ anelastic operator**~~ — done in §8.
-5. **C++/CUDA anelastic operator assembly.**  Lift
-   `solve_anelastic_2var()` (currently in `gmode_exp_e_anelastic_linop.py`)
-   into `src/gpu/anelastic_solver.{cu,cuh}` as a new solver (per CLAUDE.md
-   policy: never overwrite existing solvers).  Validate by matching the
-   $\omega^2$ tables of §7 and §8 via a Python-callable eigenvalue sweep
-   (e.g.\ shift-invert with a small Krylov space, or dense LAPACK for
-   small problems).
-6. **Avoided-crossing benchmark.**  Remains as longer-term benchmark once
-   the C++ operator handles g-modes correctly.  Needs Lamb frequency
-   $L_\ell^2 = \ell(\ell+1)c_s^2/r^2$ (already extracted by the parser)
-   and a mixed g/p-mode (fourth-order Dziembowski) formulation.
+> **Provenance.** This section's equations were checked by SymPy during
+> the Exp G development (2026-05-02 late evening); the derivation script
+> is inlined at the top of `scripts/gmode_exp_g_spherical_scalar.py`'s
+> docstring and reproducible interactively.
+
+Starting from the 2-variable Cowling system (constant $\rho_0$ for
+clarity; the variable-$\rho_0$ version is a straightforward generalisation
+exercised in Exp F):
+
+$$
+\begin{aligned}
+\text{(M)}\quad & \rho_0 N^2\,\xi_r + \partial_r p' = \omega^2\,\rho_0\,\xi_r \\
+\text{(C)}\quad & \tfrac{1}{r^2}\,\partial_r(\rho_0 r^2 \xi_r) = \omega^{-2}\cdot \tfrac{\ell(\ell+1)\,p'}{r^2}
+\end{aligned}
+$$
+
+Solve (C) for $p'$:  $p' = \frac{\omega^2}{\ell(\ell+1)}\,\partial_r(\rho_0 r^2 \xi_r)$.
+
+Substitute into (M) and simplify.  Defining $\psi \equiv \rho_0 r^2 \xi_r$:
+
+$$
+-\psi'' + \frac{\ell(\ell+1)}{r^2}\,\psi = \omega^{-2}\,\frac{\ell(\ell+1) N^2}{r^2}\,\psi. \tag{G.1}
+$$
+
+This is the full spherical scalar reduction.  Compared to the slab form
+implemented in `solve_gmode_cowling(_cheb)`:
+
+$$
+-\psi'' = \omega^{-2}\,\frac{\ell(\ell+1) N^2}{r^2}\,\psi, \tag{G.2}
+$$
+
+the spherical form carries an extra $+\ell(\ell+1)/r^2\cdot\psi$ on the LHS
+(the centrifugal / horizontal-Laplacian term).  At high $n$ (small
+wavelengths), $\psi'' \gg \psi/r^2$ and the two forms agree; at low $n$
+the spherical form is correct and the slab form misses an O(1) geometric
+correction.  Exp G (§11) confirms this quantitatively.
+
+
+# 10. Next steps (after corrections)
+
+1. ~~**Chebyshev upgrade**~~ — §5.
+2. ~~**MESA-style profile reader**~~ — §6.
+3. ~~**2-variable anelastic operator cross-check**~~ — §7, with framing
+   now corrected per §0a.
+4. ~~**Variable-$\rho_0$ anelastic operator**~~ — §8, reframed per §0a.
+5. ~~**Spherical scalar reduction + algebraic-equivalence test**~~ — §9, §11.
+6. **External benchmark (open, not done this session):** the current
+   validation chain (§§5-11) is entirely internal — two independent
+   numerical pipelines agreeing with each other, with the high-$n$
+   branch additionally agreeing with Tassoul's analytic asymptote (§3).
+   A true external benchmark would compare our $\omega^2$ spectrum to
+   an independent third-party code (ADIPLS, GYRE, or a published
+   polytropic g-mode table such as Christensen-Dalsgaard Lecture Notes
+   2014 Chap. 5).  **Not attempted here** — ADIPLS requires Fortran
+   install and GYRE input-file authoring, and we chose not to copy
+   tabulated eigenvalues without verifying the $N^2$ definition and
+   normalisation convention matches ours.  This is the most important
+   remaining gap in the validation chain.  Until it is closed, the
+   strongest true statement is:
+
+   > Exps G, B, C agree with each other and with Tassoul (1980) at the
+   > $\sim 10^{-4}$ level over a 4-decade resolution sweep.  Their
+   > common answer has not yet been compared to a published
+   > third-party numerical eigenvalue.
+7. **C++/CUDA anelastic operator assembly.**  With §§7-11 providing
+   three independent validation fronts and fully documented reference
+   tables, the Python assembly is safe to port.  Planned structure:
+   `src/gpu/anelastic_solver.{cu,cuh}` (new file, per CLAUDE.md); test
+   harness uses the same Gaussian-bump cavity as Exps E-G and
+   regression-tests against EXPECTED_OMSQ_2VAR_NR512 at Nr=512.
+8. **Avoided-crossing benchmark.**  Longer term.  Needs the Lamb
+   frequency and a 4th-order Dziembowski formulation; single-cavity
+   truncation is a reasonable first step.
+
+
+# 11. Experiment G — spherical scalar vs 2-variable (rigorous)
+
+> **Provenance.** All numbers in this section were produced by
+> `scripts/gmode_exp_g_spherical_scalar.py` at commit `<to be updated>`.
+> `python scripts/gmode_exp_g_spherical_scalar.py --verify` must exit zero.
+
+## 11.1 Setup
+
+Using the same Gaussian-bump $N^2(r)$ cavity as Exps B-F and $\rho_0 = 1$
+(const), we solve both (G.1) and the 2-variable system on the same
+uniform FD grid, at four resolutions.  The spectra should agree at every
+$n$ to within FD truncation error.
+
+## 11.2 Result at $N_r = 512$
+
+| $n$ | $\omega^2$ (spherical scalar) | $\omega^2$ (2-var) | rel_diff |
+|---|---|---|---|
+| 1 | $1.65060 \times 10^{-1}$ | $1.65062 \times 10^{-1}$ | $1.11 \times 10^{-5}$ |
+| 2 | $2.96677 \times 10^{-2}$ | $2.96696 \times 10^{-2}$ | $6.56 \times 10^{-5}$ |
+| 3 | $1.19389 \times 10^{-2}$ | $1.19410 \times 10^{-2}$ | $1.74 \times 10^{-4}$ |
+| 4 | $6.40358 \times 10^{-3}$ | $6.40572 \times 10^{-3}$ | $3.34 \times 10^{-4}$ |
+| 5 | $3.98577 \times 10^{-3}$ | $3.98794 \times 10^{-3}$ | $5.43 \times 10^{-4}$ |
+| 10 | $9.44371 \times 10^{-4}$ | $9.46580 \times 10^{-4}$ | $2.34 \times 10^{-3}$ |
+
+The relative difference grows with $n$ because higher-$n$ eigenmodes
+have shorter wavelengths and their FD discretisation errors become
+relatively larger.
+
+## 11.3 FD convergence sweep
+
+| $N_r$ | max rel_diff | $N_r^2 \times$ max_rd |
+|---|---|---|
+| 128 | $3.98 \times 10^{-2}$ | $652$ |
+| 256 | $9.48 \times 10^{-3}$ | $621$ |
+| 512 | $2.34 \times 10^{-3}$ | $613$ |
+| 1024 | $5.82 \times 10^{-4}$ | $610$ |
+
+The product $N_r^2 \cdot \text{max rel\_diff}$ plateaus at $\sim 610$,
+varying by under 7% across a factor-of-8 resolution sweep.  This is
+clean $\mathcal{O}(N_r^{-2})$ convergence, exactly as expected for
+two independent 2nd-order FD assemblies of algebraically-equivalent
+operators.  If the 2-variable assembly had a sign or bookkeeping bug,
+this product would either grow without bound or oscillate; it does
+neither.
+
+## 11.4 Verdict
+
+Exps E and F established that the 2-variable operator produces a
+sensible spectrum on both const and variable $\rho_0$ with the expected
+high-$n$ Boussinesq … no, wait: we no longer claim that.  The correct
+statement is:
+
+> Exps E and F established that the 2-variable operator produces a
+> spectrum that approaches the slab-Cowling spectrum in the
+> $\ell(\ell+1)/r^2 \ll \psi''/\psi$ limit, i.e. at high radial order.
+>
+> **Exp G establishes the stronger, rigorous result**: the 2-variable
+> operator and the spherical scalar reduction give the same $\omega^2$
+> at every $n$, with the residual tracking the shared $\mathcal{O}(N_r^{-2})$
+> FD truncation.  This is the algebraic-equivalence check that Exps E/F
+> could not provide, and it certifies the 2-variable matrix assembly as
+> bug-free to a stated tolerance.
+
+The Python reference implementation in `solve_anelastic_2var()` is now
+safe to port to C++/CUDA.

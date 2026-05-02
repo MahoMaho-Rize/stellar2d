@@ -223,6 +223,79 @@ def solve_gmode_cowling(r, N2, ell, n_modes):
 # ─────────────────────────────────────────────────────────────────────────
 # Tassoul (1980) asymptotic period spacing
 # ─────────────────────────────────────────────────────────────────────────
+def solve_gmode_cowling_spherical(r, N2, ell, n_modes):
+    """Full spherical scalar reduction of the Cowling g-mode system.
+
+    Solves the eigenproblem derived (symbolically verified in
+    `docs/gmode_experiments_2026-05-02.md` §10) by eliminating p' from
+
+        rho0 N^2 xi_r + dp'/dr = omega^2 rho0 xi_r
+        (1/r^2) d/dr(rho0 r^2 xi_r) = ell(ell+1) p' / (omega^2 r^2)
+
+    via psi = rho0 r^2 xi_r:
+
+        -psi'' + ell(ell+1)/r^2 * psi = omega^{-2} * ell(ell+1) * N^2/r^2 * psi
+
+    This is the COMPLETE spherical reduction.  It differs from
+    `solve_gmode_cowling` (which drops the ell(ell+1)/r^2 centrifugal term
+    on the LHS, implementing a local-slab approximation) by exactly that
+    term.  In the high-n limit the two agree because psi'' dominates
+    psi/r^2; at low n the spherical version is correct and the slab version
+    is off by O(1/n^2).
+
+    Parameters
+    ----------
+    r      : uniform positive radial grid, len N.
+    N2     : Brunt squared array, same shape as r.
+    ell    : spherical harmonic degree (>=1).
+    n_modes: number of smallest-omega^2 modes to return (ascending).
+
+    Returns
+    -------
+    omega_sq : ndarray (n_modes,) ascending omega^2
+    psi      : ndarray (N, n_modes) eigenfunctions, Dirichlet, FD-L2 normalised.
+    """
+    r = np.asarray(r, dtype=float)
+    N = len(r)
+    dr = r[1] - r[0]
+    if not np.allclose(np.diff(r), dr, rtol=1e-10):
+        raise ValueError("uniform r required")
+    if np.min(r) <= 0:
+        raise ValueError("r must be strictly positive")
+
+    M = N - 2
+    # A = -d^2/dr^2 + ell(ell+1)/r^2  on interior
+    main = 2.0 / dr**2 * np.ones(M) + ell * (ell + 1) / (r[1:-1] ** 2)
+    off  = -np.ones(M - 1) / dr**2
+    A = scipy.sparse.diags([off, main, off], [-1, 0, 1], format="csr").toarray()
+
+    # B = diag(ell*(ell+1)*N^2/r^2)
+    w = ell * (ell + 1) * N2[1:-1] / (r[1:-1] ** 2)
+    B = np.diag(w)
+
+    lam, vec = scipy.linalg.eig(A, B)
+    lam_r = lam.real
+    lam_r[np.abs(lam.imag) > 1e-6 * np.abs(lam_r)] = np.nan
+    mask = np.isfinite(lam_r) & (lam_r > 0)
+    lam_r = lam_r[mask]
+    vec = vec.real[:, mask]
+
+    # g-mode: n=1 highest-omega^2 has smallest lam (= 1/omega^2)
+    order = np.argsort(lam_r)[:n_modes]
+    lam_sel = lam_r[order]
+    vec_sel = vec[:, order]
+    omega_sq = 1.0 / lam_sel
+
+    psi = np.zeros((N, vec_sel.shape[1]))
+    psi[1:-1, :] = vec_sel
+    for i in range(psi.shape[1]):
+        norm = np.sqrt(np.sum(psi[:, i] ** 2) * dr)
+        if norm > 0:
+            psi[:, i] /= norm
+
+    return omega_sq, psi
+
+
 def cheb(N):
     """Chebyshev-Gauss-Lobatto points on [-1,1] and the differentiation matrix D.
 
