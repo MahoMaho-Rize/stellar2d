@@ -34,6 +34,10 @@ if(USE_GPU)
         src/gpu/fas_smoothers.cu
         src/gpu/fas_multigrid.cu
         src/gpu/fas_solver.cu
+        src/gpu/fas2_residual.cu
+        src/gpu/fas2_smoothers.cu
+        src/gpu/fas2_multigrid.cu
+        src/gpu/fas2_solver.cu
         src/gpu/simple_solver.cu
         src/gpu/projection_solver.cu
         src/gpu/strang_solver.cu
