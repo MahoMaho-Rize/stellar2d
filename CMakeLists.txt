@@ -57,6 +57,9 @@ if(USE_GPU)
         src/gpu/cart_ale_kernels.cu
         src/gpu/cart_ale2_solver.cu
         src/gpu/cart_ale2_kernels.cu
+        src/gpu/cart_impl_solver.cu
+        src/gpu/cart_impl_residual.cu
+        src/gpu/cart_impl_jfnk.cu
         src/gpu/pseudo_spectral_solver.cu
         src/gpu/pseudo_spectral_kernels.cu
     )
