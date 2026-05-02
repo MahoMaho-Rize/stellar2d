@@ -9,6 +9,7 @@
 
 #include "radial1d_solver.cuh"
 #include "radial1d_kernels.cuh"
+#include "../physics/radiation_diffusion.cuh"
 #include "fas_common.cuh"      // CUDA_CHECK macro
 #include <cstdio>
 #include <cstring>
@@ -114,6 +115,11 @@ void Radial1DSolver::init(int nz_in, double gam, double G, double cfl_in) {
     mal(&lev.d_rho0, nz);    mal(&lev.d_P0, nz);      mal(&lev.d_r0, nf);
     mal(&lev.d_dt_cell, nz); mal(&lev.d_scratch, std::max(nf, nz));
 
+    // Radiation diffusion scratch (allocated regardless; tiny)
+    mal(&d_T_work, nz);
+    mal(&d_F_work, nf);
+    mal(&d_dt_rad, nz);
+
     std::fprintf(stderr, "Radial1DSolver initialized: nz=%d zones, γ=%g, CFL=%g, CQ=%g, ZSH=%g\n",
                  nz, gamma, cfl, CQ, ZSH);
 }
@@ -125,6 +131,7 @@ void Radial1DSolver::destroy() {
     f(lev.d_rhoE); f(lev.d_Vol_prev); f(lev.d_e_prev);
     f(lev.d_rho0); f(lev.d_P0); f(lev.d_r0);
     f(lev.d_dt_cell); f(lev.d_scratch);
+    f(d_T_work); f(d_F_work); f(d_dt_rad);
     std::memset(&lev, 0, sizeof(lev));
 }
 
@@ -393,10 +400,23 @@ double Radial1DSolver::step(double t, double t_end) {
     // Final primitives
     launch_primitives(lev, nz, use_eos, gamma, eos, B);
 
+    // Radiation diffusion (operator split, after hydro)
+    int rad_sub = 0;
+    if (radiation_enabled) {
+        rad_sub = apply_radiation_diffusion(dt);
+        // Refresh primitives after e_int update
+        launch_primitives(lev, nz, use_eos, gamma, eos, B);
+    }
+
     step_count++;
     dt_current = dt;
-    if (step_count <= 10 || step_count % 1000 == 0)
-        std::fprintf(stderr, "  [radial1d] step %d  t=%.4e  dt=%.3e\n", step_count, t+dt, dt);
+    if (step_count <= 10 || step_count % 1000 == 0) {
+        if (radiation_enabled)
+            std::fprintf(stderr, "  [radial1d] step %d  t=%.4e  dt=%.3e  rad_sub=%d\n",
+                         step_count, t+dt, dt, rad_sub);
+        else
+            std::fprintf(stderr, "  [radial1d] step %d  t=%.4e  dt=%.3e\n", step_count, t+dt, dt);
+    }
     return dt;
 }
 
@@ -457,4 +477,50 @@ Radial1DSolver::Diagnostics Radial1DSolver::compute_diagnostics() {
 
     for (int i = 0; i < 6; ++i) cudaFree(scratch[i]);
     return d;
+}
+
+// ============================================================
+// Explicit radiation diffusion: subcycle at parabolic CFL
+// ============================================================
+int Radial1DSolver::apply_radiation_diffusion(double dt_total) {
+    if (!radiation_enabled) return 0;
+    int nz = lev.nz;
+    int nf = nz + 1;
+    int B = 256;
+
+    RadDiffParams pars;
+    pars.c_light = rad_c_light;
+    pars.a_rad   = rad_a_rad;
+    pars.opacity.kappa_es      = rad_kappa_es;
+    pars.opacity.kappa_ff_0    = rad_kappa_ff_0;
+    pars.opacity.kappa_dust_0  = rad_kappa_dust_0;
+    pars.opacity.kappa_Hm_0    = rad_kappa_Hm_0;
+    pars.opacity.T_dust_off    = rad_T_dust_off;
+
+    double t_rad = 0.0;
+    int sub = 0;
+    const int max_sub = 100000;  // safety cap to avoid infinite subcycle
+    while (t_rad < dt_total && sub < max_sub) {
+        // Phase 1: T from EOS
+        k_rad_diffusion_1d<<<(nz+B-1)/B, B>>>(
+            lev.d_e_int, lev.d_rho, lev.d_r, lev.d_dm,
+            d_T_work, d_F_work, nz, eos, pars, 0.0);
+        // Determine dt_sub from parabolic CFL
+        k_rad_diffusion_dt<<<(nz+B-1)/B, B>>>(
+            lev.d_rho, d_T_work, lev.d_r, d_dt_rad, nz, pars);
+        double dt_sub = gpu_reduce_min_simple(d_dt_rad, nz);
+        if (dt_sub > dt_total - t_rad) dt_sub = dt_total - t_rad;
+        if (dt_sub <= 0.0) break;
+
+        // Phase 2: flux at faces
+        k_rad_diffusion_1d_flux<<<(nf+B-1)/B, B>>>(
+            d_T_work, lev.d_rho, lev.d_r, d_F_work, nz, eos, pars);
+        // Phase 3: update e_int
+        k_rad_diffusion_1d_update<<<(nz+B-1)/B, B>>>(
+            lev.d_e_int, d_F_work, lev.d_dm, nz, dt_sub);
+
+        t_rad += dt_sub;
+        ++sub;
+    }
+    return sub;
 }

@@ -62,6 +62,8 @@ struct SimConfig {
     std::string precond = "line_jacobi";         // preconditioner for lowmach solver
     Limiter limiter = Limiter::MINMOD;
     double perturb_amplitude = 1e-3;  // density perturbation for lane_emden_perturbed
+    bool radiation_enabled = false;
+    double rad_c_light = 100.0;       // reduced speed of light (code units); full c = very slow
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     // EOS selection
     std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
@@ -213,6 +215,10 @@ int main(int argc, char** argv) {
             cfg.eos_mu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--eos-rad-a") == 0 && i + 1 < argc)
             cfg.eos_rad_a = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--radiation") == 0)
+            cfg.radiation_enabled = true;
+        else if (std::strcmp(argv[i], "--rad-c") == 0 && i + 1 < argc)
+            cfg.rad_c_light = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -597,6 +603,14 @@ int main(int argc, char** argv) {
             r1d.use_eos = true;
             r1d.eos = eos;
             std::printf("radial1d: EOS-aware kernels enabled (%s)\n", cfg.eos_type.c_str());
+        }
+        // Wire radiation diffusion
+        if (cfg.radiation_enabled) {
+            r1d.radiation_enabled = true;
+            r1d.rad_c_light = cfg.rad_c_light;
+            r1d.rad_a_rad = cfg.eos_rad_a > 0 ? cfg.eos_rad_a : 1.0;
+            std::printf("radial1d: radiation diffusion ON (c=%.3e, a=%.3e)\n",
+                        r1d.rad_c_light, r1d.rad_a_rad);
         }
         r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
         r1d.snapshot_hse();

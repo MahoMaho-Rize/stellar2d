@@ -70,6 +70,9 @@ struct Radial1DLevel {
     double* d_scratch;  // generic scratch for reductions
 };
 
+// Forward-declared radiation diffusion params (defined in physics/radiation_diffusion.cuh)
+struct RadDiffParams;
+
 struct Radial1DSolver {
     // Physical / numerical parameters
     double gamma = 5.0/3.0;
@@ -81,6 +84,24 @@ struct Radial1DSolver {
     // fall back to P = (γ-1)·ρ·e and cs = √(γP/ρ).
     bool use_eos = false;
     EOS eos;
+
+    // Radiation diffusion (explicit subcycled). If enabled, every hydro step
+    // calls apply_radiation_diffusion(dt) which subcycles at the parabolic
+    // radiation CFL (dt_rad ≪ dt_hydro typically; 1-10k subcycles per step).
+    bool radiation_enabled = false;
+    double rad_c_light = 1.0;
+    double rad_a_rad = 1.0;
+    // Opacity params stored as raw doubles (POD-safe, OpacityParams has
+    // default constructor so we just need to hand over values).
+    double rad_kappa_es = 0.2;
+    double rad_kappa_ff_0 = 4.3e24;
+    double rad_kappa_dust_0 = 2.0e-4;
+    double rad_kappa_Hm_0 = 1.1e-25;
+    double rad_T_dust_off = 1500.0;
+    // Scratch arrays for radiation diffusion
+    double* d_T_work = nullptr;   // (nz)
+    double* d_F_work = nullptr;   // (nz+1)
+    double* d_dt_rad = nullptr;   // (nz)
 
     // Artificial viscosity (Tscharnuter-Winkler)
     double CQ = 2.0;      // viscosity coefficient
@@ -142,4 +163,8 @@ struct Radial1DSolver {
 
     // Snapshot current state as HSE reference (for floors)
     void snapshot_hse();
+
+    // Apply radiation diffusion for total time dt_total using explicit
+    // subcycles at the parabolic radiation CFL. Returns number of subcycles.
+    int apply_radiation_diffusion(double dt_total);
 };
