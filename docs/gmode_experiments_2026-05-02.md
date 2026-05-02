@@ -396,7 +396,7 @@ reference for validating future C++/CUDA anelastic operator assemblies.
 # 8. Experiment F — variable-$\rho_0$ anelastic operator on polytrope
 
 > **Provenance.** All numbers in this section were produced by
-> `scripts/gmode_exp_f_variable_rho.py` at commit `<to be updated>`.
+> `scripts/gmode_exp_f_variable_rho.py` at commit `8dbf3d3`.
 > `python scripts/gmode_exp_f_variable_rho.py --verify` must exit zero.
 > The polytrope fixture is rebuilt deterministically at the top of each
 > run so this is fully self-contained.
