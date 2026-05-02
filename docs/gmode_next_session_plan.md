@@ -1,8 +1,19 @@
 ---
 title: g-mode Validation — Next Session Plan (GYRE-Compatible Operator)
 date: 2026-05-02 (late evening, pre-compact)
-status: COMPLETED — see docs/gmode_experiments_2026-05-02.md §§13-15
+status: ARCHIVED / COMPLETED — 見 docs/spectral_experiments.md (合併後)
 ---
+
+> **⚠ ARCHIVED — 2026-05-02 深夜**
+>
+> 本檔為 context compact 前對下階段 GYRE 對標工作的規劃.
+> 所有步驟已於 2026-05-02..03 執行完畢 (Exp I/J/K).
+> 結論與 EXPECTED 數據彙整於:
+>
+> - `docs/spectral_experiments.md` §§ Exp I, Exp J, Exp K (合併後)
+> - `docs/spectral_stratified_poisson_report_2026-05-03.md` §4
+>
+> 保留本檔作為 "從 Exp H 失敗到找到 V/U/Γ₁ 缺項" 診斷過程的紀錄.
 
 # STATUS (2026-05-02, next day)
 

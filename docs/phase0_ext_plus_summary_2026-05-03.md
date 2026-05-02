@@ -1,12 +1,24 @@
 ---
 title: Phase 0 ext+ Summary — Spectral Liouville Direction (pre-compact)
 date: 2026-05-03
-status: snapshot before context compact
+status: ARCHIVED (pre-compact 快照 — 結論已被正式技術報告取代)
 parents:
   - docs/spectral_liouville_plan_2026-05-03.md
   - docs/polytropic_index_spectral_convergence_2026-05-03.md
   - docs/gmode_experiments_2026-05-02.md
 ---
+
+> **⚠ ARCHIVED — 2026-05-03 後期**
+>
+> 本檔為 Phase 0 ext+ context compact 前的 snapshot, 記錄當時的 F1-F5
+> 關鍵發現 + Phase 1 kickoff 任務. 所有內容已被下列正式文檔吸收:
+>
+> - `docs/spectral_stratified_poisson_report_2026-05-03.md` — 正式英文技術報告
+> - `docs/spectral_solver_design.md` — 合併後設計文檔
+> - `docs/spectral_experiments.md` — 合併後實驗紀錄
+>
+> 存檔理由: 記錄 2026-05-03 這一天的思考彙整過程.
+> 不要用此文指導新工作; 如有衝突以正式報告為準.
 
 # One-line summary
 

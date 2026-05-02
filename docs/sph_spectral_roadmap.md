@@ -1,9 +1,22 @@
 # 球殼偽譜法天體物理路線圖 (sph_spectral roadmap)
 
-**日期**: 2026-05-01
-**分支**: `pseudo-astro-explore`
+**狀態**: 遠期規劃存檔 (Phase 4+). 目前 (2026-05-03) 主線是 2D Fourier-Chebyshev Boussinesq/Anelastic (Phase 1-3), 球殼版本是 2D 工作成熟後再開新 solver file 的目標.
+
+**日期**: 2026-05-01 (原稿); 2026-05-03 狀態標註
 **Scope**: Pseudo-spectral on spherical shell, incompressible / anelastic regime.
 **戰略**: 一個一個打怪,低級小怪秒殺,把時間留給高 tier 的 boss。
+
+---
+
+> **狀態說明 (2026-05-03)**
+>
+> 本檔原擬在 pseudo_spectral 階段後直接跳球殼, 但 Phase 0 ext+ 後發現
+> 2D Fourier-Chebyshev 在 Eddington $n=3$ 背景上是更自然的漸進路徑
+> (Rayleigh-Bénard baseline 已是成熟 benchmark, 不需要 3D 球殼).
+>
+> 球殼擴展保留為 Phase 4+ 目標. 當前工作見:
+> - `docs/spectral_solver_design.md`
+> - `docs/spectral_stratified_poisson_report_2026-05-03.md` §8 (Phase 1-3)
 
 ## 核心原則
 
