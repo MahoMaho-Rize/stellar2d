@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include <cuda_runtime.h>
 
 #ifdef __CUDACC__
 #define HE_HD __host__ __device__

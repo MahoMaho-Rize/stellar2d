@@ -91,6 +91,15 @@ static double interp_le(const LaneEmden& sol, double xi_val) {
     return t0 + t * (t1 - t0);
 }
 
+// Bulk P→e inversion on the device (EOS struct holds device table pointers
+// for the Helmholtz branch). Each thread handles one zone.
+static __global__ void k_rad1d_e_from_rhoP(const double* d_rho, const double* d_P,
+                                           double* d_e, int n, EOS eos) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= n) return;
+    d_e[k] = eos.internal_energy(d_rho[k], d_P[k]);
+}
+
 // ============================================================
 // init: allocate device memory for given nz
 // ============================================================
@@ -196,6 +205,8 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
     h_r[nz] = R_star;
 
     // 4. Compute zone-centered quantities from r-grid
+    bool eos_needs_device = use_eos
+        && eos.type == static_cast<int>(EosType::HELMHOLTZ);
     for (int k = 0; k < nz; ++k) {
         double rL = h_r[k], rR = h_r[k+1];
         double V_k = (4.0*M_PI/3.0) * (rR*rR*rR - rL*rL*rL);
@@ -204,9 +215,9 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
         h_P[k] = K_poly * std::pow(h_rho[k], 1.0 + 1.0/n_poly);
         // Specific internal energy must be consistent with the EOS actually
         // in use. For ideal gas this is P/((γ−1)ρ); for ideal_rad / PRE_MS
-        // we invert the EOS (P, ρ) → e. Otherwise the γ-only guess produces
-        // grossly wrong T in the radiation-dominated regime.
-        if (use_eos) {
+        // we invert the EOS (P, ρ) → e. Helmholtz does it on the device
+        // (below) since its table lives in GPU memory.
+        if (use_eos && !eos_needs_device) {
             h_e[k] = eos.internal_energy(h_rho[k], h_P[k]);
         } else {
             h_e[k] = h_P[k] / ((gamma - 1.0) * h_rho[k]);
@@ -220,6 +231,11 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
     CUDA_CHECK(cudaMemcpy(lev.d_e_int, h_e.data(), nz*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_rho0, h_rho.data(),nz*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(lev.d_P0,   h_P.data(),  nz*sizeof(double), cudaMemcpyHostToDevice));
+    if (eos_needs_device) {
+        int block = 64, grid = (nz + block - 1) / block;
+        k_rad1d_e_from_rhoP<<<grid, block>>>(lev.d_rho0, lev.d_P0, lev.d_e_int, nz, eos);
+        CUDA_CHECK(cudaDeviceSynchronize());
+    }
     CUDA_CHECK(cudaMemset(lev.d_v, 0, (nz+1)*sizeof(double)));
 
     // Initial surface pressure floor = initial surface P (tiny but > 0)

@@ -2,7 +2,7 @@
 
 #include <cmath>
 #include "physics/eos_pre_ms.h"
-#ifdef __CUDACC__
+#ifdef USE_GPU
 #include "physics/helmholtz_eos.cuh"
 #endif
 
@@ -30,7 +30,7 @@ struct EOS {
     double radiation_a;   // radiation constant a (code units); 0 ⇒ pure ideal
     int type;             // EosType as int for trivial POD copy
     PreMsParams pms;      // pre-MS EOS parameters (only used when type == PRE_MS)
-#ifdef __CUDACC__
+#ifdef USE_GPU
     HelmholtzTableView helm;  // only used when type == HELMHOLTZ
 #endif
 
@@ -65,7 +65,7 @@ struct EOS {
         return e;
     }
 
-#ifdef __CUDACC__
+#ifdef USE_GPU
     // Helmholtz EOS with pre-loaded table view. Abar/Zbar live inside
     // HelmholtzTableView (can be overridden before copy).
     static EOS_HD EOS helmholtz(const HelmholtzTableView& v) {
@@ -83,7 +83,7 @@ struct EOS {
     EOS_HD double cv() const { return gas_constant() / (gamma - 1.0); }
 
     EOS_HD double pressure(double rho, double e_int) const {
-#ifdef __CUDACC__
+#ifdef USE_GPU
         if (type == (int)EosType::HELMHOLTZ) {
             double T = helm_T_from_rho_e(rho, e_int, helm);
             HelmState s = helm_eval(rho, T, helm);
@@ -102,7 +102,7 @@ struct EOS {
     }
 
     EOS_HD double internal_energy(double rho, double P) const {
-#ifdef __CUDACC__
+#ifdef USE_GPU
         if (type == (int)EosType::HELMHOLTZ) {
             // Bracketed search over T to invert P(ρ, T) = target.
             double T_lo = 1e3, T_hi = 1e10;
@@ -137,7 +137,7 @@ struct EOS {
     }
 
     EOS_HD double sound_speed(double rho, double P) const {
-#ifdef __CUDACC__
+#ifdef USE_GPU
         if (type == (int)EosType::HELMHOLTZ) {
             double e = internal_energy(rho, P);
             double T = helm_T_from_rho_e(rho, e, helm);
@@ -170,7 +170,7 @@ struct EOS {
 
     // ∂P/∂(ρe) at fixed ρ — critical for FAS SIMPLE smoother Jacobian
     EOS_HD double dP_drhoe(double rho, double e_int) const {
-#ifdef __CUDACC__
+#ifdef USE_GPU
         if (type == (int)EosType::HELMHOLTZ) {
             double T = helm_T_from_rho_e(rho, e_int, helm);
             HelmState s = helm_eval(rho, T, helm);
@@ -198,7 +198,7 @@ struct EOS {
 
     // Temperature from (ρ, e) — used internally and for diagnostics
     EOS_HD double temperature_from_rho_e(double rho, double e_int) const {
-#ifdef __CUDACC__
+#ifdef USE_GPU
         if (type == (int)EosType::HELMHOLTZ) {
             return helm_T_from_rho_e(rho, e_int, helm);
         }

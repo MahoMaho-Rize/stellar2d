@@ -30,6 +30,7 @@
 #include "gpu/cart_ale2_solver.cuh"
 #include "gpu/cart_impl_solver.cuh"
 #include "gpu/pseudo_spectral_solver.cuh"
+#include "physics/helmholtz_eos.cuh"
 #endif
 
 #include <cstdio>
@@ -89,6 +90,10 @@ struct SimConfig {
     std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
     double eos_mu = 1.0;
     double eos_rad_a = 0.1;           // radiation constant (code units)
+    // Helmholtz EOS
+    std::string helm_table_path = "third_party/helmholtz/helm_table.bin";
+    double helm_Abar = 1.28;          // solar: X≈0.73, Y≈0.25, Z≈0.02
+    double helm_Zbar = 1.13;
     // cart_ale --test hse_bubble parameters
     double bubble_xc = 0.5;
     double bubble_yc = 0.3;
@@ -235,6 +240,12 @@ int main(int argc, char** argv) {
             cfg.eos_mu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--eos-rad-a") == 0 && i + 1 < argc)
             cfg.eos_rad_a = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--helm-table") == 0 && i + 1 < argc)
+            cfg.helm_table_path = argv[++i];
+        else if (std::strcmp(argv[i], "--helm-abar") == 0 && i + 1 < argc)
+            cfg.helm_Abar = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--helm-zbar") == 0 && i + 1 < argc)
+            cfg.helm_Zbar = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--radiation") == 0)
             cfg.radiation_enabled = true;
         else if (std::strcmp(argv[i], "--rad-c") == 0 && i + 1 < argc)
@@ -507,6 +518,11 @@ int main(int argc, char** argv) {
     }
 
     EOS eos;
+#ifdef USE_GPU
+    // Helmholtz table lives through the whole run; destroyed after solver loop.
+    HelmholtzTable helm_tbl;
+    bool helm_loaded = false;
+#endif
     if (cfg.eos_type == "ideal_rad") {
         eos = EOS::ideal_rad(cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
         std::printf("EOS: ideal + radiation (γ=%.3f, μ=%.3f, a=%.3e)\n",
@@ -520,6 +536,25 @@ int main(int argc, char** argv) {
         eos = EOS::pre_ms(p);
         std::printf("EOS: pre-MS Chabrier-Baraffe (T_diss=%.0f, T_ion=%.0f, μ_cold=%.2f → μ_hot=%.2f)\n",
                     p.T_diss, p.T_ion, p.mu_cold, p.mu_hot);
+    } else if (cfg.eos_type == "helmholtz") {
+#ifdef USE_GPU
+        if (helm_tbl.load(nullptr, cfg.helm_table_path.c_str(), 0) != 0) {
+            std::fprintf(stderr,
+                "ERROR: failed to load Helmholtz table at %s — run\n"
+                "  tools/helm_convert <ascii> %s\n",
+                cfg.helm_table_path.c_str(), cfg.helm_table_path.c_str());
+            return 1;
+        }
+        helm_tbl.view.Abar = cfg.helm_Abar;
+        helm_tbl.view.Zbar = cfg.helm_Zbar;
+        eos = EOS::helmholtz(helm_tbl.view);
+        helm_loaded = true;
+        std::printf("EOS: Helmholtz (cococubed %dx%d, Abar=%.3f, Zbar=%.3f)\n",
+                    HELM_IMAX, HELM_JMAX, cfg.helm_Abar, cfg.helm_Zbar);
+#else
+        std::fprintf(stderr, "ERROR: --eos helmholtz requires USE_GPU build\n");
+        return 1;
+#endif
     } else {
         eos = EOS::ideal(cfg.gamma, cfg.eos_mu);
     }
@@ -1837,6 +1872,10 @@ int main(int argc, char** argv) {
         std::snprintf(path, sizeof(path), "%s/output_final.vtk", run_dir.c_str());
         write_vtk(path, grid, state, cfg.gamma);
     }
+
+#ifdef USE_GPU
+    if (helm_loaded) helm_tbl.destroy();
+#endif
 
     std::printf("Done.\n");
     return 0;
