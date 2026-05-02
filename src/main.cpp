@@ -116,6 +116,7 @@ struct SimConfig {
     double ps_vm_dist      = 0.20;         // d / min(Lx,Ly);d/σ ≲ 3 → 合併
     int    ps_ckpt_every   = 0;            // 每 N 步存 checkpoint (0 = 停用)
     std::string ps_resume;                 // restart 檔路徑 (空 = 從 IC 開始)
+    std::string run_base   = "runs";       // 輸出根目錄 (--run-base)
 
     // --- sph2d_spectral 2D 薄球殼 偽譜 ---
     double sph_R = 1.0;
@@ -193,11 +194,11 @@ static std::string make_run_dir(const SimConfig& cfg) {
     std::strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", lt);
 
     char dirname[512];
-    std::snprintf(dirname, sizeof(dirname), "runs/%s_%dx%d_%s",
-                  cfg.test_case.c_str(), cfg.nr, cfg.ntheta, ts);
+    std::snprintf(dirname, sizeof(dirname), "%s/%s_%dx%d_%s",
+                  cfg.run_base.c_str(), cfg.test_case.c_str(),
+                  cfg.nr, cfg.ntheta, ts);
 
-    // mkdir -p runs/ and runs/<subdir>/
-    mkdir("runs", 0755);
+    mkdir(cfg.run_base.c_str(), 0755);
     mkdir(dirname, 0755);
     return std::string(dirname);
 }
@@ -348,6 +349,8 @@ int main(int argc, char** argv) {
             cfg.ps_ckpt_every = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-resume") == 0 && i + 1 < argc)
             cfg.ps_resume = argv[++i];
+        else if (std::strcmp(argv[i], "--run-base") == 0 && i + 1 < argc)
+            cfg.run_base = argv[++i];
         // sph2d flags
         else if (std::strcmp(argv[i], "--sph-R") == 0 && i + 1 < argc)
             cfg.sph_R = std::atof(argv[++i]);
@@ -1112,10 +1115,11 @@ int main(int argc, char** argv) {
         if (cfg.test_case != "kh_shear" && cfg.test_case != "forced_turb"
             && cfg.test_case != "taylor_green"
             && cfg.test_case != "double_shear_layer"
-            && cfg.test_case != "vortex_merger") {
+            && cfg.test_case != "vortex_merger"
+            && cfg.test_case != "quad_vortex_merger") {
             std::fprintf(stderr,
                 "ERROR: pseudo_spectral supports --test {kh_shear, forced_turb, taylor_green, "
-                "double_shear_layer, vortex_merger}\n");
+                "double_shear_layer, vortex_merger, quad_vortex_merger}\n");
             return 1;
         }
         PseudoSpectralSolver ps;
@@ -1138,6 +1142,8 @@ int main(int argc, char** argv) {
             ps.init_double_shear_layer(cfg.ps_vshear, amp, cfg.ps_k);
         } else if (cfg.test_case == "vortex_merger") {
             ps.init_vortex_merger(cfg.ps_vm_gamma, cfg.ps_vm_sigma, cfg.ps_vm_dist);
+        } else if (cfg.test_case == "quad_vortex_merger") {
+            ps.init_quad_vortex_merger(cfg.ps_vm_gamma, cfg.ps_vm_sigma, cfg.ps_vm_dist);
         } else {
             // forced_turb: zero IC + stochastic forcing
             ps.init_zero();

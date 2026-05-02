@@ -631,6 +631,64 @@ void PseudoSpectralSolver::init_vortex_merger(double gamma, double sigma_frac, d
 }
 
 // ============================================================
+// Quad vortex merger — 四個 Gaussian 渦,2×2 棋盤排列
+//   對角線同號 (+Γ 在左下/右上, -Γ 在右下/左上),
+//   相鄰異號 → 產生 dipole 交互 + 合併。
+//   dist_frac: 相鄰渦心間距 / min(Lx,Ly) (= 棋盤半格寬)
+// ============================================================
+void PseudoSpectralSolver::init_quad_vortex_merger(double gamma, double sigma_frac, double dist_frac) {
+    double Lmin = std::fmin(Lx, Ly);
+    double sigma = sigma_frac * Lmin;
+    double dist  = dist_frac  * Lmin;
+    double inv_s2 = 1.0 / (sigma * sigma);
+
+    // 四個渦心: 以域中心為原點, ±dist/2
+    double cx = 0.5 * Lx, cy = 0.5 * Ly;
+    double hd = 0.5 * dist;
+    // (x, y, sign): 左下(+), 右上(+), 右下(-), 左上(-)
+    double vx[4] = { cx - hd, cx + hd, cx + hd, cx - hd };
+    double vy[4] = { cy - hd, cy + hd, cy - hd, cy + hd };
+    double vs[4] = { +gamma,  +gamma,  -gamma,  -gamma  };
+
+    auto wrap = [](double d, double L) {
+        if (d >  0.5 * L) d -= L;
+        if (d < -0.5 * L) d += L;
+        return d;
+    };
+
+    std::vector<double> h_omega(ncell);
+    for (int ic = 0; ic < nx; ++ic) {
+        double x = (ic + 0.5) * dx;
+        for (int jc = 0; jc < ny; ++jc) {
+            double y = (jc + 0.5) * dy;
+            double val = 0.0;
+            for (int v = 0; v < 4; ++v) {
+                double ddx = wrap(x - vx[v], Lx);
+                double ddy = wrap(y - vy[v], Ly);
+                val += vs[v] * std::exp(-(ddx * ddx + ddy * ddy) * inv_s2);
+            }
+            h_omega[ic * ny + jc] = val;
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_omega, h_omega.data(),
+                          ncell * sizeof(double), cudaMemcpyHostToDevice));
+    phys_to_spec(plan_r2c, d_omega, d_omega_hat);
+
+    int B = 256;
+    int Gh = (ncplx + B - 1) / B;
+    k_apply_dealias<<<Gh, B>>>(d_omega_hat, d_dealias, ncplx);
+    k_clear_dc<<<1, 1>>>(d_omega_hat);
+
+    dt_current = 0.0;
+    step_count = 0;
+    std::fprintf(stderr,
+        "  PseudoSpectral QuadVortexMerger: Γ=%g, σ=%.3g, d=%.3g (d/σ=%.2f)\n"
+        "    (+) at (%.3f,%.3f) & (%.3f,%.3f) | (-) at (%.3f,%.3f) & (%.3f,%.3f)\n",
+        gamma, sigma, dist, dist / sigma,
+        vx[0], vy[0], vx[1], vy[1], vx[2], vy[2], vx[3], vy[3]);
+}
+
+// ============================================================
 // 設置 stochastic forcing — 薄殼白噪聲相位
 //
 // 方法學 (Boffetta-Ecke 2012, Alvelius 1999):

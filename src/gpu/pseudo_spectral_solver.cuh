@@ -212,6 +212,7 @@ struct PseudoSpectralSolver {
     // 典型合併門檻 d/σ ≲ 3;預設 dist_frac=0.20, sigma_frac=0.08 → d/σ=2.5 會合併。
     // DC 被 k_clear_dc 清零(零均值 ω,對應週期盒的常規慣例)。
     void init_vortex_merger(double gamma, double sigma_frac, double dist_frac);
+    void init_quad_vortex_merger(double gamma, double sigma_frac, double dist_frac);
     bool has_analytic_ic = false;
     int  analytic_k = 0;     // Taylor-Green 波數 mode
     cufftDoubleComplex* d_omega_hat_ic = nullptr;
