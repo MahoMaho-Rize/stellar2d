@@ -137,11 +137,12 @@ $$\boxed{\phat(y) = \sqrt{\rhob(y)}\;q(y),}\tag{3.1}$$
 and compute the transformed operator.
 
 \begin{proposition}[Liouville reduction]
-Under the substitution (3.1),
-$$\frac{\dd}{\dd y}\!\left[\frac{1}{\rhob}\,\frac{\dd \phat}{\dd y}\right] = \frac{1}{\sqrt{\rhob}}\,\bigl[q'' + W(y)\,q\bigr], \tag{3.2}$$
-with the \textbf{Liouville potential}
-$$W(y) \;=\; \frac{\rhob''}{2\rhob} - \frac{3(\rhob')^{2}}{4\rhob^{2}}. \tag{3.3}$$
+Under the substitution (3.1), equation (2.2) takes the form (3.2) below, with the Liouville potential given by (3.3).
 \end{proposition}
+
+$$\frac{\dd}{\dd y}\!\left[\frac{1}{\rhob}\,\frac{\dd \phat}{\dd y}\right] = \frac{1}{\sqrt{\rhob}}\,\bigl[q'' + W(y)\,q\bigr], \tag{3.2}$$
+
+$$W(y) \;=\; \frac{\rhob''}{2\rhob} - \frac{3(\rhob')^{2}}{4\rhob^{2}}. \tag{3.3}$$
 
 \begin{proof}
 Differentiating $\phat = \sqrt{\rhob}\,q$:
@@ -199,9 +200,10 @@ Standard SL theory guarantees:
 
 \begin{theorem}[Universal diagonalisation]
 The eigenfunctions $\{\psi_n\}$ simultaneously diagonalise the operator
-$\mathcal{T} - k_x^{2}$ for every $k_x$:
-$$\bigl[\mathcal{T} - k_x^{2}\bigr]\,\psi_n = -(\mu_n + k_x^{2})\,\psi_n. \tag{4.2}$$
+$\mathcal{T} - k_x^{2}$ for every $k_x$, as expressed in (4.2).
 \end{theorem}
+
+$$\bigl[\mathcal{T} - k_x^{2}\bigr]\,\psi_n = -(\mu_n + k_x^{2})\,\psi_n. \tag{4.2}$$
 
 ### 4.2 Solution by eigenfunction expansion
 
