@@ -874,7 +874,7 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, hllc_variant,
             (int)radial_only);
         if (!use_core_excision) {
             k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
@@ -884,7 +884,7 @@ double FasSolver::step_explicit(double t, double t_end) {
                 lev.d_dr, lev.d_dtheta,
                 lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
                 lev.d_res,
-                lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+                lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, hllc_variant,
             (int)radial_only);
         }
         k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
@@ -906,7 +906,7 @@ double FasSolver::step_explicit(double t, double t_end) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, hllc_variant,
             (int)radial_only);
         if (!use_core_excision) {
             k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
@@ -916,7 +916,7 @@ double FasSolver::step_explicit(double t, double t_end) {
                 lev.d_dr, lev.d_dtheta,
                 lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
                 lev.d_res,
-                lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+                lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, hllc_variant,
             (int)radial_only);
         }
         k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);

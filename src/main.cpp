@@ -75,7 +75,11 @@ struct SimConfig {
     // If none given, falls back to the single --bubble-* defaults.
     std::vector<std::array<double, 5>> bubbles;
     bool no_sponge = false;
-    bool lm_hllc = false;
+    // HLLC variant: 0=standard, 1=Rieper LM-HLLC, 2=Minoshima LHLLC.
+    // --lm-hllc  → 1 (back-compat)
+    // --lhllc    → 2 (low-dissipation HLLC, Athena++ port)
+    // --hllc <standard|lm|lhllc> — explicit form
+    int hllc_variant = 0;
     int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
     std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
     int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
@@ -239,7 +243,15 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--no-sponge") == 0)
             cfg.no_sponge = true;
         else if (std::strcmp(argv[i], "--lm-hllc") == 0)
-            cfg.lm_hllc = true;
+            cfg.hllc_variant = 1;
+        else if (std::strcmp(argv[i], "--lhllc") == 0)
+            cfg.hllc_variant = 2;
+        else if (std::strcmp(argv[i], "--hllc") == 0 && i + 1 < argc) {
+            std::string v = argv[++i];
+            if (v == "lhllc") cfg.hllc_variant = 2;
+            else if (v == "lm") cfg.hllc_variant = 1;
+            else cfg.hllc_variant = 0;
+        }
         else if (std::strcmp(argv[i], "--radial-only") == 0)
             cfg.radial_only = true;
         else if (std::strcmp(argv[i], "--r-inner") == 0 && i + 1 < argc)
@@ -617,7 +629,7 @@ int main(int argc, char** argv) {
         FasSolver fas;
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
         fas.limiter_type = static_cast<int>(cfg.limiter);
-        fas.use_lm_hllc = cfg.lm_hllc;
+        fas.hllc_variant = cfg.hllc_variant;
         fas.radial_only = cfg.radial_only;
         fas.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.radial_only)
@@ -1182,7 +1194,7 @@ int main(int argc, char** argv) {
         // ===== Well-Balanced 2D Eulerian (MESA-stabilized) =====
         Wb2DSolver wb;
         wb.limiter_type = static_cast<int>(cfg.limiter);
-        wb.use_lm_hllc = cfg.lm_hllc ? 1 : 0;
+        wb.hllc_variant = cfg.hllc_variant;
         wb.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.mesh_type == "mass") {
             wb.n_pole_avg = cfg.ntheta / 2;

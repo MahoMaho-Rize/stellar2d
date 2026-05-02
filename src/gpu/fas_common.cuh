@@ -40,7 +40,7 @@ __global__ void k_fas_residual(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, EOS eos, double atm_thresh,
-    int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only);
+    int use_wellbalance, int lim_type, int hllc_variant, int radial_only);
 
 __global__ void k_fas_residual_origin(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
@@ -51,7 +51,7 @@ __global__ void k_fas_residual_origin(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, EOS eos, double atm_thresh,
-    int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only);
+    int use_wellbalance, int lim_type, int hllc_variant, int radial_only);
 
 __global__ void k_fas_cfl(
     const double* rho, const double* mr, const double* mt, const double* rhoE,

@@ -171,7 +171,7 @@ void k_fas_residual(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, EOS eos, double atm_thresh,
-    int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only) {
+    int use_wellbalance, int lim_type, int hllc_variant, int radial_only) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
@@ -226,7 +226,7 @@ void k_fas_residual(
         fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
         wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
         wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-        return use_lm_hllc ? fas_hllc_lm(wl, wr, eos, true) : fas_hllc(wl, wr, eos, true);
+        return fas_hllc_dispatch(wl, wr, eos, true, hllc_variant);
     };
     FFlux4 fr_hi = hllc_r_face(i+1);
     FFlux4 fr_lo = hllc_r_face(i);
@@ -256,7 +256,7 @@ void k_fas_residual(
             fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
             wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
             wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-            return use_lm_hllc ? fas_hllc_lm(wl, wr, eos, false) : fas_hllc(wl, wr, eos, false);
+            return fas_hllc_dispatch(wl, wr, eos, false, hllc_variant);
         };
         FFlux4 ft_hi = hllc_t_face(j+1);
         FFlux4 ft_lo = hllc_t_face(j);
@@ -310,7 +310,7 @@ void k_fas_residual_origin(
     const double* P0, const double* rho0,
     double* res,
     int nr, int nt, int ng, EOS eos, double atm_thresh,
-    int use_wellbalance, int lim_type, int use_lm_hllc, int radial_only) {
+    int use_wellbalance, int lim_type, int hllc_variant, int radial_only) {
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     if (j >= nt) return;
     int i = 0;
@@ -353,7 +353,7 @@ void k_fas_residual_origin(
         wr.P = fmax(P0f + (wr.P - P0r(1)), 1e-30);
         wl.rho = fmax(r0f + (wl.rho - r0r(0)), 1e-20);
         wr.rho = fmax(r0f + (wr.rho - r0r(1)), 1e-20);
-        FFlux4 fr_hi = use_lm_hllc ? fas_hllc_lm(wl, wr, eos, true) : fas_hllc(wl, wr, eos, true);
+        FFlux4 fr_hi = fas_hllc_dispatch(wl, wr, eos, true, hllc_variant);
 
         // θ-face fluxes: computed for symmetry with k_fas_residual but unused in origin cell
         // (origin cell is a wedge touching r=0; all θ-cells share the same point).
@@ -370,7 +370,7 @@ void k_fas_residual_origin(
                 fas_recon(wa_.vt, wb_.vt, wc_.vt, wd_.vt, wll.vt, wrr.vt, lim_type);
                 wll.rho = fmax(r0ff+rpL, 1e-20); wrr.rho = fmax(r0ff+rpR, 1e-20);
                 wll.P = fmax(P0ff+ppL, 1e-30); wrr.P = fmax(P0ff+ppR, 1e-30);
-                return use_lm_hllc ? fas_hllc_lm(wll, wrr, eos, false) : fas_hllc(wll, wrr, eos, false);
+                return fas_hllc_dispatch(wll, wrr, eos, false, hllc_variant);
             };
             (void)hllc_t_face(j+1);
             (void)hllc_t_face(j);
@@ -462,7 +462,7 @@ void FasSolver::compute_residual(int l) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
         lev.d_res,
-        lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+        lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, hllc_variant,
         (int)radial_only);
     if (!use_core_excision) {
         k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
@@ -472,7 +472,7 @@ void FasSolver::compute_residual(int l) {
             lev.d_dr, lev.d_dtheta,
             lev.d_gr, lev.d_gr0, lev.d_P0, lev.d_rho0,
             lev.d_res,
-            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, (int)use_lm_hllc,
+            lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, hllc_variant,
             (int)radial_only);
     }
     // Subtract pre-computed HSE defect: R_corrected(U) = R(U) - R(U₀)
