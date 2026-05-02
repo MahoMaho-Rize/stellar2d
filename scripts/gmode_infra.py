@@ -832,6 +832,246 @@ def solve_gmode_cowling_gyre_compat(x, V_2, U, A_star, c_1, Gamma_1, ell, n_mode
     return omega_sq, u_out
 
 
+def solve_gmode_full_gyre_compat(x, V_2, U, A_star, c_1, Gamma_1, ell, n_modes,
+                                 alpha_gam=1.0, alpha_pi=1.0,
+                                 cavity_frac_threshold=0.7,
+                                 p_frac_cutoff=0.05):
+    """GYRE-compatible 4-variable FULL adiabatic operator (alpha_grv=1).
+
+    Implements the complete GYRE system from `ad_eqns_m.fypp` + `A_t.inc`
+    with `alpha_grv = alpha_omg = alpha_gam = alpha_pi = 1`.  Re-reading
+    A_t.inc using GYRE's convention (A_t stores transpose of Jacobian, so
+    A_t(i,j) = A(j,i) = coefficient of y_i in eq_j):
+
+        x dy_1/dx = (V_g - ell - 1) y_1 + (lambda/(c_1 omega^2) - V_g) y_2
+                      + lambda/(c_1 omega^2) y_3
+        x dy_2/dx = (c_1 omega^2 - A_star_iso) y_1 + (A* - U + 3 - ell) y_2 - y_4
+        x dy_3/dx = (3 - U - ell) y_3 + y_4
+        x dy_4/dx = U A* y_1 + U V_g y_2 + lambda y_3 + (2 - U - ell) y_4
+
+    where V_g = V_2 x^2 / Gamma_1, lambda = ell*(ell+1), and y_3, y_4 are the
+    dimensionless Eulerian gravitational-potential perturbation and its radial
+    gradient (GYRE's convention).
+
+    Boundary conditions (from `IB_regular.inc` + `OB_vacuum.inc`, alpha_grv=1):
+
+        Inner (x = x_lo, node 0):
+            c_1 omega^2 y_1 - ell y_2 - ell y_3 = 0
+            ell y_3 - y_4 = 0
+        Outer (x = x_hi, node Nr-1):
+            y_1 - y_2 = 0
+            U y_1 + (ell+1) y_3 + y_4 = 0
+
+    Linear generalised eigenproblem (omega^2 P u = Q u):  omega^2 only enters
+    eq1 (times y_1/y_2 via c_1 omega^2 and lambda/(c_1 omega^2)) and eq2 (times
+    y_1 via c_1 omega^2).  Multiplying eq1 by omega^2 yields the linear form.
+
+    Staggered FD grid (Keller-box generalised):
+        y_1, y_3 on NODES   (x_n = x passed in, Nr points)
+        y_2, y_4 on CELLS   (x_c = (x_n + x_{n+1})/2, Nr-1 points)
+    This eliminates the Nyquist null-space of the co-located FD doubling for
+    all four fields.
+
+    Returns
+    -------
+    omega_sq : ndarray (n_modes,) descending (n_g=1 first)
+    u_out    : ndarray (4Nr-2, n_modes) eigenvector stack
+               [y_1 on nodes; y_3 on nodes; y_2 on cells; y_4 on cells]
+    """
+    x = np.asarray(x, dtype=float)
+    Nr = len(x)
+    h = x[1] - x[0]
+    if not np.allclose(np.diff(x), h, rtol=1e-10):
+        raise ValueError("uniform x required")
+    if np.min(x) <= 0:
+        raise ValueError("x[0] must be > 0")
+
+    V_2 = np.asarray(V_2, dtype=float)
+    U = np.asarray(U, dtype=float)
+    A_star = np.asarray(A_star, dtype=float)
+    c_1 = np.asarray(c_1, dtype=float)
+    Gamma_1 = np.asarray(Gamma_1, dtype=float)
+    lam = ell * (ell + 1.0)
+
+    n_node = Nr
+    n_cell = Nr - 1
+    x_n = x
+    x_c = 0.5 * (x_n[:-1] + x_n[1:])
+    V_g_n = V_2 * x_n ** 2 / Gamma_1
+    V_g_c = np.interp(x_c, x_n, V_g_n)
+    A_c = np.interp(x_c, x_n, A_star)
+    A_n = A_star
+    U_n = U
+    U_c = np.interp(x_c, x_n, U)
+    c1_n = c_1
+    c1_c = np.interp(x_c, x_n, c_1)
+    A_iso_n = A_n * np.where(A_n > 0, alpha_gam, 1.0)
+    A_iso_c = A_c * np.where(A_c > 0, alpha_gam, 1.0)
+
+    # Unknown layout: [y_1 nodes (Nr), y_3 nodes (Nr), y_2 cells (Nr-1), y_4 cells (Nr-1)]
+    #   total = 4Nr - 2
+    size = 2 * n_node + 2 * n_cell
+    def iy1(n): return n
+    def iy3(n): return n_node + n
+    def iy2(c): return 2 * n_node + c
+    def iy4(c): return 2 * n_node + n_cell + c
+
+    P = np.zeros((size, size))
+    Q = np.zeros((size, size))
+
+    # -------- Row layout --------
+    # rows 0 .. n_cell-1           : eq1 at cell c                 (Nr-1 rows)
+    # rows n_cell .. 2*n_cell-1    : eq3 at cell c                 (Nr-1 rows)
+    # rows 2*n_cell .. 2*n_cell + n_node - 3 : eq2 at interior node n=1..Nr-2 (Nr-2 rows)
+    # rows ...       .. ... + n_node - 3     : eq4 at interior node n=1..Nr-2 (Nr-2 rows)
+    # 4 BC rows at the very end.
+    row_eq1_0  = 0
+    row_eq3_0  = n_cell
+    row_eq2_0  = 2 * n_cell                 # eq2 row for n=1 at row_eq2_0
+    row_eq4_0  = 2 * n_cell + (n_node - 2)  # eq4 row for n=1 at row_eq4_0
+    row_bc_start = 2 * n_cell + 2 * (n_node - 2)    # = 4Nr - 6
+    # 4 BC rows at indices row_bc_start .. row_bc_start+3 == size-1
+
+    # -------- eq1 at cell c:
+    #   x dy_1/dx = (V_g - ell - 1) y_1 + (λ/(c_1 ω²) - V_g) y_2 + λ/(c_1 ω²) y_3
+    # Multiply by ω², use staggered y_3 average 0.5(y_3[c]+y_3[c+1]):
+    #   ω² [x_c (y_1[c+1]-y_1[c])/h
+    #       - 0.5 (V_g_c - ell - 1)(y_1[c]+y_1[c+1])
+    #       + V_g_c y_2[c]]
+    #     = (λ/c_1_c) y_2[c] + 0.5 (λ/c_1_c)(y_3[c]+y_3[c+1])
+    for c in range(n_cell):
+        r = row_eq1_0 + c
+        P[r, iy1(c)]     = -x_c[c] / h - 0.5 * (V_g_c[c] - ell - 1.0)
+        P[r, iy1(c + 1)] =  x_c[c] / h - 0.5 * (V_g_c[c] - ell - 1.0)
+        P[r, iy2(c)]     =  V_g_c[c]
+        Q[r, iy2(c)]     =  lam / c1_c[c]
+        Q[r, iy3(c)]     =  0.5 * lam / c1_c[c]
+        Q[r, iy3(c + 1)] =  0.5 * lam / c1_c[c]
+
+    # -------- eq3 at cell c: x dy_3/dx = (3 - U - ell) y_3 + y_4
+    # No ω². Goes entirely on Q (set P = 0 for these rows, i.e. 0 ω² = Q u means Q u = 0).
+    # Rearrange:  x_c (y_3[c+1] - y_3[c]) / h - 0.5 (3 - U_c - ell)(y_3[c] + y_3[c+1]) - y_4[c] = 0
+    # Put this LHS = 0 on Q-row, P-row = 0.
+    for c in range(n_cell):
+        r = row_eq3_0 + c
+        Q[r, iy3(c)]     = -x_c[c] / h - 0.5 * (3.0 - U_c[c] - ell)
+        Q[r, iy3(c + 1)] =  x_c[c] / h - 0.5 * (3.0 - U_c[c] - ell)
+        Q[r, iy4(c)]     = -1.0
+
+    # -------- eq2 at interior node n=1..Nr-2:
+    # x dy_2/dx = (c_1 ω² - A*_iso) y_1 + (A* - U + 3 - ell) y_2 + 0 · y_3 - y_4
+    # Move ω² term to LHS:
+    #   c_1 y_1 · ω² = x dy_2/dx + A*_iso y_1 - (A* - U + 3 - ell) y_2 + y_4
+    # y_2 at node n: 0.5(y_2[n-1]+y_2[n]);  y_4 at node n: 0.5(y_4[n-1]+y_4[n])
+    # dy_2/dx at node n = (y_2[n] - y_2[n-1])/h
+    for n in range(1, n_node - 1):
+        r = row_eq2_0 + (n - 1)
+        P[r, iy1(n)] = c1_n[n]
+        Q[r, iy1(n)] =  A_iso_n[n]
+        Q[r, iy2(n - 1)] = -x_n[n] / h - 0.5 * (A_n[n] - U_n[n] + 3.0 - ell)
+        Q[r, iy2(n)]     =  x_n[n] / h - 0.5 * (A_n[n] - U_n[n] + 3.0 - ell)
+        Q[r, iy4(n - 1)] = 0.5
+        Q[r, iy4(n)]     = 0.5
+
+    # -------- eq4 at interior node n=1..Nr-2:
+    # x dy_4/dx = U A* y_1 + U V_g y_2 + lambda y_3 + (2 - U - ell) y_4
+    # No ω². y_2 at node n interp: 0.5(y_2[n-1] + y_2[n]); y_4 similarly.
+    for n in range(1, n_node - 1):
+        r = row_eq4_0 + (n - 1)
+        Q[r, iy1(n)] = -U_n[n] * A_n[n]
+        Q[r, iy2(n - 1)] = -0.5 * U_n[n] * V_g_n[n]
+        Q[r, iy2(n)]     = -0.5 * U_n[n] * V_g_n[n]
+        Q[r, iy3(n)] = -lam
+        Q[r, iy4(n - 1)] = -x_n[n] / h - 0.5 * (2.0 - U_n[n] - ell)
+        Q[r, iy4(n)]     =  x_n[n] / h - 0.5 * (2.0 - U_n[n] - ell)
+
+    # -------- Boundary conditions --------
+    # All BCs are collocated at cell center c=0 (inner) and c=Nr-2 (outer)
+    # using cell-centered interpolation of node-variables.  This gives O(h^2)
+    # BC accuracy instead of O(h).
+    #
+    # Inner BC 1 (has ω²): c_1 ω² y_1 - ell y_2 - ell y_3 = 0, evaluated at x_c[0]
+    #   y_1 at cell: 0.5*(y_1[0] + y_1[1]);  y_3 at cell: 0.5*(y_3[0] + y_3[1])
+    r = row_bc_start + 0
+    P[r, iy1(0)] = 0.5 * c1_c[0]
+    P[r, iy1(1)] = 0.5 * c1_c[0]
+    Q[r, iy2(0)] = ell
+    Q[r, iy3(0)] = 0.5 * ell
+    Q[r, iy3(1)] = 0.5 * ell
+
+    # Inner BC 2 (no ω²): ell y_3 - y_4 = 0, at x_c[0]
+    r = row_bc_start + 1
+    Q[r, iy3(0)] = 0.5 * ell
+    Q[r, iy3(1)] = 0.5 * ell
+    Q[r, iy4(0)] = -1.0
+
+    # Outer BC 1 (no ω²): y_1 - y_2 = 0, at x_c[-1]
+    r = row_bc_start + 2
+    Q[r, iy1(n_node - 2)] =  0.5
+    Q[r, iy1(n_node - 1)] =  0.5
+    Q[r, iy2(n_cell - 1)] = -1.0
+
+    # Outer BC 2 (no ω²): U y_1 + (ell+1) y_3 + y_4 = 0, at x_c[-1]
+    U_outer = U_c[-1]
+    r = row_bc_start + 3
+    Q[r, iy1(n_node - 2)] = 0.5 * U_outer
+    Q[r, iy1(n_node - 1)] = 0.5 * U_outer
+    Q[r, iy3(n_node - 2)] = 0.5 * (ell + 1.0)
+    Q[r, iy3(n_node - 1)] = 0.5 * (ell + 1.0)
+    Q[r, iy4(n_cell - 1)] = 1.0
+
+    # Solve ω² P u = Q u
+    mu, vecs = scipy.linalg.eig(Q, P)
+    mu_r = mu.real
+    good = (np.isfinite(mu_r)
+            & (np.abs(mu.imag) < 1e-6 * (np.abs(mu_r) + 1e-30))
+            & (mu_r > 0))
+    mu_g = mu_r[good]
+    vec_g = vecs[:, good].real
+
+    # ---- propagation-cavity classification (same as 2-var version) ----
+    N2_profile = A_star / np.maximum(c_1, 1e-30)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        L2_profile = np.where(V_2 > 0,
+                              lam * Gamma_1 / (V_2 * x_n ** 4),
+                              np.inf)
+
+    def classify_cavity(y1_nodes, mu_val):
+        w = x_n ** 3 * y1_nodes ** 2
+        total = w.sum()
+        if total <= 0:
+            return 0.0, 0.0
+        in_g = (N2_profile > mu_val) & (L2_profile > mu_val)
+        in_p = (N2_profile < mu_val) & (L2_profile < mu_val)
+        return (w * in_g).sum() / total, (w * in_p).sum() / total
+
+    g_frac_list = []; p_frac_list = []
+    for k in range(vec_g.shape[1]):
+        y1 = vec_g[:n_node, k]
+        gf, pf = classify_cavity(y1, mu_g[k])
+        g_frac_list.append(gf); p_frac_list.append(pf)
+    g_frac = np.array(g_frac_list); p_frac = np.array(p_frac_list)
+    gmask = p_frac < p_frac_cutoff
+
+    mu_ok = mu_g[gmask]; vec_ok = vec_g[:, gmask]
+
+    order = np.argsort(-mu_ok)
+    mu_sel = mu_ok[order]; vec_sel = vec_ok[:, order]
+
+    keep = []
+    for i in range(len(mu_sel)):
+        if not keep:
+            keep.append(i); continue
+        if abs(mu_sel[i] - mu_sel[keep[-1]]) / abs(mu_sel[keep[-1]] + 1e-30) > 1e-4:
+            keep.append(i)
+        if len(keep) >= n_modes:
+            break
+    mu_sel = mu_sel[keep]; vec_sel = vec_sel[:, keep]
+
+    n_out = min(n_modes, len(mu_sel))
+    return mu_sel[:n_out], vec_sel[:, :n_out]
+
+
 def tassoul_dP(r, N2, ell):
     """ΔP = 2π² / [sqrt(ell*(ell+1)) · ∫ N/r dr].
 
