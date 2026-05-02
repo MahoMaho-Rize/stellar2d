@@ -266,6 +266,177 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
 }
 
 // ============================================================
+// init_from_mesa: read scripts/convert_mesa_ic.py output, remap MESA's
+// non-uniform zones onto our equal-mass Lagrangian shells.
+//
+// MESA profile ordering: index 0 = surface, N-1 = core. We flip to core→
+// surface (monotonic increasing in both r and M_enc) and linearly
+// interpolate (rho, T, P, X, Y) against M_enc at the target shell
+// centres. The outermost face r[nz] is pinned to R_star from the IC
+// header.
+// ============================================================
+int Radial1DSolver::init_from_mesa(const char* ic_path) {
+    std::FILE* fp = std::fopen(ic_path, "r");
+    if (!fp) {
+        std::fprintf(stderr, "  init_from_mesa: cannot open %s\n", ic_path);
+        return 1;
+    }
+    char line[1024];
+    double M_star = -1.0, R_star = -1.0;
+    int n_mesa = -1;
+    while (std::fgets(line, sizeof(line), fp)) {
+        if (line[0] != '#') { std::ungetc('\n', fp); std::fseek(fp, -(long)std::strlen(line), SEEK_CUR); break; }
+        double v;
+        if (std::sscanf(line, "# M_star_g %lf", &v) == 1) M_star = v;
+        else if (std::sscanf(line, "# R_star_cm %lf", &v) == 1) R_star = v;
+        else if (std::sscanf(line, "# n_zones %d", &n_mesa) == 1) {}
+    }
+    if (n_mesa <= 0 || !(M_star > 0.0) || !(R_star > 0.0)) {
+        std::fprintf(stderr,
+            "  init_from_mesa: missing/invalid header in %s "
+            "(n_mesa=%d, M=%g, R=%g)\n",
+            ic_path, n_mesa, M_star, R_star);
+        std::fclose(fp);
+        return 2;
+    }
+
+    // Read zone rows. MESA order = surface → core; store as-is, flip later.
+    std::vector<double> m_s(n_mesa), r_s(n_mesa), rho_s(n_mesa);
+    std::vector<double> T_s(n_mesa), P_s(n_mesa);
+    std::vector<double> X_s(n_mesa), Y_s(n_mesa), Z_s(n_mesa);
+    int i = 0;
+    while (i < n_mesa && std::fgets(line, sizeof(line), fp)) {
+        if (line[0] == '#' || line[0] == '\n') continue;
+        int n = std::sscanf(line, "%lf %lf %lf %lf %lf %lf %lf %lf",
+                            &m_s[i], &r_s[i], &rho_s[i],
+                            &T_s[i], &P_s[i],
+                            &X_s[i], &Y_s[i], &Z_s[i]);
+        if (n != 8) {
+            std::fprintf(stderr, "  init_from_mesa: bad row %d in %s\n", i, ic_path);
+            std::fclose(fp);
+            return 3;
+        }
+        ++i;
+    }
+    std::fclose(fp);
+    if (i != n_mesa) {
+        std::fprintf(stderr,
+            "  init_from_mesa: expected %d rows, got %d\n", n_mesa, i);
+        return 4;
+    }
+
+    // Flip to core→surface so everything is monotonically increasing.
+    std::reverse(m_s.begin(),   m_s.end());
+    std::reverse(r_s.begin(),   r_s.end());
+    std::reverse(rho_s.begin(), rho_s.end());
+    std::reverse(T_s.begin(),   T_s.end());
+    std::reverse(P_s.begin(),   P_s.end());
+    std::reverse(X_s.begin(),   X_s.end());
+    std::reverse(Y_s.begin(),   Y_s.end());
+    std::reverse(Z_s.begin(),   Z_s.end());
+
+    // Monotonicity sanity.
+    for (int k = 1; k < n_mesa; ++k) {
+        if (!(m_s[k] >= m_s[k-1])) {
+            std::fprintf(stderr, "  init_from_mesa: m_enc non-monotone at k=%d\n", k);
+            return 5;
+        }
+    }
+
+    // Build target equal-mass shells for our own nz zones.
+    int nz = lev.nz;
+    double dm = M_star / nz;
+    std::vector<double> M_target(nz + 1);
+    for (int k = 0; k <= nz; ++k) M_target[k] = k * dm;
+
+    // Interpolate r at each face mass (linear in m).
+    std::vector<double> h_r(nz + 1);
+    h_r[0] = 0.0;                     // innermost face at r=0
+    // For faces beyond MESA's innermost zone (mass < m_s[0]), fall back to
+    // core-linear scaling r ~ (m/m_s[0])^{1/3} · r_s[0] (uniform-density
+    // core approximation).
+    int j = 0;
+    for (int k = 1; k <= nz; ++k) {
+        double Mt = M_target[k];
+        if (Mt <= m_s[0]) {
+            double frac = Mt / m_s[0];
+            h_r[k] = std::pow(frac, 1.0 / 3.0) * r_s[0];
+            continue;
+        }
+        while (j + 1 < n_mesa && m_s[j + 1] < Mt) ++j;
+        if (j + 1 >= n_mesa) { h_r[k] = R_star; continue; }
+        double t = (Mt - m_s[j]) / (m_s[j + 1] - m_s[j]);
+        h_r[k] = r_s[j] + t * (r_s[j + 1] - r_s[j]);
+    }
+    h_r[nz] = R_star;
+
+    // Zone-centred quantities: interpolate MESA data at the shell's
+    // center-of-mass (M_target[k] + dm/2).
+    std::vector<double> h_dm(nz), h_rho(nz), h_T(nz), h_P(nz), h_e(nz);
+    std::vector<double> h_X(nz), h_Y(nz);
+    j = 0;
+    for (int k = 0; k < nz; ++k) {
+        double Mc = M_target[k] + 0.5 * dm;
+        if (Mc <= m_s[0]) {
+            h_rho[k] = rho_s[0]; h_T[k] = T_s[0]; h_P[k] = P_s[0];
+            h_X[k] = X_s[0]; h_Y[k] = Y_s[0];
+        } else if (Mc >= m_s[n_mesa - 1]) {
+            h_rho[k] = rho_s[n_mesa - 1]; h_T[k] = T_s[n_mesa - 1];
+            h_P[k]   = P_s[n_mesa - 1];
+            h_X[k]   = X_s[n_mesa - 1]; h_Y[k] = Y_s[n_mesa - 1];
+        } else {
+            while (j + 1 < n_mesa && m_s[j + 1] < Mc) ++j;
+            double t = (Mc - m_s[j]) / (m_s[j + 1] - m_s[j]);
+            h_rho[k] = rho_s[j] + t * (rho_s[j + 1] - rho_s[j]);
+            h_T[k]   = T_s[j]   + t * (T_s[j + 1]   - T_s[j]);
+            h_P[k]   = P_s[j]   + t * (P_s[j + 1]   - P_s[j]);
+            h_X[k]   = X_s[j]   + t * (X_s[j + 1]   - X_s[j]);
+            h_Y[k]   = Y_s[j]   + t * (Y_s[j + 1]   - Y_s[j]);
+        }
+        h_dm[k] = dm;
+        // e from (ρ, P) via EOS, same dispatch as init_lane_emden.
+        bool eos_needs_device = use_eos
+            && eos.type == static_cast<int>(EosType::HELMHOLTZ);
+        if (use_eos && !eos_needs_device) {
+            h_e[k] = eos.internal_energy(h_rho[k], h_P[k]);
+        } else {
+            h_e[k] = h_P[k] / ((gamma - 1.0) * h_rho[k]);
+        }
+    }
+
+    // Upload
+    CUDA_CHECK(cudaMemcpy(lev.d_r,     h_r.data(),   (nz+1)*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_r0,    h_r.data(),   (nz+1)*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_dm,    h_dm.data(),  nz*sizeof(double),     cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_e_int, h_e.data(),   nz*sizeof(double),     cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_rho0,  h_rho.data(), nz*sizeof(double),     cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_P0,    h_P.data(),   nz*sizeof(double),     cudaMemcpyHostToDevice));
+    bool eos_needs_device = use_eos
+        && eos.type == static_cast<int>(EosType::HELMHOLTZ);
+    if (eos_needs_device) {
+        int block = 64, grid = (nz + block - 1) / block;
+        k_rad1d_e_from_rhoP<<<grid, block>>>(lev.d_rho0, lev.d_P0, lev.d_e_int, nz, eos);
+        CUDA_CHECK(cudaDeviceSynchronize());
+    }
+    CUDA_CHECK(cudaMemset(lev.d_v, 0, (nz+1)*sizeof(double)));
+
+    // Species, if wired
+    if (species_enabled && d_X && d_Y) {
+        CUDA_CHECK(cudaMemcpy(d_X, h_X.data(), nz*sizeof(double), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_Y, h_Y.data(), nz*sizeof(double), cudaMemcpyHostToDevice));
+    }
+
+    P_surf_floor = h_P[nz - 1];
+    hse_set = true;
+
+    std::fprintf(stderr,
+        "  MESA IC loaded: nz=%d zones (from %d MESA), M=%.4e g, R=%.4e cm, "
+        "T_core=%.3e K, ρ_core=%.3e g/cc, P_surf_floor=%.3e\n",
+        nz, n_mesa, M_star, R_star, h_T[0], h_rho[0], P_surf_floor);
+    return 0;
+}
+
+// ============================================================
 // Apply radial-only perturbation (matching init_lane_emden_perturbed in 2D code):
 //   ρ *= (1 + A sin(π r/R))
 //   P *= (1 + γ A sin(π r/R))      (adiabatic)

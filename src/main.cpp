@@ -85,6 +85,7 @@ struct SimConfig {
     double ic_rho_c = -1.0;          // override central density; <0 = test default
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
     double ic_n_poly = 1.5;          // polytropic index for --ic-solar
+    std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/convert_mesa_ic.py output
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     // EOS selection
     std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
@@ -298,6 +299,8 @@ int main(int argc, char** argv) {
             cfg.ic_R_star = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ic-n-poly") == 0 && i + 1 < argc)
             cfg.ic_n_poly = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-mesa") == 0 && i + 1 < argc)
+            cfg.ic_mesa_path = argv[++i];
         else if (std::strcmp(argv[i], "--G") == 0 && i + 1 < argc)
             cfg.G = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--implicit") == 0)
@@ -810,7 +813,13 @@ int main(int argc, char** argv) {
             r1d.mlt_alpha = cfg.mlt_alpha;
             std::printf("radial1d: MLT convection ON (α=%.2f)\n", cfg.mlt_alpha);
         }
-        if (cfg.ic_solar) {
+        if (!cfg.ic_mesa_path.empty()) {
+            std::printf("radial1d: MESA IC from %s\n", cfg.ic_mesa_path.c_str());
+            if (r1d.init_from_mesa(cfg.ic_mesa_path.c_str()) != 0) {
+                std::fprintf(stderr, "ERROR: init_from_mesa failed\n");
+                return 1;
+            }
+        } else if (cfg.ic_solar) {
             // Physical cgs Lane-Emden IC with user-specified (ρ_c, R_star, n).
             // Derive K so that α·ξ_1 = R_star exactly.
             //   α² = (n+1) K ρ_c^(1/n − 1) / (4πG)

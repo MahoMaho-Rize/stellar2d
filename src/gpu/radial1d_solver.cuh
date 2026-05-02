@@ -164,6 +164,14 @@ struct Radial1DSolver {
     // Central density rho_c, polytropic constant K, index n.
     void init_lane_emden(double rho_c, double K_poly, double n_poly);
 
+    // Initialize from a MESA profile written by scripts/convert_mesa_ic.py.
+    // Re-binned to the solver's own `nz` Lagrangian shells by equal-mass
+    // shells; (rho, T, P, e, X, Y) interpolated linearly in m_enc. Sets
+    // v=0 everywhere, fills d_rho0/d_P0/d_r0 with the mapped HSE state,
+    // initialises species (if `species_enabled`) from the profile.
+    // Returns 0 on success, non-zero on parse/load failure.
+    int init_from_mesa(const char* ic_path);
+
     // Apply a radial-only pressure perturbation: P *= (1 + amp*sin(π r/R))
     // Also adjust density self-consistently for adiabatic perturbation:
     // rho *= (1 + amp*sin(πr/R))^(1/γ)  (isentropic along the perturbation)
