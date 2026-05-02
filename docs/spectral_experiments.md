@@ -1,10 +1,10 @@
 ---
 title: |
   Spectral Methods — Experimental Record
-  (Phase 0, reduced-pressure, g-mode, polytropic-index convergence)
+  (Phase 0, reduced pressure, g-mode, polytropic-index convergence)
 author: |
   Kiriko, Tsinghua University
-date: 2026-05-03 (合併版, 綜合 2026-05-02..03 之四份實驗記錄)
+date: 2026-05-03 (consolidated edition)
 geometry: margin=1in
 fontsize: 11pt
 mainfont: "Times New Roman"
@@ -18,113 +18,132 @@ header-includes: |
 
 # 0. About this document
 
-本檔是 stellar2d 項目 Phase 0 到 Phase 0 ext+ 期間四份實驗文檔合併、
-重組後的整合版, 記錄 2026-05-02..03 每個譜法實驗的 **setup / 結果 /
-解讀**. 原始四份在 repo 中保留:
+This document consolidates four experimental notes from 2026-05-02..03
+into a single integrated record, reorganised around **setup / result /
+interpretation** for each experiment.  The original four notes remain in
+the repository as an archival reasoning trajectory:
 
-- `docs/anelastic_sl_phase0_2026-05-02.md` (§1-2: SL Poisson 可行性)
-- `docs/reduced_pressure_experiments_2026-05-02.md` (§3: reduced-pressure)
-- `docs/gmode_experiments_2026-05-02.md` (§4-6: g-mode A 到 K)
-- `docs/polytropic_index_spectral_convergence_2026-05-03.md` (§7: σ 斷崖)
+- `docs/anelastic_sl_phase0_2026-05-02.md` (§1-2 here: SL Poisson
+  feasibility)
+- `docs/reduced_pressure_experiments_2026-05-02.md` (§3-5 here:
+  reduced-pressure validation)
+- `docs/gmode_experiments_2026-05-02.md` (§6-15 here: the full g-mode
+  experiment chain, Exp A through Exp K)
+- `docs/polytropic_index_spectral_convergence_2026-05-03.md` (§16-19
+  here: the $\sigma$-dichotomy study)
 
-**重現性協議**: 每個實驗的 EXPECTED 常數凍結在對應 script 中,
-`python scripts/<name>.py --verify` 必須 exit zero. 更新 EXPECTED 必須
-與本文的表格同 commit 修改.
+**Reproducibility protocol.** Every experiment freezes its expected
+numerical output as an `EXPECTED` constant in the corresponding script.
+A `python scripts/<name>.py --verify` invocation must exit zero to
+confirm the numbers in the tables below.  Any intentional change to
+these numbers must be landed in the same commit that updates both the
+`EXPECTED` and the corresponding table.
 
-**姊妹文檔**:
-- `docs/spectral_solver_design.md` — 設計、推導、路線圖
-- `docs/spectral_stratified_poisson_report_2026-05-03.md` — 正式英文報告
-- `docs/singular_basis_survey_2026-05-02.md` — GYRE / Dedalus 調查
+**Sibling documents**:
+
+- `docs/spectral_solver_design.md` — design, derivations, roadmap.
+- `docs/spectral_stratified_poisson_report_2026-05-03.md` — formal
+  English report.
+- `docs/singular_basis_survey_2026-05-02.md` — GYRE / Dedalus survey.
 
 ---
 
 
-# Part I  SL Poisson 可行性驗證 (Phase 0, 2026-05-02)
+# Part I  SL Poisson feasibility (Phase 0, 2026-05-02)
 
-## 1. Lane-Emden 背景與 Liouville 勢 $W$
+## 1. Lane-Emden background and the Liouville potential $W$
 
 ### 1.1 Setup
-Emden 方程 $\theta'' + (2/\xi)\theta' + \theta^n = 0$ 積分到首零點 $\xi_1$.
 
-### 1.2 Lane-Emden $n=3/2$ 數值結果
+The Emden equation $\theta'' + (2/\xi)\theta' + \theta^n = 0$ is
+integrated to the first zero $\xi_1$.
+
+### 1.2 Numerical results for Lane-Emden $n = 3/2$
 
 \begin{center}
 \begin{tabular}{lc}\toprule
-量 & 值\\\midrule
-$\xi_1$ (polytrope 半徑)                       & $3.653754$\\
-$\rho/\rho_c$ 範圍                             & $[1.0,\,2\times 10^{-5}]$\\
-$W(y)$ 全域                                    & $[-1.35\times 10^6,\;-3.3]$\\
-表面 $\rho<0.01$ 區                            & $|W|_{\max} = 1.35\times 10^{6}$ (發散)\\
-截斷域 $r/R_\star\in[0,0.94]$ ($\rho>0.01$) & $W\in[-398,\,-3.3]$ ✓ bounded\\\bottomrule
+Quantity & Value\\\midrule
+$\xi_1$ (polytrope radius)                      & $3.653754$\\
+$\rho/\rho_c$ range                             & $[1.0,\,2\times 10^{-5}]$\\
+$W(y)$ full range                               & $[-1.35\times 10^{6},\;-3.3]$\\
+Surface region $\rho < 0.01$                    & $|W|_{\max} = 1.35\times 10^{6}$ (divergent)\\
+Truncated domain $r/R_\star\in[0, 0.94]$ ($\rho > 0.01$) & $W \in [-398, -3.3]$, bounded\\\bottomrule
 \end{tabular}
 \end{center}
 
 Script: `scripts/anelastic_sl_phase0.py`.
 
-### 1.3 結論
+### 1.3 Conclusion
 
-表面奇異確實存在 (數學設計階段已預警). 對 $n=3/2$ 安全截斷在
-$r/R_\star\le 0.94$ (對流區內部, 忽略表面大氣薄層). 這是 ASH/Rayleigh
-的標準做法.
+The surface singularity exists as anticipated at the design stage.  For
+$n = 3/2$ the safe truncation is $r/R_\star \le 0.94$ (the convective
+interior, excluding the thin surface atmosphere).  This is the standard
+ASH / Rayleigh prescription.
 
-**2026-05-03 更新**: 此截斷策略只對 $n=3/2$ 必要. 對 $n=3$ (Eddington),
-$\rhob\propto(R-r)^3$ 是多項式, Chebyshev 直接處理到機器精度
-不需要任何截斷. 見 Part IV.
+**2026-05-03 update**: the truncation is required only for
+$n = 3/2$.  For $n = 3$ (Eddington), $\rhob \propto (R - r)^{3}$ is a
+polynomial and Chebyshev handles it to machine precision without
+truncation (see Part IV).
 
 
-## 2. SL 本徵問題 + Fourier 極限退化驗證
+## 2. SL eigenproblem + Fourier-limit degeneracy test
 
-### 2.1 離散化
+### 2.1 Discretisation
 
-Interior FD (nodes $1..N-2$, Dirichlet 隱含), $N=512$.
-`scipy.sparse.linalg.eigsh` 取 256 個最小本徵值.
+Interior finite differences on nodes $1,\ldots,N-2$ with implicit
+Dirichlet endpoints, $N = 512$.  `scipy.sparse.linalg.eigsh` extracts
+the lowest 256 eigenvalues.
 
-### 2.2 Fourier 極限 (W=0) 驗證
+### 2.2 Fourier limit verification ($W = 0$)
 
-設 $W(y)=0$, SL 本徵值應回到 $(n\pi/L)^2$.
+With $W = 0$ the SL eigenvalues should reduce to $(n\pi/L)^{2}$.
 
 \begin{center}
 \begin{tabular}{rrrr}\toprule
-$n$ & $\mu_\text{SL}$ & $(n\pi/L)^{2}$ & rel err\\\midrule
+$n$ & $\mu_\text{SL}$ & $(n\pi/L)^{2}$ & rel.\ err.\\\midrule
 1  & $11.146$   & $11.146$   & $3.1\times 10^{-6}$\\
 20 & $4452.8$   & $4458.4$   & $1.26\times 10^{-3}$\\\bottomrule
 \end{tabular}
 \end{center}
 
-$n=20$ 的 rel err 恰好等於 FD stencil 理論極限
-$n^4\pi^4 \Delta y^2 / (12L^4) \approx 1.26\times 10^{-3}$. **實測 = 理論**
-→ 離散化正確.
+The $n = 20$ relative error matches the FD stencil theoretical limit
+$n^{4}\pi^{4}\Delta y^{2}/(12L^{4}) \approx 1.26\times 10^{-3}$
+exactly.  Measured $=$ theory $\Rightarrow$ discretisation verified.
 
-### 2.3 SL-Poisson 端到端 manufactured-solution
+### 2.3 End-to-end SL-Poisson manufactured solution
 
 \begin{center}
 \begin{tabular}{rcr}\toprule
-$N_\text{modes}$ & $\text{err}_{L^2}$ & 降幅\\\midrule
-5   & $3.00\times 10^{-2}$  & —    \\
-10  & $7.34\times 10^{-3}$  & 4.1× \\
-20  & $1.37\times 10^{-3}$  & 5.4× \\
-40  & $2.18\times 10^{-4}$  & 6.3× \\
-80  & $3.27\times 10^{-5}$  & 6.7× \\
-160 & $5.99\times 10^{-6}$  & 5.5× \\
-\textbf{256} & $\bm{3.74\times 10^{-6}}$ & 收斂到 FD 底\\\bottomrule
+$N_\text{modes}$ & $\text{err}_{L^{2}}$ & improvement\\\midrule
+5   & $3.00\times 10^{-2}$  & --\\
+10  & $7.34\times 10^{-3}$  & 4.1$\times$\\
+20  & $1.37\times 10^{-3}$  & 5.4$\times$\\
+40  & $2.18\times 10^{-4}$  & 6.3$\times$\\
+80  & $3.27\times 10^{-5}$  & 6.7$\times$\\
+160 & $5.99\times 10^{-6}$  & 5.5$\times$\\
+\textbf{256} & $\bm{3.74\times 10^{-6}}$ & converged to FD floor\\\bottomrule
 \end{tabular}
 \end{center}
 
-收斂斜率: $\log(\text{err})$ vs $\log(N)\approx -3.5$, **代數收斂**,
-不是指數. 理論上對 $\rho\to 0$ 表面奇異, $\widetilde W$ 有代數收斂
-預期, 實驗定量證實.
+The convergence slope $\log(\text{err})$ vs.\ $\log(N)$ is $\approx -3.5$,
+i.e.\ **algebraic**, not exponential.  This is consistent with the
+theoretical expectation that the truncated surface $\rho \to 0$ should
+degrade the SL expansion from exponential to algebraic convergence.
 
-### 2.4 Sturm 震盪 + Tassoul 漸近 (Phase 0 ext, 實驗 E1-E2)
+### 2.4 Sturm oscillation + Tassoul asymptote (Phase 0 extensions E1, E2)
 
-- **E1 (Sturm)**: $\psi_n$ 精確有 $n$ 個內部零點 (測試 21/21 通過).
-  驗證本徵向量位元正確 + 拓撲保持.
-- **E2 (Tassoul)**: $\Delta P_n$ 漸近到常數, std/mean = $8\times 10^{-4}$.
-  定性符合 Tassoul 1980, 定量差 2.9× 因子源於 Cowling slab 近似
-  (無 $\ell(\ell+1)/r^2$).
+- **E1 (Sturm).** Each $\psi_n$ has exactly $n$ internal zeros (21 of
+  21 tested).  This verifies bit-level correctness of the eigenvectors
+  and preservation of topology.
+- **E2 (Tassoul).**  $\Delta P_n$ asymptotes to a constant with
+  std/mean $= 8\times 10^{-4}$.  The shape matches Tassoul (1980)
+  qualitatively, but a factor of $2.9$ in magnitude remains — traceable
+  to the Cowling slab approximation (which drops the
+  $\ell(\ell+1)/r^{2}$ centrifugal term).
 
-### 2.5 收斂階 vs cutoff (E3) — 光滑 vs 奇異的決定性對比
+### 2.5 Convergence order vs.\ cutoff (E3) — the smooth-vs-singular contrast
 
-Lane-Emden 掃描 $\rho_\text{threshold}$:
+Scanning the Lane-Emden density threshold $\rho_\text{threshold}$:
 
 \begin{center}
 \begin{tabular}{cccc}\toprule
@@ -134,518 +153,605 @@ cutoff & $r_\text{hi}$ & err(256) & slope\\\midrule
 0.001  & 0.99  & $2.7\times 10^{-5}$ & $-2.26$\\
 0.0001 & 0.997 & $1.5\times 10^{-4}$ & $-1.78$\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
-越靠近 $\rho=0$, 收斂越慢 — 奇異性定量可見.
+The closer to $\rho = 0$, the slower the convergence — the singularity's
+influence is quantitatively visible.
 
-**Gaussian-capped 光滑 $\rho(y) = \exp(-2y^2) + 0.05$ (無奇異)**:
-err(256) = $8.3\times 10^{-7}$, semilog slope $= -0.049$ →
-**err $\sim \exp(-0.05\cdot N)$**, 指數收斂.
+**Gaussian-capped smooth $\rho(y) = \exp(-2y^{2}) + 0.05$ (no
+singularity)**: err$(256) = 8.3\times 10^{-7}$, semilog slope $-0.049$,
+giving err $\sim \exp(-0.05\,N)$ — **exponential convergence**.
 
-**論文級結論**:
+Publication-level summary:
+
 > "The SL method is exponentially convergent for smooth stratification.
 > Algebraic convergence observed on Lane-Emden polytropes is entirely
-> attributable to the surface singularity $\rho(R_\star)=0$, quantifiable
-> via cutoff scaling analysis."
+> attributable to the surface singularity $\rho(R_\star) = 0$,
+> quantifiable via cutoff scaling analysis."
 
-### 2.6 Brunt-Väisälä N²(r) vs Liouville W(r) 物理分工 (E4)
+### 2.6 Brunt--V\"ais\"al\"a $N^{2}(r)$ vs.\ Liouville $W(r)$ — physical division of labour (E4)
 
 \begin{center}
 \begin{tabular}{lll}\toprule
-量 & 編碼 & 用途\\\midrule
-$W(r)$    & 純密度分層 ($\rho''$) & SL Poisson inversion 的 Liouville 勢\\
-$N^2(r)$  & 密度 + 溫度 (Schwarzschild) & g-mode 物理頻率 / 對流穩定性\\\bottomrule
+Quantity & Encoding & Purpose\\\midrule
+$W(r)$   & pure density stratification ($\rho''$)      & SL Poisson Liouville potential\\
+$N^{2}(r)$ & density + temperature (Schwarzschild)     & g-mode frequencies / convective stability\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
-**發現**: Lane-Emden 是 $\gamma$-絕熱 polytrope, Schwarzschild 中性,
-$N^2 \equiv 0$. 非絕熱擾動 ($\delta = 0.1 \sin 2\pi r$ 疊加在 T 上)
-給 $|N^2|\sim 1$, 與 $|W|\sim 10\text{-}400$ 可比.
+**Finding.** Lane-Emden with $\gamma$-adiabatic law is
+Schwarzschild-neutral; $N^{2} \equiv 0$ identically.  A non-adiabatic
+perturbation ($\delta = 0.1\sin(2\pi r)$ on top of $T$) gives
+$|N^{2}| \sim 1$, comparable in scale to $|W| \sim 10$-$400$.
 
-### 2.7 Phase 0 累積驗證表
+### 2.7 Phase 0 cumulative verification table
 
 \begin{center}
 \begin{tabular}{lcc}\toprule
-檢查項 & 狀態 & 強度\\\midrule
-Lane-Emden $W(y)$ 奇異性定位       & ✓ & 已定量到 cutoff 策略\\
-SL 離散化 Fourier 極限             & ✓ & = FD 理論極限\\
-前 256 本徵對穩定求解              & ✓ & scipy eigsh, <1s\\
-SL-Poisson $\text{err}_{L^2} = 3.7\times 10^{-6}$ & ✓ & 工程可用\\
-Sturm oscillation (E1)             & ✓ & 21/21 位元正確\\
-Tassoul asymptotic $\Delta P$ (E2) & ✓ & 漸近常數行為\\
-Exponential vs algebraic (E3)      & ✓ & 光滑指數收斂已證\\
-$N^2\leftrightarrow W$ 物理分工 (E4) & ✓ & Phase 2/3 scope 明確\\\bottomrule
+Check & Status & Strength\\\midrule
+Lane-Emden $W(y)$ singularity localisation    & PASS & quantified via cutoff\\
+SL discretisation Fourier limit               & PASS & matches FD theoretical limit\\
+Stable solution of first 256 eigenpairs       & PASS & scipy eigsh, $<1$\,s\\
+SL-Poisson $\text{err}_{L^{2}} = 3.7\times 10^{-6}$ & PASS & engineering-ready\\
+Sturm oscillation (E1)                        & PASS & 21/21 bit-correct\\
+Tassoul asymptotic $\Delta P$ (E2)            & PASS & asymptote attained\\
+Exponential vs.\ algebraic (E3)               & PASS & smooth $\Rightarrow$ exponential confirmed\\
+$N^{2} \leftrightarrow W$ division of labour (E4) & PASS & Phase 2/3 scope clarified\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
-Phase 0 gate PASS (原計畫). 但 Phase 0 ext+ 之後把 "SL 作為最優基底"
-angle 降級為 "同網格獨立 EVP" 範疇 (見 Part IV §10 與
+Phase 0 gate was originally PASS.  Phase 0 ext+ subsequently demoted
+the "SL as optimal basis" angle to "same-mesh independent EVP" (see
 `docs/spectral_solver_design.md` Part V).
 
 
-# Part II  Reduced-Pressure Follow-up (2026-05-02)
+# Part II  Reduced-pressure follow-up (2026-05-02)
 
-**說明**: 本部分基於 `docs/reduced_pressure_liouville.md` 的理論預測
-(reduced-pressure formulation 降低奇異性 7×), 做三組數值驗證.
-Scope: 只對 Lane-Emden $n=3/2$ (分數 $\sigma$) 有意義; 對項目主要
-$n=3$ 情境不適用 (見 Part IV).
+The experiments in this part numerically validate the theoretical
+prediction of `docs/reduced_pressure_liouville.md` — namely, that the
+reduced-pressure formulation weakens the surface singularity by a
+factor of 7.  **Scope**: meaningful only for Lane-Emden $n = 3/2$
+(fractional $\sigma$); not applicable to the project's main $n = 3$
+scenario (see Part IV).
 
-## 3. 實驗 A — Chebyshev floor 打破
+## 3. Experiment A — breaking the Chebyshev floor
 
 Script: `scripts/reduced_pressure_chebyshev.py`.
 
-### 3.1 動機
-父文檔 §9 用 FD 離散 SL 本徵問題, floor 在 $\sim 10^{-7}$ 由 FD 精度決定.
-用 Chebyshev collocation 求 $(\mu_n,\psi_n)$ 可打破這個 floor, 看到兩個
-formulation 的真正差異.
+### 3.1 Motivation
 
-### 3.2 結果 (Lane-Emden $n=3/2$, cutoff 0.01, $N$ modes 掃描)
+The parent report's §9 discretised the SL eigenvalue problem with finite
+differences, giving a floor $\sim 10^{-7}$ set by FD accuracy.  A
+Chebyshev collocation eigensolver for $(\mu_n, \psi_n)$ breaks this
+floor and makes the two formulations quantitatively distinguishable.
+
+### 3.2 Result (Lane-Emden $n = 3/2$, cutoff $0.01$, $N$-mode scan)
 
 \begin{center}
 \begin{tabular}{rccc}\toprule
 $N$ & err (original) & err (reduced-p) & ratio\\\midrule
-5   & $6.0\times 10^{-3}$  & $3.7\times 10^{-4}$ & 16×\\
-10  & $8.4\times 10^{-4}$  & $6.9\times 10^{-5}$ & 12×\\
-20  & $7.8\times 10^{-5}$  & $7.6\times 10^{-6}$ & 10×\\
-40  & $5.1\times 10^{-6}$  & $5.7\times 10^{-7}$ & 9×\\
-80  & $3.1\times 10^{-7}$  & $1.5\times 10^{-7}$ & 2×\\
-256 & $1.4\times 10^{-7}$  & $1.5\times 10^{-7}$ & 1× (FD floor)\\\bottomrule
-\end{tabular>
-\end{center>
+5   & $6.0\times 10^{-3}$  & $3.7\times 10^{-4}$ & 16$\times$\\
+10  & $8.4\times 10^{-4}$  & $6.9\times 10^{-5}$ & 12$\times$\\
+20  & $7.8\times 10^{-5}$  & $7.6\times 10^{-6}$ & 10$\times$\\
+40  & $5.1\times 10^{-6}$  & $5.7\times 10^{-7}$ & 9$\times$\\
+80  & $3.1\times 10^{-7}$  & $1.5\times 10^{-7}$ & 2$\times$\\
+256 & $1.4\times 10^{-7}$  & $1.5\times 10^{-7}$ & 1$\times$ (FD floor)\\\bottomrule
+\end{tabular}
+\end{center}
 
-**Reduced-p 在 $N\le 40$ 譜法階段 10× 更準**, 高 $N$ 下兩者都到 FD 底.
+**Reduced-pressure is $10\times$ more accurate in the spectral range
+$N \le 40$**; at high $N$ both hit the FD floor.
 
-### 3.3 解讀
+### 3.3 Interpretation
 
-- **一致的 10× 低模式優勢**: GPU GEMM cost $\sim N_y^2$, 用 20-40 SL 模式
-  是自然工程目標
-- **光滑 $\rho$ 下優勢消失**: Gaussian density $\rho$ profile 下兩個
-  formulation 收斂曲線重疊, 確認改進源於弱化奇異性, 不是 generic 性質
-- **排斥勢 better-conditioned**: 原始強吸引勢 ($C=-21/16$) 扭曲低階
-  $\psi_n$ 往奇異邊界集中, 需要多高階模式補償; reduced-p 弱排斥
-  ($C=+3/16$) 使低階 $\psi_n$ 更接近 Fourier 模, 用少模式快速收斂
+- **Consistent $10\times$ advantage at low mode count.**  GPU GEMM cost
+  scales as $N_y^{2}$; using 20-40 SL modes is the natural engineering
+  target, and this is exactly the range where reduced pressure excels.
+- **Advantage vanishes for a smooth $\rho$.**  With a Gaussian density
+  profile (no singularity), the two formulations give identical
+  convergence curves — confirming that the improvement stems from the
+  weaker singularity, not from any generic property of the
+  reduced-pressure variable.
+- **The repulsive potential is better conditioned.**  The original
+  strongly attractive potential ($C = -21/16$) distorts low-order
+  $\psi_n$ toward the singular boundary; compensating requires many
+  high-order modes.  The weakly repulsive reduced-pressure potential
+  ($C = +3/16$) leaves low-order $\psi_n$ closer to Fourier modes,
+  enabling rapid convergence at small mode count.
 
-## 4. 實驗 B — End-to-end Poisson 收斂 (on $\pi$, not $q$)
+## 4. Experiment B — end-to-end Poisson convergence (on $\pi$, not $q$)
 
 Script: `scripts/reduced_pressure_poisson_end2end.py`.
 
 ### 4.1 Setup
-Manufactured $\pi_\text{exact}(x,y) = \sin(2\pi k_x x)\sin(\pi(y-y_\text{lo})/L)$,
-$k_x=2$, 同時 transport 與反 transport 驗證.
 
-### 4.2 主要結果 ($\rho_\text{cut}=0.01$)
-$\text{err}_{L^2}(\pi)$ 在 $N=256$ modes 達 $1.8\times 10^{-6}$.
+Manufactured $\pi_\text{exact}(x, y) = \sin(2\pi k_x x)\sin(\pi(y - y_\text{lo})/L)$
+with $k_x = 2$.  Forward and backward transport verified.
 
-### 4.3 $k_x$-independence 驗證 (實驗 C)
+### 4.2 Principal result ($\rho_\text{cut} = 0.01$)
 
-同一套 $(\mu_n, \psi_n)$ 預計算, 對 $k_x\in\{1,2,4,8,16\}$ 都達可比精度,
-確認 §5 的理論預測.
+$\text{err}_{L^{2}}(\pi) = 1.8\times 10^{-6}$ at $N = 256$ modes.
 
-## 5. 符號推導更正 ($\widetilde W$ 係數)
+### 4.3 $k_x$-independence verification (Experiment C)
 
-父文檔 eq (12) 的 $\widetilde W$ 表達式有符號錯 (少了因式 3).
-Script `scripts/reduced_pressure_liouville_derive.py` 用 SymPy 對 $n=3/2$
-做符號展開:
+A single precomputed $(\mu_n, \psi_n)$ set attains comparable accuracy
+for every $k_x \in \{1, 2, 4, 8, 16\}$, confirming the theoretical
+prediction of §5.
 
-$$\frac{1}{\sqrt{\rhob}}\frac{\dd}{\dd y}\!\left[\rhob\frac{\dd}{\dd y}\!\left(\frac{q}{\sqrt{\rhob}}\right)\right] = q'' + \frac{3}{16\,t^2}q,$$
+## 5. Symbolic correction to the $\widetilde W$ coefficient
 
-其中 $t=R-y$. 確認 $C=+3/16$, 與 §3 的數值結果自洽. 父文檔已更正.
+The parent report's eq.\ (12) had a sign error (a missing factor of 3).
+The SymPy script `scripts/reduced_pressure_liouville_derive.py`
+computes, for $n = 3/2$,
+
+$$\frac{1}{\sqrt{\rhob}}\frac{\dd}{\dd y}\!\left[\rhob\frac{\dd}{\dd y}\!\left(\frac{q}{\sqrt{\rhob}}\right)\right] = q'' + \frac{3}{16\,t^{2}}q,$$
+
+with $t = R - y$.  This confirms $C = +3/16$, in agreement with §3.
+The parent report has been corrected.
 
 
-# Part III  g-mode Infrastructure & Validation (Exps A-K)
+# Part III  g-mode infrastructure and validation (Exps A-K)
 
-**說明**: 這一系列實驗是項目從 "incompressible buoyancy" 簡化模型
-到 "GYRE-compatible 4-variable adiabatic" 的完整演化過程. 合併後的
-濃縮版, 每個實驗說明 **setup / 結果 / 結論**.
-
-Script 集中在 `scripts/gmode_exp_*.py`, 共享 `scripts/gmode_infra.py`.
+The following is a condensed walk-through of the full g-mode experiment
+chain, from the initial incompressible-buoyancy simplification to the
+GYRE-compatible 4-variable adiabatic operator.  Each entry is organised
+as **setup / result / conclusion**.  Scripts are located in
+`scripts/gmode_exp_*.py`, with shared infrastructure in
+`scripts/gmode_infra.py`.
 
 ## 6. Exp A — Lane-Emden $\widetilde W$-proxy heuristic
 
 Script: `gmode_exp_a_lane_emden.py`, commit `8aa3476`.
 
-**Setup**: Lane-Emden $n=3/2$, $\rho_\text{cut}=0.05$, 空腔
-$r\in[0.15, 0.844]$, 用 $N^2_\text{proxy}\equiv -\widetilde W(r)$
-餵入 Cowling solver (30 radial orders, last-5 tail avg).
+**Setup.** Lane-Emden $n = 3/2$, $\rho_\text{cut} = 0.05$, cavity
+$r \in [0.15, 0.844]$.  Use $N^{2}_\text{proxy} \equiv -\widetilde W(r)$
+as input to the Cowling solver (30 radial orders, last-5 tail average).
 
-**結果**: $\Delta P_\text{tail}/\Delta P_\text{Tassoul} = 0.852$
-(窗口 0.80-1.20 PASS).
+**Result.** $\Delta P_\text{tail} / \Delta P_\text{Tassoul} = 0.852$
+(within the acceptance window 0.80-1.20, PASS).
 
-**結論**: 純管線冒煙測試. Lane-Emden 本身是絕熱 $N^2=0$ 無真 g-mode,
-但 `solve_gmode_cowling` 對任意正 $N^2$ profile 應重現 Tassoul 漸近.
+**Conclusion.**  A pure pipeline smoke test.  Lane-Emden itself is
+isentropic with $N^{2} = 0$ and supports no true g-modes, but
+`solve_gmode_cowling` should reproduce the Tassoul asymptote whenever
+any positive $N^{2}$ profile is fed in.
 
-## 7. Exp B — 人工 Gaussian-bump $N^2$ 收斂
+## 7. Exp B — artificial Gaussian-bump $N^{2}$ convergence
 
 Script: `gmode_exp_b_stratified.py`, commit `8aa3476`.
 
-**Setup**: 人工 Gaussian $N^2(r)$ 在 $[0.2, 1.0]$, $r_c=0.6, \sigma=0.2$,
-$\sin^2$ taper. 分辨率掃描 $N_r\in\{256,512,1024,2048\}$.
+**Setup.**  Artificial Gaussian $N^{2}(r)$ on $[0.2, 1.0]$,
+$r_c = 0.6$, $\sigma = 0.2$, with a $\sin^{2}$ taper.  Resolution scan
+$N_r \in \{256, 512, 1024, 2048\}$.
 
-**結果 ($N_r=2048$)**:
-$\Delta P_\text{tail}/\Delta P_\text{Tassoul} = 0.9993$,
-$|\text{ratio}-1| = 7.5\times 10^{-4}$.
-收斂率 $\mathcal{O}(N_r^{-2})$, 符合 2 階 FD 預期.
+**Result ($N_r = 2048$).**
+$\Delta P_\text{tail} / \Delta P_\text{Tassoul} = 0.9993$;
+$|\text{ratio} - 1| = 7.5\times 10^{-4}$.  Convergence rate
+$\mathcal{O}(N_r^{-2})$, matching the second-order FD expectation.
 
-**結論**: 項目中**第一個真正的 g-mode 計算**. 基礎設施可以接 MESA
-profile, 多腔 / 對流-輻射邊界等擴展.
+**Conclusion.**  The **first genuine g-mode calculation in the
+repository**.  The infrastructure is ready for MESA profile ingestion,
+multi-cavity / radiative-convective boundary extensions, etc.
 
 ## 8. Exp C — Chebyshev collocation g-mode solver
 
 Script: `gmode_exp_c_chebyshev.py`, commit `e703991`.
 
-**Setup**: Exp B 同樣 Gaussian-bump, 改用 Chebyshev collocation
-(`solve_gmode_cowling_cheb`).
+**Setup.**  Same Gaussian bump as Exp B, now discretised with Chebyshev
+collocation (`solve_gmode_cowling_cheb`).
 
-**結果 ($N_\text{Cheb}=512$)**: $|\text{ratio}-1| = 6.85\times 10^{-5}$,
-比 FD $N_r=2048$ 快 4× (DOF) 精度 10×.
+**Result ($N_\text{Cheb} = 512$).**  $|\text{ratio} - 1| = 6.85\times 10^{-5}$ —
+$4\times$ smaller DOF and $10\times$ smaller error than Exp B at
+$N_r = 2048$.
 
-**Spurious-mode guard**: `n_modes = max(10, N_\text{Cheb}//5)` 避免
-spectral tail 污染. Chebyshev $D^2$ 在標準內積下非對稱, 需用
-`numpy.linalg.eig`, 不能用 `eigvalsh` (這個教訓後來在 Phase 0 ext+
-Test B/C 再次出現).
+**Spurious-mode guard.** `n_modes = max(10, N_\text{Cheb}//5)` is
+enforced to avoid spectral-tail pollution.  The Chebyshev $D^{2}$ is
+non-symmetric in the standard inner product, so one must use
+`numpy.linalg.eig` rather than `eigvalsh`.  This lesson reappears in
+Phase 0 ext+ Tests B and C.
 
-## 9. Exp D — Polytropic 剖面 via MESA-style parser
+## 9. Exp D — polytropic profile via a MESA-style parser
 
 Script: `gmode_exp_d_polytrope_profile.py`, commit `c8b655c`.
 
-**Setup**: MESA-style column-table reader, 讀入合成 $n=3$ 多方 +
-Gaussian $N^2$ fixture (600 行), 再餵給 Cowling solver.
+**Setup.**  A MESA-style column-table reader ingests a synthetic
+$n = 3$ polytrope with a Gaussian $N^{2}$ fixture (600 rows), then
+hands it to the Cowling solver.
 
-**結果**: Chebyshev $N=512$ 下 $|\text{ratio}-1| = 8.1\times 10^{-5}$,
-相對 in-memory Exp B/C 漂移 18% (由 600 行 fixture 插值誤差主導).
+**Result.**  Chebyshev $N = 512$ gives $|\text{ratio} - 1| = 8.1\times 10^{-5}$.
+Drift relative to the in-memory Exp B/C numbers is $18\%$, dominated by
+the 600-row fixture interpolation error.
 
-**結論**: MESA parser 管線清潔, 可以替換真 `profile*.data`.
+**Conclusion.**  The parser pipeline is clean and can be swapped for a
+real `profile*.data`.
 
-## 10. Exp E-G — 2-variable anelastic operator (過渡)
+## 10. Exp E-G — 2-variable anelastic operator (transition phase)
 
-Scripts: `gmode_exp_e_anelastic_linop.py`, `gmode_exp_f_variable_rho.py`,
+Scripts: `gmode_exp_e_anelastic_linop.py`,
+`gmode_exp_f_variable_rho.py`,
 `gmode_exp_g_spherical_scalar.py`.
 
-**Setup**: 2-var $(y_1, p')$ anelastic operator, 消除 $p'$ 得 scalar
-reduction, Exp E/F/G 交叉驗證三個等價形式.
+**Setup.**  A 2-variable $(y_1, p')$ anelastic operator; eliminating
+$p'$ yields a scalar reduction.  E/F/G cross-validate three algebraic
+forms.
 
-**結果**: Exp E 在 Gaussian bump cavity 上 PASS ratio 0.85-1.20 寬窗口.
-Exp F 變密度 PASS. Exp G 球形 scalar vs 2-var PASS, $\mathcal{O}(N_r^{-2})$
-收斂.
+**Result.**  Exp E PASS on the Gaussian-bump cavity with the wide
+0.85-1.20 acceptance window.  Exp F PASS with variable density.  Exp G
+spherical scalar vs.\ 2-variable PASS with $\mathcal{O}(N_r^{-2})$
+convergence.
 
-**2026-05-02 Corrections log**: §7 原把 scalar solver 稱為 "Boussinesq
-limit of 2-var" 是錯的 — scalar 是 **slab/local-Cartesian** 近似
-(忽略 $\ell(\ell+1)/r^2$), 不是 thermodynamic (Boussinesq vs anelastic)
-截斷. Exps B-G 的 PASS 都是**自身一致性**, 不是**外部正確性**.
-第一次外部對照 (Exp H) 才暴露了問題.
+**2026-05-02 corrections log.**  §7 originally described the scalar
+solver as the "Boussinesq limit of the 2-variable operator" — this was
+wrong.  The scalar solver is the **slab / local-Cartesian**
+approximation (drops $\ell(\ell+1)/r^{2}$), not a thermodynamic
+truncation (Boussinesq vs.\ anelastic).  Consequently, the B-G PASS
+verdicts demonstrate **internal consistency**, not **external
+correctness**.  The first external benchmark, Exp H, exposes this.
 
-## 11. Exp H — GYRE 外部 benchmark (第一次曝光)
+## 11. Exp H — first GYRE benchmark (exposing the problem)
 
-Script: `gmode_exp_h_gyre_benchmark.py` + `gmode_exp_h_run_gyre.sh`.
+Script: `gmode_exp_h_gyre_benchmark.py` plus `gmode_exp_h_run_gyre.sh`.
 
-**Setup**: 在 MESA SDK 環境下 build GYRE, 跑 Lane-Emden $n=3$ 的內建
-poly3 case, 把 Python 2-var anelastic 結果對照 GYRE full-gravity.
+**Setup.**  Build GYRE in the MESA SDK environment, run it on the
+bundled Lane-Emden $n = 3$ `poly3` case, and compare against the Python
+2-variable anelastic solver under full gravity.
 
-**結果**: $n_g=1$ 比率 **2.2×** (120% 分歧), $n_g=5$ 比率 1.3×, $n_g=10$
-比率 1.1×. 高 $n_g$ 收斂到 1 (Boussinesq 極限).
+**Result.**  $n_g = 1$ ratio **$2.2\times$** ($120\%$ disagreement);
+$n_g = 5$ ratio $1.3$; $n_g = 10$ ratio $1.1$; high-$n_g$ ratio tends
+to $1$ (the Boussinesq limit).
 
-**診斷**: 不是 bug, 是物理不匹配. `solve_anelastic_2var` 只用 $\rho_0, N^2$,
-**silently 丟掉 V, U, $\Gamma_1$ 耦合**. GYRE `alpha_grv=0` (純 Cowling)
-的 2-var 系統需要 5 個結構係數 $V, U, A^\star, c_1, \Gamma_1$.
-我們的是 Boussinesq-like 簡化, 不是 "anelastic in stellar oscillation
-sense".
+**Diagnosis.**  Not a bug — a physics mismatch.
+`solve_anelastic_2var` uses only $\rho_0, N^{2}$ and **silently drops
+the $V, U, \Gamma_1$ coupling**.  GYRE's $\alpha_\text{grv} = 0$ pure
+Cowling 2-variable system requires five structure coefficients
+$V, U, A^{\star}, c_1, \Gamma_1$.  Our solver is a Boussinesq-like
+simplification, not "anelastic in the stellar-oscillation sense".
 
-**結論**: 需要重做符合 GYRE 方程的 operator (Exp I/J).
+**Conclusion.**  Re-implement the operator to match the GYRE equations
+(Exp I / Exp J).
 
-## 12. Exp I — 2-var Cowling GYRE-compat (first external benchmark)
+## 12. Exp I — 2-variable Cowling GYRE-compatible (first external benchmark)
 
 Script: `gmode_exp_i_gyre_compat.py`, commit `953d49f`.
 
-**Setup**: 實現 GYRE `alpha_grv=0` 2-var Cowling 方程,
-$(y_1, y_2) = (x^{2-\ell}\xi_r/r, x^{2-\ell}P'/(\rho g r))$,
-5 個結構係數 $V, U, A^\star, c_1, \Gamma_1$ 從 GYRE poly3.txt 讀入,
-staggered FD $N_r=1024$, `inner_cut=0.01, outer_cut=0.999`.
+**Setup.**  Implement GYRE's $\alpha_\text{grv} = 0$ 2-variable Cowling
+equations, with $(y_1, y_2) = (x^{2-\ell}\xi_r/r, x^{2-\ell}P'/(\rho g r))$
+and the five structure coefficients $V, U, A^{\star}, c_1, \Gamma_1$
+read from GYRE's `poly3.txt`.  Staggered FD at $N_r = 1024$, cutoffs
+$\mathrm{inner\_cut} = 0.01$, $\mathrm{outer\_cut} = 0.999$.
 
-**結果 (vs GYRE Cowling)**:
+**Result (vs.\ GYRE Cowling)**:
 
 \begin{center}
 \begin{tabular}{rlll}\toprule
-$n_g$ & $\omega^2_\text{GYRE(Cow)}$ & $\omega^2_\text{ours}$ & rel\_diff\\\midrule
+$n_g$ & $\omega^{2}_\text{GYRE(Cow)}$ & $\omega^{2}_\text{ours}$ & rel.\ diff.\\\midrule
 1  & $2.85195$ & $2.85195$ & $2.3\times 10^{-6}$\\
 2  & $1.36145$ & $1.36146$ & $3.1\times 10^{-6}$\\
 5  & $0.37473$ & $0.37472$ & $2.1\times 10^{-5}$\\
 10 & $0.11850$ & $0.11843$ & $5.6\times 10^{-4}$\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
-$\max$ rel\_diff $= 5.6\times 10^{-4}$, 遠低於 1% 目標. **$n_g=1$
-agree 到 5-6 位有效數字**. 首個真正的 apples-to-apples 外部 benchmark PASS.
+Max relative difference $5.6\times 10^{-4}$, far below the $1\%$
+target.  **$n_g = 1$ agrees to 5-6 significant figures.**  The first
+apples-to-apples external benchmark PASS.
 
-**Cowling limit 定量化**: GYRE Cowling vs GYRE full 在 $n_g=1$ 有 13%
-差別, 對應已知 Cowling 近似誤差 (Unno 1989).
+**Cowling-limit quantified.**  GYRE Cowling vs.\ GYRE full differ by
+$\sim 13\%$ at $n_g = 1$ — the known Cowling approximation error (Unno
+et al.\ 1989).
 
-## 13. Exp J — 4-var full-gravity GYRE-compat (production reference)
+## 13. Exp J — 4-variable full-gravity GYRE-compatible (FD production reference)
 
 Script: `gmode_exp_j_full_gyre_compat.py`, commit `be94af9`.
 
-**Setup**: 提升 Cowling 至 $\alpha_\text{grv}=1$ 完整 4-var 系統
-(見 `docs/spectral_solver_design.md` §4.2 與正式報告 §4.2), 加入
-$y_3 = \Phi'/(gr), y_4 = (\dd\Phi'/\dd r)/g$. 同 FD 網格.
+**Setup.**  Lift Cowling to $\alpha_\text{grv} = 1$ full 4-variable
+system (see `docs/spectral_solver_design.md` §4.2 and the formal report
+§4.2), adding $y_3 = \Phi'/(gr)$ and $y_4 = (\dd\Phi'/\dd r)/g$.  Same
+FD grid.
 
-**兩個 bookkeeping bug**: 首版給 2.5% rel\_diff at $n_g=1$ — 物理上不合理.
-重讀 `A_t.inc` (GYRE 存 transpose of Jacobian, `A_t(i,j) = A(j,i)`) 找到
-兩處錯:
-1. eq1 少了 $\lambda/(c_1\omega^2)y_3$ 項 (只在 $\alpha_\text{grv}=1$ 出現).
-   這個 inverse-$\omega^2$ 項是 full-gravity 系統中 $\Phi'$ 回饋到
-   位移方程的關鍵.
-2. eq2 $y_3$ 係數應為 0 不是 $-A^\star$; 且漏了 $-y_4$ 項.
+**Two bookkeeping bugs caught during implementation.**  An initial
+version gave $2.5\%$ rel.\ diff.\ at $n_g = 1$ — physically untenable.
+Re-reading `A_t.inc` (GYRE stores the Jacobian transpose, so
+`A_t(i, j) = A(j, i)`) identified two errors:
 
-修正後殘差降 4 量級:
+1. Eq.\ 1 was missing the $\lambda/(c_1\omega^{2})\,y_3$ term (present
+   only when $\alpha_\text{grv} = 1$).  This inverse-$\omega^{2}$ term is
+   what couples $\Phi'$ back into the displacement equation in the
+   full-gravity case.
+2. Eq.\ 2 had the $y_3$ coefficient as $-A^{\star}$ instead of $0$, and
+   was missing the $-y_4$ term.
+
+After correction the residual drops by four orders of magnitude:
 
 \begin{center}
 \begin{tabular}{rlll}\toprule
-$n_g$ & $\omega^2_\text{GYRE(full)}$ & $\omega^2_\text{ours(full)}$ & rel\_diff\\\midrule
+$n_g$ & $\omega^{2}_\text{GYRE(full)}$ & $\omega^{2}_\text{ours(full)}$ & rel.\ diff.\\\midrule
 1  & $2.51593$ & $2.51593$ & $\bm{5.9\times 10^{-7}}$\\
 2  & $1.28571$ & $1.28571$ & $2.7\times 10^{-5}$\\
 5  & $0.36993$ & $0.36992$ & $2.0\times 10^{-4}$\\
 10 & $0.11807$ & $0.11801$ & $5.3\times 10^{-4}$\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
-**$n_g=1$ 6 位有效數字一致**. 這是 FD production reference, `--verify`
-regressions 凍結為 CUDA port 的回歸 oracle.
+**$n_g = 1$ agrees to 6 significant figures.**  This is the frozen FD
+production reference; its `--verify` regression is the oracle for any
+future CUDA port.
 
-## 14. Exp K — Chebyshev 4-var (spectral production)
+## 14. Exp K — Chebyshev 4-variable (spectral production)
 
 Script: `gmode_exp_k_chebyshev_full.py`, commit `0da140f`.
 
-**Setup**: Exp J 同方程同 BC, 改用 Chebyshev collocation on $x\in[0.01, 0.999]$.
-`load_gyre_structure_interp_cheb` 使用 `scipy.interpolate.CubicSpline`
-(早期用 `numpy.interp` 線性插值, floor 卡在 $3\times 10^{-5}$; 換 cubic
-spline 降 4 量級到 $8.7\times 10^{-9}$).
+**Setup.**  Same equations and boundary conditions as Exp J, now
+discretised by Chebyshev collocation on $x \in [0.01, 0.999]$.
+`load_gyre_structure_interp_cheb` uses `scipy.interpolate.CubicSpline`
+(an initial implementation using `numpy.interp` hit a $3\times 10^{-5}$
+floor; swapping to a cubic spline lowered it by four orders of
+magnitude to $8.7\times 10^{-9}$).
 
-**結果 ($N=48$, 192 DOF)**:
+**Result ($N = 48$, 192 DOF)**:
 
 \begin{center}
 \begin{tabular}{rlll}\toprule
-$n_g$ & $\omega^2_\text{GYRE}$ & $\omega^2_\text{Chebyshev}$ & rel\_diff\\\midrule
+$n_g$ & $\omega^{2}_\text{GYRE}$ & $\omega^{2}_\text{Chebyshev}$ & rel.\ diff.\\\midrule
 1  & $2.51593$ & $2.51593$ & $5.9\times 10^{-7}$\\
 2  & $1.28571$ & $1.28571$ & $2.7\times 10^{-5}$\\
 5  & $0.36993$ & $0.36992$ & $2.0\times 10^{-4}$\\
 10 & $0.11807$ & $0.11801$ & $5.3\times 10^{-4}$\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
-同精度但 **21× 更少 DOF, 350× 更小 max error** 相比 Exp J FD $N_r=1024$.
+Same accuracy with **$21\times$ fewer DOF and $350\times$ smaller
+maximum error** compared with Exp J at $N_r = 1024$.
 
-## 15. Production readiness summary
+## 15. Production-readiness summary
 
 \begin{center}
 \begin{tabular}{llc}\toprule
-算子 & 方法 & $n_g=1$ err vs GYRE full\\\midrule
-`solve_gmode_cowling` (slab)               & FD, Boussinesq-like   & $\sim 220\%$ (educational only)\\
-`solve_gmode_cowling_spherical`            & FD, scalar reduction  & $120\%$\\
-`solve_anelastic_2var`                     & FD, no $V/U/\Gamma_1$ & $120\%$\\
-`solve_gmode_cowling_gyre_compat` (2-var)  & FD, Cowling           & $13.4\%$ (Cowling limit)\\
-\textbf{`solve\_gmode\_full\_gyre\_compat` (4-var)} & FD, full gravity & $\bm{5.9\times 10^{-7}}$ (production FD ref)\\
-\textbf{`solve\_gmode\_full\_chebyshev` (Exp K)}  & Chebyshev, full  & $\bm{5.9\times 10^{-7}}$ (production spectral, 21× less DOF)\\\bottomrule
+Operator & Method & $n_g = 1$ err vs.\ GYRE full\\\midrule
+`solve_gmode_cowling` (slab)                   & FD, Boussinesq-like   & $\sim 220\%$ (educational only)\\
+`solve_gmode_cowling_spherical`                & FD, scalar reduction  & $120\%$\\
+`solve_anelastic_2var`                         & FD, no $V/U/\Gamma_1$ & $120\%$\\
+`solve_gmode_cowling_gyre_compat` (2-var)      & FD, Cowling           & $13.4\%$ (Cowling limit)\\
+\textbf{`solve\_gmode\_full\_gyre\_compat` (4-var)}     & FD, full gravity & $\bm{5.9\times 10^{-7}}$ (FD production ref)\\
+\textbf{`solve\_gmode\_full\_chebyshev` (Exp K)}        & Chebyshev, full  & $\bm{5.9\times 10^{-7}}$ (spectral production, $21\times$ less DOF)\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
 
-# Part IV  Polytropic Index Convergence Dichotomy
+# Part IV  Polytropic-index convergence dichotomy
 
-**背景**: Phase 0 (Part I) 發現 Lane-Emden 有 $N^{-2.4}$ 代數收斂.
-Phase 0 ext+ 系統掃描發現收斂階強烈依賴於表面指數 $\sigma$
-的整數/分數性質, 這是論文級發現.
+**Background.** Phase 0 (Part I) observed $N^{-2.4}$ algebraic
+convergence on Lane-Emden.  A systematic Phase 0 ext+ scan reveals that
+the convergence order depends sharply on whether the surface exponent
+$\sigma$ is integer or fractional, with clear consequences for the
+project's choice of background polytrope.
 
-## 16. E6 v2 收斂掃描 (SymPy-forced manufactured)
+## 16. E6 v2 convergence scan (SymPy-forced manufactured solution)
 
 Script: `scripts/spectral_liouville_convergence_v2.py`.
 
 ### 16.1 Setup
 
-$\rho(r) = (1-r)^\sigma$ on $[0,1]$, $\pi_\text{exact}=\sin(2\pi r)$
-(Dirichlet-compatible). $f = [\rho\pi']' - k_x^2\rho\pi$ 由 SymPy
-符號計算, 再在 CGL 網格上數值求值. Dirichlet BC $\pi(0)=\pi(R)=0$.
+$\rho(r) = (1 - r)^{\sigma}$ on $[0, 1]$;
+$\pi_\text{exact} = \sin(2\pi r)$ (Dirichlet-compatible); the forcing
+$f = [\rho\pi']' - k_x^{2}\rho\pi$ is constructed symbolically in SymPy
+and evaluated on the CGL grid.  Dirichlet BCs $\pi(0) = \pi(R) = 0$.
 
-### 16.2 $\sigma=3$ (Lane-Emden $n=3$)
+### 16.2 $\sigma = 3$ (Lane-Emden $n = 3$)
 
 \begin{center}
 \begin{tabular}{rcc}\toprule
-$N$ & err (raw) & err ($\alpha=1-\sigma/2=-1/2$)\\\midrule
+$N$ & err (raw) & err ($\alpha = 1 - \sigma/2 = -1/2$)\\\midrule
 16  & $8.5\times 10^{-8}$   & $2.4\times 10^{-3}$\\
 32  & $\sim 10^{-10}$       & $\sim 10^{-4}$\\
 64  & $6.7\times 10^{-11}$  & $1.5\times 10^{-4}$\\
 128 & $\sim 10^{-9}$ (roundoff) & $\sim 10^{-5}$\\
 256 & $3.2\times 10^{-9}$   & $9.1\times 10^{-6}$\\\bottomrule
-\end{tabular>
-\end{center>
+\end{tabular}
+\end{center}
 
-**Raw 離散到機器精度**. 額外的前因子**使其變差** (因分數 $\alpha$ 在
-端點引入代數不連續).
+**Raw Chebyshev reaches machine precision.**  Adding a prefactor makes
+the error **worse** (fractional $\alpha$ introduces algebraic
+irregularity at the endpoint).
 
-### 16.3 $\sigma=3/2$ (Lane-Emden $n=3/2$)
+### 16.3 $\sigma = 3/2$ (Lane-Emden $n = 3/2$)
 
 \begin{center}
 \begin{tabular}{rcccc}\toprule
-$N$ & err (raw) & $\alpha=1/4$ & $\alpha=-1/2$ & $\alpha=-3/4$\\\midrule
+$N$ & err (raw) & $\alpha = 1/4$ & $\alpha = -1/2$ & $\alpha = -3/4$\\\midrule
 16  & $2.7\times 10^{-3}$ & $1.1\times 10^{-2}$ & $1.3\times 10^{-2}$ & $7.8\times 10^{-2}$\\
 64  & $1.8\times 10^{-4}$ & $7.5\times 10^{-4}$ & $1.1\times 10^{-3}$ & $2.1\times 10^{-2}$\\
 256 & $1.1\times 10^{-5}$ & $4.8\times 10^{-5}$ & $8.3\times 10^{-5}$ & $5.4\times 10^{-3}$\\\bottomrule
 \end{tabular}
-\end{center>
+\end{center}
 
-**所有 $\alpha$ 下代數 $N^{-2.0}$ 收斂**. 無簡單冪次前因子能恢復譜精度.
+**$N^{-2.0}$ algebraic convergence for all $\alpha$.**  No simple
+power-law prefactor restores spectral accuracy.
 
-## 17. 為什麼整數 vs 分數指數差別如此大
+## 17. Why integer vs.\ fractional $\sigma$ matters
 
-### 17.1 逼近論
+### 17.1 Approximation-theoretic view
 
-Chebyshev 多項式係數衰減由函數解析性決定 (Trefethen Thm 7.2):
+The decay of Chebyshev coefficients is governed by analytic regularity
+(Trefethen 2013, Thm.\ 7.2):
 
-- $\rho(r) = (R-r)^3 = R^3 - 3R^2 r + 3Rr^2 - r^3$ 是**多項式**,
-  Chebyshev 展開有限 (4 項). 乘積 $\rho(r)\pi(r)$ 的光滑性完全由 $\pi$ 繼承.
-- $\rho(r) = (R-r)^{3/2}$ 在 $[0,R)$ 解析但在 $R$ 有分支點. Chebyshev
-  係數衰減 $N^{-\sigma-1/2}\sim N^{-2}$.
+- $\rho(r) = (R - r)^{3} = R^{3} - 3R^{2}r + 3Rr^{2} - r^{3}$ is a
+  **polynomial**, with a finite Chebyshev expansion (4 terms).  The
+  smoothness of $\rho(r)\pi(r)$ is inherited entirely from $\pi(r)$.
+- $\rho(r) = (R - r)^{3/2}$ is analytic on $[0, R)$ but has a branch
+  point at $R$.  Its Chebyshev coefficients decay only as
+  $N^{-\sigma - 1/2} \sim N^{-2}$.
 
-**$N^{-2}$ 是 Chebyshev 無法指數精度分辨分數冪分支點的直接後果**.
+**The $N^{-2}$ convergence is a direct consequence of Chebyshev's
+inability to resolve a fractional-power branch point with exponential
+accuracy.**
 
-### 17.2 物理意義 (Lane-Emden 表面結構)
+### 17.2 Physical significance (Lane-Emden surface structure)
 
-Lane-Emden $\theta''+(2/\xi)\theta'+\theta^n=0$ with $\theta(\xi_1)=0$ 有
-$\theta(\xi)\sim(\xi_1-\xi)$, 故 $\rho\propto(\xi_1-\xi)^n\propto(R-r)^n$.
+The Lane-Emden equation
+$\theta'' + (2/\xi)\theta' + \theta^{n} = 0$ with $\theta(\xi_1) = 0$
+has surface behaviour $\theta(\xi) \sim (\xi_1 - \xi)$, so
+$\rho \propto (\xi_1 - \xi)^{n} \propto (R - r)^{n}$.
 
-**多方指數 $n$ 就是表面指數 $\sigma$**. 見
-`docs/spectral_solver_design.md` Part IV §8.3 表格.
+**The polytropic index $n$ is literally the surface exponent
+$\sigma$.**  See the table in `docs/spectral_solver_design.md`
+Part IV §8.3.
 
-## 18. 對分數 $\sigma$ 真正有效的方法
+## 18. What actually works for fractional $\sigma$
 
-1. **Jacobi 加權基底** (Dedalus): 展開 $\pi$ 在 $\{(1-r)^\sigma J_n^{(\sigma,0)}(r)\}$.
-   基函數攜帶奇異行為, 係數展開是多項式. **對任意 $\sigma>-1$ 給譜收斂**.
-2. **座標拉伸** (Kosloff-Tal-Ezer): $r = r(s)$ 映射使 $s$-空間積分
-   集中在表面. 未由 GYRE / Dedalus 使用.
+1. **Jacobi-weighted basis** (Dedalus).  Expand $\pi$ in
+   $\{(1 - r)^{\sigma} J_n^{(\sigma, 0)}(r)\}$ — the basis carries the
+   singular behaviour, and the coefficient expansion is over
+   polynomials.  **Gives spectral convergence for any $\sigma > -1$.**
+2. **Coordinate stretching** (Kosloff--Tal-Ezer).  Introduce a
+   change of variable $r = r(s)$ that concentrates integration near
+   the surface.  Used neither by GYRE nor by Dedalus.
 
-兩者均**在 Liouville 框架之外**.
+Both options lie **outside the Liouville framework**.
 
-## 19. 解析解天花板測試 (E7b)
+## 19. Analytical ceiling tests (E7b)
 
 Script: `scripts/spectral_analytical_ceiling.py`.
 
-**動機**: Exp K 的 $8.7\times 10^{-9}$ floor 到底是 Chebyshev 本身的
-極限, 還是 GYRE 輸入精度限制? 用解析解測試:
+**Motivation.**  Does the $8.7\times 10^{-9}$ floor of Exp K represent
+the Chebyshev ceiling itself, or is it a property of the GYRE input
+data?  Analytical-solution tests discriminate.
 
-### 19.1 Test A — Manufactured Poisson (前述 §16 複用)
+### 19.1 Test A — manufactured Poisson (reused from §16)
 
-$\sigma=3$, SymPy-exact forcing. 結果達 $5.5\times 10^{-13}$ at $N=24$ —
-基本上雙精度機器 roundoff.
+$\sigma = 3$ with SymPy-exact forcing.  Reaches $5.5\times 10^{-13}$ at
+$N = 24$ — essentially double-precision rounding.
 
-### 19.2 Test B — 量子諧振子 on $[-10, 10]$
+### 19.2 Test B — quantum harmonic oscillator on $[-10, 10]$
 
-$-\psi'' + x^2\psi = \lambda\psi$, exact $\lambda_n=2n+1$.
-前 5 eigenvalues 在 $N=64$ 達 $3\times 10^{-13}$ rel err.
+$-\psi'' + x^{2}\psi = \lambda\psi$, exact eigenvalues
+$\lambda_n = 2n + 1$.  The first five eigenvalues reach
+$3\times 10^{-13}$ relative error at $N = 64$.
 
-### 19.3 Test C — Dirichlet Laplacian on $[0,1]$
+### 19.3 Test C — Dirichlet Laplacian on $[0, 1]$
 
-$-u'' = \lambda u$, exact $\lambda_n=n^2\pi^2$. $N=16$ 就達 $10^{-14}$.
+$-u'' = \lambda u$, exact eigenvalues $\lambda_n = n^{2}\pi^{2}$.
+$N = 16$ already reaches $10^{-14}$.
 
-### 19.4 關鍵教訓 — $D^2$ 非對稱性
+### 19.4 A key lesson — non-symmetry of $D^{2}$
 
-Test B/C 首次實現用 `np.linalg.eigvalsh` 得到發散/虛假本徵值. Chebyshev
-$D^2$ 在 Euclidean 內積**不是對稱**, 必須用 `np.linalg.eig` 然後過濾
-finite+positive+real. 文獻有載但容易忘.
+An initial implementation of Tests B and C with `np.linalg.eigvalsh`
+gave divergent / spurious eigenvalues.  The Chebyshev $D^{2}$ is not
+symmetric in the Euclidean inner product; one must use `np.linalg.eig`
+and filter for finite, positive, real-part eigenvalues.  The lesson is
+in the literature but easy to forget.
 
-### 19.5 結論
+### 19.5 Conclusion
 
-**Exp K 的 $8.7\times 10^{-9}$ floor 不是譜法極限**. 是 GYRE 999-point
-`poly3.txt` 的結構係數輸入精度天花板. 要更精需要 rebuild polytropic model
-with GL6 integrator + $10^4$ 點 + rtol $10^{-14}$.
+**Exp K's $8.7\times 10^{-9}$ floor is not a spectral limit.**  It is
+the precision ceiling of GYRE's 999-point `poly3.txt` input.
+Recovering more precision would require rebuilding the polytrope with
+a GL6 integrator at $\sim 10^{4}$ nodes and relative tolerance
+$10^{-14}$.
 
 
-# Part V  Barycentric Interpolation — 解析度 vs 表達
+# Part V  Barycentric interpolation — resolution vs.\ representation
 
-## 20. 譜表達是連續函數
+## 20. The spectral representation is a continuous function
 
 Script: `scripts/spectral_resolution_demo.py`.
 
-### 20.1 概念
+### 20.1 Concept
 
-$N+1$ Chebyshev 係數定義一個**連續函數**, 可透過 barycentric Lagrange
-interpolation (Berrut & Trefethen 2004, SIAM Rev 46, 501-517) 在任意
-點評估到機器精度:
+The $N + 1$ Chebyshev coefficients define a **continuous function**
+evaluable at any point by barycentric Lagrange interpolation (Berrut &
+Trefethen 2004, SIAM Rev 46, 501-517):
 
-$$u(r^\star) = \frac{\sum_j w_j u_j / (r^\star - r_j)}{\sum_j w_j / (r^\star - r_j)},
-\quad w_j = (-1)^j c_j$$
+$$u(r^{\star}) = \frac{\sum_j w_j u_j / (r^{\star} - r_j)}{\sum_j w_j / (r^{\star} - r_j)},
+\quad w_j = (-1)^{j} c_j,$$
 
-$c_0 = c_N = 1/2$, $c_j=1$ 其他. $\mathcal{O}(N)$ 每評估點, 對
-catastrophic cancellation 穩定, 誤差 $\le 10^{-12}$.
+with $c_0 = c_N = 1/2$, $c_j = 1$ otherwise.  $\mathcal{O}(N)$ per
+evaluation point, stable against catastrophic cancellation, error
+$\le 10^{-12}$.
 
-### 20.2 數值驗證
+### 20.2 Numerical verification
 
-Exp K $N=48$ (49 CGL 節點) barycentric 到 4096 點 vs Exp J FD $N_r=1024$
-cubic spline 到 4096 點: max diff $3.4\times 10^{-3}$, **完全等於 $N=48$
-離散化誤差**, barycentric 插值本身貢獻 $< 10^{-12}$.
+The Exp K $N = 48$ (49 CGL nodes) representation, barycentric-evaluated
+at 4096 points, vs.\ the Exp J FD $N_r = 1024$ solution cubic-spline
+interpolated at the same 4096 points: max diff
+$3.4\times 10^{-3}$, **exactly the Exp K discretisation error**; the
+barycentric contribution is $< 10^{-12}$.
 
-### 20.3 對 2D 模擬的意義
+### 20.3 Implication for 2D simulations
 
-Pseudo-spectral 的 $2048^2$ 場可以**無損渲染到 4K/8K 解析度**. 真正
-resolution cap 是 2/3 dealiasing cutoff ($2N/3\approx 1365^2$),
-不是 $2048^2$ 格點本身.
+A pseudo-spectral $2048^{2}$ field can be **rendered at 4K / 8K
+resolution without loss**.  The real resolution ceiling is the 2/3
+dealiasing cutoff ($2N/3 \approx 1365^{2}$), not the grid itself.
 
 
 # Part VI  Frozen regression assets
 
-## 21. 凍結的 1D g-mode 算子
+## 21. Frozen 1D g-mode operators
 
-| 算子 | 方法 | 精度 vs GYRE | 作用 |
-|------|------|-----|------|
-| `solve_gmode_full_gyre_compat` (`gmode_infra.py`) | Staggered FD $N_r=1024$ | $n_g=1$ 5.9e-7, max 5.3e-4 | FD regression oracle |
-| `solve_gmode_cowling_gyre_compat` (`gmode_infra.py`) | Staggered FD $N_r=1024$ | vs GYRE Cowling 5.6e-4 | FD Cowling baseline |
-| `solve_gmode_full_chebyshev` (`gmode_exp_k_chebyshev_full.py`) | Chebyshev $N=48$ | max 1.5e-6 | **Chebyshev production ref** |
+| Operator | Method | Accuracy vs.\ GYRE | Role |
+|----------|--------|-------------------|------|
+| `solve_gmode_full_gyre_compat` (`gmode_infra.py`) | Staggered FD $N_r = 1024$ | $n_g = 1$ $5.9\times 10^{-7}$, max $5.3\times 10^{-4}$ | FD regression oracle |
+| `solve_gmode_cowling_gyre_compat` (`gmode_infra.py`) | Staggered FD $N_r = 1024$ | vs.\ GYRE Cowling $5.6\times 10^{-4}$ | FD Cowling baseline |
+| `solve_gmode_full_chebyshev` (`gmode_exp_k_chebyshev_full.py`) | Chebyshev $N = 48$ | max $1.5\times 10^{-6}$ | **Chebyshev production ref.** |
 
-## 22. 解析驗證腳本 (EXPECTED 凍結)
+## 22. Analytical-verification scripts (frozen `EXPECTED`)
 
-- `gmode_exp_i_gyre_compat.py --verify` — 2-var Cowling, max 5.6e-4
-- `gmode_exp_j_full_gyre_compat.py --verify` — 4-var full, max 5.3e-4
-- `gmode_exp_k_chebyshev_full.py --verify` — Chebyshev 4-var, max 1.5e-6
-- `spectral_analytical_ceiling.py` — 三 ceiling 測試, 各 $10^{-13}$-$10^{-15}$
+- `gmode_exp_i_gyre_compat.py --verify` — 2-var Cowling, max $5.6\times 10^{-4}$.
+- `gmode_exp_j_full_gyre_compat.py --verify` — 4-var full, max $5.3\times 10^{-4}$.
+- `gmode_exp_k_chebyshev_full.py --verify` — Chebyshev 4-var, max $1.5\times 10^{-6}$.
+- `spectral_analytical_ceiling.py` — three ceiling tests, all $10^{-13}$
+  to $10^{-15}$.
 
-## 23. 探索腳本 (保留但不再改動)
+## 23. Exploratory scripts (retained, not to be modified)
 
-- `gmode_exp_a..g_*.py` — 教學 baseline, Boussinesq-like 簡化算子
-- `gmode_exp_h_*.py` — 首次 GYRE benchmark, 失配記錄 (物理見解)
-- `reduced_pressure_*.py` — Liouville 形式驗證
-- `anelastic_sl_phase0*.py` — Lane-Emden $n=3/2$ Phase 0
-- `spectral_liouville_beta_derivation.py` — $\alpha^\star$ SymPy
-- `spectral_liouville_convergence_v2.py` — $\sigma$ 斷崖數據
-- `spectral_liouville_prefactor.py` — Path A $\alpha$ sweep
-- `spectral_resolution_demo.py` — barycentric demo
-
-
-# Appendix A — 2026-05-03 關鍵發現列表 (F1-F5)
-
-以下 5 點是 Phase 0 ext+ 期間 conversation-level 發現, 不只實驗表格.
-
-- **F1**: Exp K 的 $8.7\times 10^{-9}$ floor 不是譜法極限,
-  是 GYRE 999-point 結構係數輸入精度天花板. Ceiling tests 證實.
-- **F2**: "N 個係數 ≠ N 個像素" — 譜法解析度常見誤解, 由 barycentric
-  Lagrange 解構 ($N+1$ 係數定義連續函數).
-- **F3**: Gibbs 現象 vs 恆星脈動 — 低頻線性問題譜法到機器精度, 強激波
-  / 超音速才需切 cart_ale2. 對我們 stellar2d 用例 (脈動 + 弱-中對流 +
-  光滑 polytropic background), 譜法實用天花板遠高於 2D FD.
-- **F4**: 項目定位最終修正. Novelty 不在 1D 星震 (GYRE / Reese-Lignières /
-  Dedalus 已佔據), 而在**2D GPU DNS + 線上模式投影**.
-- **F5**: Liouville "unified basis simultaneously diagonalises" 強形式
-  不成立 ($\alpha^\star \ne \beta^\star$). 退化為"同網格獨立 EVP".
+- `gmode_exp_a..g_*.py` — educational baselines (Boussinesq-like
+  simplifications).
+- `gmode_exp_h_*.py` — the first GYRE benchmark, diagnostic record.
+- `reduced_pressure_*.py` — Liouville-form validation suite.
+- `anelastic_sl_phase0*.py` — Lane-Emden $n = 3/2$ Phase 0.
+- `spectral_liouville_beta_derivation.py` — SymPy $\alpha_\star$.
+- `spectral_liouville_convergence_v2.py` — $\sigma$-dichotomy data.
+- `spectral_liouville_prefactor.py` — Path A $\alpha$ sweep.
+- `spectral_resolution_demo.py` — barycentric demo.
 
 
-# Appendix B — 合併前原始文檔對應關係
+# Appendix A  Five central findings of Phase 0 ext+ (F1-F5)
 
-| 本檔章節 | 前身文檔 | 原始章節 |
-|---------|---------|---------|
-| Part I §1-2 | anelastic_sl_phase0_2026-05-02.md | 全文 |
-| Part II §3-5 | reduced_pressure_experiments_2026-05-02.md | 全文 |
-| Part III §6-14 | gmode_experiments_2026-05-02.md | §2-15 |
-| Part III §15 | gmode_experiments_2026-05-02.md | §15 production readiness |
-| Part IV §16-19 | polytropic_index_spectral_convergence_2026-05-03.md + phase0_ext_plus_summary_2026-05-03.md | F1 (ceiling), §16 convergence |
-| Part V §20 | phase0_ext_plus_summary_2026-05-03.md | F2 (resolution) |
-| Part VI §21-23 | phase0_ext_plus_summary_2026-05-03.md | Frozen assets |
-| Appendix A | phase0_ext_plus_summary_2026-05-03.md | F1-F5 |
+The following five points, surfaced during the Phase 0 ext+ conversation,
+extend beyond the tabulated experimental data:
 
-四份前身文檔全部保留作為推理軌跡存檔, 頭部都標註了 Update 區塊
-指向本文與正式報告.
+- **F1.** Exp K's $8.7\times 10^{-9}$ floor is not a spectral limit but
+  the GYRE 999-point input precision ceiling.  Verified by the
+  analytical-ceiling tests.
+- **F2.** "$N$ coefficients $\ne$ $N$ pixels."  The $N + 1$ Chebyshev
+  coefficients define a continuous function evaluable at arbitrary
+  resolution via barycentric Lagrange interpolation.
+- **F3.** Gibbs vs.\ stellar pulsation.  Low-frequency linear problems
+  reach machine precision with spectral methods; strong-shock /
+  supersonic flows do not (switch to `cart_ale2`).  For the stellar2d
+  use case (pulsation + weak-to-moderate convection + smooth polytropic
+  background), the practical spectral ceiling is far above 2D FD.
+- **F4.** Revised project positioning.  Novelty is not in 1D stellar
+  pulsation (GYRE / Reese--Lignières / Dedalus occupy that territory)
+  but in **2D GPU DNS with live eigenmode projection**.
+- **F5.** The strong form of "unified basis simultaneously diagonalises
+  Poisson and g-mode" fails ($\alpha_\star \ne \beta_\star$); what
+  survives is "same-mesh independent EVP".
+
+
+# Appendix B  Mapping to the four predecessor documents
+
+| Section in this document | Predecessor | Original section |
+|-------------------------|-------------|-----------------|
+| Part I §1-2     | anelastic_sl_phase0_2026-05-02.md                    | entire |
+| Part II §3-5    | reduced_pressure_experiments_2026-05-02.md           | entire |
+| Part III §6-14  | gmode_experiments_2026-05-02.md                      | §2-15 |
+| Part III §15    | gmode_experiments_2026-05-02.md                      | §15 production readiness |
+| Part IV §16-19  | polytropic_index_spectral_convergence_2026-05-03.md + phase0_ext_plus_summary_2026-05-03.md | F1, §16 convergence |
+| Part V §20      | phase0_ext_plus_summary_2026-05-03.md                | F2 (resolution) |
+| Part VI §21-23  | phase0_ext_plus_summary_2026-05-03.md                | frozen assets |
+| Appendix A      | phase0_ext_plus_summary_2026-05-03.md                | F1-F5 |
+
+All four predecessor files remain in the repository as a reasoning
+trajectory.  Each carries an update block pointing here and to the
+formal report; new work should be framed against this document and the
+formal report.
