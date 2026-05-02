@@ -80,7 +80,7 @@ Shared module used by both experiments.  Key entry points:
 # 2. Experiment A — Lane-Emden $\widetilde W$-proxy heuristic
 
 > **Provenance.** All numbers in this section were produced by
-> `scripts/gmode_exp_a_lane_emden.py` at commit `<to be updated>`.
+> `scripts/gmode_exp_a_lane_emden.py` at commit `8aa3476`.
 > `python scripts/gmode_exp_a_lane_emden.py --verify` must exit zero.
 
 ## 2.1 Setup
@@ -125,7 +125,7 @@ eigensolver on an under-resolved cavity.
 # 3. Experiment B — stratified layer g-modes
 
 > **Provenance.** All numbers in this section were produced by
-> `scripts/gmode_exp_b_stratified.py` at commit `<to be updated>`.
+> `scripts/gmode_exp_b_stratified.py` at commit `8aa3476`.
 > `python scripts/gmode_exp_b_stratified.py --verify` must exit zero.
 
 ## 3.1 Setup
