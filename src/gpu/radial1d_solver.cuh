@@ -95,6 +95,9 @@ struct Radial1DSolver {
     double nuc_T_scale = 1.0;        // T_K = T_code · T_scale (1 for cgs, e.g. 1e8 for code units)
     double nuc_epsilon_scale = 1.0;
     double nuc_q_burn = 6.4e18;      // erg/g per gram of H burnt (26.73 MeV / 4 m_p)
+    // Dynamic time-scale compression: pick ε_scale each step so that
+    // ε·dt / (cv·T) ≤ nuc_compress_frac. Disabled when ≤ 0.
+    double nuc_compress_frac = 0.0;
 
     // Species tracking. When enabled, per-zone X (hydrogen) and Y (helium) are
     // evolved by the nuclear kernel. In Lagrangian coords there is no advection
@@ -227,6 +230,11 @@ struct Radial1DSolver {
     int newton_max_iter = 15;
     double gmres_tol = 1e-3;
     int gmres_max_iter = GMRES_K;
+
+    // If >0, re-snapshot R_hse every N accepted steps to track evolving
+    // quasi-static state (KH contraction / ignition). Keeps F small when
+    // the initial HSE reference no longer reflects the solution.
+    int hse_resnap_interval = 0;
 
     // Public API (when implicit_enabled)
     void init_implicit();              // allocates implicit scratch, called from init() when needed

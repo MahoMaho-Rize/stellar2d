@@ -391,12 +391,12 @@ void k_rad1d_diag_per_zone(
     double r_cell = 0.5 * (r[k] + r[k+1]);
     double M_cell = 0.5 * (M[k] + M[k+1]);
     out_PE[k] = (r_cell > 1e-20) ? -G_const * M_cell * dm_k / r_cell : 0.0;
-    // Mach
+    // Mach: floor cs to prevent surface rarefaction giving fake Mach=1e8
     double Pk = fmax(P[k], 1e-30);
     double rho_k = fmax(rho[k], 1e-30);
     double cs = sqrt(gam * Pk / rho_k);
     double vmag = fmax(fabs(v[k]), fabs(v[k+1]));
-    out_mach[k] = vmag / fmax(cs, 1e-30);
+    out_mach[k] = vmag / fmax(cs, 1.0);  // 1 cm/s floor — diagnostic only
     out_vmax[k] = vmag;
 }
 
@@ -479,6 +479,6 @@ void k_rad1d_diag_per_zone_eos(
     double rho_k = fmax(rho[k], 1e-30);
     double cs = eos.sound_speed(rho_k, Pk);
     double vmag = fmax(fabs(v[k]), fabs(v[k+1]));
-    out_mach[k] = vmag / fmax(cs, 1e-30);
+    out_mach[k] = vmag / fmax(cs, 1.0);  // 1 cm/s floor — diagnostic only
     out_vmax[k] = vmag;
 }

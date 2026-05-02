@@ -37,6 +37,26 @@ extern __global__ void k_rad1d_enclosed_mass(const double*, double*, int);
 extern __global__ void k_rad1d_gravity(const double*, const double*, double*, int, double);
 extern __global__ void k_rad1d_artificial_viscosity(
     const double*, const double*, const double*, double*, int, double, double);
+
+// Species-only burn kernel: advance X, Y by dt using current ρ, T. Does NOT
+// modify e_int — that's done implicitly by the Newton solver via R_e.
+static __global__ void k_r1di_nuclear_pp_species(
+    double* e_int, double* X, double* Y, const double* rho,
+    int nz, EOS eos, NuclearPPParams pars, double dt)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double Xk = fmax(X[k], 0.0);
+    double eps = nuclear_pp_epsilon_X(rho_k, T_k, Xk, pars);
+    // Only species update (e_int untouched — handled implicitly).
+    double dX = -dt * eps / fmax(pars.q_burn, 1e-30);
+    double Xnew = Xk + dX;
+    if (Xnew < 0.0) { dX = -Xk; Xnew = 0.0; }
+    X[k] = Xnew;
+    Y[k] = fmin(1.0, Y[k] + (-dX));
+}
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -401,6 +421,28 @@ void Radial1DSolver::compute_R_implicit() {
     npars.X_hydrogen = nuc_X; npars.T_floor = nuc_T_floor;
     npars.T_scale = nuc_T_scale; npars.epsilon_scale = nuc_epsilon_scale;
     npars.q_burn = nuc_q_burn;
+
+    // Dynamic ε scale: let physics compress time by picking
+    //   scale = compress_frac · (core e) / (ε_phys · dt_current)
+    // so Δe per step ≤ compress_frac · e. Stores back to npars.epsilon_scale.
+    if (nuclear_enabled && use_eos && nuc_compress_frac > 0.0 && dt_current > 0.0) {
+        // Peek core state on host once per R(U) evaluation (fast; nz small).
+        double h_rho_c, h_e_c;
+        cudaMemcpy(&h_rho_c, lev.d_rho, sizeof(double), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&h_e_c,   lev.d_e_int, sizeof(double), cudaMemcpyDeviceToHost);
+        NuclearPPParams np_base = npars;
+        np_base.epsilon_scale = 1.0;  // physical
+        double T_c = eos.temperature_from_rho_e(fmax(h_rho_c, 1e-30), fmax(h_e_c, 1e-30));
+        double eps_phys = nuclear_pp_epsilon_X(h_rho_c, T_c, nuc_X, np_base);
+        if (eps_phys > 0.0) {
+            double scale_target = nuc_compress_frac * h_e_c / (eps_phys * dt_current);
+            // Clamp to [1, 1e12] and apply user's manual scale as a ceiling.
+            if (scale_target < 1.0) scale_target = 1.0;
+            if (scale_target > nuc_epsilon_scale && nuc_epsilon_scale > 1.0)
+                scale_target = nuc_epsilon_scale;
+            npars.epsilon_scale = scale_target;
+        }
+    }
 
     k_r1di_residual<<<(nz+B-1)/B, B>>>(
         d_R,
@@ -854,7 +896,15 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
     pack_state_from_device();
     k_r1di_copy<<<(N+B-1)/B, B>>>(d_Un, d_U, N);
 
-    std::fprintf(stderr, "  step_implicit ENTER: step=%d dt_try=%.3e\n", step_count, dt_try);
+    // Periodically re-snapshot R_hse to track the evolving quasi-static
+    // reference (KH contraction makes initial HSE invalid after ~100 steps).
+    if (hse_resnap_interval > 0 && step_count > 0
+        && (step_count % hse_resnap_interval) == 0) {
+        snapshot_hse_implicit();
+    }
+    if (step_count < 3 || step_count % 100 == 0) {
+        std::fprintf(stderr, "  step_implicit ENTER: step=%d dt_try=%.3e\n", step_count, dt_try);
+    }
 
     int max_cuts = 5;
     double dt = dt_try;
@@ -866,6 +916,25 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
         }
         int iters = newton_solve_implicit(dt);
         if (iters >= 0) {
+            // Species burn-up: Newton has updated e_int implicitly (R_e
+            // contains ε_pp source). Now update X, Y explicitly from the
+            // converged ρ, T of this step. This is operator-split *only
+            // for species*, not for the energy source, which is fully
+            // implicit.
+            if (nuclear_enabled && use_eos && species_enabled) {
+                int nz = lev.nz;
+                NuclearPPParams npars;
+                npars.X_hydrogen = nuc_X;
+                npars.T_floor = nuc_T_floor;
+                npars.T_scale = nuc_T_scale;
+                npars.epsilon_scale = nuc_epsilon_scale;
+                npars.q_burn = nuc_q_burn;
+
+                k_r1di_nuclear_pp_species<<<(nz+B-1)/B, B>>>(
+                    lev.d_e_int, d_X, d_Y, lev.d_rho, nz,
+                    eos, npars, dt);
+            }
+
             dt_current = dt;
             step_count++;
             return dt;

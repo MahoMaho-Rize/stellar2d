@@ -76,6 +76,8 @@ struct SimConfig {
     double dt_implicit = 0.0;        // fixed dt for --implicit;<=0 uses acoustic CFL × scale
     double dt_implicit_scale = 1.0;  // multiplier on CFL dt when dt_implicit<=0
     bool no_viallet = false;         // dev toggle: disable Viallet L/R scaling in implicit
+    int hse_resnap_interval = 0;     // implicit: re-snapshot R_hse every N steps (0=off)
+    double nuc_compress_frac = 0.0;  // dynamic nuc scale: ε·dt/(cv·T) ≤ this (0=off)
     bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
     double ic_rho_c = -1.0;          // override central density; <0 = test default
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
@@ -269,6 +271,10 @@ int main(int argc, char** argv) {
             cfg.dt_implicit_scale = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--no-viallet") == 0)
             cfg.no_viallet = true;
+        else if (std::strcmp(argv[i], "--hse-resnap") == 0 && i + 1 < argc)
+            cfg.hse_resnap_interval = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-compress") == 0 && i + 1 < argc)
+            cfg.nuc_compress_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -722,6 +728,8 @@ int main(int argc, char** argv) {
         if (cfg.implicit_mode) {
             r1d.implicit_enabled = true;
             if (cfg.no_viallet) r1d.use_viallet_scaling = false;
+            r1d.hse_resnap_interval = cfg.hse_resnap_interval;
+            r1d.nuc_compress_frac = cfg.nuc_compress_frac;
             r1d.init_implicit();
             r1d.snapshot_hse_implicit();
         }
@@ -750,12 +758,27 @@ int main(int argc, char** argv) {
         while (t < cfg.t_end && !g_interrupted) {
             double dt;
             if (cfg.implicit_mode) {
-                double dt_req = cfg.dt_implicit;
-                if (dt_req <= 0.0) dt_req = cfg.dt_implicit_scale * r1d.compute_dt();
-                dt = r1d.step_implicit(t, cfg.t_end, dt_req);
+                // Adaptive dt: start from target, retry with halvings if implicit
+                // fails. We keep it fully implicit — never fall back to
+                // explicit because explicit would blow up accelerated nuclear
+                // source terms.
+                static double dt_req_state = 0.0;
+                double target = (cfg.dt_implicit > 0) ? cfg.dt_implicit : cfg.dt_implicit_scale * r1d.compute_dt();
+                if (dt_req_state == 0.0) dt_req_state = target;
+                // After success, ramp back up towards target aggressively.
+                if (dt_req_state < target) dt_req_state = std::min(target, dt_req_state * 4.0);
+
+                dt = r1d.step_implicit(t, cfg.t_end, dt_req_state);
                 if (dt <= 0.0) {
-                    std::fprintf(stderr, "  step %d: implicit failed, fallback explicit\n", step);
-                    dt = r1d.step(t, cfg.t_end);
+                    // All internal cuts failed — halve outer dt request and
+                    // retry. Never fall back to explicit (accelerated nuclear
+                    // would blow up).
+                    dt_req_state *= 0.1;
+                    if (dt_req_state < 1.0) dt_req_state = 1.0;
+                    std::fprintf(stderr,
+                        "  step %d: implicit FAILED, outer dt reset to %.3e\n",
+                        step, dt_req_state);
+                    dt = 0.0;  // don't advance time, just retry
                 }
             } else {
                 dt = r1d.step(t, cfg.t_end);
