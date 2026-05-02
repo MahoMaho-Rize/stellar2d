@@ -247,7 +247,7 @@ sufficient; the infrastructure is ready to move on.
 # 6. Experiment D — polytropic profile through a MESA-style parser
 
 > **Provenance.** All numbers in this section were produced by
-> `scripts/gmode_exp_d_polytrope_profile.py` at commit `<to be updated>`.
+> `scripts/gmode_exp_d_polytrope_profile.py` at commit `c8b655c`.
 > `python scripts/gmode_exp_d_polytrope_profile.py --verify` must exit
 > zero.  The polytropic fixture file (`videos/polytrope_fixture.dat`, ~30 KB)
 > is regenerated deterministically at the top of `main()` so does not need
