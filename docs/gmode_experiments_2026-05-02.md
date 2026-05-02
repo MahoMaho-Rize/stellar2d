@@ -607,7 +607,7 @@ correction.  Exp G (§11) confirms this quantitatively.
 # 11. Experiment G — spherical scalar vs 2-variable (rigorous)
 
 > **Provenance.** All numbers in this section were produced by
-> `scripts/gmode_exp_g_spherical_scalar.py` at commit `<to be updated>`.
+> `scripts/gmode_exp_g_spherical_scalar.py` at commit `92bffea`.
 > `python scripts/gmode_exp_g_spherical_scalar.py --verify` must exit zero.
 
 ## 11.1 Setup
