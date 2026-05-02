@@ -241,6 +241,43 @@ Based on Step 5 decision:
    rationale.
 
 
+# Narrative correction log (追加,執行中發現)
+
+## NC1 (2026-05-03, from E5): 統一 basis 賣點需降格
+
+原 `anelastic_SL_spectral_design.md` §4.2 和 Phase 0 主敘事是:
+
+> 同一組 {μ_n, ψ_n} 同時對角化變係數 Poisson 和構成 g-mode 本徵譜
+
+E5 推導顯示這需要修正:
+
+- **Poisson 奇點在 r = R**(ρ₀ → 0 的表面),α★_poisson = 1 - σ/2
+- **g-mode 奇點在 r = 0**(ℓ(ℓ+1)/r² 離心位能),β★_gmode = ℓ + 1
+- 兩個問題的**最優前因子不同**,所以嚴格意義上 "SL spectral decomposition 同時對角化兩個算子" **不成立**
+
+**修正後的正確敘事**:
+
+> A Chebyshev spectral backend on [0, R] with endpoint-specific analytic
+> prefactors handles both operators.  For Poisson the Liouville + α★
+> substitution yields a diagonalisable SL with eigendecomposition amortised
+> across all k_x (core efficiency claim intact).  For the g-mode EVP, the
+> same grid with the ℓ+1 centrifugal prefactor gives a separate dense GEP —
+> not a free by-product, but sharing the spectral infrastructure and thus
+> order-of-magnitude cheaper to add than a standalone GYRE-style code.
+
+**仍保留的核心賣點**:
+1. 單次 Liouville + α★ 譜分解對所有 k_x 重用(O(N²) 預處理,O(N² N_x) 求解)
+2. Dedalus 用 Jacobi 權重 (1-x)^σ 從 basis 層吸收奇點,我們用 α★ 前因子從變換層吸收;兩條路在數值上可能收斂到類似結果,是方法學比較的真正題目
+3. g-mode EVP 仍然 "bundled" 在同一求解器內 — 對一個 2D stratified 模擬而言,隨時算脈動模式頻率只需要同樣的 Chebyshev 矩陣,這對 Dedalus/GYRE 都做不到
+
+## 後續需要修改的文檔(E9 時一次處理)
+
+- `docs/anelastic_SL_spectral_design.md` §4.2 "對角化求解" — 強化 "Poisson only" 範疇
+- `docs/reduced_pressure_liouville.md` — 加入 α★ 前因子章節
+- `docs/anelastic_sl_phase0_2026-05-02.md` — Phase 0 敘事中 "g-mode 免費副產品" 的部份改為 "同網格獨立 EVP"
+- `docs/singular_basis_survey_2026-05-02.md` §7.3 direction forward — 把 "unified basis pitch" 改為 "shared Chebyshev backend with endpoint-specific prefactors"
+
+
 # Non-goals for this sprint
 
 - No CUDA coding.
