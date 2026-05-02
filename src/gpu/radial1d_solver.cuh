@@ -169,8 +169,17 @@ struct Radial1DSolver {
     // shells; (rho, T, P, e, X, Y) interpolated linearly in m_enc. Sets
     // v=0 everywhere, fills d_rho0/d_P0/d_r0 with the mapped HSE state,
     // initialises species (if `species_enabled`) from the profile.
+    //
+    // If `seed_T` is true (Helmholtz only), (e, P) are re-derived from a
+    // forward helm_eval(ρ, T) instead of inverting MESA's P. This pins
+    // our runtime T to MESA's T to machine precision, which in turn
+    // makes κ(ρ, T, X) agree with MESA to ≤1 % (14 % → 1 % in practice).
+    // The downside is MESA's P is slightly overwritten (1 % level) to
+    // whatever Helm says at the same (ρ, T); HSE is re-balanced when
+    // the first hydro step runs.
+    //
     // Returns 0 on success, non-zero on parse/load failure.
-    int init_from_mesa(const char* ic_path);
+    int init_from_mesa(const char* ic_path, bool seed_T = false);
 
     // Apply a radial-only pressure perturbation: P *= (1 + amp*sin(π r/R))
     // Also adjust density self-consistently for adiabatic perturbation:

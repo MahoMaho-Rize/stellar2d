@@ -119,6 +119,33 @@ static __global__ void k_rad1d_e_from_rhoP(const double* d_rho, const double* d_
     d_e[k] = eos.internal_energy(d_rho[k], d_P[k]);
 }
 
+// T-seeded variant: read (ρ, T), write (e, P_out) via a Helm forward eval.
+// Used by init_from_mesa --ic-mesa-seed-T so runtime T matches MESA exactly
+// and κ(ρ, T) is consistent. Overwrites d_P with the Helm-computed P(ρ, T)
+// to keep the internal HSE self-consistent; any discrepancy vs MESA's P
+// is then a pure EOS-choice diagnostic (same ρ, same T → different P means
+// blend differs), not a mismatch with our own runtime state.
+#ifdef __CUDACC__
+static __global__ void k_rad1d_eP_from_rhoT(const double* d_rho,
+                                            const double* d_T,
+                                            double* d_e, double* d_P,
+                                            int n, EOS eos) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= n) return;
+    double rho = d_rho[k], T = d_T[k];
+    if (eos.type == (int)EosType::HELMHOLTZ) {
+        HelmState s = helm_eval(rho, T, eos.helm);
+        d_e[k] = s.e;
+        d_P[k] = s.P;
+    } else {
+        // Ideal gas fallback: e = cv·T, P = (γ−1)·ρ·e = ρ·R_gas·T
+        double cv_val = eos.cv();
+        d_e[k] = cv_val * T;
+        d_P[k] = (eos.gamma - 1.0) * rho * d_e[k];
+    }
+}
+#endif
+
 // ============================================================
 // init: allocate device memory for given nz
 // ============================================================
@@ -275,7 +302,7 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
 // centres. The outermost face r[nz] is pinned to R_star from the IC
 // header.
 // ============================================================
-int Radial1DSolver::init_from_mesa(const char* ic_path) {
+int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
     std::FILE* fp = std::fopen(ic_path, "r");
     if (!fp) {
         std::fprintf(stderr, "  init_from_mesa: cannot open %s\n", ic_path);
@@ -394,7 +421,8 @@ int Radial1DSolver::init_from_mesa(const char* ic_path) {
             h_Y[k]   = Y_s[j]   + t * (Y_s[j + 1]   - Y_s[j]);
         }
         h_dm[k] = dm;
-        // e from (ρ, P) via EOS, same dispatch as init_lane_emden.
+        // Host-side e seeding (non-Helm path). For Helm we defer to the
+        // device kernel below where table pointers live.
         bool eos_needs_device = use_eos
             && eos.type == static_cast<int>(EosType::HELMHOLTZ);
         if (use_eos && !eos_needs_device) {
@@ -415,8 +443,22 @@ int Radial1DSolver::init_from_mesa(const char* ic_path) {
         && eos.type == static_cast<int>(EosType::HELMHOLTZ);
     if (eos_needs_device) {
         int block = 64, grid = (nz + block - 1) / block;
-        k_rad1d_e_from_rhoP<<<grid, block>>>(lev.d_rho0, lev.d_P0, lev.d_e_int, nz, eos);
-        CUDA_CHECK(cudaDeviceSynchronize());
+        if (seed_T) {
+            // Forward Helm eval from (ρ, T_MESA); overwrites d_P with Helm's
+            // P(ρ, T) so HSE and runtime κ(ρ, T) are internally consistent.
+            double* d_T_tmp = nullptr;
+            CUDA_CHECK(cudaMalloc(&d_T_tmp, nz * sizeof(double)));
+            CUDA_CHECK(cudaMemcpy(d_T_tmp, h_T.data(),
+                                  nz * sizeof(double), cudaMemcpyHostToDevice));
+            k_rad1d_eP_from_rhoT<<<grid, block>>>(
+                lev.d_rho0, d_T_tmp, lev.d_e_int, lev.d_P0, nz, eos);
+            CUDA_CHECK(cudaDeviceSynchronize());
+            cudaFree(d_T_tmp);
+        } else {
+            k_rad1d_e_from_rhoP<<<grid, block>>>(
+                lev.d_rho0, lev.d_P0, lev.d_e_int, nz, eos);
+            CUDA_CHECK(cudaDeviceSynchronize());
+        }
     }
     CUDA_CHECK(cudaMemset(lev.d_v, 0, (nz+1)*sizeof(double)));
 
@@ -426,13 +468,23 @@ int Radial1DSolver::init_from_mesa(const char* ic_path) {
         CUDA_CHECK(cudaMemcpy(d_Y, h_Y.data(), nz*sizeof(double), cudaMemcpyHostToDevice));
     }
 
-    P_surf_floor = h_P[nz - 1];
+    if (seed_T && eos_needs_device) {
+        // d_P0 was overwritten by Helm; read back the outermost shell for
+        // the surface-floor BC so it matches the live state.
+        double P_surf_live = 0.0;
+        CUDA_CHECK(cudaMemcpy(&P_surf_live, lev.d_P0 + (nz - 1),
+                              sizeof(double), cudaMemcpyDeviceToHost));
+        P_surf_floor = P_surf_live;
+    } else {
+        P_surf_floor = h_P[nz - 1];
+    }
     hse_set = true;
 
     std::fprintf(stderr,
         "  MESA IC loaded: nz=%d zones (from %d MESA), M=%.4e g, R=%.4e cm, "
-        "T_core=%.3e K, ρ_core=%.3e g/cc, P_surf_floor=%.3e\n",
-        nz, n_mesa, M_star, R_star, h_T[0], h_rho[0], P_surf_floor);
+        "T_core=%.3e K, ρ_core=%.3e g/cc, P_surf_floor=%.3e [%s]\n",
+        nz, n_mesa, M_star, R_star, h_T[0], h_rho[0], P_surf_floor,
+        seed_T ? "seed_T" : "seed_P");
     return 0;
 }
 

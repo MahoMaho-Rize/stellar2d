@@ -86,6 +86,7 @@ struct SimConfig {
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
     double ic_n_poly = 1.5;          // polytropic index for --ic-solar
     std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/convert_mesa_ic.py output
+    bool ic_mesa_seed_T = false;     // --ic-mesa-seed-T: seed (e,P) from Helm(ρ,T_MESA) instead of (ρ,P_MESA)
     bool rich_profile = false;       // --rich-profile: emit T, κ, ∇_ad, ∇_rad, L, conv_vel per zone
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     // EOS selection
@@ -302,6 +303,8 @@ int main(int argc, char** argv) {
             cfg.ic_n_poly = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ic-mesa") == 0 && i + 1 < argc)
             cfg.ic_mesa_path = argv[++i];
+        else if (std::strcmp(argv[i], "--ic-mesa-seed-T") == 0)
+            cfg.ic_mesa_seed_T = true;
         else if (std::strcmp(argv[i], "--rich-profile") == 0)
             cfg.rich_profile = true;
         else if (std::strcmp(argv[i], "--G") == 0 && i + 1 < argc)
@@ -817,8 +820,11 @@ int main(int argc, char** argv) {
             std::printf("radial1d: MLT convection ON (α=%.2f)\n", cfg.mlt_alpha);
         }
         if (!cfg.ic_mesa_path.empty()) {
-            std::printf("radial1d: MESA IC from %s\n", cfg.ic_mesa_path.c_str());
-            if (r1d.init_from_mesa(cfg.ic_mesa_path.c_str()) != 0) {
+            std::printf("radial1d: MESA IC from %s (seed=%s)\n",
+                        cfg.ic_mesa_path.c_str(),
+                        cfg.ic_mesa_seed_T ? "T" : "P");
+            if (r1d.init_from_mesa(cfg.ic_mesa_path.c_str(),
+                                   cfg.ic_mesa_seed_T) != 0) {
                 std::fprintf(stderr, "ERROR: init_from_mesa failed\n");
                 return 1;
             }
