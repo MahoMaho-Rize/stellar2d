@@ -393,24 +393,101 @@ reference for validating future C++/CUDA anelastic operator assemblies.
   wave propagation.
 
 
-# 8. Next steps
+# 8. Experiment F — variable-$\rho_0$ anelastic operator on polytrope
+
+> **Provenance.** All numbers in this section were produced by
+> `scripts/gmode_exp_f_variable_rho.py` at commit `<to be updated>`.
+> `python scripts/gmode_exp_f_variable_rho.py --verify` must exit zero.
+> The polytrope fixture is rebuilt deterministically at the top of each
+> run so this is fully self-contained.
+
+## 8.1 Setup
+
+Experiment E validated the 2-variable operator in the simplified
+$\rho_0 = \text{const}$ limit.  This experiment relaxes that to full
+Lane-Emden $n = 3$ $\rho_0(r)$ (from the fixture built in Exp D), with the
+same Gaussian-bump $N^2(r)$ cavity.  The cavity is further restricted to
+$\rho_0 > 0.02$ so that the operator never sees $\rho_0 \to 0$ at grid edges.
+
+Grid: $N_r = 512$, $\ell = 1$, $r \in [0.2001, 0.5120]$,
+$\rho_0$ varying **21×** across the cavity ($0.020 \to 0.427$).
+
+The only code change from Exp E is that `rho0` is now $\rho_0(r)$ rather
+than a constant.  The continuity row of matrix $B$ becomes
+
+$$B_{21} = \text{diag}(1/r^2)\,D_1\,\text{diag}(\rho_0\,r^2),$$
+
+and the $D_1 \cdot \text{diag}(\rho_0 r^2)$ product exercises the
+$\rho_0'$ term that was identically zero in Exp E.
+
+## 8.2 Result
+
+| $n$ | $\omega^2_\text{Bouss}$ | $\omega^2_\text{anelastic}$ | ratio |
+|---|---|---|---|
+| 1 | $1.731 \times 10^{-2}$ | $1.546 \times 10^{-2}$ | $0.8929$ |
+| 2 | $3.639 \times 10^{-3}$ | $3.497 \times 10^{-3}$ | $0.9609$ |
+| 3 | $1.536 \times 10^{-3}$ | $1.503 \times 10^{-3}$ | $0.9786$ |
+| 5 | $5.316 \times 10^{-4}$ | $5.266 \times 10^{-4}$ | $0.9905$ |
+| 8 | $2.034 \times 10^{-4}$ | $2.027 \times 10^{-4}$ | $0.9965$ |
+| **10** | $\mathbf{1.293 \times 10^{-4}}$ | $\mathbf{1.292 \times 10^{-4}}$ | $\mathbf{0.9988}$ |
+
+- low-$n$ avg (n = 1..3): $\mathbf{0.944}$
+- high-$n$ avg (n = 8..10): $\mathbf{0.998}$
+- $|\text{ratio}_\text{hi} - 1| = 2.3 \times 10^{-3}$
+
+## 8.3 Interpretation
+
+**The variable-$\rho_0$ 2-variable operator passes.**  Key observations:
+
+1. The ratio is **closer to 1** at every $n$ than in Exp E (const-$\rho_0$).
+   Physically this makes sense: with $\rho_0(r)$ dropping outward, the
+   g-mode cavity is pushed inward where the Boussinesq approximation
+   (which assumes slowly-varying $\rho_0$) is more accurate, not less.
+2. The convergence rate toward 1 is the same **monotone-from-below**
+   pattern established in Exp E.  A sign error in the $\rho_0'$ term
+   would produce either a non-monotone ratio or a ratio > 1 (since the
+   $\rho_0'$ contribution would appear with the wrong sign in the
+   momentum equation).  Neither happens.
+3. The overall $\omega^2$ magnitudes are **13× smaller** than Exp E
+   ($1.7 \times 10^{-2}$ vs $2.35 \times 10^{-1}$ at $n = 1$) because
+   the cavity in Exp F is shorter (length $0.31$) and $N^2$ is attenuated
+   by the Gaussian-bump × $\rho_0$-cut interplay.  Tassoul's $\Delta P$
+   scales inversely with the cavity $\int N/r\,dr$, so longer periods
+   (smaller $\omega^2$) at the same $n$ is the expected geometric
+   outcome, not a bug.
+
+## 8.4 Operator is ready for C++ assembly
+
+With Exp E (constant $\rho_0$, $\text{ratio}_\text{hi} = 0.993$) and Exp F
+(variable $\rho_0$, $\text{ratio}_\text{hi} = 0.998$) both passing, the
+2-variable anelastic operator is validated on both the simple and the
+physically relevant configurations.  The Python assembly in
+`solve_anelastic_2var()` can now serve as the **reference implementation**:
+a future C++/CUDA port must reproduce these same $\omega^2$ tables to
+within a stated tolerance (we suggest $10^{-2}$ relative, matching the
+current dedup threshold).
+
+The next development step is therefore to lift `solve_anelastic_2var` from
+`gmode_exp_e_anelastic_linop.py` into a proper C++ operator that plugs
+into the existing solver harness in `src/gpu/`.  Because the spectrum is
+known mode-by-mode, the C++ port can regression-test against Exp E/F
+without any additional physics infrastructure.
+
+
+# 9. Next steps
 
 1. ~~**Chebyshev upgrade**~~ — done in §5.
 2. ~~**MESA-style profile reader**~~ — done in §6.
 3. ~~**2-variable anelastic operator cross-check**~~ — done in §7.
-4. **Variable-$\rho_0$ anelastic operator.**  Extend (E.2) to include
-   $\rho_0'$ terms in the continuity equation and re-run on the Lane-Emden
-   polytrope profile.  This is the last prerequisite before the C++/CUDA
-   assembly: the $\rho_0'$ bookkeeping is where index-error bugs are most
-   likely to hide.
-5. **Integration with anelastic momentum solver (C++/CUDA).**  Begin
-   writing the linearised RHS assembly in C++; the matrix-free version
-   should produce eigenvalues (via SLEPc-style shift-invert or a custom
-   Krylov sweep) that agree with Exp E's 2-variable spectrum mode-by-mode
-   within a stated tolerance.
-6. **Avoided-crossing benchmark.** Standard astrophysics test case with
-   piecewise-linear $N^2$ and a radiative-convective boundary; expected
-   spectra available in Unno et al. (1989) figures 17-19.  Uses the
-   `cs2` column that `mesa_profile.py` already extracts.  A mixed g/p-mode
-   solver (fourth-order Dziembowski / GYRE structure) is needed for the
-   full test; a truncated single-cavity version is a reasonable first step.
+4. ~~**Variable-$\rho_0$ anelastic operator**~~ — done in §8.
+5. **C++/CUDA anelastic operator assembly.**  Lift
+   `solve_anelastic_2var()` (currently in `gmode_exp_e_anelastic_linop.py`)
+   into `src/gpu/anelastic_solver.{cu,cuh}` as a new solver (per CLAUDE.md
+   policy: never overwrite existing solvers).  Validate by matching the
+   $\omega^2$ tables of §7 and §8 via a Python-callable eigenvalue sweep
+   (e.g.\ shift-invert with a small Krylov space, or dense LAPACK for
+   small problems).
+6. **Avoided-crossing benchmark.**  Remains as longer-term benchmark once
+   the C++ operator handles g-modes correctly.  Needs Lamb frequency
+   $L_\ell^2 = \ell(\ell+1)c_s^2/r^2$ (already extracted by the parser)
+   and a mixed g/p-mode (fourth-order Dziembowski) formulation.
