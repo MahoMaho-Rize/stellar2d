@@ -189,7 +189,7 @@ These are items for the next development cycle.
 # 5. Experiment C — Chebyshev collocation g-mode solver
 
 > **Provenance.** All numbers in this section were produced by
-> `scripts/gmode_exp_c_chebyshev.py` at commit `<to be updated>`.
+> `scripts/gmode_exp_c_chebyshev.py` at commit `e703991`.
 > `python scripts/gmode_exp_c_chebyshev.py --verify` must exit zero.
 
 ## 5.1 Setup
