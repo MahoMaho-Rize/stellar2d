@@ -18,41 +18,70 @@ TMP=$(mktemp -d)
 trap "rm -rf $TMP" EXIT
 
 # Preprocess: wrap each problematic glyph with a LaTeX raw-inline so the
-# fallback font only affects that one character.
+# fallback font only affects that one character.  Uses a single-pass
+# character-level state machine that correctly handles:
+#   - fenced code blocks (```...```) — verbatim, monofont handles Unicode
+#   - inline code spans (`...`) that may straddle line breaks
+#   - everything else — wrap offending chars in \sym{} / \boxd{}
 python3 - "$SRC" "$TMP/pre.md" <<'PY'
-import re, sys
+import sys
 src, dst = sys.argv[1:]
 SYM = set("⊙⟨⟩≪≫∇∂∈≈≡ΓΣαγδκμπρστ²³⁴⁵⁶⁹₁✅❌▼←→↓↔−×·")
 BOX = set("─│┌┐└┘┬")
+
 with open(src, encoding="utf-8") as f:
     text = f.read()
+
 def wrap(ch):
-    if ch in SYM:
-        return f'`\\sym{{{ch}}}`{{=latex}}'
-    if ch in BOX:
-        return f'`\\boxd{{{ch}}}`{{=latex}}'
+    if ch in SYM: return f'`\\sym{{{ch}}}`{{=latex}}'
+    if ch in BOX: return f'`\\boxd{{{ch}}}`{{=latex}}'
     return ch
-# Don't touch content inside fenced code blocks — they should render in the
-# monospace stream verbatim via the monofont.  Walk line by line, toggling
-# on/off whenever we see a fence.
-lines = text.split("\n")
-in_code = False
+
 out = []
-for ln in lines:
-    if ln.startswith("```"):
-        in_code = not in_code
-        out.append(ln); continue
-    if in_code:
-        out.append(ln); continue
-    # inline code ``...`` also bypassed — keep simple: don't wrap chars
-    # inside backtick-delimited runs, so splitting on backtick pairs:
-    parts = ln.split("`")
-    for i, p in enumerate(parts):
-        if i % 2 == 0:              # outside `...`
-            parts[i] = "".join(wrap(c) for c in p)
-    out.append("`".join(parts))
+i = 0
+n = len(text)
+# State machine:
+#   in_fence: inside ```..``` block (verbatim, no wrapping)
+#   in_inline: inside `...` run (verbatim, no wrapping, may cross \n)
+in_fence = False
+in_inline = False
+at_line_start = True
+while i < n:
+    ch = text[i]
+    # Detect opening/closing of fenced block only at line start.
+    if at_line_start and text[i:i+3] == "```":
+        # Copy the whole fence marker line verbatim.
+        eol = text.find("\n", i)
+        if eol == -1: eol = n
+        out.append(text[i:eol+1])
+        in_fence = not in_fence
+        i = eol + 1
+        at_line_start = True
+        continue
+    if in_fence:
+        out.append(ch)
+        at_line_start = (ch == "\n")
+        i += 1
+        continue
+    # Outside fenced block: handle inline code spans.
+    if ch == "`":
+        in_inline = not in_inline
+        out.append(ch)
+        i += 1
+        at_line_start = False
+        continue
+    if in_inline:
+        out.append(ch)
+        at_line_start = (ch == "\n")
+        i += 1
+        continue
+    # Body text: wrap if offending char.
+    out.append(wrap(ch))
+    at_line_start = (ch == "\n")
+    i += 1
+
 with open(dst, "w", encoding="utf-8") as f:
-    f.write("\n".join(out))
+    f.write("".join(out))
 PY
 
 cat > "$TMP/header.tex" <<'EOF'
@@ -72,6 +101,7 @@ cat > "$TMP/header.tex" <<'EOF'
 EOF
 
 pixi run pandoc "$TMP/pre.md" --pdf-engine=xelatex \
+    --from=markdown-smart \
     -V mainfont="Times New Roman" \
     -V monofont="JetBrains Mono" \
     -V fontsize=11pt \
