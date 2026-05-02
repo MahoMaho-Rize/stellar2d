@@ -303,28 +303,38 @@ __global__ static void k_r1di_build_scaling(
     double cs_f = sqrt(fmax(eos.gamma * P_bar / rho_bar, 1e-30));
     double R_s = fmax(R_star, 1e-30);
 
-    // ---- face v (row i, field 0) ----
-    double Lv  = cs_f * cs_f / R_s;       // scales F_v to O(1)
-    double Rv  = cs_f;                    // scales δv to O(1)
+    // ---- Left scaling only (row normalization); R = identity ----
+    // Why identity R: forward-scaling δX = R⁻¹ δU and back-scaling
+    // δU = R δX requires R to be balanced against the column magnitudes of
+    // J. A "typical-U" R overshoots because ∂R_e/∂e is O(cs²), not O(1/dt).
+    // Instead of trying to guess column scales, only normalize rows so F
+    // components are O(1), and let GMRES work in δU space directly.
+    //
+    // Row scale L_i = typical |F_i|:
+    //   F_v ~ g ~ cs²/R_star     (momentum imbalance)
+    //   F_r ~ cs                  (kinematic, R_r = v)
+    //   F_e ~ P·v/ρ ~ cs² · (cs/R) = cs³/R_star
+    // Use HSE reference cs (per zone) so scaling is state-independent.
+
+    // ---- face v ----
+    double Lv  = cs_f * cs_f / R_s;
     L[i]       = Lv;
-    R[i]       = Rv;
+    R[i]       = 1.0;
     invL[i]    = 1.0 / fmax(Lv, 1e-30);
 
-    // ---- face r (row nz+i, field 1) ----
-    double Lr  = cs_f;                    // scales F_r = v to O(1)
-    double Rr  = R_s;                     // scales δr to O(1)
+    // ---- face r ----
+    double Lr  = cs_f;
     L[nz + i]   = Lr;
-    R[nz + i]   = Rr;
+    R[nz + i]   = 1.0;
     invL[nz + i]= 1.0 / fmax(Lr, 1e-30);
 
-    // ---- zone e (row 2nz+i, field 2) ----
+    // ---- zone e ----
     double rho_c = fmax(rho0[i], 1e-30);
     double P_c   = fmax(P0[i], 1e-30);
     double cs_c  = sqrt(fmax(eos.gamma * P_c / rho_c, 1e-30));
-    double Le  = cs_c * cs_c * cs_c / R_s;    // scales F_e to O(1)
-    double Re  = cs_c * cs_c;                 // scales δe to O(1)
+    double Le  = cs_c * cs_c * cs_c / R_s;
     L[2*nz + i]    = Le;
-    R[2*nz + i]    = Re;
+    R[2*nz + i]    = 1.0;
     invL[2*nz + i] = 1.0 / fmax(Le, 1e-30);
 }
 
@@ -475,10 +485,19 @@ void Radial1DSolver::jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, do
         CUDA_CHECK(cudaMemset(d_Jv, 0, N*sizeof(double)));
         return;
     }
-    // α relative to dimensionally-balanced R: R_i ≈ U_typ_i so α = 1e-6
-    // gives a ~ppm relative perturbation per field, comfortably outside
-    // round-off and inside the linear regime.
-    double alpha = 1.0e-6;
+    // FD step. For Viallet-scaled matvec, v_scaled = R·d_v already carries
+    // physical magnitudes (R_i ≈ U_typ_i for row i), so α = √εₘ gives
+    // ~ppm relative perturb per component.  For the unscaled path, v_in
+    // is a unit basis vector with no physical units, so we rescale via
+    // the full norm (Knoll-Keyes ||U||/||v|| form).
+    double alpha;
+    if (use_viallet_scaling) {
+        alpha = std::sqrt(1e-15);  // ~3e-8
+    } else {
+        double norm_U = gpu_norm_r1di(d_Un, N);
+        double u_ref = (norm_U > 1.0) ? norm_U : 1.0;
+        alpha = std::sqrt(1e-15) * u_ref / norm_v;
+    }
     double eps_hat = alpha * norm_v;  // kept for back-scaling: eps_hat = α·||v||
 
     // Save U, perturb
@@ -658,6 +677,10 @@ int Radial1DSolver::gmres_solve_implicit(double* d_x, const double* d_b,
 
         if (std::fabs(g[j+1]) < tol * beta) { j++; break; }
     }
+    if (step_count < 2) {
+        std::fprintf(stderr, "    GMRES: β=%.3e final|g|=%.3e (j=%d)\n",
+                     beta, std::fabs(g[std::min(j,m)]), j);
+    }
 
     std::vector<double> y(j);
     for (int i = j-1; i >= 0; --i) {
@@ -729,6 +752,28 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
         // Back-scale: δU = R · δX
         if (use_viallet_scaling) {
             k_r1di_mul_diag<<<(N+B-1)/B, B>>>(d_gmres_w, d_scale_R, N);
+        }
+        if (step_count < 2) {
+            // Dump per-field ||δU||
+            int nz = lev.nz;
+            std::vector<double> h_dU(N);
+            cudaMemcpy(h_dU.data(), d_gmres_w, N*sizeof(double), cudaMemcpyDeviceToHost);
+            double n_v=0, n_r=0, n_e=0;
+            for (int i = 0; i < nz; ++i) n_v += h_dU[i]*h_dU[i];
+            for (int i = 0; i < nz; ++i) n_r += h_dU[nz+i]*h_dU[nz+i];
+            for (int i = 0; i < nz; ++i) n_e += h_dU[2*nz+i]*h_dU[2*nz+i];
+            // Also compare to |U| per field
+            std::vector<double> h_U(N);
+            cudaMemcpy(h_U.data(), d_U, N*sizeof(double), cudaMemcpyDeviceToHost);
+            double u_v=0, u_r=0, u_e=0;
+            for (int i = 0; i < nz; ++i) u_v += h_U[i]*h_U[i];
+            for (int i = 0; i < nz; ++i) u_r += h_U[nz+i]*h_U[nz+i];
+            for (int i = 0; i < nz; ++i) u_e += h_U[2*nz+i]*h_U[2*nz+i];
+            std::fprintf(stderr,
+                "    δU: ||v||=%.2e (rel %.2e) ||r||=%.2e (rel %.2e) ||e||=%.2e (rel %.2e)\n",
+                std::sqrt(n_v), std::sqrt(n_v/std::max(u_v,1e-60)),
+                std::sqrt(n_r), std::sqrt(n_r/std::max(u_r,1e-60)),
+                std::sqrt(n_e), std::sqrt(n_e/std::max(u_e,1e-60)));
         }
 
         // ---- Armijo backtracking line search (ported from MESA mod_newton.f90 ----
