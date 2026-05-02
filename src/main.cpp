@@ -1284,6 +1284,58 @@ int main(int argc, char** argv) {
             ansl.manufactured_test();
         }
 
+        if (cfg.test_case == "kh_shear_boussinesq") {
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-2;
+            ansl.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
+            std::fprintf(stderr,
+                "  AnelasticSL KH run: tend=%g, cfl=%g, ν=%g, k=%d\n",
+                cfg.t_end, cfg.cfl, cfg.ps_nu, cfg.ps_k);
+            double t = 0.0;
+            int step = 0;
+            std::timespec wall_start;
+            clock_gettime(CLOCK_MONOTONIC, &wall_start);
+            while (t < cfg.t_end && !g_interrupted) {
+                double dt = ansl.step();
+                if (t + dt > cfg.t_end) dt = cfg.t_end - t;
+                t += dt;
+                ++step;
+                if (step % 50 == 0 || t >= cfg.t_end) {
+                    print_progress(t, cfg.t_end, step, dt, wall_start);
+                }
+            }
+            // Dump final ω(x,y) to CSV for Python comparison.
+            std::vector<double> h_omega;
+            ansl.download_omega(h_omega);
+            std::vector<double> h_u, h_v;
+            ansl.download_uv(h_u, h_v);
+            std::vector<double> y_cgl;
+            ansl.download_y(y_cgl);
+            std::vector<double> h_div;
+            ansl.download_divergence(h_div);
+            double max_div = 0.0;
+            for (double d : h_div) if (std::fabs(d) > max_div) max_div = std::fabs(d);
+            std::fprintf(stderr, "  final |∇·u|∞ (C++ side) = %.3e\n", max_div);
+            char csv_path[512];
+            std::snprintf(csv_path, sizeof(csv_path), "%s/kh_final.csv", run_dir.c_str());
+            FILE* fp = std::fopen(csv_path, "w");
+            std::fprintf(fp, "# nx=%d, ny=%d, Lx=%g, Ly=%g, nu=%g, t=%g, steps=%d\n",
+                         ansl.nx, ansl.ny, ansl.Lx, ansl.Ly, ansl.nu, t, step);
+            std::fprintf(fp, "# y_cgl (ny values):\n");
+            for (int i = 0; i < ansl.ny; ++i)
+                std::fprintf(fp, "%.15e\n", y_cgl[i]);
+            std::fprintf(fp, "# omega (ny × nx row-major):\n");
+            for (int i = 0; i < ansl.ncell; ++i)
+                std::fprintf(fp, "%.15e\n", h_omega[i]);
+            std::fprintf(fp, "# u (ny × nx row-major):\n");
+            for (int i = 0; i < ansl.ncell; ++i)
+                std::fprintf(fp, "%.15e\n", h_u[i]);
+            std::fprintf(fp, "# v (ny × nx row-major):\n");
+            for (int i = 0; i < ansl.ncell; ++i)
+                std::fprintf(fp, "%.15e\n", h_v[i]);
+            std::fclose(fp);
+            std::fprintf(stderr, "  KH final state written to %s\n", csv_path);
+        }
+
         // Phase 1a: dump SL basis to CSV for offline verification.
         char basis_path[512];
         std::snprintf(basis_path, sizeof(basis_path), "%s/sl_basis.csv", run_dir.c_str());

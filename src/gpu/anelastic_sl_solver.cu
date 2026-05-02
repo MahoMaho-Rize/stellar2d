@@ -82,6 +82,20 @@ extern "C" {
     __global__ void k_diag_divide_sl(cufftDoubleComplex*, const cufftDoubleComplex*,
                                      const double*, const double*, int, int);
     __global__ void k_normalize(double*, int, double);
+    __global__ void k_mult_ikx_out(cufftDoubleComplex*, const cufftDoubleComplex*,
+                                   const double*, double, int, int);
+    __global__ void k_mult_mkx2_out(cufftDoubleComplex*, const cufftDoubleComplex*,
+                                    const double*, double, int, int);
+    __global__ void k_fma_product(double*, double, const double*, const double*, int);
+    __global__ void k_fma_scalar(double*, double, const double*, int);
+    __global__ void k_rk3_combine(double*, const double*, const double*, const double*,
+                                  double, double, double, int);
+    __global__ void k_sub_inplace(double*, const double*, int);
+    __global__ void k_add_out(double*, const double*, const double*, int);
+    __global__ void k_compute_omega(double*, const double*, const double*, int);
+    __global__ void k_zero_y_boundary(double*, int, int);
+    __global__ void k_max_abs_pass1(const double*, int, double*);
+    __global__ void k_dealias_x_inplace(cufftDoubleComplex*, int, int, int);
 }
 
 // ============================================================================
@@ -247,6 +261,10 @@ void AnelasticSLSolver::free_all() {
     auto free_ptr = [](double*& p){ if (p) { cudaFree(p); p = nullptr; } };
     auto free_cptr = [](cufftDoubleComplex*& p){ if (p) { cudaFree(p); p = nullptr; } };
     free_ptr(d_u); free_ptr(d_v); free_ptr(d_omega); free_ptr(d_rhs_pi); free_ptr(d_pi);
+    free_ptr(d_u_orig); free_ptr(d_v_orig);
+    free_ptr(d_rhs_u);  free_ptr(d_rhs_v);
+    free_ptr(d_scratch);
+    free_ptr(d_Dy);
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
     free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
     free_ptr(d_mu); free_ptr(d_cc_weights);
@@ -333,6 +351,36 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     h_cc_weights.resize(ny);
     for (int k = 0; k < ny; ++k)
         h_cc_weights[k] = w_raw[idx[k]] * Ly / 2.0;
+
+    // Upload D_scaled to device for the apply_dy DGEMM path.  With F stored
+    // row-major (ny × nx), its col-major reinterpretation is (nx × ny) with
+    // lda = nx and col-major entry C_cm(ix, jy) == row-major F[jy*nx + ix].
+    // We want (∂y F)[jy, ix] = Σ_{jy'} D(jy, jy') · F[jy', ix], which in
+    // col-major is C = A · M_cm where
+    //   A     = F_cm        of shape (nx × ny),
+    //   M_cm  = the (ny × ny) matrix whose col-major entry M_cm(jy', jy) = D(jy, jy').
+    // Using cublasDgemm with OP_N on both and lda_B = ny then multiplies by
+    //   B_cm(jy', jy) = D(jy, jy')     (note: jy is the COLUMN of B_cm)
+    // which is exactly what we store: d_Dy[jy' + jy*ny] = D(jy, jy').
+    // In other words, the col-major d_Dy IS the row-major D transposed.  We
+    // store D_scaled (which is row-major) directly:
+    //   d_Dy[jy' + jy*ny] = D_scaled[jy*ny + jy']     (values match, layout differs)
+    std::vector<double> h_Dy_col((size_t)ny * ny);
+    for (int i = 0; i < ny; ++i) {
+        for (int j = 0; j < ny; ++j) {
+            h_Dy_col[(size_t)i + (size_t)j * ny] = D_scaled[(size_t)i * ny + j];
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_Dy, h_Dy_col.data(),
+                          sizeof(double) * (size_t)ny * ny,
+                          cudaMemcpyHostToDevice));
+
+    // Min Δy on the non-uniform CGL grid — used for convective CFL.
+    dy_min = Ly;
+    for (int k = 1; k < ny; ++k) {
+        double dy = h_y_cgl[k] - h_y_cgl[k - 1];
+        if (dy < dy_min) dy_min = dy;
+    }
 
     // ── SL eigenproblem on interior nodes (Dirichlet BCs): ────────────
     //   A := -D²_int - diag(W̃_int),   A ψ = μ ψ.
@@ -573,6 +621,16 @@ void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
     CUDA_CHECK(cudaMalloc(&d_rhs_pi,  sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_pi,      sizeof(double) * ncell));
 
+    // RK3 scratch buffers for primitive-variable projection time stepping.
+    CUDA_CHECK(cudaMalloc(&d_u_orig,  sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_v_orig,  sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_rhs_u,   sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_rhs_v,   sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_scratch, sizeof(double) * ncell));
+
+    // Chebyshev differentiation matrix on [0, Ly], col-major ny × ny.
+    CUDA_CHECK(cudaMalloc(&d_Dy,      sizeof(double) * (size_t)ny * ny));
+
     CUDA_CHECK(cudaMalloc(&d_rho,          sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_rho_sqrt_inv, sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_cc_weights,   sizeof(double) * ny));
@@ -632,14 +690,257 @@ void AnelasticSLSolver::init_zero() {
     CUDA_CHECK(cudaMemset(d_omega, 0, sizeof(double) * ncell));
 }
 
-void AnelasticSLSolver::init_kh_shear(double /*vshear*/, double /*amp*/, int /*k*/) {
-    // TODO Phase 1c (needs full time integrator)
-    init_zero();
+void AnelasticSLSolver::init_kh_shear(double vshear, double amp, int k) {
+    // KH Boussinesq with Dirichlet velocity BC (u=v=0 on y-walls).  This is
+    // needed for compatibility with the SL-Poisson pressure projection: ψ_n
+    // all vanish at y=0, Ly, so the projection can only kill divergence that
+    // is itself expressible in the Dirichlet basis.  We therefore multiply
+    // the tanh shear profile by a smooth taper T(y) that is 1 over most of
+    // the interior and 0 at the walls.  The KH dynamics live in the interior
+    // where T ≈ 1; the wall taper only affects a thin boundary layer.
+    //   u(x,y) = vshear · T(y) · [tanh((y-y_lo)/δ) - tanh((y-y_hi)/δ) - 1]
+    //   v(x,y) = amp · T(y) · sin(kx·x) · (G_lo + G_hi)
+    //   T(y) = sin²(π · y / Ly)   (smooth, 0 at walls, 1 at Ly/2, 1 order zero)
+    double delta   = std::fmax(8.0 * dy_ref, 0.02 * Ly);
+    double y_lo    = 0.25 * Ly;
+    double y_hi    = 0.75 * Ly;
+    double sigma   = 0.05 * Ly;
+    double kx_phys = k * 2.0 * M_PI / Lx;
+
+    std::vector<double> h_u(ncell), h_v(ncell);
+    for (int jy = 0; jy < ny; ++jy) {
+        double y = h_y_cgl[jy];
+        double T = std::sin(M_PI * y / Ly);
+        T = T * T;                                       // sin² wall taper
+        double t1 = std::tanh((y - y_lo) / delta);
+        double t2 = std::tanh((y - y_hi) / delta);
+        double u_y = T * vshear * (t1 - t2 - 1.0);
+        double G1 = std::exp(-(y - y_lo) * (y - y_lo) / (sigma * sigma));
+        double G2 = std::exp(-(y - y_hi) * (y - y_hi) / (sigma * sigma));
+        double G  = T * (G1 + G2);
+        for (int ix = 0; ix < nx; ++ix) {
+            double x = ix * dx;
+            double sn = std::sin(kx_phys * x);
+            int kidx = jy * nx + ix;
+            h_u[kidx] = u_y;
+            h_v[kidx] = amp * sn * G;
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_u, h_u.data(), sizeof(double) * ncell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_v, h_v.data(), sizeof(double) * ncell, cudaMemcpyHostToDevice));
+
+    dt_current = 0.0;
+    step_count = 0;
+    // Project IC onto divergence-free subspace — ∂v/∂x is nonzero from the
+    // perturbation, so ∇·u ≠ 0 at t=0 before projection.
+    project_div_free();
+    std::fprintf(stderr,
+        "  AnelasticSL KH Boussinesq: |vx|=%g, amp=%g, k=%d (δ=%.3g, σ=%.3g)\n",
+        vshear, amp, k, delta, sigma);
 }
 
+// ── GPU-resident max|f| reduction ───────────────────────────────────────
+static double gpu_max_abs(const double* d_in, int n, double* d_scratch_blocks,
+                          int& cached_blocks) {
+    int block = 256;
+    int grid = (n + block - 1) / block;
+    if (cached_blocks < grid) cached_blocks = grid;
+    k_max_abs_pass1<<<grid, block>>>(d_in, n, d_scratch_blocks);
+    std::vector<double> h(grid);
+    CUDA_CHECK(cudaMemcpy(h.data(), d_scratch_blocks,
+                          sizeof(double) * grid, cudaMemcpyDeviceToHost));
+    double m = 0.0;
+    for (int i = 0; i < grid; ++i) if (h[i] > m) m = h[i];
+    return m;
+}
+
+// ── apply_dy: dst[jy, ix] = Σ_jy' D(jy, jy') src[jy', ix]. ──────────────
+// Row-major (ny × nx) physical buffers ↔ col-major (nx × ny) GEMM view:
+//   buf[jy*nx + ix]  ↔  buf_cm(ix, jy).
+// d_Dy uploaded as col-major (ny × ny) with d_Dy[i + j*ny] = D(i, j).
+// We want dst_cm(ix, jy) = Σ_jy' D(jy, jy') src_cm(ix, jy').  That matches
+// C = A · B^T with A = src_cm, B = d_Dy (so B^T(jy', jy) = d_Dy(jy, jy')
+// = D(jy, jy')).  Hence OP_N on A, OP_T on B.
+static void apply_dy(cublasHandle_t h, const double* d_src, double* d_dst,
+                     const double* d_D, int nx, int ny) {
+    const double one = 1.0, zero = 0.0;
+    CUBLAS_CHECK(cublasDgemm(
+        h, CUBLAS_OP_N, CUBLAS_OP_T,
+        nx, ny, ny,
+        &one,
+        d_src, nx,     // A: src_cm (nx × ny), lda = nx
+        d_D,   ny,     // B: d_Dy  (ny × ny), lda = ny,  op=T
+        &zero,
+        d_dst, nx));   // C: dst_cm (nx × ny), lda = nx
+}
+
+// ── Evaluate du/dt, dv/dt (advection + viscosity, NO pressure). ─────────
+//   ∂t u = -(u ∂_x u + v ∂_y u) + ν (∂_xx u + ∂_yy u)
+//   ∂t v = -(u ∂_x v + v ∂_y v) + ν (∂_xx v + ∂_yy v)
+// Pressure projection is handled by the caller after adding dt·rhs.
+void AnelasticSLSolver::compute_rhs_uv(const double* dU, const double* dV,
+                                       double* dRU, double* dRV) {
+    int block = 256;
+    int grid1d = (ncell + block - 1) / block;
+    dim3 b2(32, 8);
+    dim3 g_ny_nh((nh + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+
+    const double inv_nx = 1.0 / (double)nx;
+
+    // zero the RHS buffers
+    CUDA_CHECK(cudaMemsetAsync(dRU, 0, sizeof(double) * ncell));
+    CUDA_CHECK(cudaMemsetAsync(dRV, 0, sizeof(double) * ncell));
+
+    // ───────── u-equation ─────────
+    // FFT u → d_fhat (spectral u)
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, const_cast<double*>(dU), d_fhat));
+    k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, (2 * (nh - 1)) / 3);
+
+    // -u·∂x u: compute ∂x u in physical space (d_scratch), then dRU -= u·∂x u
+    k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));      // d_scratch = ∂x u
+    k_fma_product<<<grid1d, block>>>(dRU, -1.0, dU, d_scratch, ncell);
+
+    // +ν·∂xx u: ∂xx u = IFFT(-kx² û)
+    k_mult_mkx2_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));      // d_scratch = ∂xx u
+    k_fma_scalar<<<grid1d, block>>>(dRU, nu, d_scratch, ncell);
+
+    // ∂y u and ∂yy u via Chebyshev D (apply D twice).
+    apply_dy(cublas, dU, d_scratch, d_Dy, nx, ny);                 // d_scratch = ∂y u
+    k_fma_product<<<grid1d, block>>>(dRU, -1.0, dV, d_scratch, ncell); // -v·∂y u
+    apply_dy(cublas, d_scratch, d_rhs_pi, d_Dy, nx, ny);           // d_rhs_pi = ∂yy u (scratch-borrow)
+    k_fma_scalar<<<grid1d, block>>>(dRU, nu, d_rhs_pi, ncell);     // +ν·∂yy u
+
+    // ───────── v-equation ─────────
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, const_cast<double*>(dV), d_fhat));
+    k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, (2 * (nh - 1)) / 3);
+
+    // -u·∂x v
+    k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));      // d_scratch = ∂x v
+    k_fma_product<<<grid1d, block>>>(dRV, -1.0, dU, d_scratch, ncell);
+
+    // +ν·∂xx v
+    k_mult_mkx2_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));
+    k_fma_scalar<<<grid1d, block>>>(dRV, nu, d_scratch, ncell);
+
+    // ∂y v and ∂yy v
+    apply_dy(cublas, dV, d_scratch, d_Dy, nx, ny);                 // d_scratch = ∂y v
+    k_fma_product<<<grid1d, block>>>(dRV, -1.0, dV, d_scratch, ncell);
+    apply_dy(cublas, d_scratch, d_rhs_pi, d_Dy, nx, ny);
+    k_fma_scalar<<<grid1d, block>>>(dRV, nu, d_rhs_pi, ncell);
+}
+
+// ── Project (u, v) onto divergence-free subspace. ───────────────────────
+//   (1) RHS = ∂x u + ∂y v  (written into d_rhs_pi, row-major ncell)
+//   (2) sl_poisson_solve() reads d_rhs_pi, writes π into d_pi,
+//       solving ∇·(ρ ∇π) = RHS.  For Boussinesq (ρ=1) this is ∇²π = RHS.
+//   (3) u -= ∂x π ;  v -= ∂y π.
+void AnelasticSLSolver::project_div_free() {
+    int block = 256;
+    int grid1d = (ncell + block - 1) / block;
+    dim3 b2(32, 8);
+    dim3 g_ny_nh((nh + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+    const double inv_nx = 1.0 / (double)nx;
+
+    // ∂x u → d_scratch
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_u, d_fhat));
+    k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, (2 * (nh - 1)) / 3);
+    k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));     // d_scratch = ∂x u
+
+    // ∂y v → d_rhs_pi
+    apply_dy(cublas, d_v, d_rhs_pi, d_Dy, nx, ny);                // d_rhs_pi = ∂y v
+
+    // d_rhs_pi = ∂x u + ∂y v  (divergence of the unprojected velocity)
+    k_fma_scalar<<<grid1d, block>>>(d_rhs_pi, 1.0, d_scratch, ncell);
+
+    // Solve ∇·(ρ ∇π) = RHS  (reduced-pressure form; for ρ=1, plain ∇²π = RHS).
+    // For our solver the SL pipeline already solves with a -1/(μ+kx²) factor
+    // i.e. ∇²π + RHS = 0,  so passing RHS = ∂x u + ∂y v yields π satisfying
+    // ∇²π = -(∂x u + ∂y v).  Correction: u ← u − ∂x π gives
+    //   ∇·u_new = ∇·u + ∇²π = ∇·u - ∇·u = 0.  ✓
+    sl_poisson_solve();
+
+    // ∂x π → d_scratch, subtract from u
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_pi, d_fhat));
+    k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, (2 * (nh - 1)) / 3);
+    k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));
+    k_sub_inplace<<<grid1d, block>>>(d_u, d_scratch, ncell);
+
+    // ∂y π → d_scratch, subtract from v;  then enforce v|_wall = 0 (Dirichlet).
+    apply_dy(cublas, d_pi, d_scratch, d_Dy, nx, ny);
+    k_sub_inplace<<<grid1d, block>>>(d_v, d_scratch, ncell);
+
+    // Dirichlet velocity BC: u = v = 0 at y = 0, Ly.  Required for
+    // compatibility with the SL-Poisson Dirichlet-π projection: if u_tan
+    // were non-zero at the wall, ∂x u_tan would contribute to ∇·u at the
+    // wall where the SL basis cannot resolve it (leaving residual div).
+    int grid_bdy = (nx + 255) / 256;
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_u, nx, ny);
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+}
+
+// ── Shu-Osher RK3 (primitive-variable + projection). ────────────────────
+// Standard low-storage 3-stage form:
+//   u^(1) = u^n + dt R(u^n)                      ;  project
+//   u^(2) = 3/4 u^n + 1/4 (u^(1) + dt R(u^(1)))  ;  project
+//   u^{n+1} = 1/3 u^n + 2/3 (u^(2) + dt R(u^(2))) ; project
 double AnelasticSLSolver::step() {
-    // TODO Phase 1c
-    return 0.0;
+    int block = 256;
+    int grid1d = (ncell + block - 1) / block;
+
+    // ── CFL-limited dt ──
+    if (!d_reduce) {
+        // Reserve ~enough slots for the two-pass max|·| reductions.
+        reduce_blocks = (ncell + block - 1) / block;
+        CUDA_CHECK(cudaMalloc(&d_reduce, sizeof(double) * reduce_blocks));
+    }
+    double umax = gpu_max_abs(d_u, ncell, d_reduce, reduce_blocks);
+    double vmax = gpu_max_abs(d_v, ncell, d_reduce, reduce_blocks);
+    double dt_adv = cfl / std::max(umax / dx + vmax / std::max(dy_min, 1e-30), 1e-30);
+    // Explicit viscous CFL (RK3, Chebyshev clustered grid).  Stability needs
+    //   ν · dt · (kx_max² + μ_max) ≲ 2.51  (RK3 stability on imaginary axis).
+    // kx_max = π/dx;  μ_max ≈ largest SL eigenvalue = (2 N²/Ly)² / 4 (Trefethen).
+    // Use the conservative estimate dt_visc ≲ 0.5·dy_min² / ν (matches the FD
+    // rule of thumb and is dominated by the near-boundary cluster).
+    double dt_visc = (nu > 0.0) ? 0.5 * dy_min * dy_min / nu : 1e30;
+    double dt = std::min({dt_max, dt_adv, dt_visc});
+    dt = std::max(dt_min, dt);
+    dt_current = dt;
+
+
+    // Snapshot y_n
+    CUDA_CHECK(cudaMemcpy(d_u_orig, d_u, sizeof(double) * ncell, cudaMemcpyDeviceToDevice));
+    CUDA_CHECK(cudaMemcpy(d_v_orig, d_v, sizeof(double) * ncell, cudaMemcpyDeviceToDevice));
+
+    // ── Stage 1 : u^(1) = u_n + dt·R(u_n) ──
+    compute_rhs_uv(d_u, d_v, d_rhs_u, d_rhs_v);
+    k_fma_scalar<<<grid1d, block>>>(d_u, dt, d_rhs_u, ncell);
+    k_fma_scalar<<<grid1d, block>>>(d_v, dt, d_rhs_v, ncell);
+    project_div_free();
+
+    // ── Stage 2 : u^(2) = 3/4 u_n + 1/4 (u^(1) + dt·R(u^(1))) ──
+    compute_rhs_uv(d_u, d_v, d_rhs_u, d_rhs_v);
+    k_rk3_combine<<<grid1d, block>>>(d_u, d_u_orig, d_u, d_rhs_u,
+                                     0.75, 0.25, dt, ncell);
+    k_rk3_combine<<<grid1d, block>>>(d_v, d_v_orig, d_v, d_rhs_v,
+                                     0.75, 0.25, dt, ncell);
+    project_div_free();
+
+    // ── Stage 3 : u_{n+1} = 1/3 u_n + 2/3 (u^(2) + dt·R(u^(2))) ──
+    compute_rhs_uv(d_u, d_v, d_rhs_u, d_rhs_v);
+    k_rk3_combine<<<grid1d, block>>>(d_u, d_u_orig, d_u, d_rhs_u,
+                                     1.0 / 3.0, 2.0 / 3.0, dt, ncell);
+    k_rk3_combine<<<grid1d, block>>>(d_v, d_v_orig, d_v, d_rhs_v,
+                                     1.0 / 3.0, 2.0 / 3.0, dt, ncell);
+    project_div_free();
+
+    ++step_count;
+    return dt;
 }
 
 
@@ -836,7 +1137,44 @@ void AnelasticSLSolver::download_uv(std::vector<double>& h_u, std::vector<double
     CUDA_CHECK(cudaMemcpy(h_v.data(), d_v, sizeof(double) * ncell, cudaMemcpyDeviceToHost));
 }
 
+void AnelasticSLSolver::download_divergence(std::vector<double>& h_div) {
+    dim3 b2(32, 8);
+    dim3 g_ny_nh((nh + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+    int block = 256;
+    int grid1d = (ncell + block - 1) / block;
+    const double inv_nx = 1.0 / (double)nx;
+
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_u, d_fhat));
+    k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));      // ∂x u
+
+    apply_dy(cublas, d_v, d_rhs_pi, d_Dy, nx, ny);                 // ∂y v
+
+    k_fma_scalar<<<grid1d, block>>>(d_rhs_pi, 1.0, d_scratch, ncell);  // ∂x u + ∂y v
+
+    h_div.resize(ncell);
+    CUDA_CHECK(cudaMemcpy(h_div.data(), d_rhs_pi,
+                          sizeof(double) * ncell, cudaMemcpyDeviceToHost));
+}
+
 void AnelasticSLSolver::download_omega(std::vector<double>& h_omega) {
+    // ω = ∂v/∂x − ∂u/∂y.  Compute on device into d_omega, then download.
+    int block = 256;
+    int grid1d = (ncell + block - 1) / block;
+    dim3 b2(32, 8);
+    dim3 g_ny_nh((nh + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+    const double inv_nx = 1.0 / (double)nx;
+
+    // ∂v/∂x via FFT
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_v, d_fhat));
+    k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));   // d_scratch = ∂v/∂x
+
+    // ∂u/∂y via Chebyshev D (store into d_rhs_pi as scratch)
+    apply_dy(cublas, d_u, d_rhs_pi, d_Dy, nx, ny);              // d_rhs_pi = ∂u/∂y
+
+    k_compute_omega<<<grid1d, block>>>(d_omega, d_scratch, d_rhs_pi, ncell);
+
     h_omega.resize(ncell);
     CUDA_CHECK(cudaMemcpy(h_omega.data(), d_omega, sizeof(double) * ncell,
                           cudaMemcpyDeviceToHost));

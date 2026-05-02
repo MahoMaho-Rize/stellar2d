@@ -75,4 +75,141 @@ __global__ void k_normalize(
 }
 
 
+// ── 2/3 dealias mask in x: zero modes with |kx| > (2/3) kx_max. ─────────
+__global__ void k_dealias_x_inplace(
+    cufftDoubleComplex* fhat,
+    int ny, int nh, int kx_cut)
+{
+    int jy = blockIdx.y * blockDim.y + threadIdx.y;
+    int kk = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny || kk >= nh) return;
+    if (kk > kx_cut) {
+        int off = jy * nh + kk;
+        fhat[off].x = 0.0;
+        fhat[off].y = 0.0;
+    }
+}
+
+// ── spectral-space ∂_x via i·kx multiply ─────────────────────────────────
+// dst[jy, kx] = (i · kx_vec[kx]) · src[jy, kx]   (complex multiply by i·kx)
+// Also applies 1/nx normalisation factor `inv_nx` so the subsequent IFFT
+// output is the physical derivative without a second normalise pass.
+__global__ void k_mult_ikx_out(
+    cufftDoubleComplex* dst,
+    const cufftDoubleComplex* src,
+    const double* kx_vec,   // (nh,)
+    double inv_nx,
+    int ny, int nh)
+{
+    int jy = blockIdx.y * blockDim.y + threadIdx.y;
+    int kk = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny || kk >= nh) return;
+    int off = jy * nh + kk;
+    double kx = kx_vec[kk] * inv_nx;
+    cufftDoubleComplex in = src[off];
+    cufftDoubleComplex o;
+    o.x = -kx * in.y;   // Re(i·kx · (a+ib)) = -kx·b
+    o.y =  kx * in.x;   // Im(i·kx · (a+ib)) = +kx·a
+    dst[off] = o;
+}
+
+// ── spectral-space ∂_xx via -kx² multiply ────────────────────────────────
+__global__ void k_mult_mkx2_out(
+    cufftDoubleComplex* dst,
+    const cufftDoubleComplex* src,
+    const double* kx_vec,
+    double inv_nx,
+    int ny, int nh)
+{
+    int jy = blockIdx.y * blockDim.y + threadIdx.y;
+    int kk = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny || kk >= nh) return;
+    int off = jy * nh + kk;
+    double kx = kx_vec[kk];
+    double fac = -kx * kx * inv_nx;
+    cufftDoubleComplex in = src[off];
+    cufftDoubleComplex o;
+    o.x = fac * in.x;
+    o.y = fac * in.y;
+    dst[off] = o;
+}
+
+// ── accumulate:  acc[i] += fac · a[i] · b[i] ────────────────────────────
+__global__ void k_fma_product(
+    double* acc, double fac,
+    const double* a, const double* b, int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) acc[i] += fac * a[i] * b[i];
+}
+
+// ── accumulate:  acc[i] += fac · a[i] ───────────────────────────────────
+__global__ void k_fma_scalar(
+    double* acc, double fac, const double* a, int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) acc[i] += fac * a[i];
+}
+
+// ── Shu-Osher RK3 combine:  out[i] = ca·a[i] + cb·(b[i] + dt·r[i]) ───────
+__global__ void k_rk3_combine(
+    double* out,
+    const double* a, const double* b, const double* r,
+    double ca, double cb, double dt, int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) out[i] = ca * a[i] + cb * (b[i] + dt * r[i]);
+}
+
+// ── in-place subtraction:  a[i] -= b[i]  ────────────────────────────────
+__global__ void k_sub_inplace(double* a, const double* b, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) a[i] -= b[i];
+}
+
+// ── pointwise store: c[i] = a[i] + b[i]  ───────────────────────────────
+__global__ void k_add_out(double* c, const double* a, const double* b, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) c[i] = a[i] + b[i];
+}
+
+// ── ω = ∂v/∂x − ∂u/∂y ──────────────────────────────────────────────────
+__global__ void k_compute_omega(
+    double* omega, const double* dvdx, const double* dudy, int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) omega[i] = dvdx[i] - dudy[i];
+}
+
+// ── zero the Dirichlet y-boundary rows of a physical field ──────────────
+// Row-major (ny × nx) layout: rows jy=0 and jy=ny-1 become 0.
+__global__ void k_zero_y_boundary(double* f, int nx, int ny) {
+    int ix = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ix >= nx) return;
+    f[0 * nx + ix]          = 0.0;
+    f[(ny - 1) * nx + ix]   = 0.0;
+}
+
+// ── max absolute value reduction (two-pass: blocks → scratch → host) ────
+__global__ void k_max_abs_pass1(
+    const double* a, int n, double* out_blocks)
+{
+    __shared__ double s[256];
+    int tid = threadIdx.x;
+    int i = blockIdx.x * blockDim.x + tid;
+    double v = 0.0;
+    if (i < n) v = fabs(a[i]);
+    s[tid] = v;
+    __syncthreads();
+    for (int off = blockDim.x / 2; off > 0; off >>= 1) {
+        if (tid < off) {
+            double o = s[tid + off];
+            if (o > s[tid]) s[tid] = o;
+        }
+        __syncthreads();
+    }
+    if (tid == 0) out_blocks[blockIdx.x] = s[0];
+}
+
+
 }  // extern "C"

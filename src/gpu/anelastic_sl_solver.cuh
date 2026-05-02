@@ -59,12 +59,23 @@ struct AnelasticSLSolver {
     std::vector<double> h_cc_weights;  // Clenshaw-Curtis quadrature weights
 
     // ── Device-side buffers ──────────────────────────────────────────────
-    // Physical fields (column-major: y is the fastest varying, ny × nx)
-    // Using ny-major layout so a DGEMM on Psi acts on the y dimension naturally.
+    // Physical fields (row-major ny × nx: y is slow, x is fast — consistent
+    // with cuFFT R2C-in-x layout and with DGEMM on d_Dy along y).
     double* d_u         = nullptr;   // velocity_x
     double* d_v         = nullptr;   // velocity_y
-    double* d_omega     = nullptr;   // vorticity
+    double* d_omega     = nullptr;   // vorticity (derived on demand)
     double* d_rhs_pi    = nullptr;   // RHS of Poisson for π (temporary)
+
+    // RK3 scratch (primitive-variable Shu-Osher: need u_orig + rhs_u + rhs_v)
+    double* d_u_orig    = nullptr;   // y_n snapshot of u at start of step
+    double* d_v_orig    = nullptr;
+    double* d_rhs_u     = nullptr;
+    double* d_rhs_v     = nullptr;
+    double* d_scratch   = nullptr;   // ∂y* scratch (size ncell)
+
+    // Chebyshev differentiation matrix on [0, Ly] (ny × ny, col-major for DGEMM).
+    // Uploaded once in set_background, reused every RK substep.
+    double* d_Dy = nullptr;
 
     // Weight vectors (ny)
     double* d_rho               = nullptr;
@@ -101,6 +112,9 @@ struct AnelasticSLSolver {
 
     int step_count = 0;
 
+    // Min dy on the non-uniform CGL grid (for CFL).  Set in set_background.
+    double dy_min = 0.0;
+
     // ── API ──────────────────────────────────────────────────────────────
     void init(int nx_, int ny_, int n_modes_,
               double Lx_, double Ly_,
@@ -126,6 +140,14 @@ struct AnelasticSLSolver {
     // SL-Poisson solve.  Reads from d_rhs_pi (ny × nx physical RHS) and writes
     // the solution π (for reduced-pressure form) to d_pi.
     void sl_poisson_solve();
+
+    // Phase 1c time-stepping helpers (primitive-variable + projection).
+    void compute_rhs_uv(const double* dU, const double* dV,
+                        double* dRU, double* dRV);
+    void project_div_free();
+
+    // Download ∇·u (∂x u + ∂y v) to host for diagnostics.  Uses d_scratch.
+    void download_divergence(std::vector<double>& h_div);
 
     // Manufactured-solution self-test (Phase 1b).  Constructs a known π_exact,
     // computes the analytic RHS, runs the pipeline, measures L2 error.
