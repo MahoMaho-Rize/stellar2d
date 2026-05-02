@@ -99,6 +99,46 @@ static double gpu_dot_r1di(const double* a, const double* b, int N) {
 }
 static double gpu_norm_r1di(const double* a, int N) { return std::sqrt(gpu_dot_r1di(a, a, N)); }
 
+// Row-scaled RMS: sqrt( Σ (F_i · invL_i)² / N ) — the natural Newton metric
+// when Viallet row-scaling is active. Each component is weighed by its
+// reciprocal natural magnitude, so F_v, F_r, F_e enter the norm with
+// comparable weight even when their raw magnitudes span 10 orders.
+__global__ static void k_r1di_mul_sq_partial(const double* F, const double* invL,
+                                             double* out, int N) {
+    extern __shared__ double sdata[];
+    int tid = threadIdx.x;
+    int i = blockIdx.x * blockDim.x + tid;
+    double v = 0.0;
+    if (i < N) {
+        double w = F[i] * invL[i];
+        v = w * w;
+    }
+    sdata[tid] = v;
+    __syncthreads();
+    for (int s = blockDim.x >> 1; s > 0; s >>= 1) {
+        if (tid < s) sdata[tid] += sdata[tid + s];
+        __syncthreads();
+    }
+    if (tid == 0) out[blockIdx.x] = sdata[0];
+}
+static double gpu_norm_scaled_r1di(const double* F, const double* invL, int N) {
+    int B = 256, nb = (N + B - 1) / B;
+    if (nb > 256) nb = 256;
+    static double* d_p = nullptr;
+    static int cap = 0;
+    if (cap < nb) {
+        if (d_p) cudaFree(d_p);
+        cudaMalloc(&d_p, nb * sizeof(double));
+        cap = nb;
+    }
+    k_r1di_mul_sq_partial<<<nb, B, B * sizeof(double)>>>(F, invL, d_p, N);
+    std::vector<double> h(nb);
+    cudaMemcpy(h.data(), d_p, nb * sizeof(double), cudaMemcpyDeviceToHost);
+    double s = 0.0;
+    for (double v : h) s += v;
+    return std::sqrt(s / (double)N);
+}
+
 // ---------------------------------------------------------------------
 // Generic utility kernels
 // ---------------------------------------------------------------------
@@ -472,6 +512,11 @@ void Radial1DSolver::compute_F_implicit(double inv_dt) {
 
 double Radial1DSolver::residual_norm_implicit() {
     int N = N_dof;
+    if (use_viallet_scaling && d_scale_invL != nullptr) {
+        // Row-scaled: ‖invL · F‖_RMS — each field weighed by its natural
+        // magnitude so v/r/e components contribute comparably.
+        return gpu_norm_scaled_r1di(d_F, d_scale_invL, N);
+    }
     return std::sqrt(gpu_dot_r1di(d_F, d_F, N) / (double)N);
 }
 
