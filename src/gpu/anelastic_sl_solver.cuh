@@ -69,9 +69,17 @@ struct AnelasticSLSolver {
     // RK3 scratch (primitive-variable Shu-Osher: need u_orig + rhs_u + rhs_v)
     double* d_u_orig    = nullptr;   // y_n snapshot of u at start of step
     double* d_v_orig    = nullptr;
+    double* d_b_orig    = nullptr;   // buoyancy snapshot (Phase 1d)
+    double* d_b         = nullptr;   // buoyancy perturbation (anelastic)
     double* d_rhs_u     = nullptr;
     double* d_rhs_v     = nullptr;
+    double* d_rhs_b     = nullptr;
     double* d_scratch   = nullptr;   // ∂y* scratch (size ncell)
+
+    // Anelastic background on CGL y-grid.
+    double* d_rho_prime = nullptr;   // ∂ρ₀/∂y on CGL nodes (ny,)
+    double* d_N2        = nullptr;   // Brunt-Väisälä² on CGL nodes (ny,)
+    bool    is_anelastic = false;    // set by set_background if ρ₀ non-uniform
 
     // Chebyshev differentiation matrix on [0, Ly] (ny × ny, col-major for DGEMM).
     // Uploaded once in set_background, reused every RK substep.
@@ -130,6 +138,9 @@ struct AnelasticSLSolver {
     // Test-case initial conditions (zero velocity unless otherwise noted)
     void init_zero();
     void init_kh_shear(double vshear, double amp, int k);
+    // Lane-Emden n=3 g-mode pulsation: zero u, v drawn from a low-k sinusoid
+    // in y (approximates the n_g=1 mode shape without full eigensolve).
+    void init_gmode_pulsation(double amp, int k_y);
 
     // Main API
     double step();
@@ -142,12 +153,21 @@ struct AnelasticSLSolver {
     void sl_poisson_solve();
 
     // Phase 1c time-stepping helpers (primitive-variable + projection).
+    // For Phase 1d (anelastic), compute_rhs_uv also fills d_rhs_b with
+    //   ∂t b = -(u·∇) b - N² v
+    // and adds the buoyancy force b·ê_y to ∂t v.
     void compute_rhs_uv(const double* dU, const double* dV,
                         double* dRU, double* dRV);
     void project_div_free();
 
     // Download ∇·u (∂x u + ∂y v) to host for diagnostics.  Uses d_scratch.
     void download_divergence(std::vector<double>& h_div);
+
+    // Phase 1d probe: integrate v(x=Lx/2, y=Ly/2) for the pulsation frequency.
+    // Returns a single double sampled at the middle grid node.
+    double probe_v_center();
+
+    void download_b(std::vector<double>& h_b);
 
     // Manufactured-solution self-test (Phase 1b).  Constructs a known π_exact,
     // computes the analytic RHS, runs the pipeline, measures L2 error.

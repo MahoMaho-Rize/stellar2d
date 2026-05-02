@@ -524,7 +524,8 @@ int main(int argc, char** argv) {
                || cfg.test_case == "sl_basis_check"
                || cfg.test_case == "sl_poisson_test"
                || cfg.test_case == "sl_poisson_test_boussinesq"
-               || cfg.test_case == "kh_shear_boussinesq") {
+               || cfg.test_case == "kh_shear_boussinesq"
+               || cfg.test_case == "gmode_pulsation") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -1263,10 +1264,12 @@ int main(int argc, char** argv) {
         if (cfg.test_case != "sl_basis_check"
             && cfg.test_case != "sl_poisson_test"
             && cfg.test_case != "sl_poisson_test_boussinesq"
-            && cfg.test_case != "kh_shear_boussinesq") {
+            && cfg.test_case != "kh_shear_boussinesq"
+            && cfg.test_case != "gmode_pulsation") {
             std::fprintf(stderr,
                 "ERROR: anelastic_sl supports --test {sl_basis_check, "
-                "sl_poisson_test[_boussinesq], kh_shear_boussinesq}\n");
+                "sl_poisson_test[_boussinesq], kh_shear_boussinesq, "
+                "gmode_pulsation}\n");
             return 1;
         }
         AnelasticSLSolver ansl;
@@ -1282,6 +1285,41 @@ int main(int argc, char** argv) {
         if (cfg.test_case == "sl_poisson_test"
             || cfg.test_case == "sl_poisson_test_boussinesq") {
             ansl.manufactured_test();
+        }
+
+        if (cfg.test_case == "gmode_pulsation") {
+            // Phase 1d: Lane-Emden n=3/2 background, k_y=1 sinusoid seed.
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-3;
+            int k_y = (cfg.ps_k > 0) ? cfg.ps_k : 1;
+            ansl.init_gmode_pulsation(amp, k_y);
+            std::fprintf(stderr,
+                "  AnelasticSL gmode run: tend=%g, cfl=%g, amp=%g, k_y=%d\n",
+                cfg.t_end, cfg.cfl, amp, k_y);
+            double t = 0.0;
+            int step = 0;
+            std::timespec wall_start;
+            clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+            char probe_path[512];
+            std::snprintf(probe_path, sizeof(probe_path), "%s/gmode_probe.csv",
+                          run_dir.c_str());
+            FILE* probe = std::fopen(probe_path, "w");
+            std::fprintf(probe, "# t  v_center\n");
+
+            while (t < cfg.t_end && !g_interrupted) {
+                double dt = ansl.step();
+                if (t + dt > cfg.t_end) dt = cfg.t_end - t;
+                t += dt;
+                ++step;
+                double v_c = ansl.probe_v_center();
+                std::fprintf(probe, "%.10e %.10e\n", t, v_c);
+                if (step % 200 == 0 || t >= cfg.t_end) {
+                    print_progress(t, cfg.t_end, step, dt, wall_start);
+                }
+            }
+            std::fclose(probe);
+            std::fprintf(stderr, "  gmode probe written to %s (%d samples)\n",
+                         probe_path, step);
         }
 
         if (cfg.test_case == "kh_shear_boussinesq") {

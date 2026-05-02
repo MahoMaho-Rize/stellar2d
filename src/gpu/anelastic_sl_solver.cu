@@ -96,6 +96,9 @@ extern "C" {
     __global__ void k_zero_y_boundary(double*, int, int);
     __global__ void k_max_abs_pass1(const double*, int, double*);
     __global__ void k_dealias_x_inplace(cufftDoubleComplex*, int, int, int);
+    __global__ void k_add_buoyancy(double*, const double*, int);
+    __global__ void k_sub_N2_v(double*, const double*, const double*, int, int);
+    __global__ void k_fma_row(double*, double, const double*, const double*, int, int);
 }
 
 // ============================================================================
@@ -261,11 +264,12 @@ void AnelasticSLSolver::free_all() {
     auto free_ptr = [](double*& p){ if (p) { cudaFree(p); p = nullptr; } };
     auto free_cptr = [](cufftDoubleComplex*& p){ if (p) { cudaFree(p); p = nullptr; } };
     free_ptr(d_u); free_ptr(d_v); free_ptr(d_omega); free_ptr(d_rhs_pi); free_ptr(d_pi);
-    free_ptr(d_u_orig); free_ptr(d_v_orig);
-    free_ptr(d_rhs_u);  free_ptr(d_rhs_v);
+    free_ptr(d_u_orig); free_ptr(d_v_orig); free_ptr(d_b_orig); free_ptr(d_b);
+    free_ptr(d_rhs_u);  free_ptr(d_rhs_v); free_ptr(d_rhs_b);
     free_ptr(d_scratch);
     free_ptr(d_Dy);
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
+    free_ptr(d_rho_prime); free_ptr(d_N2);
     free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
     free_ptr(d_mu); free_ptr(d_cc_weights);
     free_cptr(d_fhat); free_cptr(d_ghat); free_cptr(d_Ghat);
@@ -381,6 +385,34 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
         double dy = h_y_cgl[k] - h_y_cgl[k - 1];
         if (dy < dy_min) dy_min = dy;
     }
+
+    // ρ₀'(y) on CGL = D · ρ₀  (used by anelastic continuity and N²).
+    std::vector<double> h_rho_prime(ny, 0.0);
+    for (int i = 0; i < ny; ++i) {
+        double s = 0.0;
+        for (int j = 0; j < ny; ++j) s += D_scaled[(size_t)i * ny + j] * h_rho[j];
+        h_rho_prime[i] = s;
+    }
+    CUDA_CHECK(cudaMemcpy(d_rho_prime, h_rho_prime.data(),
+                          sizeof(double) * ny, cudaMemcpyHostToDevice));
+
+    // Brunt-Väisälä N²(y) for anelastic dynamics.  For a stratified ρ₀(y)
+    // in a uniform gravity g·ê_y the polytropic N² = g · (−ρ₀'/ρ₀ − g/c_s²).
+    // For the Phase 1d minimum we use a simple proxy: N² = g · max(0, −ρ₀'/ρ₀)
+    // (convectively stable where ρ decreases with height).  g=1 by default.
+    // Boussinesq background sets N² ≡ 0.
+    is_anelastic = (kind != "boussinesq");
+    std::vector<double> h_N2(ny, 0.0);
+    if (is_anelastic) {
+        const double g_const = 1.0;
+        for (int i = 0; i < ny; ++i) {
+            double dlnrho = h_rho_prime[i] / std::max(h_rho[i], 1e-12);
+            double n2 = -g_const * dlnrho;        // positive if ρ decreases
+            h_N2[i] = std::max(0.0, n2);
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_N2, h_N2.data(),
+                          sizeof(double) * ny, cudaMemcpyHostToDevice));
 
     // ── SL eigenproblem on interior nodes (Dirichlet BCs): ────────────
     //   A := -D²_int - diag(W̃_int),   A ψ = μ ψ.
@@ -624,16 +656,23 @@ void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
     // RK3 scratch buffers for primitive-variable projection time stepping.
     CUDA_CHECK(cudaMalloc(&d_u_orig,  sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_v_orig,  sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_b_orig,  sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_b,       sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_rhs_u,   sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_rhs_v,   sizeof(double) * ncell));
+    CUDA_CHECK(cudaMalloc(&d_rhs_b,   sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_scratch, sizeof(double) * ncell));
+    CUDA_CHECK(cudaMemset(d_b, 0, sizeof(double) * ncell));
 
     // Chebyshev differentiation matrix on [0, Ly], col-major ny × ny.
     CUDA_CHECK(cudaMalloc(&d_Dy,      sizeof(double) * (size_t)ny * ny));
 
     CUDA_CHECK(cudaMalloc(&d_rho,          sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_rho_sqrt_inv, sizeof(double) * ny));
+    CUDA_CHECK(cudaMalloc(&d_rho_prime,    sizeof(double) * ny));
+    CUDA_CHECK(cudaMalloc(&d_N2,           sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_cc_weights,   sizeof(double) * ny));
+    CUDA_CHECK(cudaMemset(d_N2, 0, sizeof(double) * ny));   // Boussinesq default
 
     CUDA_CHECK(cudaMalloc(&d_kx, sizeof(double) * nh));
 
@@ -739,6 +778,50 @@ void AnelasticSLSolver::init_kh_shear(double vshear, double amp, int k) {
         vshear, amp, k, delta, sigma);
 }
 
+// ── Phase 1d IC: g-mode-like sinusoid in y ──────────────────────────────
+// Sets u = 0, v = amp · sin(k_y · π · y / Ly) · sin(kx_0 · x),  b = 0.
+// The eigenmodes of the linearised anelastic system are SL modes; here we
+// seed a pure sine (which is the exact g-mode shape for Boussinesq) and
+// let the anelastic operator respond — in a real run it evolves into the
+// correct eigenmode within one oscillation period.
+void AnelasticSLSolver::init_gmode_pulsation(double amp, int k_y) {
+    std::vector<double> h_u(ncell, 0.0);
+    std::vector<double> h_v(ncell, 0.0);
+    const double kx_phys = 2.0 * M_PI / Lx;   // k_x = 1 mode in x
+    for (int jy = 0; jy < ny; ++jy) {
+        double y = h_y_cgl[jy];
+        double shape = std::sin((double)k_y * M_PI * y / Ly);
+        for (int ix = 0; ix < nx; ++ix) {
+            double x = ix * dx;
+            h_v[jy * nx + ix] = amp * shape * std::sin(kx_phys * x);
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_u, h_u.data(), sizeof(double) * ncell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_v, h_v.data(), sizeof(double) * ncell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_b, 0, sizeof(double) * ncell));
+    dt_current = 0.0;
+    step_count = 0;
+    project_div_free();
+    std::fprintf(stderr,
+        "  AnelasticSL gmode IC: amp=%g, k_y=%d, anelastic=%d\n",
+        amp, k_y, (int)is_anelastic);
+}
+
+double AnelasticSLSolver::probe_v_center() {
+    // Sample v at (jy = ny/2, ix = nx/4).  Single-cell D2H copy (slow-ish
+    // but called infrequently).
+    int jy = ny / 2, ix = nx / 4;
+    int off = jy * nx + ix;
+    double val = 0.0;
+    CUDA_CHECK(cudaMemcpy(&val, d_v + off, sizeof(double), cudaMemcpyDeviceToHost));
+    return val;
+}
+
+void AnelasticSLSolver::download_b(std::vector<double>& h_b) {
+    h_b.resize(ncell);
+    CUDA_CHECK(cudaMemcpy(h_b.data(), d_b, sizeof(double) * ncell, cudaMemcpyDeviceToHost));
+}
+
 // ── GPU-resident max|f| reduction ───────────────────────────────────────
 static double gpu_max_abs(const double* d_in, int n, double* d_scratch_blocks,
                           int& cached_blocks) {
@@ -831,6 +914,29 @@ void AnelasticSLSolver::compute_rhs_uv(const double* dU, const double* dV,
     k_fma_product<<<grid1d, block>>>(dRV, -1.0, dV, d_scratch, ncell);
     apply_dy(cublas, d_scratch, d_rhs_pi, d_Dy, nx, ny);
     k_fma_scalar<<<grid1d, block>>>(dRV, nu, d_rhs_pi, ncell);
+
+    // ───────── Anelastic extras: buoyancy in v-eq + b equation ────
+    if (is_anelastic) {
+        // +b · ê_y to v-momentum
+        k_add_buoyancy<<<grid1d, block>>>(dRV, d_b, ncell);
+
+        // ∂t b = -(u · ∇) b - N²(y) · v
+        CUDA_CHECK(cudaMemsetAsync(d_rhs_b, 0, sizeof(double) * ncell));
+
+        // Spectral ∂x b → d_scratch; dRB -= u · ∂x b
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_b, d_fhat));
+        k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, (2 * (nh - 1)) / 3);
+        k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, inv_nx, ny, nh);
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_scratch));
+        k_fma_product<<<grid1d, block>>>(d_rhs_b, -1.0, dU, d_scratch, ncell);
+
+        // Chebyshev ∂y b → d_scratch; dRB -= v · ∂y b
+        apply_dy(cublas, d_b, d_scratch, d_Dy, nx, ny);
+        k_fma_product<<<grid1d, block>>>(d_rhs_b, -1.0, dV, d_scratch, ncell);
+
+        // −N²(y) · v (Brunt-Väisälä restoring force)
+        k_sub_N2_v<<<g_ny_nh, b2>>>(d_rhs_b, dV, d_N2, nx, ny);
+    }
 }
 
 // ── Project (u, v) onto divergence-free subspace. ───────────────────────
@@ -854,8 +960,24 @@ void AnelasticSLSolver::project_div_free() {
     // ∂y v → d_rhs_pi
     apply_dy(cublas, d_v, d_rhs_pi, d_Dy, nx, ny);                // d_rhs_pi = ∂y v
 
-    // d_rhs_pi = ∂x u + ∂y v  (divergence of the unprojected velocity)
+    // d_rhs_pi = ∂x u + ∂y v  (divergence of the unprojected velocity).
+    // For anelastic (ρ₀(y) non-uniform): RHS = ρ₀·(∂x u + ∂y v) + ρ₀'·v
+    //   = ∇·(ρ₀ u) when projected so the SL-Poisson solve ∇·(ρ₀ ∇π) = RHS
+    //   produces a π whose ∇π cancels the mass flux divergence exactly.
     k_fma_scalar<<<grid1d, block>>>(d_rhs_pi, 1.0, d_scratch, ncell);
+    if (is_anelastic) {
+        // Scale divergence by ρ₀(y) and add ρ₀'·v along y.
+        // Use d_scratch as temp: d_scratch = (∂x u + ∂y v)·ρ₀ - (∂x u + ∂y v)
+        // Easier path: rebuild RHS from scratch for clarity.
+        CUDA_CHECK(cudaMemsetAsync(d_rhs_pi, 0, sizeof(double) * ncell));
+        // term 1: ρ₀ · ∂x u  (d_scratch currently holds ∂x u)
+        k_fma_row<<<g_ny_nh, b2>>>(d_rhs_pi, 1.0, d_scratch, d_rho, nx, ny);
+        // term 2: ρ₀ · ∂y v
+        apply_dy(cublas, d_v, d_scratch, d_Dy, nx, ny);           // d_scratch = ∂y v
+        k_fma_row<<<g_ny_nh, b2>>>(d_rhs_pi, 1.0, d_scratch, d_rho, nx, ny);
+        // term 3: ρ₀' · v
+        k_fma_row<<<g_ny_nh, b2>>>(d_rhs_pi, 1.0, d_v, d_rho_prime, nx, ny);
+    }
 
     // Solve ∇·(ρ ∇π) = RHS  (reduced-pressure form; for ρ=1, plain ∇²π = RHS).
     // For our solver the SL pipeline already solves with a -1/(μ+kx²) factor
@@ -916,27 +1038,38 @@ double AnelasticSLSolver::step() {
     // Snapshot y_n
     CUDA_CHECK(cudaMemcpy(d_u_orig, d_u, sizeof(double) * ncell, cudaMemcpyDeviceToDevice));
     CUDA_CHECK(cudaMemcpy(d_v_orig, d_v, sizeof(double) * ncell, cudaMemcpyDeviceToDevice));
+    if (is_anelastic) {
+        CUDA_CHECK(cudaMemcpy(d_b_orig, d_b, sizeof(double) * ncell,
+                              cudaMemcpyDeviceToDevice));
+    }
 
-    // ── Stage 1 : u^(1) = u_n + dt·R(u_n) ──
+    // ── Stage 1 : y^(1) = y_n + dt·R(y_n) ──
     compute_rhs_uv(d_u, d_v, d_rhs_u, d_rhs_v);
     k_fma_scalar<<<grid1d, block>>>(d_u, dt, d_rhs_u, ncell);
     k_fma_scalar<<<grid1d, block>>>(d_v, dt, d_rhs_v, ncell);
+    if (is_anelastic) k_fma_scalar<<<grid1d, block>>>(d_b, dt, d_rhs_b, ncell);
     project_div_free();
 
-    // ── Stage 2 : u^(2) = 3/4 u_n + 1/4 (u^(1) + dt·R(u^(1))) ──
+    // ── Stage 2 : y^(2) = 3/4 y_n + 1/4 (y^(1) + dt·R(y^(1))) ──
     compute_rhs_uv(d_u, d_v, d_rhs_u, d_rhs_v);
     k_rk3_combine<<<grid1d, block>>>(d_u, d_u_orig, d_u, d_rhs_u,
                                      0.75, 0.25, dt, ncell);
     k_rk3_combine<<<grid1d, block>>>(d_v, d_v_orig, d_v, d_rhs_v,
                                      0.75, 0.25, dt, ncell);
+    if (is_anelastic)
+        k_rk3_combine<<<grid1d, block>>>(d_b, d_b_orig, d_b, d_rhs_b,
+                                         0.75, 0.25, dt, ncell);
     project_div_free();
 
-    // ── Stage 3 : u_{n+1} = 1/3 u_n + 2/3 (u^(2) + dt·R(u^(2))) ──
+    // ── Stage 3 : y_{n+1} = 1/3 y_n + 2/3 (y^(2) + dt·R(y^(2))) ──
     compute_rhs_uv(d_u, d_v, d_rhs_u, d_rhs_v);
     k_rk3_combine<<<grid1d, block>>>(d_u, d_u_orig, d_u, d_rhs_u,
                                      1.0 / 3.0, 2.0 / 3.0, dt, ncell);
     k_rk3_combine<<<grid1d, block>>>(d_v, d_v_orig, d_v, d_rhs_v,
                                      1.0 / 3.0, 2.0 / 3.0, dt, ncell);
+    if (is_anelastic)
+        k_rk3_combine<<<grid1d, block>>>(d_b, d_b_orig, d_b, d_rhs_b,
+                                         1.0 / 3.0, 2.0 / 3.0, dt, ncell);
     project_div_free();
 
     ++step_count;

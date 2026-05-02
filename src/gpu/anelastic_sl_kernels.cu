@@ -173,6 +173,34 @@ __global__ void k_add_out(double* c, const double* a, const double* b, int n) {
     if (i < n) c[i] = a[i] + b[i];
 }
 
+// ── Anelastic buoyancy: dRV[j] += b[j] (hydrostatic buoyancy, g=1) ──────
+__global__ void k_add_buoyancy(double* dRV, const double* b, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) dRV[i] += b[i];
+}
+
+// ── Anelastic N² forcing: dRB[j] -= N²(y_j) · v[j] ──────────────────────
+// For row-major (ny × nx), y is the slow axis → index j = idx / nx.
+__global__ void k_sub_N2_v(double* dRB, const double* v, const double* N2,
+                           int nx, int ny) {
+    int jy = blockIdx.y * blockDim.y + threadIdx.y;
+    int ix = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny || ix >= nx) return;
+    int k = jy * nx + ix;
+    dRB[k] -= N2[jy] * v[k];
+}
+
+// ── Row-multiply: out[j, i] += fac · a[j, i] · rho[j] ──────────────────
+// Adds fac·ρ(y)·src to acc (used to build anelastic projection RHS).
+__global__ void k_fma_row(double* acc, double fac, const double* src,
+                          const double* row_scale, int nx, int ny) {
+    int jy = blockIdx.y * blockDim.y + threadIdx.y;
+    int ix = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny || ix >= nx) return;
+    int k = jy * nx + ix;
+    acc[k] += fac * src[k] * row_scale[jy];
+}
+
 // ── ω = ∂v/∂x − ∂u/∂y ──────────────────────────────────────────────────
 __global__ void k_compute_omega(
     double* omega, const double* dvdx, const double* dudy, int n)
