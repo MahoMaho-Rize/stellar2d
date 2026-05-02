@@ -802,6 +802,168 @@ __global__ static void k_rad1d_mlt_diag(
     out_conv_mass[k] = (super > 0.0) ? dm[k] : 0.0;
 }
 
+// Rich per-zone diagnostic kernel used by download_profile_rich (Tier-2
+// MESA PK). Writes T, κ, Γ₁, ∇_ad, ∇_rad, L_rad at outer face, an int
+// mixing flag (0=stable, 1=convective), and a v_conv proxy.
+//
+// v_conv proxy: Böhm-Vitense-style estimate
+//   v_conv^2 = g · H_P · (∇_rad − ∇_ad)    for ∇_rad > ∇_ad, else 0
+// using H_P = P/(ρg), g = G M_enc / r². This is what MESA records as
+// `conv_vel` in a fully-developed MLT envelope.
+__global__ static void k_rad1d_rich_diag(
+    const double* r,          // (nz+1)
+    const double* rho,        // (nz)
+    const double* P,          // (nz)
+    const double* e_int,      // (nz)
+    const double* M,          // (nz+1)
+    double* out_T,            // (nz)
+    double* out_kap,          // (nz)
+    double* out_gamma1,       // (nz)
+    double* out_grada,        // (nz)
+    double* out_gradr,        // (nz)
+    double* out_Lface,        // (nz) L at outer face
+    int*    out_mixtype,      // (nz)
+    double* out_conv_vel,     // (nz)
+    int nz, EOS eos,
+    double a_rad, double c_light, double G_const,
+    OpacityParams opa)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    const double PI = 3.14159265358979323846;
+
+    double rho_k = fmax(rho[k], 1e-30);
+    double e_k   = fmax(e_int[k], 1e-30);
+    double T_k   = fmax(eos.temperature_from_rho_e(rho_k, e_k), 1e-12);
+    double P_k   = fmax(P[k], 1e-30);
+    double kap   = grey_opacity(rho_k, T_k, opa);
+
+    out_T[k]   = T_k;
+    out_kap[k] = kap;
+
+    // Γ₁ — ideal gas default; Helm branch reports its own below.
+    double gam = eos.gamma;
+    double gamma1_val = gam;
+#ifdef __CUDA_ARCH__
+    if (eos.type == (int)EosType::HELMHOLTZ) {
+        HelmState hs = helm_eval(rho_k, T_k, eos.helm);
+        gamma1_val = hs.gamma1;
+    }
+#endif
+    out_gamma1[k] = gamma1_val;
+
+    // L_rad at outer face, identical logic to k_rad1d_mlt_diag
+    double L_rad = 0.0;
+    double r_kp1 = r[k+1];
+    if (k < nz - 1) {
+        double rho_kp1 = fmax(rho[k+1], 1e-30);
+        double e_kp1   = fmax(e_int[k+1], 1e-30);
+        double T_kp1   = fmax(eos.temperature_from_rho_e(rho_kp1, e_kp1), 1e-12);
+        double T_face   = 0.5 * (T_k + T_kp1);
+        double rho_face = 0.5 * (rho_k + rho_kp1);
+        double kap_f    = grey_opacity(rho_face, T_face, opa);
+        double D        = c_light / (3.0 * kap_f * rho_face);
+        double A_face   = 4.0 * PI * r_kp1 * r_kp1;
+        double rc_lo    = 0.5 * (r[k]   + r[k+1]);
+        double rc_hi    = 0.5 * (r[k+1] + r[k+2]);
+        double dr_zc    = fmax(rc_hi - rc_lo, 1e-30);
+        double T_k_4    = T_k * T_k * T_k * T_k;
+        double T_kp1_4  = T_kp1 * T_kp1 * T_kp1 * T_kp1;
+        L_rad = A_face * D * a_rad * (T_k_4 - T_kp1_4) / dr_zc;
+    } else {
+        double A_s = 4.0 * PI * r_kp1 * r_kp1;
+        double sigma_sb = c_light * a_rad / 4.0;
+        double T_k_4 = T_k * T_k * T_k * T_k;
+        L_rad = A_s * sigma_sb * T_k_4;
+    }
+    out_Lface[k] = L_rad;
+
+    // ∇_rad and ∇_ad — reuse MLT diagnostic formulas
+    double M_k = M[k+1];
+    if (M_k < 1e-30) M_k = 1e-30;
+    double T_k_4  = T_k * T_k * T_k * T_k;
+    double denom  = 16.0 * PI * a_rad * c_light * G_const * M_k * T_k_4;
+    double gradr  = (denom > 1e-300) ? (3.0 * kap * rho_k * L_rad * P_k) / denom : 0.0;
+    double grada  = (gam - 1.0) / gam;
+
+    out_gradr[k]   = gradr;
+    out_grada[k]   = grada;
+    out_mixtype[k] = (gradr > grada) ? 1 : 0;
+
+    // Böhm-Vitense v_conv proxy. H_P from P/(ρg), g from enclosed M at outer face.
+    double r_c   = 0.5 * (r[k] + r[k+1]);
+    double g     = G_const * M_k / fmax(r_kp1 * r_kp1, 1e-30);
+    double H_P   = P_k / fmax(rho_k * g, 1e-30);
+    double super = gradr - grada;
+    double v_conv = (super > 0.0 && H_P > 0.0)
+                    ? sqrt(g * H_P * super)
+                    : 0.0;
+    out_conv_vel[k] = v_conv;
+
+    (void)r_c;
+}
+
+// Host wrapper: download all rich profile fields.
+void Radial1DSolver::download_profile_rich(
+    std::vector<double>& r_face, std::vector<double>& v_face,
+    std::vector<double>& rho_cell, std::vector<double>& P_cell,
+    std::vector<double>& e_cell, std::vector<double>& T_cell,
+    std::vector<double>& kap_cell, std::vector<double>& gamma1_cell,
+    std::vector<double>& grada_cell, std::vector<double>& gradr_cell,
+    std::vector<double>& L_face, std::vector<int>& mixing_type,
+    std::vector<double>& conv_vel)
+{
+    int nz = lev.nz, B = 256;
+    r_face.resize(nz+1);
+    v_face.resize(nz+1);
+    rho_cell.resize(nz); P_cell.resize(nz); e_cell.resize(nz);
+    T_cell.resize(nz); kap_cell.resize(nz); gamma1_cell.resize(nz);
+    grada_cell.resize(nz); gradr_cell.resize(nz);
+    L_face.resize(nz); mixing_type.resize(nz); conv_vel.resize(nz);
+
+    // Refresh primitives + enclosed mass so rho, P, M are consistent.
+    launch_primitives(lev, nz, use_eos, gamma, eos, B);
+    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+
+    // Allocate device scratch for rich fields.
+    double *d_T, *d_kap, *d_g1, *d_ga, *d_gr, *d_Lf, *d_vc;
+    int *d_mt;
+    CUDA_CHECK(cudaMalloc(&d_T,   nz*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_kap, nz*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_g1,  nz*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_ga,  nz*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_gr,  nz*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_Lf,  nz*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_vc,  nz*sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_mt,  nz*sizeof(int)));
+
+    OpacityParams opa;
+    fill_opacity_params(opa);
+    k_rad1d_rich_diag<<<(nz+B-1)/B, B>>>(
+        lev.d_r, lev.d_rho, lev.d_P, lev.d_e_int, lev.d_M,
+        d_T, d_kap, d_g1, d_ga, d_gr, d_Lf, d_mt, d_vc,
+        nz, eos, rad_a_rad, rad_c_light, G_const, opa);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    // Download everything.
+    CUDA_CHECK(cudaMemcpy(r_face.data(),   lev.d_r,    (nz+1)*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(v_face.data(),   lev.d_v,    (nz+1)*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(rho_cell.data(), lev.d_rho,  nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(P_cell.data(),   lev.d_P,    nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(e_cell.data(),   lev.d_e_int,nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(T_cell.data(),   d_T,        nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(kap_cell.data(), d_kap,      nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(gamma1_cell.data(), d_g1,    nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(grada_cell.data(),  d_ga,    nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(gradr_cell.data(),  d_gr,    nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(L_face.data(),      d_Lf,    nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(conv_vel.data(),    d_vc,    nz*sizeof(double),     cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(mixing_type.data(), d_mt,    nz*sizeof(int),        cudaMemcpyDeviceToHost));
+
+    cudaFree(d_T); cudaFree(d_kap); cudaFree(d_g1); cudaFree(d_ga);
+    cudaFree(d_gr); cudaFree(d_Lf); cudaFree(d_vc); cudaFree(d_mt);
+}
+
 Radial1DSolver::ConvectionDiag Radial1DSolver::compute_convection_diag() {
     ConvectionDiag d{};
     if (!use_eos) return d;  // need EOS for T from e

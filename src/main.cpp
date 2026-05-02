@@ -86,6 +86,7 @@ struct SimConfig {
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
     double ic_n_poly = 1.5;          // polytropic index for --ic-solar
     std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/convert_mesa_ic.py output
+    bool rich_profile = false;       // --rich-profile: emit T, κ, ∇_ad, ∇_rad, L, conv_vel per zone
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     // EOS selection
     std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
@@ -301,6 +302,8 @@ int main(int argc, char** argv) {
             cfg.ic_n_poly = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ic-mesa") == 0 && i + 1 < argc)
             cfg.ic_mesa_path = argv[++i];
+        else if (std::strcmp(argv[i], "--rich-profile") == 0)
+            cfg.rich_profile = true;
         else if (std::strcmp(argv[i], "--G") == 0 && i + 1 < argc)
             cfg.G = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--implicit") == 0)
@@ -959,21 +962,47 @@ int main(int argc, char** argv) {
                 }
                 std::fflush(csv);
 
-                // Dump profile as simple text
+                // Dump profile as simple text. When --rich-profile is set,
+                // also emit T, κ, Γ₁, ∇_ad, ∇_rad, L, mixing type, v_conv
+                // so scripts/pk_mesa_radial1d.py can compare per-field.
                 std::vector<double> r_face, v_face, rho_cell, P_cell, e_cell;
-                r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
+                std::vector<double> T_cell, kap_cell, g1_cell, ga_cell, gr_cell;
+                std::vector<double> L_face, vc_cell;
+                std::vector<int>    mt_cell;
+                if (cfg.rich_profile) {
+                    r1d.download_profile_rich(r_face, v_face, rho_cell, P_cell, e_cell,
+                                              T_cell, kap_cell, g1_cell, ga_cell, gr_cell,
+                                              L_face, mt_cell, vc_cell);
+                } else {
+                    r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
+                }
                 std::vector<double> X_cell, Y_cell;
                 if (r1d.species_enabled) r1d.download_species(X_cell, Y_cell);
                 char path[512];
                 std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
                 std::FILE* fp = std::fopen(path, "w");
-                if (r1d.species_enabled) {
+                if (cfg.rich_profile) {
+                    std::fprintf(fp,
+                        "# t = %.10e  step = %d\n"
+                        "# k r_face v_face rho P e_int T kap gamma1 grada gradr L_face mixing_type conv_vel%s\n",
+                        t, step, r1d.species_enabled ? " X Y" : "");
+                } else if (r1d.species_enabled) {
                     std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int X Y\n", t, step);
                 } else {
                     std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int\n", t, step);
                 }
                 for (int k = 0; k < r1d.lev.nz; ++k) {
-                    if (r1d.species_enabled) {
+                    if (cfg.rich_profile) {
+                        std::fprintf(fp,
+                            "%d %.10e %.10e %.10e %.10e %.10e "
+                            "%.10e %.10e %.6e %.6e %.6e %.6e %d %.6e",
+                            k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k],
+                            T_cell[k], kap_cell[k], g1_cell[k], ga_cell[k], gr_cell[k],
+                            L_face[k], mt_cell[k], vc_cell[k]);
+                        if (r1d.species_enabled)
+                            std::fprintf(fp, " %.6e %.6e", X_cell[k], Y_cell[k]);
+                        std::fprintf(fp, "\n");
+                    } else if (r1d.species_enabled) {
                         std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e %.6e %.6e\n",
                                      k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k],
                                      X_cell[k], Y_cell[k]);
@@ -982,7 +1011,7 @@ int main(int argc, char** argv) {
                                      k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k]);
                     }
                 }
-                // last face
+                // last face (velocity only; cell-centred fields don't apply)
                 std::fprintf(fp, "%d %.10e %.10e - - -\n", r1d.lev.nz, r_face[r1d.lev.nz], v_face[r1d.lev.nz]);
                 std::fclose(fp);
             }

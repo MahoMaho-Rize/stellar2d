@@ -194,6 +194,29 @@ struct Radial1DSolver {
                           std::vector<double>& P_cell,
                           std::vector<double>& e_cell);
 
+    // Rich profile emission used by the Tier-2 MESA PK. Adds the physical
+    // state variables a MESA profile exposes: T [K], κ_R [cm²/g], Γ₁,
+    // ∇_ad, ∇_rad, L_rad at outer face [erg/s], convective-velocity
+    // proxy and mixing-type flag. Single launch per call; all fields
+    // computed from the current (r, v, ρ, P, e_int, X) state.
+    //
+    // mixing_type: 0 = stable (∇_rad < ∇_ad)
+    //              1 = convective (∇_rad > ∇_ad)
+    // conv_vel:    Böhm-Vitense v_conv estimate (0 in stable zones)
+    void download_profile_rich(std::vector<double>& r_face,
+                               std::vector<double>& v_face,
+                               std::vector<double>& rho_cell,
+                               std::vector<double>& P_cell,
+                               std::vector<double>& e_cell,
+                               std::vector<double>& T_cell,
+                               std::vector<double>& kap_cell,
+                               std::vector<double>& gamma1_cell,
+                               std::vector<double>& grada_cell,
+                               std::vector<double>& gradr_cell,
+                               std::vector<double>& L_face,
+                               std::vector<int>&    mixing_type,
+                               std::vector<double>& conv_vel);
+
     // Compute conservation diagnostics (mass, total energy) on GPU
     struct Diagnostics {
         double total_mass;
