@@ -110,6 +110,10 @@ struct SimConfig {
     bool   ps_batched_fft  = false;        // 啟用 batched FFT pipeline (opt-in, 消費卡慢)
     bool   ps_pi_dt        = false;        // PI controller 自適應 dt
     int    ps_tg_k         = 2;            // Taylor-Green 波數 (for --test taylor_green)
+    // vortex_merger 參數 (co-rotating Gaussian pair)
+    double ps_vm_gamma     = 1.0;          // 峰值渦量 Γ
+    double ps_vm_sigma     = 0.08;         // σ / min(Lx,Ly)
+    double ps_vm_dist      = 0.20;         // d / min(Lx,Ly);d/σ ≲ 3 → 合併
     int    ps_ckpt_every   = 0;            // 每 N 步存 checkpoint (0 = 停用)
     std::string ps_resume;                 // restart 檔路徑 (空 = 從 IC 開始)
 
@@ -334,6 +338,12 @@ int main(int argc, char** argv) {
             cfg.ps_pi_dt = true;
         else if (std::strcmp(argv[i], "--ps-tg-k") == 0 && i + 1 < argc)
             cfg.ps_tg_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-vm-gamma") == 0 && i + 1 < argc)
+            cfg.ps_vm_gamma = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-vm-sigma") == 0 && i + 1 < argc)
+            cfg.ps_vm_sigma = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ps-vm-dist") == 0 && i + 1 < argc)
+            cfg.ps_vm_dist = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-ckpt-every") == 0 && i + 1 < argc)
             cfg.ps_ckpt_every = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-resume") == 0 && i + 1 < argc)
@@ -502,6 +512,8 @@ int main(int argc, char** argv) {
                || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb"
                || cfg.test_case == "kh_lecoanet"
                || cfg.test_case == "taylor_green"
+               || cfg.test_case == "double_shear_layer"
+               || cfg.test_case == "vortex_merger"
                || cfg.test_case == "rossby_wave"
                || cfg.test_case == "jovian_bands") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
@@ -1098,9 +1110,12 @@ int main(int argc, char** argv) {
     } else if (cfg.solver_type == "pseudo_spectral") {
         // ===== 偽譜法 2D 不可壓 NS (渦度-流函數, cuFFT) =====
         if (cfg.test_case != "kh_shear" && cfg.test_case != "forced_turb"
-            && cfg.test_case != "taylor_green") {
+            && cfg.test_case != "taylor_green"
+            && cfg.test_case != "double_shear_layer"
+            && cfg.test_case != "vortex_merger") {
             std::fprintf(stderr,
-                "ERROR: pseudo_spectral supports --test {kh_shear, forced_turb, taylor_green}\n");
+                "ERROR: pseudo_spectral supports --test {kh_shear, forced_turb, taylor_green, "
+                "double_shear_layer, vortex_merger}\n");
             return 1;
         }
         PseudoSpectralSolver ps;
@@ -1118,6 +1133,11 @@ int main(int argc, char** argv) {
             ps.init_kh_shear(cfg.ps_vshear, amp, cfg.ps_k);
         } else if (cfg.test_case == "taylor_green") {
             ps.init_taylor_green(cfg.ps_tg_k);
+        } else if (cfg.test_case == "double_shear_layer") {
+            double amp = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 5e-2;
+            ps.init_double_shear_layer(cfg.ps_vshear, amp, cfg.ps_k);
+        } else if (cfg.test_case == "vortex_merger") {
+            ps.init_vortex_merger(cfg.ps_vm_gamma, cfg.ps_vm_sigma, cfg.ps_vm_dist);
         } else {
             // forced_turb: zero IC + stochastic forcing
             ps.init_zero();

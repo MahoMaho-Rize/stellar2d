@@ -196,6 +196,22 @@ struct PseudoSpectralSolver {
     // 對流項應嚴格為 0(u·∇ω 在 Taylor-Green 幾何上精確消去),只測 IFRK3 積分因子與空間階。
     // 啟用後會存 ω̂₀ 到 d_omega_hat_ic,compute_diagnostics 可額外算 err_L2。
     void init_taylor_green(int k);
+
+    // Bell-Colella-Glaz 1989 double shear layer:
+    //   u(y) = vshear · tanh((y - y_low)/δ)   for y < Ly/2
+    //        = vshear · tanh((y_high - y)/δ)  for y ≥ Ly/2
+    //   v(x,y) = amp · sin(k·2π·x/Lx)               (全域正弦,與 KH 的 Gaussian-bumped 不同)
+    // δ = max(8·dy, 0.02·Ly) 保持譜可解析;ω = ∂v/∂x - ∂u/∂y 解析式上載後 FFT。
+    // 對 dealiasing 非常敏感的經典 benchmark,兩條對稱剪切層捲成對稱渦鏈。
+    void init_double_shear_layer(double vshear, double amp, int k);
+
+    // Melander-Zabusky-McWilliams 1988 co-rotating vortex merger:
+    //   ω(x,y) = Γ·[exp(-r₁²/σ²) + exp(-r₂²/σ²)]
+    //   r₁, r₂ = 距兩個同號 Gaussian 渦中心的距離,沿 x 軸分開距離 d,y=Ly/2。
+    // sigma = sigma_frac · min(Lx,Ly),dist = dist_frac · min(Lx,Ly)。
+    // 典型合併門檻 d/σ ≲ 3;預設 dist_frac=0.20, sigma_frac=0.08 → d/σ=2.5 會合併。
+    // DC 被 k_clear_dc 清零(零均值 ω,對應週期盒的常規慣例)。
+    void init_vortex_merger(double gamma, double sigma_frac, double dist_frac);
     bool has_analytic_ic = false;
     int  analytic_k = 0;     // Taylor-Green 波數 mode
     cufftDoubleComplex* d_omega_hat_ic = nullptr;

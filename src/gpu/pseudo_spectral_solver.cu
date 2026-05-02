@@ -529,6 +529,108 @@ void PseudoSpectralSolver::init_taylor_green(int k) {
 }
 
 // ============================================================
+// Bell-Colella-Glaz 1989 雙剪切層 IC
+//   u(y) = vshear · tanh((y - y_low)/δ),  y < Ly/2
+//        = vshear · tanh((y_high - y)/δ), y ≥ Ly/2
+//   v(x)  = amp · sin(k·2π·x/Lx)   (全域正弦擾動)
+// 解析 ω = ∂v/∂x - ∂u/∂y:
+//   ∂u/∂y|lower =  vshear/δ · sech²((y-y_low)/δ)
+//   ∂u/∂y|upper = -vshear/δ · sech²((y_high-y)/δ)
+//   ∂v/∂x       = amp · kx_phys · cos(kx_phys·x)
+// ============================================================
+void PseudoSpectralSolver::init_double_shear_layer(double vshear, double amp, int k) {
+    double delta   = std::fmax(8.0 * dy, 0.02 * Ly);
+    double y_low   = 0.25 * Ly;
+    double y_high  = 0.75 * Ly;
+    double y_mid   = 0.50 * Ly;
+    double kx_phys = k * 2.0 * M_PI / Lx;
+
+    std::vector<double> h_omega(ncell);
+    for (int ic = 0; ic < nx; ++ic) {
+        double x = (ic + 0.5) * dx;
+        double cos_kx = std::cos(kx_phys * x);
+        for (int jc = 0; jc < ny; ++jc) {
+            double y = (jc + 0.5) * dy;
+            double sech, dudy;
+            if (y < y_mid) {
+                sech = 1.0 / std::cosh((y - y_low) / delta);
+                dudy =  vshear * sech * sech / delta;
+            } else {
+                sech = 1.0 / std::cosh((y_high - y) / delta);
+                dudy = -vshear * sech * sech / delta;
+            }
+            double dvdx = amp * kx_phys * cos_kx;
+            h_omega[ic * ny + jc] = dvdx - dudy;
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_omega, h_omega.data(),
+                          ncell * sizeof(double), cudaMemcpyHostToDevice));
+    phys_to_spec(plan_r2c, d_omega, d_omega_hat);
+
+    int B = 256;
+    int Gh = (ncplx + B - 1) / B;
+    k_apply_dealias<<<Gh, B>>>(d_omega_hat, d_dealias, ncplx);
+    k_clear_dc<<<1, 1>>>(d_omega_hat);
+
+    dt_current = 0.0;
+    step_count = 0;
+    std::fprintf(stderr,
+        "  PseudoSpectral DoubleShearLayer: |vx|=%g, amp=%g, k=%d (δ=%.3g)\n",
+        vshear, amp, k, delta);
+}
+
+// ============================================================
+// Co-rotating Gaussian vortex pair (Melander-Zabusky-McWilliams 1988)
+//   兩個同號 Gaussian,中心 (Lx/2 ± d/2, Ly/2),σ = sigma_frac·min(L),d = dist_frac·min(L)
+//   d/σ ≲ 3 → 合併為單渦;更大則穩定共旋。
+//   為匹配週期盒,ω 用最近鏡像距離(modular wrap);DC mode 由 k_clear_dc 清零。
+// ============================================================
+void PseudoSpectralSolver::init_vortex_merger(double gamma, double sigma_frac, double dist_frac) {
+    double Lmin = std::fmin(Lx, Ly);
+    double sigma = sigma_frac * Lmin;
+    double dist  = dist_frac  * Lmin;
+    double xc1   = 0.5 * Lx - 0.5 * dist;
+    double xc2   = 0.5 * Lx + 0.5 * dist;
+    double yc    = 0.5 * Ly;
+    double inv_s2 = 1.0 / (sigma * sigma);
+
+    auto wrap = [](double d, double L) {
+        if (d >  0.5 * L) d -= L;
+        if (d < -0.5 * L) d += L;
+        return d;
+    };
+
+    std::vector<double> h_omega(ncell);
+    for (int ic = 0; ic < nx; ++ic) {
+        double x = (ic + 0.5) * dx;
+        double dx1 = wrap(x - xc1, Lx);
+        double dx2 = wrap(x - xc2, Lx);
+        for (int jc = 0; jc < ny; ++jc) {
+            double y = (jc + 0.5) * dy;
+            double dy0 = wrap(y - yc, Ly);
+            double r1sq = dx1 * dx1 + dy0 * dy0;
+            double r2sq = dx2 * dx2 + dy0 * dy0;
+            h_omega[ic * ny + jc] =
+                gamma * (std::exp(-r1sq * inv_s2) + std::exp(-r2sq * inv_s2));
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_omega, h_omega.data(),
+                          ncell * sizeof(double), cudaMemcpyHostToDevice));
+    phys_to_spec(plan_r2c, d_omega, d_omega_hat);
+
+    int B = 256;
+    int Gh = (ncplx + B - 1) / B;
+    k_apply_dealias<<<Gh, B>>>(d_omega_hat, d_dealias, ncplx);
+    k_clear_dc<<<1, 1>>>(d_omega_hat);
+
+    dt_current = 0.0;
+    step_count = 0;
+    std::fprintf(stderr,
+        "  PseudoSpectral VortexMerger: Γ=%g, σ=%.3g, d=%.3g (d/σ=%.2f)\n",
+        gamma, sigma, dist, dist / sigma);
+}
+
+// ============================================================
 // 設置 stochastic forcing — 薄殼白噪聲相位
 //
 // 方法學 (Boffetta-Ecke 2012, Alvelius 1999):
