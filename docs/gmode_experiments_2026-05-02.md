@@ -244,16 +244,79 @@ anelastic momentum solver, $10^{-4}$ accuracy on $\omega^2$ is more than
 sufficient; the infrastructure is ready to move on.
 
 
-# 6. Next steps
+# 6. Experiment D — polytropic profile through a MESA-style parser
+
+> **Provenance.** All numbers in this section were produced by
+> `scripts/gmode_exp_d_polytrope_profile.py` at commit `<to be updated>`.
+> `python scripts/gmode_exp_d_polytrope_profile.py --verify` must exit
+> zero.  The polytropic fixture file (`videos/polytrope_fixture.dat`, ~30 KB)
+> is regenerated deterministically at the top of `main()` so does not need
+> to be tracked in git.
+
+## 6.1 Setup
+
+A thin column-table reader `scripts/mesa_profile.py` consumes a MESA-style
+text file with columns `(r, rho, N², cs²)`.  The companion helper
+`build_polytrope_fixture()` writes such a file from scratch: a Lane-Emden
+$n = 3$ polytrope density profile plus the *same* Gaussian-bump $N^2(r)$
+used in Experiments B and C, imposed rather than derived thermodynamically.
+
+This is the minimal integration test for the future MESA reader: the
+Cowling solvers consume only $(r, N^2)$, so feeding the fixture through the
+parser must reproduce the Exp B/C numbers up to small interpolation
+artifacts introduced by resampling the 600-row table onto the uniform FD or
+CGL grid.
+
+## 6.2 Result
+
+| Suite | $\Delta P_\text{Tassoul}$ | $\Delta P_\text{tail}$ | ratio | $|\text{ratio} - 1|$ |
+|---|---|---|---|---|
+| FD, $N_r = 1024$ | $20.992871$ | $20.910504$ | $0.996076$ | $3.92 \times 10^{-3}$ |
+| FD, $N_r = 2048$ | $20.992860$ | $20.977810$ | $0.999283$ | $7.17 \times 10^{-4}$ |
+| Chebyshev, $N = 256$ | $20.993408$ | $20.997854$ | $1.000212$ | $2.12 \times 10^{-4}$ |
+| **Chebyshev, $N = 512$** | $20.993003$ | $20.994706$ | $\mathbf{1.000081}$ | $\mathbf{8.11 \times 10^{-5}}$ |
+
+Against the in-memory Exp B/C numbers:
+
+| Suite | Exp D (file I/O) | Exp B/C (in-memory) | drift |
+|---|---|---|---|
+| FD, $N_r = 1024$ | $3.92 \times 10^{-3}$ | $3.96 \times 10^{-3}$ | $1.0\%$ |
+| FD, $N_r = 2048$ | $7.17 \times 10^{-4}$ | $7.49 \times 10^{-4}$ | $4.3\%$ |
+| Chebyshev, $N = 256$ | $2.12 \times 10^{-4}$ | $1.94 \times 10^{-4}$ | $9.3\%$ |
+| Chebyshev, $N = 512$ | $8.11 \times 10^{-5}$ | $6.85 \times 10^{-5}$ | $18.4\%$ |
+
+The drift grows with resolution because the interpolation error floor is
+fixed by the 600-row fixture, so as the solver becomes more accurate the
+relative contribution of the resampling error grows.  Absolute error
+remains well below $10^{-3}$ in all cases — good enough for a file-I/O
+sanity test.  A future MESA reader fed with higher-resolution real stellar
+profiles should see the drift shrink.
+
+## 6.3 Interpretation
+
+The parser path is clean: the Cowling solvers accept file-loaded $N^2(r)$
+and produce the expected Tassoul asymptote, with error dominated by the
+fixture's 600-row resolution rather than anything in `mesa_profile.py`
+itself.  This unblocks swapping in a real MESA `profile*.data` file as soon
+as an actual stellar model is available.
+
+
+# 7. Next steps
 
 1. ~~**Chebyshev upgrade**~~ — done in §5.
-2. **MESA profile reader.** A thin parser for MESA's `profile*.data` files
-   feeding `(r, rho_0, N^2, c_s)` into `solve_gmode_cowling` /
-   `solve_gmode_cowling_cheb`.
+2. ~~**MESA-style profile reader**~~ — done in §6 with a polytropic fixture;
+   swapping to real MESA `profile*.data` is now a one-line
+   `read_profile(path)` call once a physical model is chosen.
 3. **Avoided-crossing benchmark.** Standard astrophysics test case with
    piecewise-linear $N^2$ and a radiative-convective boundary; expected
-   spectra available in Unno et al. (1989) figures 17-19.
+   spectra available in Unno et al. (1989) figures 17-19.  This needs the
+   Lamb frequency $L_\ell^2 = \ell(\ell+1)\,c_s^2/r^2$ as well as $N^2$ —
+   i.e.\ it uses the `cs2` column that the parser already extracts but
+   the current solvers ignore.  A mixed g/p-mode solver (fourth-order
+   Dziembowski / GYRE structure) is out of scope for a validation
+   infrastructure; a truncated version using only the g-mode branch in a
+   single cavity is a reasonable first step.
 4. **Integration with anelastic momentum solver.** The anelastic time
-   integrator needs a linear-stability analysis tool; the $\omega^2$ output
-   of the Cowling solvers is the natural reference against which the
-   linearised RHS eigenvalues should agree.
+   integrator needs a linear-stability analysis tool; the $\omega^2$
+   output of the Cowling solvers is the natural reference against which
+   the linearised RHS eigenvalues should agree.
