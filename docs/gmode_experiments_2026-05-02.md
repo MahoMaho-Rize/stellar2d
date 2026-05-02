@@ -304,7 +304,7 @@ as an actual stellar model is available.
 # 7. Experiment E — anelastic 2-variable operator vs Boussinesq Cowling
 
 > **Provenance.** All numbers in this section were produced by
-> `scripts/gmode_exp_e_anelastic_linop.py` at commit `<to be updated>`.
+> `scripts/gmode_exp_e_anelastic_linop.py` at commit `94a808b`.
 > `python scripts/gmode_exp_e_anelastic_linop.py --verify` must exit zero.
 
 ## 7.1 Setup — two distinct derivations
