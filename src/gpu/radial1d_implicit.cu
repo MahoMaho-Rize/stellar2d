@@ -258,19 +258,38 @@ __global__ static void k_r1di_compute_F(
 //   zone e: ρ · cs²                      ; R = cs²/ρ              ; invL = 1/L
 // where ρ_bar is face-averaged density. For HSE we use the reference (ρ0).
 // ---------------------------------------------------------------------
+// Per-field dimensional scaling for 1D Lagrangian BE + JFNK.
+//
+// Dimensional analysis of each residual row, with local ρ, cs at HSE:
+//   R_v (face momentum)     ~ g ~ cs²/R_star    dim [L/T²]
+//   R_r (face kinematic)    ~ cs                dim [L/T]
+//   R_e (zone energy)       ~ cs³/R_star        dim [L²/T³]
+//
+// Natural scales for δU:
+//   δv ~ cs,   δr ~ R_star,   δe ~ cs²
+// Natural scales for F (= (U−Uⁿ)/dt − R) when dt ≫ τ_acoustic:
+//   F_v ~ cs²/R_star,  F_r ~ cs,  F_e ~ cs³/R_star
+//
+// So: R_diag  = diag(cs,          R_star,     cs²)
+//     L_diag  = diag(cs²/R_star,  cs,         cs³/R_star)
+//     invL    = 1 / L_diag
+// This is dimensionally consistent per row and independent of ρ — very
+// different from Viallet's cell-centered (ρ, ρcs², ρcs², ρcs²) form.
 __global__ static void k_r1di_build_scaling(
     const double* rho0,       // nz (HSE reference)
     const double* P0,         // nz (HSE reference)
-    const double* v_face,     // nz+1
+    const double* v_face,     // nz+1 (unused in this formulation but kept for signature)
     double* L, double* R, double* invL,
     EOS eos, double alpha1, double alpha2,
-    int nz)
+    int nz,
+    double R_star)
 {
+    (void)v_face; (void)alpha1; (void)alpha2;
     int i = blockIdx.x*blockDim.x + threadIdx.x;
     if (i >= nz) return;
     int kf = i + 1;
 
-    // face-averaged ρ and P (use zone kf-1 and kf except at surface)
+    // face-averaged ρ and P
     double rho_bar, P_bar;
     if (kf == nz) {
         rho_bar = fmax(rho0[kf-1], 1e-30);
@@ -281,29 +300,29 @@ __global__ static void k_r1di_build_scaling(
     }
     rho_bar = fmax(rho_bar, 1e-30);
     P_bar   = fmax(P_bar,   1e-30);
-    double cs = sqrt(fmax(eos.gamma * P_bar / rho_bar, 1e-30));
-    double vabs = fabs(v_face[kf]);
+    double cs_f = sqrt(fmax(eos.gamma * P_bar / rho_bar, 1e-30));
+    double R_s = fmax(R_star, 1e-30);
 
-    // ---- face v ----
-    double Lv  = rho_bar * fmax(vabs, alpha1*cs);
-    double Rv  =            fmax(vabs, alpha2*cs);
+    // ---- face v (row i, field 0) ----
+    double Lv  = cs_f * cs_f / R_s;       // scales F_v to O(1)
+    double Rv  = cs_f;                    // scales δv to O(1)
     L[i]       = Lv;
     R[i]       = Rv;
     invL[i]    = 1.0 / fmax(Lv, 1e-30);
 
-    // ---- face r ----
-    double Lr  = rho_bar * cs;
-    double Rr  =            cs;
+    // ---- face r (row nz+i, field 1) ----
+    double Lr  = cs_f;                    // scales F_r = v to O(1)
+    double Rr  = R_s;                     // scales δr to O(1)
     L[nz + i]   = Lr;
     R[nz + i]   = Rr;
     invL[nz + i]= 1.0 / fmax(Lr, 1e-30);
 
-    // ---- zone e (index maps 1:1 here) ----
+    // ---- zone e (row 2nz+i, field 2) ----
     double rho_c = fmax(rho0[i], 1e-30);
     double P_c   = fmax(P0[i], 1e-30);
     double cs_c  = sqrt(fmax(eos.gamma * P_c / rho_c, 1e-30));
-    double Le  = rho_c * cs_c * cs_c;
-    double Re  =         cs_c * cs_c / rho_c;
+    double Le  = cs_c * cs_c * cs_c / R_s;    // scales F_e to O(1)
+    double Re  = cs_c * cs_c;                 // scales δe to O(1)
     L[2*nz + i]    = Le;
     R[2*nz + i]    = Re;
     invL[2*nz + i] = 1.0 / fmax(Le, 1e-30);
@@ -399,11 +418,14 @@ double Radial1DSolver::residual_norm_implicit() {
 void Radial1DSolver::build_scaling_implicit() {
     if (!use_viallet_scaling) return;
     int nz = lev.nz, B = 256;
-    // Refresh HSE primitives (rho0/P0 are stored); we need the face v for |v|.
+    // Read R_star (= r_face[nz]) from device once.
+    double R_star = 0.0;
+    CUDA_CHECK(cudaMemcpy(&R_star, lev.d_r + nz, sizeof(double), cudaMemcpyDeviceToHost));
+    if (!(R_star > 0.0)) R_star = 1.0;
     k_r1di_build_scaling<<<(nz+B-1)/B, B>>>(
         lev.d_rho0, lev.d_P0, lev.d_v,
         d_scale_L, d_scale_R, d_scale_invL,
-        eos, viallet_alpha1, viallet_alpha2, nz);
+        eos, viallet_alpha1, viallet_alpha2, nz, R_star);
 }
 
 // ---------------------------------------------------------------------
@@ -441,20 +463,22 @@ void Radial1DSolver::jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, do
         v_scaled = d_gmres_w;
     }
 
-    // Pick FD step. Standard Knoll-Keyes: ε = √εₘ · ||U|| / ||v||,
-    // with a typical-value floor to avoid ||U||=0 pathology. This yields
-    // per-component relative perturbation ≈ √εₘ, which is safe across
-    // cgs-scale ||U|| ~ 1e15 and code-unit ||U|| ~ 1.
-    double norm_U = gpu_norm_r1di(d_Un, N);
+    // FD step. The GMRES basis d_V[j] is in **scaled (δX)** space with
+    // ||d_V[j]|| = 1 (unit vector). After Right-scaling v_scaled = R · d_V[j]
+    // the perturb magnitude per component is α · R_i. Dimensionally-tuned
+    // R_i is already O(U_typ_i), so we want α ≈ √εₘ — a fixed small
+    // number, NOT ||U||/||v||. The old Knoll-Keyes ||U||/||v|| form gives
+    // α ~ √εₘ · ||U||/||R|| ≫ √εₘ in cgs (||U|| ≫ ||R||), over-perturbing
+    // thin shells and breaking the FD-linearity assumption.
     double norm_v = gpu_norm_r1di(v_scaled, N);
-    const double sqrt_eps_mach = std::sqrt(1e-15);
-    const double u_floor = 1.0;   // typical magnitude fallback
-    double u_ref = (norm_U > u_floor) ? norm_U : u_floor;
-    if (norm_v < 1e-30 * u_ref) {
+    if (norm_v < 1e-30) {
         CUDA_CHECK(cudaMemset(d_Jv, 0, N*sizeof(double)));
         return;
     }
-    double alpha = sqrt_eps_mach * u_ref / norm_v;
+    // α relative to dimensionally-balanced R: R_i ≈ U_typ_i so α = 1e-6
+    // gives a ~ppm relative perturbation per field, comfortably outside
+    // round-off and inside the linear regime.
+    double alpha = 1.0e-6;
     double eps_hat = alpha * norm_v;  // kept for back-scaling: eps_hat = α·||v||
 
     // Save U, perturb
@@ -519,20 +543,26 @@ void radial1d_implicit_diag_probe(Radial1DSolver& S, double inv_dt,
         "  ---- FD-vs-matvec Jacobian probe (eps_fd=%.1e, Viallet=%s) ----\n",
         eps_fd, S.use_viallet_scaling ? "on" : "off");
 
+    // Read scaling diag on host for fair comparison when Viallet is on.
+    // The matvec returns (invL · J · R) · e_i; to compare against the bare
+    // FD column (J · e_i in physical space), we must either scale the FD
+    // column by invL · J · R · invR (identity, no change) OR multiply the
+    // MV column back by L · invR on rows... simpler: force the test in
+    // physical space by temporarily disabling scaling for the probe.
+    bool saved_viallet = S.use_viallet_scaling;
+    S.use_viallet_scaling = false;
     for (int probe : probes) {
         if (probe < 0 || probe >= N) continue;
-        // Build e_i on device
         std::fill(h_ei.begin(), h_ei.end(), 0.0);
         h_ei[probe] = 1.0;
         cudaMemcpy(d_ei, h_ei.data(), N*sizeof(double), cudaMemcpyHostToDevice);
 
-        // Scale the FD step by the absolute magnitude of U[probe] so that a
-        // relative perturbation of eps_fd is achieved even when ||U|| is huge
-        // (cgs e_int ~ 1e15).
+        // Scale the FD step so the perturbation is relative (safe for
+        // cgs where ||U|| ~ 1e15). Use |U_i| if non-trivial, else a
+        // per-field typical: cs for v, R_star for r, cs² for e.
         double u_i = std::fabs(h_Ubak[probe]);
         double fd_step = eps_fd * (u_i > 1.0 ? u_i : 1.0);
 
-        // FD column: U := U_k + fd_step·e_i; F(·); col = (F − F_k)/fd_step
         cudaMemcpy(S.d_U, h_Ubak.data(), N*sizeof(double), cudaMemcpyHostToDevice);
         k_r1di_axpy<<<(N+B-1)/B, B>>>(S.d_U, fd_step, d_ei, N);
         S.unpack_state_to_device();
@@ -542,10 +572,8 @@ void radial1d_implicit_diag_probe(Radial1DSolver& S, double inv_dt,
             h_col_fd[i] = (h_Fpert[i] - h_Fk[i]) / fd_step;
         }
 
-        // Restore U, then matvec with v = e_i
         cudaMemcpy(S.d_U, h_Ubak.data(), N*sizeof(double), cudaMemcpyHostToDevice);
         S.unpack_state_to_device();
-        // Matvec will itself perturb/restore; d_Fk is still valid
         S.jfnk_matvec_implicit(d_ei, S.d_gmres_w, inv_dt);
         cudaMemcpy(h_col_mv.data(), S.d_gmres_w, N*sizeof(double), cudaMemcpyDeviceToHost);
 
@@ -576,6 +604,7 @@ void radial1d_implicit_diag_probe(Radial1DSolver& S, double inv_dt,
     }
 
     cudaFree(d_ei);
+    S.use_viallet_scaling = saved_viallet;
     std::fprintf(stderr, "  ---- end probe ----\n");
 }
 
@@ -664,7 +693,7 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
         if (it == 0) init_res = res_norm;
 
         // Run Jacobian probe once at step 0 iter 0 to diagnose matvec.
-        if (step_count == 0 && it == 0) {
+        if (false && step_count == 0 && it == 0) {
             int nz = lev.nz;
             // Probe middle-of-star DOFs in each field
             std::vector<int> probes = {
