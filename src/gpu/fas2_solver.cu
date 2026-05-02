@@ -519,10 +519,20 @@ int FasSolver2::gmres_solve(double* d_x, const double* d_b, double dt,
         // w = J · z_j
         jfnk_matvec(lev.d_gmres_Z[j], lev.d_gmres_w, dt, g0_over_dt);
 
-        // Modified Gram-Schmidt
+        // Modified Gram-Schmidt with one reorthogonalization pass (CGS2-equivalent).
+        // Knoll-Keyes 2004 §4: single-pass MGS leaves O(‖J‖·ε_mach) residuals on
+        // ill-conditioned JM⁻¹; a second pass brings it back to ε_mach. This is
+        // what Trilinos NOX does by default and is critical for log-mesh / polar
+        // geometries where JM⁻¹ has spectrum spanning many decades.
         for (int i = 0; i <= j; ++i) {
             H[i*m+j] = gpu_dot(lev.d_gmres_w, lev.d_gmres_V[i], N);
             k_fas_axpy_v<<<(N+B-1)/B,B>>>(lev.d_gmres_w, -H[i*m+j], lev.d_gmres_V[i], N);
+        }
+        // Reorthogonalization pass — accumulate corrections into H[i,j]
+        for (int i = 0; i <= j; ++i) {
+            double h_corr = gpu_dot(lev.d_gmres_w, lev.d_gmres_V[i], N);
+            H[i*m+j] += h_corr;
+            k_fas_axpy_v<<<(N+B-1)/B,B>>>(lev.d_gmres_w, -h_corr, lev.d_gmres_V[i], N);
         }
         H[(j+1)*m+j] = gpu_norm(lev.d_gmres_w, N);
 
