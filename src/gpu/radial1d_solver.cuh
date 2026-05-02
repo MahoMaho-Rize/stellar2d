@@ -3,6 +3,7 @@
 #include "../grid.h"
 #include "../state.h"
 #include "../eos.h"
+#include "../physics/opacity_table.cuh"
 
 // 1D radial Lagrangian stellar hydrodynamics solver (MESA RSP-inspired).
 //
@@ -120,6 +121,15 @@ struct Radial1DSolver {
     double rad_kappa_dust_0 = 2.0e-4;
     double rad_kappa_Hm_0 = 1.1e-25;
     double rad_T_dust_off = 1500.0;
+    // Optional MESA-style tabulated opacity. Owned in main.cpp (lifetime
+    // spans the solver); if either view is uninitialised we fall back to
+    // the analytic grey formula. Use set_kap_tables() to attach.
+    KapTableView kap_view_lowT  = {};
+    KapTableView kap_view_highT = {};
+    bool         kap_use_table  = false;
+    double       kap_logT_lo_end   = 3.9;
+    double       kap_logT_hi_start = 4.1;
+    double       kap_hydrogen_X    = 0.7;   // slice at this X in the 3-D table
     // Scratch arrays for radiation diffusion
     double* d_T_work = nullptr;   // (nz)
     double* d_F_work = nullptr;   // (nz+1)
@@ -140,6 +150,11 @@ struct Radial1DSolver {
     double dt_current = 0.0;
     int step_count = 0;
     bool hse_set = false;
+
+    // Populate an OpacityParams from the solver's rad_kappa_* fields +
+    // optional table views. Inlined in the .cu once the include is in
+    // scope; declared here so any caller can fill it consistently.
+    void fill_opacity_params(struct OpacityParams& opa) const;
 
     // Lifecycle
     void init(int nz, double gamma, double G, double cfl);

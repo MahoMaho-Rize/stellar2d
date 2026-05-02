@@ -91,6 +91,25 @@ static double interp_le(const LaneEmden& sol, double xi_val) {
     return t0 + t * (t1 - t0);
 }
 
+// Helper: fill an OpacityParams from the solver's rad_kappa_* coefficients
+// plus any attached MESA kap table views. Used at every call site that
+// needs to dispatch `grey_opacity()`.
+void Radial1DSolver::fill_opacity_params(OpacityParams& opa) const {
+    opa.kappa_es     = rad_kappa_es;
+    opa.kappa_ff_0   = rad_kappa_ff_0;
+    opa.kappa_dust_0 = rad_kappa_dust_0;
+    opa.kappa_Hm_0   = rad_kappa_Hm_0;
+    opa.T_dust_off   = rad_T_dust_off;
+    opa.use_table    = kap_use_table;
+    if (kap_use_table) {
+        opa.table_lowT    = kap_view_lowT;
+        opa.table_highT   = kap_view_highT;
+        opa.logT_lo_end   = kap_logT_lo_end;
+        opa.logT_hi_start = kap_logT_hi_start;
+        opa.hydrogen_X    = kap_hydrogen_X;
+    }
+}
+
 // Bulk P→e inversion on the device (EOS struct holds device table pointers
 // for the Helmholtz branch). Each thread handles one zone.
 static __global__ void k_rad1d_e_from_rhoP(const double* d_rho, const double* d_P,
@@ -625,11 +644,7 @@ Radial1DSolver::ConvectionDiag Radial1DSolver::compute_convection_diag() {
     for (int i = 0; i < 4; ++i) CUDA_CHECK(cudaMalloc(&sc[i], nz*sizeof(double)));
 
     OpacityParams opa;
-    opa.kappa_es     = rad_kappa_es;
-    opa.kappa_ff_0   = rad_kappa_ff_0;
-    opa.kappa_dust_0 = rad_kappa_dust_0;
-    opa.kappa_Hm_0   = rad_kappa_Hm_0;
-    opa.T_dust_off   = rad_T_dust_off;
+    fill_opacity_params(opa);
 
     k_rad1d_mlt_diag<<<(nz+B-1)/B, B>>>(
         lev.d_r, lev.d_rho, lev.d_P, lev.d_e_int, lev.d_M, lev.d_dm,
@@ -1008,11 +1023,7 @@ int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
     int nz = lev.nz, B = 256;
 
     OpacityParams opa;
-    opa.kappa_es     = rad_kappa_es;
-    opa.kappa_ff_0   = rad_kappa_ff_0;
-    opa.kappa_dust_0 = rad_kappa_dust_0;
-    opa.kappa_Hm_0   = rad_kappa_Hm_0;
-    opa.T_dust_off   = rad_T_dust_off;
+    fill_opacity_params(opa);
     double sigma_sb = rad_c_light * rad_a_rad / 4.0;
 
     // Allocate tridiag scratch (tiny)
@@ -1126,11 +1137,7 @@ int Radial1DSolver::apply_radiation_diffusion(double dt_total) {
     RadDiffParams pars;
     pars.c_light = rad_c_light;
     pars.a_rad   = rad_a_rad;
-    pars.opacity.kappa_es      = rad_kappa_es;
-    pars.opacity.kappa_ff_0    = rad_kappa_ff_0;
-    pars.opacity.kappa_dust_0  = rad_kappa_dust_0;
-    pars.opacity.kappa_Hm_0    = rad_kappa_Hm_0;
-    pars.opacity.T_dust_off    = rad_T_dust_off;
+    fill_opacity_params(pars.opacity);
 
     double t_rad = 0.0;
     int sub = 0;

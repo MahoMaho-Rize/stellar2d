@@ -94,6 +94,16 @@ struct SimConfig {
     std::string helm_table_path = "third_party/helmholtz/helm_table.bin";
     double helm_Abar = 1.28;          // solar: X≈0.73, Y≈0.25, Z≈0.02
     double helm_Zbar = 1.13;
+    // MESA opacity tables — radial1d reads two binaries (lowT + highT) and
+    // stitches them at logT ≈ 4. --kap-prefix/--kap-lowT accept just the
+    // family tag (e.g. `gs98`, `lowT_fa05_gs98`); we append `_z<Z>.kapbin`.
+    std::string kap_highT_family = "gs98";
+    std::string kap_lowT_family  = "lowT_fa05_gs98";
+    double      kap_table_Z      = 0.02;
+    std::string kap_data_dir     = "third_party/mesa_kap";
+    bool        kap_use_table    = false;
+    double      kap_logT_lo_end   = 3.9;
+    double      kap_logT_hi_start = 4.1;
     // cart_ale --test hse_bubble parameters
     double bubble_xc = 0.5;
     double bubble_yc = 0.3;
@@ -246,6 +256,20 @@ int main(int argc, char** argv) {
             cfg.helm_Abar = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--helm-zbar") == 0 && i + 1 < argc)
             cfg.helm_Zbar = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--kap") == 0)
+            cfg.kap_use_table = true;
+        else if (std::strcmp(argv[i], "--kap-highT") == 0 && i + 1 < argc)
+            cfg.kap_highT_family = argv[++i];
+        else if (std::strcmp(argv[i], "--kap-lowT") == 0 && i + 1 < argc)
+            cfg.kap_lowT_family = argv[++i];
+        else if (std::strcmp(argv[i], "--kap-Z") == 0 && i + 1 < argc)
+            cfg.kap_table_Z = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--kap-dir") == 0 && i + 1 < argc)
+            cfg.kap_data_dir = argv[++i];
+        else if (std::strcmp(argv[i], "--kap-logT-lo-end") == 0 && i + 1 < argc)
+            cfg.kap_logT_lo_end = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--kap-logT-hi-start") == 0 && i + 1 < argc)
+            cfg.kap_logT_hi_start = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--radiation") == 0)
             cfg.radiation_enabled = true;
         else if (std::strcmp(argv[i], "--rad-c") == 0 && i + 1 < argc)
@@ -522,6 +546,8 @@ int main(int argc, char** argv) {
     // Helmholtz table lives through the whole run; destroyed after solver loop.
     HelmholtzTable helm_tbl;
     bool helm_loaded = false;
+    KapTable kap_tbl_lowT, kap_tbl_highT;
+    bool kap_loaded = false;
 #endif
     if (cfg.eos_type == "ideal_rad") {
         eos = EOS::ideal_rad(cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
@@ -558,6 +584,38 @@ int main(int argc, char** argv) {
     } else {
         eos = EOS::ideal(cfg.gamma, cfg.eos_mu);
     }
+
+#ifdef USE_GPU
+    // Optional MESA kap table pair (lowT + highT). Loaded once before the
+    // solver starts; the radial1d branch below hands the views to the solver.
+    if (cfg.kap_use_table) {
+        char z_buf[32];
+        std::snprintf(z_buf, sizeof(z_buf), "%g", cfg.kap_table_Z);
+        std::string z_tag = z_buf;
+        std::string high_path = cfg.kap_data_dir + "/" + cfg.kap_highT_family
+                              + "_z" + z_tag + ".kapbin";
+        std::string low_path  = cfg.kap_data_dir + "/" + cfg.kap_lowT_family
+                              + "_z" + z_tag + ".kapbin";
+        int rc_hi = kap_tbl_highT.load(high_path.c_str(), 0);
+        if (rc_hi != 0) {
+            std::fprintf(stderr,
+                "ERROR: failed to load high-T kap binary at %s (rc=%d)\n",
+                high_path.c_str(), rc_hi);
+            return 1;
+        }
+        int rc_lo = kap_tbl_lowT.load(low_path.c_str(), 0);
+        if (rc_lo != 0) {
+            std::fprintf(stderr,
+                "ERROR: failed to load low-T kap binary at %s (rc=%d)\n",
+                low_path.c_str(), rc_lo);
+            return 1;
+        }
+        kap_loaded = true;
+        std::printf("KAP: stitched {%s + %s} at Z=%s, seam logT ∈ [%.2f, %.2f]\n",
+                    cfg.kap_highT_family.c_str(), cfg.kap_lowT_family.c_str(),
+                    z_tag.c_str(), cfg.kap_logT_lo_end, cfg.kap_logT_hi_start);
+    }
+#endif
 
     State state;
     state.allocate(grid);
@@ -708,6 +766,17 @@ int main(int argc, char** argv) {
             r1d.rad_a_rad = cfg.eos_rad_a > 0 ? cfg.eos_rad_a : 1.0;
             std::printf("radial1d: radiation diffusion ON (c=%.3e, a=%.3e)\n",
                         r1d.rad_c_light, r1d.rad_a_rad);
+        }
+        // Wire tabulated opacity, if loaded
+        if (kap_loaded) {
+            r1d.kap_use_table      = true;
+            r1d.kap_view_lowT      = kap_tbl_lowT.view;
+            r1d.kap_view_highT     = kap_tbl_highT.view;
+            r1d.kap_logT_lo_end    = cfg.kap_logT_lo_end;
+            r1d.kap_logT_hi_start  = cfg.kap_logT_hi_start;
+            r1d.kap_hydrogen_X     = cfg.nuc_X;     // composition slice
+            std::printf("radial1d: tabulated kap ON (X slice = %.3f)\n",
+                        r1d.kap_hydrogen_X);
         }
         // Wire nuclear burning
         if (cfg.nuclear_enabled) {
@@ -1875,6 +1944,7 @@ int main(int argc, char** argv) {
 
 #ifdef USE_GPU
     if (helm_loaded) helm_tbl.destroy();
+    if (kap_loaded) { kap_tbl_lowT.destroy(); kap_tbl_highT.destroy(); }
 #endif
 
     std::printf("Done.\n");

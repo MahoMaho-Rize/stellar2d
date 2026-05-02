@@ -16,6 +16,9 @@
 // All GPU __host__ __device__.
 
 #include <cmath>
+#ifdef USE_GPU
+#include "opacity_table.cuh"
+#endif
 
 #ifdef __CUDACC__
 #define OPA_HD __host__ __device__
@@ -35,11 +38,71 @@ struct OpacityParams {
     double kappa_Hm_0 = 1.1e-25;
     // Simpler: use piecewise maximum of the four components.
     // User must have T, ρ in physical cgs or code-unit-consistent system.
+
+#ifdef USE_GPU
+    // Tabulated MESA-style opacity, takes priority over the analytic fallback
+    // when `use_table` is true and both view pointers are non-null.
+    //
+    // Stitching: if logT ≤ logT_lo_end use `table_lowT` only; if
+    // logT ≥ logT_hi_start use `table_highT` only; otherwise take the
+    // harmonic mean of the two (equivalent to MESA's "min of logκ" overlap
+    // choice but smoother and C⁰ at the seams). Default seams match the
+    // MESA kap Type-1 / Ferguson overlap (3.9, 4.1 dex).
+    KapTableView table_lowT = {};
+    KapTableView table_highT = {};
+    double hydrogen_X = 0.7;         // composition used to slice the 3-D table
+    double logT_lo_end = 3.9;        // upper edge of the pure-lowT regime
+    double logT_hi_start = 4.1;      // lower edge of the pure-highT regime
+    bool   use_table = false;
+#endif
 };
 
+#ifdef USE_GPU
+// Stitched table lookup. Assumes both views point at valid device memory.
+// Regime selection follows MESA's Kap_Type1 + lowT split:
+//   logT ≤ logT_lo_end        → pure lowT (Ferguson)
+//   logT ≥ logT_hi_start      → pure highT (OPAL / OPLIB / OP)
+//   lo_end < logT < hi_start  → C⁰ blend by logT fraction in logκ-space
+// That last branch is what MESA's `kap_eval_blend_logT` does; the linear
+// blend in log space is the same recipe.
+OPA_HD inline double kap_stitch_eval(double rho, double T,
+                                     const OpacityParams& p) {
+    double T_use = T > 1.0 ? T : 1.0;
+    double rho_use = rho > 1e-30 ? rho : 1e-30;
+    double logT = log10(T_use);
+    double logR = log10(rho_use) - 3.0 * logT + 18.0;
+
+    double k_lo = 0.0, k_hi = 0.0;
+    if (logT <= p.logT_hi_start) {
+        k_lo = kap_eval(p.table_lowT,  p.hydrogen_X, logT, logR);
+    }
+    if (logT >= p.logT_lo_end) {
+        k_hi = kap_eval(p.table_highT, p.hydrogen_X, logT, logR);
+    }
+    if (logT <= p.logT_lo_end) return k_lo;
+    if (logT >= p.logT_hi_start) return k_hi;
+
+    double w = (logT - p.logT_lo_end) / (p.logT_hi_start - p.logT_lo_end);
+    if (w < 0.0) w = 0.0; else if (w > 1.0) w = 1.0;
+    // Linear in log κ — matches MESA's blend scheme.
+    double lk_lo = log10(k_lo > 1e-30 ? k_lo : 1e-30);
+    double lk_hi = log10(k_hi > 1e-30 ? k_hi : 1e-30);
+    double lk = (1.0 - w) * lk_lo + w * lk_hi;
+#ifdef __CUDA_ARCH__
+    return exp10(lk);
+#else
+    return pow(10.0, lk);
+#endif
+}
+#endif
+
 // Grey Rosseland opacity (cm²/g if parameters are cgs; code-unit consistent).
-// Takes max of components plus electron scattering floor.
+// Dispatches to the MESA table when one is attached; otherwise falls back
+// to the analytic piecewise-max formula.
 OPA_HD inline double grey_opacity(double rho, double T, const OpacityParams& p) {
+#ifdef USE_GPU
+    if (p.use_table) return kap_stitch_eval(rho, T, p);
+#endif
     double T_use = T > 1.0 ? T : 1.0;
     double rho_use = rho > 1e-30 ? rho : 1e-30;
 
