@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include "../eos.h"
+#include "../physics/nuclear_pp.h"
 
 // Device kernels for 1D Lagrangian radial stellar hydrodynamics.
 // All kernels operate on Radial1DLevel's device arrays.
@@ -397,6 +398,27 @@ void k_rad1d_diag_per_zone(
     double vmag = fmax(fabs(v[k]), fabs(v[k+1]));
     out_mach[k] = vmag / fmax(cs, 1e-30);
     out_vmax[k] = vmag;
+}
+
+// ========================================================================
+// Nuclear energy source: pp-chain heat release.
+// Updates e_int in place: e += dt · ε_pp(ρ, T)
+// ========================================================================
+__global__
+inline void k_rad1d_nuclear_pp(
+    double* e_int,
+    const double* rho,
+    int nz,
+    EOS eos,
+    NuclearPPParams pars,
+    double dt)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double eps = nuclear_pp_epsilon(rho_k, T_k, pars);
+    e_int[k] += dt * eps;
 }
 
 __global__

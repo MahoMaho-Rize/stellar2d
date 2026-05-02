@@ -85,6 +85,13 @@ struct Radial1DSolver {
     bool use_eos = false;
     EOS eos;
 
+    // Nuclear burning (pp-chain, simplified). If enabled, every hydro step adds
+    // ε_pp(ρ, T) · dt to internal energy.
+    bool nuclear_enabled = false;
+    double nuc_X = 0.7;
+    double nuc_T_floor = 1.0e6;
+    double nuc_epsilon_scale = 1.0;
+
     // Radiation diffusion (explicit subcycled). If enabled, every hydro step
     // calls apply_radiation_diffusion(dt) which subcycles at the parabolic
     // radiation CFL (dt_rad ≪ dt_hydro typically; 1-10k subcycles per step).

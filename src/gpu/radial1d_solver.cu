@@ -400,7 +400,18 @@ double Radial1DSolver::step(double t, double t_end) {
     // Final primitives
     launch_primitives(lev, nz, use_eos, gamma, eos, B);
 
-    // Radiation diffusion (operator split, after hydro)
+    // Nuclear burning (operator split; adds ε_pp · dt to e_int)
+    if (nuclear_enabled && use_eos) {
+        NuclearPPParams npars;
+        npars.X_hydrogen = nuc_X;
+        npars.T_floor = nuc_T_floor;
+        npars.epsilon_scale = nuc_epsilon_scale;
+        k_rad1d_nuclear_pp<<<(nz+B-1)/B, B>>>(
+            lev.d_e_int, lev.d_rho, nz, eos, npars, dt);
+        launch_primitives(lev, nz, use_eos, gamma, eos, B);
+    }
+
+    // Radiation diffusion (operator split, after hydro + burning)
     int rad_sub = 0;
     if (radiation_enabled) {
         rad_sub = apply_radiation_diffusion(dt);

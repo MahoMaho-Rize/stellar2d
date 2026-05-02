@@ -64,6 +64,10 @@ struct SimConfig {
     double perturb_amplitude = 1e-3;  // density perturbation for lane_emden_perturbed
     bool radiation_enabled = false;
     double rad_c_light = 100.0;       // reduced speed of light (code units); full c = very slow
+    bool nuclear_enabled = false;
+    double nuc_X = 0.7;
+    double nuc_epsilon_scale = 1.0;
+    double nuc_T_floor = 1.0e6;
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     // EOS selection
     std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
@@ -219,6 +223,14 @@ int main(int argc, char** argv) {
             cfg.radiation_enabled = true;
         else if (std::strcmp(argv[i], "--rad-c") == 0 && i + 1 < argc)
             cfg.rad_c_light = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuclear") == 0)
+            cfg.nuclear_enabled = true;
+        else if (std::strcmp(argv[i], "--nuc-x") == 0 && i + 1 < argc)
+            cfg.nuc_X = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-scale") == 0 && i + 1 < argc)
+            cfg.nuc_epsilon_scale = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-t-floor") == 0 && i + 1 < argc)
+            cfg.nuc_T_floor = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -611,6 +623,15 @@ int main(int argc, char** argv) {
             r1d.rad_a_rad = cfg.eos_rad_a > 0 ? cfg.eos_rad_a : 1.0;
             std::printf("radial1d: radiation diffusion ON (c=%.3e, a=%.3e)\n",
                         r1d.rad_c_light, r1d.rad_a_rad);
+        }
+        // Wire nuclear burning
+        if (cfg.nuclear_enabled) {
+            r1d.nuclear_enabled = true;
+            r1d.nuc_X = cfg.nuc_X;
+            r1d.nuc_epsilon_scale = cfg.nuc_epsilon_scale;
+            r1d.nuc_T_floor = cfg.nuc_T_floor;
+            std::printf("radial1d: pp-chain nuclear burning ON (X=%.2f, scale=%.3e, T_floor=%.3e)\n",
+                        r1d.nuc_X, r1d.nuc_epsilon_scale, r1d.nuc_T_floor);
         }
         r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
         r1d.snapshot_hse();
