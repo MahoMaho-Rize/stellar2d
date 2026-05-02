@@ -443,34 +443,53 @@ void FasSolver2::jfnk_matvec(const double* d_v, double* d_Jv, double dt, double 
     FasLevel2& lev = levels[0];
     int n = lev.nr * lev.nt, N4 = 4*n, B = 256;
 
+    // FIX (Trilinos NOX style): unit-normalize v before FD perturbation.
+    //
+    // The failure mode without this: Arnoldi's later basis vectors v_j often
+    // have ‖v_j‖ ≪ ‖U‖. Original formula ε = sqrt(ulp)·(1+‖U‖)/‖v‖ amplifies
+    // by 1/‖v‖ to keep ε·v = O(sqrt(ulp)·‖U‖), BUT when ‖v‖ is O(ulp)·‖U‖
+    // due to round-off (not true zero), ε·‖v‖ ≈ sqrt(ulp)·(1+‖U‖) becomes
+    // O(1)·‖U‖ — a finite perturbation, not an infinitesimal one. Result:
+    // U+ε·v wildly non-physical, apply_floor clips to 1e-20, F(U+ε·v) is
+    // garbage, J·v contains NaN. This is exactly what we observed at 256².
+    //
+    // Fix: always perturb along v̂ = v/‖v‖ with magnitude eps_hat = sqrt(ulp)·(1+‖U‖),
+    // then scale result by ‖v‖ to recover J·v (since J·v = ‖v‖·J·v̂).
+    //
+    // Clamp ‖v‖ at floor to prevent amplification of pure round-off noise.
+
+    double norm_U = gpu_norm(lev.d_Un, N4);
     double norm_v = gpu_norm(d_v, N4);
-    if (norm_v < 1e-30) {
+    double norm_v_floor = 1e-15 * (1.0 + norm_U);  // round-off floor
+    if (norm_v < norm_v_floor) {
         CUDA_CHECK(cudaMemset(d_Jv, 0, N4*sizeof(double)));
         return;
     }
 
-    double norm_U = gpu_norm(lev.d_Un, N4);
-    double eps_fd = std::sqrt(1e-15) * (1.0 + norm_U) / norm_v;
+    double eps_hat = std::sqrt(1e-15) * (1.0 + norm_U);  // desired perturbation magnitude
+    double alpha_v = eps_hat / norm_v;                   // scale on raw v
 
     // Save state
     k_fas_pack_flat<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_gmres_Ubak, lev.nr, lev.nt, lev.ng);
 
-    // Perturb: U += eps * v
+    // Perturb: U += alpha_v · v = U + eps_hat · v̂
     k_fas_perturb<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-        d_v, eps_fd, lev.nr, lev.nt, lev.ng);
+        d_v, alpha_v, lev.nr, lev.nt, lev.ng);
     apply_floor(0);
     launch_ghost(0);
 
-    // F(U + eps*v)
+    // F(U + eps_hat · v̂)
     compute_F(0, g0_over_dt);
     k_fas_copy<<<(N4+B-1)/B,B>>>(d_Jv, lev.d_res, N4);
 
-    // Jv = (F(U+εv) - F(U)) / ε
+    // J·v̂ = (F(U+eps_hat·v̂) - F(U)) / eps_hat
+    // J·v  = ‖v‖ · J·v̂
     k_fas_axpy_v<<<(N4+B-1)/B,B>>>(d_Jv, -1.0, lev.d_Fk, N4);
-    k_fas_scale<<<(N4+B-1)/B,B>>>(d_Jv, 1.0/eps_fd, N4);
+    double scale_Jv = norm_v / eps_hat;  // == 1/alpha_v
+    k_fas_scale<<<(N4+B-1)/B,B>>>(d_Jv, scale_Jv, N4);
 
     // Restore state
     k_fas_unpack_flat<<<(n+B-1)/B,B>>>(
