@@ -893,13 +893,15 @@ __global__ static void k_rad1d_rich_diag(
     out_T[k]   = T_k;
     out_kap[k] = kap;
 
-    // Γ₁ — ideal gas default; Helm branch reports its own below.
+    // Γ₁ and ∇_ad — prefer Helm's exact derivatives when available.
     double gam = eos.gamma;
     double gamma1_val = gam;
+    double grada_val  = (gam - 1.0) / gam;    // ideal-gas default
 #ifdef __CUDA_ARCH__
     if (eos.type == (int)EosType::HELMHOLTZ) {
         HelmState hs = helm_eval(rho_k, T_k, eos.helm);
         gamma1_val = hs.gamma1;
+        grada_val  = hs.grada;
     }
 #endif
     out_gamma1[k] = gamma1_val;
@@ -930,29 +932,89 @@ __global__ static void k_rad1d_rich_diag(
     }
     out_Lface[k] = L_rad;
 
-    // ∇_rad and ∇_ad — reuse MLT diagnostic formulas
+    // ∇_rad from radiative-diffusion flux formula. ∇_ad already computed
+    // above (Helm-exact when EOS supports it, ideal-gas fallback else).
     double M_k = M[k+1];
     if (M_k < 1e-30) M_k = 1e-30;
     double T_k_4  = T_k * T_k * T_k * T_k;
     double denom  = 16.0 * PI * a_rad * c_light * G_const * M_k * T_k_4;
     double gradr  = (denom > 1e-300) ? (3.0 * kap * rho_k * L_rad * P_k) / denom : 0.0;
-    double grada  = (gam - 1.0) / gam;
 
     out_gradr[k]   = gradr;
-    out_grada[k]   = grada;
-    out_mixtype[k] = (gradr > grada) ? 1 : 0;
+    out_grada[k]   = grada_val;
+    out_mixtype[k] = (gradr > grada_val) ? 1 : 0;
 
-    // Böhm-Vitense v_conv proxy. H_P from P/(ρg), g from enclosed M at outer face.
-    double r_c   = 0.5 * (r[k] + r[k+1]);
+    // Böhm-Vitense MLT with radiative-efficiency saturation (Henyey 1965 /
+    // Kippenhahn-Weigert-Weiss eq. 7.7 — same classical MLT MESA uses).
+    //
+    // Inputs: ∇_rad, ∇_ad, ρ, T, P, c_P, δ = χ_T/χ_ρ, κ, g, H_P, α.
+    // The actual ∇_T lies between ∇_ad (efficient) and ∇_rad (inefficient).
+    // Let ξ² = ∇_T − ∇_ad; Henyey's derivation gives the cubic
+    //   ξ³ + U·ξ² + U²·ξ − U²·W = 0,   W = ∇_rad − ∇_ad
+    //   U = (12·σ_SB·T³)/(c_P·ρ²·κ·ℓ²) · √(8·H_P/(g·δ))
+    //
+    // Deep envelope limit U→0: ξ² → W (no loss).
+    // Surface limit U→∞:        ξ² → W/U² (radiative loss dominates).
+    // Solve via Cardano (real root guaranteed positive for W>0).
     double g     = G_const * M_k / fmax(r_kp1 * r_kp1, 1e-30);
     double H_P   = P_k / fmax(rho_k * g, 1e-30);
-    double super = gradr - grada;
-    double v_conv = (super > 0.0 && H_P > 0.0)
-                    ? sqrt(g * H_P * super)
-                    : 0.0;
-    out_conv_vel[k] = v_conv;
+    double W_raw = gradr - grada_val;
+    double v_conv = 0.0;
+    if (W_raw > 0.0 && H_P > 0.0) {
+        // Thermodynamic derivatives — Helm-exact when available.
+        double delta_val = 1.0;   // δ = −∂lnρ/∂lnT|_P = χ_T/χ_ρ
+        double cP_val    = 2.5e8; // fallback ≈ ideal gas μ=1, stellar T
+#ifdef __CUDA_ARCH__
+        if (eos.type == (int)EosType::HELMHOLTZ) {
+            HelmState hs_k = helm_eval(rho_k, T_k, eos.helm);
+            delta_val = (hs_k.chiRho > 1e-30) ? hs_k.chiT / hs_k.chiRho : 1.0;
+            cP_val    = (hs_k.cP > 1e-30) ? hs_k.cP : 2.5e8;
+        }
+#endif
+        const double alpha_mlt = 1.5;     // mixing-length parameter
+        double ell = alpha_mlt * H_P;
+        double sigma_sb_loc = c_light * a_rad / 4.0;
+        double T3 = T_k * T_k * T_k;
+        double U_num = 12.0 * sigma_sb_loc * T3;
+        double U_den = cP_val * rho_k * rho_k * kap * ell * ell;
+        double U_aux = (g * delta_val > 1e-30)
+                       ? sqrt(8.0 * H_P / (g * delta_val))
+                       : 0.0;
+        double U = (U_den > 1e-30) ? (U_num / U_den) * U_aux : 0.0;
 
-    (void)r_c;
+        // The cubic  ξ³ + U·ξ² + U²·ξ − U²·W = 0  has exactly one positive
+        // real root between 0 and √W. Limits:
+        //   U → 0   (deep efficient):   ξ³ ≈ U²·W    ⇒ ξ ≈ (U²·W)^{1/3}
+        //                               → super_eff ≈ (U²·W)^{2/3} → 0
+        //   U → ∞   (surface radiative): ξ² ≈ W       ⇒ ξ ≈ √W
+        //                               → super_eff → W  (no convection happening)
+        double xi;
+        if (U < 1e-30) {
+            xi = 0.0;                     // fully efficient limit → zero super
+        } else {
+            // Seed from the small-U balance, which is usually where MLT sits.
+            double seed = cbrt(U * U * W_raw);
+            xi = seed;
+            for (int it = 0; it < 15; ++it) {
+                double f  = xi * xi * xi + U * xi * xi + U * U * xi - U * U * W_raw;
+                double fp = 3.0 * xi * xi + 2.0 * U * xi + U * U;
+                if (fp < 1e-30) break;
+                double dxi = f / fp;
+                xi -= dxi;
+                if (xi < 0.0) xi = 0.0;
+                if (fabs(dxi) < 1e-12 * (fabs(xi) + 1e-30)) break;
+            }
+            if (xi < 0.0) xi = 0.0;
+            if (xi > sqrt(W_raw)) xi = sqrt(W_raw);
+        }
+        double xi2 = xi * xi;
+        // v_conv² = (1/8) · g · δ · ℓ² · ξ² / H_P · (H_P/ℓ)²   simplified:
+        //         = (g · δ · ℓ² · ξ²) / (8 · H_P)
+        // Equivalent classical form v_conv = α · √(g·δ·H_P·ξ²/8)
+        double v2 = (g * delta_val * ell * ell * xi2) / fmax(8.0 * H_P, 1e-30);
+        v_conv = v2 > 0.0 ? sqrt(v2) : 0.0;
+    }
+    out_conv_vel[k] = v_conv;
 }
 
 // Host wrapper: download all rich profile fields.

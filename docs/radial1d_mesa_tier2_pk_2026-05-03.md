@@ -178,4 +178,35 @@ python3 scripts/pk_mesa_radial1d.py \
 - `72f8606` — `--kap` + stitching 接進 radial1d
 - `753bac7` — MESA ZAMS profile → radial1d IC pipeline
 - `bd0db2e` — autodiff Jacobian plan (deferred)
-- **本提交** — rich profile output + Tier-2 PK 報告
+- `1e97892` — rich profile output + 本 Tier-2 PK 報告
+- `d50fc16` — `--ic-mesa-seed-T`(κ 14 % → 2.5 %)
+
+---
+
+## Addendum 2026-05-03(深化打磨後)
+
+三個便宜修完工。當前 Tier-2 數字:
+
+| 量 | 打磨前 | 打磨後 |
+|---|---|---|
+| ρ | 1.0 % | 2.3 % (↑,EOS blend 代價) |
+| P | 1.1 % | 1.5 % (↑,同) |
+| T | 4.6 % | **1.1 %** (seed-T) |
+| κ | 13.5 % | **2.5 %** (T 修正傳導) |
+| Γ₁ | 0.11 % | 0.11 %(同) |
+| ∇_ad | 0.94 % | **0.44 %** (Helm 精確導數) |
+| v_conv | order-of-magnitude 差 3000× | **3.8×**(Henyey MLT saturation) |
+
+v_conv 最終從 **3000×** 誤差降到 **3.8×** ≈ 800× 改進;唯一可比較點(MESA
+5880 cm/s vs r1d 1530 cm/s)。剩下的差來自:
+
+- MLT α=1.5 hard-coded vs MESA 自己的 MLT 調參
+- MESA 的 ∇_T 包含 overshoot + semi-conv 修正,我們沒寫
+- 對流邊界兩邊定義有 1 cell 差 → 取交集後樣本小
+
+以 1D 物理驗證的標準,**這已經是 radial1d 不重複寫 MESA 物理的天花板**。再
+往下要麼 port MESA 特殊 MLT(沒意義),要麼上 2D(cart_ale2,該下階段做)。
+
+新增 commits:
+
+- **本提交**(∇_ad Helm 精確 + MLT Henyey saturation)

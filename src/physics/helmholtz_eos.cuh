@@ -234,6 +234,18 @@ struct HelmState {
     double cs;         // adiabatic sound speed
     double dPde_rho;   // ∂P/∂e at fixed ρ — needed for Jacobian scaling
     double gamma1;     // Γ₁ = (∂ln P / ∂ln ρ)_S
+    // ∇_ad = (∂ ln T / ∂ ln P)_S, a.k.a. "grada" in MESA. Derived from the
+    // textbook identity ∇_ad = (Γ₃ − 1) / Γ₁ with
+    //   Γ₃ − 1 = (P · χ_T) / (ρ · T · c_V · χ_ρ)     (Cox & Giuli §9.17)
+    // so it automatically reflects radiation + ion + electron contributions.
+    double grada;
+    // Additional thermodynamic derivatives consumers may want (MLT, sound
+    // speed decomposition, Jacobian builds). Filled at essentially zero
+    // cost since helm_eval already has them in local scope.
+    double chiT;       // χ_T = (∂ln P / ∂ln T)_ρ
+    double chiRho;     // χ_ρ = (∂ln P / ∂ln ρ)_T
+    double cV;         // specific heat at constant volume [erg/g/K]
+    double cP;         // specific heat at constant pressure [erg/g/K]
 };
 
 HE_HD inline HelmState helm_eval(double rho, double T,
@@ -454,12 +466,30 @@ HE_HD inline HelmState helm_eval(double rho, double T,
     // ∂P/∂e|ρ needed for Jacobian — chain via T: dP/de|ρ = (dP/dT)/(de/dT)
     double dPde_rho = dP_dT_tot / (cv_tot > 1e-30 ? cv_tot : 1e-30);
 
+    // ∇_ad via Cox & Giuli textbook identity
+    //   Γ_3 − 1 = (P · χ_T) / (ρ · T · c_V · χ_ρ)
+    //   ∇_ad   = (Γ_3 − 1) / Γ_1
+    double gam3_m1 = (cv_tot > 1e-30 && chiD > 1e-30)
+                     ? (P_tot * deni) * chiT / (Trun * cv_tot * chiD)
+                     : 0.0;
+    double grada_val = gam3_m1 / gam1;
+    // c_P = c_V + P·χ_T·(Γ_3 − 1) / (ρ·T·χ_ρ)  ← Mayer's relation generalised
+    double cP_val = cv_tot
+                  + (chiD > 1e-30
+                     ? (P_tot * chiT * gam3_m1) / (rhorun * Trun * chiD)
+                     : 0.0);
+
     HelmState s;
     s.P = P_tot;
     s.e = e_tot;
     s.cs = cs;
     s.dPde_rho = dPde_rho;
     s.gamma1 = gam1;
+    s.grada = grada_val;
+    s.chiT = chiT;
+    s.chiRho = chiD;
+    s.cV = cv_tot;
+    s.cP = cP_val;
     return s;
 }
 

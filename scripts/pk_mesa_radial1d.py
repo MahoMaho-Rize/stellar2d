@@ -213,6 +213,19 @@ def main() -> int:
             summarize("Γ₁",  r1d["gamma1"], gamma1_interp)
         if grada_interp is not None:
             summarize("∇_ad",r1d["grada"],  grada_interp)
+        if cvel_interp is not None and "conv_vel" in r1d:
+            # v_conv: MESA reports 0 in stable zones; comparing relative
+            # error there is meaningless. Restrict to MESA conv-active cells.
+            both_conv = (cvel_interp > 1.0) & (r1d["conv_vel"] > 1.0)
+            if np.any(both_conv):
+                rel = np.abs(r1d["conv_vel"][both_conv] - cvel_interp[both_conv]) \
+                      / cvel_interp[both_conv]
+                print(f"  {'v_conv':>8} rel err (both-conv zones only, "
+                      f"n={both_conv.sum()}): "
+                      f"median {np.median(rel):.2e}, "
+                      f"p90 {np.percentile(rel, 90):.2e}")
+                print(f"           MESA median: {np.median(cvel_interp[both_conv]):.2e} cm/s, "
+                      f"r1d median: {np.median(r1d['conv_vel'][both_conv]):.2e} cm/s")
 
     return 0
 
