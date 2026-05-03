@@ -295,6 +295,25 @@ struct AnelasticSLSolver {
                                      std::vector<double>& phi_modes);
 
     // ────────────────────────────────────────────────────────────────────
+    // SL-basis q-space EVP — the truly operator-consistent path
+    //
+    // Galerkin projection of  -φ'' + k² φ = (k² N²/ω²) φ,  φ = ρ₀·V̂
+    // onto the SL basis {ψ_n} already used by sl_poisson_solve().  Using
+    // -ψ_n'' = μ_n ψ_n - W̃ ψ_n, expanding φ = Σ c_n ψ_n gives
+    //     (diag(μ + k²) − W̃_matrix) c = (k²/ω²) H c
+    // with  W̃_{nm} = ⟨ψ_n, W̃ ψ_m⟩_cc,  H_{nm} = ⟨ψ_n, N² ψ_m⟩_cc.
+    // Because the TD SL-Poisson pipeline uses the same {ψ_n}, μ_n, w_cc,
+    // the EVP eigenvector is an exact invariant direction of the
+    // linear TD operator up to time-splitting error.
+    //
+    // Outputs phi_modes in V̂-space already (caller doesn't divide by ρ₀):
+    //   for each mode k, V̂(y) = (Σ_n c_n ψ_n(y)) / ρ₀(y).
+    void compute_2d_gmode_evp_qspace_sl(double kx_phys,
+                                        int n_modes,
+                                        std::vector<double>& omega_sq,
+                                        std::vector<double>& v_modes);
+
+    // ────────────────────────────────────────────────────────────────────
     // Exp K: 4-var full GYRE-compatible g-mode EVP on CGL grid
     // (see scripts/gmode_exp_k_chebyshev_full.py for derivation)
     //

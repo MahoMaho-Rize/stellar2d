@@ -1421,16 +1421,19 @@ int main(int argc, char** argv) {
             double kx_phys = kx_int * 2.0 * M_PI / ansl.Lx;
             int n_modes_req = 10;
             std::vector<double> omega_sq, v_modes;
-            bool use_qspace = false;
+            enum class EvpPath { GALERKIN, QSPACE_FOURIER, QSPACE_SL };
+            EvpPath path = EvpPath::GALERKIN;
             if (const char* s = std::getenv("ANSL_EVP_BASIS")) {
                 std::string ss(s);
-                if (ss == "qspace" || ss == "q" || ss == "phi") use_qspace = true;
+                if (ss == "qspace" || ss == "q" || ss == "phi")
+                    path = EvpPath::QSPACE_FOURIER;
+                else if (ss == "qspace_sl" || ss == "sl" || ss == "q_sl")
+                    path = EvpPath::QSPACE_SL;
             }
-            if (use_qspace) {
+            if (path == EvpPath::QSPACE_FOURIER) {
                 std::vector<double> phi_modes;
                 ansl.compute_2d_gmode_evp_qspace(kx_phys, n_modes_req,
                                                  omega_sq, phi_modes);
-                // Convert φ → V̂ on interior nodes for CSV compatibility.
                 const int n_out = (int)omega_sq.size();
                 v_modes.assign((size_t)(ansl.ny - 2) * n_out, 0.0);
                 for (int k = 0; k < n_out; ++k) {
@@ -1439,6 +1442,19 @@ int main(int argc, char** argv) {
                         double phi = phi_modes[(size_t)row * n_out + k];
                         v_modes[(size_t)i + (size_t)k * (ansl.ny - 2)] =
                             phi / std::max(ansl.h_rho[row], 1e-30);
+                    }
+                }
+            } else if (path == EvpPath::QSPACE_SL) {
+                std::vector<double> v_full;
+                ansl.compute_2d_gmode_evp_qspace_sl(kx_phys, n_modes_req,
+                                                    omega_sq, v_full);
+                const int n_out = (int)omega_sq.size();
+                v_modes.assign((size_t)(ansl.ny - 2) * n_out, 0.0);
+                for (int k = 0; k < n_out; ++k) {
+                    for (int i = 0; i < ansl.ny - 2; ++i) {
+                        int row = i + 1;
+                        v_modes[(size_t)i + (size_t)k * (ansl.ny - 2)] =
+                            v_full[(size_t)row * n_out + k];
                     }
                 }
             } else {
