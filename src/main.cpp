@@ -95,6 +95,7 @@ struct SimConfig {
     std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/convert_mesa_ic.py output
     bool ic_mesa_seed_T = false;     // --ic-mesa-seed-T: seed (e,P) from Helm(ρ,T_MESA) instead of (ρ,P_MESA)
     int  ic_mesa_atm_zones = 0;      // --ic-mesa-atm-zones N: use hybrid zoning with N log-spaced outer atm zones (0=equal-mass)
+    int  atm_split = 0;              // --atm-split N: operator-split rad in outer N zones (usually = ic_mesa_atm_zones)
     bool rich_profile = false;       // --rich-profile: emit T, κ, ∇_ad, ∇_rad, L, conv_vel per zone
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
     // EOS selection
@@ -327,6 +328,8 @@ int main(int argc, char** argv) {
             cfg.ic_mesa_seed_T = true;
         else if (std::strcmp(argv[i], "--ic-mesa-atm-zones") == 0 && i + 1 < argc)
             cfg.ic_mesa_atm_zones = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--atm-split") == 0 && i + 1 < argc)
+            cfg.atm_split = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--rich-profile") == 0)
             cfg.rich_profile = true;
         else if (std::strcmp(argv[i], "--G") == 0 && i + 1 < argc)
@@ -925,6 +928,7 @@ int main(int argc, char** argv) {
             if (cfg.newton_tol_override > 0) r1d.newton_tol = cfg.newton_tol_override;
             r1d.hse_resnap_interval = cfg.hse_resnap_interval;
             r1d.nuc_compress_frac = cfg.nuc_compress_frac;
+            r1d.nz_atm_split = cfg.atm_split;
             r1d.init_implicit();
             r1d.snapshot_hse_implicit();
         }

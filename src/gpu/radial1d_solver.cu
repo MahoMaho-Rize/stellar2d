@@ -1482,10 +1482,19 @@ __global__ static void k_rad1d_be_assemble(
     double c_light, double a_rad, OpacityParams opa,
     double sigma_sb,        // σ_SB in code units (=c·a/4)
     double dt,
-    const double* K_conv)   // (nz) MLT conductivity, nullptr ⇒ no MLT
+    const double* K_conv,   // (nz) MLT conductivity, nullptr ⇒ no MLT
+    int k_start)            // solve only zones [k_start, nz). 0 = full grid.
 {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k >= nz) return;
+    // Outside the active range: assemble identity row (zero δT solution).
+    if (k < k_start) {
+        A_diag[k] = 0.0;
+        B_diag[k] = 1.0;
+        C_diag[k] = 0.0;
+        rhs[k]    = 0.0;
+        return;
+    }
 
     double r_k   = r[k];           // inner face of zone k
     double r_k1  = r[k+1];         // outer face
@@ -1604,7 +1613,13 @@ __global__ static void k_rad1d_be_assemble(
     //    + dL_out_dTk δT_k + dL_out_dTkp1 δT_{k+1}
     //   = [-dmk cv(Tp-Tkn)/dt + L_in(Tp) − L_out(Tp)]
     //
-    double a_ = -dL_in_dTkm1;
+    // For k = k_start, T[k-1] is Dirichlet (part of the implicitly-solved
+    // inner block, not a BE unknown here). Zero its Jacobian coupling so
+    // the tridiag doesn't try to solve for δT_{k-1} via the a_ off-diagonal.
+    // L_face_in at T_p(T_{k-1}, T_k) remains correct (it's the nonlinear
+    // value used on the RHS).
+    double a_coup = (k == k_start) ? 0.0 : dL_in_dTkm1;
+    double a_ = -a_coup;
     double c_ =  dL_out_dTkp1;
     double b_ = (dmk * cv_k / dt) - dL_in_dTk + dL_out_dTk;
     double rhs_val = -dmk * cv_k * (Tk - Tkn) / dt + L_face_in - L_face_out;
@@ -1648,10 +1663,11 @@ static void thomas_solve(std::vector<double>& a, std::vector<double>& b,
 // don't have a cheap T→e inverse kernel.
 __global__ static void k_rad1d_apply_dT(
     double* e_int, const double* rho, const double* T_new, const double* T_start,
-    int nz, EOS eos)
+    int nz, EOS eos, int k_start)
 {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k >= nz) return;
+    if (k < k_start) return;  // split mode: don't overwrite inner e
     double rho_k = fmax(rho[k], 1e-30);
     double T_k   = fmax(T_new[k], 1e-12);
 #ifdef USE_GPU
@@ -1686,9 +1702,11 @@ __global__ static void k_rad1d_apply_delta_T(
     T_p[k] = newT;
 }
 
-int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
+int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total, int k_start) {
     if (!radiation_enabled || !use_eos) return 0;
     int nz = lev.nz, B = 256;
+    if (k_start < 0) k_start = 0;
+    if (k_start >= nz) return 0;
 
     OpacityParams opa;
     fill_opacity_params(opa);
@@ -1738,7 +1756,7 @@ int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
             d_Tp, d_Tn, lev.d_rho, lev.d_r, lev.d_dm,
             d_A, d_Bm, d_Cm, d_R,
             nz, eos, rad_c_light, rad_a_rad, opa, sigma_sb, dt_total,
-            K_conv_ptr);
+            K_conv_ptr, k_start);
 
         CUDA_CHECK(cudaMemcpy(h_a.data(),   d_A,  nz*sizeof(double), cudaMemcpyDeviceToHost));
         CUDA_CHECK(cudaMemcpy(h_b.data(),   d_Bm, nz*sizeof(double), cudaMemcpyDeviceToHost));
@@ -1775,7 +1793,7 @@ int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
 
     // Apply final T back to e_int. For Helm/IDEAL_RAD we re-evaluate the EOS
     // at (ρ, T_new) exactly; for IDEAL we linearize Δe = cv · ΔT.
-    k_rad1d_apply_dT<<<(nz+B-1)/B, B>>>(lev.d_e_int, lev.d_rho, d_Tp, d_Tn, nz, eos);
+    k_rad1d_apply_dT<<<(nz+B-1)/B, B>>>(lev.d_e_int, lev.d_rho, d_Tp, d_Tn, nz, eos, k_start);
 
     // Diagnostic: surface luminosity L = A_surf · σ · T_surf⁴
     {

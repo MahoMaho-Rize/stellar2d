@@ -184,6 +184,7 @@ __host__ __device__ inline void residual_zone_dual(
     const NuclearPPParams& npars,
     int nuclear_on,
     const RadParams& rad,
+    int nz_atm_split,
     dual::Dual<N>& R_v_out,
     dual::Dual<N>& R_r_out,
     dual::Dual<N>& R_e_out)
@@ -295,8 +296,12 @@ __host__ __device__ inline void residual_zone_dual(
     Dual<N> Pt = P_k + Pvsc_k;
     R_e_out = (-1.0) * Pt * dVdt / fmax(Dual<N>(dm[k]), 1e-30);
 
+    // Split-mode gate: atm zones get hydro only; rad & nuclear handled
+    // by operator-split BE post-Newton.
+    const bool in_atm = (nz_atm_split > 0) && (k >= nz - nz_atm_split);
+
     // Nuclear source (zone k)
-    if (nuclear_on) {
+    if (nuclear_on && !in_atm) {
         Dual<N> rho_safe = fmax(rho_k, 1e-30);
         Dual<N> eps = pp_eps_dual<N>(rho_safe, T_k, npars);
         R_e_out = R_e_out + eps;
@@ -309,7 +314,7 @@ __host__ __device__ inline void residual_zone_dual(
     // L at outer face (index k+1):
     //   Interior: same form with T_k, T_{k+1}
     //   Surface (k == nz-1): L = 4π r_surf² · σ · T_k⁴ (Stefan-Boltzmann)
-    if (rad.enabled) {
+    if (rad.enabled && !in_atm) {
         Dual<N> L_in(0.0);
         Dual<N> L_out(0.0);
 

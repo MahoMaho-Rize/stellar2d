@@ -135,6 +135,7 @@ __global__ void k_dual_residual(
     dualR::RadParams rad;  // enabled=0 by default → skipped
     dualR::residual_zone_dual<1>(k, nz, U_d, dm, G_const, P_surf_floor,
                                   CQ, ZSH, eos, npars, nuclear_on, rad,
+                                  /*nz_atm_split=*/0,
                                   Rv, Rr, Re);
     R_d[k]        = Rv;
     R_d[nz + k]   = Rr;

@@ -254,7 +254,7 @@ struct Radial1DSolver {
     // photosphere BC at the outer face (F_surf = σ T_surf⁴ · A).
     // Unconditionally stable → can take arbitrary dt, suitable for τ_KH.
     // Returns number of Picard iterations.
-    int apply_radiation_diffusion_implicit(double dt_total);
+    int apply_radiation_diffusion_implicit(double dt_total, int k_start = 0);
     int rad_impl_last_picard = 0;     // diagnostic: iterations last call
     double rad_impl_L_surf = 0.0;     // diagnostic: surface luminosity last call
     int    rad_impl_phot_zone = 0;    // diagnostic: τ=2/3 photosphere zone index
@@ -338,6 +338,14 @@ struct Radial1DSolver {
     // inside the implicit residual R(U), so Newton solves hydro + rad in
     // one step. Keep this flag for A/B comparisons.
     bool rad_be_split = false;
+    // Split architecture: when nz_atm_split > 0, the outer nz_atm_split
+    // zones are treated as a 1D atmosphere. Inside Newton, atm zones skip
+    // the rad diffusion term (their e is effectively frozen from Newton's
+    // POV). After Newton converges, operator-split BE-rad runs ONLY over
+    // those atm zones to evolve T(τ) toward radiative equilibrium.
+    // Physics: atm diffusion time ~(Δr)²·3κρ/c ≈ 10⁻⁷ s, already in
+    // equilibrium on any reasonable implicit dt ≥ μs.
+    int  nz_atm_split = 0;
     // Diagnostic: disable R_hse subtraction in F. When ON, F = (U-Uⁿ)/dt - R(U),
     // so Newton sees the full residual (gravity + pressure + rad). Tests
     // whether the well-balanced HSE subtraction absorbs rad-driven evolution.

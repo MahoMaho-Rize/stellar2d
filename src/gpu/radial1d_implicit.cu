@@ -281,10 +281,15 @@ __global__ static void k_r1di_residual(
     double P_surf_floor,
     NuclearPPParams npars,
     int nuclear_on,
-    dualR::RadParams rad)
+    dualR::RadParams rad,
+    int nz_atm_split)
 {
     int k = blockIdx.x*blockDim.x + threadIdx.x;
     if (k >= nz) return;
+    // Split mode: atm zones see hydro only. Rad + nuclear source terms
+    // are handled by the operator-split BE-rad post-Newton.
+    int k_split = nz - nz_atm_split;
+    bool in_atm = (nz_atm_split > 0) && (k >= k_split);
     // face-based index kf = k+1 (face 1..nz)
     int kf = k + 1;
 
@@ -321,7 +326,7 @@ __global__ static void k_r1di_residual(
     double R_e = -Pt * dVdt / dm_k;
 
     // Nuclear source (in residual so it's implicit)
-    if (nuclear_on) {
+    if (nuclear_on && !in_atm) {
         double rho_k = fmax(rho[k], 1e-30);
         double T_k;
         if (use_eos) T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
@@ -334,7 +339,7 @@ __global__ static void k_r1di_residual(
     // This couples hydro and rad in the same Newton solve — replaces the
     // operator-split BE-rad, which left transient momentum imbalances that
     // stalled Newton at Mach > 1 in quasi-static KH contraction.
-    if (rad.enabled && use_eos) {
+    if (rad.enabled && use_eos && !in_atm) {
         double rho_k = fmax(rho[k], 1e-30);
         double e_k   = fmax(e_int[k], 1e-30);
         double T_k   = eos.temperature_from_rho_e(rho_k, e_k);
@@ -692,7 +697,7 @@ void Radial1DSolver::compute_R_implicit() {
         lev.d_r, lev.d_v, lev.d_dm, lev.d_gr,
         lev.d_Vol, lev.d_rho, lev.d_P, lev.d_Pvsc, lev.d_e_int,
         nz, eos, use_eos, P_surf_floor,
-        npars, nuclear_enabled ? 1 : 0, rad);
+        npars, nuclear_enabled ? 1 : 0, rad, nz_atm_split);
 }
 
 void Radial1DSolver::compute_F_implicit(double inv_dt) {
@@ -850,14 +855,14 @@ __global__ static void k_r1di_ad_residual(
     double G_const, double P_surf_floor,
     double CQ, double ZSH,
     EOS eos, NuclearPPParams npars, int nuclear_on,
-    dualR::RadParams rad)
+    dualR::RadParams rad, int nz_atm_split)
 {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k >= nz) return;
     dual::Dual<1> Rv, Rr, Re;
     dualR::residual_zone_dual<1>(k, nz, U_d, dm,
                                   G_const, P_surf_floor, CQ, ZSH,
-                                  eos, npars, nuclear_on, rad,
+                                  eos, npars, nuclear_on, rad, nz_atm_split,
                                   Rv, Rr, Re);
     R_d[k]          = Rv;
     R_d[nz + k]     = Rr;
@@ -933,7 +938,7 @@ void Radial1DSolver::jfnk_matvec_ad(const double* d_v_in, double* d_Jv, double i
     k_r1di_ad_residual<<<(nz+B-1)/B, B>>>(
         s_d_R_d, s_d_U_d, lev.d_dm, nz,
         G_const, P_surf_floor, CQ, ZSH,
-        eos, npars, nuclear_enabled ? 1 : 0, rad);
+        eos, npars, nuclear_enabled ? 1 : 0, rad, nz_atm_split);
 
     // J·v_scaled = inv_dt · v_scaled - ∂R/∂U · v_scaled
     k_r1di_ad_compute_Jv<<<(N+B-1)/B, B>>>(d_Jv, s_d_R_d, v_scaled, inv_dt, N);
@@ -1645,6 +1650,17 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
             // R(U) (dualR::residual_zone_dual + k_r1di_residual), so hydro and
             // rad couple in one solve — the operator-split path is retained
             // only as a fallback, gated on rad_be_split. Default OFF.
+            // Operator-split atmosphere: after Newton converges on the
+            // inner-core subsystem (atm zones excluded from residual source
+            // terms), evolve the atm rad+MLT via BE-rad over [k_split, nz).
+            // Inner face Dirichlet T comes from the Newton-converged inner
+            // outermost zone. Surface BC remains Eddington T(τ).
+            if (nz_atm_split > 0 && radiation_enabled && use_eos) {
+                int k_split = lev.nz - nz_atm_split;
+                apply_radiation_diffusion_implicit(dt, k_split);
+                prims_and_visc(*this);
+            }
+
             if (rad_be_split && radiation_enabled && use_eos) {
                 apply_radiation_diffusion_implicit(dt);
                 prims_and_visc(*this);
