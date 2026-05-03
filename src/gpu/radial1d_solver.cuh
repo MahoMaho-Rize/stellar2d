@@ -326,6 +326,10 @@ struct Radial1DSolver {
     //   A_upper [i]  : 3×3 block, column in U at zone i+1 (upper; A_upper[nz-1] unused)
     // Blocks stored row-major in 9 doubles each.
     bool precond_tridiag = false;      // toggle: off = identity PC (legacy)
+    // AD (forward-mode Dual) J·v matvec. Off = finite-difference (legacy,
+    // cgs noise floor ~1e-3 relative). On = exact J·v via Dual<1>, one
+    // residual evaluation per matvec, no noise floor.
+    bool jfnk_autodiff = false;
     double* d_A_diag  = nullptr;       // nz · 9 doubles
     double* d_A_lower = nullptr;
     double* d_A_upper = nullptr;
@@ -358,6 +362,9 @@ struct Radial1DSolver {
     int    newton_solve_implicit(double dt);
     int    gmres_solve_implicit(double* d_x, const double* d_b, double inv_dt, double tol, int max_iter);
     void   jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, double inv_dt);
+    // Exact J·v via Dual<1> — same call signature as FD matvec above but
+    // uses the autodiff F kernel (radial1d_residual_dual.cuh). No α / FD.
+    void   jfnk_matvec_ad(const double* d_v_in, double* d_Jv, double inv_dt);
     void   apply_precond_implicit(const double* d_v_in, double* d_Mv, double inv_dt);
     // Build the block-tridiag preconditioner approximation of the current
     // scaled Jacobian. Calls jfnk_matvec_implicit 9 times (3 colors × 3 fields)

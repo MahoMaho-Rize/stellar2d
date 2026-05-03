@@ -22,6 +22,7 @@
 #include "radial1d_solver.cuh"
 #include "fas_common.cuh"
 #include "../physics/nuclear_pp.h"
+#include "radial1d_residual_dual.cuh"
 
 // Forward declare kernels from radial1d_kernels.cuh (defined in radial1d_solver.cu TU).
 static constexpr double PI4_IMPL = 12.566370614359172;
@@ -633,6 +634,112 @@ void Radial1DSolver::jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, do
     unpack_state_to_device();
 }
 
+// ---------------------------------------------------------------------
+// AD J·v matvec via Dual<1>. One residual eval, exact derivatives, no
+// finite-difference noise floor. Same column/row scaling as the FD path.
+// ---------------------------------------------------------------------
+__global__ static void k_r1di_ad_seed(
+    dual::Dual<1>* U_d, const double* U, const double* v_seed, int N)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    dual::Dual<1> u;
+    u.v = U[i];
+    u.g[0] = v_seed[i];
+    U_d[i] = u;
+}
+
+__global__ static void k_r1di_ad_residual(
+    dual::Dual<1>* R_d, const dual::Dual<1>* U_d,
+    const double* dm, int nz,
+    double G_const, double P_surf_floor,
+    double CQ, double ZSH,
+    EOS eos, NuclearPPParams npars, int nuclear_on)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    dual::Dual<1> Rv, Rr, Re;
+    dualR::residual_zone_dual<1>(k, nz, U_d, dm,
+                                  G_const, P_surf_floor, CQ, ZSH,
+                                  eos, npars, nuclear_on,
+                                  Rv, Rr, Re);
+    R_d[k]          = Rv;
+    R_d[nz + k]     = Rr;
+    R_d[2*nz + k]   = Re;
+}
+
+// Build F = (U - Un)/dt - (R - R_hse) with Dual. Since U appears linearly
+// in (U-Un)/dt its contribution to J·v is just v_seed/dt — so F_grad =
+// inv_dt · v_seed - R_grad. R_hse is constant so doesn't affect gradient.
+__global__ static void k_r1di_ad_compute_Jv(
+    double* Jv,
+    const dual::Dual<1>* R_d,          // ∂R/∂(seed direction) in .g[0]
+    const double* v_seed,               // direction
+    double inv_dt, int N)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    // F = (U-Un)/dt - (R - R_hse), so J·v = v/dt - (∂R/∂U) · v
+    // Dual gave us ∂R/∂U · v_seed in R_d[i].g[0]
+    Jv[i] = inv_dt * v_seed[i] - R_d[i].g[0];
+}
+
+// Dispatch: AD if flag set, else FD. Internal use only.
+static inline void r1di_matvec(Radial1DSolver& S, const double* v_in,
+                               double* Jv, double inv_dt) {
+    if (S.jfnk_autodiff) S.jfnk_matvec_ad(v_in, Jv, inv_dt);
+    else                 S.jfnk_matvec_implicit(v_in, Jv, inv_dt);
+}
+
+void Radial1DSolver::jfnk_matvec_ad(const double* d_v_in, double* d_Jv, double inv_dt) {
+    int N = N_dof, B = 256;
+    int nz = lev.nz;
+
+    // Step 1: apply column scale v_scaled = R · v_in (if Viallet on)
+    const double* v_scaled = d_v_in;
+    if (use_viallet_scaling) {
+        k_r1di_copy<<<(N+B-1)/B, B>>>(d_gmres_w, d_v_in, N);
+        k_r1di_mul_diag<<<(N+B-1)/B, B>>>(d_gmres_w, d_scale_R, N);
+        v_scaled = d_gmres_w;
+    }
+
+    // Lazy-allocate Dual buffers on first call.
+    static dual::Dual<1>* s_d_U_d = nullptr;
+    static dual::Dual<1>* s_d_R_d = nullptr;
+    static int s_N_cached = 0;
+    if (s_N_cached != N) {
+        if (s_d_U_d) cudaFree(s_d_U_d);
+        if (s_d_R_d) cudaFree(s_d_R_d);
+        CUDA_CHECK(cudaMalloc(&s_d_U_d, N * sizeof(dual::Dual<1>)));
+        CUDA_CHECK(cudaMalloc(&s_d_R_d, N * sizeof(dual::Dual<1>)));
+        s_N_cached = N;
+    }
+
+    // Seed Dual<1>: value = U, gradient = v_scaled.
+    k_r1di_ad_seed<<<(N+B-1)/B, B>>>(s_d_U_d, d_U, v_scaled, N);
+
+    // Evaluate Dual residual. Uses residual_zone_dual which reconstructs
+    // r, v, e from U internally — no need to unpack the scalar path.
+    NuclearPPParams npars;
+    npars.X_hydrogen   = nuc_X;
+    npars.T_floor      = nuc_T_floor;
+    npars.T_scale      = nuc_T_scale;
+    npars.epsilon_scale= nuc_epsilon_scale;
+    npars.q_burn       = nuc_q_burn;
+    k_r1di_ad_residual<<<(nz+B-1)/B, B>>>(
+        s_d_R_d, s_d_U_d, lev.d_dm, nz,
+        G_const, P_surf_floor, CQ, ZSH,
+        eos, npars, nuclear_enabled ? 1 : 0);
+
+    // J·v_scaled = inv_dt · v_scaled - ∂R/∂U · v_scaled
+    k_r1di_ad_compute_Jv<<<(N+B-1)/B, B>>>(d_Jv, s_d_R_d, v_scaled, inv_dt, N);
+
+    // Apply row scale invL (matches FD path postconditioning)
+    if (use_viallet_scaling) {
+        k_r1di_mul_diag<<<(N+B-1)/B, B>>>(d_Jv, d_scale_invL, N);
+    }
+}
+
 void Radial1DSolver::apply_precond_implicit(const double* d_v_in, double* d_Mv, double inv_dt) {
     if (precond_tridiag && d_A_diag != nullptr) {
         apply_precond_tridiag(d_v_in, d_Mv);
@@ -724,7 +831,7 @@ void Radial1DSolver::build_precond_tridiag(double inv_dt) {
         for (int field = 0; field < 3; ++field) {
             k_r1di_fill_color_probe<<<(nz+B-1)/B, B>>>(
                 d_matvec_scratch, nz, color, field);
-            jfnk_matvec_implicit(d_matvec_scratch, d_probe_out, inv_dt);
+            r1di_matvec(*this, d_matvec_scratch, d_probe_out, inv_dt);
             k_r1di_extract_block_column<<<(nz+B-1)/B, B>>>(
                 d_probe_out, d_A_diag, d_A_lower, d_A_upper,
                 nz, color, field);
@@ -1017,7 +1124,7 @@ int Radial1DSolver::gmres_solve_implicit(double* d_x, const double* d_b,
     int j;
     for (j = 0; j < m; ++j) {
         apply_precond_implicit(d_V[j], d_Z[j], inv_dt);
-        jfnk_matvec_implicit(d_Z[j], d_gmres_w, inv_dt);
+        r1di_matvec(*this, d_Z[j], d_gmres_w, inv_dt);
 
         // CGS2
         for (int i = 0; i <= j; ++i) {
