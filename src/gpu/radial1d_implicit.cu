@@ -425,7 +425,12 @@ __global__ static void k_r1di_residual(
                 T_phot = eos.temperature_from_rho_e(rho_p, e_p);
             }
             double A_surf = PI4 * r_face[k+1] * r_face[k+1];
+            // Soft floor: T_eff⁴ = T⁴ + T_floor⁴.
             double T4p = T_phot*T_phot; T4p *= T4p;
+            if (rad.T_phot_floor > 0.0) {
+                double f2 = rad.T_phot_floor * rad.T_phot_floor;
+                T4p += f2 * f2;
+            }
             L_out = A_surf * rad.sigma_sb * T4p;
         }
 
@@ -653,6 +658,7 @@ void Radial1DSolver::compute_R_implicit() {
     rad.a_rad    = rad_a_rad;
     rad.c_light  = rad_c_light;
     rad.sigma_sb = rad_c_light * rad_a_rad / 4.0;
+    rad.T_phot_floor = rad_T_phot_floor;
     fill_opacity_params(rad.opa);
 
     k_r1di_residual<<<(nz+B-1)/B, B>>>(
@@ -882,6 +888,7 @@ void Radial1DSolver::jfnk_matvec_ad(const double* d_v_in, double* d_Jv, double i
     rad.a_rad    = rad_a_rad;
     rad.c_light  = rad_c_light;
     rad.sigma_sb = rad_c_light * rad_a_rad / 4.0;
+    rad.T_phot_floor = rad_T_phot_floor;
     fill_opacity_params(rad.opa);
     k_r1di_ad_residual<<<(nz+B-1)/B, B>>>(
         s_d_R_d, s_d_U_d, lev.d_dm, nz,

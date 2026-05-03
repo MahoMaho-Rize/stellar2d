@@ -32,6 +32,10 @@ struct RadParams {
     double a_rad        = 7.5657e-15;
     double c_light      = 2.998e10;
     double sigma_sb     = 5.6704e-5; // = c·a/4
+    // Minimum photospheric T used in surface Stefan BC. Prevents runaway
+    // cooling below the Helm table floor (1000 K) which physically would
+    // be arrested by H⁻ opacity blow-up. 0 = no floor.
+    double T_phot_floor = 0.0;
     OpacityParams opa;
 };
 
@@ -408,8 +412,18 @@ __host__ __device__ inline void residual_zone_dual(
             }
             Dual<N> rs = r_face(k+1);
             Dual<N> A_surf = PI4_D * rs * rs;
+            // Soft floor: T_eff⁴ = T_phot⁴ + T_floor⁴. Preserves non-zero
+            // gradient even below the floor, so Newton still couples to the
+            // surface. Physically: photospheric H⁻ opacity self-regulation
+            // prevents T_eff from dropping below ~3000 K for pre-MS stars.
             Dual<N> T2 = T_phot * T_phot;
             Dual<N> T4 = T2 * T2;
+            double T_floor = rad.T_phot_floor;
+            if (T_floor > 0.0) {
+                double f2 = T_floor * T_floor;
+                double f4 = f2 * f2;
+                T4 = T4 + f4;
+            }
             L_out = A_surf * (rad.sigma_sb * T4);
         }
 

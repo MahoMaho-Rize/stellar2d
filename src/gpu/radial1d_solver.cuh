@@ -337,6 +337,11 @@ struct Radial1DSolver {
     // inside the implicit residual R(U), so Newton solves hydro + rad in
     // one step. Keep this flag for A/B comparisons.
     bool rad_be_split = false;
+    // Min photospheric T used in Stefan surface BC. Prevents atmospheric
+    // cooling below the Helm-table floor (1000 K) from stalling KH — the
+    // physical photospheric T of a pre-MS 1 M☉ on Hayashi is 3000-4000 K
+    // (H⁻ opacity self-regulation). 0 = no floor.
+    double rad_T_phot_floor = 0.0;
     double* d_A_diag  = nullptr;       // nz · 9 doubles
     double* d_A_lower = nullptr;
     double* d_A_upper = nullptr;

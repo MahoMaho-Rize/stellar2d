@@ -83,6 +83,7 @@ struct SimConfig {
     int hse_resnap_interval = 0;     // implicit: re-snapshot R_hse every N steps (0=off)
     double dt_thermal_frac = 0.0;    // implicit: dt ≤ frac · IE/L_surf (τ_KH cap, 0=off)
     double dt_mach_cap = 0.0;        // implicit: shrink dt when max Mach exceeds this (0=off)
+    double rad_T_phot_floor = 0.0;   // implicit rad-in-F: min T_phot for Stefan BC (K, 0=off)
     double nuc_compress_frac = 0.0;  // dynamic nuc scale: ε·dt/(cv·T) ≤ this (0=off)
     bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
     bool mlt_enabled = false;        // Böhm-Vitense MLT convection in BE rad solve
@@ -346,6 +347,8 @@ int main(int argc, char** argv) {
             cfg.dt_thermal_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--dt-mach-cap") == 0 && i + 1 < argc)
             cfg.dt_mach_cap = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--rad-T-phot-floor") == 0 && i + 1 < argc)
+            cfg.rad_T_phot_floor = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--nuc-compress") == 0 && i + 1 < argc)
             cfg.nuc_compress_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--mlt") == 0)
@@ -909,6 +912,7 @@ int main(int argc, char** argv) {
             if (cfg.no_viallet) r1d.use_viallet_scaling = false;
             r1d.precond_tridiag = cfg.precond_tridiag;
             r1d.jfnk_autodiff   = cfg.jfnk_autodiff;
+            r1d.rad_T_phot_floor = cfg.rad_T_phot_floor;
             if (cfg.newton_tol_override > 0) r1d.newton_tol = cfg.newton_tol_override;
             r1d.hse_resnap_interval = cfg.hse_resnap_interval;
             r1d.nuc_compress_frac = cfg.nuc_compress_frac;
