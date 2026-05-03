@@ -272,3 +272,64 @@ pre-MS 演化變 2D convection 的後續任務。
 
 這兩個都是 **正確的** 修法,只是上面 IC 問題比它們更根本。
 未來任何 outer-atm 修法都要搭這兩個。
+
+## Phase 7:Hybrid outer zoning 嘗試(commits 76599d7, f2a4827)
+
+### 7.1 結構改寫(76599d7)
+
+`init_from_mesa` 加 `n_atm_zones` 參數。當 N>0 時:
+- 內 `nz-N` zones equal-mass 覆蓋 [0, M_cut]
+- 外 `N` zones 幾何分佈覆蓋 [M_cut, M_star]
+- M_cut = M_star·(1 - 1e-11)(讓最外 zone 中點 mass depth <1e22 g,
+  落進 MESA 光球 T<5000K 的層)
+
+CLI: `--ic-mesa-atm-zones 20`
+
+### 7.2 Helm T-inversion 初值改良(同 commit)
+
+`helm_T_from_rho_e` 原本 T_guess=1e4 固定,對 T=4500K 低 ρ 大氣 Newton
+迭代走錯分支(Helm cv 在部分電離區不平滑)。改用 `T_guess = e/1.9e8`
+的完全電離估算,Newton 從較低 T 單調上升。
+
+驗證:原 `Helm(ρ=2.5e-7, e=9.5e11)` → 11000K(錯)。現在 → ~4600K(對)。
+
+### 7.3 Newton line-search α-limit(同 commit)
+
+大氣 zones e 量級小(~10¹¹),Newton 一步就可能把 e 推過零。加
+host-side α_max = 0.1·e_old/|Δe| 限制,確保每步 e 不降超過 90%。
+
+### 7.4 Viallet Le_rad cap(f2a4827)
+
+Le_rad 公式 `c·a·T⁴/(3κρ²·Δr²)` 在大氣 zones 給 ~10²²(因 ρ²·Δr²
+雙小),但實際 `F_e = (L_in-L_out)/dm ≈ 10⁵`。過估的 Le 讓 Newton
+對該 zone 超過敏感。cap 到 `100·e·cs/R_s`。
+
+### 結果
+
+**IC 結構**:成功。外層 20 zones T_MESA=4570-4600K, ρ=2.5e-7,
+  P=7.5e4 — 物理光球。
+**solver 行為**:t=1×10⁹ s 後 **dt collapse 到 0**。Newton 無法在
+  hybrid 外層 zones 的 μs 級聲波時標下收斂 dt=10⁹-10¹⁰ s 的步長。
+
+### 下次 session 的方向
+
+1. **Operator-split atmosphere**:對外 N_atm zones 分開做 sub-cycled
+   explicit step,內部 zones implicit Newton。
+2. **Semi-implicit atm BC**:外層 zones 不進 Newton,只 evolve e
+   via explicit radiation diffusion + atm T(τ) 關係。
+3. **降 atm zone 數到 5-10** 配合更大 Δr 讓 dt 能到 10⁹:精度會降
+   但 solver 穩定。
+4. **放棄 pre-MS → 直接 ZAMS**:用 `zams.ic` 展示 pp 點火(已驗證
+   `T_c=1.34e7, L_nuc=2.46e33 erg/s = 0.6 L☉`)。
+
+## Phase 8:保留資產(本 session 截止)
+
+| commit | 內容 | 狀態 |
+|---|---|---|
+| 14f2e38 | Eddington 1-zone BC | **保留**,替代 τ-scan |
+| 8912326 | nuc-aware Le | **保留**,Newton 能看 ε_pp source |
+| 76599d7 | hybrid IC zoning + Helm T_guess + line search | **保留**,IC 結構正確 |
+| f2a4827 | Le_rad cap | **保留**,防止 atm zone 過敏感 |
+
+**飞跃点**:IC 外層 T 從 7×10⁶ K 錯值降到 4570 K 物理值。但
+ rad timestep 問題擋住 evolution 收斂,需 sub-cycle 或 split。
