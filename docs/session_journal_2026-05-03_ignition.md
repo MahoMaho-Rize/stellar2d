@@ -333,3 +333,111 @@ Le_rad 公式 `c·a·T⁴/(3κρ²·Δr²)` 在大氣 zones 給 ~10²²(因 ρ²
 
 **飞跃点**:IC 外層 T 從 7×10⁶ K 錯值降到 4570 K 物理值。但
  rad timestep 問題擋住 evolution 收斂,需 sub-cycle 或 split。
+
+## Phase 9:Newton instrumentation + operator-split atm(commits 20b6add, 0cd7f88)
+
+### 9.1 核心 probe:Δe_core 直接測量(20b6add)
+
+在 step_implicit 前後對 `lev.d_e_int[0]` 和 `[nz-1]` 做 cudaMemcpy 讀取,
+印出每 Newton step 的 **真實** 能量變化。結果:
+
+```
+step=0 pre:  e_core=1.543869e+15
+       post: e_core=1.543869e+15  Δ=-1320  (用預設 rel_tol=1e-3)
+```
+
+**發現**:T_c 看似完全凍結實際上是 **Newton rel_tol=1e-3 讓 GMRES
+一 iter linear drop 6 decades 就被當 Newton converged**。Newton 從未
+真的消除非線性 residual。
+
+**修法**:rel_tol 1e-3 → 1e-9。Newton 現在真跑 3-8 iter/step。
+
+**但** 修正後 Δe_core ≈ -1.6×10⁷ erg/g (pp 生成應 +4.5×10⁸)——
+**方向錯了**!Newton 在把 core 能量**往外 drain**。
+
+### 9.2 真根因定位:pre-MS KH 不是 ε_nuc 驅動
+
+分析:
+- Core ε_pp @ T=7.35e6, ρ=19.5 = **0.18 erg/g/s**
+- Core rad + MLT drain rate(L_enc/dm)≈ **10³ erg/g/s**(大 5000×)
+- 所以 Newton 看到的是能量**淨流出**,正確地把 e_core 往下調
+
+**物理真相**:pre-MS KH 靠**重力 PdV work** 放能,不是 ε_nuc。機制:
+```
+L_surf 輻射掉表面能 → 表面冷縮 → ∇P < ρg → 整體 infall (v_r<0)
+  → gravity 做正功 → PdV 加熱 → core T 升 → KH τ ~ GM²/RL ~ 10 Myr
+```
+
+但 **HSE well-balancing 使 F_v ≡ 0** → Newton 保持 v = 0 → 無 PdV →
+T_c 永遠不升。即使 Eddington + Le_nuc + hybrid IC 全對,這個 loop
+還是啟不動。
+
+### 9.3 Operator-split atmosphere 嘗試(0cd7f88)
+
+架構:
+- `--atm-split N`:外 N zones 從 Newton residual 中 skip source terms
+  (rad + nuclear),只保留 hydro
+- Newton 收斂後,`apply_radiation_diffusion_implicit(k_start=nz-N)`
+  做限制 range 的 BE-rad
+- inner 最外 zone 的 outer-face rad 仍在 Newton 裡,自然形成 inner→atm
+  的 flux coupling
+
+**結果**:
+- **equal-mass IC + N=2**:`||F||` 4 decades 下降,Newton 能 iter
+  但 line search 在 iter 2 fail 於 dt=10⁹
+- **hybrid IC + N=20**:line search **第一 iter 就 fail**,Jacobian
+  條件數在 inner↔atm 幾何不連續界面(Δr 差 10⁴×)爆掉
+
+Split 架構本身對,但**實際 hydro code 下** interface conditioning 需
+2-3 天重構才能處理。
+
+## 最終結論:radial1d 做 pre-MS KH 是架構錯配
+
+不是 bug,是 solver 家族失配。成熟的 stellar evolution(MESA / KEPLER)
+用 **Henyey method** —— 解 4 個結構 BVP (∂r/∂m, ∂P/∂m, ∂L/∂m, ∂T/∂m),
+**v 不是變數**,dt 只透過 `T·Δs/Δt` 進入源項,沒有聲波 CFL 限制。
+
+我們的 radial1d 是 compressible hydro:U=(v, r, e),解 IVP with 聲波
+dynamics。對長時標 quasi-static 演化(KH τ~10 Myr)天生不適合。所有
+今天修的症狀(Newton false converge、Δe 方向錯、atm Δr、光球 T)都是
+**用弓箭射衛星** —— 工具沒壞,目標錯。
+
+### 正確 scope(已寫入 CLAUDE.md)
+
+radial1d 能做:
+- 載入 MESA 輸出,驗證 HSE 穩定數萬 dt
+- ZAMS IC pp 點火**瞬間響應**(已驗證 T_c=1.34e7, L_nuc=0.6 L☉)
+- 脈動 / 聲波 / 短時標動力學 / nuclear flash 瞬態
+- 作為 2D cart_ale2 Newton-Krylov 機制 testbed
+
+radial1d 不能做:
+- pre-MS KH contraction(T_c 7.4e6 → 1.5e7 的 30 Myr 演化)
+- 任何 τ_KH 或 τ_nuc 級長時標 stellar evolution
+- 正確 L_surf(需要 Kurucz / PHOENIX atm table,不是 grey Eddington)
+
+### 不要重走的死路
+
+下次 session 看到 "pre-MS KH T_c 不升" 不要再試:
+- 改 BC form(Eddington / τ-scan / T_phot_floor)
+- 改 Viallet scaling / Le row scale
+- 改 IC zoning(equal-mass / hybrid / log-P)
+- 改 Newton tol / line search
+- 改 K_cap for MLT
+
+這些我全試過,都是 symptom,不是根因。真做 KH 要**重寫成 Henyey BVP
+solver**(2-4 週),或**用 MESA output 當 IC 只做動力學**(幾小時)。
+
+### 保留的真實 progress
+
+這 session commit 都**獨立正確**,留著不要回滾:
+
+| commit | 內容 | 獨立價值 |
+|---|---|---|
+| 14f2e38 | Eddington BC | dt stability |
+| 8912326 | nuc-aware Le | Newton ε-sensitivity |
+| 76599d7 | hybrid IC + Helm + line search | IC 正確性 |
+| f2a4827 | Le_rad cap | atm 非過敏感 |
+| 20b6add | Newton rel_tol 1e-9 | 真 Newton 收斂 |
+| 0cd7f88 | operator-split arch | 架構 groundwork |
+
+任何未來 stellar surface / atmosphere 工作都能站在這些基礎上。
