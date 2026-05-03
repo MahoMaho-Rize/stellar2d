@@ -19,9 +19,21 @@
 #include "../physics/dual.cuh"
 #include "../physics/helmholtz_eos_dual.cuh"
 #include "../physics/nuclear_pp.h"
+#include "../physics/opacity.h"
 #include "../eos.h"
 
 namespace dualR {
+
+// Radiation + convection params bundled for residual. Mirrors the inputs to
+// k_rad1d_be_assemble: grey Rosseland κ via OpacityParams, Stefan-Boltzmann
+// surface BC. `enabled` gates the whole contribution.
+struct RadParams {
+    int  enabled        = 0;        // 0 ⇒ skip rad term entirely
+    double a_rad        = 7.5657e-15;
+    double c_light      = 2.998e10;
+    double sigma_sb     = 5.6704e-5; // = c·a/4
+    OpacityParams opa;
+};
 
 // PI constants (match radial1d_kernels.cuh)
 static constexpr double PI4_D  = 12.566370614359172;
@@ -93,6 +105,40 @@ __host__ __device__ inline void primitives_dual(const dual::Dual<N>& rho,
     P_out = (eos.gamma - 1.0) * rho * e;
 }
 
+// Rosseland radiation flux across a single face between zones L and R.
+// Returns the Dual-valued luminosity flowing from L to R (positive = outward).
+//
+// L_face = 4π r_face² · D · a · (T_L⁴ - T_R⁴) / Δr_zc
+// with D = c / (3 κ ρ_face). Opacity is Picard-lagged (evaluated at scalar
+// T_L.v, ρ_face.v) so the Dual gradient comes only from T_L⁴, T_R⁴, r_face.
+// Δr_zc is the zone-center spacing — scalar since r enters only via face
+// positions, and differentiating Δr_zc through r would couple more broadly;
+// the standard choice in BE-rad assembly treats it as geometric lag too.
+template <int N>
+__host__ __device__ inline dual::Dual<N> rad_face_L_dual(
+    const dual::Dual<N>& rho_L_d, const dual::Dual<N>& T_L_d,
+    const dual::Dual<N>& rho_R_d, const dual::Dual<N>& T_R_d,
+    const dual::Dual<N>& r_face_d, double dr_zc,
+    const RadParams& rad)
+{
+    using dual::Dual;
+    double rho_face_v = 0.5 * (rho_L_d.v + rho_R_d.v);
+    double T_face_v   = 0.5 * (T_L_d.v   + T_R_d.v);
+    double kap = grey_opacity(rho_face_v > 1e-30 ? rho_face_v : 1e-30,
+                              T_face_v   > 1.0   ? T_face_v   : 1.0, rad.opa);
+    if (!(kap > 1e-30)) kap = 1e-30;
+    double D_v = rad.c_light / (3.0 * kap * (rho_face_v > 1e-30 ? rho_face_v : 1e-30));
+    // A_face = 4π r²
+    Dual<N> A_face = PI4_D * r_face_d * r_face_d;
+    // T⁴_L - T⁴_R (Dual). Clamp tiny values.
+    Dual<N> TL2 = T_L_d * T_L_d;
+    Dual<N> TL4 = TL2 * TL2;
+    Dual<N> TR2 = T_R_d * T_R_d;
+    Dual<N> TR4 = TR2 * TR2;
+    double dr = dr_zc > 1e-30 ? dr_zc : 1e-30;
+    return A_face * (D_v * rad.a_rad / dr) * (TL4 - TR4);
+}
+
 // Compute residual R = R(U) for one zone k and write face-v, face-r, zone-e
 // components. Face arrays (r, v) are indexed k = 0..nz; this helper produces
 // the three R packed components for zone/face index k.
@@ -121,6 +167,7 @@ __host__ __device__ inline void residual_zone_dual(
     const EOS& eos,
     const NuclearPPParams& npars,
     int nuclear_on,
+    const RadParams& rad,
     dual::Dual<N>& R_v_out,
     dual::Dual<N>& R_r_out,
     dual::Dual<N>& R_e_out)
@@ -237,6 +284,70 @@ __host__ __device__ inline void residual_zone_dual(
         Dual<N> rho_safe = fmax(rho_k, 1e-30);
         Dual<N> eps = pp_eps_dual<N>(rho_safe, T_k, npars);
         R_e_out = R_e_out + eps;
+    }
+
+    // --- Radiation diffusion source for zone k ---
+    // d(ρe·V)/dt_rad = L_in - L_out  ⇒ per-mass rate (L_in - L_out) / dm_k.
+    // L at inner face (index k, between zones k-1 and k):
+    //   L_in = 4π r_k² · D · a · (T_{k-1}⁴ - T_k⁴) / Δr_zc,  D = c/(3κρ_face)
+    // L at outer face (index k+1):
+    //   Interior: same form with T_k, T_{k+1}
+    //   Surface (k == nz-1): L = 4π r_surf² · σ · T_k⁴ (Stefan-Boltzmann)
+    if (rad.enabled) {
+        Dual<N> L_in(0.0);
+        Dual<N> L_out(0.0);
+
+        // Inner face (k). For k=0 there is no inner face (center is
+        // reflective); treat L_in = 0.
+        if (k >= 1) {
+            // Zone k-1 primitives
+            Dual<N> rLm = r_face(k-1);
+            Dual<N> rRm = r_face(k);
+            Dual<N> Vm  = PI43_D * (rRm*rRm*rRm - rLm*rLm*rLm);
+            if (Vm.v < 1e-30) Vm = Dual<N>(1e-30);
+            Dual<N> rho_m = Dual<N>(dm[k-1]) / Vm;
+            Dual<N> e_m   = e_zone(k-1);
+            if (e_m.v < 1e-30) e_m = Dual<N>(1e-30);
+            Dual<N> P_m, T_m;
+            primitives_dual<N>(rho_m, e_m, eos, P_m, T_m);
+
+            // zone-center spacing: rc_k - rc_{k-1} ≈ 0.5(r_{k+1}-r_{k-1})
+            double rc_lo = 0.5 * (r_face(k-1).v + r_face(k).v);
+            double rc_hi = 0.5 * (r_face(k).v   + r_face(k+1).v);
+            double dr_zc = rc_hi - rc_lo;
+            L_in = rad_face_L_dual<N>(rho_m, T_m, rho_k, T_k,
+                                       r_face(k), dr_zc, rad);
+        }
+
+        // Outer face (k+1)
+        if (k < nz - 1) {
+            // Zone k+1 primitives
+            Dual<N> rLj = r_face(k+1);
+            Dual<N> rRj = r_face(k+2);
+            Dual<N> Vj  = PI43_D * (rRj*rRj*rRj - rLj*rLj*rLj);
+            if (Vj.v < 1e-30) Vj = Dual<N>(1e-30);
+            Dual<N> rho_j = Dual<N>(dm[k+1]) / Vj;
+            Dual<N> e_j   = e_zone(k+1);
+            if (e_j.v < 1e-30) e_j = Dual<N>(1e-30);
+            Dual<N> P_j, T_j;
+            primitives_dual<N>(rho_j, e_j, eos, P_j, T_j);
+
+            double rc_lo = 0.5 * (r_face(k).v   + r_face(k+1).v);
+            double rc_hi = 0.5 * (r_face(k+1).v + r_face(k+2).v);
+            double dr_zc = rc_hi - rc_lo;
+            L_out = rad_face_L_dual<N>(rho_k, T_k, rho_j, T_j,
+                                        r_face(k+1), dr_zc, rad);
+        } else {
+            // Surface: L = 4π r_surf² σ T_surf⁴
+            Dual<N> rs = r_face(k+1);
+            Dual<N> A_surf = PI4_D * rs * rs;
+            Dual<N> T2 = T_k * T_k;
+            Dual<N> T4 = T2 * T2;
+            L_out = A_surf * (rad.sigma_sb * T4);
+        }
+
+        Dual<N> eps_rad = (L_in - L_out) / fmax(Dual<N>(dm[k]), 1e-30);
+        R_e_out = R_e_out + eps_rad;
     }
 }
 

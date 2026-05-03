@@ -38,6 +38,8 @@ extern __global__ void k_rad1d_enclosed_mass(const double*, double*, int);
 extern __global__ void k_rad1d_gravity(const double*, const double*, double*, int, double);
 extern __global__ void k_rad1d_artificial_viscosity(
     const double*, const double*, const double*, double*, int, double, double);
+extern __global__ void k_rad1d_T_from_rho_e(
+    const double*, const double*, double*, int, EOS);
 
 // Species-only burn kernel: advance X, Y by dt using current ρ, T. Does NOT
 // modify e_int — that's done implicitly by the Newton solver via R_e.
@@ -243,7 +245,8 @@ __global__ static void k_r1di_residual(
     bool use_eos,
     double P_surf_floor,
     NuclearPPParams npars,
-    int nuclear_on)
+    int nuclear_on,
+    dualR::RadParams rad)
 {
     int k = blockIdx.x*blockDim.x + threadIdx.x;
     if (k >= nz) return;
@@ -290,6 +293,61 @@ __global__ static void k_r1di_residual(
         else         T_k = fmax(e_int[k], 1e-30) / (1.0/(eos.gamma - 1.0));  // fallback, unused
         double eps = nuclear_pp_epsilon(rho_k, T_k, npars);
         R_e += eps;
+    }
+
+    // Radiation source (same formula as rad_face_L_dual, scalar path).
+    // This couples hydro and rad in the same Newton solve — replaces the
+    // operator-split BE-rad, which left transient momentum imbalances that
+    // stalled Newton at Mach > 1 in quasi-static KH contraction.
+    if (rad.enabled && use_eos) {
+        double rho_k = fmax(rho[k], 1e-30);
+        double e_k   = fmax(e_int[k], 1e-30);
+        double T_k   = eos.temperature_from_rho_e(rho_k, e_k);
+        double L_in = 0.0, L_out = 0.0;
+
+        // Inner face: between zones k-1 and k
+        if (k >= 1) {
+            double rho_m = fmax(rho[k-1], 1e-30);
+            double e_m   = fmax(e_int[k-1], 1e-30);
+            double T_m   = eos.temperature_from_rho_e(rho_m, e_m);
+            double rho_face = 0.5 * (rho_m + rho_k);
+            double T_face   = 0.5 * (T_m + T_k);
+            double kap = grey_opacity(rho_face, T_face > 1.0 ? T_face : 1.0, rad.opa);
+            if (!(kap > 1e-30)) kap = 1e-30;
+            double D = rad.c_light / (3.0 * kap * rho_face);
+            double A_face = PI4 * r_face[k] * r_face[k];
+            double rc_lo = 0.5 * (r_face[k-1] + r_face[k]);
+            double rc_hi = 0.5 * (r_face[k]   + r_face[k+1]);
+            double dr_zc = fmax(rc_hi - rc_lo, 1e-30);
+            double Tm4 = T_m*T_m; Tm4 *= Tm4;
+            double Tk4 = T_k*T_k; Tk4 *= Tk4;
+            L_in = A_face * D * rad.a_rad * (Tm4 - Tk4) / dr_zc;
+        }
+
+        // Outer face: between zones k and k+1, or surface
+        if (k < nz - 1) {
+            double rho_p = fmax(rho[k+1], 1e-30);
+            double e_p   = fmax(e_int[k+1], 1e-30);
+            double T_p   = eos.temperature_from_rho_e(rho_p, e_p);
+            double rho_face = 0.5 * (rho_k + rho_p);
+            double T_face   = 0.5 * (T_k + T_p);
+            double kap = grey_opacity(rho_face, T_face > 1.0 ? T_face : 1.0, rad.opa);
+            if (!(kap > 1e-30)) kap = 1e-30;
+            double D = rad.c_light / (3.0 * kap * rho_face);
+            double A_face = PI4 * r_face[k+1] * r_face[k+1];
+            double rc_lo = 0.5 * (r_face[k]   + r_face[k+1]);
+            double rc_hi = 0.5 * (r_face[k+1] + r_face[k+2]);
+            double dr_zc = fmax(rc_hi - rc_lo, 1e-30);
+            double Tk4 = T_k*T_k; Tk4 *= Tk4;
+            double Tp4 = T_p*T_p; Tp4 *= Tp4;
+            L_out = A_face * D * rad.a_rad * (Tk4 - Tp4) / dr_zc;
+        } else {
+            double A_surf = PI4 * r_face[k+1] * r_face[k+1];
+            double Tk4 = T_k*T_k; Tk4 *= Tk4;
+            L_out = A_surf * rad.sigma_sb * Tk4;
+        }
+
+        R_e += (L_in - L_out) / dm_k;
     }
 
     // Write packed
@@ -508,12 +566,19 @@ void Radial1DSolver::compute_R_implicit() {
         }
     }
 
+    dualR::RadParams rad;
+    rad.enabled  = (radiation_enabled && use_eos) ? 1 : 0;
+    rad.a_rad    = rad_a_rad;
+    rad.c_light  = rad_c_light;
+    rad.sigma_sb = rad_c_light * rad_a_rad / 4.0;
+    fill_opacity_params(rad.opa);
+
     k_r1di_residual<<<(nz+B-1)/B, B>>>(
         d_R,
         lev.d_r, lev.d_v, lev.d_dm, lev.d_gr,
         lev.d_Vol, lev.d_rho, lev.d_P, lev.d_Pvsc, lev.d_e_int,
         nz, eos, use_eos, P_surf_floor,
-        npars, nuclear_enabled ? 1 : 0);
+        npars, nuclear_enabled ? 1 : 0, rad);
 }
 
 void Radial1DSolver::compute_F_implicit(double inv_dt) {
@@ -558,11 +623,14 @@ void Radial1DSolver::snapshot_hse_implicit() {
     // balance — they are physical energy injection. Temporarily disable
     // so R_hse captures only (advection + gravity) which is what HSE
     // balances.
-    bool saved_nuclear = nuclear_enabled;
-    nuclear_enabled = false;
+    bool saved_nuclear   = nuclear_enabled;
+    bool saved_radiation = radiation_enabled;
+    nuclear_enabled   = false;
+    radiation_enabled = false;
     pack_state_from_device();
     compute_R_implicit();
-    nuclear_enabled = saved_nuclear;
+    nuclear_enabled   = saved_nuclear;
+    radiation_enabled = saved_radiation;
 
     int N = N_dof, B = 256;
     k_r1di_copy<<<(N+B-1)/B, B>>>(d_R_hse, d_R, N);
@@ -654,14 +722,15 @@ __global__ static void k_r1di_ad_residual(
     const double* dm, int nz,
     double G_const, double P_surf_floor,
     double CQ, double ZSH,
-    EOS eos, NuclearPPParams npars, int nuclear_on)
+    EOS eos, NuclearPPParams npars, int nuclear_on,
+    dualR::RadParams rad)
 {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k >= nz) return;
     dual::Dual<1> Rv, Rr, Re;
     dualR::residual_zone_dual<1>(k, nz, U_d, dm,
                                   G_const, P_surf_floor, CQ, ZSH,
-                                  eos, npars, nuclear_on,
+                                  eos, npars, nuclear_on, rad,
                                   Rv, Rr, Re);
     R_d[k]          = Rv;
     R_d[nz + k]     = Rr;
@@ -726,10 +795,16 @@ void Radial1DSolver::jfnk_matvec_ad(const double* d_v_in, double* d_Jv, double i
     npars.T_scale      = nuc_T_scale;
     npars.epsilon_scale= nuc_epsilon_scale;
     npars.q_burn       = nuc_q_burn;
+    dualR::RadParams rad;
+    rad.enabled  = (radiation_enabled && use_eos) ? 1 : 0;
+    rad.a_rad    = rad_a_rad;
+    rad.c_light  = rad_c_light;
+    rad.sigma_sb = rad_c_light * rad_a_rad / 4.0;
+    fill_opacity_params(rad.opa);
     k_r1di_ad_residual<<<(nz+B-1)/B, B>>>(
         s_d_R_d, s_d_U_d, lev.d_dm, nz,
         G_const, P_surf_floor, CQ, ZSH,
-        eos, npars, nuclear_enabled ? 1 : 0);
+        eos, npars, nuclear_enabled ? 1 : 0, rad);
 
     // J·v_scaled = inv_dt · v_scaled - ∂R/∂U · v_scaled
     k_r1di_ad_compute_Jv<<<(N+B-1)/B, B>>>(d_Jv, s_d_R_d, v_scaled, inv_dt, N);
@@ -1394,13 +1469,30 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
         }
         int iters = newton_solve_implicit(dt);
         if (iters >= 0) {
-            // Radiation diffusion: BE tridiag solve with photosphere BC.
-            // Run AFTER Newton so hydro is consistent, then let energy flow
-            // to space. This is the mechanism that drives τ_KH.
-            if (radiation_enabled && use_eos) {
+            // Radiation diffusion is now inside the implicit Newton residual
+            // R(U) (dualR::residual_zone_dual + k_r1di_residual), so hydro and
+            // rad couple in one solve — the operator-split path is retained
+            // only as a fallback, gated on rad_be_split. Default OFF.
+            if (rad_be_split && radiation_enabled && use_eos) {
                 apply_radiation_diffusion_implicit(dt);
-                // Refresh primitives after e_int update
                 prims_and_visc(*this);
+            } else if (radiation_enabled && use_eos) {
+                // Diagnostic-only: compute L_surf from the converged surface T.
+                // L = 4π r_surf² σ T_surf⁴. Writes rad_impl_L_surf so the
+                // thermal dt cap in main.cpp stays informed.
+                double sigma_sb = rad_c_light * rad_a_rad / 4.0;
+                static double* s_d_Tsurf = nullptr;
+                if (!s_d_Tsurf) CUDA_CHECK(cudaMalloc(&s_d_Tsurf, sizeof(double)));
+                k_rad1d_T_from_rho_e<<<1, 1>>>(
+                    lev.d_rho + (lev.nz - 1), lev.d_e_int + (lev.nz - 1),
+                    s_d_Tsurf, 1, eos);
+                double T_surf = 0.0, r_surf = 0.0;
+                CUDA_CHECK(cudaMemcpy(&T_surf, s_d_Tsurf, sizeof(double),
+                                      cudaMemcpyDeviceToHost));
+                CUDA_CHECK(cudaMemcpy(&r_surf, lev.d_r + lev.nz, sizeof(double),
+                                      cudaMemcpyDeviceToHost));
+                double T4 = T_surf*T_surf; T4 *= T4;
+                rad_impl_L_surf = 4.0 * M_PI * r_surf * r_surf * sigma_sb * T4;
             }
 
             // Species burn-up: Newton has updated e_int implicitly (R_e

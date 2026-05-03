@@ -330,6 +330,10 @@ struct Radial1DSolver {
     // cgs noise floor ~1e-3 relative). On = exact J·v via Dual<1>, one
     // residual evaluation per matvec, no noise floor.
     bool jfnk_autodiff = false;
+    // Operator-split BE radiation (legacy path). Default OFF — rad is now
+    // inside the implicit residual R(U), so Newton solves hydro + rad in
+    // one step. Keep this flag for A/B comparisons.
+    bool rad_be_split = false;
     double* d_A_diag  = nullptr;       // nz · 9 doubles
     double* d_A_lower = nullptr;
     double* d_A_upper = nullptr;
