@@ -268,6 +268,7 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_rhs_u);  free_ptr(d_rhs_v); free_ptr(d_rhs_b);
     free_ptr(d_scratch);
     free_ptr(d_Dy);
+    free_ptr(d_y_filter);
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
     free_ptr(d_rho_prime); free_ptr(d_N2);
     free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
@@ -427,6 +428,35 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     }
     CUDA_CHECK(cudaMemcpy(d_N2, h_N2.data(),
                           sizeof(double) * ny, cudaMemcpyHostToDevice));
+
+    // Filter config from env (used by the build block at end of set_background).
+    if (const char* s = std::getenv("ANSL_FILTER_ALPHA")) {
+        double v = std::atof(s);
+        if (v > 0.0) filter_alpha = v;
+    }
+    if (const char* s = std::getenv("ANSL_FILTER_S")) {
+        int v = std::atoi(s);
+        if (v >= 2) filter_s = v;
+    }
+    if (const char* s = std::getenv("ANSL_FILTER_CUT")) {
+        double v = std::atof(s);
+        if (v > 0.0 && v < 1.0) filter_cut_frac = v;
+    }
+    if (const char* s = std::getenv("ANSL_FILTER_BASIS")) {
+        std::string bs(s);
+        if      (bs == "cheb") filter_basis = FilterBasis::CHEB;
+        else if (bs == "sl")   filter_basis = FilterBasis::SL;
+        else if (bs == "evp")  filter_basis = FilterBasis::EVP;
+        else {
+            std::fprintf(stderr, "ANSL_FILTER_BASIS must be cheb|sl|evp.\n");
+            std::exit(1);
+        }
+    }
+    filter_evp_kx = 2.0 * M_PI / Lx;
+    if (const char* s = std::getenv("ANSL_FILTER_EVP_KX")) {
+        double v = std::atof(s);
+        if (v > 0.0) filter_evp_kx = v;
+    }
 
     // ── SL eigenproblem on interior nodes (Dirichlet BCs): ────────────
     //   A := -D²_int - diag(W̃_int),   A ψ = μ ψ.
@@ -646,6 +676,163 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     CUDA_CHECK(cudaMemcpy(d_Psi_inv, h_Psi_inv.data(),
                           sizeof(cufftDoubleComplex) * (size_t)ny * n_modes,
                           cudaMemcpyHostToDevice));
+
+    // ── y-direction filter build (CHEB / SL / EVP) ─────────────────────
+    // Runs after SL eigenproblem so h_Psi is available (SL basis) and
+    // after all device buffers are allocated (EVP basis calls the 2D EVP).
+    if (filter_alpha > 0.0) {
+        const int Nf = ny - 1;
+        const char* basis_name =
+            (filter_basis == FilterBasis::CHEB ? "CHEB" :
+             filter_basis == FilterBasis::SL   ? "SL"   : "EVP");
+
+        int n_cut = 0;
+        int n_modes_filt = 0;
+        if (filter_basis == FilterBasis::CHEB) {
+            n_modes_filt = ny;
+            n_cut = (int)std::floor(Nf * filter_cut_frac);
+        } else if (filter_basis == FilterBasis::SL) {
+            n_modes_filt = n_modes;
+            n_cut = (int)std::floor(n_modes * filter_cut_frac);
+        } else {
+            n_modes_filt = ny - 2;
+            n_cut = (int)std::floor((ny - 2) * filter_cut_frac);
+        }
+        std::vector<double> sigma(n_modes_filt, 1.0);
+        for (int n = 0; n < n_modes_filt; ++n) {
+            if (n <= n_cut) { sigma[n] = 1.0; continue; }
+            double t = (double)(n - n_cut) /
+                       (double)std::max(1, n_modes_filt - 1 - n_cut);
+            double tp = 1.0;
+            for (int q = 0; q < filter_s; ++q) tp *= t;
+            sigma[n] = std::exp(-filter_alpha * tp);
+        }
+
+        std::vector<double> Q_row((size_t)ny * ny, 0.0);
+
+        if (filter_basis == FilterBasis::CHEB) {
+            auto gamma = [Nf](int k) { return (k == 0 || k == Nf) ? 2.0 : 1.0; };
+            for (int i = 0; i < ny; ++i) {
+                int kd_i = Nf - i;
+                for (int j = 0; j < ny; ++j) {
+                    int kd_j = Nf - j;
+                    double sum = 0.0;
+                    for (int n = 0; n <= Nf; ++n) {
+                        double f_inv = std::cos(M_PI * n * kd_i / (double)Nf);
+                        double f_fwd = (2.0 / (double)Nf) / (gamma(n) * gamma(kd_j))
+                                       * std::cos(M_PI * n * kd_j / (double)Nf);
+                        sum += f_inv * sigma[n] * f_fwd;
+                    }
+                    Q_row[(size_t)i * ny + j] = sum;
+                }
+            }
+        } else if (filter_basis == FilterBasis::SL) {
+            // SL basis: Q(j,i) = Σ_m ψ_m(y_j) σ_m w_cc[i] ψ_m(y_i)
+            // h_Psi[m*ny + i] = ψ_m(y_i)     (full-grid, ψ=0 at walls)
+            for (int i = 0; i < ny; ++i) {
+                double wi = h_cc_weights[i];
+                for (int j = 0; j < ny; ++j) {
+                    double sum = 0.0;
+                    for (int m = 0; m < n_modes; ++m) {
+                        sum += h_Psi[(size_t)m * ny + j] * sigma[m]
+                             * wi * h_Psi[(size_t)m * ny + i];
+                    }
+                    Q_row[(size_t)j * ny + i] = sum;
+                }
+            }
+        } else {
+            // EVP basis: Q_int = V_R · diag(σ) · V_R⁻¹ on interior, pad with I.
+            std::vector<double> omega_sq_tmp, vmodes_tmp;
+            compute_2d_gmode_evp(filter_evp_kx, ny - 2,
+                                 omega_sq_tmp, vmodes_tmp);
+            const int M_int = ny - 2;
+            int n_got = (int)omega_sq_tmp.size();
+            std::vector<double> VR_cm((size_t)M_int * M_int, 0.0);
+            for (int m = 0; m < n_got; ++m)
+                for (int i = 0; i < M_int; ++i)
+                    VR_cm[(size_t)i + (size_t)m * M_int] =
+                        vmodes_tmp[(size_t)i + (size_t)m * M_int];
+            for (int m = n_got; m < M_int; ++m)
+                VR_cm[(size_t)m + (size_t)m * M_int] = 1.0;
+
+            // Gauss-Jordan invert VR_cm (host, partial pivot).
+            std::vector<double> M_aug((size_t)M_int * 2 * M_int, 0.0);
+            for (int i = 0; i < M_int; ++i) {
+                for (int j = 0; j < M_int; ++j)
+                    M_aug[(size_t)i * 2 * M_int + j] =
+                        VR_cm[(size_t)i + (size_t)j * M_int];
+                M_aug[(size_t)i * 2 * M_int + M_int + i] = 1.0;
+            }
+            for (int k = 0; k < M_int; ++k) {
+                int pivot = k;
+                double best = std::fabs(M_aug[(size_t)k * 2 * M_int + k]);
+                for (int ii = k + 1; ii < M_int; ++ii) {
+                    double v = std::fabs(M_aug[(size_t)ii * 2 * M_int + k]);
+                    if (v > best) { best = v; pivot = ii; }
+                }
+                if (best < 1e-300) {
+                    std::fprintf(stderr, "EVP-basis filter: VR singular at k=%d\n", k);
+                    std::exit(1);
+                }
+                if (pivot != k) {
+                    for (int j = 0; j < 2 * M_int; ++j)
+                        std::swap(M_aug[(size_t)k * 2 * M_int + j],
+                                  M_aug[(size_t)pivot * 2 * M_int + j]);
+                }
+                double inv_pivot = 1.0 / M_aug[(size_t)k * 2 * M_int + k];
+                for (int j = 0; j < 2 * M_int; ++j)
+                    M_aug[(size_t)k * 2 * M_int + j] *= inv_pivot;
+                for (int ii = 0; ii < M_int; ++ii) {
+                    if (ii == k) continue;
+                    double factor = M_aug[(size_t)ii * 2 * M_int + k];
+                    if (factor == 0.0) continue;
+                    for (int j = 0; j < 2 * M_int; ++j)
+                        M_aug[(size_t)ii * 2 * M_int + j] -=
+                            factor * M_aug[(size_t)k * 2 * M_int + j];
+                }
+            }
+            std::vector<double> A_inv((size_t)M_int * M_int);
+            for (int i = 0; i < M_int; ++i)
+                for (int j = 0; j < M_int; ++j)
+                    A_inv[(size_t)i + (size_t)j * M_int] =
+                        M_aug[(size_t)i * 2 * M_int + M_int + j];
+
+            std::vector<double> sigma_ext(M_int, 1.0);
+            for (int n = 0; n < (int)sigma.size() && n < M_int; ++n)
+                sigma_ext[n] = sigma[n];
+            std::vector<double> Q_int_cm((size_t)M_int * M_int, 0.0);
+            for (int i = 0; i < M_int; ++i) {
+                for (int j = 0; j < M_int; ++j) {
+                    double s = 0.0;
+                    for (int m = 0; m < M_int; ++m) {
+                        s += VR_cm[(size_t)i + (size_t)m * M_int]
+                           * sigma_ext[m]
+                           * A_inv[(size_t)m + (size_t)j * M_int];
+                    }
+                    Q_int_cm[(size_t)i + (size_t)j * M_int] = s;
+                }
+            }
+            for (int i = 0; i < M_int; ++i)
+                for (int j = 0; j < M_int; ++j)
+                    Q_row[(size_t)(i + 1) * ny + (j + 1)] =
+                        Q_int_cm[(size_t)i + (size_t)j * M_int];
+            Q_row[(size_t)0 * ny + 0] = 1.0;
+            Q_row[(size_t)(ny - 1) * ny + (ny - 1)] = 1.0;
+        }
+
+        std::vector<double> Q_col((size_t)ny * ny);
+        for (int i = 0; i < ny; ++i)
+            for (int j = 0; j < ny; ++j)
+                Q_col[(size_t)i + (size_t)j * ny] = Q_row[(size_t)i * ny + j];
+        CUDA_CHECK(cudaMalloc(&d_y_filter, sizeof(double) * (size_t)ny * ny));
+        CUDA_CHECK(cudaMemcpy(d_y_filter, Q_col.data(),
+                              sizeof(double) * (size_t)ny * ny,
+                              cudaMemcpyHostToDevice));
+        std::fprintf(stderr,
+            "  yFilter ENABLED: basis=%s, α=%.3g, s=%d, n_cut=%d/%d, σ(last)=%.3e\n",
+            basis_name, filter_alpha, filter_s, n_cut, n_modes_filt - 1,
+            sigma.back());
+    }
 }
 
 void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
@@ -851,6 +1038,132 @@ void AnelasticSLSolver::init_gmode_pulsation(double amp, int k_y) {
         "  AnelasticSL gmode IC: amp=%g, k_y=%d, kx_int=1, anelastic=%d%s\n",
         amp, k_y, (int)is_anelastic,
         projection_test ? ", PROJECTION TEST" : "");
+}
+
+// ── Phase 1e IC: exact 2D eigenmode ──────────────────────────────────────
+// Reconstructs v(x,y) = V(y) · sin(k_x x), u(x,y) = U(y) · cos(k_x x) from
+// the continuity constraint ∂x(ρ₀u) + ∂y(ρ₀v) = 0 (anelastic), and
+// b(x,y) = -(N²/ω²) v(x,y) from the linearised buoyancy balance
+//   ∂t v = b  ⇒  -iω V = B  ⇒  -iω B = -N² V  ⇒  B = i(N²/ω) V
+// So |b|_phys = (N²/ω²) v up to a phase; we absorb the i-phase by storing
+// b = -(N²/ω²) v at t=0 and u analogously.
+double AnelasticSLSolver::init_gmode_eigenmode(int kx_int, int n_g, double amp) {
+    if (h_N2.empty() || h_rho.empty()) {
+        std::fprintf(stderr,
+            "init_gmode_eigenmode: call set_background() first.\n");
+        std::exit(1);
+    }
+    const double kx_phys = kx_int * 2.0 * M_PI / Lx;
+    const int M_int = ny - 2;
+
+    // Get at least n_g eigenpairs
+    std::vector<double> omega_sq, v_modes;
+    compute_2d_gmode_evp(kx_phys, std::max(n_g + 2, 6), omega_sq, v_modes);
+    if ((int)omega_sq.size() < n_g) {
+        std::fprintf(stderr,
+            "init_gmode_eigenmode: requested n_g=%d but only %zu modes returned.\n",
+            n_g, omega_sq.size());
+        std::exit(1);
+    }
+    double om2   = omega_sq[n_g - 1];
+    double omega = std::sqrt(om2);
+
+    // Eigenvector V(y) on interior nodes (M_int,); zero at walls.
+    std::vector<double> V_full(ny, 0.0);
+    for (int i = 0; i < M_int; ++i) {
+        V_full[i + 1] = v_modes[(size_t)i + (size_t)(n_g - 1) * M_int];
+    }
+
+    // Normalise so max|V| = amp (sign-stabilised — make V at its peak positive).
+    double max_absV = 0.0; int arg_max = 0;
+    for (int i = 0; i < ny; ++i) {
+        if (std::fabs(V_full[i]) > max_absV) {
+            max_absV = std::fabs(V_full[i]); arg_max = i;
+        }
+    }
+    if (max_absV <= 0.0) {
+        std::fprintf(stderr,
+            "init_gmode_eigenmode: degenerate eigenvector (max|V|=0).\n");
+        std::exit(1);
+    }
+    double sgn = (V_full[arg_max] >= 0.0 ? 1.0 : -1.0);
+    double scale = amp * sgn / max_absV;
+    for (int i = 0; i < ny; ++i) V_full[i] *= scale;
+
+    // Continuity:  ∂x(ρ₀ u) + ∂y(ρ₀ v) = 0
+    //   v(x,y) = V(y) sin(kx x)
+    //   ∂y(ρ₀ V)(y) · sin(kx x)  +  ρ₀(y)·kx·U(y)·cos(kx x) = 0 only if the
+    //   two terms are 90° out of phase.  Choose u(x,y) = U(y) cos(kx x) and
+    //   set U(y) = -(1/(ρ₀ kx)) · (ρ₀V)' · tan(kx x)?  — No, a phase-correct
+    //   eigenmode uses SIN for v and COS for u; then
+    //     ∂x(ρ₀ U cos) = -ρ₀ U kx sin,
+    //     ∂y(ρ₀ V sin) =  (ρ₀ V)' sin
+    //   hence  -ρ₀ U kx + (ρ₀V)' = 0  ⇒  U(y) = (ρ₀V)'(y) / (ρ₀ kx).
+    std::vector<double> rhoV(ny), dRhoV_dy(ny), U_full(ny, 0.0);
+    for (int i = 0; i < ny; ++i) rhoV[i] = h_rho[i] * V_full[i];
+    for (int i = 0; i < ny; ++i) {
+        double s = 0.0;
+        for (int j = 0; j < ny; ++j) s += h_Dy_row[(size_t)i * ny + j] * rhoV[j];
+        dRhoV_dy[i] = s;
+    }
+    for (int i = 0; i < ny; ++i) {
+        U_full[i] = dRhoV_dy[i] / (h_rho[i] * kx_phys);
+    }
+    // No wall clamp on U: free-slip BC leaves u(wall) unconstrained, and
+    // the EVP eigenvector already implies U(wall) = V'(wall)/(ρ₀ k_x) which
+    // is the analytically correct free-slip value.
+
+    // Fill physical fields.  Layout: row-major (ny × nx), y slow, x fast.
+    std::vector<double> h_u_host(ncell, 0.0), h_v_host(ncell, 0.0),
+                        h_b_host(ncell, 0.0);
+    for (int jy = 0; jy < ny; ++jy) {
+        double Vy = V_full[jy];
+        double Uy = U_full[jy];
+        double by = -(h_N2[jy] / std::max(om2, 1e-30)) * Vy;
+        for (int ix = 0; ix < nx; ++ix) {
+            double x  = ix * dx;
+            double sn = std::sin(kx_phys * x);
+            double cs = std::cos(kx_phys * x);
+            int k = jy * nx + ix;
+            h_v_host[k] = Vy * sn;
+            h_u_host[k] = Uy * cs;
+            h_b_host[k] = by * sn;
+        }
+    }
+    CUDA_CHECK(cudaMemcpy(d_u, h_u_host.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_v, h_v_host.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
+    if (is_anelastic) {
+        CUDA_CHECK(cudaMemcpy(d_b, h_b_host.data(), sizeof(double) * ncell,
+                              cudaMemcpyHostToDevice));
+    }
+
+    dt_current = 0.0;
+    step_count = 0;
+
+    // Single project_div_free() to clean up any residual divergence from the
+    // finite-precision (ρ₀V)' — for ρ₀=1 this is exactly zero analytically,
+    // but EVP eigenvectors carry O(1e-13) noise.
+    // NOTE: disable via ANSL_SKIP_IC_PROJECT=1 to test whether the projection
+    // itself is polluting the IC with other eigenmodes.
+    if (!std::getenv("ANSL_SKIP_IC_PROJECT")) project_div_free();
+
+    // Cache the post-projection v for the eigenmode-deviation diagnostic.
+    h_eigmode_v.assign(h_v_host.begin(), h_v_host.end());
+    // Also snapshot what just went to the device in case projection altered v.
+    std::vector<double> v_dev(ncell);
+    CUDA_CHECK(cudaMemcpy(v_dev.data(), d_v, sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+    h_eigmode_v = v_dev;
+    eigmode_norm = 0.0;
+    for (int i = 0; i < ncell; ++i) eigmode_norm += v_dev[i] * v_dev[i];
+    eigmode_omega = omega;
+
+    std::fprintf(stderr,
+        "  AnelasticSL eigenmode IC: kx_int=%d, n_g=%d, ω²_EVP=%.10e, ω=%.10e, amp=%g\n",
+        kx_int, n_g, om2, omega, amp);
+    return om2;
 }
 
 double AnelasticSLSolver::probe_v_center() {
@@ -1600,13 +1913,56 @@ void AnelasticSLSolver::project_div_free() {
     apply_dy(cublas, d_pi, d_scratch, d_Dy, nx, ny);
     k_sub_inplace<<<grid1d, block>>>(d_v, d_scratch, ncell);
 
-    // Dirichlet velocity BC: u = v = 0 at y = 0, Ly.  Required for
-    // compatibility with the SL-Poisson Dirichlet-π projection: if u_tan
-    // were non-zero at the wall, ∂x u_tan would contribute to ∇·u at the
-    // wall where the SL basis cannot resolve it (leaving residual div).
+    // Free-slip (stress-free) BC:  v = 0 at y = 0, Ly  (impermeable wall),
+    // but u is UNCONSTRAINED at the wall.  This is the physically correct
+    // BC for stellar internal-gravity-wave and pulsation problems (no
+    // viscous wall inside a star), and it matches the 2D g-mode EVP
+    // eigenvectors which only impose V(wall)=0.
+    //
+    // Compatibility with the SL-Poisson Dirichlet-π projection: π(wall)=0
+    // means ∂π/∂x|wall = 0, so projection never modifies u at the wall —
+    // there is no ∇·u contribution from ∂x u_tan at the wall to worry
+    // about because the SL basis itself does not see wall nodes.
     int grid_bdy = (nx + 255) / 256;
-    k_zero_y_boundary<<<grid_bdy, 256>>>(d_u, nx, ny);
     k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+}
+
+// ── y-direction filter: dst = Q · src along y, batched over x. ─────────
+// Uses same DGEMM pattern as apply_dy (filter stored col-major at d_y_filter).
+void AnelasticSLSolver::apply_y_filter(double* d_field) {
+    if (d_y_filter == nullptr) return;
+    const double one = 1.0, zero = 0.0;
+    CUBLAS_CHECK(cublasDgemm(
+        cublas, CUBLAS_OP_N, CUBLAS_OP_T,
+        nx, ny, ny,
+        &one,
+        d_field, nx,
+        d_y_filter, ny,
+        &zero,
+        d_scratch, nx));
+    CUDA_CHECK(cudaMemcpyAsync(d_field, d_scratch, sizeof(double) * ncell,
+                               cudaMemcpyDeviceToDevice));
+}
+
+// ── Eigenmode-deviation diagnostic ───────────────────────────────────
+//   deviation = ‖v − a·V‖ / ‖V‖,  a = ⟨v, V⟩ / ⟨V, V⟩  (L² projection)
+// Returns NaN if init_gmode_eigenmode was not called.
+double AnelasticSLSolver::eigmode_deviation() {
+    if (h_eigmode_v.empty() || eigmode_norm <= 0.0) {
+        return std::nan("");
+    }
+    std::vector<double> hv(ncell);
+    CUDA_CHECK(cudaMemcpy(hv.data(), d_v, sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+    double num = 0.0;
+    for (int i = 0; i < ncell; ++i) num += hv[i] * h_eigmode_v[i];
+    double a = num / eigmode_norm;
+    double sqr = 0.0;
+    for (int i = 0; i < ncell; ++i) {
+        double d = hv[i] - a * h_eigmode_v[i];
+        sqr += d * d;
+    }
+    return std::sqrt(sqr / eigmode_norm);
 }
 
 // ── Shu-Osher RK3 (primitive-variable + projection). ────────────────────
@@ -1633,7 +1989,13 @@ double AnelasticSLSolver::step() {
     // Use the conservative estimate dt_visc ≲ 0.5·dy_min² / ν (matches the FD
     // rule of thumb and is dominated by the near-boundary cluster).
     double dt_visc = (nu > 0.0) ? 0.5 * dy_min * dy_min / nu : 1e30;
-    double dt = std::min({dt_max, dt_adv, dt_visc});
+    // Optional override of dt_max via env (Phase 1e dt-scan diagnostic).
+    double dt_max_eff = dt_max;
+    if (const char* s = std::getenv("ANSL_DT_MAX")) {
+        double v = std::atof(s);
+        if (v > 0.0) dt_max_eff = v;
+    }
+    double dt = std::min({dt_max_eff, dt_adv, dt_visc});
     dt = std::max(dt_min, dt);
     dt_current = dt;
 
@@ -1674,6 +2036,18 @@ double AnelasticSLSolver::step() {
         k_rk3_combine<<<grid1d, block>>>(d_b, d_b_orig, d_b, d_rhs_b,
                                          1.0 / 3.0, 2.0 / 3.0, dt, ncell);
     project_div_free();
+
+    // Optional Chebyshev spectral filter (y direction) — once per full step.
+    // Applied to u, v (and b if anelastic); divergence constraint is
+    // preserved up to filter leakage (minor — σ is very close to 1 at low n).
+    if (d_y_filter) {
+        apply_y_filter(d_u);
+        apply_y_filter(d_v);
+        if (is_anelastic) apply_y_filter(d_b);
+        // Re-project to restore divergence-free constraint exactly after
+        // filtering (filter does not commute with the SL-Poisson solver).
+        project_div_free();
+    }
 
     ++step_count;
     return dt;

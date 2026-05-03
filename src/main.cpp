@@ -529,6 +529,7 @@ int main(int argc, char** argv) {
                || cfg.test_case == "kh_shear_boussinesq"
                || cfg.test_case == "gmode_pulsation"
                || cfg.test_case == "gmode_2d_evp"
+               || cfg.test_case == "gmode_eigenmode_td"
                || cfg.test_case == "gmode_exp_k") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
@@ -1271,11 +1272,12 @@ int main(int argc, char** argv) {
             && cfg.test_case != "kh_shear_boussinesq"
             && cfg.test_case != "gmode_pulsation"
             && cfg.test_case != "gmode_2d_evp"
+            && cfg.test_case != "gmode_eigenmode_td"
             && cfg.test_case != "gmode_exp_k") {
             std::fprintf(stderr,
                 "ERROR: anelastic_sl supports --test {sl_basis_check, "
                 "sl_poisson_test[_boussinesq], kh_shear_boussinesq, "
-                "gmode_pulsation, gmode_2d_evp, gmode_exp_k}\n");
+                "gmode_pulsation, gmode_2d_evp, gmode_eigenmode_td, gmode_exp_k}\n");
             return 1;
         }
         AnelasticSLSolver ansl;
@@ -1289,7 +1291,8 @@ int main(int argc, char** argv) {
             || cfg.test_case == "sl_poisson_test_boussinesq") {
             bg = "boussinesq";
         } else if (cfg.test_case == "gmode_pulsation"
-                   || cfg.test_case == "gmode_2d_evp") {
+                   || cfg.test_case == "gmode_2d_evp"
+                   || cfg.test_case == "gmode_eigenmode_td") {
             bg = "stratified_n2";
             // Re-use ps_vshear as the N² value knob for this test (default 1.0).
             bg_arg = (cfg.ps_vshear > 0.0) ? cfg.ps_vshear : 1.0;
@@ -1482,6 +1485,62 @@ int main(int argc, char** argv) {
             std::fclose(probe);
             std::fprintf(stderr, "  gmode probe written to %s (%d samples)\n",
                          probe_path, step);
+        }
+
+        if (cfg.test_case == "gmode_eigenmode_td") {
+            // Phase 1e: exact 2D g-mode eigenmode IC → time-domain probe.
+            // Background: stratified_n2 (ρ₀=1, constant N² via --ps-vshear).
+            // Used to characterise the Chorin-splitting time error on a
+            // clean single-frequency signal.
+            double amp   = (cfg.perturb_amplitude > 0) ? cfg.perturb_amplitude : 1e-3;
+            int kx_int   = (cfg.ps_k > 0) ? cfg.ps_k : 1;
+            int n_g_env  = 1;
+            if (const char* s = std::getenv("ANSL_NG")) n_g_env = std::atoi(s);
+            if (n_g_env < 1) n_g_env = 1;
+
+            double om2_evp = ansl.init_gmode_eigenmode(kx_int, n_g_env, amp);
+            double om_evp  = std::sqrt(om2_evp);
+            double T_period = 2.0 * M_PI / om_evp;
+            std::fprintf(stderr,
+                "  AnelasticSL eigenmode-TD run: tend=%g, cfl=%g, N²=%g, kx_int=%d, n_g=%d\n",
+                cfg.t_end, cfg.cfl, bg_arg, kx_int, n_g_env);
+            std::fprintf(stderr,
+                "  EVP ω²=%.10e, ω=%.10e, period=%.6f (t_end covers %.2f periods)\n",
+                om2_evp, om_evp, T_period, cfg.t_end / T_period);
+
+            double t = 0.0;
+            int step = 0;
+            std::timespec wall_start;
+            clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+            char probe_path[512];
+            std::snprintf(probe_path, sizeof(probe_path),
+                          "%s/gmode_eigenmode_td.csv", run_dir.c_str());
+            FILE* probe = std::fopen(probe_path, "w");
+            std::fprintf(probe,
+                "# kx_int=%d n_g=%d N2=%g omega_sq_evp=%.15e omega_evp=%.15e amp=%g\n",
+                kx_int, n_g_env, bg_arg, om2_evp, om_evp, amp);
+            std::fprintf(probe, "# t  v_center  eigmode_deviation\n");
+            double v0 = ansl.probe_v_center();
+            double dev0 = ansl.eigmode_deviation();
+            std::fprintf(probe, "%.10e %.10e %.10e\n", 0.0, v0, dev0);
+
+            while (t < cfg.t_end && !g_interrupted) {
+                double dt = ansl.step();
+                if (t + dt > cfg.t_end) dt = cfg.t_end - t;
+                t += dt;
+                ++step;
+                double v_c = ansl.probe_v_center();
+                double dev = ansl.eigmode_deviation();
+                std::fprintf(probe, "%.10e %.10e %.10e\n", t, v_c, dev);
+                if (step % 200 == 0 || t >= cfg.t_end) {
+                    print_progress(t, cfg.t_end, step, dt, wall_start);
+                }
+            }
+            std::fclose(probe);
+            std::fprintf(stderr,
+                "  eigenmode-TD probe written to %s (%d samples)\n",
+                probe_path, step);
         }
 
         if (cfg.test_case == "kh_shear_boussinesq") {

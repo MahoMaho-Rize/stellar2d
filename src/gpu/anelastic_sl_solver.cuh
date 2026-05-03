@@ -88,6 +88,41 @@ struct AnelasticSLSolver {
     // Uploaded once in set_background, reused every RK substep.
     double* d_Dy = nullptr;
 
+    // ── y-direction spectral filter (optional) ───────────────────────────
+    // Boyd-Vandeven exponential filter applied in y after every step:
+    //   σ(n) = 1                             if n ≤ n_cut
+    //        = exp(-α · ((n − n_cut)/(N − n_cut))^s)   otherwise
+    // The filter is a pre-compiled (ny × ny) real matrix Q that maps a
+    // physical field on CGL nodes to itself, stored col-major for DGEMM.
+    //
+    // Three basis variants (operator-convergence comparison, Phase 1e):
+    //   "cheb" : Q = F_T⁻¹ · diag(σ) · F_T     (standard Chebyshev-T DCT-I)
+    //   "sl"   : Q = Ψ · diag(σ) · diag(w_cc) · Ψᵀ  (Dirichlet SL basis,
+    //            which is also the pressure-projection basis)
+    //   "evp"  : Q = V_R · diag(σ) · V_R⁻¹     (2D g-mode EVP eigenvectors
+    //            at kx_phys = filter_evp_kx; these are the eigenvectors
+    //            that the EVP IC uses, so filtering in this basis keeps
+    //            each n_g-mode's amplitude an exact invariant — the truly
+    //            "operator-aligned" filter)
+    //
+    // Activated when filter_alpha > 0 (set via ANSL_FILTER_ALPHA env var).
+    enum class FilterBasis { CHEB, SL, EVP };
+    double* d_y_filter = nullptr;
+    FilterBasis filter_basis = FilterBasis::CHEB;
+    double  filter_alpha  = 0.0;     // 0 disables the filter
+    int     filter_s      = 16;
+    double  filter_cut_frac = 2.0 / 3.0;  // n_cut = floor(N · cut_frac)
+    double  filter_evp_kx = 0.0;     // kx_phys for EVP-basis filter (only used if basis=EVP)
+
+    // ── Eigenmode-deviation diagnostic (Phase 1e) ───────────────────────
+    // If set, stores the IC eigenmode shape V_EVP(y) · sin(kx·x) on interior
+    // nodes; step() then computes ‖v − (V·c(t))‖ / ‖V‖ where c(t) is the
+    // L²-projection onto the IC direction.  Quantifies scattering without
+    // FFT windowing artefacts.
+    std::vector<double> h_eigmode_v;     // (ncell,) IC v field
+    double  eigmode_norm = 0.0;
+    double  eigmode_omega = 0.0;
+
     // Weight vectors (ny)
     double* d_rho               = nullptr;
     double* d_rho_sqrt_inv      = nullptr;  // 1/√ρ_0 on CGL nodes
@@ -145,6 +180,18 @@ struct AnelasticSLSolver {
     // in y (approximates the n_g=1 mode shape without full eigensolve).
     void init_gmode_pulsation(double amp, int k_y);
 
+    // Seed an exact 2D g-mode eigenmode as IC.  Calls compute_2d_gmode_evp
+    // internally for (kx_phys = kx_int·2π/Lx), picks the n_g-th eigenvalue
+    // (1-based, n_g=1 is largest ω²), reconstructs v(x,y) = V(y)·sin(kx·x),
+    // then enforces ∇·(ρ₀ u) = 0 → u(x,y) = (1/(ρ₀ kx))·∂y(ρ₀ V)·cos(kx·x),
+    // and b(x,y) = -(N²/ω²)·v(x,y) (linear eigenmode balance).  Returns the
+    // EVP ω² so caller can compare probe FFT frequency.
+    //
+    // Assumes stratified_n2 background (constant ρ₀=1, constant N²); under
+    // those assumptions the Boussinesq dispersion ω² = N²·k_x²/(k_x²+k_y²)
+    // must be reproduced to machine precision by the EVP.
+    double init_gmode_eigenmode(int kx_int, int n_g, double amp);
+
     // Main API
     double step();
     void download_uv(std::vector<double>& h_u, std::vector<double>& h_v);
@@ -154,6 +201,15 @@ struct AnelasticSLSolver {
     // SL-Poisson solve.  Reads from d_rhs_pi (ny × nx physical RHS) and writes
     // the solution π (for reduced-pressure form) to d_pi.
     void sl_poisson_solve();
+
+    // Apply y-direction spectral filter in-place (ny × nx row-major field).
+    // No-op if d_y_filter is null (filter_alpha == 0).
+    void apply_y_filter(double* d_field);
+
+    // Eigenmode-deviation diagnostic:  deviation = ‖v − a(t)·V‖ / ‖V‖
+    // where a(t) = ⟨v, V⟩ / ⟨V, V⟩ (L² projection onto IC direction).
+    // Returns NaN if the IC was not set via init_gmode_eigenmode.
+    double eigmode_deviation();
 
     // Phase 1c time-stepping helpers (primitive-variable + projection).
     // For Phase 1d (anelastic), compute_rhs_uv also fills d_rhs_b with
