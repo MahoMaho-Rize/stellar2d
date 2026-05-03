@@ -560,7 +560,17 @@ __global__ static void k_r1di_build_scaling(
     // ε-sized sources drive Newton instead of being scaled into noise.
     // In a near-HSE state the true |F_e| ≈ ε_nuc + rad_imbalance, so
     // setting Le to that magnitude gives the right sensitivity.
-    double Le = fmax(Le_hydro, Le_rad);
+    //
+    // Cap Le from above by ε_nuc when nuclear burns (sensitive to small
+    // sources). Cap Le from below by e_k/R_s·cs_c (typical residual
+    // magnitude |F_e| = Δe/dt where dt ~ acoustic transit = R_s/cs; this
+    // prevents Le_rad's "max possible L / dm" overestimate from making
+    // Newton over-aggressive in atmospheric zones, where ρ² and Δr² are
+    // small so Le_rad shoots to 10¹² while actual imbalance is 10⁵).
+    double e_k = fmax(e_int[i], 1e-30);
+    double Le_e_typ = e_k * cs_c / R_s;
+    double Le = fmax(Le_hydro, Le_e_typ);
+    if (Le_rad > Le) Le = fmin(Le_rad, 100.0 * Le_e_typ);  // allow rad up to 100×
     if (Le_nuc > 0.0 && Le_nuc < Le) Le = Le_nuc;
     L[2*nz + i]    = Le;
     R_col[2*nz + i] = cs_c * cs_c;
