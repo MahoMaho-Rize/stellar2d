@@ -397,6 +397,30 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
     }
     h_r[nz] = R_star;
 
+    // Outer-shell spacing floor. MESA atmospheres over-sample the outermost
+    // mass fractions (300+ zones in < 10⁻⁵ of mass), producing a tiny Δr
+    // in radial1d's mass-averaged face grid for the outer shell. This in
+    // turn inflates ρ_geom = dm/Vol, produces a density spike at k = nz-1,
+    // and makes Newton struggle once rad/MLT start driving the surface.
+    //
+    // Remedy: cap the outermost 2 shells' Δr at a floor relative to the
+    // interior spacing, shifting faces inward to honour it. Mass conservation
+    // is preserved (dm unchanged); only the geometric Δr is regularised.
+    {
+        double dr_deep = h_r[nz-2] - h_r[nz-3];
+        double dr_top  = h_r[nz]   - h_r[nz-1];
+        double dr_mid  = h_r[nz-1] - h_r[nz-2];
+        double dr_min  = 0.7 * dr_deep;
+        if (dr_top < dr_min) {
+            h_r[nz-1] = h_r[nz] - dr_min;
+            // Recompute dr_mid after shift
+            dr_mid = h_r[nz-1] - h_r[nz-2];
+        }
+        if (dr_mid < dr_min) {
+            h_r[nz-2] = h_r[nz-1] - dr_min;
+        }
+    }
+
     // Zone-centred quantities: interpolate MESA data at the shell's
     // center-of-mass (M_target[k] + dm/2).
     std::vector<double> h_dm(nz), h_rho(nz), h_T(nz), h_P(nz), h_e(nz);
@@ -421,6 +445,31 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
             h_Y[k]   = Y_s[j]   + t * (Y_s[j + 1]   - Y_s[j]);
         }
         h_dm[k] = dm;
+
+        // --- Geometric consistency override ---
+        // MESA's mass → radius map can be sampled far more densely at the
+        // surface than our nz allows. The outermost equal-mass shell ends
+        // up occupying a finite Δr where MESA has a sharp atmosphere drop,
+        // so the mass-averaged ρ_geom = dm/Vol is much larger than
+        // rho_s interpolated at Mc (the MESA surface ρ). Using the MESA ρ
+        // directly gives e(ρ_mesa, T_mesa) ≈ 1e-30 floor for the outermost
+        // shell — Helm can't stably invert. But d_rho at runtime is
+        // dm/Vol, so the EOS call sees a completely different state.
+        //
+        // Fix: override h_rho[k] = dm / Vol_k for shells where Vol_k is
+        // what radial1d will actually use. Keep T from MESA (temperature is
+        // the physically meaningful atmosphere quantity we want preserved);
+        // P is then re-derived via Helm in k_rad1d_eP_from_rhoT.
+        double r_lo = h_r[k];
+        double r_hi = h_r[k+1];
+        double Vol  = (4.0/3.0) * M_PI * (r_hi*r_hi*r_hi - r_lo*r_lo*r_lo);
+        if (Vol > 0.0) {
+            double rho_geom = dm / Vol;
+            // Only use geom ρ when it's larger than MESA ρ (outer zones
+            // where MESA atmosphere is unresolved). Core zones where
+            // sampling is fine keep MESA ρ.
+            if (rho_geom > h_rho[k]) h_rho[k] = rho_geom;
+        }
         // Host-side e seeding (non-Helm path). For Helm we defer to the
         // device kernel below where table pointers live.
         bool eos_needs_device = use_eos
