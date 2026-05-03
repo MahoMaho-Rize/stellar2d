@@ -1,0 +1,124 @@
+%% Elsevier cas-sc submission draft for JCP
+%% Compile: xelatex paper-cas.tex (twice)
+
+\documentclass[a4paper,fleqn]{cas-sc}
+
+\usepackage[authoryear,longnamesfirst]{natbib}
+
+% Math + graphics packages required by pandoc output.
+% amsmath must be loaded BEFORE unicode-math.
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{calc}
+\usepackage{etoolbox}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+% Match the official Elsevier cas-sc sample PDF: STIX Two family for
+% text + sans + math, giving a unified Times-like appearance and
+% eliminating the SF/CM mix that pdflatex falls back to.
+\usepackage{fontspec}
+\usepackage{unicode-math}
+\setmainfont{STIX Two Text}[
+  Ligatures=TeX,
+  Scale=1.0]
+\setsansfont{STIX Two Text}[
+  Ligatures=TeX,
+  Scale=1.0]
+\setmathfont{STIX Two Math}
+
+% pandoc boilerplate: \tightlist, passthrough verbatim, etc.
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\pandocbounded}[1]{#1}
+\providecommand{\passthrough}[1]{#1}
+
+% Theorem environments (pandoc may emit definitions; we supply cas-sc compatibles)
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+
+\begin{document}
+\let\WriteBookmarks\relax
+\def\floatpagepagefraction{1}
+\def\textpagefraction{.001}
+
+\shorttitle{Operator-consistency in pseudo-spectral anelastic flow}
+\shortauthors{Kiriko}
+
+\title[mode = title]{Operator-Consistency Failure and its Resolution in
+Primitive-Node Pseudo-Spectral Time Stepping of
+Variable-Coefficient Anelastic Flow}
+
+\author[1]{Kiriko}
+\cormark[1]
+
+\affiliation[1]{organization={Department of Astronomy, Tsinghua University},
+                country={China}}
+
+\cortext[cor1]{Corresponding author}
+
+\begin{abstract}
+Nodal pseudo-spectral discretisations of variable-coefficient
+anelastic flow that apply the elliptic operator *matrix-free* (as a
+composition of differentiation, pointwise multiplication, and
+pointwise division kernels, without constructing the assembled
+matrix) exhibit a structural operator-consistency gap at the
+discrete level.  We identify, quantify, and resolve this gap, and
+show that it reflects a more general property: matrix-free nodal
+pseudo-spectral discretisations of variable-coefficient elliptic
+generalised eigenproblems converge, in the continuous limit, to a
+local surrogate operator rather than the intended global elliptic
+inverse.  When the scheme is reduced to an explicit second-order oscillator by
+eliminating the momentum/pressure coupling, initialising it with an
+exact g-mode eigenvector of its own discrete eigenproblem produces a
+per-step deviation of
+$\mathcal{O}(10^{-4})$ that is independent of grid resolution,
+independent of time-step refinement, and independent of the
+boundary-condition formulation; under further factorisation of the
+elliptic operator the reduced scheme acquires negative eigenvalues
+and diverges exponentially within a single oscillation period.
+Production pseudo-spectral anelastic codes avoid the latter regime by
+retaining pressure and solving a global variable-coefficient Poisson
+equation at each substage; the present work shows that this pressure
+solve acts as an *implicit* assembly of the same elliptic inverse.  The failure
+arises from replacing the inverse of a global elliptic operator by a
+pointwise scaling: a structural inconsistency, not a singularity or
+a truncation effect, that persists under both grid refinement and
+small-perturbation limits of the physics amplitude.  The associated
+relative consistency gap is shown to admit a resolution-independent
+lower bound that scales linearly in $\|\rho_0'\|_\infty$ in the
+small-perturbation limit and is structural rather than
+truncation-driven.  The failure is resolved by assembling
+$\mathsf{M} = \mathsf{L}^{-1}\mathsf{R}$ once at setup and applying it
+as a per-wavenumber dense matrix-vector product at every RK4 substage;
+this preserves any eigenvector of the assembled eigenproblem to
+within $\mathcal{O}(\epsilon_{\mathrm{mach}}\,\kappa(Q))$ round-off
+per step.  The CPU reference implementation achieves a per-step
+deviation of $5\times 10^{-18}$, while a GPU-accelerated port
+maintains accuracy at the $3\times 10^{-15}$ level; the spatial
+machinery is externally validated against the GYRE stellar-pulsation
+code to $9.1\times 10^{-9}$ relative error on a Lane--Emden $n = 3$
+polytrope at $N_r = 96$.  At $N_y = 64$ the assembled scheme reaches
+$3 \times 10^{-18}$ per-step deviation, four orders of magnitude
+below a $\tau$-method Galerkin reference implementation ($2 \times
+10^{-14}$), at approximately one-third the working-memory footprint
+and within a factor of two of either method's per-substep runtime.
+The scheme requires only a single setup-time matrix insertion into an
+existing matrix-free pipeline, and is positioned as a low-memory
+alternative to the per-substage Poisson solve on problems where the
+background is horizontally separable.
+\end{abstract}
+
+\begin{keywords}
+pseudo-spectral methods \sep anelastic approximation \sep stellar
+pulsation \sep operator consistency \sep g-modes
+\end{keywords}
+
+\maketitle
+
+\input{body.tex}
+
+\end{document}

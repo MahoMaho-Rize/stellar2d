@@ -1,8 +1,50 @@
 # Anelastic 伪谱求解器：Sturm-Liouville 本征展开设计
 
-日期：2026-05-01  
-状态：探索性设计文档  
-前置：`pseudo_spectral_solver`（2D 不可压 NS 伪谱法，已稳定）
+日期：2026-05-01(原稿);2026-05-03 更新
+状态：**探索性设计文档 — 部分結論已由 Phase 0 ext+ 更新,見下方 Update 區**
+前置：`pseudo_spectral_solver`(2D 不可压 NS 伪谱法,已稳定)
+
+---
+
+## Update (2026-05-03) — Phase 0 ext+ 後的結論修正
+
+本文檔 2026-05-01 起草時還在"SL 基底是唯一出路"的假設下。Phase 0 ext+
+(2026-05-02..03)改寫了幾個關鍵結論,後續讀者請以下述更正為準:
+
+**NC1. "同一組 (μ_n, ψ_n) 同時對角化 Poisson 與 g-mode"(§6.2)不成立**.
+Poisson 算子的奇點在表面 $r=R$(因 $\rhob\to 0$),最佳前因子
+$\alpha^{\star}(\mathrm{Poisson}) = 1 - \sigma/2$; g-mode 算子的奇點
+在原點 $r=0$(離心項),最佳前因子 $\beta^{\star}(\mathrm{gmode})=\ell+1$.
+**兩者不同**, 因此沒有一組本徵函數可以同時對角化兩個算子.
+退化後的正確說法是:**同一 Chebyshev 網格可共用**,單次前分解對所有
+$k_x$ 重用,g-mode 是**同網格的獨立 EVP**,不是免費副產品.
+
+**NC2. 表面奇異性(§6.3 / §8.1)對整數 $\sigma$ 無實際影響**.
+對 Lane-Emden $n=3$(Eddington 模型,$\rho\sim(R-r)^3$ 是多項式),
+**raw Chebyshev 已給出譜收斂**,誤差在 $N=64$ 就到 $10^{-10}$.
+對分數 $\sigma$(如 $n=3/2$)才需要 Jacobi 加權基底或座標拉伸;
+簡單 $t^{\alpha}$ 前因子**不能**將代數收斂提升為譜收斂 —
+這是 2026-05-03 E6 的負面結果, 見
+`docs/polytropic_index_spectral_convergence_2026-05-03.md`.
+
+**NC3. 項目定位從 "1D 星震求解器" 改為 "2D GPU DNS + 線上模式投影"**.
+本項目的 novelty 不在 1D 星震(GYRE / Reese-Lignières / Dedalus 已
+佔據該領域), 而在**對流-脈動耦合的 2D 非線性 DNS + 同網格模式投影**.
+1D Chebyshev g-mode solver 只是 2D 求解器 y 方向的單元測試, 不是
+獨立產品.
+
+**NC4. Phase 1 主路線已明確**(本文檔 §9 的 roadmap 過時):
+x 方向 Fourier(沿用 `pseudo_spectral` 的 cuFFT); y 方向
+**Chebyshev collocation**(非 SL 展開)在 Eddington $n=3$ 背景上;
+物理從 Boussinesq(Rayleigh-Bénard baseline)開始, 升級到 anelastic.
+
+**權威正式報告見**:
+`docs/spectral_stratified_poisson_report_2026-05-03.md`
+(Kiriko, Tsinghua University — 16 頁英文技術報告, 綜合 Phase 0 ext+
+全部發現與定量證據).
+
+以下原始設計保留作為推理軌跡; 數學推導(§3-§4)完全正確,
+工程結論以上述 NC1-NC4 為準.
 
 ---
 
@@ -149,17 +191,35 @@ W(y) = ρ₀''/(2ρ₀) − 3ρ₀'²/(4ρ₀²) 度量密度分层的"曲率"�
 
 ### 6.2 与恒星 g-mode 的关系
 
-SL 本征问题 (4.1) 的数学结构与恒星内部 g-mode（重力波）本征频率问题完全类似。
-g-mode 频率由 Brunt-Väisälä 频率 N²(r) 决定，而 N²(r) 和 W(y) 具有相同的依赖关系。
+SL 本征问题 (4.1) 的数学结构与恒星内部 g-mode(重力波)本征频率问题类似,
+但**奇点位置不同**(見頂部 NC1):
+- Poisson 奇点在表面 $r=R$(因 $\rhob\to 0$),最优前因子 $\alpha^{\star}_{\mathrm{Pois}}=1-\sigma/2$;
+- g-mode 奇点在原点 $r=0$(离心项 $\ell(\ell+1)/r^2$),最优前因子 $\beta^{\star}_{\mathrm{gmode}}=\ell+1$.
 
-**副产品**：SL 预计算在给出 Poisson 求解器的同时，也给出了 g-mode 本征频率分析。
+因此**不存在**一组本征函数可以同时对角化两个算子.
+
+**~~副产品~~ 更新為**:同一 Chebyshev 网格可共用,但 Poisson 与 g-mode
+是**同网格的独立 EVP**. 前者对每个 $k_x$ 重用 LU 分解; 后者需要独立
+generalised eigenvalue problem 求解. 共用 GPU 记忆体布局与 dense
+linear algebra 基础设施的工程收益保留,"免费" 不成立.
 
 ### 6.3 潜在奇异性
 
-当 ρ₀ → 0（恒星表面/大气），W(y) 可能发散。需要验证：
-- Lane-Emden n=1.5 polytrope：ρ₀ = 0 在 r = R★，W → ?
-- 可能需要表面 cutoff 或 sponge layer 截断
-- **TODO**：拿真实 polytrope/MESA profile 数值计算 W(y)，检查行为
+~~**TODO**:拿真实 polytrope/MESA profile 数值计算 W(y),检查行为~~
+
+**已驗證(2026-05-02..03)**. 對 Lane-Emden $n=3/2$,
+$|W|$ 在表面近 $r/R=1$ 達 $1.35\times 10^6$(1/t² 發散),
+Phase 0 實測 SL 收斂退化為代數 ($N^{-2.4}$).
+
+**對 Lane-Emden $n=3$(Eddington)則無此問題**: $\rho\sim(R-r)^3$
+是多項式, $W$ 的奇異性結構同樣可吸收, 且
+**raw Chebyshev 已直接給出譜收斂到機器精度**
+(見 `docs/polytropic_index_spectral_convergence_2026-05-03.md`).
+
+**整數 $\sigma$ 與分數 $\sigma$ 的斷崖式差異**是這個項目最重要的
+non-trivial 發現, 詳見專題文檔
+`docs/polytropic_index_spectral_convergence_2026-05-03.md` 與
+`docs/spectral_stratified_poisson_report_2026-05-03.md` §3.
 
 ---
 
@@ -217,29 +277,40 @@ g-mode 频率由 Brunt-Väisälä 频率 N²(r) 决定，而 N²(r) 和 W(y) 具
 
 ## 9. 实现路线图
 
-### Phase 0: 可行性验证（1 周）
-1. 用 Python/numpy 算 polytropic W(y) 和前 N 个 SL 本征对
-2. 测试 SL 展开对已知解的逼近精度
-3. 估算 GPU GEMM 实际延迟
+**本節已於 2026-05-03 重新定錨**. 原 Phase 0..4 roadmap 依據
+"SL-GEMM 是 y 方向的唯一譜法"的假設; Phase 0 ext+ 顯示 raw Chebyshev
+collocation 對 Eddington $n=3$ 就已足夠, SL-GEMM 降級為可選優化路徑.
 
-### Phase 1: Boussinesq 伪谱 + Fourier-Chebyshev（2-3 周）
-不用 SL，先用标准 Chebyshev + 三对角做 y 方向，验证物理正确性：
-- Rayleigh-Bénard 对流，Nu-Ra 标度律对标
-- 保留为 baseline
+### Phase 0 ext+(2026-05-02..03, 已完成)
+1. ✓ Lane-Emden $n=3/2$ vs $n=3$ 的譜收斂斷崖驗證
+2. ✓ Chebyshev $N=48$ 對 GYRE full-gravity 4-var 系統 benchmark, max_rd 1.5e-6
+3. ✓ 三組解析解天花板測試證實譜法能達機器精度
+4. ✓ Barycentric 驗證 "N 係數 ≠ N 像素"
 
-### Phase 2: SL-GEMM 替换 y 方向求解（1-2 周）
-- 预计算 SL 本征对（GPU Schrödinger solver 或 host 预算传入）
-- 用 cuBLAS batched GEMM 替换 Chebyshev 三对角
-- 精度/速度对比
+詳見 `docs/spectral_stratified_poisson_report_2026-05-03.md`.
 
-### Phase 3: Anelastic 扩展（2-3 周）
-- 从 Boussinesq 升级到 anelastic: ∇·(ρ₀ u) = 0
-- SL 求解器天然适配（同一套 W(y) 和 {ψ_n}）
+### Phase 1: 2D Fourier-Chebyshev Boussinesq(進行中)
+- x 方向:Fourier(沿用 `pseudo_spectral` cuFFT 基礎設施)
+- y 方向:**Chebyshev collocation**(非 SL 展開), 在 Eddington $n=3$
+  背景上(或先用 Gaussian 背景過渡)
+- 物理:2D Boussinesq + buoyancy, Rayleigh-Bénard Nu-Ra baseline
+- 設計文檔:`docs/phase1_2d_spectral_design_2026-05-04.md`(待寫)
 
-### Phase 4: 论文撰写
-目标：JCP 或 Astronomy & Computing
-标题草案："GPU-accelerated anelastic pseudo-spectral solver using
-         Sturm-Liouville eigenfunction expansion for stratified convection"
+### Phase 2: Anelastic 升級
+- 從 Boussinesq 升級到 anelastic: $\nabla\cdot(\rho_0 \bm{u})=0$
+- Chebyshev 對變密度 Poisson 直接適配(raw 或 reduced-pressure 形式)
+- SL-GEMM 仍為可選後端, 看 dense solve 的 GPU wall-time 是否成為瓶頸
+
+### Phase 3: 線上模式投影(差異化賣點)
+- 同網格獨立 EVP 求 g-mode/p-mode 本徵對
+- 將瞬時流場投影到模式空間作為 runtime diagnostic
+- **這是項目的真正 novelty**: 對流-脈動耦合的 2D 非線性 DNS + 線上模式投影
+
+### Phase 4: 論文撰寫
+目標:**A&C / ApJS**(天體應用)優先於 JCP(方法)
+新 angle:"GPU anelastic pseudo-spectral with live eigenmode projection
+for convection-pulsation coupling diagnostics"
+(原 "SL-GEMM 方法" angle 降級為技術章節)
 
 ---
 

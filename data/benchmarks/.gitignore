@@ -1,0 +1,5 @@
+# Ignore all downloaded benchmark data; only README + download_all.sh are tracked.
+*
+!.gitignore
+!README.md
+!download_all.sh

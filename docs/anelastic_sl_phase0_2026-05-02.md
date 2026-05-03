@@ -1,9 +1,43 @@
 # Anelastic SL-Spectral:Phase 0 可行性驗證報告
 
-**日期**: 2026-05-02
+**日期**: 2026-05-02(原稿);2026-05-03 更新
 **對應設計**: `docs/anelastic_SL_spectral_design.md`
 **腳本**: `scripts/anelastic_sl_phase0.py`
-**結論**: ✅ **設計可行**。SL-Poisson 反演精度 `3.7×10⁻⁶`(256 modes),收斂斜率 -3.5(algebraic,符合奇異邊界預期)。
+**結論**: ✅ SL-Poisson 反演精度 `3.7×10⁻⁶`(256 modes),收斂斜率 -3.5
+(algebraic,符合奇異邊界預期).
+
+---
+
+## Update (2026-05-03) — Phase 0 ext+ 後的修正
+
+本報告所有數據均基於 Lane-Emden **$n=3/2$** polytrope. Phase 0 ext+
+(2026-05-02..03)發現:
+
+**U1. "同一個 ψ_n 同時是 Poisson 和 g-mode 基底" (§0.4 倒數第 2 段)
+是錯的**. Poisson 算子的奇點在 $r=R$, g-mode 算子的奇點在 $r=0$,
+兩者需要**不同**的分析前因子. 正確說法: Chebyshev 網格可共用,
+但 Poisson 與 g-mode 是同網格的**獨立 EVP**.
+
+**U2. $n=3/2$ 的 algebraic 收斂 (-2.4) 不是靠 "小心選擇 cutoff" 能
+解決的**. 簡單 $r^\alpha$ 前因子無效(E6 實驗); 要達譜精度只能用
+Jacobi 加權基底(Dedalus)或座標拉伸. 對我們項目用的 $n=3$ 則是
+**多項式 $\sigma$**, raw Chebyshev 直接譜收斂到機器精度 — 這是
+2026-05-03 的關鍵發現.
+
+**U3. 論文 angle "SL 是最優基底" 降級**. 實際主 angle 是
+"GPU 2D anelastic DNS + 線上 eigenmode projection"
+(見 `docs/spectral_stratified_poisson_report_2026-05-03.md`);
+SL-GEMM 降為 Phase 2 可選後端.
+
+**U4. 本文 §"Phase 1 建議" (Fourier-Fourier) 已作廢**. Phase 1 確定
+用 **2D Fourier-Chebyshev**(x Fourier, y Chebyshev collocation),
+不再走 Fourier-Fourier 雙週期路線. 理由: Chebyshev 是恆星徑向結構的
+自然離散化, 且 $n=3$ 下 raw Chebyshev 精度綽綽有餘.
+
+本報告的 $n=3/2$ 數據仍是有效的物理結果, 作為 "分數 $\sigma$ 情境"
+的存檔保留. 但不要用本報告的 paper angle 與 Phase 1 roadmap 作為
+main-line 指引 — 用
+`docs/spectral_stratified_poisson_report_2026-05-03.md`.
 
 ---
 
@@ -87,7 +121,14 @@ Lane-Emden 勢下前 10 個 μ_n ratio 1.80 → 1.02(收斂到 Fourier 漸近)�
 
 理論:W(y) 漸近常數(內部)→ `μ_n ≈ (nπ/L)² + |W|_avg` → `μ/n² → (π/L)²` = (π/0.94)² = **11.15** ✓ 完美吻合。
 
-意義:SL 本徵值漸近受**平均勢場**主導,低階模式(g-mode)受**勢場形狀**主導。**同一個 ψ_n 同時是 Poisson 反演基底和 g-mode 本徵函數**。
+意義:SL 本徵值漸近受**平均勢場**主導,低階模式(g-mode)受**勢場形狀**主導。
+
+~~**同一個 ψ_n 同時是 Poisson 反演基底和 g-mode 本徵函數**~~
+→ **更正(2026-05-03, U1)**: Poisson 奇點在 $r=R$(因 $\rho\to 0$),
+g-mode 奇點在 $r=0$(離心項 $\ell(\ell+1)/r^2$), 兩者最優前因子
+不同($\alpha^\star_{\mathrm{Pois}}=1-\sigma/2$ vs $\beta^\star_{\mathrm{gmode}}=\ell+1$),
+**不存在**一組本徵函數同時對角化兩者. 正確說法: **同一 Chebyshev
+網格**可共用, Poisson/g-mode 是同網格的**獨立 EVP**.
 
 ![gmode](../videos/anelastic_sl_0p4_gmode.png)
 
@@ -235,7 +276,11 @@ Lane-Emden 掃描 ρ_threshold:
 
 ## Phase 1 建議(修正自原 roadmap)
 
-原 Phase 1 建議:「Boussinesq + Chebyshev baseline」→ **改為「Boussinesq + Fourier-Fourier baseline」**(雙週期 box)。
+**⚠ 本節已作廢 (2026-05-03, U4). 最新 Phase 1 路線見下方更新區.**
+
+---
+
+~~原 Phase 1 建議:「Boussinesq + Chebyshev baseline」→ **改為「Boussinesq + Fourier-Fourier baseline」**(雙週期 box)。~~
 
 理由:
 - 已有 `pseudo_spectral`(2D Fourier),直接擴展加 buoyancy + 溫度方程就是 Boussinesq

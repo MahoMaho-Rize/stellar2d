@@ -3,9 +3,8 @@ title: |
   Reduced-Pressure Formulation of the Variable-Density Poisson Equation:
   A 7$\times$ Reduction in Liouville Singularity Strength
 author: |
-  Technical Report --- stellar2d project,
-  \texttt{anelastic-sl-spectral} branch
-date: 2 May 2026
+  Kiriko, Tsinghua University
+date: 2 May 2026 (原稿); 2026-05-03 更新
 geometry: margin=1in
 fontsize: 11pt
 header-includes: |
@@ -18,6 +17,35 @@ header-includes: |
   \newtheorem{theorem}{Theorem}
   \newtheorem{proposition}{Proposition}
   \newtheorem{remark}{Remark}
+---
+
+# 0. Update (2026-05-03)
+
+**本文檔的全部結論 (7× 降低奇異性 / 4× GEMM cost 節省) 都是針對
+Lane-Emden $n=3/2$ (分數指數 $\sigma=3/2$) 的特化分析**. 對項目的
+**實際目標 — Lane-Emden $n=3$ (Eddington 標準模型, $\sigma=3$)**,
+情況完全不同:
+
+1. $n=3$ 下 $\rho\sim(R-r)^3$ **是多項式**, Chebyshev 展開有限項
+   (4 項)就完全解析, **raw Chebyshev 已給譜收斂到機器精度** —
+   不需要 reduced-pressure 形式, 也不需要任何前因子.
+2. 本文檔推導的 "弱化奇異性 7×" 在 $n=3$ 下無 operational 意義,
+   因為原始形式的奇異性已經被多項式結構消化掉.
+3. $n=3/2$ 的收斂改進(9-33×)是真實的但只改善**預漸近階段常數**,
+   兩種形式的漸近收斂仍是 $N^{-2}$ 代數, 都無法達譜精度.
+   要對分數 $\sigma$ 達譜收斂必須用 **Jacobi 加權基底** (Dedalus)
+   或座標拉伸, 單純改變因變數不夠.
+
+**scope 正確表述**: 本文檔是一個**關於 $n=3/2$ 的次要優化分析**,
+內容正確,但**不適用於項目主路線** ($n=3$ Chebyshev). 後續讀者應
+將本文視為分數 $\sigma$ 情境的技術存檔, 而非 main-line 設計.
+
+Phase 0 ext+ 的完整定論見
+`docs/spectral_stratified_poisson_report_2026-05-03.md` §3 與
+`docs/polytropic_index_spectral_convergence_2026-05-03.md`.
+
+以下原始內容保留不動.
+
 ---
 
 # 1. Motivation

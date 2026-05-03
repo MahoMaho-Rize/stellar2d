@@ -1,7 +1,7 @@
 ---
 title: Spectral Liouville Solver — Detailed Plan (Path A + Path B parallel)
 date: 2026-05-03
-status: active
+status: ARCHIVED (2026-05-03 後期; 計畫已執行完畢)
 supersedes: docs/gmode_next_session_plan.md
 parents:
   - docs/anelastic_SL_spectral_design.md
@@ -9,6 +9,18 @@ parents:
   - docs/singular_basis_survey_2026-05-02.md
   - docs/anelastic_sl_phase0_2026-05-02.md
 ---
+
+> **⚠ ARCHIVED — 2026-05-03**
+>
+> 本文檔是 Phase 0 ext+ 的 3 日執行計畫, 所有步驟 (E5-E9) 已完成.
+> 最終結論與證據彙整在:
+>
+> - `docs/spectral_stratified_poisson_report_2026-05-03.md` (正式英文技術報告)
+> - `docs/spectral_solver_design.md` (設計文檔, 合併後)
+> - `docs/spectral_experiments.md` (實驗紀錄, 合併後)
+>
+> 本檔保留作為計畫過程存檔, 反映 2026-05-03 早期的決策樹.
+> 不要據此規劃新工作.
 
 # Context — what happened up to 2026-05-02
 

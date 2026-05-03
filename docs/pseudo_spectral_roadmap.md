@@ -1,8 +1,23 @@
 # pseudo_spectral 求解器完善路線圖與 MHD 擴展計劃
 
-**日期**: 2026-05-01
-**分支**: `pseudo-spectral` (from `cart_ale2-ppm-periodic`)
+**狀態**: ARCHIVED (2026-05-03) — 近期工作重點已轉向球殼/譜法方向(見 `sph_spectral_roadmap.md` 與 `spectral_solver_design.md`). 本檔為 pseudo_spectral 2D 雙週期求解器的完整開發紀錄與 MHD 擴展遠期構想.
+
+**日期**: 2026-05-01 (主體); 2026-05-03 歸檔
 **目的**: context compact 前記錄當前狀態、未了事項、中長期走向;最終目標是擴展到天體物理 2D/3D MHD (吸積盤 MRI / ISM 湍流 / 太陽磁對流)
+
+---
+
+> **⚠ ARCHIVED note (2026-05-03)**
+>
+> 本檔原為 pseudo_spectral 階段的活躍 roadmap. 2026-05-02 以後的工作
+> 重心轉向 anelastic 球殼/譜法 Liouville 路線, 詳見:
+> - `docs/spectral_solver_design.md`
+> - `docs/spectral_experiments.md`
+> - `docs/spectral_stratified_poisson_report_2026-05-03.md`
+>
+> 本檔保留作為 `pseudo_spectral` solver (`src/gpu/pseudo_spectral_*.cu`)
+> 的長期維護參考與 MHD 遠期規劃存檔. 其中技術狀態快照 (§1) 仍準確,
+> 但 MHD 擴展建議 (§2-§3) 屬於 "未來的未來" 構想, 不列為近期路線.
 
 ---
 

@@ -1,0 +1,4 @@
+scheme,horizon_periods,final_dev,fourier_drift_rel
+bare M_eff RK4 (§5.7),0.3,blew up,n/a
+3-var RK4 + projection,0.5539225595311358,blew up,n/a
+assembled RK4 (reference),300,2.757e-13,n/a
