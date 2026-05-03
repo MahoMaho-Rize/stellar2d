@@ -41,18 +41,34 @@ extern __global__ void k_rad1d_artificial_viscosity(
 extern __global__ void k_rad1d_T_from_rho_e(
     const double*, const double*, double*, int, EOS);
 
-// Diagnostic: compute L_surf = 4π r_surf² σ T[nz-1]⁴ on the device.
+// Diagnostic: L_surf with τ=2/3 photospheric BC. Walks optical depth from
+// outer boundary inward, identifies photosphere zone, uses T there in Stefan.
 __global__ static void k_r1di_diag_L_surf(
     const double* rho, const double* e_int, const double* r,
     double* out, int nz, EOS eos, OpacityParams opa,
     double sigma_sb)
 {
-    (void)opa;
     if (threadIdx.x != 0 || blockIdx.x != 0) return;
-    double rho_s = fmax(rho[nz - 1], 1e-30);
-    double e_s   = fmax(e_int[nz - 1], 1e-30);
-    double T_s   = eos.temperature_from_rho_e(rho_s, e_s);
-    double T4 = T_s*T_s; T4 *= T4;
+    const double tau_target = 2.0 / 3.0;
+    double tau_acc = 0.0;
+    int phot = nz - 1;
+    for (int j = nz - 1; j >= 0; --j) {
+        double rj = r[j], rjp1 = r[j+1];
+        double dr = rjp1 - rj;
+        if (dr < 0.0) dr = 0.0;
+        double rho_j = fmax(rho[j], 1e-30);
+        double e_j   = fmax(e_int[j], 1e-30);
+        double T_j   = eos.temperature_from_rho_e(rho_j, e_j);
+        double kap   = grey_opacity(rho_j, T_j > 1.0 ? T_j : 1.0, opa);
+        double dtau = kap * rho_j * dr;
+        if (tau_acc + dtau >= tau_target) { phot = j; break; }
+        tau_acc += dtau;
+        phot = j;
+    }
+    double rho_p = fmax(rho[phot], 1e-30);
+    double e_p   = fmax(e_int[phot], 1e-30);
+    double T_p   = eos.temperature_from_rho_e(rho_p, e_p);
+    double T4 = T_p*T_p; T4 *= T4;
     double A = 4.0 * 3.14159265358979323846 * r[nz] * r[nz];
     out[0] = A * sigma_sb * T4;
 }
@@ -358,9 +374,42 @@ __global__ static void k_r1di_residual(
             double Tp4 = T_p*T_p; Tp4 *= Tp4;
             L_out = A_face * D * rad.a_rad * (Tk4 - Tp4) / dr_zc;
         } else {
+            // Photospheric BC: integrate optical depth from surface inward,
+            // stop at τ=2/3, use that zone's T as T_eff.
+            const double tau_target = 2.0 / 3.0;
+            double tau_acc = 0.0;
+            int phot_zone = nz - 1;
+            for (int j = nz - 1; j >= 0; --j) {
+                double rj   = r_face[j];
+                double rjp1 = r_face[j+1];
+                double dr   = rjp1 - rj;
+                if (dr < 0.0) dr = 0.0;
+                double rj_v = fmax(rho[j], 1e-30);
+                double tj_v = T_k;
+                if (j != k) {
+                    double ej_v = fmax(e_int[j], 1e-30);
+                    tj_v = eos.temperature_from_rho_e(rj_v, ej_v);
+                }
+                double kap = grey_opacity(rj_v, tj_v > 1.0 ? tj_v : 1.0, rad.opa);
+                double dtau = kap * rj_v * dr;
+                if (tau_acc + dtau >= tau_target) {
+                    phot_zone = j;
+                    break;
+                }
+                tau_acc += dtau;
+                phot_zone = j;
+            }
+            double T_phot;
+            if (phot_zone == k) {
+                T_phot = T_k;
+            } else {
+                double rho_p = fmax(rho[phot_zone], 1e-30);
+                double e_p   = fmax(e_int[phot_zone], 1e-30);
+                T_phot = eos.temperature_from_rho_e(rho_p, e_p);
+            }
             double A_surf = PI4 * r_face[k+1] * r_face[k+1];
-            double Tk4 = T_k*T_k; Tk4 *= Tk4;
-            L_out = A_surf * rad.sigma_sb * Tk4;
+            double T4p = T_phot*T_phot; T4p *= T4p;
+            L_out = A_surf * rad.sigma_sb * T4p;
         }
 
         R_e += (L_in - L_out) / dm_k;
