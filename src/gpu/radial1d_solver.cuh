@@ -256,6 +256,9 @@ struct Radial1DSolver {
     int apply_radiation_diffusion_implicit(double dt_total);
     int rad_impl_last_picard = 0;     // diagnostic: iterations last call
     double rad_impl_L_surf = 0.0;     // diagnostic: surface luminosity last call
+    int    rad_impl_phot_zone = 0;    // diagnostic: τ=2/3 photosphere zone index
+    double rad_impl_T_phot    = 0.0;  // diagnostic: T at photosphere [K]
+    double rad_impl_tau_surf  = 0.0;  // diagnostic: total τ integrated down
 
     // ============================================================
     // MLT convection — Phase 6

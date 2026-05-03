@@ -501,22 +501,34 @@ HE_HD inline double helm_T_from_rho_e(double rho, double e_target,
                                       const HelmholtzTableView& tv,
                                       double T_guess = -1.0)
 {
-    if (T_guess <= 0.0) T_guess = 1e4;  // sensible stellar start
+    if (T_guess <= 0.0) T_guess = 1e4;
+    // The Helm table is grid-defined over [1e3, 1e13] K. Below T=1e3 the
+    // interpolator clamps to the edge row, so e(T) is flat and Newton
+    // cannot drive f to zero — it just halves T forever toward the 1 K
+    // floor. Bracket T at [T_min, T_max] of the table and accept the
+    // saturated value when we hit the bound.
+    double T_min = pow(10.0, tv.tlo);
+    double T_max = pow(10.0, tv.tlo + (HELM_JMAX - 1) * tv.dt);
     double T = T_guess;
-    for (int it = 0; it < 40; ++it) {
+    if (T < T_min) T = T_min;
+    if (T > T_max) T = T_max;
+    for (int it = 0; it < 60; ++it) {
         HelmState s = helm_eval(rho, T, tv);
         double f = s.e - e_target;
         if (fabs(f) < 1e-10 * fabs(e_target) + 1e-20) break;
-        // de/dT = cv_tot. Use finite diff — cheaper than propagating cv.
-        double dT = 1e-4 * T + 1.0;
-        HelmState sp = helm_eval(rho, T + dT, tv);
-        double df = (sp.e - s.e) / dT;
-        if (fabs(df) < 1e-30) df = 1e-30;
+        // de/dT = c_V. Use the analytic cv returned by helm_eval, NOT a
+        // finite-difference on e. The biquintic Hermite table is on a
+        // log-T grid with spacing ~0.05 decade ≈ 0.12·T, so a small
+        // linear dT (O(1)) falls inside the same interpolation cell and
+        // produces a zero df.
+        double df = s.cV;
+        if (!(df > 1e-30)) df = 1e-30;
         double T_new = T - f / df;
-        // Bound the step so we don't shoot off-grid.
         if (T_new < 0.5 * T) T_new = 0.5 * T;
         if (T_new > 2.0 * T) T_new = 2.0 * T;
-        if (T_new < 1.0)     T_new = 1.0;
+        if (T_new < T_min)   T_new = T_min;
+        if (T_new > T_max)   T_new = T_max;
+        if (T == T_new) break;      // saturated at grid edge; can't improve
         T = T_new;
     }
     return T;

@@ -43,6 +43,7 @@ extern __global__ void k_rad1d_T_from_rho_e(
 
 // Diagnostic: L_surf with τ=2/3 photospheric BC. Walks optical depth from
 // outer boundary inward, identifies photosphere zone, uses T there in Stefan.
+// Also writes the photosphere index + T into out[1], out[2] for debugging.
 __global__ static void k_r1di_diag_L_surf(
     const double* rho, const double* e_int, const double* r,
     double* out, int nz, EOS eos, OpacityParams opa,
@@ -68,9 +69,25 @@ __global__ static void k_r1di_diag_L_surf(
     double rho_p = fmax(rho[phot], 1e-30);
     double e_p   = fmax(e_int[phot], 1e-30);
     double T_p   = eos.temperature_from_rho_e(rho_p, e_p);
+    // Helm's Newton inversion occasionally pathologically returns the 1 K
+    // floor when it over-corrects on low-ρ, mid-T states (pre-MS outer
+    // envelope, ρ ~ 0.1, e ~ 3e12). Detect and fall back to an ideal
+    // ion-gas estimate, which is accurate to ~20% in this regime and
+    // keeps the diagnostic sane until we tighten the Newton wrapper.
+    if (!(T_p > 10.0)) {
+        // Ideal ion gas: e_ion ≈ (3/2)(N_A k_B / Abar) T
+        // With Abar ≈ 1.3, coefficient ≈ 9.6e7 erg/g/K.
+        double T_guess = e_p / 9.6e7;
+        if (T_guess < 1.0)  T_guess = 1.0;
+        if (T_guess > 1e8) T_guess = 1e8;
+        T_p = T_guess;
+    }
     double T4 = T_p*T_p; T4 *= T4;
     double A = 4.0 * 3.14159265358979323846 * r[nz] * r[nz];
     out[0] = A * sigma_sb * T4;
+    out[1] = (double)phot;
+    out[2] = T_p;
+    out[3] = tau_acc;
 }
 
 // Species-only burn kernel: advance X, Y by dt using current ρ, T. Does NOT
@@ -1542,16 +1559,21 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
                 apply_radiation_diffusion_implicit(dt);
                 prims_and_visc(*this);
             } else if (radiation_enabled && use_eos) {
-                // Diagnostic-only L_surf via device kernel (Eddington BC).
+                // Diagnostic-only L_surf via device kernel (τ=2/3 scan).
                 static double* s_d_Lout = nullptr;
-                if (!s_d_Lout) CUDA_CHECK(cudaMalloc(&s_d_Lout, sizeof(double)));
+                if (!s_d_Lout) CUDA_CHECK(cudaMalloc(&s_d_Lout, 4 * sizeof(double)));
                 OpacityParams opa;
                 fill_opacity_params(opa);
                 double sigma_sb = rad_c_light * rad_a_rad / 4.0;
                 k_r1di_diag_L_surf<<<1, 1>>>(lev.d_rho, lev.d_e_int, lev.d_r,
                                               s_d_Lout, lev.nz, eos, opa, sigma_sb);
-                CUDA_CHECK(cudaMemcpy(&rad_impl_L_surf, s_d_Lout, sizeof(double),
+                double h_diag[4] = {0, 0, 0, 0};
+                CUDA_CHECK(cudaMemcpy(h_diag, s_d_Lout, 4 * sizeof(double),
                                       cudaMemcpyDeviceToHost));
+                rad_impl_L_surf = h_diag[0];
+                rad_impl_phot_zone = (int)h_diag[1];
+                rad_impl_T_phot = h_diag[2];
+                rad_impl_tau_surf = h_diag[3];
             }
 
             // Species burn-up: Newton has updated e_int implicitly (R_e

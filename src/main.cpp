@@ -1013,6 +1013,11 @@ int main(int argc, char** argv) {
                     std::printf("    ignition: T_c=%.3e K  ρ_c=%.3e g/cc  L_nuc=%.3e erg/s  L_nuc/L_surf=%.3e\n",
                                 d.T_c, d.rho_c, d.L_nuc, L_ratio);
                 }
+                if (r1d.radiation_enabled) {
+                    std::printf("    rad_BC:   phot_zone=%d  T_phot=%.3e K  tau_sum=%.3e  L_surf=%.3e erg/s\n",
+                                r1d.rad_impl_phot_zone, r1d.rad_impl_T_phot,
+                                r1d.rad_impl_tau_surf, r1d.rad_impl_L_surf);
+                }
                 if (mlt.n_conv_zones > 0) {
                     std::printf("    MLT: conv_mass_frac=%.4f  r_conv=[%.3e,%.3e]  n_conv=%d  max_super=%.3e\n",
                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer,
