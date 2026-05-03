@@ -287,6 +287,11 @@ bool read_gyre_structure_txt(const std::string& path, StellarProfile& out) {
         double x, V_2, A_star, U, c_1, G1;
         if (std::sscanf(line, "%lf %lf %lf %lf %lf %lf",
                         &x, &V_2, &A_star, &U, &c_1, &G1) == 6) {
+            // GYRE poly_to_txt writes V_2=A*=Infinity at the surface row (x=1);
+            // skip non-finite rows so downstream interpolation stays clean.
+            if (!std::isfinite(V_2) || !std::isfinite(A_star)
+                || !std::isfinite(U) || !std::isfinite(c_1)
+                || !std::isfinite(G1)) continue;
             out.x.push_back(x);
             out.V_2.push_back(V_2);
             out.A_star.push_back(A_star);

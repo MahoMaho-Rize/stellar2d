@@ -42,6 +42,7 @@
 #include <vector>
 #include <csignal>
 #include <functional>
+#include <algorithm>
 #include <sys/stat.h>
 
 static volatile sig_atomic_t g_interrupted = 0;
