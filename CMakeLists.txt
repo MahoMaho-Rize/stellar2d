@@ -334,6 +334,13 @@ if(USE_GPU)
     target_link_libraries(test_helm_dual PRIVATE CUDA::cudart)
     add_test(NAME helm_dual COMMAND test_helm_dual)
 
+    add_executable(test_residual_dual tests/test_residual_dual.cu src/physics/helmholtz_eos.cu)
+    target_include_directories(test_residual_dual PRIVATE src)
+    target_compile_definitions(test_residual_dual PRIVATE USE_GPU)
+    set_target_properties(test_residual_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_residual_dual PRIVATE CUDA::cudart)
+    add_test(NAME residual_dual COMMAND test_residual_dual)
+
     add_executable(test_kap_table tests/test_kap_table.cu)
     target_include_directories(test_kap_table PRIVATE src)
     target_compile_definitions(test_kap_table PRIVATE USE_GPU)
