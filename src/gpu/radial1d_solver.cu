@@ -302,7 +302,8 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
 // centres. The outermost face r[nz] is pinned to R_star from the IC
 // header.
 // ============================================================
-int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
+int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T,
+                                    int n_atm_zones) {
     std::FILE* fp = std::fopen(ic_path, "r");
     if (!fp) {
         std::fprintf(stderr, "  init_from_mesa: cannot open %s\n", ic_path);
@@ -370,11 +371,58 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
         }
     }
 
-    // Build target equal-mass shells for our own nz zones.
+    // Build target shell masses. Default = equal-mass Lagrangian.
+    // When n_atm_zones > 0, use hybrid: inner (nz - n_atm_zones) equal-mass
+    // covering [0, M_cut], outer n_atm_zones log-spaced in "depth from surface"
+    // covering [M_cut, M_star], so the photosphere is resolved with multiple
+    // zones instead of being compressed into a single outer shell.
+    //
+    // Physics: MESA's late_preMS atmosphere has 300+ zones in <10⁻⁵ of mass.
+    // Equal-mass zoning at nz=128 collapses all into zone nz-1, whose
+    // interpolated T at the shell midpoint is a deep-interior T (~7e6 K),
+    // not the photospheric 4500 K. The Eddington BC then misfires on a wrong
+    // T_k input → T_eff ~630 K → L_surf ~10⁻⁴ L☉ → KH contraction stalled.
     int nz = lev.nz;
-    double dm = M_star / nz;
     std::vector<double> M_target(nz + 1);
-    for (int k = 0; k <= nz; ++k) M_target[k] = k * dm;
+    int n_atm = n_atm_zones;
+    if (n_atm < 0) n_atm = 0;
+    if (n_atm > nz / 2) n_atm = nz / 2;    // keep at least half as inner core
+    if (n_atm > 0) {
+        // Hybrid zoning. M_cut = M_star · (1 - M_atm_frac). Choose
+        // M_atm_frac so outer N_atm zones span the MESA atmosphere.
+        // For 1 M⊙ pre-MS, MESA's photosphere (T ~ 4500 K) sits at depth
+        // fraction ~10⁻¹² to 10⁻¹¹. For the outermost zone's mass-weighted
+        // center to actually sample that cold material, we need
+        // dm_{nz-1} ≲ 2·(1e-11·M_star). With 20 geometric zones at ratio
+        // 0.05, outermost dm ≈ 0.14·M_atm_frac·M_star → need
+        // M_atm_frac ≲ 1e-11. Outer zones beyond that become rarified
+        // atmosphere (ρ ~ 10⁻⁷, many orders below Helm table edge ρ_min
+        // = 10⁻¹² which is safe).
+        double M_atm_frac = 1.0e-11;
+        double M_cut = M_star * (1.0 - M_atm_frac);
+        int nz_inner = nz - n_atm;
+        double dm_inner = M_cut / nz_inner;
+        for (int k = 0; k <= nz_inner; ++k) M_target[k] = k * dm_inner;
+        // Outer zones: geometric series in depth (M_star - M).
+        // M_target[nz_inner + j] = M_star - (M_star - M_cut) · r^{j/n_atm}
+        // where r < 1 so the outermost zone (j = n_atm) sits at M_star.
+        // Use r = 1/n_atm to compress outer zones exponentially.
+        // Outer shell dm_j = M_star·M_atm_frac·(r^((j-1)/n_atm) - r^(j/n_atm))
+        // Monotonic small outer dm — exactly what MESA resolves.
+        double M_depth = M_star - M_cut;  // = M_star · M_atm_frac
+        double ratio = 1.0 / (double)n_atm;
+        for (int j = 1; j <= n_atm; ++j) {
+            double frac = std::pow(ratio, (double)(n_atm - j) / (double)n_atm);
+            // frac runs from ratio^1 (j=1, deep atm) → 1 (j=n_atm, surface)
+            // so M_target climbs from M_cut + small to M_star.
+            M_target[nz_inner + j] = M_star - M_depth * (1.0 - frac);
+        }
+        // Pin exactly at surface (avoid roundoff).
+        M_target[nz] = M_star;
+    } else {
+        double dm = M_star / nz;
+        for (int k = 0; k <= nz; ++k) M_target[k] = k * dm;
+    }
 
     // Interpolate r at each face mass (linear in m).
     std::vector<double> h_r(nz + 1);
@@ -397,23 +445,24 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
     }
     h_r[nz] = R_star;
 
-    // Outer-shell spacing floor. MESA atmospheres over-sample the outermost
-    // mass fractions (300+ zones in < 10⁻⁵ of mass), producing a tiny Δr
-    // in radial1d's mass-averaged face grid for the outer shell. This in
-    // turn inflates ρ_geom = dm/Vol, produces a density spike at k = nz-1,
-    // and makes Newton struggle once rad/MLT start driving the surface.
+    // Outer-shell spacing floor (equal-mass mode only). For equal-mass
+    // zoning, MESA atmospheres over-sample the outermost mass fractions
+    // (300+ zones in < 10⁻⁵ of mass), producing a tiny Δr for the single
+    // outer radial1d shell. This inflates ρ_geom = dm/Vol, produces a
+    // density spike at k = nz-1, and makes Newton struggle.
     //
     // Remedy: cap the outermost 2 shells' Δr at a floor relative to the
-    // interior spacing, shifting faces inward to honour it. Mass conservation
-    // is preserved (dm unchanged); only the geometric Δr is regularised.
-    {
+    // interior spacing.
+    //
+    // In hybrid zoning (n_atm > 0) we deliberately want small outer Δr to
+    // resolve the atmosphere; skip the floor.
+    if (n_atm == 0) {
         double dr_deep = h_r[nz-2] - h_r[nz-3];
         double dr_top  = h_r[nz]   - h_r[nz-1];
         double dr_mid  = h_r[nz-1] - h_r[nz-2];
         double dr_min  = 0.7 * dr_deep;
         if (dr_top < dr_min) {
             h_r[nz-1] = h_r[nz] - dr_min;
-            // Recompute dr_mid after shift
             dr_mid = h_r[nz-1] - h_r[nz-2];
         }
         if (dr_mid < dr_min) {
@@ -422,12 +471,13 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
     }
 
     // Zone-centred quantities: interpolate MESA data at the shell's
-    // center-of-mass (M_target[k] + dm/2).
+    // center-of-mass (midpoint between M_target[k] and M_target[k+1]).
     std::vector<double> h_dm(nz), h_rho(nz), h_T(nz), h_P(nz), h_e(nz);
     std::vector<double> h_X(nz), h_Y(nz);
     j = 0;
     for (int k = 0; k < nz; ++k) {
-        double Mc = M_target[k] + 0.5 * dm;
+        double dm_k = M_target[k+1] - M_target[k];
+        double Mc = M_target[k] + 0.5 * dm_k;
         if (Mc <= m_s[0]) {
             h_rho[k] = rho_s[0]; h_T[k] = T_s[0]; h_P[k] = P_s[0];
             h_X[k] = X_s[0]; h_Y[k] = Y_s[0];
@@ -444,7 +494,7 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
             h_X[k]   = X_s[j]   + t * (X_s[j + 1]   - X_s[j]);
             h_Y[k]   = Y_s[j]   + t * (Y_s[j + 1]   - Y_s[j]);
         }
-        h_dm[k] = dm;
+        h_dm[k] = dm_k;
 
         // --- Geometric consistency override ---
         // MESA's mass → radius map can be sampled far more densely at the
@@ -464,7 +514,7 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
         double r_hi = h_r[k+1];
         double Vol  = (4.0/3.0) * M_PI * (r_hi*r_hi*r_hi - r_lo*r_lo*r_lo);
         if (Vol > 0.0) {
-            double rho_geom = dm / Vol;
+            double rho_geom = dm_k / Vol;
             // Only use geom ρ when it's larger than MESA ρ (outer zones
             // where MESA atmosphere is unresolved). Core zones where
             // sampling is fine keep MESA ρ.
@@ -510,6 +560,19 @@ int Radial1DSolver::init_from_mesa(const char* ic_path, bool seed_T) {
         }
     }
     CUDA_CHECK(cudaMemset(lev.d_v, 0, (nz+1)*sizeof(double)));
+
+    // Diagnostic: outer 3 zones after IC write (read back e_int from device)
+    if (n_atm > 0) {
+        std::vector<double> h_e_check(nz);
+        CUDA_CHECK(cudaMemcpy(h_e_check.data(), lev.d_e_int,
+                              nz*sizeof(double), cudaMemcpyDeviceToHost));
+        std::fprintf(stderr, "  init_from_mesa hybrid IC (outer 3):\n");
+        for (int k = std::max(0, nz-3); k < nz; ++k) {
+            std::fprintf(stderr,
+                "    k=%d rho=%.3e T_MESA=%.3e e=%.3e\n",
+                k, h_rho[k], h_T[k], h_e_check[k]);
+        }
+    }
 
     // Species, if wired
     if (species_enabled && d_X && d_Y) {

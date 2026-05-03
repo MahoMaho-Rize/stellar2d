@@ -179,7 +179,8 @@ struct Radial1DSolver {
     // the first hydro step runs.
     //
     // Returns 0 on success, non-zero on parse/load failure.
-    int init_from_mesa(const char* ic_path, bool seed_T = false);
+    int init_from_mesa(const char* ic_path, bool seed_T = false,
+                       int n_atm_zones = 0);
 
     // Apply a radial-only pressure perturbation: P *= (1 + amp*sin(π r/R))
     // Also adjust density self-consistently for adiabatic perturbation:

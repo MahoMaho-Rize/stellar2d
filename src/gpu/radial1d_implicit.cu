@@ -55,14 +55,11 @@ __global__ static void k_r1di_diag_L_surf(
     int k = nz - 1;
     double rho_k = fmax(rho[k], 1e-30);
     double e_k   = fmax(e_int[k], 1e-30);
-    double T_k   = eos.temperature_from_rho_e(rho_k, e_k);
-    if (!(T_k > 10.0)) {
-        // Ideal ion-gas fallback when Helm inversion collapses to floor.
-        double T_guess = e_k / 9.6e7;
-        if (T_guess < 1.0)  T_guess = 1.0;
-        if (T_guess > 1e8) T_guess = 1e8;
-        T_k = T_guess;
-    }
+    double T_helm = eos.temperature_from_rho_e(rho_k, e_k);
+    double T_ideal = e_k / 9.6e7;
+    if (T_ideal < 1.0)  T_ideal = 1.0;
+    if (T_ideal > 1e8) T_ideal = 1e8;
+    double T_k = (T_helm > 10.0 && T_helm < 3.0 * T_ideal) ? T_helm : T_ideal;
     double dr_k = r[k+1] - r[k];
     if (dr_k < 0.0) dr_k = 0.0;
     double kap_k = grey_opacity(rho_k, T_k > 1.0 ? T_k : 1.0, opa);
@@ -1509,8 +1506,34 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
         // Keep U_k in d_Ubak so we can restore; trial α starting at 1.
         // If every α ∈ {1, 0.5, 0.25, …, 0.001} produces a worse residual,
         // we must NOT leave the state at the last-tried (worst) α.
+        //
+        // Also: pre-shrink α so no zone ends up with e < 0.5·e_old — this
+        // prevents outer-atmosphere zones from being driven into the 1e-30
+        // floor on a single Newton step, which creates a T=0 artefact that
+        // the radiation BC then "fixes" by emitting nothing.
         k_r1di_copy<<<(N+B-1)/B, B>>>(d_Ubak, d_U, N);
         double alpha = 1.0;
+        // Scan (on host) for maximum α that keeps U_e positive-of-half-old.
+        // d_U layout: [v..., r..., e...]. Read the e block + proposed δe.
+        {
+            std::vector<double> h_U_old(N), h_dU(N);
+            CUDA_CHECK(cudaMemcpy(h_U_old.data(), d_Ubak, N*sizeof(double), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(h_dU.data(),    d_gmres_w, N*sizeof(double), cudaMemcpyDeviceToHost));
+            double alpha_max = 1.0;
+            int nz_ = lev.nz;
+            for (int k = 0; k < nz_; ++k) {
+                double e_old = h_U_old[2*nz_ + k];
+                double de    = h_dU[2*nz_ + k];
+                if (de < 0.0 && e_old > 0.0) {
+                    // α·|de| ≤ 0.1·e_old  ⇒  α ≤ 0.1·e_old/|de|
+                    // 0.1 factor (not 0.5) because Newton can take 5-10
+                    // iterations per step, cumulatively 0.5^10 = 1e-3.
+                    double a_lim = 0.1 * e_old / (-de);
+                    if (a_lim < alpha_max) alpha_max = a_lim;
+                }
+            }
+            if (alpha_max < 1.0) alpha = alpha_max;
+        }
         double new_res = res_norm;  // placeholder
         bool ls_ok = false;
         int ls_tries = 0;

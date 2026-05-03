@@ -501,7 +501,17 @@ HE_HD inline double helm_T_from_rho_e(double rho, double e_target,
                                       const HelmholtzTableView& tv,
                                       double T_guess = -1.0)
 {
-    if (T_guess <= 0.0) T_guess = 1e4;
+    if (T_guess <= 0.0) {
+        // Ideal-ion+electron estimate: e ≈ 3·(N_A·k_B/Abar)·T for full
+        // ionization, e ≈ 1.5·(N_A·k_B/Abar)·T for neutral. Use the
+        // full-ionization coefficient (smaller T_guess) so we start below
+        // and Newton monotonically increases.
+        //   N_A·k_B = 8.314e7 erg/mol/K, Abar~1.3 → coeff ≈ 1.9e8 erg/g/K
+        double T_est = e_target / 1.9e8;
+        if (T_est < 500.0)   T_est = 500.0;
+        if (T_est > 1e8) T_est = 1e8;
+        T_guess = T_est;
+    }
     // The Helm table is grid-defined over [1e3, 1e13] K. Below T=1e3 the
     // interpolator clamps to the edge row, so e(T) is flat and Newton
     // cannot drive f to zero — it just halves T forever toward the 1 K
