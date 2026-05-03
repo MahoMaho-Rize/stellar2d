@@ -90,6 +90,60 @@ split BE-rad 路徑有 MLT**,但 **rad-in-F 路徑沒有**。沒有 MLT 時,輻�
 
 ---
 
+## Phase 1 診斷結果 (2026-05-03 追加)
+
+**實驗**:加 `--no-rhse` flag(commit),nr=128 和 nr=1024 各跑一對比。
+
+### nr = 128 (dt=1e12 s, no dt_thermal_frac)
+兩路徑 **都正常演化**:
+- BASE:T_c 4.22 → 8.50 ×10⁶ K, ρ_c 9.59 → 51.3 g/cc (Step 2770, t=4.1e12s)
+- NORHSE:T_c 4.04 → 8.10 ×10⁶ K, ρ_c 4.78 → 60.8 g/cc (Step 1590, t=8.3e12s)
+
+**結論**:在 nr=128 根因 A **不成立** — R_hse 沒有幹掉 rad drive。
+
+### nr = 1024 (dt=1e12 s, --dt-thermal-frac 0.01)
+兩路徑都 **不穩定**,Tc 反向演化:
+- BASE 首輪 GMRES 只走 1 步(β=3e4, |g|=1.3e-4 → 收斂) → Newton 只 2 iter 收到 ||F||=40
+  之後 step 76 起 dt 持續 cut 失敗。Tc 從 9.87e6 K 反降 → 6.66e6 K。
+- NORHSE 首輪 T_c 6.57e6 → 3.34e6 K,ρ_c 14.7 → 50.5 g/cc(radiative overcool)。
+
+**結論**:nr=1024 的凍結 / 不穩定 **不是** R_hse 的問題,是 **Newton 在高解析度下不
+收斂**(GMRES 的 restart 太激進 / PC 在細格不準 / ||F|| 本身測量有問題)。先前的
+"frozen" 實為 Newton 早期 converged 到假 fixed point(很小 ||F|| residual 但物理不動)。
+
+### 根因 D 已修復 (2026-05-03 後續)
+
+**三管齊下修 Newton-Krylov**:
+
+1. **current-state Viallet scaling**: build_scaling 從 HSE 快照改成用當前 ρ/P/e — 演化中 scale 跟著走,不再固定在 IC
+2. **rad-aware Le row-scale**:`Le = max(cs³/R, c·a·T⁴/(3κρ²Δr²))`,在 rad 主導區用真實 rad 量級
+3. **GMRES tol 1e-3 → 1e-6**:原 tol 太鬆,GMRES j=1 就「假收斂」
+4. **Newton rel_tol 0.5 → 1e-3**:原 0.5× cut 等於 2 iter 就停;1e-3 要求 3 個 decade 下降,逼 Newton 真解
+
+**結果 (nr=1024, dt_implicit=1e12, --dt-thermal-frac 0.01)**:
+- ||F||_scaled 從 553 降到 5e-6 (8 decades), step=0 用 11 iter
+- step 1-4600 **ZERO implicit FAILED**
+- dt 從 1.3e8 恢復到穩定 1.6e10 s
+- T_c 4.18e6 → 5.33e6 K (隨 0→7e13 s = 2.2 Myr) — 真實 KH 演化節奏
+- Mach_max ~ 1e-9 全程
+
+**剩下的問題**:
+- Surface BC 仍 stuck: `phot_zone=1023, T_phot=1000K, tau_sum=0` — 表面 τ 累積不起來
+  → 這是計畫中的**根因 B**,應該是下一個 iteration
+- T_c 在 5.3e6 K 附近停滯不升 — 可能是 MLT 帶 decoupling (根因 C) 或 rad 帶走過
+  多,要看 profile
+
+---
+
+### 新根因 D(最可能):高解析度 Newton 不收斂
+- nr=128:dm[k] 粗,RadiationN term per-mass 穩; Newton damps OK
+- nr=1024:dm[k] 細 (1024×),single-zone rad divergence 量級大很多 (L/dm ∝ 1/dm),
+  但 scaled ||F|| 用 HSE-time cs²/R_star row-scaling,和 rad-driven dynamics 不同 scale
+  → Newton 以為收斂了,但物理 δT 量級很大,對流 / κ 查表外推,下一 dt 就失控。
+- GMRES j=1 退出 = 矩陣條件數太差;PC 不夠好。
+
+---
+
 ## 修復路徑(按優先級)
 
 ### Phase 1:診斷實驗(0.5 天)

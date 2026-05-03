@@ -450,11 +450,12 @@ __global__ static void k_r1di_compute_F(
     const double* R,
     const double* R_hse,
     double inv_dt,
-    int N)
+    int N,
+    double rhse_scale)  // 1.0 = well-balanced, 0.0 = --no-rhse diagnostic
 {
     int i = blockIdx.x*blockDim.x + threadIdx.x;
     if (i >= N) return;
-    F[i] = (U[i] - Un[i]) * inv_dt - (R[i] - R_hse[i]);
+    F[i] = (U[i] - Un[i]) * inv_dt - (R[i] - rhse_scale * R_hse[i]);
 }
 
 // ---------------------------------------------------------------------
@@ -482,73 +483,99 @@ __global__ static void k_r1di_compute_F(
 // This is dimensionally consistent per row and independent of ρ — very
 // different from Viallet's cell-centered (ρ, ρcs², ρcs², ρcs²) form.
 __global__ static void k_r1di_build_scaling(
-    const double* rho0,       // nz (HSE reference)
-    const double* P0,         // nz (HSE reference)
-    const double* v_face,     // nz+1 (unused in this formulation but kept for signature)
-    double* L, double* R, double* invL,
-    EOS eos, double alpha1, double alpha2,
+    const double* rho,        // nz (current state — NOT HSE, so rad-driven
+                              //     evolution sees its own scale)
+    const double* P,          // nz (current state)
+    const double* e_int,      // nz (current state; needed for T via EOS)
+    const double* r_face,     // nz+1 (current state; for Δr per cell)
+    const double* v_face,     // nz+1 (unused; kept for signature)
+    double* L, double* R_col, double* invL,
+    EOS eos, bool use_eos, double alpha1, double alpha2,
     int nz,
-    double R_star)
+    double R_star,
+    int rad_on, double a_rad, double c_light, OpacityParams opa)
 {
     (void)v_face; (void)alpha1; (void)alpha2;
     int i = blockIdx.x*blockDim.x + threadIdx.x;
     if (i >= nz) return;
     int kf = i + 1;
 
-    // face-averaged ρ and P
-    double rho_bar, P_bar;
+    // Derive T(ρ, e) for this zone and its neighbour (face average).
+    auto T_of = [&](int j) -> double {
+        double rj = fmax(rho[j], 1e-30);
+        double ej = fmax(e_int[j], 1e-30);
+        if (use_eos) return fmax(eos.temperature_from_rho_e(rj, ej), 1.0);
+        // ideal fallback
+        double cv = (1.0 / eos.mu) / (eos.gamma - 1.0);
+        return fmax(ej / fmax(cv, 1e-30), 1.0);
+    };
+    double T_i = T_of(i);
+
+    // Current-state face-averaged ρ, P, and T (for rad).
+    double rho_bar, P_bar, T_bar;
     if (kf == nz) {
-        rho_bar = fmax(rho0[kf-1], 1e-30);
-        P_bar   = fmax(P0[kf-1], 1e-30);
+        rho_bar = fmax(rho[kf-1], 1e-30);
+        P_bar   = fmax(P[kf-1], 1e-30);
+        T_bar   = T_i;
     } else {
-        rho_bar = 0.5*(rho0[kf-1] + rho0[kf]);
-        P_bar   = 0.5*(P0[kf-1]   + P0[kf]);
+        rho_bar = 0.5*(rho[kf-1] + rho[kf]);
+        P_bar   = 0.5*(P[kf-1]   + P[kf]);
+        T_bar   = 0.5*(T_i + T_of(kf));
     }
     rho_bar = fmax(rho_bar, 1e-30);
     P_bar   = fmax(P_bar,   1e-30);
     double cs_f = sqrt(fmax(eos.gamma * P_bar / rho_bar, 1e-30));
     double R_s = fmax(R_star, 1e-30);
 
-    // Two-sided Viallet scaling. L_i normalizes row i (F-space); R_i carries
-    // the characteristic magnitude of U-component i (column scale).
-    //
-    // The column scale matters for JFNK finite difference: with unit-norm
-    // GMRES basis v_in ∈ δX space, the physical perturbation is v_scaled =
-    // R·v_in. For a single global α = √ε_m to produce linear FD response
-    // across all fields, each R_i must be O(U_typ_i). In cgs, U magnitudes
-    // span 10 orders (U_v=0 initially ≪ U_r≈R_star ≪ U_e≈c²). Without R,
-    // FD simultaneously over-perturbs v (since |U_v|=0) and under-perturbs
-    // r,e. This is what breaks line search at step 0.
-    //
-    // Choices (HSE-reference, state-independent):
-    //   R_v = cs_f                  (characteristic flow speed at the face)
-    //   R_r = R_star                (radius scale)
-    //   R_e = cs_c²                 (specific internal energy scale)
-    //
-    // Row scales L_i = typical |F_i|:
-    //   F_v ~ g ~ cs²/R_star        (momentum imbalance per dt)
-    //   F_r ~ cs                     (R_r = v)
-    //   F_e ~ cs³/R_star             (P·v/ρ · 1/R)
+    // Column scales R_col (O(U_typ)) — set from current state so FD probes
+    // stay linear as state evolves. Unchanged structure vs. HSE version.
+    //   R_v = cs_f, R_r = R_star, R_e = cs²
+    // Row scales L — typical |F_i| at current state. Rad addition matters
+    // at high nr, where dm shrinks and L/dm swamps PdV/dm.
 
     // ---- face v ----
-    double Lv  = cs_f * cs_f / R_s;
-    L[i]       = Lv;
-    R[i]       = cs_f;                    // was 1.0 — fatal in cgs when U_v=0
-    invL[i]    = 1.0 / fmax(Lv, 1e-30);
+    double Lv_hydro = cs_f * cs_f / R_s;
+    L[i]       = Lv_hydro;
+    R_col[i]   = cs_f;
+    invL[i]    = 1.0 / fmax(Lv_hydro, 1e-30);
 
     // ---- face r ----
     double Lr  = cs_f;
     L[nz + i]   = Lr;
-    R[nz + i]   = R_s;                    // was 1.0
+    R_col[nz + i] = R_s;
     invL[nz + i]= 1.0 / fmax(Lr, 1e-30);
 
     // ---- zone e ----
-    double rho_c = fmax(rho0[i], 1e-30);
-    double P_c   = fmax(P0[i], 1e-30);
+    // Hydro part: F_e^hydro ~ P·v / (ρ·R) ~ cs³/R
+    double rho_c = fmax(rho[i], 1e-30);
+    double P_c   = fmax(P[i], 1e-30);
     double cs_c  = sqrt(fmax(eos.gamma * P_c / rho_c, 1e-30));
-    double Le  = cs_c * cs_c * cs_c / R_s;
+    double Le_hydro = cs_c * cs_c * cs_c / R_s;
+
+    // Rad part: F_e^rad ~ (L_out - L_in) / dm
+    //   L ≈ 4π r² · D a T⁴ / Δr_zc, D = c / (3κρ)
+    //   dm ≈ ρ · 4π r² Δr
+    //   so L/dm ≈ c a T⁴ / (3 κ ρ² · Δr²)
+    // Use local r_face[i+1] and Δr ≈ r[i+1] - r[i] for the cell.
+    double Le_rad = 0.0;
+    if (rad_on) {
+        double r_hi = r_face[i+1];
+        double r_lo = r_face[i];
+        double dr = fmax(r_hi - r_lo, 1e-30);
+        double T4 = T_bar*T_bar; T4 *= T4;
+        double kap = grey_opacity(rho_bar, T_bar, opa);
+        if (!(kap > 1e-30)) kap = 1e-30;
+        // c a T⁴ / (3 κ ρ² Δr²) — same dimensional form as
+        // (L/dm), where L ~ 4π r² · (c a T⁴)/(3 κ ρ) / Δr and dm ~ ρ V.
+        Le_rad = c_light * a_rad * T4 / (3.0 * kap * rho_bar * rho_bar * dr * dr);
+    }
+
+    // Row-scale is the LARGER of the two — so whichever term is dominating
+    // in F_e sets the normalization. This prevents the HSE hydro scale from
+    // hiding rad-driven ||F_e|| at high resolution.
+    double Le = fmax(Le_hydro, Le_rad);
     L[2*nz + i]    = Le;
-    R[2*nz + i]    = cs_c * cs_c;         // was 1.0; O(e_typ)
+    R_col[2*nz + i] = cs_c * cs_c;
     invL[2*nz + i] = 1.0 / fmax(Le, 1e-30);
 }
 
@@ -676,7 +703,8 @@ void Radial1DSolver::compute_F_implicit(double inv_dt) {
     unpack_state_to_device();
     compute_R_implicit();
     int N = N_dof, B = 256;
-    k_r1di_compute_F<<<(N+B-1)/B, B>>>(d_F, d_U, d_Un, d_R, d_R_hse, inv_dt, N);
+    double rhse_scale = no_rhse_subtract ? 0.0 : 1.0;
+    k_r1di_compute_F<<<(N+B-1)/B, B>>>(d_F, d_U, d_Un, d_R, d_R_hse, inv_dt, N, rhse_scale);
 }
 
 double Radial1DSolver::residual_norm_implicit() {
@@ -696,10 +724,14 @@ void Radial1DSolver::build_scaling_implicit() {
     double R_star = 0.0;
     CUDA_CHECK(cudaMemcpy(&R_star, lev.d_r + nz, sizeof(double), cudaMemcpyDeviceToHost));
     if (!(R_star > 0.0)) R_star = 1.0;
+    OpacityParams opa;
+    if (radiation_enabled && use_eos) fill_opacity_params(opa);
+    int rad_on = (radiation_enabled && use_eos) ? 1 : 0;
     k_r1di_build_scaling<<<(nz+B-1)/B, B>>>(
-        lev.d_rho0, lev.d_P0, lev.d_v,
+        lev.d_rho, lev.d_P, lev.d_e_int, lev.d_r, lev.d_v,
         d_scale_L, d_scale_R, d_scale_invL,
-        eos, viallet_alpha1, viallet_alpha2, nz, R_star);
+        eos, use_eos, viallet_alpha1, viallet_alpha2, nz, R_star,
+        rad_on, rad_a_rad, rad_c_light, opa);
 }
 
 // ---------------------------------------------------------------------
@@ -1349,6 +1381,10 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
     double inv_dt = 1.0 / dt;
     double init_res = -1.0;
     for (int it = 0; it < newton_max_iter; ++it) {
+        // Refresh primitives first so build_scaling sees current ρ/P/e.
+        // compute_F_implicit also unpacks, but the scaling kernel needs
+        // current-state inputs to set row-scales correctly.
+        unpack_state_to_device();
         if (use_viallet_scaling) build_scaling_implicit();
 
         compute_F_implicit(inv_dt);
@@ -1502,7 +1538,12 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
                 it, res_norm, new_res, gm, alpha, ls_tries);
         }
         bool abs_ok = (new_res < newton_tol);
-        bool rel_ok = (init_res > 0 && new_res < 0.5 * init_res);
+        // Relative convergence: require 4 orders drop from init. A mere 2×
+        // cut (the old 0.5 factor) let Newton stop after 2 iters at a
+        // nonphysical state in nr=1024, where init_res can be O(1e3) and
+        // 0.5·init_res = 250 is still far from satisfied.
+        bool rel_ok = (init_res > 0 && new_res < newton_rel_tol * init_res);
+        // Stall: 5% flat over 3 consecutive iters. Bail to dt-cut.
         bool stall  = (it >= 2 && res_norm > 0 &&
                        std::fabs(new_res - res_norm) < 0.05 * res_norm);
         if (abs_ok || rel_ok || stall) {

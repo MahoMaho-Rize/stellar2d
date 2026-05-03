@@ -337,6 +337,10 @@ struct Radial1DSolver {
     // inside the implicit residual R(U), so Newton solves hydro + rad in
     // one step. Keep this flag for A/B comparisons.
     bool rad_be_split = false;
+    // Diagnostic: disable R_hse subtraction in F. When ON, F = (U-Uⁿ)/dt - R(U),
+    // so Newton sees the full residual (gravity + pressure + rad). Tests
+    // whether the well-balanced HSE subtraction absorbs rad-driven evolution.
+    bool no_rhse_subtract = false;
     // Min photospheric T used in Stefan surface BC. Prevents atmospheric
     // cooling below the Helm-table floor (1000 K) from stalling KH — the
     // physical photospheric T of a pre-MS 1 M☉ on Hayashi is 3000-4000 K
@@ -355,8 +359,15 @@ struct Radial1DSolver {
     double viallet_alpha1 = 1e-5;
     double viallet_alpha2 = 1.0;
     double newton_tol = 1e-8;
+    // Relative convergence target: accept if ||F||_new < newton_rel_tol·init_res.
+    // 1e-4 = four orders drop from initial. Previous 0.5 (2× cut) let Newton
+    // stop too early at high resolution.
+    double newton_rel_tol = 1e-3;
     int newton_max_iter = 15;
-    double gmres_tol = 1e-3;
+    double gmres_tol = 1e-6;   // Tightened from 1e-3: at nr=1024 GMRES was
+                               // exiting at j=1 with false convergence (PC
+                               // too well-aligned to first Krylov direction
+                               // but not to the global solution).
     int gmres_max_iter = GMRES_K;
 
     // If >0, re-snapshot R_hse every N accepted steps to track evolving

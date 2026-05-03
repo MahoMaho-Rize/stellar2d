@@ -79,6 +79,7 @@ struct SimConfig {
     bool no_viallet = false;         // dev toggle: disable Viallet L/R scaling in implicit
     bool precond_tridiag = false;    // implicit: block-tridiag PC (assembled from 9 colored FD matvecs)
     bool jfnk_autodiff = false;      // implicit: exact J·v via Dual<1> AD (replaces FD matvec)
+    bool no_rhse_subtract = false;   // implicit diagnostic: F = (U-Uⁿ)/dt - R(U) (skip R_hse term)
     double newton_tol_override = 0.0;// implicit: override Newton ||F|| convergence tol (0 = solver default 1e-8)
     int hse_resnap_interval = 0;     // implicit: re-snapshot R_hse every N steps (0=off)
     double dt_thermal_frac = 0.0;    // implicit: dt ≤ frac · IE/L_surf (τ_KH cap, 0=off)
@@ -339,6 +340,8 @@ int main(int argc, char** argv) {
             cfg.precond_tridiag = true;
         else if (std::strcmp(argv[i], "--jfnk-autodiff") == 0)
             cfg.jfnk_autodiff = true;
+        else if (std::strcmp(argv[i], "--no-rhse") == 0)
+            cfg.no_rhse_subtract = true;
         else if (std::strcmp(argv[i], "--newton-tol") == 0 && i + 1 < argc)
             cfg.newton_tol_override = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--hse-resnap") == 0 && i + 1 < argc)
@@ -912,6 +915,7 @@ int main(int argc, char** argv) {
             if (cfg.no_viallet) r1d.use_viallet_scaling = false;
             r1d.precond_tridiag = cfg.precond_tridiag;
             r1d.jfnk_autodiff   = cfg.jfnk_autodiff;
+            r1d.no_rhse_subtract = cfg.no_rhse_subtract;
             r1d.rad_T_phot_floor = cfg.rad_T_phot_floor;
             if (cfg.newton_tol_override > 0) r1d.newton_tol = cfg.newton_tol_override;
             r1d.hse_resnap_interval = cfg.hse_resnap_interval;
