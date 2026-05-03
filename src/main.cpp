@@ -1296,6 +1296,22 @@ int main(int argc, char** argv) {
             bg = "stratified_n2";
             // Re-use ps_vshear as the N² value knob for this test (default 1.0).
             bg_arg = (cfg.ps_vshear > 0.0) ? cfg.ps_vshear : 1.0;
+            // Variable-density override: ANSL_BG=lane_emden_1_5 flips to a
+            // real stratified Lane-Emden n=3/2 background (uses ANSL_RHO_CUT
+            // for surface truncation, default 0.01).  The EVP, SL-filter and
+            // TANH coord-map downstream all work identically; only ρ₀(y),
+            // N²(y), and W̃(y) change.
+            if (const char* bg_env = std::getenv("ANSL_BG")) {
+                std::string s(bg_env);
+                if (s == "lane_emden_1_5" || s == "lane_emden") {
+                    bg = "lane_emden_1_5";
+                    bg_arg = 0.01;
+                    if (const char* rc = std::getenv("ANSL_RHO_CUT")) {
+                        double v = std::atof(rc);
+                        if (v > 0.0 && v < 1.0) bg_arg = v;
+                    }
+                }
+            }
         } else {
             bg = "lane_emden_1_5";
         }

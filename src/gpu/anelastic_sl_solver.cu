@@ -270,7 +270,7 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_Dy);
     free_ptr(d_y_filter);
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
-    free_ptr(d_rho_prime); free_ptr(d_N2);
+    free_ptr(d_rho_prime); free_ptr(d_rho_prime_over_rho); free_ptr(d_N2);
     free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
     free_ptr(d_mu); free_ptr(d_cc_weights);
     free_cptr(d_fhat); free_cptr(d_ghat); free_cptr(d_Ghat);
@@ -565,6 +565,18 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
         h_rho_prime[i] = s;
     }
     CUDA_CHECK(cudaMemcpy(d_rho_prime, h_rho_prime.data(),
+                          sizeof(double) * ny, cudaMemcpyHostToDevice));
+
+    // ρ₀'/ρ₀ for the reduced-pressure projection correction:
+    //   the y-momentum equation in π = p/ρ₀ form is
+    //     ∂t v = -∂y π - (ρ₀'/ρ₀)·π + b,
+    //   so Chorin projection must subtract BOTH ∂y π AND (ρ₀'/ρ₀)·π from v.
+    //   For Boussinesq ρ₀=1 this vector is zero and the extra term is a no-op.
+    std::vector<double> h_rho_prime_over_rho(ny, 0.0);
+    for (int i = 0; i < ny; ++i) {
+        h_rho_prime_over_rho[i] = h_rho_prime[i] / std::max(h_rho[i], 1e-30);
+    }
+    CUDA_CHECK(cudaMemcpy(d_rho_prime_over_rho, h_rho_prime_over_rho.data(),
                           sizeof(double) * ny, cudaMemcpyHostToDevice));
 
     // Brunt-Väisälä N²(y) for anelastic dynamics.  For a stratified ρ₀(y)
@@ -1032,6 +1044,7 @@ void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
     CUDA_CHECK(cudaMalloc(&d_rho,          sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_rho_sqrt_inv, sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_rho_prime,    sizeof(double) * ny));
+    CUDA_CHECK(cudaMalloc(&d_rho_prime_over_rho, sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_N2,           sizeof(double) * ny));
     CUDA_CHECK(cudaMalloc(&d_cc_weights,   sizeof(double) * ny));
     CUDA_CHECK(cudaMemset(d_N2, 0, sizeof(double) * ny));   // Boussinesq default
@@ -1324,6 +1337,21 @@ double AnelasticSLSolver::init_gmode_eigenmode(int kx_int, int n_g, double amp) 
     std::fprintf(stderr,
         "  AnelasticSL eigenmode IC: kx_int=%d, n_g=%d, ω²_EVP=%.10e, ω=%.10e, amp=%g\n",
         kx_int, n_g, om2, omega, amp);
+    {
+        double maxV = 0.0, maxU = 0.0, maxB = 0.0;
+        double rho_min = h_rho.front(), rho_max = h_rho.front();
+        for (int i = 0; i < ny; ++i) {
+            maxV = std::max(maxV, std::fabs(V_full[i]));
+            maxU = std::max(maxU, std::fabs(U_full[i]));
+            double by = -(h_N2[i] / std::max(om2, 1e-30)) * V_full[i];
+            maxB = std::max(maxB, std::fabs(by));
+            rho_min = std::min(rho_min, h_rho[i]);
+            rho_max = std::max(rho_max, h_rho[i]);
+        }
+        std::fprintf(stderr,
+            "  IC peaks: |V|=%.3e |U|=%.3e |b|=%.3e, ρ∈[%.3e, %.3e]\n",
+            maxV, maxU, maxB, rho_min, rho_max);
+    }
     return om2;
 }
 

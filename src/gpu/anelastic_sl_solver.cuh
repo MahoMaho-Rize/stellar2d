@@ -83,6 +83,7 @@ struct AnelasticSLSolver {
 
     // Anelastic background on CGL y-grid.
     double* d_rho_prime = nullptr;   // ∂ρ₀/∂y on CGL nodes (ny,)
+    double* d_rho_prime_over_rho = nullptr;  // ρ₀'/ρ₀ on CGL nodes (ny,)
     double* d_N2        = nullptr;   // Brunt-Väisälä² on CGL nodes (ny,)
     bool    is_anelastic = false;    // set by set_background if ρ₀ non-uniform
 
