@@ -930,9 +930,9 @@ int main(int argc, char** argv) {
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
         if (cfg.species_enabled) {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,mass_H,mass_He,X_core,X_surf,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,mass_H,mass_He,X_core,X_surf,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super,T_phot,phot_zone,R_surf\n");
         } else {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super,T_phot,phot_zone,R_surf\n");
         }
 
         int frame = 0;
@@ -1027,6 +1027,13 @@ int main(int argc, char** argv) {
                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer,
                                 mlt.n_conv_zones, mlt.max_superadiab);
                 }
+                // R_surf = outermost face radius (read once per CSV row)
+                double R_surf = 0.0;
+                {
+                    std::vector<double> r_f, v_f, rho_c3, P_c3, e_c3;
+                    r1d.download_profile(r_f, v_f, rho_c3, P_c3, e_c3);
+                    if (!r_f.empty()) R_surf = r_f.back();
+                }
                 if (r1d.species_enabled) {
                     std::vector<double> X_c, Y_c;
                     r1d.download_species(X_c, Y_c);
@@ -1043,18 +1050,20 @@ int main(int argc, char** argv) {
                     }
                     double X_core = X_c.front();
                     double X_surf = X_c.back();
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
                                  d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
                                  d.T_c, d.rho_c, d.L_nuc,
                                  mH, mHe, X_core, X_surf, r1d.rad_impl_L_surf,
-                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab);
+                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab,
+                                 r1d.rad_impl_T_phot, r1d.rad_impl_phot_zone, R_surf);
                 } else {
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
                                  d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
                                  d.T_c, d.rho_c, d.L_nuc, r1d.rad_impl_L_surf,
-                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab);
+                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab,
+                                 r1d.rad_impl_T_phot, r1d.rad_impl_phot_zone, R_surf);
                 }
                 std::fflush(csv);
 
