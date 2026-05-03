@@ -194,6 +194,32 @@ struct AnelasticSLSolver {
                               std::vector<double>& omega_sq,
                               std::vector<double>& v_modes);
 
+    // ────────────────────────────────────────────────────────────────────
+    // Exp K: 4-var full GYRE-compatible g-mode EVP on CGL grid
+    // (see scripts/gmode_exp_k_chebyshev_full.py for derivation)
+    //
+    // Inputs are per-node stellar structure coefficients (all length Nr),
+    // ell is the spherical harmonic degree.
+    // Builds a (4Nr × 4Nr) generalised EVP  Q u = ω² P u, solves via
+    // M = P⁻¹ Q + cusolverDnXgeev, filters g-modes by propagation-cavity
+    // classification (p_frac < 0.05), and returns up to n_modes ω²
+    // in descending order (n_g=1 first).
+    //
+    // Uses its own CGL D matrix built from x_nodes[0], x_nodes.back() — does
+    // NOT reuse AnelasticSLSolver's [0, Ly] D.  That's intentional:
+    // the g-mode problem is posed on a radial x=r/R ∈ [inner_cut, outer_cut].
+    void solve_gmode_full_chebyshev(
+        const std::vector<double>& x_nodes,       // CGL x points (Nr,)
+        const std::vector<double>& V_2,           // (Nr,)
+        const std::vector<double>& U,
+        const std::vector<double>& A_star,
+        const std::vector<double>& c_1,
+        const std::vector<double>& Gamma_1,
+        int ell,
+        int n_modes_out,
+        std::vector<double>& omega_sq,
+        std::vector<double>& eigvecs_y1);         // y_1(x) for each mode
+
     // Manufactured-solution self-test (Phase 1b).  Constructs a known π_exact,
     // computes the analytic RHS, runs the pipeline, measures L2 error.
     // Returns err_L2 and prints a breakdown.  Works for Boussinesq and

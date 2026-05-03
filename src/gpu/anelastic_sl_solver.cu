@@ -868,6 +868,370 @@ void AnelasticSLSolver::download_b(std::vector<double>& h_b) {
     CUDA_CHECK(cudaMemcpy(h_b.data(), d_b, sizeof(double) * ncell, cudaMemcpyDeviceToHost));
 }
 
+// ── Chebyshev D1 on arbitrary interval, ascending nodes ────────────────
+static void cheb_D1_interval(int N, double a, double b,
+                             std::vector<double>& x_asc,
+                             std::vector<double>& D1_row) {
+    // Trefethen-descending
+    std::vector<double> x(N + 1), D((N + 1) * (N + 1));
+    for (int k = 0; k <= N; ++k) x[k] = std::cos(M_PI * k / (double)N);
+    auto c = [N](int k) {
+        double v = 1.0; if (k == 0 || k == N) v = 2.0;
+        return ((k & 1) ? -1.0 : 1.0) * v;
+    };
+    for (int i = 0; i <= N; ++i) {
+        double row_sum = 0.0;
+        for (int j = 0; j <= N; ++j) {
+            double v;
+            if (i == j) v = 0.0;
+            else v = (c(i) / c(j)) / (x[i] - x[j]);
+            D[(size_t)i * (N + 1) + j] = v;
+            if (i != j) row_sum += v;
+        }
+        D[(size_t)i * (N + 1) + i] = -row_sum;
+    }
+    // Reorder ascending; also scale for [a, b]: d/dy = (2/(b-a)) d/dx
+    double scale = 2.0 / (b - a);
+    x_asc.resize(N + 1);
+    D1_row.resize((size_t)(N + 1) * (N + 1));
+    for (int i = 0; i <= N; ++i) {
+        int ii = N - i;
+        x_asc[i] = a + (1.0 + x[ii]) * (b - a) / 2.0;
+    }
+    for (int i = 0; i <= N; ++i) {
+        int ii = N - i;
+        for (int j = 0; j <= N; ++j) {
+            int jj = N - j;
+            D1_row[(size_t)i * (N + 1) + j] = scale * D[(size_t)ii * (N + 1) + jj];
+        }
+    }
+}
+
+// ── Exp K: 4-var full GYRE-compatible g-mode EVP on CGL ─────────────────
+void AnelasticSLSolver::solve_gmode_full_chebyshev(
+        const std::vector<double>& x_nodes,
+        const std::vector<double>& V_2,
+        const std::vector<double>& U,
+        const std::vector<double>& A_star,
+        const std::vector<double>& c_1,
+        const std::vector<double>& Gamma_1,
+        int ell,
+        int n_modes_out,
+        std::vector<double>& omega_sq_out,
+        std::vector<double>& eigvecs_y1_out) {
+    const int Nr = (int)x_nodes.size();
+    if (Nr < 4) { std::fprintf(stderr, "solve_gmode_full_chebyshev: Nr too small\n"); std::exit(1); }
+    const int N = Nr - 1;
+    const int size = 4 * Nr;
+    const double lam = (double)ell * (ell + 1.0);
+
+    // Build D1 on [x_nodes[0], x_nodes.back()]
+    std::vector<double> x_chk, D1_row;
+    cheb_D1_interval(N, x_nodes.front(), x_nodes.back(), x_chk, D1_row);
+    // sanity: x_chk should equal x_nodes
+    double max_x_diff = 0.0;
+    for (int i = 0; i < Nr; ++i) {
+        double d = std::fabs(x_chk[i] - x_nodes[i]);
+        if (d > max_x_diff) max_x_diff = d;
+    }
+    if (max_x_diff > 1e-10) {
+        std::fprintf(stderr,
+            "solve_gmode_full_chebyshev: x_nodes not matching CGL grid "
+            "(max_diff=%.3e). Use cheb_D1_interval output.\n", max_x_diff);
+    }
+
+    // V_g = V_2 · x² / Γ_1 ;  A_iso = A* · (alpha_gam if A*>0 else 1) — alpha_gam=1
+    std::vector<double> V_g(Nr), A_iso(Nr);
+    for (int i = 0; i < Nr; ++i) {
+        V_g[i]   = V_2[i] * x_nodes[i] * x_nodes[i] / Gamma_1[i];
+        A_iso[i] = A_star[i];       // alpha_gam=1 ⇒ A_iso = A*
+    }
+
+    // Build P, Q row-major (size × size), later transpose to col-major.
+    // Row index convention:
+    //   eq1: row r in [0, Nr)         (y_1 equation)
+    //   eq2: row r in [Nr, 2Nr)       (y_2)
+    //   eq3: row r in [2Nr, 3Nr)      (y_3)
+    //   eq4: row r in [3Nr, 4Nr)      (y_4)
+    // iy1(n)=n, iy2(n)=Nr+n, iy3(n)=2Nr+n, iy4(n)=3Nr+n.
+    auto iy1 = [&](int n) { return n; };
+    auto iy2 = [&](int n) { return Nr + n; };
+    auto iy3 = [&](int n) { return 2 * Nr + n; };
+    auto iy4 = [&](int n) { return 3 * Nr + n; };
+    std::vector<double> P_rm((size_t)size * size, 0.0);
+    std::vector<double> Q_rm((size_t)size * size, 0.0);
+    auto Pref = [&](int r, int c) -> double& { return P_rm[(size_t)r * size + c]; };
+    auto Qref = [&](int r, int c) -> double& { return Q_rm[(size_t)r * size + c]; };
+
+    // xD1_row[i, j] = x[i] * D1[i, j]
+    auto xD1 = [&](int i, int j) { return x_nodes[i] * D1_row[(size_t)i * Nr + j]; };
+
+    // eq1: P[r, :Nr] = xD1[i, :] - diag(V_g-ell-1);  P[r, Nr:2Nr] += diag(V_g)
+    //       Q[r, iy2(i)] += λ/c_1;  Q[r, iy3(i)] += λ/c_1
+    for (int i = 0; i < Nr; ++i) {
+        int r = i;
+        for (int j = 0; j < Nr; ++j) {
+            Pref(r, iy1(j)) = xD1(i, j);
+        }
+        Pref(r, iy1(i)) -= (V_g[i] - (double)ell - 1.0);
+        Pref(r, iy2(i)) += V_g[i];
+        Qref(r, iy2(i)) += lam / c_1[i];
+        Qref(r, iy3(i)) += lam / c_1[i];
+    }
+    // eq2
+    for (int i = 0; i < Nr; ++i) {
+        int r = Nr + i;
+        Pref(r, iy1(i)) = c_1[i];
+        Qref(r, iy1(i)) = A_iso[i];
+        for (int j = 0; j < Nr; ++j) {
+            Qref(r, iy2(j)) = xD1(i, j);
+        }
+        Qref(r, iy2(i)) -= (A_star[i] - U[i] + 3.0 - (double)ell);
+        Qref(r, iy4(i)) += 1.0;
+    }
+    // eq3
+    for (int i = 0; i < Nr; ++i) {
+        int r = 2 * Nr + i;
+        for (int j = 0; j < Nr; ++j) {
+            Qref(r, iy3(j)) = xD1(i, j);
+        }
+        Qref(r, iy3(i)) -= (3.0 - U[i] - (double)ell);
+        Qref(r, iy4(i)) -= 1.0;
+    }
+    // eq4
+    for (int i = 0; i < Nr; ++i) {
+        int r = 3 * Nr + i;
+        Qref(r, iy1(i)) -= U[i] * A_star[i];
+        Qref(r, iy2(i)) -= U[i] * V_g[i];
+        Qref(r, iy3(i)) -= lam;
+        for (int j = 0; j < Nr; ++j) {
+            Qref(r, iy4(j)) = xD1(i, j);
+        }
+        Qref(r, iy4(i)) -= (2.0 - U[i] - (double)ell);
+    }
+
+    // BCs (overwrite rows)
+    // IB1 (has ω²):  c_1(0) ω² y_1(0) - ell y_2(0) - ell y_3(0) = 0
+    //               ⇒ ω² [c_1 y_1] = ell y_2 + ell y_3
+    {
+        int r = 0;
+        for (int c = 0; c < size; ++c) { Pref(r, c) = 0.0; Qref(r, c) = 0.0; }
+        Pref(r, iy1(0)) = c_1[0];
+        Qref(r, iy2(0)) = (double)ell;
+        Qref(r, iy3(0)) = (double)ell;
+    }
+    // IB2: ell y_3(0) - y_4(0) = 0
+    {
+        int r = 2 * Nr;
+        for (int c = 0; c < size; ++c) { Pref(r, c) = 0.0; Qref(r, c) = 0.0; }
+        Qref(r, iy3(0)) = (double)ell;
+        Qref(r, iy4(0)) = -1.0;
+    }
+    // OB1: y_1(R) - y_2(R) = 0
+    {
+        int r = Nr - 1;
+        for (int c = 0; c < size; ++c) { Pref(r, c) = 0.0; Qref(r, c) = 0.0; }
+        Qref(r, iy1(Nr - 1)) =  1.0;
+        Qref(r, iy2(Nr - 1)) = -1.0;
+    }
+    // OB2: U(R) y_1(R) + (ell+1) y_3(R) + y_4(R) = 0
+    {
+        int r = 4 * Nr - 1;
+        for (int c = 0; c < size; ++c) { Pref(r, c) = 0.0; Qref(r, c) = 0.0; }
+        Qref(r, iy1(Nr - 1)) = U[Nr - 1];
+        Qref(r, iy3(Nr - 1)) = (double)(ell + 1);
+        Qref(r, iy4(Nr - 1)) = 1.0;
+    }
+
+    // Transpose to col-major for cuSOLVER.
+    std::vector<double> P_cm((size_t)size * size), Q_cm((size_t)size * size);
+    for (int i = 0; i < size; ++i)
+        for (int j = 0; j < size; ++j) {
+            P_cm[(size_t)i + (size_t)j * size] = P_rm[(size_t)i * size + j];
+            Q_cm[(size_t)i + (size_t)j * size] = Q_rm[(size_t)i * size + j];
+        }
+
+    // ---- GPU: P^-1 Q via getrf/getrs, then Xgeev on M = P^-1 Q ------------
+    cusolverDnHandle_t solver = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreate(&solver));
+    cusolverDnParams_t params = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreateParams(&params));
+
+    // For Exp K the P matrix has zero rows (eq3, eq4 are algebraic
+    // constraints without ω²), so P is singular.  Instead factor Q and
+    // solve Q · M = P for M = Q⁻¹ P.  The eigenvalues λ of M then
+    // satisfy Q u = ω² P u  ⇒  (Q⁻¹ P) u = (1/ω²) u, i.e. ω² = 1/λ.
+    double *d_P = nullptr, *d_Q = nullptr;
+    int *d_ipiv = nullptr, *d_info = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_P, sizeof(double) * (size_t)size * size));
+    CUDA_CHECK(cudaMalloc(&d_Q, sizeof(double) * (size_t)size * size));
+    CUDA_CHECK(cudaMalloc(&d_ipiv, sizeof(int) * size));
+    CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
+    CUDA_CHECK(cudaMemcpy(d_P, P_cm.data(), sizeof(double) * (size_t)size * size,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Q, Q_cm.data(), sizeof(double) * (size_t)size * size,
+                          cudaMemcpyHostToDevice));
+
+    int getrf_ws = 0;
+    CUSOLVER_CHECK(cusolverDnDgetrf_bufferSize(solver, size, size, d_Q, size, &getrf_ws));
+    double* d_getrf_work = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_getrf_work, sizeof(double) * getrf_ws));
+    CUSOLVER_CHECK(cusolverDnDgetrf(solver, size, size, d_Q, size,
+                                    d_getrf_work, d_ipiv, d_info));
+    int h_info_v = 0;
+    CUDA_CHECK(cudaMemcpy(&h_info_v, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+    if (h_info_v != 0) {
+        std::fprintf(stderr, "solve_gmode_full_chebyshev: getrf(Q) info=%d\n", h_info_v);
+        std::exit(1);
+    }
+    CUSOLVER_CHECK(cusolverDnDgetrs(solver, CUBLAS_OP_N, size, size,
+                                    d_Q, size, d_ipiv, d_P, size, d_info));
+    // d_P now holds M = Q⁻¹ P (col-major).  Eigenvalues λ give ω² = 1/λ.
+
+    // Pack to complex and Xgeev
+    cuDoubleComplex *d_Mc = nullptr, *d_W = nullptr, *d_VR = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_Mc, sizeof(cuDoubleComplex) * (size_t)size * size));
+    CUDA_CHECK(cudaMalloc(&d_W,  sizeof(cuDoubleComplex) * size));
+    CUDA_CHECK(cudaMalloc(&d_VR, sizeof(cuDoubleComplex) * (size_t)size * size));
+    int block = 256;
+    int total = size * size;
+    int grid = (total + block - 1) / block;
+    k_real_to_cplx_local<<<grid, block>>>(d_Mc, d_P, total);
+
+    size_t work_device = 0, work_host = 0;
+    CUSOLVER_CHECK(cusolverDnXgeev_bufferSize(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)size,
+        CUDA_C_64F, d_Mc, (int64_t)size,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)size,
+        CUDA_C_64F, d_VR,    (int64_t)size,
+        CUDA_C_64F, &work_device, &work_host));
+    void *d_work = nullptr, *h_work = nullptr;
+    if (work_device) CUDA_CHECK(cudaMalloc(&d_work, work_device));
+    if (work_host) h_work = std::malloc(work_host);
+    CUSOLVER_CHECK(cusolverDnXgeev(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)size,
+        CUDA_C_64F, d_Mc, (int64_t)size,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)size,
+        CUDA_C_64F, d_VR,    (int64_t)size,
+        CUDA_C_64F, d_work, work_device, h_work, work_host, d_info));
+    CUDA_CHECK(cudaMemcpy(&h_info_v, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+    if (h_info_v != 0) {
+        std::fprintf(stderr, "solve_gmode_full_chebyshev: Xgeev info=%d\n", h_info_v);
+        std::exit(1);
+    }
+
+    std::vector<cuDoubleComplex> h_W(size);
+    std::vector<cuDoubleComplex> h_VR((size_t)size * size);
+    CUDA_CHECK(cudaMemcpy(h_W.data(),  d_W,  sizeof(cuDoubleComplex) * size,
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_VR.data(), d_VR,
+                          sizeof(cuDoubleComplex) * (size_t)size * size,
+                          cudaMemcpyDeviceToHost));
+
+    // Filter real positive eigenvalues.  M = Q⁻¹ P has eigenvalues λ with
+    // ω² = 1/λ.  True g-modes have λ ~ O(0.1–1); the P-singular directions
+    // produce either λ ≈ 0 (ω² → ∞ ghost) or NaN.  Threshold 1e-6 keeps
+    // everything physically reasonable ( ω² < 1e6 ).
+    struct Cand { double omega_sq; int idx; };
+    std::vector<Cand> cand;
+    for (int k = 0; k < size; ++k) {
+        double re = h_W[k].x;
+        double im = h_W[k].y;
+        if (!std::isfinite(re)) continue;
+        if (std::fabs(im) > 1e-6 * (std::fabs(re) + 1e-30)) continue;
+        if (re <= 1e-6) continue;                 // drop ghost modes (λ ≈ 0)
+        double omega_sq = 1.0 / re;
+        if (!std::isfinite(omega_sq) || omega_sq > 1e6) continue;
+        cand.push_back({omega_sq, k});
+    }
+
+    // Propagation-cavity g-mode classification
+    std::vector<double> N2_profile(Nr), L2_profile(Nr);
+    for (int i = 0; i < Nr; ++i) {
+        N2_profile[i] = A_star[i] / std::max(c_1[i], 1e-30);
+        if (V_2[i] > 0.0) {
+            double x4 = std::pow(x_nodes[i], 4);
+            L2_profile[i] = lam * Gamma_1[i] / (V_2[i] * x4);
+        } else {
+            L2_profile[i] = 1e30;
+        }
+    }
+    auto classify = [&](const double* y1, double mu_val) {
+        double total = 0.0, in_g = 0.0, in_p = 0.0;
+        for (int i = 0; i < Nr; ++i) {
+            double w = x_nodes[i] * x_nodes[i] * x_nodes[i] * y1[i] * y1[i];
+            total += w;
+            bool g = (N2_profile[i] > mu_val) && (L2_profile[i] > mu_val);
+            bool p = (N2_profile[i] < mu_val) && (L2_profile[i] < mu_val);
+            if (g) in_g += w;
+            if (p) in_p += w;
+        }
+        double g_frac = (total > 0) ? in_g / total : 0.0;
+        double p_frac = (total > 0) ? in_p / total : 0.0;
+        return std::make_pair(g_frac, p_frac);
+    };
+    const double p_frac_cut = 0.05;
+
+    // Filter by classifier (optional — ANSL_SKIP_CLASSIFY disables it for debugging)
+    std::vector<Cand> kept;
+    if (std::getenv("ANSL_SKIP_CLASSIFY")) {
+        kept = cand;
+    } else {
+        for (const auto& c : cand) {
+            int col = c.idx;
+            std::vector<double> y1(Nr);
+            for (int i = 0; i < Nr; ++i) {
+                y1[i] = h_VR[(size_t)i + (size_t)col * size].x;
+            }
+            auto [gf, pf] = classify(y1.data(), c.omega_sq);
+            if (pf < p_frac_cut) kept.push_back(c);
+        }
+    }
+    std::fprintf(stderr,
+        "  [Exp K] eigenvalues: total=%d, valid_real_pos=%zu, kept=%zu\n",
+        size, cand.size(), kept.size());
+
+    // Sort descending ω², dedup close ones
+    std::sort(kept.begin(), kept.end(),
+              [](const Cand& a, const Cand& b){ return a.omega_sq > b.omega_sq; });
+    std::vector<Cand> dedup;
+    for (const auto& c : kept) {
+        if (!dedup.empty()) {
+            double last = dedup.back().omega_sq;
+            if (std::fabs(c.omega_sq - last) / std::fabs(last + 1e-30) < 1e-4) continue;
+        }
+        dedup.push_back(c);
+        if ((int)dedup.size() >= n_modes_out) break;
+    }
+
+    int n_out = (int)dedup.size();
+    omega_sq_out.resize(n_out);
+    eigvecs_y1_out.assign((size_t)Nr * n_out, 0.0);
+    for (int k = 0; k < n_out; ++k) {
+        omega_sq_out[k] = dedup[k].omega_sq;
+        int col = dedup[k].idx;
+        for (int i = 0; i < Nr; ++i) {
+            eigvecs_y1_out[(size_t)i + (size_t)k * Nr] =
+                h_VR[(size_t)i + (size_t)col * size].x;
+        }
+    }
+
+    // Cleanup
+    std::free(h_work);
+    if (d_work) cudaFree(d_work);
+    cudaFree(d_Mc); cudaFree(d_W); cudaFree(d_VR);
+    cudaFree(d_getrf_work);
+    cudaFree(d_P); cudaFree(d_Q); cudaFree(d_ipiv); cudaFree(d_info);
+    cusolverDnDestroyParams(params);
+    cusolverDnDestroy(solver);
+}
+
 // ── 2D anelastic g-mode EVP (single k_x, cuSOLVER Xgeev) ────────────────
 // Builds scalar operator  A v = ω² B v  with
 //     A = k_x² diag(N² ρ₀)         (diagonal, ny-2)

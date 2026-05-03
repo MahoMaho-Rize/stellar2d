@@ -57,6 +57,7 @@ if(USE_GPU)
         src/gpu/pseudo_spectral_kernels.cu
         src/gpu/anelastic_sl_solver.cu
         src/gpu/anelastic_sl_kernels.cu
+        src/gpu/stellar_profile.cpp
         src/gpu/sph_transforms.cu
         src/gpu/sph2d_spectral_solver.cu
         src/gpu/sph2d_spectral_kernels.cu
@@ -314,4 +315,9 @@ if(USE_GPU)
     set_target_properties(test_coverage_critical PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_coverage_critical PRIVATE CUDA::cudart)
     add_test(NAME coverage_critical COMMAND test_coverage_critical)
+
+    # Stellar profile (Lane-Emden + GYRE structure coefficients) — host-only, no CUDA
+    add_executable(test_stellar_profile tests/test_stellar_profile.cpp
+        src/gpu/stellar_profile.cpp)
+    target_include_directories(test_stellar_profile PRIVATE src)
 endif()

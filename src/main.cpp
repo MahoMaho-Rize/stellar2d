@@ -29,6 +29,7 @@
 #include "gpu/cart_ale2_solver.cuh"
 #include "gpu/pseudo_spectral_solver.cuh"
 #include "gpu/anelastic_sl_solver.cuh"
+#include "gpu/stellar_profile.h"
 #include "gpu/sph2d_spectral_solver.cuh"
 #endif
 
@@ -526,7 +527,8 @@ int main(int argc, char** argv) {
                || cfg.test_case == "sl_poisson_test_boussinesq"
                || cfg.test_case == "kh_shear_boussinesq"
                || cfg.test_case == "gmode_pulsation"
-               || cfg.test_case == "gmode_2d_evp") {
+               || cfg.test_case == "gmode_2d_evp"
+               || cfg.test_case == "gmode_exp_k") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -1267,11 +1269,12 @@ int main(int argc, char** argv) {
             && cfg.test_case != "sl_poisson_test_boussinesq"
             && cfg.test_case != "kh_shear_boussinesq"
             && cfg.test_case != "gmode_pulsation"
-            && cfg.test_case != "gmode_2d_evp") {
+            && cfg.test_case != "gmode_2d_evp"
+            && cfg.test_case != "gmode_exp_k") {
             std::fprintf(stderr,
                 "ERROR: anelastic_sl supports --test {sl_basis_check, "
                 "sl_poisson_test[_boussinesq], kh_shear_boussinesq, "
-                "gmode_pulsation, gmode_2d_evp}\n");
+                "gmode_pulsation, gmode_2d_evp, gmode_exp_k}\n");
             return 1;
         }
         AnelasticSLSolver ansl;
@@ -1297,6 +1300,100 @@ int main(int argc, char** argv) {
         if (cfg.test_case == "sl_poisson_test"
             || cfg.test_case == "sl_poisson_test_boussinesq") {
             ansl.manufactured_test();
+        }
+
+        if (cfg.test_case == "gmode_exp_k") {
+            // CUDA port of scripts/gmode_exp_k_chebyshev_full.py
+            int N = (cfg.nr > 0 ? cfg.nr : 64);
+            int ell = 1;
+            int n_modes_req = 10;
+            double inner_cut = 1e-4, outer_cut = 0.9999;
+
+            // Build CGL nodes on [inner_cut, outer_cut]
+            std::vector<double> x_cgl(N + 1);
+            for (int k = 0; k <= N; ++k) {
+                int kk = N - k;
+                x_cgl[k] = inner_cut
+                         + (1.0 + std::cos(M_PI * kk / (double)N))
+                         * (outer_cut - inner_cut) / 2.0;
+            }
+            std::sort(x_cgl.begin(), x_cgl.end());
+
+            // If ANSL_POLY3_TXT is set, load GYRE's poly3.txt and CubicSpline-
+            // interpolate to CGL.  Otherwise build our own n=3 polytrope.
+            StellarProfile prof;
+            const char* poly_path_env = std::getenv("ANSL_POLY3_TXT");
+            if (poly_path_env) {
+                StellarProfile raw;
+                if (!read_gyre_structure_txt(poly_path_env, raw)) {
+                    std::fprintf(stderr,
+                        "gmode_exp_k: failed to load %s\n", poly_path_env);
+                    return 1;
+                }
+                std::fprintf(stderr,
+                    "  Loaded GYRE structure from %s (%d rows)\n",
+                    poly_path_env, raw.n_points());
+                // Linear-interpolate raw → CGL (upgrade to cubic spline later)
+                auto interp = [&](const std::vector<double>& y) {
+                    std::vector<double> out(x_cgl.size());
+                    for (size_t i = 0; i < x_cgl.size(); ++i) {
+                        double xq = x_cgl[i];
+                        int j = 0;
+                        while (j + 1 < (int)raw.x.size() && raw.x[j + 1] < xq) ++j;
+                        if (j + 1 >= (int)raw.x.size()) j = (int)raw.x.size() - 2;
+                        double f = (xq - raw.x[j]) / (raw.x[j + 1] - raw.x[j]);
+                        out[i] = y[j] + f * (y[j + 1] - y[j]);
+                    }
+                    return out;
+                };
+                prof.x       = x_cgl;
+                prof.V_2     = interp(raw.V_2);
+                prof.A_star  = interp(raw.A_star);
+                prof.U       = interp(raw.U);
+                prof.c_1     = interp(raw.c_1);
+                prof.Gamma_1 = interp(raw.Gamma_1);
+            } else {
+                prof = build_polytrope_profile_at(3.0, x_cgl);
+            }
+
+            std::vector<double> omega_sq, eigvecs_y1;
+            ansl.solve_gmode_full_chebyshev(
+                prof.x, prof.V_2, prof.U, prof.A_star, prof.c_1, prof.Gamma_1,
+                ell, n_modes_req, omega_sq, eigvecs_y1);
+
+            // Exp K EXPECTED vs GYRE (frozen values in the Python script)
+            static const double EXPECTED[10] = {
+                2.5159279360877496, 1.2857077544856306, 0.7757327764772477,
+                0.5177759762324133, 0.36992549567563754, 0.2775028154601723,
+                0.21592664733814718, 0.1728536032702941, 0.1415440904624304,
+                0.11806842352742726,
+            };
+            std::fprintf(stderr,
+                "  Exp K CUDA:  N=%d (DOF=%d), ell=%d, polytrope n=3\n",
+                N, 4 * (N + 1), ell);
+            std::fprintf(stderr,
+                "  %3s  %16s  %16s  %10s\n", "n_g", "ω²_CUDA", "ω²_GYRE", "rel err");
+            double max_rel = 0.0;
+            int n_show = std::min((int)omega_sq.size(), 10);
+            for (int k = 0; k < n_show; ++k) {
+                double rel = std::fabs(omega_sq[k] - EXPECTED[k]) / EXPECTED[k];
+                if (rel > max_rel) max_rel = rel;
+                std::fprintf(stderr,
+                    "  %3d  %16.10e  %16.10e  %10.3e\n",
+                    k + 1, omega_sq[k], EXPECTED[k], rel);
+            }
+            std::fprintf(stderr, "  Exp K max_rel = %.3e\n", max_rel);
+
+            // CSV dump
+            char csv_path[512];
+            std::snprintf(csv_path, sizeof(csv_path), "%s/gmode_exp_k.csv",
+                          run_dir.c_str());
+            FILE* fp = std::fopen(csv_path, "w");
+            std::fprintf(fp, "# N=%d, ell=%d\n", N, ell);
+            std::fprintf(fp, "# omega_sq (n_modes):\n");
+            for (double w : omega_sq) std::fprintf(fp, "%.15e\n", w);
+            std::fclose(fp);
+            std::fprintf(stderr, "  Exp K CSV at %s\n", csv_path);
         }
 
         if (cfg.test_case == "gmode_2d_evp") {
