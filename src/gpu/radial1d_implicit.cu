@@ -50,44 +50,33 @@ __global__ static void k_r1di_diag_L_surf(
     double sigma_sb)
 {
     if (threadIdx.x != 0 || blockIdx.x != 0) return;
-    const double tau_target = 2.0 / 3.0;
-    double tau_acc = 0.0;
-    int phot = nz - 1;
-    for (int j = nz - 1; j >= 0; --j) {
-        double rj = r[j], rjp1 = r[j+1];
-        double dr = rjp1 - rj;
-        if (dr < 0.0) dr = 0.0;
-        double rho_j = fmax(rho[j], 1e-30);
-        double e_j   = fmax(e_int[j], 1e-30);
-        double T_j   = eos.temperature_from_rho_e(rho_j, e_j);
-        double kap   = grey_opacity(rho_j, T_j > 1.0 ? T_j : 1.0, opa);
-        double dtau = kap * rho_j * dr;
-        if (tau_acc + dtau >= tau_target) { phot = j; break; }
-        tau_acc += dtau;
-        phot = j;
-    }
-    double rho_p = fmax(rho[phot], 1e-30);
-    double e_p   = fmax(e_int[phot], 1e-30);
-    double T_p   = eos.temperature_from_rho_e(rho_p, e_p);
-    // Helm's Newton inversion occasionally pathologically returns the 1 K
-    // floor when it over-corrects on low-ρ, mid-T states (pre-MS outer
-    // envelope, ρ ~ 0.1, e ~ 3e12). Detect and fall back to an ideal
-    // ion-gas estimate, which is accurate to ~20% in this regime and
-    // keeps the diagnostic sane until we tighten the Newton wrapper.
-    if (!(T_p > 10.0)) {
-        // Ideal ion gas: e_ion ≈ (3/2)(N_A k_B / Abar) T
-        // With Abar ≈ 1.3, coefficient ≈ 9.6e7 erg/g/K.
-        double T_guess = e_p / 9.6e7;
+    // Mirror the residual BC: grey Eddington 1-zone atmosphere.
+    //   T_eff⁴ = (4/3) T_k⁴ / (τ_k + 2/3)
+    int k = nz - 1;
+    double rho_k = fmax(rho[k], 1e-30);
+    double e_k   = fmax(e_int[k], 1e-30);
+    double T_k   = eos.temperature_from_rho_e(rho_k, e_k);
+    if (!(T_k > 10.0)) {
+        // Ideal ion-gas fallback when Helm inversion collapses to floor.
+        double T_guess = e_k / 9.6e7;
         if (T_guess < 1.0)  T_guess = 1.0;
         if (T_guess > 1e8) T_guess = 1e8;
-        T_p = T_guess;
+        T_k = T_guess;
     }
-    double T4 = T_p*T_p; T4 *= T4;
+    double dr_k = r[k+1] - r[k];
+    if (dr_k < 0.0) dr_k = 0.0;
+    double kap_k = grey_opacity(rho_k, T_k > 1.0 ? T_k : 1.0, opa);
+    if (!(kap_k > 1e-30)) kap_k = 1e-30;
+    double tau_k = kap_k * rho_k * dr_k;
+    double Tk2 = T_k * T_k;
+    double Tk4 = Tk2 * Tk2;
+    double T_eff4 = (4.0 / 3.0) * Tk4 / (tau_k + 2.0 / 3.0);
     double A = 4.0 * 3.14159265358979323846 * r[nz] * r[nz];
-    out[0] = A * sigma_sb * T4;
-    out[1] = (double)phot;
-    out[2] = T_p;
-    out[3] = tau_acc;
+    double T_eff = sqrt(sqrt(T_eff4));
+    out[0] = A * sigma_sb * T_eff4;
+    out[1] = (double)k;
+    out[2] = T_eff;
+    out[3] = tau_k;
 }
 
 // Species-only burn kernel: advance X, Y by dt using current ρ, T. Does NOT
@@ -401,47 +390,27 @@ __global__ static void k_r1di_residual(
                     L_out += A_face * K_face * (T_k - T_p) / dr_zc;
             }
         } else {
-            // Photospheric BC: integrate optical depth from surface inward,
-            // stop at τ=2/3, use that zone's T as T_eff.
-            const double tau_target = 2.0 / 3.0;
-            double tau_acc = 0.0;
-            int phot_zone = nz - 1;
-            for (int j = nz - 1; j >= 0; --j) {
-                double rj   = r_face[j];
-                double rjp1 = r_face[j+1];
-                double dr   = rjp1 - rj;
-                if (dr < 0.0) dr = 0.0;
-                double rj_v = fmax(rho[j], 1e-30);
-                double tj_v = T_k;
-                if (j != k) {
-                    double ej_v = fmax(e_int[j], 1e-30);
-                    tj_v = eos.temperature_from_rho_e(rj_v, ej_v);
-                }
-                double kap = grey_opacity(rj_v, tj_v > 1.0 ? tj_v : 1.0, rad.opa);
-                double dtau = kap * rj_v * dr;
-                if (tau_acc + dtau >= tau_target) {
-                    phot_zone = j;
-                    break;
-                }
-                tau_acc += dtau;
-                phot_zone = j;
-            }
-            double T_phot;
-            if (phot_zone == k) {
-                T_phot = T_k;
-            } else {
-                double rho_p = fmax(rho[phot_zone], 1e-30);
-                double e_p   = fmax(e_int[phot_zone], 1e-30);
-                T_phot = eos.temperature_from_rho_e(rho_p, e_p);
-            }
-            double A_surf = PI4 * r_face[k+1] * r_face[k+1];
-            // Soft floor: T_eff⁴ = T⁴ + T_floor⁴.
-            double T4p = T_phot*T_phot; T4p *= T4p;
+            // Grey Eddington 1-zone atmosphere BC:
+            //   T⁴(τ) = (3/4) T_eff⁴ (τ + 2/3)
+            //   ⇒ T_eff⁴ = (4/3) T_k⁴ / (τ_k + 2/3)
+            // where τ_k = κ(ρ_k,T_k)·ρ_k·Δr_k is the optical depth of the
+            // outermost zone treated as a single atmosphere layer. This
+            // replaces the earlier τ-scan which collapsed onto zone k for
+            // MESA-seeded IC (Phase 4 Δr-floor makes τ_k ≫ 2/3 in one zone).
+            double dr_k = r_face[k+1] - r_face[k];
+            if (dr_k < 0.0) dr_k = 0.0;
+            double kap_k = grey_opacity(rho_k, T_k > 1.0 ? T_k : 1.0, rad.opa);
+            if (!(kap_k > 1e-30)) kap_k = 1e-30;
+            double tau_k = kap_k * rho_k * dr_k;
+            double Tk2 = T_k * T_k;
+            double Tk4 = Tk2 * Tk2;
+            double T_eff4 = (4.0 / 3.0) * Tk4 / (tau_k + 2.0 / 3.0);
             if (rad.T_phot_floor > 0.0) {
                 double f2 = rad.T_phot_floor * rad.T_phot_floor;
-                T4p += f2 * f2;
+                T_eff4 += f2 * f2;
             }
-            L_out = A_surf * rad.sigma_sb * T4p;
+            double A_surf = PI4 * r_face[k+1] * r_face[k+1];
+            L_out = A_surf * rad.sigma_sb * T_eff4;
         }
 
         R_e += (L_in - L_out) / dm_k;

@@ -362,89 +362,35 @@ __host__ __device__ inline void residual_zone_dual(
             L_out = rad_face_L_dual<N>(rho_k, T_k, rho_j, T_j,
                                         r_face(k+1), dr_zc, rad, K_face);
         } else {
-            // Surface: photospheric (τ=2/3) BC. Integrate τ inward from the
-            // outer boundary:  τ(j) = Σ_{i=j..nz-1} κ(ρ_i,T_i) · ρ_i · Δr_i.
-            // The photosphere sits at the zone where τ first exceeds 2/3;
-            // linearly interpolate in τ between that zone and its neighbor.
-            // L_out = 4π r² σ T_phot⁴.
-            //
-            // Opacity and ρ are Picard-lagged (scalar); T_phot is computed
-            // as Dual so the gradient reaches T_k when the photosphere
-            // coincides with zone k, and T_{k-1}, T_{k-2}, ... when it sits
-            // deeper. In practice for pre-MS stars the photosphere is one
-            // or two zones below the last zone, so the Dual coupling reaches
-            // those neighbors.
-            const double tau_target = 2.0 / 3.0;
-            double tau_acc = 0.0;
-            int phot_zone = 0;   // zone index where τ first exceeds target
-            double tau_below = 0.0;
-            // Walk from outermost zone inward
-            for (int j = nz - 1; j >= 0; --j) {
-                double rho_j_v;
-                double T_j_v;
-                double r_j_v   = r_face(j).v;
-                double r_jp1_v = r_face(j+1).v;
-                double dr = r_jp1_v - r_j_v;
-                if (dr < 0.0) dr = 0.0;
-                if (j == k) {
-                    rho_j_v = rho_k.v;
-                    T_j_v   = T_k.v;
-                } else {
-                    double V = (4.188790204786391) * (r_jp1_v*r_jp1_v*r_jp1_v
-                                                    - r_j_v*r_j_v*r_j_v);
-                    if (V < 1e-30) V = 1e-30;
-                    rho_j_v = dm[j] / V;
-                    double e_j_v = e_zone(j).v;
-                    if (e_j_v < 1e-30) e_j_v = 1e-30;
-                    T_j_v = eos.temperature_from_rho_e(
-                        rho_j_v > 1e-30 ? rho_j_v : 1e-30, e_j_v);
-                }
-                double kap = grey_opacity(rho_j_v > 1e-30 ? rho_j_v : 1e-30,
-                                          T_j_v > 1.0 ? T_j_v : 1.0, rad.opa);
-                double dtau = kap * rho_j_v * dr;
-                if (tau_acc + dtau >= tau_target) {
-                    phot_zone = j;
-                    tau_below = tau_acc;
-                    tau_acc = tau_acc + dtau;
-                    break;
-                }
-                tau_acc += dtau;
-                phot_zone = j;
-                tau_below = tau_acc;
-            }
-            // Use T of the photospheric zone as T_eff. For now (grey, no
-            // interpolation), just take Dual<N> T at that zone — this keeps
-            // the gradient correct.
-            Dual<N> T_phot(0.0);
-            if (phot_zone == k) {
-                T_phot = T_k;
-            } else {
-                // Reconstruct Dual T at phot_zone
-                Dual<N> rLp = r_face(phot_zone);
-                Dual<N> rRp = r_face(phot_zone + 1);
-                Dual<N> Vp  = PI43_D * (rRp*rRp*rRp - rLp*rLp*rLp);
-                if (Vp.v < 1e-30) Vp = Dual<N>(1e-30);
-                Dual<N> rho_p = Dual<N>(dm[phot_zone]) / Vp;
-                Dual<N> e_p   = e_zone(phot_zone);
-                if (e_p.v < 1e-30) e_p = Dual<N>(1e-30);
-                Dual<N> P_p;
-                primitives_dual<N>(rho_p, e_p, eos, P_p, T_phot);
-            }
-            Dual<N> rs = r_face(k+1);
-            Dual<N> A_surf = PI4_D * rs * rs;
-            // Soft floor: T_eff⁴ = T_phot⁴ + T_floor⁴. Preserves non-zero
-            // gradient even below the floor, so Newton still couples to the
-            // surface. Physically: photospheric H⁻ opacity self-regulation
-            // prevents T_eff from dropping below ~3000 K for pre-MS stars.
-            Dual<N> T2 = T_phot * T_phot;
+            // Grey Eddington 1-zone atmosphere BC:
+            //   T⁴(τ) = (3/4) T_eff⁴ (τ + 2/3)
+            //   ⇒ T_eff⁴ = (4/3) T_k⁴ / (τ_k + 2/3)
+            // Opacity Picard-lagged (scalar κ·ρ·Δr), T_k is Dual so Newton
+            // couples T_k → L_surf → e_int. Replaces τ-scan which collapsed
+            // to a single zone for MESA-seeded IC (Phase 4 Δr floor makes
+            // τ_k ≫ 2/3 in one zone already).
+            Dual<N> rL = r_face(k);
+            Dual<N> rR = r_face(k+1);
+            Dual<N> dr_k = rR - rL;
+            double dr_v = dr_k.v > 0.0 ? dr_k.v : 0.0;
+            double rho_v = rho_k.v > 1e-30 ? rho_k.v : 1e-30;
+            double T_v   = T_k.v > 1.0 ? T_k.v : 1.0;
+            double kap   = grey_opacity(rho_v, T_v, rad.opa);
+            if (!(kap > 1e-30)) kap = 1e-30;
+            double tau_k = kap * rho_v * dr_v;
+            double inv_denom = 1.0 / (tau_k + 2.0 / 3.0);
+            double eddington_factor = (4.0 / 3.0) * inv_denom;
+            Dual<N> T2 = T_k * T_k;
             Dual<N> T4 = T2 * T2;
+            Dual<N> T4_eff = T4 * eddington_factor;
             double T_floor = rad.T_phot_floor;
             if (T_floor > 0.0) {
                 double f2 = T_floor * T_floor;
                 double f4 = f2 * f2;
-                T4 = T4 + f4;
+                T4_eff = T4_eff + f4;
             }
-            L_out = A_surf * (rad.sigma_sb * T4);
+            Dual<N> A_surf = PI4_D * rR * rR;
+            L_out = A_surf * (rad.sigma_sb * T4_eff);
         }
 
         Dual<N> eps_rad = (L_in - L_out) / fmax(Dual<N>(dm[k]), 1e-30);
