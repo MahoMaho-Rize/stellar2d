@@ -371,6 +371,11 @@ __global__ static void k_r1di_residual(
             double Tm4 = T_m*T_m; Tm4 *= Tm4;
             double Tk4 = T_k*T_k; Tk4 *= Tk4;
             L_in = A_face * D * rad.a_rad * (Tm4 - Tk4) / dr_zc;
+            if (rad.K_conv != nullptr) {
+                double K_face = 0.5 * (rad.K_conv[k-1] + rad.K_conv[k]);
+                if (K_face > 0.0)
+                    L_in += A_face * K_face * (T_m - T_k) / dr_zc;
+            }
         }
 
         // Outer face: between zones k and k+1, or surface
@@ -390,6 +395,11 @@ __global__ static void k_r1di_residual(
             double Tk4 = T_k*T_k; Tk4 *= Tk4;
             double Tp4 = T_p*T_p; Tp4 *= Tp4;
             L_out = A_face * D * rad.a_rad * (Tk4 - Tp4) / dr_zc;
+            if (rad.K_conv != nullptr) {
+                double K_face = 0.5 * (rad.K_conv[k] + rad.K_conv[k+1]);
+                if (K_face > 0.0)
+                    L_out += A_face * K_face * (T_k - T_p) / dr_zc;
+            }
         } else {
             // Photospheric BC: integrate optical depth from surface inward,
             // stop at τ=2/3, use that zone's T as T_eff.
@@ -687,6 +697,7 @@ void Radial1DSolver::compute_R_implicit() {
     rad.sigma_sb = rad_c_light * rad_a_rad / 4.0;
     rad.T_phot_floor = rad_T_phot_floor;
     fill_opacity_params(rad.opa);
+    rad.K_conv = (mlt_enabled && d_K_conv != nullptr) ? d_K_conv : nullptr;
 
     k_r1di_residual<<<(nz+B-1)/B, B>>>(
         d_R,
@@ -922,6 +933,7 @@ void Radial1DSolver::jfnk_matvec_ad(const double* d_v_in, double* d_Jv, double i
     rad.sigma_sb = rad_c_light * rad_a_rad / 4.0;
     rad.T_phot_floor = rad_T_phot_floor;
     fill_opacity_params(rad.opa);
+    rad.K_conv = (mlt_enabled && d_K_conv != nullptr) ? d_K_conv : nullptr;
     k_r1di_ad_residual<<<(nz+B-1)/B, B>>>(
         s_d_R_d, s_d_U_d, lev.d_dm, nz,
         G_const, P_surf_floor, CQ, ZSH,
@@ -1380,6 +1392,14 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
     int N = N_dof, B = 256;
     double inv_dt = 1.0 / dt;
     double init_res = -1.0;
+    // Refresh K_conv ONCE per timestep (not per Newton iter). Oscillating K
+    // between iters — because K depends on super-adiabaticity which is very
+    // sensitive to T — destabilises Newton at high resolution. Freezing K at
+    // the start-of-step state mirrors what BE-split does (fully lagged).
+    if (mlt_enabled && radiation_enabled && use_eos) {
+        unpack_state_to_device();
+        refresh_K_conv_implicit();
+    }
     for (int it = 0; it < newton_max_iter; ++it) {
         // Refresh primitives first so build_scaling sees current ρ/P/e.
         // compute_F_implicit also unpacks, but the scaling kernel needs

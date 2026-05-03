@@ -37,6 +37,11 @@ struct RadParams {
     // be arrested by H⁻ opacity blow-up. 0 = no floor.
     double T_phot_floor = 0.0;
     OpacityParams opa;
+    // MLT convection: Picard-lagged K_conv per zone (nullptr ⇒ no MLT).
+    // F_conv_face = A_face · K_face · (T_L − T_R) / Δr_zc, linear in T.
+    // K_face = 0.5·(K_conv[L] + K_conv[R]). Treated as scalar (not Dual)
+    // since K is lagged between Newton solves.
+    const double* K_conv = nullptr;
 };
 
 // PI constants (match radial1d_kernels.cuh)
@@ -123,7 +128,8 @@ __host__ __device__ inline dual::Dual<N> rad_face_L_dual(
     const dual::Dual<N>& rho_L_d, const dual::Dual<N>& T_L_d,
     const dual::Dual<N>& rho_R_d, const dual::Dual<N>& T_R_d,
     const dual::Dual<N>& r_face_d, double dr_zc,
-    const RadParams& rad)
+    const RadParams& rad,
+    double K_face = 0.0)   // Picard-lagged MLT conductivity at this face
 {
     using dual::Dual;
     double rho_face_v = 0.5 * (rho_L_d.v + rho_R_d.v);
@@ -140,7 +146,13 @@ __host__ __device__ inline dual::Dual<N> rad_face_L_dual(
     Dual<N> TR2 = T_R_d * T_R_d;
     Dual<N> TR4 = TR2 * TR2;
     double dr = dr_zc > 1e-30 ? dr_zc : 1e-30;
-    return A_face * (D_v * rad.a_rad / dr) * (TL4 - TR4);
+    Dual<N> L = A_face * (D_v * rad.a_rad / dr) * (TL4 - TR4);
+    // MLT convective flux (Picard-lagged K). Linear in T.
+    //   F_conv = A_face · K_face · (T_L − T_R) / Δr_zc
+    if (K_face > 0.0) {
+        L = L + A_face * (K_face / dr) * (T_L_d - T_R_d);
+    }
+    return L;
 }
 
 // Compute residual R = R(U) for one zone k and write face-v, face-r, zone-e
@@ -319,8 +331,12 @@ __host__ __device__ inline void residual_zone_dual(
             double rc_lo = 0.5 * (r_face(k-1).v + r_face(k).v);
             double rc_hi = 0.5 * (r_face(k).v   + r_face(k+1).v);
             double dr_zc = rc_hi - rc_lo;
+            double K_face = 0.0;
+            if (rad.K_conv != nullptr) {
+                K_face = 0.5 * (rad.K_conv[k-1] + rad.K_conv[k]);
+            }
             L_in = rad_face_L_dual<N>(rho_m, T_m, rho_k, T_k,
-                                       r_face(k), dr_zc, rad);
+                                       r_face(k), dr_zc, rad, K_face);
         }
 
         // Outer face (k+1)
@@ -339,8 +355,12 @@ __host__ __device__ inline void residual_zone_dual(
             double rc_lo = 0.5 * (r_face(k).v   + r_face(k+1).v);
             double rc_hi = 0.5 * (r_face(k+1).v + r_face(k+2).v);
             double dr_zc = rc_hi - rc_lo;
+            double K_face = 0.0;
+            if (rad.K_conv != nullptr) {
+                K_face = 0.5 * (rad.K_conv[k] + rad.K_conv[k+1]);
+            }
             L_out = rad_face_L_dual<N>(rho_k, T_k, rho_j, T_j,
-                                        r_face(k+1), dr_zc, rad);
+                                        r_face(k+1), dr_zc, rad, K_face);
         } else {
             // Surface: photospheric (τ=2/3) BC. Integrate τ inward from the
             // outer boundary:  τ(j) = Σ_{i=j..nz-1} κ(ρ_i,T_i) · ρ_i · Δr_i.

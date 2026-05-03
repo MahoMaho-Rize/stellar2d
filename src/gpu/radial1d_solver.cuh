@@ -381,6 +381,11 @@ struct Radial1DSolver {
     void pack_state_from_device();     // writes (d_v, d_r, d_e_int) → d_U
     void unpack_state_to_device();     // writes d_U → (d_v, d_r, d_e_int) + refreshes primitives
     void snapshot_hse_implicit();      // computes d_R_hse from current HSE state
+    // Picard-lag refresh of MLT conductivity K_conv[0..nz-1] from current ρ/P/T.
+    // Called once per Newton iteration so the rad-in-F residual can include a
+    // convective-flux term F_conv ∝ K_face · (T_L − T_R), linear in T. K stays
+    // constant during a Newton solve but updates across Newton outer iters.
+    void refresh_K_conv_implicit();
     double step_implicit(double t, double t_end, double dt_try);  // returns dt actually taken
     int    newton_solve_implicit(double dt);
     int    gmres_solve_implicit(double* d_x, const double* d_b, double inv_dt, double tol, int max_iter);

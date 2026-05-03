@@ -1288,7 +1288,19 @@ __global__ static void k_rad1d_mlt_cond(
     double cs = eos.sound_speed(rho_k, P_k);
     if (v_conv > cs) v_conv = cs;
 
-    K_conv[k] = rho_k * cp * ell * v_conv;
+    // Diffusion-limit cap on K_conv: don't let the convective flux exceed
+    // what radiative diffusion delivers at the same level × some multiplier.
+    //   D_rad = c / (3 κ ρ)    (rad diffusivity, cm²/s)
+    //   K_rad_equiv = ρ cp D_rad   (erg/s/cm/K equivalent)
+    // Convection in pre-MS envelopes really is ~100-1000× more efficient
+    // than rad — leave plenty of headroom but don't blow up.
+    double kap_c  = kap_k > 1e-30 ? kap_k : 1e-30;
+    double D_rad  = c_light / (3.0 * kap_c * rho_k);
+    double K_rad  = rho_k * cp * D_rad;
+    double K_cap  = 1.0e4 * K_rad;  // 10⁴× rad diffusion; plenty of margin
+
+    double K_raw = rho_k * cp * ell * v_conv;
+    K_conv[k] = fmin(K_raw, K_cap);
 }
 
 // Kernel: compute T from (ρ, e) into T_work (used both for init + Picard)
@@ -1300,6 +1312,35 @@ __global__ static void k_rad1d_T_from_rhoe(
     double r = fmax(rho[k], 1e-30);
     double e = fmax(e_int[k], 1e-30);
     T[k] = fmax(eos.temperature_from_rho_e(r, e), 1e-12);
+}
+
+// Picard-lag MLT refresh for rad-in-F path. Builds K_conv[0..nz-1] from
+// current device state (ρ, P, T(ρ,e)). Called from the implicit Newton outer
+// loop so each iter sees an up-to-date but frozen convective conductivity.
+void Radial1DSolver::refresh_K_conv_implicit() {
+    if (!mlt_enabled || !radiation_enabled || !use_eos) return;
+    int nz = lev.nz, B = 256;
+    if (d_K_conv == nullptr) {
+        CUDA_CHECK(cudaMalloc(&d_K_conv, nz * sizeof(double)));
+    }
+    // Need enclosed mass M[0..nz] at faces and T at zone centres. Scratch
+    // T buffer reused per call — small (nz doubles).
+    static double* d_T_scratch = nullptr;
+    static int cached_nz = 0;
+    if (cached_nz != nz) {
+        if (d_T_scratch) cudaFree(d_T_scratch);
+        CUDA_CHECK(cudaMalloc(&d_T_scratch, nz * sizeof(double)));
+        cached_nz = nz;
+    }
+    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    k_rad1d_T_from_rhoe<<<(nz+B-1)/B, B>>>(
+        lev.d_rho, lev.d_e_int, d_T_scratch, nz, eos);
+    OpacityParams opa;
+    fill_opacity_params(opa);
+    k_rad1d_mlt_cond<<<(nz+B-1)/B, B>>>(
+        d_T_scratch, lev.d_rho, lev.d_P, lev.d_M, lev.d_r,
+        d_K_conv, nz, eos, G_const, mlt_alpha,
+        rad_a_rad, rad_c_light, opa);
 }
 
 // Kernel: assemble tridiag for BE rad diffusion with Picard T⁴ linearization.
