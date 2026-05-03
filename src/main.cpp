@@ -77,6 +77,7 @@ struct SimConfig {
     double dt_implicit = 0.0;        // fixed dt for --implicit;<=0 uses acoustic CFL × scale
     double dt_implicit_scale = 1.0;  // multiplier on CFL dt when dt_implicit<=0
     bool no_viallet = false;         // dev toggle: disable Viallet L/R scaling in implicit
+    bool precond_tridiag = false;    // implicit: block-tridiag PC (assembled from 9 colored FD matvecs)
     int hse_resnap_interval = 0;     // implicit: re-snapshot R_hse every N steps (0=off)
     double nuc_compress_frac = 0.0;  // dynamic nuc scale: ε·dt/(cv·T) ≤ this (0=off)
     bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
@@ -329,6 +330,8 @@ int main(int argc, char** argv) {
             cfg.dt_implicit_scale = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--no-viallet") == 0)
             cfg.no_viallet = true;
+        else if (std::strcmp(argv[i], "--precond-tridiag") == 0)
+            cfg.precond_tridiag = true;
         else if (std::strcmp(argv[i], "--hse-resnap") == 0 && i + 1 < argc)
             cfg.hse_resnap_interval = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--nuc-compress") == 0 && i + 1 < argc)
@@ -892,6 +895,7 @@ int main(int argc, char** argv) {
         if (cfg.implicit_mode) {
             r1d.implicit_enabled = true;
             if (cfg.no_viallet) r1d.use_viallet_scaling = false;
+            r1d.precond_tridiag = cfg.precond_tridiag;
             r1d.hse_resnap_interval = cfg.hse_resnap_interval;
             r1d.nuc_compress_frac = cfg.nuc_compress_frac;
             r1d.init_implicit();

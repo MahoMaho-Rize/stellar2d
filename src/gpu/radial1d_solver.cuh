@@ -312,6 +312,28 @@ struct Radial1DSolver {
     double* d_Z[GMRES_K] = {};         // preconditioned directions
     double* d_gmres_w = nullptr;
 
+    // ============================================================
+    // Block-tridiag preconditioner (plan: autodiff_jacobian_plan.md §B).
+    // Approximates the scaled Jacobian A = invL·J·R (the same matrix
+    // jfnk_matvec_implicit produces) as a block-tridiagonal operator
+    // with 3×3 blocks (one per zone, fields v/r/e). Assembled via 9
+    // colored FD matvecs (3 colors × 3 fields), refreshed each Newton
+    // step. Block-Thomas forward/backward sweep provides GMRES PC.
+    //
+    // Layout (row-major, per zone i ∈ [0, nz)):
+    //   A_diag  [i]  : 3×3 block, column in U at zone i
+    //   A_lower [i]  : 3×3 block, column in U at zone i-1 (lower diag; A_lower[0] unused)
+    //   A_upper [i]  : 3×3 block, column in U at zone i+1 (upper; A_upper[nz-1] unused)
+    // Blocks stored row-major in 9 doubles each.
+    bool precond_tridiag = false;      // toggle: off = identity PC (legacy)
+    double* d_A_diag  = nullptr;       // nz · 9 doubles
+    double* d_A_lower = nullptr;
+    double* d_A_upper = nullptr;
+    // Thomas sweep scratch (host-side, nz small)
+    double* d_thomas_rhs = nullptr;    // nz · 3 doubles (working rhs, copies of subvector)
+    double* d_thomas_y   = nullptr;    // nz · 3 doubles (intermediate)
+    double* d_matvec_scratch = nullptr;// N_dof working buffer for PC assembly probes
+
     // Params
     bool use_viallet_scaling = true;
     double viallet_alpha1 = 1e-5;
@@ -337,6 +359,13 @@ struct Radial1DSolver {
     int    gmres_solve_implicit(double* d_x, const double* d_b, double inv_dt, double tol, int max_iter);
     void   jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, double inv_dt);
     void   apply_precond_implicit(const double* d_v_in, double* d_Mv, double inv_dt);
+    // Build the block-tridiag preconditioner approximation of the current
+    // scaled Jacobian. Calls jfnk_matvec_implicit 9 times (3 colors × 3 fields)
+    // to extract the 9-entry 3×3 block per zone. Cheap: 18 F evals vs ~60 in a
+    // 30-iter GMRES cycle.
+    void   build_precond_tridiag(double inv_dt);
+    // Apply block-Thomas forward/backward sweep: M⁻¹ · v_in → Mv.
+    void   apply_precond_tridiag(const double* d_v_in, double* d_Mv);
     void   compute_R_implicit();       // evaluates R(U) into d_R using current (d_v,d_r,d_e_int)
     void   compute_F_implicit(double inv_dt);  // d_F = (d_U - d_Un)/dt - (d_R - d_R_hse)
     double residual_norm_implicit();

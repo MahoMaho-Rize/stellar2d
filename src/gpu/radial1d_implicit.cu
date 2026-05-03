@@ -421,8 +421,20 @@ void Radial1DSolver::init_implicit() {
     for (int k = 0; k <= GMRES_K; ++k) mal(&d_V[k]);
     for (int k = 0; k <  GMRES_K; ++k) mal(&d_Z[k]);
     mal(&d_gmres_w);
-    std::fprintf(stderr, "  radial1d implicit: allocated (N_dof=%d, Viallet=%s)\n",
-                 N_dof, use_viallet_scaling ? "ON" : "OFF");
+    // Block-tridiag PC scratch: 9 doubles per zone × 3 block arrays.
+    size_t nb_blk = nz * 9 * sizeof(double);
+    CUDA_CHECK(cudaMalloc(&d_A_diag,  nb_blk));
+    CUDA_CHECK(cudaMalloc(&d_A_lower, nb_blk));
+    CUDA_CHECK(cudaMalloc(&d_A_upper, nb_blk));
+    CUDA_CHECK(cudaMemset(d_A_diag,  0, nb_blk));
+    CUDA_CHECK(cudaMemset(d_A_lower, 0, nb_blk));
+    CUDA_CHECK(cudaMemset(d_A_upper, 0, nb_blk));
+    CUDA_CHECK(cudaMalloc(&d_thomas_y, nz * 3 * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_thomas_rhs, nz * 3 * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_matvec_scratch, nb));
+    std::fprintf(stderr, "  radial1d implicit: allocated (N_dof=%d, Viallet=%s, block-tridiag PC=%s)\n",
+                 N_dof, use_viallet_scaling ? "ON" : "OFF",
+                 precond_tridiag ? "ON" : "OFF");
 }
 
 void Radial1DSolver::destroy_implicit() {
@@ -437,6 +449,9 @@ void Radial1DSolver::destroy_implicit() {
     d_gmres_w = nullptr;
     for (int k = 0; k <= GMRES_K; ++k) d_V[k] = nullptr;
     for (int k = 0; k <  GMRES_K; ++k) d_Z[k] = nullptr;
+    auto f2 = [](double** p) { if (*p) { cudaFree(*p); *p = nullptr; } };
+    f2(&d_A_diag); f2(&d_A_lower); f2(&d_A_upper);
+    f2(&d_thomas_y); f2(&d_thomas_rhs); f2(&d_matvec_scratch);
 }
 
 // ---------------------------------------------------------------------
@@ -618,9 +633,269 @@ void Radial1DSolver::jfnk_matvec_implicit(const double* d_v_in, double* d_Jv, do
     unpack_state_to_device();
 }
 
-void Radial1DSolver::apply_precond_implicit(const double* d_v_in, double* d_Mv, double /*inv_dt*/) {
+void Radial1DSolver::apply_precond_implicit(const double* d_v_in, double* d_Mv, double inv_dt) {
+    if (precond_tridiag && d_A_diag != nullptr) {
+        apply_precond_tridiag(d_v_in, d_Mv);
+        return;
+    }
     int N = N_dof, B = 256;
     k_r1di_copy<<<(N+B-1)/B, B>>>(d_Mv, d_v_in, N);
+    (void)inv_dt;
+}
+
+// ---------------------------------------------------------------------
+// Block-tridiag preconditioner: build + apply.
+//
+// We assemble an approximation to A = invL · J · R (the scaled operator
+// that jfnk_matvec_implicit computes). A is structurally block-tridiag
+// with 3×3 blocks (per zone × 3 fields). To extract the entries with
+// minimum matvec count we use a 3-coloring in the zone axis:
+//   color c ∈ {0,1,2}: e_i = 1 for all zones i where i%3 == c
+// For a given field f ∈ {0,1,2}, probing e_i produces J · e_i whose
+// components at zone i contribute to the (f,f) diagonal and whose
+// components at zone i±1 contribute to upper/lower blocks. Since zones
+// with the same color are >= 3 apart, there is no overlap.
+//
+// Total: 3 colors × 3 fields = 9 matvecs ≈ 18 F evals per Newton step.
+// Compare: a 30-iter GMRES cycle today costs ≈ 60 F evals.
+// ---------------------------------------------------------------------
+__global__ static void k_r1di_fill_color_probe(
+    double* d_v_in, int n_per_field, int color, int field)
+{
+    // Set d_v_in = e-vector for (color, field). Zone i, field f writes
+    // v_in[field*n_per_field + i] = 1 if i%3 == color.
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n_per_field) return;
+    for (int ff = 0; ff < 3; ++ff) {
+        int idx = ff * n_per_field + i;
+        d_v_in[idx] = (ff == field && (i % 3 == color)) ? 1.0 : 0.0;
+    }
+}
+
+// Given the Jv output of a colored probe with (color, field) = (c, f),
+// extract the column entries into the correct block slots:
+//   Jv[row g, zone j] where j%3 == c  → A_diag[j].row_g.col_f
+//   Jv[row g, zone j] where j%3 == c-1 → A_upper[j].row_g.col_f   (j is below a probed cell)
+//   Jv[row g, zone j] where j%3 == c+1 → A_lower[j].row_g.col_f   (j is above a probed cell)
+// Block layout: A_* array has nz·9 doubles, block i row-major: 3 rows × 3 cols.
+__global__ static void k_r1di_extract_block_column(
+    const double* d_Jv, double* d_A_diag, double* d_A_lower, double* d_A_upper,
+    int n_per_field, int color, int field)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j >= n_per_field) return;
+    int nz = n_per_field;
+    for (int g = 0; g < 3; ++g) {
+        double val = d_Jv[g * nz + j];
+        int blk_offset = j * 9 + g * 3 + field;  // row g, col field, in 3×3 block
+        int jmod = j % 3;
+        if (jmod == color) {
+            d_A_diag[blk_offset] = val;
+        } else if (jmod == (color + 1) % 3) {
+            // zone j sits "above" a probed zone (probed at j-1)
+            d_A_lower[blk_offset] = val;
+        } else if (jmod == (color + 2) % 3) {
+            // zone j sits "below" a probed zone (probed at j+1)
+            d_A_upper[blk_offset] = val;
+        }
+    }
+}
+
+void Radial1DSolver::build_precond_tridiag(double inv_dt) {
+    int nz = lev.nz, B = 256;
+    int N = N_dof;
+    CUDA_CHECK(cudaMemset(d_A_diag,  0, nz * 9 * sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_A_lower, 0, nz * 9 * sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_A_upper, 0, nz * 9 * sizeof(double)));
+
+    // jfnk_matvec_implicit reads state from d_U / primitives. Cache F_k since
+    // jfnk_matvec perturbs U and restores via d_Ubak. Existing Newton caller
+    // already cached d_Fk before calling us; we don't need to re-evaluate F.
+    // The matvec itself uses d_Fk (assumed current) for the finite-difference
+    // baseline — which is exactly what the Newton outer loop guarantees.
+
+    // We need a dedicated output buffer distinct from both d_matvec_scratch
+    // (the probe input) and d_gmres_w (used as workspace by jfnk_matvec).
+    // Allocate on demand (tiny overhead since done once per build call).
+    double* d_probe_out = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_probe_out, N * sizeof(double)));
+
+    for (int color = 0; color < 3; ++color) {
+        for (int field = 0; field < 3; ++field) {
+            k_r1di_fill_color_probe<<<(nz+B-1)/B, B>>>(
+                d_matvec_scratch, nz, color, field);
+            jfnk_matvec_implicit(d_matvec_scratch, d_probe_out, inv_dt);
+            k_r1di_extract_block_column<<<(nz+B-1)/B, B>>>(
+                d_probe_out, d_A_diag, d_A_lower, d_A_upper,
+                nz, color, field);
+        }
+    }
+
+    CUDA_CHECK(cudaFree(d_probe_out));
+}
+
+// Block-Thomas sweep on the CPU. nz is small (128–512), the 3×3 per-block
+// LU is trivial, no need to run this on GPU. Costs one D→H of three
+// nz·9-double arrays + one H→D of the result.
+void Radial1DSolver::apply_precond_tridiag(const double* d_v_in, double* d_Mv)
+{
+    int nz = lev.nz, N = N_dof;
+    std::vector<double> h_D(nz*9), h_L(nz*9), h_U(nz*9);
+    std::vector<double> h_rhs(N), h_y(N);
+
+    CUDA_CHECK(cudaMemcpy(h_D.data(), d_A_diag,  nz*9*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_L.data(), d_A_lower, nz*9*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_U.data(), d_A_upper, nz*9*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_rhs.data(), d_v_in, N*sizeof(double), cudaMemcpyDeviceToHost));
+
+    // Reorganise rhs from field-major (packed) to zone-major (3 per zone).
+    // rhs_zone[i*3 + g] = h_rhs[g*nz + i]
+    auto rhs_z = [&](int i, int g) -> double& {
+        static thread_local std::vector<double> z(nz*3);
+        (void)z;  // placeholder
+        return h_rhs[g*nz + i];  // we'll index packed directly below
+    };
+    (void)rhs_z;
+
+    // Local helpers: 3x3 matrix ops. A is row-major 9 doubles.
+    auto idx3 = [](int r, int c) { return r*3 + c; };
+
+    auto mat_add_to = [&](double* A, const double* B_minus_3x3) {
+        for (int k = 0; k < 9; ++k) A[k] += B_minus_3x3[k];
+    };
+    (void)mat_add_to;
+
+    auto mat3_mul = [&](const double* A, const double* B, double* C) {
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c) {
+                double s = 0;
+                for (int k = 0; k < 3; ++k) s += A[idx3(r,k)] * B[idx3(k,c)];
+                C[idx3(r,c)] = s;
+            }
+    };
+    auto mat3_sub = [&](double* A, const double* B) {
+        for (int k = 0; k < 9; ++k) A[k] -= B[k];
+    };
+    auto mat3_vec = [&](const double* A, const double* x, double* y) {
+        for (int r = 0; r < 3; ++r) {
+            double s = 0;
+            for (int c = 0; c < 3; ++c) s += A[idx3(r,c)] * x[c];
+            y[r] = s;
+        }
+    };
+    // Solve 3x3 A·x = b using partial-pivot LU on a 3x4 augmented matrix.
+    auto solve3x3 = [&](const double* A_in, const double* b_in, double* x_out) -> bool {
+        double A[3][4];
+        for (int r = 0; r < 3; ++r) {
+            for (int c = 0; c < 3; ++c) A[r][c] = A_in[idx3(r,c)];
+            A[r][3] = b_in[r];
+        }
+        for (int k = 0; k < 3; ++k) {
+            int piv = k;
+            double pivmax = std::fabs(A[k][k]);
+            for (int r = k+1; r < 3; ++r) {
+                double a = std::fabs(A[r][k]);
+                if (a > pivmax) { pivmax = a; piv = r; }
+            }
+            if (pivmax < 1e-30) return false;
+            if (piv != k) {
+                for (int c = 0; c < 4; ++c) std::swap(A[k][c], A[piv][c]);
+            }
+            double inv_p = 1.0 / A[k][k];
+            for (int r = k+1; r < 3; ++r) {
+                double m = A[r][k] * inv_p;
+                for (int c = k; c < 4; ++c) A[r][c] -= m * A[k][c];
+            }
+        }
+        for (int r = 2; r >= 0; --r) {
+            double s = A[r][3];
+            for (int c = r+1; c < 3; ++c) s -= A[r][c] * x_out[c];
+            x_out[r] = s / A[r][r];
+        }
+        return true;
+    };
+
+    // Thomas forward: modify D_i, y_i in place.
+    //   For i = 0:      D₀' = D₀,         y₀ = D₀⁻¹ rhs₀
+    //   For i > 0:      D_i' = D_i − L_i D_{i-1}'⁻¹ U_{i-1}
+    //                   y_i  = D_i'⁻¹ (rhs_i − L_i y_{i-1})
+    // We avoid inverting D by solving (D_i') · y_i = rhs_i − L_i y_{i-1}.
+    //
+    // Since D_{i-1}⁻¹ · U_{i-1} is needed to form D_i', we store it as "Uhat".
+    std::vector<double> Uhat_store(nz*9, 0.0);  // Uhat_i = (D'_i)⁻¹ · U_i
+
+    // Working copies of D along the sweep
+    std::vector<double> Dp(9);
+    std::vector<double> rhs_i(3), y_i(3), tmp3(3), tmp33(9);
+
+    // i = 0
+    for (int k = 0; k < 9; ++k) Dp[k] = h_D[k];       // D'_0 = D_0
+    // Solve D'_0 · Uhat_0 = U_0 (column-wise)
+    for (int c = 0; c < 3; ++c) {
+        double col_U[3] = { h_U[idx3(0,c)], h_U[idx3(1,c)], h_U[idx3(2,c)] };
+        double col_Uhat[3];
+        if (!solve3x3(Dp.data(), col_U, col_Uhat)) {
+            std::fprintf(stderr, "  [tridiag PC] singular D'_0 col %d\n", c);
+            cudaMemcpy(d_Mv, d_v_in, N*sizeof(double), cudaMemcpyDeviceToDevice);
+            return;
+        }
+        for (int r = 0; r < 3; ++r) Uhat_store[idx3(r,c)] = col_Uhat[r];
+    }
+    // Solve D'_0 · y_0 = rhs_0  (rhs_0 is field-major packed rhs)
+    for (int g = 0; g < 3; ++g) rhs_i[g] = h_rhs[g*nz + 0];
+    if (!solve3x3(Dp.data(), rhs_i.data(), y_i.data())) {
+        std::fprintf(stderr, "  [tridiag PC] singular D'_0 for y\n");
+        cudaMemcpy(d_Mv, d_v_in, N*sizeof(double), cudaMemcpyDeviceToDevice);
+        return;
+    }
+    for (int g = 0; g < 3; ++g) h_y[g*nz + 0] = y_i[g];
+
+    // i = 1 .. nz-1
+    for (int i = 1; i < nz; ++i) {
+        // D'_i = D_i − L_i · Uhat_{i-1}
+        double* Li = &h_L[i*9];
+        double* Di = &h_D[i*9];
+        double* Uhat_prev = &Uhat_store[(i-1)*9];
+        mat3_mul(Li, Uhat_prev, tmp33.data());
+        for (int k = 0; k < 9; ++k) Dp[k] = Di[k] - tmp33[k];
+        // rhs_i = rhs_i − L_i · y_{i-1}
+        double y_prev[3] = { h_y[0*nz + (i-1)], h_y[1*nz + (i-1)], h_y[2*nz + (i-1)] };
+        mat3_vec(Li, y_prev, tmp3.data());
+        for (int g = 0; g < 3; ++g) rhs_i[g] = h_rhs[g*nz + i] - tmp3[g];
+        // y_i = D'_i⁻¹ rhs_i
+        if (!solve3x3(Dp.data(), rhs_i.data(), y_i.data())) {
+            std::fprintf(stderr, "  [tridiag PC] singular D'_%d\n", i);
+            cudaMemcpy(d_Mv, d_v_in, N*sizeof(double), cudaMemcpyDeviceToDevice);
+            return;
+        }
+        for (int g = 0; g < 3; ++g) h_y[g*nz + i] = y_i[g];
+        // Uhat_i = D'_i⁻¹ U_i (only if i < nz-1; at i=nz-1, U_i is unused)
+        if (i < nz - 1) {
+            double* Ui = &h_U[i*9];
+            for (int c = 0; c < 3; ++c) {
+                double col_U[3] = { Ui[idx3(0,c)], Ui[idx3(1,c)], Ui[idx3(2,c)] };
+                double col_Uhat[3];
+                if (!solve3x3(Dp.data(), col_U, col_Uhat)) {
+                    std::fprintf(stderr, "  [tridiag PC] singular D'_%d for Uhat\n", i);
+                    cudaMemcpy(d_Mv, d_v_in, N*sizeof(double), cudaMemcpyDeviceToDevice);
+                    return;
+                }
+                for (int r = 0; r < 3; ++r) Uhat_store[i*9 + idx3(r,c)] = col_Uhat[r];
+            }
+        }
+    }
+
+    // Backward substitution: x_{nz-1} = y_{nz-1}; x_i = y_i − Uhat_i · x_{i+1}
+    std::vector<double> h_x(N, 0.0);
+    for (int g = 0; g < 3; ++g) h_x[g*nz + (nz-1)] = h_y[g*nz + (nz-1)];
+    for (int i = nz - 2; i >= 0; --i) {
+        double x_next[3] = { h_x[0*nz + (i+1)], h_x[1*nz + (i+1)], h_x[2*nz + (i+1)] };
+        mat3_vec(&Uhat_store[i*9], x_next, tmp3.data());
+        for (int g = 0; g < 3; ++g)
+            h_x[g*nz + i] = h_y[g*nz + i] - tmp3[g];
+    }
+
+    CUDA_CHECK(cudaMemcpy(d_Mv, h_x.data(), N*sizeof(double), cudaMemcpyHostToDevice));
 }
 
 // ---------------------------------------------------------------------
@@ -867,6 +1142,17 @@ int Radial1DSolver::newton_solve_implicit(double dt) {
         if (!std::isfinite(res_norm)) {
             std::fprintf(stderr, "  r1di_newton: NaN residual at iter %d\n", it);
             return -1;
+        }
+
+        // Build block-tridiag preconditioner BEFORE scaling d_F into the
+        // GMRES RHS — jfnk_matvec_implicit overwrites d_F via its internal
+        // compute_F calls, so we must not pre-populate d_F with invL·F_k
+        // before the PC build. Refreshed every Newton iter (9 matvecs).
+        if (precond_tridiag) {
+            build_precond_tridiag(inv_dt);
+            // Re-evaluate d_F at U (PC build's last matvec restored U → d_Ubak
+            // but d_F still holds F(U_perturbed)). Restore d_F = d_Fk.
+            k_r1di_copy<<<(N+B-1)/B, B>>>(d_F, d_Fk, N);
         }
 
         // Scale RHS: F ← invL · F  (d_F contains F_k; use d_F as d_x-RHS temp)
