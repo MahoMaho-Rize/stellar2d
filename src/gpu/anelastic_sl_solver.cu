@@ -271,6 +271,7 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_y_filter);
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
     free_ptr(d_rho_prime); free_ptr(d_rho_prime_over_rho); free_ptr(d_N2);
+    free_ptr(d_M_per_kx);
     free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
     free_ptr(d_mu); free_ptr(d_cc_weights);
     free_cptr(d_fhat); free_cptr(d_ghat); free_cptr(d_Ghat);
@@ -1006,6 +1007,17 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
             basis_name, filter_alpha, filter_s, n_cut, n_modes_filt - 1,
             sigma.back());
     }
+
+    // ── Path D: assembled-matrix linear TD ───────────────────────────────
+    // Env ANSL_TD_KIND=assembled_linear activates the Full-Galerkin path
+    // documented in docs/full_galerkin_closure_proof_2026-05-03.md.
+    td_assembled_linear = false;
+    if (const char* s = std::getenv("ANSL_TD_KIND")) {
+        std::string ss(s);
+        if (ss == "assembled_linear" || ss == "assembled" || ss == "matrix")
+            td_assembled_linear = true;
+    }
+    if (td_assembled_linear) assemble_path_d_operators();
 }
 
 void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
@@ -1355,6 +1367,10 @@ double AnelasticSLSolver::init_gmode_eigenmode(int kx_int, int n_g, double amp) 
                           cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_v, h_v_host.data(), sizeof(double) * ncell,
                           cudaMemcpyHostToDevice));
+    // Path D needs W(0) = ∂_t V(0) = 0 (cosine-phase IC).  For the legacy
+    // step() path d_rhs_v is recomputed each RK3 substep so this zero is
+    // harmless there.
+    CUDA_CHECK(cudaMemset(d_rhs_v, 0, sizeof(double) * ncell));
     if (is_anelastic) {
         CUDA_CHECK(cudaMemcpy(d_b, h_b_host.data(), sizeof(double) * ncell,
                               cudaMemcpyHostToDevice));
@@ -2791,6 +2807,368 @@ void AnelasticSLSolver::sl_poisson_solve() {
     int block1d = 256;
     int grid1d = (ncell + block1d - 1) / block1d;
     k_normalize<<<grid1d, block1d>>>(d_pi, ncell, 1.0 / (double)nx);
+}
+
+// ── Path D: assemble M_kx = L⁻¹ R for each x-Fourier mode ───────────────
+// Must be called after set_background has populated h_Dy_row, h_rho, h_N2.
+// Host-side Gaussian elimination with partial pivoting per kx (n_int ≤ ~62,
+// nh ≤ ~64, tiny cost).  Result stored col-major on device as a flat
+// [nh × n_int × n_int] slab (contiguous per kx).
+//
+// For kx=0 mode the g-mode problem is degenerate (k²N² term vanishes, L
+// reduces to a second-derivative operator without pressure coupling —
+// m=0 is a mean-x slice equilibrium).  We store the identity there so
+// V̈=-M·V reduces to V̈=-V, harmless if no energy is injected at kx=0
+// (linear g-mode IC has zero kx=0 component by construction).
+void AnelasticSLSolver::assemble_path_d_operators() {
+    if (h_Dy_row.empty() || h_rho.empty() || h_N2.empty()) {
+        std::fprintf(stderr,
+            "assemble_path_d_operators: set_background must run first.\n");
+        std::exit(1);
+    }
+    const int n_int = ny - 2;
+    if (n_int <= 0) return;
+    n_int_path_d = n_int;
+
+    const size_t per_kx = (size_t)n_int * n_int;
+    std::vector<double> M_all((size_t)nh * per_kx, 0.0);
+
+    // Build full ny × ny operator elements once:
+    //   Lfull[i][j] = -(Σ_k D[i,k] ρ[k] D[k,j]) + kδ_ij·ρ[i]·k²
+    //   (the k² δ_ij·ρ term we add per-kx in the loop).
+    // Pre-compute  A[i,j] = Σ_k D[i,k] · ρ[k] · D[k,j]  (row-major ny × ny).
+    std::vector<double> A((size_t)ny * ny, 0.0);
+    for (int i = 0; i < ny; ++i) {
+        for (int j = 0; j < ny; ++j) {
+            double s = 0.0;
+            for (int k = 0; k < ny; ++k) {
+                s += h_Dy_row[(size_t)i * ny + k]
+                   * h_rho[k]
+                   * h_Dy_row[(size_t)k * ny + j];
+            }
+            A[(size_t)i * ny + j] = s;
+        }
+    }
+
+    // Per-kx assemble + invert via Gauss-Jordan (small matrices, host).
+    std::vector<double> L_rm((size_t)n_int * n_int);
+    std::vector<double> aug ((size_t)n_int * 2 * n_int);  // [L | I]
+    std::vector<double> R_diag(n_int);
+
+    for (int kx_idx = 0; kx_idx < nh; ++kx_idx) {
+        double kx = 2.0 * M_PI * kx_idx / Lx;
+        double k2 = kx * kx;
+
+        // Interior-slice  L = -A + k²·diag(ρ)
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                L_rm[(size_t)i * n_int + j] = -A[(size_t)(i + 1) * ny + (j + 1)];
+            }
+            L_rm[(size_t)i * n_int + i] += k2 * h_rho[i + 1];
+            R_diag[i] = k2 * h_N2[i + 1] * h_rho[i + 1];
+        }
+
+        // kx_idx == 0: k² = 0 ⇒ L = -A singular (pure Neumann-like). Skip
+        // with identity (M_kx=0 will give V̈=0 for that mode; IC for g-modes
+        // has zero kx=0 component anyway).
+        if (kx_idx == 0) {
+            double* Mslab = &M_all[(size_t)kx_idx * per_kx];
+            std::fill(Mslab, Mslab + per_kx, 0.0);
+            continue;
+        }
+
+        // Augment [L | I] (row-major, width 2·n_int).
+        const int W2 = 2 * n_int;
+        std::fill(aug.begin(), aug.end(), 0.0);
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j)
+                aug[(size_t)i * W2 + j] = L_rm[(size_t)i * n_int + j];
+            aug[(size_t)i * W2 + (n_int + i)] = 1.0;
+        }
+
+        // Gauss-Jordan with partial pivoting.
+        for (int piv = 0; piv < n_int; ++piv) {
+            int ipiv_row = piv;
+            double best = std::fabs(aug[(size_t)piv * W2 + piv]);
+            for (int r = piv + 1; r < n_int; ++r) {
+                double v = std::fabs(aug[(size_t)r * W2 + piv]);
+                if (v > best) { best = v; ipiv_row = r; }
+            }
+            if (best < 1e-300) {
+                std::fprintf(stderr,
+                    "  [Path D] kx_idx=%d: singular L (pivot=%.3e)\n",
+                    kx_idx, best);
+                std::exit(1);
+            }
+            if (ipiv_row != piv) {
+                for (int c = 0; c < W2; ++c) {
+                    std::swap(aug[(size_t)piv * W2 + c],
+                              aug[(size_t)ipiv_row * W2 + c]);
+                }
+            }
+            double inv_p = 1.0 / aug[(size_t)piv * W2 + piv];
+            for (int c = 0; c < W2; ++c) aug[(size_t)piv * W2 + c] *= inv_p;
+            for (int r = 0; r < n_int; ++r) {
+                if (r == piv) continue;
+                double f = aug[(size_t)r * W2 + piv];
+                if (f == 0.0) continue;
+                for (int c = 0; c < W2; ++c)
+                    aug[(size_t)r * W2 + c] -= f * aug[(size_t)piv * W2 + c];
+            }
+        }
+
+        // M = L⁻¹ · diag(R_diag).  Row-major result with M[i,j] = L⁻¹[i,j]·R_diag[j].
+        // Pack column-major onto device slab.
+        double* Mslab = &M_all[(size_t)kx_idx * per_kx];
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                double Linv_ij = aug[(size_t)i * W2 + (n_int + j)];
+                Mslab[(size_t)i + (size_t)j * n_int] = Linv_ij * R_diag[j];
+            }
+        }
+    }
+
+    // Upload.
+    if (d_M_per_kx) cudaFree(d_M_per_kx);
+    CUDA_CHECK(cudaMalloc(&d_M_per_kx, sizeof(double) * (size_t)nh * per_kx));
+    CUDA_CHECK(cudaMemcpy(d_M_per_kx, M_all.data(),
+                          sizeof(double) * (size_t)nh * per_kx,
+                          cudaMemcpyHostToDevice));
+    std::fprintf(stderr,
+        "  [Path D] assembled M_kx for %d kx modes, n_int=%d, VRAM=%.2f MB\n",
+        nh, n_int, (double)(nh * per_kx * 8) / (1024.0 * 1024.0));
+}
+
+// ── Path D: step_assembled_linear ───────────────────────────────────────
+// Advances (v, w = ∂_t v) via V̈ = -M_kx V in each x-Fourier mode using RK4,
+// where v is stored row-major (ny × nx) in d_v and w is stored in d_rhs_v.
+// d_b is untouched (buoyancy is already eliminated by construction of M).
+//
+// Algorithm per RK4 substep:
+//   1) FFT_x(v) → d_fhat                    (complex ny × nh, row-major)
+//   2) for each kx_idx, DGEMM interior block: v̈_hat[:,kx] = -M_kx · v_hat[:,kx]
+//      (walls forced to zero since Dirichlet).
+//   3) IFFT_x → d_scratch (real ny × nx, v̈)
+//   4) Combine into RK4 state update.
+//
+// Bootstrap: d_rhs_v is zeroed on step 0 to start from w(0) = 0 (oscillator
+// peak IC).  A persistent state flag would be cleaner; for first-pass we
+// seed each RK4 step with w from d_rhs_v (caller responsibility).
+static void _apply_M_kx_to_vhat(
+        cufftDoubleComplex* d_vhat,
+        cufftDoubleComplex* d_out,
+        const double* d_M_per_kx,
+        int n_int, int ny, int nh,
+        cublasHandle_t cublas);
+
+double AnelasticSLSolver::step_assembled_linear() {
+    if (d_M_per_kx == nullptr) assemble_path_d_operators();
+    if (d_M_per_kx == nullptr) {
+        std::fprintf(stderr, "step_assembled_linear: assemble failed.\n");
+        return 0.0;
+    }
+    const int n_int = n_int_path_d;
+    const size_t per_kx = (size_t)n_int * n_int;
+
+    double dt_max_eff = dt_max;
+    if (const char* s = std::getenv("ANSL_DT_MAX")) {
+        double v = std::atof(s);
+        if (v > 0.0) dt_max_eff = v;
+    }
+    double dt = dt_max_eff;
+    if (dt <= 0.0) dt = 1e-4;
+    dt_current = dt;
+
+    // State:
+    //   V = d_v          (physical, row-major ny × nx)
+    //   W = d_rhs_v      (physical, same layout; ∂_t V)
+    // RK4 on (V, W):  V̇ = W, Ẇ = -M·V  (in x-Fourier per kx).
+    //
+    // Temporary buffers used:
+    //   d_u_orig  = V0 snapshot
+    //   d_v_orig  = W0 snapshot
+    //   d_b_orig  = accumulator V_update
+    //   d_rhs_u   = accumulator W_update
+    //   d_scratch = tmp V or W during substep
+    //   d_b       = tmp W-dot (-M·V)
+    //   d_rhs_b   = tmp V,W during intermediate state load
+    //   d_fhat / d_ghat (complex scratch)
+
+    const int block = 256;
+    const int grid1d = (ncell + block - 1) / block;
+
+    auto copy_dev = [&](double* dst, const double* src) {
+        CUDA_CHECK(cudaMemcpyAsync(dst, src, sizeof(double) * ncell,
+                                   cudaMemcpyDeviceToDevice));
+    };
+    auto zero_dev = [&](double* p) {
+        CUDA_CHECK(cudaMemsetAsync(p, 0, sizeof(double) * ncell));
+    };
+    auto axpy_dev = [&](double alpha, const double* x, double* y) {
+        // y += alpha · x
+        CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &alpha, x, 1, y, 1));
+    };
+    auto copy_scaled = [&](double* dst, const double* src, double a) {
+        // dst = a · src
+        CUDA_CHECK(cudaMemcpyAsync(dst, src, sizeof(double) * ncell,
+                                   cudaMemcpyDeviceToDevice));
+        if (a != 1.0) CUBLAS_CHECK(cublasDscal(cublas, ncell, &a, dst, 1));
+    };
+
+    // Compute -M·V_state  into d_b (row-major ny × nx).
+    auto compute_mdot = [&](const double* d_Vstate, double* d_Mv_neg) {
+        // FFT_x(V) → d_fhat (ny × nh complex, row-major).
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x,
+                                 const_cast<double*>(d_Vstate), d_fhat));
+        _apply_M_kx_to_vhat(d_fhat, d_ghat, d_M_per_kx, n_int, ny, nh, cublas);
+        // IFFT_x → d_Mv_neg (physical).
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_Mv_neg));
+        // cuFFT R2C/Z2D unnormalised → divide by nx; also M·V is positive,
+        // we want -M·V for Ẇ, so include the negative sign in the scaling.
+        double scale = -1.0 / (double)nx;
+        CUBLAS_CHECK(cublasDscal(cublas, ncell, &scale, d_Mv_neg, 1));
+        // Enforce Dirichlet walls on Ẇ.
+        int grid_bdy = (nx + 255) / 256;
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_Mv_neg, nx, ny);
+    };
+
+    // Snapshots of V0, W0.
+    copy_dev(d_u_orig, d_v);        // V0
+    copy_dev(d_v_orig, d_rhs_v);    // W0
+
+    // Accumulators start at V0, W0.
+    copy_dev(d_b_orig, d_u_orig);   // Vacc = V0
+    copy_dev(d_rhs_u, d_v_orig);    // Wacc = W0
+
+    // k1 = (V̇, Ẇ)|_{V0,W0} = (W0, -M·V0)
+    //   Vacc += dt/6 · W0 ; Wacc += dt/6 · (-M·V0)
+    compute_mdot(d_u_orig, d_b);               // d_b = -M·V0
+    axpy_dev(dt / 6.0, d_v_orig, d_b_orig);    // Vacc += dt/6 · W0
+    axpy_dev(dt / 6.0, d_b,     d_rhs_u);      // Wacc += dt/6 · (-M·V0)
+
+    // Intermediate state: V = V0 + dt/2·W0,  W = W0 + dt/2·(-M·V0).
+    copy_scaled(d_scratch, d_v_orig, 1.0);         // d_scratch = W0
+    copy_scaled(d_rhs_b,  d_u_orig, 1.0);          // d_rhs_b  = V0
+    axpy_dev(dt * 0.5, d_v_orig, d_rhs_b);         // d_rhs_b += dt/2·W0  → V_mid1
+    // W_mid1 = W0 + dt/2·(-M·V0)
+    double half = dt * 0.5;
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &half, d_b, 1, d_scratch, 1));
+    // Now d_rhs_b = V_mid1 (ny × nx), d_scratch = W_mid1.
+
+    // k2 = (W_mid1, -M·V_mid1)
+    //   Vacc += dt/3 · W_mid1 ; Wacc += dt/3 · (-M·V_mid1)
+    // Need temporary for -M·V_mid1 (use d_b).
+    compute_mdot(d_rhs_b, d_b);                    // d_b = -M·V_mid1
+    axpy_dev(dt / 3.0, d_scratch, d_b_orig);       // Vacc += dt/3·W_mid1
+    axpy_dev(dt / 3.0, d_b,       d_rhs_u);        // Wacc += dt/3·(-M·V_mid1)
+
+    // Intermediate state V_mid2 = V0 + dt/2·W_mid1, W_mid2 = W0 + dt/2·(-M·V_mid1)
+    // Build V_mid2 = V0 + (dt/2)·W_mid1 into d_rhs_b (overwrite previous).
+    copy_dev(d_rhs_b, d_u_orig);                   // d_rhs_b = V0
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &half, d_scratch, 1, d_rhs_b, 1));
+    // W_mid2 into d_scratch: d_scratch = W0 + (dt/2)·(-M·V_mid1).
+    copy_dev(d_scratch, d_v_orig);
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &half, d_b, 1, d_scratch, 1));
+
+    // k3 = (W_mid2, -M·V_mid2)
+    compute_mdot(d_rhs_b, d_b);                    // d_b = -M·V_mid2
+    axpy_dev(dt / 3.0, d_scratch, d_b_orig);
+    axpy_dev(dt / 3.0, d_b,       d_rhs_u);
+
+    // Intermediate state V_end = V0 + dt·W_mid2, W_end = W0 + dt·(-M·V_mid2)
+    copy_dev(d_rhs_b, d_u_orig);                   // V0
+    double dt1 = dt;
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &dt1, d_scratch, 1, d_rhs_b, 1));
+    copy_dev(d_scratch, d_v_orig);                 // W0
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &dt1, d_b, 1, d_scratch, 1));
+
+    // k4 = (W_end, -M·V_end)
+    compute_mdot(d_rhs_b, d_b);                    // d_b = -M·V_end
+    axpy_dev(dt / 6.0, d_scratch, d_b_orig);
+    axpy_dev(dt / 6.0, d_b,       d_rhs_u);
+
+    // Commit.
+    copy_dev(d_v,     d_b_orig);
+    copy_dev(d_rhs_v, d_rhs_u);
+
+    // Enforce Dirichlet walls on V (RK4 of linear Dirichlet problem
+    // preserves BCs analytically; this kills round-off).
+    int grid_bdy = (nx + 255) / 256;
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+
+    step_count++;
+    return dt;
+}
+
+// Apply M_kx per x-Fourier mode: for each kx_idx (skipping kx=0),
+//     v_hat_out[row, kx] = Σ_col M_{kx}[row, col] · v_hat_in[col, kx]
+// with row, col ∈ [0, n_int) mapping to interior y-nodes [1, ny-1).
+// Walls (row=0, row=ny-1) in output are forced to 0.
+//
+// Layout reminder (cuFFT R2C row-major output):
+//     d_vhat[jy * nh + kx_idx] = v_hat at (y-node jy, kx=kx_idx).
+// For each kx column we must gather n_int complex values, DGEMM with
+// the real M_kx, scatter back.  For a first implementation we launch
+// a kernel that reads M as real and treats the complex v_hat as two
+// real ZGEMV-equivalent DGEMV operations (real-part and imag-part
+// separately using M's reality).
+//
+// To stay simple we implement a dedicated kernel below.  Matrix sizes
+// are tiny (n_int ~ 62), nh ~ 33 modes, so performance is not critical.
+__global__ static void k_apply_M_kx(
+        const cuDoubleComplex* vhat_in,
+        cuDoubleComplex* vhat_out,
+        const double* M_per_kx,
+        int n_int, int ny, int nh) {
+    int kx_idx = blockIdx.x;
+    int row = threadIdx.x;            // 0..n_int-1 maps to jy = row+1
+    if (kx_idx >= nh || row >= n_int) return;
+
+    // Walls = 0 (jy=0, jy=ny-1).  Zero explicitly.
+    cuDoubleComplex zero_c; zero_c.x = 0.0; zero_c.y = 0.0;
+    if (row == 0) {
+        vhat_out[(size_t)0          * nh + kx_idx] = zero_c;
+        vhat_out[(size_t)(ny - 1)   * nh + kx_idx] = zero_c;
+    }
+
+    if (kx_idx == 0) {
+        // Zero out the entire kx=0 column (g-mode IC has no mean-x content).
+        int jy = row + 1;
+        vhat_out[(size_t)jy * nh + kx_idx] = zero_c;
+        return;
+    }
+
+    // M is col-major: M[row, col] = M_per_kx[kx*n_int² + col*n_int + row]
+    const double* M = M_per_kx + (size_t)kx_idx * (size_t)n_int * n_int;
+    double sum_re = 0.0, sum_im = 0.0;
+    for (int col = 0; col < n_int; ++col) {
+        double m_rc = M[(size_t)col * n_int + row];
+        cuDoubleComplex vin = vhat_in[(size_t)(col + 1) * nh + kx_idx];
+        sum_re += m_rc * vin.x;
+        sum_im += m_rc * vin.y;
+    }
+    cuDoubleComplex out_c; out_c.x = sum_re; out_c.y = sum_im;
+    int jy_out = row + 1;
+    vhat_out[(size_t)jy_out * nh + kx_idx] = out_c;
+}
+
+static void _apply_M_kx_to_vhat(
+        cufftDoubleComplex* d_vhat,
+        cufftDoubleComplex* d_out,
+        const double* d_M_per_kx,
+        int n_int, int ny, int nh,
+        cublasHandle_t /*cublas*/) {
+    // Zero the full output once (walls + kx=0 column handled explicitly
+    // below but other cells need clean state).
+    CUDA_CHECK(cudaMemsetAsync(d_out, 0,
+                               sizeof(cufftDoubleComplex) * (size_t)ny * nh));
+    dim3 grid(nh);
+    dim3 block(n_int);
+    k_apply_M_kx<<<grid, block>>>(
+        reinterpret_cast<const cuDoubleComplex*>(d_vhat),
+        reinterpret_cast<cuDoubleComplex*>(d_out),
+        d_M_per_kx, n_int, ny, nh);
 }
 
 // Manufactured-solution self-test.

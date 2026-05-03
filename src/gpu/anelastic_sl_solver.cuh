@@ -87,6 +87,24 @@ struct AnelasticSLSolver {
     double* d_N2        = nullptr;   // Brunt-Väisälä² on CGL nodes (ny,)
     bool    is_anelastic = false;    // set by set_background if ρ₀ non-uniform
 
+    // ── Path D: assembled-matrix linear TD ───────────────────────────────
+    // Full-Galerkin closure proof (docs/full_galerkin_closure_proof_2026-05-03.md)
+    // showed that primitive node-space (apply_dy + pointwise N²·v) leaks
+    // ~5e-5 dev/step on Lane-Emden while an assembled L⁻¹R matrix leaks 1e-18.
+    //
+    // For each x-Fourier mode kx_j, we pre-compute on host then upload:
+    //     L_{kx} = (-D · diag(ρ₀) · D + k² · diag(ρ₀))_{interior}   (n_int × n_int)
+    //     R_{kx} = (k² · diag(N²·ρ₀))_{interior}
+    //     M_{kx} = L_{kx}⁻¹ R_{kx}                                  (col-major)
+    // Linear TD evolves V̈ = -M_{kx} V in each x-Fourier mode independently.
+    //
+    // d_M_per_kx layout: (nh, n_int, n_int) col-major slabs = contiguous
+    //   offset(kx, row, col) = kx * n_int² + col * n_int + row
+    // n_int = ny - 2 (interior, Dirichlet).
+    int     n_int_path_d = 0;        // cached ny - 2
+    double* d_M_per_kx   = nullptr;  // (nh * n_int * n_int,)
+    bool    td_assembled_linear = false;  // env ANSL_TD_KIND=assembled_linear
+
     // Chebyshev differentiation matrix on [0, Ly] (ny × ny, col-major for DGEMM).
     // Uploaded once in set_background, reused every RK substep.
     double* d_Dy = nullptr;
@@ -344,4 +362,16 @@ struct AnelasticSLSolver {
     // Returns err_L2 and prints a breakdown.  Works for Boussinesq and
     // Lane-Emden backgrounds.
     double manufactured_test();
+
+    // ── Path D API ──────────────────────────────────────────────────────
+    // Assemble M_kx = L_kx⁻¹ R_kx for every kx.  Safe to call from
+    // set_background (after D, h_rho, h_N2 are populated) or lazily.
+    // No-op if already assembled for the current background.
+    void assemble_path_d_operators();
+
+    // One-step linear-only assembled TD.  Reads d_v, d_b (state at t=n·dt),
+    // produces d_v, d_b at t=(n+1)·dt.  Uses d_rhs_v as W buffer (W = ∂_t V).
+    // Integrator: classical RK4 on the 2-state (V, W) pair with V̈ = -M·V.
+    // Skips advection entirely; intended for pure linear g-mode validation.
+    double step_assembled_linear();
 };

@@ -1579,8 +1579,17 @@ int main(int argc, char** argv) {
             double dev0 = ansl.eigmode_deviation();
             std::fprintf(probe, "%.10e %.10e %.10e\n", 0.0, v0, dev0);
 
+            // Path D: if ANSL_TD_KIND=assembled_linear, replace step() with
+            // the linear-only assembled-matrix RK4 path
+            // (docs/full_galerkin_closure_proof_2026-05-03.md).
+            bool use_path_d = ansl.td_assembled_linear;
+            if (use_path_d) {
+                std::fprintf(stderr,
+                    "  Path D linear TD: assembled L⁻¹R per kx, RK4\n");
+            }
             while (t < cfg.t_end && !g_interrupted) {
-                double dt = ansl.step();
+                double dt = use_path_d ? ansl.step_assembled_linear()
+                                       : ansl.step();
                 if (t + dt > cfg.t_end) dt = cfg.t_end - t;
                 t += dt;
                 ++step;
