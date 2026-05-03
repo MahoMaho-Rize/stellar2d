@@ -1481,15 +1481,44 @@ static void thomas_solve(std::vector<double>& a, std::vector<double>& b,
     for (int i = n - 2; i >= 0; --i) x[i] = dp[i] - cp[i] * x[i+1];
 }
 
-// Kernel: update e_int from ΔT (ρ cv ΔT = Δe per mass)
+// Kernel: update e_int given T_new from BE-rad Picard solve.
+//
+// Correctness matters here: for Helmholtz EOS, e is a highly non-linear
+// function of T (ideal ions + radiation ~T⁴ + partially degenerate
+// electrons). The earlier linearization Δe = eos.cv() · ΔT used the
+// IDEAL-GAS cv from EOS::cv() = 1/μ/(γ-1) — for Helm that gives ≈1 erg/g/K
+// while the real pre-MS core cv is ≈1e8 erg/g/K. That undercounted
+// radiation cooling by eight orders of magnitude and froze T_c.
+//
+// Fix: evaluate the EOS directly at (ρ, T_new) to get e exactly. For IDEAL
+// / IDEAL_RAD we still use the local-cv linearization since those paths
+// don't have a cheap T→e inverse kernel.
 __global__ static void k_rad1d_apply_dT(
-    double* e_int, const double* T_new, const double* T_start,
+    double* e_int, const double* rho, const double* T_new, const double* T_start,
     int nz, EOS eos)
 {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k   = fmax(T_new[k], 1e-12);
+#ifdef USE_GPU
+    if (eos.type == (int)EosType::HELMHOLTZ) {
+        HelmState s = helm_eval(rho_k, T_k, eos.helm);
+        e_int[k] = fmax(s.e, 1e-30);
+        return;
+    }
+#endif
+    if (eos.type == (int)EosType::IDEAL_RAD) {
+        // e_tot = cv·T + a·T^4 / ρ
+        double cv_gas = eos.cv();
+        double T4 = T_k * T_k * T_k * T_k;
+        double e_tot = cv_gas * T_k + eos.radiation_a * T4 / rho_k;
+        e_int[k] = fmax(e_tot, 1e-30);
+        return;
+    }
+    // IDEAL (and PRE_MS as a last-resort linearization)
     double cv = eos.cv();
-    double dT = T_new[k] - T_start[k];
+    double dT = T_k - T_start[k];
     e_int[k] = fmax(e_int[k] + cv * dT, 1e-30);
 }
 
@@ -1591,8 +1620,9 @@ int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total) {
         if (max_rel < tol_rel && damp >= 0.99) { it++; break; }
     }
 
-    // Apply final ΔT back to e_int: Δe = cv · (T_final − T_n)
-    k_rad1d_apply_dT<<<(nz+B-1)/B, B>>>(lev.d_e_int, d_Tp, d_Tn, nz, eos);
+    // Apply final T back to e_int. For Helm/IDEAL_RAD we re-evaluate the EOS
+    // at (ρ, T_new) exactly; for IDEAL we linearize Δe = cv · ΔT.
+    k_rad1d_apply_dT<<<(nz+B-1)/B, B>>>(lev.d_e_int, lev.d_rho, d_Tp, d_Tn, nz, eos);
 
     // Diagnostic: surface luminosity L = A_surf · σ · T_surf⁴
     {

@@ -80,6 +80,7 @@ struct SimConfig {
     bool precond_tridiag = false;    // implicit: block-tridiag PC (assembled from 9 colored FD matvecs)
     double newton_tol_override = 0.0;// implicit: override Newton ||F|| convergence tol (0 = solver default 1e-8)
     int hse_resnap_interval = 0;     // implicit: re-snapshot R_hse every N steps (0=off)
+    double dt_thermal_frac = 0.0;    // implicit: dt ≤ frac · IE/L_surf (τ_KH cap, 0=off)
     double nuc_compress_frac = 0.0;  // dynamic nuc scale: ε·dt/(cv·T) ≤ this (0=off)
     bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
     bool mlt_enabled = false;        // Böhm-Vitense MLT convection in BE rad solve
@@ -337,6 +338,8 @@ int main(int argc, char** argv) {
             cfg.newton_tol_override = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--hse-resnap") == 0 && i + 1 < argc)
             cfg.hse_resnap_interval = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--dt-thermal-frac") == 0 && i + 1 < argc)
+            cfg.dt_thermal_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--nuc-compress") == 0 && i + 1 < argc)
             cfg.nuc_compress_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--mlt") == 0)
@@ -957,6 +960,21 @@ int main(int argc, char** argv) {
                 } else {
                     // Geometric growth on success — cross many τ_dyn fast.
                     dt_req_state = std::min(dt_cap, dt_req_state * 2.0);
+
+                    // Thermal-timescale cap: dt ≤ thermal_frac · IE / L_surf
+                    // (Kelvin-Helmholtz). Without this, once rad coupling
+                    // actually cools the star the outer dt grows ×2 per step
+                    // and overshoots a full τ_KH in one step, blowing the
+                    // solution past hydrostatic equilibrium.
+                    if (cfg.dt_thermal_frac > 0.0) {
+                        Radial1DSolver::Diagnostics dg = r1d.compute_diagnostics();
+                        double L_tot = std::fabs(r1d.rad_impl_L_surf);
+                        if (L_tot > 1e-30 && dg.total_internal_E > 0.0) {
+                            double tau_th = dg.total_internal_E / L_tot;
+                            double dt_th  = cfg.dt_thermal_frac * tau_th;
+                            if (dt_req_state > dt_th) dt_req_state = dt_th;
+                        }
+                    }
                 }
             } else {
                 dt = r1d.step(t, cfg.t_end);
