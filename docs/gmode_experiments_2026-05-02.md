@@ -878,6 +878,7 @@ target (stellar pulsation g-modes) is almost exclusively $\ell = 1, 2$.
 | `solve_anelastic_2var` | $120\%$ | Boussinesq-like, no $V/U/\Gamma_1$ |
 | `solve_gmode_cowling_gyre_compat` (2-var Cowling) | $13.4\%$ | Cowling approx limit |
 | **`solve_gmode_full_gyre_compat` (4-var full)** | **$5.9 \times 10^{-7}$** | **production reference** |
+| **`AnelasticSLSolver::solve_gmode_full_chebyshev` (CUDA)** | **$8.6 \times 10^{-7}$ @ $N = 96$** | **CUDA port, externally validated 2026-05-03** (§16) |
 
 The 4-variable `solve_gmode_full_gyre_compat` is the **CUDA port target**.
 It implements the exact equations and BCs GYRE solves for the standard
@@ -887,3 +888,116 @@ on the shipped Lane-Emden $n=3$ polytrope) are frozen as EXPECTED
 constants in `gmode_exp_i_gyre_compat.py` (Cowling check) and
 `gmode_exp_j_full_gyre_compat.py` (full-gravity check); both `--verify`
 regressions must exit zero before any CUDA port is merged.
+
+
+# 16. Experiment K — CUDA Chebyshev 4-var operator vs GYRE
+
+> **Provenance.** `scripts/gmode_exp_k_chebyshev_full.py` (Python reference)
+> and `AnelasticSLSolver::solve_gmode_full_chebyshev` (CUDA) at commit
+> `942ca9e`.  Benchmark re-run on 2026-05-03 after collaborator install
+> of GYRE at `$HOME/gyre` + MESA SDK `$HOME/mesasdk-26.3.2`.  Two local
+> fixes required to close the loop (see §16.1); both targeted at the
+> input pipeline, not the EVP kernel itself.  Raw artefacts (poly3.txt,
+> gyre summary.h5, CUDA CSVs, PNG plots, SHA256SUMS) attached to GitHub
+> release `gyre-benchmark-2026-05-03`.
+
+## 16.1 Two pipeline fixes
+
+1. `src/main.cpp` — missing `#include <algorithm>` for the
+   `std::sort(x_cgl)` call; the header was only implicit in GCC ≤ 14.
+2. `src/gpu/stellar_profile.cpp::read_gyre_structure_txt` — GYRE's
+   `poly_to_txt` writes `V_2 = A* = Infinity` on the surface row
+   ($x = 1$).  The linear-interp into our CGL grid at
+   `outer_cut = 0.9999` picked up that row and poisoned $Q$ → the
+   generalised-eigenproblem LU factorisation reported
+   `getrf(Q) info = 256` (singular).  Fix: drop rows with any
+   non-finite structure coefficient in the reader.
+
+Neither fix touches the CUDA kernel.  Both are input-sanitisation
+patches discovered only by feeding GYRE-native structure data into
+the pipeline for the first time; the Python-only Exp J had silently
+avoided them by reading `/tmp/gyre_run/poly3.txt` directly via
+`np.loadtxt` (which produces `inf` that `np.interp` propagates but
+never hits `cholesky`/`eig`, since Exp J builds its own grid).
+
+## 16.2 Setup
+
+Same Lane-Emden $n = 3$ polytrope shipped with GYRE.  Structure data
+loaded via `ANSL_POLY3_TXT=/tmp/gyre_run/poly3.txt`.  CGL grid on
+$[10^{-4}, 0.9999]$; interior BCs = regular-at-origin, exterior BCs
+= vacuum-at-surface, same as GYRE `IB_regular.inc` + `OB_vacuum.inc`.
+4-var full-gravity operator (`alpha_grv = 1`); ghost modes
+(eigenvalues with $|\lambda| \to 0$) filtered out; propagation-cavity
+classifier (`p_frac < 0.05`) to remove residual p-mode contamination.
+
+## 16.3 Result vs GYRE full-gravity `summary.h5`
+
+CUDA `--test gmode_exp_k --solver anelastic_sl --nr 96`:
+
+| $n_g$ | $\omega^2_\text{CUDA}$ | $\omega^2_\text{GYRE}$ | rel_diff |
+|---|---|---|---|
+| 1 | $2.51593011$ | $2.51592794$ | $8.6 \times 10^{-7}$ |
+| 2 | $1.28571470$ | $1.28570775$ | $5.4 \times 10^{-6}$ |
+| 3 | $0.77574009$ | $0.77573278$ | $9.4 \times 10^{-6}$ |
+| 4 | $0.51778259$ | $0.51777598$ | $1.3 \times 10^{-5}$ |
+| 5 | $0.36993169$ | $0.36992550$ | $1.7 \times 10^{-5}$ |
+| 6 | $0.27750880$ | $0.27750282$ | $2.2 \times 10^{-5}$ |
+| 7 | $0.21593228$ | $0.21592665$ | $2.6 \times 10^{-5}$ |
+| 8 | $0.17285865$ | $0.17285360$ | $2.9 \times 10^{-5}$ |
+| 9 | $0.14154872$ | $0.14154409$ | $3.3 \times 10^{-5}$ |
+| 10 | $0.11807267$ | $0.11806842$ | $3.6 \times 10^{-5}$ |
+
+$\max \text{rel\_diff} = 3.6 \times 10^{-5}$ across $n_g = 1..10$.
+The monotone growth with $n_g$ indicates the residual is
+interpolation-dominated (GYRE's 1001-point native grid → CGL via
+linear interp; replacing this with cubic-spline would push it down
+further, but the current figure already exceeds all PASS thresholds).
+
+At $N = 48$ the classifier still admits 2 head spurious eigenvalues
+(ω² ≈ 500, 443) above the true $n_g = 1$ mode; by $N = 96$ they fall
+out of the kept window.  Python `scripts/verify_exp_k_cuda.py --N 48`
+reproduces this head contamination (it's a classifier sensitivity at
+low $N$, not a CUDA-specific issue).
+
+## 16.4 Cross-validation with GYRE-Cowling and Python-J
+
+Re-running the upstream Python benchmarks against the same GYRE
+artefacts on the collaborator machine:
+
+| Experiment | Operator | Baseline | max rel_diff | PASS |
+|---|---|---|---|---|
+| Exp H (Python) | Boussinesq 2-var | GYRE full | $1.2$ (expected, §12) | — |
+| Exp I (Python) | 2-var Cowling | GYRE Cowling (`alpha_grv=0`) | $5.6 \times 10^{-4}$ | ✅ |
+| Exp J (Python) | 4-var full | GYRE full | $5.3 \times 10^{-4}$ | ✅ |
+| **Exp K (CUDA)** | 4-var full (CGL) | GYRE full | **$3.6 \times 10^{-5}$** | ✅ |
+
+Exp K's tighter agreement than Exp J is the expected gain from
+spectral (Chebyshev) vs finite-difference discretisation on the same
+physics; it's not a refutation of Exp J.
+
+## 16.5 Reproducer
+
+```bash
+# 1. Produce GYRE baselines
+MESASDK_ROOT=$HOME/mesasdk-26.3.2 bash scripts/gmode_exp_h_run_gyre.sh
+MESASDK_ROOT=$HOME/mesasdk-26.3.2 bash scripts/gmode_exp_i_run_gyre_cowling.sh
+
+# 2. Build (pixi provides cuda-toolkit 12.9 + cmake)
+pixi run configure-gpu && pixi run build-gpu
+
+# 3. CUDA Exp K with GYRE profile (N = 96, DOF = 388)
+ANSL_POLY3_TXT=/tmp/gyre_run/poly3.txt \
+    build/stellar2d --test gmode_exp_k --solver anelastic_sl --nr 96
+
+# 4. Python cross-checks (Exp H/I/J)
+pixi run python scripts/gmode_exp_h_gyre_benchmark.py
+pixi run python scripts/gmode_exp_i_gyre_compat.py
+pixi run python scripts/gmode_exp_j_full_gyre_compat.py
+```
+
+CSV outputs land at `runs/gmode_exp_k_<N>x64_<timestamp>/gmode_exp_k.csv`.
+Published artefacts (poly3.txt, two GYRE summary.h5, CUDA CSVs at
+$N = 48$ and $N = 96$, Exp H/I/J PNGs, SHA256SUMS):
+
+  → GitHub release **`gyre-benchmark-2026-05-03`** on
+  `MahoMaho-Rize/stellar2d`.

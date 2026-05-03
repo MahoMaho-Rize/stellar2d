@@ -55,6 +55,9 @@ if(USE_GPU)
         src/gpu/cart_ale2_kernels.cu
         src/gpu/pseudo_spectral_solver.cu
         src/gpu/pseudo_spectral_kernels.cu
+        src/gpu/anelastic_sl_solver.cu
+        src/gpu/anelastic_sl_kernels.cu
+        src/gpu/stellar_profile.cpp
         src/gpu/sph_transforms.cu
         src/gpu/sph2d_spectral_solver.cu
         src/gpu/sph2d_spectral_kernels.cu
@@ -93,6 +96,8 @@ if(USE_GPU)
     target_link_libraries(stellar2d PRIVATE
         CUDA::cudart
         CUDA::cufft
+        CUDA::cublas
+        CUDA::cusolver
     )
 
     # AmgX is optional: only needed for --solver compressible (GpuSolver)
@@ -100,7 +105,7 @@ if(USE_GPU)
         target_compile_definitions(stellar2d PRIVATE USE_AMGX)
         target_include_directories(stellar2d PRIVATE ${AMGX_DIR}/include)
         target_link_directories(stellar2d PRIVATE ${AMGX_DIR}/lib)
-        target_link_libraries(stellar2d PRIVATE amgx CUDA::cublas CUDA::cusparse CUDA::cusolver)
+        target_link_libraries(stellar2d PRIVATE amgx CUDA::cusparse)
     endif()
 endif()
 
@@ -310,4 +315,9 @@ if(USE_GPU)
     set_target_properties(test_coverage_critical PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_coverage_critical PRIVATE CUDA::cudart)
     add_test(NAME coverage_critical COMMAND test_coverage_critical)
+
+    # Stellar profile (Lane-Emden + GYRE structure coefficients) — host-only, no CUDA
+    add_executable(test_stellar_profile tests/test_stellar_profile.cpp
+        src/gpu/stellar_profile.cpp)
+    target_include_directories(test_stellar_profile PRIVATE src)
 endif()
