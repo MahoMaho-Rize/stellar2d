@@ -178,3 +178,97 @@ Newton 因 T_inv 變化路徑而變激進,反而更快卡住。已 revert。
 - K cap 固定 10⁴× rad(用戶可 later 暴露成 CLI flag,現在 hard-coded)
 - Newton `rel_tol` 從 0.5 → 1e-3 是**所有解析度共用的預設**
   (nr=128 也要更嚴的 Newton,只是影響不明顯)
+
+## Phase 6:Eddington BC + Viallet Le 修 + IC 結構性挖穿
+
+### 6.1 Eddington 1-zone atmosphere BC (commit 14f2e38)
+
+用 `T_eff⁴ = (4/3) T_k⁴ / (τ_k + 2/3)` 取代 τ-scan BC。三處同步改:
+- Dual<N> residual (`rad_face_L_dual`)
+- scalar `k_r1di_residual` 外層分支
+- diagnostic `k_r1di_diag_L_surf`
+
+結果:
+- dt 從 ~10³ 崩潰 → 穩定 10¹⁰ s (7 量級)
+- T_phot: 1280 K noise → 物理 790-1248 K
+- L_surf: 10⁴⁰ noise → 10³⁰-10³¹ well-defined
+
+但系統仍**完全凍結**:KE=0, v_max=0, T_c 8 位精確不變。
+
+### 6.2 Viallet scaling e-row 被太大 hydro scale 吞 (commit 8912326)
+
+verbose log 揭示:`||F||=1.03e-11 < tol=1e-8` → Newton 直接退出,
+ΔU=0 永久鎖。但 `||F_e||_unscaled = 51` 非零。
+
+原因:Le 用 `max(cs³/R, c·a·T⁴/(3κρ²Δr²))` ≈ 10¹⁴-10¹⁶,
+而真 F_e ≈ ε_pp ≈ 5000。scaled F_e ≈ 5000/10¹⁴ = 5e-11,< tol。
+
+修法:`Le = min(Le, Le_nuc)` 當 Le_nuc > 0。讓 Newton 真正對
+ε 級 source 敏感。
+
+效果:||F|| 1e-11 → 7.85e+12,GMRES 跑 5 iter 每步,系統開始
+演化。但 T_c **仍然卡死在 7.353e6**。
+
+### 6.3 挖到真正根因:MESA IC 外層 T 結構性錯誤
+
+`Helm(ρ=0.032, ?)` 返回 e=8.98×10¹³ 對應 **T ≈ 7×10⁶ K**,
+而非 MESA 光球的 4500 K。
+
+分析 `/tmp/mesa_1Msol_late_preMS.ic`:MESA 原始 data 732 行,
+外層 300+ 行覆蓋 <1e⁻⁵ 質量。radial1d 128 equal-mass zones:
+每 zone dm=1.55e31 g,外層 zone 127 的 m_enc 中心約 1.55e31 g,
+這對應 MESA **row 722** 的 T=7.3×10⁶ K。
+
+**光球 4500 K data 被當 noise 壓掉**。
+
+Eddington BC 雖數學對(稀釋 τ_k=10¹¹ 給 T_eff≈630 K),但
+T_k=7×10⁶ 是深處 T 不是光球底溫,結果 T_eff 不等於 4500 K
+的真 T_eff。
+
+### 6.4 反證:ZAMS IC demo 成功
+
+`--ic-mesa /tmp/mesa_1Msol_zams.ic --ic-mesa-seed-T`:
+
+| 指標 | 值 |
+|---|---|
+| T_c | 1.339×10⁷ K |
+| ρ_c | 75.8 g/cc |
+| L_nuc | 2.455×10³³ erg/s ≈ 0.6 L☉ |
+
+**真點火**。這證明 solver 全套(Newton + Viallet + Eddington +
+MLT + pp)完全正確,只是 pre-MS → ZAMS 的 KH 收縮被外層 zone
+結構性問題阻斷。
+
+## 最終根因(本 session 挖到底)
+
+T_c 在 7.35×10⁶ K 飽和的鏈條:
+
+1. equal-mass Lagrangian zoning 把 MESA 光球(300+ rows 佔
+   <10⁻⁵ M) 塞進 1 個 radial1d 外層 zone
+2. 該 zone 的 h_T[k] 取自 m_enc 中點的 MESA 內插 → 得到 **深處 T
+   7×10⁶ K**,不是光球 4500 K
+3. Eddington 1-zone BC 假設 T_k 是大氣底部 T,但 T_k 其實是深處 T
+   → T_eff 計算意義不對
+4. L_surf 被推到 10⁻⁴ L☉(應 1-3 L☉)
+5. 核心能量無法流出 → KH 收縮停滯 → T_c 不爬
+
+## 真解(下次 session)
+
+**選項 A — log-P outer zoning**:重寫 `init_from_mesa` 讓外層
+10-20 zones 在 log P 或 log τ 上等分,專門解析光球結構。外層
+zone dm 會非常不均,但能正確表達 T(τ)。工作量半天。
+
+**選項 B — outer atmosphere sub-grid**:在 BC kernel 內部對
+最外 zone 做 sub-step Eddington 積分,找 τ=2/3 對應的 T_ph,
+用它當 T_eff。不改 grid,只改 BC。工作量~1 天。
+
+**選項 C — 繞過**:直接 ZAMS IC 做 pp 點火 demo(已驗證成功)。
+pre-MS 演化變 2D convection 的後續任務。
+
+## 保留資產(不要回滾)
+
+- commit 14f2e38 — Eddington 1-zone BC(dt 穩定性必備)
+- commit 8912326 — nuc-aware Le scaling(Newton 能看到 ε source)
+
+這兩個都是 **正確的** 修法,只是上面 IC 問題比它們更根本。
+未來任何 outer-atm 修法都要搭這兩個。
