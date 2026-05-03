@@ -338,7 +338,9 @@ __host__ __device__ inline void residual_zone_dual(
             L_out = rad_face_L_dual<N>(rho_k, T_k, rho_j, T_j,
                                         r_face(k+1), dr_zc, rad);
         } else {
-            // Surface: L = 4π r_surf² σ T_surf⁴
+            // Surface: L = 4π r_surf² σ T_surf⁴ (Stefan). T_surf = T[nz-1].
+            // This is the simplest photospheric BC; full τ=2/3 atmosphere
+            // needs a root-find or Eddington-average across the outer zones.
             Dual<N> rs = r_face(k+1);
             Dual<N> A_surf = PI4_D * rs * rs;
             Dual<N> T2 = T_k * T_k;

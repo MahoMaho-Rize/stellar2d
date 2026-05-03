@@ -41,6 +41,22 @@ extern __global__ void k_rad1d_artificial_viscosity(
 extern __global__ void k_rad1d_T_from_rho_e(
     const double*, const double*, double*, int, EOS);
 
+// Diagnostic: compute L_surf = 4π r_surf² σ T[nz-1]⁴ on the device.
+__global__ static void k_r1di_diag_L_surf(
+    const double* rho, const double* e_int, const double* r,
+    double* out, int nz, EOS eos, OpacityParams opa,
+    double sigma_sb)
+{
+    (void)opa;
+    if (threadIdx.x != 0 || blockIdx.x != 0) return;
+    double rho_s = fmax(rho[nz - 1], 1e-30);
+    double e_s   = fmax(e_int[nz - 1], 1e-30);
+    double T_s   = eos.temperature_from_rho_e(rho_s, e_s);
+    double T4 = T_s*T_s; T4 *= T4;
+    double A = 4.0 * 3.14159265358979323846 * r[nz] * r[nz];
+    out[0] = A * sigma_sb * T4;
+}
+
 // Species-only burn kernel: advance X, Y by dt using current ρ, T. Does NOT
 // modify e_int — that's done implicitly by the Newton solver via R_e.
 static __global__ void k_r1di_nuclear_pp_species(
@@ -1477,22 +1493,16 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
                 apply_radiation_diffusion_implicit(dt);
                 prims_and_visc(*this);
             } else if (radiation_enabled && use_eos) {
-                // Diagnostic-only: compute L_surf from the converged surface T.
-                // L = 4π r_surf² σ T_surf⁴. Writes rad_impl_L_surf so the
-                // thermal dt cap in main.cpp stays informed.
+                // Diagnostic-only L_surf via device kernel (Eddington BC).
+                static double* s_d_Lout = nullptr;
+                if (!s_d_Lout) CUDA_CHECK(cudaMalloc(&s_d_Lout, sizeof(double)));
+                OpacityParams opa;
+                fill_opacity_params(opa);
                 double sigma_sb = rad_c_light * rad_a_rad / 4.0;
-                static double* s_d_Tsurf = nullptr;
-                if (!s_d_Tsurf) CUDA_CHECK(cudaMalloc(&s_d_Tsurf, sizeof(double)));
-                k_rad1d_T_from_rho_e<<<1, 1>>>(
-                    lev.d_rho + (lev.nz - 1), lev.d_e_int + (lev.nz - 1),
-                    s_d_Tsurf, 1, eos);
-                double T_surf = 0.0, r_surf = 0.0;
-                CUDA_CHECK(cudaMemcpy(&T_surf, s_d_Tsurf, sizeof(double),
+                k_r1di_diag_L_surf<<<1, 1>>>(lev.d_rho, lev.d_e_int, lev.d_r,
+                                              s_d_Lout, lev.nz, eos, opa, sigma_sb);
+                CUDA_CHECK(cudaMemcpy(&rad_impl_L_surf, s_d_Lout, sizeof(double),
                                       cudaMemcpyDeviceToHost));
-                CUDA_CHECK(cudaMemcpy(&r_surf, lev.d_r + lev.nz, sizeof(double),
-                                      cudaMemcpyDeviceToHost));
-                double T4 = T_surf*T_surf; T4 *= T4;
-                rad_impl_L_surf = 4.0 * M_PI * r_surf * r_surf * sigma_sb * T4;
             }
 
             // Species burn-up: Newton has updated e_int implicitly (R_e
