@@ -766,6 +766,45 @@ Radial1DSolver::Diagnostics Radial1DSolver::compute_diagnostics() {
     d.max_mach        = gpu_reduce_max_simple(scratch[4], nz);
     d.max_vr          = gpu_reduce_max_simple(scratch[5], nz);
 
+    // Core state + integrated nuclear luminosity. Both need temperature, which
+    // for the Helmholtz EOS must be evaluated on device (table pointers live in
+    // GPU memory). Use a small device kernel to compute per-zone T and
+    // ε_pp(ρ, T, X)·dm, then copy to host and reduce on CPU.
+    std::vector<double> h_rho(nz), h_e(nz), h_dm(nz), h_X, h_L(nz, 0.0), h_T(nz);
+    CUDA_CHECK(cudaMemcpy(h_rho.data(), lev.d_rho,   nz*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_e.data(),   lev.d_e_int, nz*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_dm.data(),  lev.d_dm,    nz*sizeof(double), cudaMemcpyDeviceToHost));
+
+    if (nuclear_enabled && use_eos) {
+        // Kernel: per-zone T_k + ε_pp·dm, stored in scratch[0] (unused after this).
+        NuclearPPParams npars;
+        npars.X_hydrogen = nuc_X;
+        npars.T_floor = nuc_T_floor;
+        npars.T_scale = nuc_T_scale;
+        npars.epsilon_scale = nuc_epsilon_scale;
+        npars.q_burn = nuc_q_burn;
+        if (species_enabled) {
+            k_rad1d_nuclear_L_species<<<(nz+B-1)/B, B>>>(
+                lev.d_rho, lev.d_e_int, d_X, lev.d_dm, scratch[0], nz, eos, npars);
+        } else {
+            k_rad1d_nuclear_L<<<(nz+B-1)/B, B>>>(
+                lev.d_rho, lev.d_e_int, lev.d_dm, scratch[0], nz, eos, npars);
+        }
+        d.L_nuc = gpu_reduce_sum_simple(scratch[0], nz);
+    } else {
+        d.L_nuc = 0.0;
+    }
+
+    // Core state: innermost zone at k=0
+    d.rho_c = h_rho[0];
+    if (use_eos) {
+        // Need a device eval for Helmholtz branch. Reuse scratch[1] for T[0] only.
+        k_rad1d_T_from_rho_e<<<1, 1>>>(lev.d_rho, lev.d_e_int, scratch[1], 1, eos);
+        CUDA_CHECK(cudaMemcpy(&d.T_c, scratch[1], sizeof(double), cudaMemcpyDeviceToHost));
+    } else {
+        d.T_c = (gamma - 1.0) * h_e[0];
+    }
+
     for (int i = 0; i < 6; ++i) cudaFree(scratch[i]);
     return d;
 }

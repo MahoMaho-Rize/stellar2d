@@ -457,6 +457,52 @@ inline void k_rad1d_nuclear_pp_species(
     Y[k] = fmin(1.0, Y[k] + (-dX));
 }
 
+// ========================================================================
+// Diagnostics: per-zone ε_pp·dm (for integrated L_nuc). Writes out[k] = L_k
+// so host can reduce. Reads ρ, e, dm; computes T via EOS.
+// ========================================================================
+__global__
+inline void k_rad1d_nuclear_L(
+    const double* rho, const double* e_int, const double* dm,
+    double* out_L,
+    int nz, EOS eos, NuclearPPParams pars)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double eps = nuclear_pp_epsilon(rho_k, T_k, pars);
+    out_L[k] = eps * dm[k];
+}
+
+__global__
+inline void k_rad1d_nuclear_L_species(
+    const double* rho, const double* e_int, const double* X, const double* dm,
+    double* out_L,
+    int nz, EOS eos, NuclearPPParams pars)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double Xk = fmax(X[k], 0.0);
+    double eps = nuclear_pp_epsilon_X(rho_k, T_k, Xk, pars);
+    out_L[k] = eps * dm[k];
+}
+
+// Small utility: device-side EOS T(ρ, e) evaluation (for core-T diagnostic).
+__global__
+inline void k_rad1d_T_from_rho_e(
+    const double* rho, const double* e_int, double* out_T,
+    int n, EOS eos)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= n) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double e_k = fmax(e_int[k], 1e-30);
+    out_T[k] = eos.temperature_from_rho_e(rho_k, e_k);
+}
+
 __global__
 void k_rad1d_diag_per_zone_eos(
     const double* dm, const double* e_int, const double* rho, const double* P,

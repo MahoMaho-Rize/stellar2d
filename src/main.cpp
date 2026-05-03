@@ -908,9 +908,9 @@ int main(int argc, char** argv) {
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
         if (cfg.species_enabled) {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,mass_H,mass_He,X_core,X_surf,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,mass_H,mass_He,X_core,X_surf,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
         } else {
-            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super\n");
         }
 
         int frame = 0;
@@ -965,6 +965,11 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "\n");
                 std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
                             step, t, dt, d.total_mass, d.total_E, d.max_vr, d.max_mach);
+                if (r1d.nuclear_enabled) {
+                    double L_ratio = (r1d.rad_impl_L_surf > 0) ? d.L_nuc / r1d.rad_impl_L_surf : 0.0;
+                    std::printf("    ignition: T_c=%.3e K  ρ_c=%.3e g/cc  L_nuc=%.3e erg/s  L_nuc/L_surf=%.3e\n",
+                                d.T_c, d.rho_c, d.L_nuc, L_ratio);
+                }
                 if (mlt.n_conv_zones > 0) {
                     std::printf("    MLT: conv_mass_frac=%.4f  r_conv=[%.3e,%.3e]  n_conv=%d  max_super=%.3e\n",
                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer,
@@ -986,15 +991,17 @@ int main(int argc, char** argv) {
                     }
                     double X_core = X_c.front();
                     double X_surf = X_c.back();
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
                                  d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
+                                 d.T_c, d.rho_c, d.L_nuc,
                                  mH, mHe, X_core, X_surf, r1d.rad_impl_L_surf,
                                  mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab);
                 } else {
-                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e\n",
                                  step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
-                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr, r1d.rad_impl_L_surf,
+                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
+                                 d.T_c, d.rho_c, d.L_nuc, r1d.rad_impl_L_surf,
                                  mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab);
                 }
                 std::fflush(csv);

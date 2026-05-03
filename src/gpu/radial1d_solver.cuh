@@ -235,6 +235,9 @@ struct Radial1DSolver {
         double total_E;
         double max_mach;
         double max_vr;
+        double T_c;          // core temperature (innermost zone) — for ignition tracking
+        double rho_c;        // core density
+        double L_nuc;        // ∫ ε_pp·dm over all zones [erg/s] — 0 if --nuclear off
     };
     Diagnostics compute_diagnostics();
 
