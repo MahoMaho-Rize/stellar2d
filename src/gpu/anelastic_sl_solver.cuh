@@ -265,6 +265,36 @@ struct AnelasticSLSolver {
                               std::vector<double>& v_modes);
 
     // ────────────────────────────────────────────────────────────────────
+    // q-space (reduced-pressure) 2D g-mode EVP — operator-consistent path
+    //
+    // Derivation (docs/qspace_reduced_pressure_algebra_2026-05-03.md):
+    // Substituting φ = ρ₀·V̂ into the usual v-space EVP
+    //     -(ρ₀ V̂)'' + k² ρ₀ V̂ = k² N² ρ₀ V̂ / ω²
+    // yields a density-free Helmholtz eigenproblem
+    //     -φ''(y) + k² φ(y) = (k² N²(y) / ω²) φ(y),
+    // with Dirichlet φ(0) = φ(L_y) = 0. The natural basis is pure Fourier
+    //     ϕ_n(y) = √(2/L_y) sin(nπy/L_y),  μ_n = (nπ/L_y)².
+    //
+    // Projecting onto ϕ_n (sampling with Clenshaw-Curtis weights on the same
+    // CGL grid as the TD pipeline) collapses to the generalised EVP
+    //     (diag(μ + k²) − (k²/ω²) H) c = 0,
+    //     H_{nm} = Σ_k w_cc[k] · ϕ_n(y_k) · N²(y_k) · ϕ_m(y_k).
+    // This is n_modes × n_modes (much smaller than ny × ny), and the matrix
+    // coefficients contain no ρ₀ — so it matches exactly what the Boussinesq
+    // SL-Poisson pipeline sees when the background happens to be uniform.
+    //
+    // Outputs on host:
+    //   omega_sq : descending ω² (length n_modes)
+    //   phi_modes: (ny, n_modes) row-major, φ(y) = ρ₀ V̂ reconstructed on the
+    //              CGL grid (interior nodes are non-zero, walls forced to 0).
+    //              To recover physical V̂(y), divide row-wise by ρ₀(y).
+    // Requires init() + set_background() already called.
+    void compute_2d_gmode_evp_qspace(double kx_phys,
+                                     int n_modes,
+                                     std::vector<double>& omega_sq,
+                                     std::vector<double>& phi_modes);
+
+    // ────────────────────────────────────────────────────────────────────
     // Exp K: 4-var full GYRE-compatible g-mode EVP on CGL grid
     // (see scripts/gmode_exp_k_chebyshev_full.py for derivation)
     //

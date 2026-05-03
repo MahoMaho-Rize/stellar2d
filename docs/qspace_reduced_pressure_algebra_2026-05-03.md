@@ -233,3 +233,103 @@ $10^{-4}$ 量级),那说明别的误差源(time splitting、filter 残差)是 bo
 按 §5 路径 A 先落地 Fourier q-space CUDA 实现,量化 Boussinesq 下 dev/step
 的改善。如果 $\ge 2\times$ 改善(比如 $4.5\times 10^{-5} \to 2\times 10^{-5}$),
 推 §4.2 的 SL-basis 版本。如果无改善,考虑 IMEX 时间格式或其他耗散源。
+
+# 8. 路径 A 实际执行结果(2026-05-03)
+
+## 8.1 CUDA 实现
+
+新增 `AnelasticSLSolver::compute_2d_gmode_evp_qspace(kx_phys, n_modes,
+omega_sq_out, phi_modes_out)`:
+
+- 构造 Fourier basis $\phi_n(y) = \sqrt{2/L_y}\sin(n\pi y/L_y)$ 在 CGL y 网格采样
+- 用 Clenshaw-Curtis 权重做内积得 $H_{nm} = \langle\phi_n, N^2\phi_m\rangle$
+- 构造 $M = \operatorname{diag}(1/(\mu + k^2))\cdot H$,标准 EVP `cusolverDnXgeev`
+- 重建 $\varphi(y) = \sum_n c_n\phi_n(y)$,返回 $\varphi$ 在 CGL 网格上
+
+`init_gmode_eigenmode` 和 `gmode_2d_evp` 测试都加了 `ANSL_EVP_BASIS=qspace`
+env 切换,IC 重建路径是 $\hat V = \varphi/\rho_0$(interior),walls 严格 0。
+
+## 8.2 Boussinesq 验证(机器精度闭环)
+
+$k_x = 2\pi, N^2 = 1$,ny=64:
+
+```
+  n   ω²_CUDA           ω²_analytic      rel err
+  1   8.0000000000e-01  8.0000000000e-01  2.08e-15
+  2   5.0000000000e-01  5.0000000000e-01  3.78e-15
+  ...
+ 10   3.8461538462e-02  3.8461538462e-02  3.70e-13
+```
+
+前 10 模本征值都闭环到机器精度。代数 + 实现正确。
+
+## 8.3 核心测量 —— Lane-Emden dev/step
+
+纯线性算子一致性测试($\nu = 0$,amp = $10^{-8}$,dt = $10^{-4}$,filter off,
+IC projection skipped),前 10 步平均 deviation 增量:
+
+| 背景 | EVP path | dev/step | 相对 Boussinesq |
+|---|---|---|---|
+| Boussinesq | Galerkin (v-space) | $4.46\times 10^{-5}$ | 1.0× |
+| **Boussinesq** | **q-space (Fourier)** | $\mathbf{4.46\times 10^{-5}}$ | **1.0×** ✓ 两路径严格相等 |
+| Lane-Emden | Galerkin (v-space) | $6.9\times 10^{-4}$ | 15.5× |
+| **Lane-Emden** | **q-space (Fourier)** | $\mathbf{6.0\times 10^{-4}}$ | **13.5×** |
+
+**结论**:
+- Boussinesq: q-space 与 Galerkin 给同一 V(期望行为,两路径离散算子偶然重合)
+- Lane-Emden: q-space 稍好($6.0$ vs $6.9 \times 10^{-4}$,改善 13%),但**远不足以**
+  闭环 — 仍在 $10^{-3}$ 量级。
+
+## 8.4 为什么路径 A 对 Lane-Emden 无效
+
+回到 §2.1 的预测表格:
+
+| 组合 | 离散算子一致性 | 实测 dev/step |
+|---|---|---|
+| Boussinesq + Fourier q-space EVP | ✓ 严格一致 | $4.5\times 10^{-5}$ ✓ |
+| **Lane-Emden + Fourier q-space EVP** | ✗ TD 用 $\psi_n \ne$ Fourier | $6.0\times 10^{-4}$ ✗ |
+
+**被预测的失败。** Lane-Emden 下 TD SL-Poisson pipeline 用的基是
+$\{\psi_n\}$($T = -\partial_y^2 + \widetilde W$ 的特征向量),**不是** Fourier。
+q-space EVP 给的 $\varphi$ 是 Fourier 系数意义下的本征向量,TD 做 Poisson
+projection 时要在 $\psi_n$ 基下展开 $\varphi/\rho_0$,**这一步本身就把 V 散射**
+到其他 $\psi_m$ 方向。因此 EVP 的本征性质不被 TD pipeline 保留。
+
+## 8.5 下一步
+
+**已证的事**:q-space 代数正确 + CUDA 实现正确(Boussinesq 机器精度 + Lane-Emden
+O(10⁻³) 与 Galerkin 同量级)。
+
+**未证的事**:Lane-Emden 的 operator mismatch 是否能通过"只换 EVP 基"解决。
+答案显然是 **不能** —— 必须换 TD 投影基或 TD 推进变量。
+
+**推荐**:推 §4.2 SL-basis q-space EVP(实质是"q-space 代数在 SL 基下 Galerkin
+投影")。预期能把 Lane-Emden dev/step 降到 $\le 10^{-4}$。工程量 1-2 天。
+
+若 §4.2 仍不足,最后手段是 §4.3(TD 改在 $\varphi = \rho_0 v$ 上推进),
+3-4 天。
+
+## 8.6 代码变更
+
+- `src/gpu/anelastic_sl_solver.{cu,cuh}`:`compute_2d_gmode_evp_qspace`
+  + `init_gmode_eigenmode` 加 `ANSL_EVP_BASIS=qspace` 切换路径
+- `src/main.cpp`:`gmode_2d_evp` dispatch 同样支持 env 切换
+
+## 8.7 一键复现
+
+```bash
+cmake --build build -j --target stellar2d
+
+# (A) Boussinesq: q-space = Galerkin to machine precision
+ANSL_EVP_BASIS=qspace ./build/stellar2d --solver anelastic_sl \
+    --test gmode_2d_evp --ntheta 64 --nr 64 \
+    --ps-Lx 1 --ps-Ly 1 --ps-vshear 1.0 --ps-k 1
+
+# (B) Lane-Emden: q-space dev/step ≈ 6.0e-4, Galerkin ≈ 6.9e-4
+ANSL_EVP_BASIS=qspace ANSL_BG=lane_emden_1_5 ANSL_RHO_CUT=0.01 \
+ANSL_COORD_MAP=tanh ANSL_COORD_BETA=2 \
+ANSL_SKIP_IC_PROJECT=1 ANSL_DT_MAX=1e-4 \
+./build/stellar2d --solver anelastic_sl --test gmode_eigenmode_td \
+    --ntheta 64 --nr 64 --ps-Lx 1 --ps-Ly 1 \
+    --ps-k 1 --perturb 1e-8 --tend 0.003 --cfl 0.1 --ps-nu 0
+```

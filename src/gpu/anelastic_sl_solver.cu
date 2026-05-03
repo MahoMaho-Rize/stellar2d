@@ -1230,23 +1230,50 @@ double AnelasticSLSolver::init_gmode_eigenmode(int kx_int, int n_g, double amp) 
     const double kx_phys = kx_int * 2.0 * M_PI / Lx;
     const int M_int = ny - 2;
 
-    // Get at least n_g eigenpairs
-    std::vector<double> omega_sq, v_modes;
-    compute_2d_gmode_evp(kx_phys, std::max(n_g + 2, 6), omega_sq, v_modes);
-    if ((int)omega_sq.size() < n_g) {
-        std::fprintf(stderr,
-            "init_gmode_eigenmode: requested n_g=%d but only %zu modes returned.\n",
-            n_g, omega_sq.size());
-        std::exit(1);
+    // Choose EVP path: default v-space Galerkin, ANSL_EVP_BASIS=qspace uses
+    // the operator-consistent reduced-pressure formulation.
+    bool use_qspace = false;
+    if (const char* s = std::getenv("ANSL_EVP_BASIS")) {
+        std::string ss(s);
+        if (ss == "qspace" || ss == "q" || ss == "phi") use_qspace = true;
+    }
+
+    std::vector<double> omega_sq;
+    std::vector<double> V_full(ny, 0.0);
+    if (use_qspace) {
+        // q-space: returns φ(y) on full CGL grid; convert to V̂ = φ/ρ₀.
+        std::vector<double> phi_modes;
+        compute_2d_gmode_evp_qspace(kx_phys, std::max(n_g + 2, 6),
+                                    omega_sq, phi_modes);
+        if ((int)omega_sq.size() < n_g) {
+            std::fprintf(stderr,
+                "init_gmode_eigenmode[qspace]: requested n_g=%d but only %zu modes.\n",
+                n_g, omega_sq.size());
+            std::exit(1);
+        }
+        const int n_out = (int)omega_sq.size();
+        for (int i = 0; i < ny; ++i) {
+            double phi = phi_modes[(size_t)i * n_out + (n_g - 1)];
+            V_full[i] = phi / std::max(h_rho[i], 1e-30);
+        }
+        // Walls already Dirichlet on φ (compute_2d_gmode_evp_qspace enforced).
+        V_full.front() = 0.0;
+        V_full.back()  = 0.0;
+    } else {
+        std::vector<double> v_modes;
+        compute_2d_gmode_evp(kx_phys, std::max(n_g + 2, 6), omega_sq, v_modes);
+        if ((int)omega_sq.size() < n_g) {
+            std::fprintf(stderr,
+                "init_gmode_eigenmode: requested n_g=%d but only %zu modes returned.\n",
+                n_g, omega_sq.size());
+            std::exit(1);
+        }
+        for (int i = 0; i < M_int; ++i) {
+            V_full[i + 1] = v_modes[(size_t)i + (size_t)(n_g - 1) * M_int];
+        }
     }
     double om2   = omega_sq[n_g - 1];
     double omega = std::sqrt(om2);
-
-    // Eigenvector V(y) on interior nodes (M_int,); zero at walls.
-    std::vector<double> V_full(ny, 0.0);
-    for (int i = 0; i < M_int; ++i) {
-        V_full[i + 1] = v_modes[(size_t)i + (size_t)(n_g - 1) * M_int];
-    }
 
     // Normalise so max|V| = amp (sign-stabilised — make V at its peak positive).
     double max_absV = 0.0; int arg_max = 0;
@@ -1923,6 +1950,201 @@ void AnelasticSLSolver::compute_2d_gmode_evp(double kx_phys,
     cudaFree(d_Mc); cudaFree(d_W); cudaFree(d_VR);
     cudaFree(d_getrf_work);
     cudaFree(d_B); cudaFree(d_A); cudaFree(d_ipiv); cudaFree(d_info);
+    cusolverDnDestroyParams(params);
+    cusolverDnDestroy(solver);
+}
+
+// ── q-space reduced-pressure 2D g-mode EVP ──────────────────────────────
+// Solves  -φ''(y) + k² φ = (k² N²(y)/ω²) φ,  φ = ρ₀·V̂  (Dirichlet)
+// in the Fourier basis ϕ_n(y) = √(2/L_y) sin(nπy/L_y) with L²-orthonormal
+// quadrature via the existing Clenshaw-Curtis weights.
+//
+// GEVP form (n_modes × n_modes, all real):
+//     (diag(μ_n + k²)) c = (k²/ω²) H c,   H_{nm} = ⟨ϕ_n, N² ϕ_m⟩_cc
+// Cast as standard EVP  M c = λ c,  M = diag(1/(μ+k²)) · H,  λ = ω²/k².
+//
+// Output φ(y) on FULL CGL grid (ny), with φ(wall)=0.
+void AnelasticSLSolver::compute_2d_gmode_evp_qspace(
+        double kx_phys, int n_modes_out,
+        std::vector<double>& omega_sq_out,
+        std::vector<double>& phi_modes_out) {
+    if (h_cc_weights.empty() || h_N2.empty()) {
+        std::fprintf(stderr,
+            "compute_2d_gmode_evp_qspace: call set_background() first.\n");
+        std::exit(1);
+    }
+    const double k2 = kx_phys * kx_phys;
+    // Use a generous basis truncation — Fourier series converge linearly
+    // until ny/2 modes, so matching n_modes to n_modes_out*4 (capped at
+    // ny-2) keeps the H matrix well-resolved without blowing cost.
+    const int Nb = std::min(std::max(n_modes_out * 4, 32), ny - 2);
+
+    // ── Build L²-orthonormal Fourier basis on CGL grid ──────────────
+    // ϕ_n(y_k) = √(2/Ly) · sin(n π y_k / Ly),  n = 1..Nb
+    std::vector<double> Phi((size_t)ny * Nb, 0.0);          // row-major (ny, Nb)
+    const double norm = std::sqrt(2.0 / Ly);
+    for (int k = 0; k < ny; ++k) {
+        double y = h_y_cgl[k];
+        for (int n = 1; n <= Nb; ++n) {
+            Phi[(size_t)k * Nb + (n - 1)] =
+                norm * std::sin((double)n * M_PI * y / Ly);
+        }
+    }
+
+    // ── Build H_{nm} = Σ_k w_cc[k] · Phi[k,n] · N²[k] · Phi[k,m] ───
+    // Via DGEMM of (Phi^T · diag(w·N²)) · Phi  → Nb × Nb.
+    std::vector<double> H((size_t)Nb * Nb, 0.0);
+    // Weight rows of Phi: W[k, n] = sqrt(w_cc[k] * N²[k]) · Phi[k, n]
+    // so that H = W^T W.  But N² ≥ 0 is not guaranteed inside rho_cut
+    // truncation — use direct triple-loop with Kahan summation instead
+    // (ny × Nb² is tiny, ≤ 64 × 128² = 1M ops, negligible).
+    for (int n = 0; n < Nb; ++n) {
+        for (int m = n; m < Nb; ++m) {
+            double s = 0.0;
+            for (int k = 0; k < ny; ++k) {
+                s += h_cc_weights[k] * Phi[(size_t)k * Nb + n]
+                                     * h_N2[k]
+                                     * Phi[(size_t)k * Nb + m];
+            }
+            H[(size_t)n * Nb + m] = s;
+            H[(size_t)m * Nb + n] = s;
+        }
+    }
+
+    // Diagonal of L = μ_n + k² with μ_n = (nπ/L_y)².
+    std::vector<double> invL(Nb, 0.0);
+    for (int n = 0; n < Nb; ++n) {
+        double mu = (n + 1) * (n + 1) * M_PI * M_PI / (Ly * Ly);
+        invL[n] = 1.0 / (mu + k2);
+    }
+
+    // M_{nm} = invL[n] · H_{nm}  (row-scale H).
+    std::vector<double> M_row((size_t)Nb * Nb, 0.0);
+    for (int n = 0; n < Nb; ++n) {
+        for (int m = 0; m < Nb; ++m) {
+            M_row[(size_t)n * Nb + m] = invL[n] * H[(size_t)n * Nb + m];
+        }
+    }
+
+    // ── Solve M c = λ c using cusolverDnXgeev (general real EVP) ────
+    cusolverDnHandle_t solver = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreate(&solver));
+    cusolverDnParams_t params = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreateParams(&params));
+
+    // cuSOLVER expects column-major; transpose M_row → M_cm.
+    std::vector<double> M_cm((size_t)Nb * Nb, 0.0);
+    for (int n = 0; n < Nb; ++n) {
+        for (int m = 0; m < Nb; ++m) {
+            M_cm[(size_t)n + (size_t)m * Nb] = M_row[(size_t)n * Nb + m];
+        }
+    }
+
+    cuDoubleComplex *d_Mc = nullptr, *d_W = nullptr, *d_VR = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_Mc, sizeof(cuDoubleComplex) * (size_t)Nb * Nb));
+    CUDA_CHECK(cudaMalloc(&d_W,  sizeof(cuDoubleComplex) * Nb));
+    CUDA_CHECK(cudaMalloc(&d_VR, sizeof(cuDoubleComplex) * (size_t)Nb * Nb));
+
+    // Pack real M into complex via host round-trip (simpler than kernel for
+    // this small matrix).
+    std::vector<cuDoubleComplex> h_Mc((size_t)Nb * Nb);
+    for (int i = 0; i < Nb * Nb; ++i) {
+        h_Mc[i].x = M_cm[i];
+        h_Mc[i].y = 0.0;
+    }
+    CUDA_CHECK(cudaMemcpy(d_Mc, h_Mc.data(),
+                          sizeof(cuDoubleComplex) * (size_t)Nb * Nb,
+                          cudaMemcpyHostToDevice));
+
+    int *d_info = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
+    size_t work_device = 0, work_host = 0;
+    CUSOLVER_CHECK(cusolverDnXgeev_bufferSize(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)Nb,
+        CUDA_C_64F, d_Mc, (int64_t)Nb,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)Nb,
+        CUDA_C_64F, d_VR,    (int64_t)Nb,
+        CUDA_C_64F, &work_device, &work_host));
+    void *d_work = nullptr, *h_work = nullptr;
+    if (work_device) CUDA_CHECK(cudaMalloc(&d_work, work_device));
+    if (work_host)   h_work = std::malloc(work_host);
+    CUSOLVER_CHECK(cusolverDnXgeev(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_VECTOR,
+        (int64_t)Nb,
+        CUDA_C_64F, d_Mc, (int64_t)Nb,
+        CUDA_C_64F, d_W,
+        CUDA_C_64F, nullptr, (int64_t)Nb,
+        CUDA_C_64F, d_VR,    (int64_t)Nb,
+        CUDA_C_64F, d_work, work_device, h_work, work_host, d_info));
+    int h_info = 0;
+    CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+    if (h_info != 0) {
+        std::fprintf(stderr,
+            "compute_2d_gmode_evp_qspace: Xgeev info=%d.\n", h_info);
+        std::exit(1);
+    }
+
+    std::vector<cuDoubleComplex> h_W(Nb);
+    std::vector<cuDoubleComplex> h_VR((size_t)Nb * Nb);
+    CUDA_CHECK(cudaMemcpy(h_W.data(),  d_W,  sizeof(cuDoubleComplex) * Nb,
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_VR.data(), d_VR,
+                          sizeof(cuDoubleComplex) * (size_t)Nb * Nb,
+                          cudaMemcpyDeviceToHost));
+
+    struct EigPair { double omega_sq; int idx; };
+    std::vector<EigPair> good;
+    int n_dropped_imag = 0, n_dropped_neg = 0;
+    double max_imag_ratio = 0.0;
+    for (int k = 0; k < Nb; ++k) {
+        double re = h_W[k].x;                    // λ = ω²/k²
+        double im = h_W[k].y;
+        if (!std::isfinite(re)) continue;
+        double ratio = std::fabs(im) / (std::fabs(re) + 1e-30);
+        if (ratio > max_imag_ratio) max_imag_ratio = ratio;
+        if (ratio > 1e-8) { ++n_dropped_imag; continue; }
+        double om2 = re * k2;
+        if (om2 <= 0.0) { ++n_dropped_neg; continue; }
+        good.push_back({om2, k});
+    }
+    std::fprintf(stderr,
+        "  [2D EVP qspace] Nb=%d, kept=%zu, dropped imag=%d neg=%d, "
+        "max_imag_ratio=%.3e\n",
+        Nb, good.size(), n_dropped_imag, n_dropped_neg, max_imag_ratio);
+    std::sort(good.begin(), good.end(),
+              [](const EigPair& a, const EigPair& b) {
+                  return a.omega_sq > b.omega_sq;
+              });
+    int n_out = std::min(n_modes_out, (int)good.size());
+    omega_sq_out.resize(n_out);
+    phi_modes_out.assign((size_t)ny * n_out, 0.0);
+    // Reconstruct φ(y) on CGL grid: φ = Σ_n c_n · ϕ_n(y).
+    for (int km = 0; km < n_out; ++km) {
+        omega_sq_out[km] = good[km].omega_sq;
+        int col = good[km].idx;
+        for (int k = 0; k < ny; ++k) {
+            double phi_val = 0.0;
+            for (int n = 0; n < Nb; ++n) {
+                double cn = h_VR[(size_t)n + (size_t)col * Nb].x;
+                phi_val += cn * Phi[(size_t)k * Nb + n];
+            }
+            phi_modes_out[(size_t)k * n_out + km] = phi_val;
+        }
+        // Hard zero at walls (Dirichlet); basis gives 0 analytically, this
+        // cancels round-off.
+        phi_modes_out[(size_t)0 * n_out + km]        = 0.0;
+        phi_modes_out[(size_t)(ny - 1) * n_out + km] = 0.0;
+    }
+
+    // Cleanup
+    std::free(h_work);
+    if (d_work) cudaFree(d_work);
+    cudaFree(d_Mc); cudaFree(d_W); cudaFree(d_VR);
+    cudaFree(d_info);
     cusolverDnDestroyParams(params);
     cusolverDnDestroy(solver);
 }

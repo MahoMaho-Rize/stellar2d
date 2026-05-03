@@ -1421,7 +1421,29 @@ int main(int argc, char** argv) {
             double kx_phys = kx_int * 2.0 * M_PI / ansl.Lx;
             int n_modes_req = 10;
             std::vector<double> omega_sq, v_modes;
-            ansl.compute_2d_gmode_evp(kx_phys, n_modes_req, omega_sq, v_modes);
+            bool use_qspace = false;
+            if (const char* s = std::getenv("ANSL_EVP_BASIS")) {
+                std::string ss(s);
+                if (ss == "qspace" || ss == "q" || ss == "phi") use_qspace = true;
+            }
+            if (use_qspace) {
+                std::vector<double> phi_modes;
+                ansl.compute_2d_gmode_evp_qspace(kx_phys, n_modes_req,
+                                                 omega_sq, phi_modes);
+                // Convert φ → V̂ on interior nodes for CSV compatibility.
+                const int n_out = (int)omega_sq.size();
+                v_modes.assign((size_t)(ansl.ny - 2) * n_out, 0.0);
+                for (int k = 0; k < n_out; ++k) {
+                    for (int i = 0; i < ansl.ny - 2; ++i) {
+                        int row = i + 1;
+                        double phi = phi_modes[(size_t)row * n_out + k];
+                        v_modes[(size_t)i + (size_t)k * (ansl.ny - 2)] =
+                            phi / std::max(ansl.h_rho[row], 1e-30);
+                    }
+                }
+            } else {
+                ansl.compute_2d_gmode_evp(kx_phys, n_modes_req, omega_sq, v_modes);
+            }
             double N2 = bg_arg;
             std::fprintf(stderr,
                 "  2D g-mode EVP at k_x_int=%d  (k_x_phys=%g, N²=%g)\n",
