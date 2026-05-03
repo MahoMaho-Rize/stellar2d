@@ -143,6 +143,14 @@ struct SimConfig {
     double cart_ale2_slab_perturb = 0.01;  // entropy seed amplitude at slab bottom
     int cart_ale2_slab_seed_k = 4;     // horizontal mode of entropy seed
     double cart_ale2_cool_tau = 0.0;   // cart_ale2: Newton-cooling timescale (s). 0 = disabled.
+    // Bottom enthalpy-flux source (makes local_convection flux-driven so v_conv
+    // saturates at the MLT scale). Either --heat-flux F directly [erg/cm²/s],
+    // or --heat-lsun L + --heat-bot-R R → F = L/(4π R²).  0 = disabled.
+    double cart_ale2_heat_flux = 0.0;
+    double cart_ale2_heat_lsun = 0.0;
+    double cart_ale2_heat_bot_R = 0.0;
+    double cart_ale2_heat_bot_frac = 0.05; // e-fold of exp heating profile / Ly
+    double cart_ale2_cool_top_frac = 0.3;  // cooling confined to top frac of column
     // pseudo-spectral (偽譜法) 專用
     double ps_nu = 1e-4;          // 運動黏度
     double ps_Lx = 1.0;
@@ -418,6 +426,16 @@ int main(int argc, char** argv) {
             cfg.cart_ale2_slab_seed_k = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--cool-tau") == 0 && i + 1 < argc)
             cfg.cart_ale2_cool_tau = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-flux") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_flux = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-lsun") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_lsun = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-bot-R") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_bot_R = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-bot-frac") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_bot_frac = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--cool-top-frac") == 0 && i + 1 < argc)
+            cfg.cart_ale2_cool_top_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
             cfg.ps_nu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)
@@ -1612,6 +1630,24 @@ int main(int argc, char** argv) {
             if (cale.tau_cool > 0.0)
                 std::fprintf(stderr,
                     "    Newton cooling ON: τ_cool=%.3e s\n", cale.tau_cool);
+
+            // Bottom enthalpy-flux heating.  Either F directly or L/(4π R²).
+            double F_bot = cfg.cart_ale2_heat_flux;
+            if (F_bot <= 0.0 && cfg.cart_ale2_heat_lsun > 0.0) {
+                if (cfg.cart_ale2_heat_bot_R <= 0.0) {
+                    std::fprintf(stderr,
+                        "  [error] --heat-lsun requires --heat-bot-R "
+                        "(bottom-face radius in cm)\n");
+                    return 1;
+                }
+                double R = cfg.cart_ale2_heat_bot_R;
+                F_bot = cfg.cart_ale2_heat_lsun / (4.0 * M_PI * R * R);
+            }
+            if (F_bot > 0.0 || cfg.cart_ale2_cool_top_frac < 1.0) {
+                cale.configure_thermal(F_bot,
+                                       cfg.cart_ale2_heat_bot_frac,
+                                       cfg.cart_ale2_cool_top_frac);
+            }
         } else {
             cale.init_sod();
         }

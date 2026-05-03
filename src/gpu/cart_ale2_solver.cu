@@ -216,22 +216,43 @@ void CartAle2Solver::destroy() {
     f(d_FSX); f(d_FSY);
     f(d_dt_cell); f(d_reduce_buf);
     f(d_e_ref_y);
+    f(d_cool_weight_y);
+    f(d_heat_dedt_base_y);
     std::memset(this, 0, sizeof(*this));
 }
 
 // ============================================================
-// Newton cooling: e ← e + (e_ref(y) − e)·(1 − exp(−dt/τ))
+// Newton cooling + bottom enthalpy-flux heating:
+//   e ← e + (e_ref(y) − e)·α_cool·s_cool(y) + q_base(y)/ρ · dt
+// α_cool = 1 − exp(−dt/τ); q_base(y) = F_bot·g(y), ∫g dy = 1.
+// s_cool(y) is a cosine ramp active in the top cool_top_frac of the column.
+// Density (dm/V) is untouched → mass conservation is exact.
 // ============================================================
-__global__ static void k_cale2_newton_cool(double* __restrict__ e_int,
-                                           const double* __restrict__ e_ref_y,
-                                           double alpha, int nx, int ny) {
+__global__ static void k_cale2_thermal_step(double* __restrict__ e_int,
+                                            const double* __restrict__ dm,
+                                            const double* __restrict__ Area0,
+                                            const double* __restrict__ e_ref_y,
+                                            const double* __restrict__ w_cool_y,
+                                            const double* __restrict__ q_base_y,
+                                            double alpha_cool, double dt,
+                                            int nx, int ny, int has_cool, int has_heat) {
     int ic = blockIdx.x * blockDim.x + threadIdx.x;
     int jc = blockIdx.y * blockDim.y + threadIdx.y;
     if (ic >= nx || jc >= ny) return;
     int idx = ic * ny + jc;
     double e = e_int[idx];
-    double eref = e_ref_y[jc];
-    e_int[idx] = e + (eref - e) * alpha;
+    if (has_cool) {
+        double w = w_cool_y[jc];
+        double eref = e_ref_y[jc];
+        e += (eref - e) * alpha_cool * w;
+    }
+    if (has_heat) {
+        // q_base(y) is volumetric power density [erg/(s·cm³)].
+        // Per-cell Δe = q · dt / ρ, with ρ = dm / (Area0 · 1 cm depth-equiv).
+        double rho = dm[idx] / Area0[idx];
+        e += q_base_y[jc] * dt / rho;
+    }
+    e_int[idx] = e;
 }
 
 void CartAle2Solver::alloc_cooling_ref(const std::vector<double>& e_ref_per_row) {
@@ -247,12 +268,83 @@ void CartAle2Solver::alloc_cooling_ref(const std::vector<double>& e_ref_per_row)
                           ny * sizeof(double), cudaMemcpyHostToDevice));
 }
 
+void CartAle2Solver::configure_thermal(double F_bot,
+                                       double heat_bot_frac_,
+                                       double cool_top_frac_) {
+    bottom_heat_flux = F_bot;
+    if (heat_bot_frac_ > 0.0) heat_bot_frac = heat_bot_frac_;
+    if (cool_top_frac_ > 0.0) cool_top_frac = cool_top_frac_;
+
+    double Ly = g_Ly;
+    double dy = Ly / ny;
+
+    std::vector<double> h_wcool(ny, 1.0);
+    if (cool_top_frac < 1.0) {
+        double y_on = (1.0 - cool_top_frac) * Ly;    // cooling starts here
+        for (int jc = 0; jc < ny; ++jc) {
+            double yc = (jc + 0.5) * dy;
+            if (yc <= y_on) {
+                h_wcool[jc] = 0.0;
+            } else {
+                double u = (yc - y_on) / (Ly - y_on);   // 0 at start → 1 at top
+                h_wcool[jc] = 0.5 * (1.0 - std::cos(M_PI * u));
+            }
+        }
+    }
+    if (d_cool_weight_y) { cudaFree(d_cool_weight_y); d_cool_weight_y = nullptr; }
+    CUDA_CHECK(cudaMalloc(&d_cool_weight_y, ny * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_cool_weight_y, h_wcool.data(),
+                          ny * sizeof(double), cudaMemcpyHostToDevice));
+
+    std::vector<double> h_qbase(ny, 0.0);
+    if (F_bot > 0.0) {
+        double H = heat_bot_frac * Ly;
+        double wsum = 0.0;
+        std::vector<double> w(ny);
+        for (int jc = 0; jc < ny; ++jc) {
+            double yc = (jc + 0.5) * dy;
+            w[jc] = std::exp(-yc / H);
+            wsum += w[jc] * dy;
+        }
+        // q(y) = F_bot · g(y), ∫g dy = 1  → volumetric power density [erg/s/cm³]
+        for (int jc = 0; jc < ny; ++jc)
+            h_qbase[jc] = F_bot * w[jc] / wsum;
+    }
+    if (d_heat_dedt_base_y) { cudaFree(d_heat_dedt_base_y); d_heat_dedt_base_y = nullptr; }
+    CUDA_CHECK(cudaMalloc(&d_heat_dedt_base_y, ny * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_heat_dedt_base_y, h_qbase.data(),
+                          ny * sizeof(double), cudaMemcpyHostToDevice));
+
+    if (F_bot > 0.0) {
+        std::fprintf(stderr,
+            "  [thermal] bottom heat F=%.3e erg/cm²/s, e-fold H=%.3e cm (%.2f Ly); "
+            "cooling top frac=%.2f\n",
+            F_bot, heat_bot_frac * Ly, heat_bot_frac, cool_top_frac);
+    }
+}
+
 void CartAle2Solver::apply_cooling(double dt) {
-    if (tau_cool <= 0.0 || d_e_ref_y == nullptr) return;
-    double alpha = 1.0 - std::exp(-dt / tau_cool);
+    bool has_cool = (tau_cool > 0.0 && d_e_ref_y != nullptr);
+    bool has_heat = (bottom_heat_flux > 0.0 && d_heat_dedt_base_y != nullptr);
+    if (!has_cool && !has_heat) return;
+
+    double alpha = has_cool ? (1.0 - std::exp(-dt / tau_cool)) : 0.0;
+
+    // Cool-weight buffer is allocated lazily on the first call when cooling is
+    // enabled but configure_thermal() was never invoked.
+    if (has_cool && d_cool_weight_y == nullptr) {
+        std::vector<double> ones(ny, 1.0);
+        CUDA_CHECK(cudaMalloc(&d_cool_weight_y, ny * sizeof(double)));
+        CUDA_CHECK(cudaMemcpy(d_cool_weight_y, ones.data(),
+                              ny * sizeof(double), cudaMemcpyHostToDevice));
+    }
+
     dim3 B(16, 16);
     dim3 G((nx + B.x - 1) / B.x, (ny + B.y - 1) / B.y);
-    k_cale2_newton_cool<<<G, B>>>(d_e_int, d_e_ref_y, alpha, nx, ny);
+    k_cale2_thermal_step<<<G, B>>>(d_e_int, d_dm, d_Area0,
+                                   d_e_ref_y, d_cool_weight_y, d_heat_dedt_base_y,
+                                   alpha, dt, nx, ny,
+                                   has_cool ? 1 : 0, has_heat ? 1 : 0);
 }
 
 // ============================================================

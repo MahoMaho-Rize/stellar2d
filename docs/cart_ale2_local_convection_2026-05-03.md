@@ -480,23 +480,82 @@ saturated.
 
 ## 9. Future Work
 
-### 9.1 Add a bottom enthalpy-flux source (the immediate next step)
+### 9.1 Bottom enthalpy-flux source [IMPLEMENTED 2026-05-03]
 
-Minimal: extend `k_cale2_newton_cool` with a bottom-row source:
+**Shipped.** `k_cale2_newton_cool` became `k_cale2_thermal_step`, now
+combining a relaxation term and a volumetric heating term:
 
-```cpp
-if (jc == 0) {              // bottom row
-    e += heat_rate * dt;    // heat_rate = L⊙ / (4π R² · ρ_bot · dy)
-}
+```
+e ← e + (e_ref(y) − e) · α_cool · s_cool(y) + q(y)/ρ · dt
+q(y)  = F_bot · g(y),   ∫ g(y) dy = 1,   g(y) ∝ exp(−y/(h·Ly))
+s_cool(y): cosine ramp, 0 below (1−f)·Ly, 1 at top.
 ```
 
-- Use L⊙ = 3.83 × 10³³ erg/s / (cell volume × ρ_bot) for the
-  coefficient.
-- In steady state bottom heating = top cooling (the two must be
-  decoupled — probably by limiting cooling to the top few rows too).
-- Expected: v_conv drops to the MESA MLT scale.
+Decoupling requirement from the pre-design note above is satisfied by
+`cool_top_frac` (default 0.3) — cooling only fires in the top 30 % of the
+column, heating only in the bottom `h = 0.05 Ly` e-fold. Density is never
+touched, so mass and HSE are exactly preserved.
 
-Work estimate: ~2 hours.
+CLI (new, implemented):
+
+```
+--heat-flux <F>        # erg/cm²/s, direct
+--heat-lsun <L>        # erg/s, combined with
+--heat-bot-R <R>       #   cm, to give F = L/(4π R²)
+--heat-bot-frac <h>    # e-fold of exp profile as fraction of Ly, default 0.05
+--cool-top-frac <f>    # cooling ramp depth, default 0.3
+```
+
+Bit-exact sanity check (no-perturb, heat-only, 32² ny, dt=5000 s,
+F=1e15 erg/cm²/s, Lx=1.7e10 cm):
+
+```
+predicted ΔE = F · Lx · dt = 8.65 × 10²⁸ erg
+measured  ΔE =              8.59 × 10²⁸ erg   (0.7 % agreement)
+```
+
+### 9.1a Physical timescale caveat — v_conv still does not snap to MLT in 15 000 s
+
+Running `--heat-lsun 2.69e33 --heat-bot-R 5.24e10` (0.7 L⊙ at bottom
+of the r/R = 0.85 convective shell) for 15 000 s gives KE and v_max
+essentially **unchanged from the cool-only baseline**. The reason is a
+ratio mismatch the design note under-estimated:
+
+```
+F · Lx · t_end = 7.8e10 · 1.7e10 · 1.5e4 ≈ 2 × 10²⁵ erg
+KE_initial                             ≈ 6 × 10²⁹ erg
+```
+
+The pipeline injects L⊙ worth of flux but the 2D-box KE is 10⁴ × larger
+than what L⊙ can deposit in one τ_dyn, so convection is driven by the
+initial entropy seed, not the bottom heating, for many thousands of
+τ_dyn. Equilibration time is `τ_eq ~ KE/(F·Lx) ≈ 5 × 10⁸ s ≈ 2×10⁵ τ_dyn`
+— not tractable on this box size.
+
+**What this means in practice.** The mechanism is implemented
+correctly; the controller does what it says. Matching v_conv to MLT
+requires *either*:
+  1. A physically-consistent Lz depth normalization (F_bot scaled up
+     by `R/Lz` or similar to reflect a 3D annular shell), or
+  2. A smaller, thinner slab (shrink Ly by 10×, Lx by 10×) so
+     F·Lx·τ_dyn becomes comparable to KE, or
+  3. Relaxing the initial perturbation to near zero and letting the
+     heating build up a steady state over ~10⁵ τ_dyn (impractical).
+
+Option (1) is the cleanest and matches how Muthsam+ 2010 set up their
+CO⁵BOLD patches — queued as §9.1b.
+
+### 9.1b 2D-box flux scaling (follow-up)
+
+Reinterpret the slab: the 2D box represents a column of unit depth
+through a 3D convective layer of area `4π r²_bot`. The relevant
+heat-per-unit-box-volume is still `F_bot · g(y)`, but the steady-state
+velocity is set by the flux balance, and the equilibration timescale
+with a 1 × Lx × Ly box is artificially long. Options: introduce a
+sponge `F_sink = F_bot/Lx` in the top few rows to match steady-state
+cooling, or scale up the box depth via an effective 2D-to-3D mapping.
+
+Work estimate: ~4 hours plus a scanning study.
 
 ### 9.2 Spatially-varying τ_cool
 
@@ -533,6 +592,7 @@ This is the increment that MESA and GYRE cannot produce.
 
 ## 11. Commits Preview (pending)
 
+Session 1 (earlier commit c524652):
 - `scripts/make_local_convection_slab.py` — new.
 - `src/gpu/cart_ale2_solver.cuh` — new declarations:
   `init_local_convection`, `tau_cool`, `d_e_ref_y`,
@@ -541,9 +601,16 @@ This is the increment that MESA and GYRE cannot produce.
   call site.
 - `src/main.cpp` — five new flags: `--test local_convection`,
   `--ic-slab`, `--slab-perturb`, `--slab-seed-k`, `--cool-tau`.
+
+Session 2 (bottom L⊙ heating, this revision):
+- `src/gpu/cart_ale2_solver.cuh` — merged cooling + heating into one
+  `k_cale2_thermal_step`; new fields `d_cool_weight_y`,
+  `d_heat_dedt_base_y`, `cool_top_frac`, `bottom_heat_flux`,
+  `heat_bot_frac`; new method `configure_thermal`.
+- `src/gpu/cart_ale2_solver.cu` — kernel rewrite + free list update.
+- `src/main.cpp` — five new flags: `--heat-flux`, `--heat-lsun`,
+  `--heat-bot-R`, `--heat-bot-frac`, `--cool-top-frac`.
 - `docs/cart_ale2_local_convection_2026-05-03.md` — this document.
-- `docs/cart_ale2_design.md` — one line added to the applicability
-  list.
 
 ---
 

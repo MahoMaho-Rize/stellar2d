@@ -135,16 +135,26 @@ struct CartAle2Solver {
     //     ppm.cpp + characteristic.cpp (Stone+08 Appendix A, adiabatic hydro).
     int ppm_char = 1;
 
-    // ---- Newton cooling (optional; only used by local_convection) ----
-    // Relaxes e_int(y) toward a reference profile e_ref(y) with timescale
-    // tau_cool.  Same mechanic Nordlund & Stein used in their 1980s box
-    // convection papers to bleed off compressive heating so v_conv saturates
-    // at physical values instead of running up to Mach ~0.1.
-    //   e ← e + (e_ref(y) − e)·(1 − exp(−dt / τ_cool))
-    // Density is untouched (so mass and HSE are preserved exactly).
-    double *d_e_ref_y = nullptr;   // per-row (ny) reference e_int, cell-centered
-    double tau_cool = 0.0;         // 0 = disabled
+    // ---- Newton cooling + bottom enthalpy-flux heating (optional) ----
+    // Newton cooling bleeds off heat at the top:
+    //   e ← e + (e_ref(y) − e)·α_cool·s_cool(y),   α_cool = 1 − exp(−dt/τ)
+    // where s_cool(y) is a cosine ramp: 0 below (1 − cool_top_frac)·Ly, 1 at top.
+    // Bottom enthalpy source injects L⊙-equivalent flux as a volumetric
+    // heating with exponential profile concentrated at the bottom:
+    //   q(y) = F_bot · g(y),   g(y) = w(y)/∫w dy,   w(y) = exp(−y/(heat_bot_frac·Ly))
+    //   de/dt = q(y) / ρ(y)
+    // In steady state ∫(top cooling) = ∫(bottom heating) = F_bot·Lx — classical
+    // Stein-Nordlund box convection driving. Density is never touched so mass &
+    // HSE are exactly preserved.
+    double *d_e_ref_y          = nullptr;  // per-row reference e_int (cooling target)
+    double *d_cool_weight_y    = nullptr;  // per-row cooling ramp weight (0 at bot, 1 at top)
+    double *d_heat_dedt_base_y = nullptr;  // per-row F_bot·g(y) [erg/(s·cm³)]
+    double tau_cool            = 0.0;      // Newton cooling timescale (s); 0 = disabled
+    double cool_top_frac       = 1.0;      // cooling active in top frac of column (1 = full)
+    double bottom_heat_flux    = 0.0;      // F_bot [erg/cm²/s]; 0 = disabled
+    double heat_bot_frac       = 0.05;     // heating depth fraction (e-fold of exp profile / Ly)
     void alloc_cooling_ref(const std::vector<double>& e_ref_per_row);
+    void configure_thermal(double F_bot, double heat_bot_frac_, double cool_top_frac_);
     void apply_cooling(double dt);
 
     // ---- Bookkeeping ----
