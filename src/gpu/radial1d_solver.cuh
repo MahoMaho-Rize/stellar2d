@@ -363,7 +363,7 @@ struct Radial1DSolver {
     // Relative convergence target: accept if ||F||_new < newton_rel_tol·init_res.
     // 1e-4 = four orders drop from initial. Previous 0.5 (2× cut) let Newton
     // stop too early at high resolution.
-    double newton_rel_tol = 1e-3;
+    double newton_rel_tol = 1e-9;
     int newton_max_iter = 15;
     double gmres_tol = 1e-6;   // Tightened from 1e-3: at nr=1024 GMRES was
                                // exiting at j=1 with false convergence (PC
