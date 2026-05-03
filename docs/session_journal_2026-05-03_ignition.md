@@ -96,6 +96,65 @@ T_c 離 1.5×10⁷ K 還差 2.2×,需要再 30 Myr。當前 solver 撐不過去:
 - `--no-rhse` CLI flag(保留作未來診斷工具)
 - Newton 真收斂配方(current-state scaling + rad-aware Le + tol 收緊)
 
+## Phase 4:繼續排查 (commit `6333017`)
+
+### 診斷 step 700 dt collapse 的根因
+
+抓出 profile_0030 (step 600) 外層:
+- 正常 zones 1019-1022: ρ ~ 1e-3 → 3.7e-4 平滑遞減
+- **zone 1023 異常:ρ = 0.022 (50× spike), e_int = 1e-30 (literal FLOOR)**
+- Δr_1023 = 2e8 cm(鄰近 zone 的 1/60)
+
+### 根因 E:MESA IC 外層 Δr 擠壓 + ρ_geom 不一致
+
+MESA profile.data 在外層大氣**超采樣** — 300+ MESA zones 佔 <10⁻⁵ 質量
+(H, He 光球精細結構)。radial1d 1024-zone equal-mass shell 把這些
+全塞到 1 個外層 zone,結果:
+
+1. Δr_1023 僅 5e8 cm(相鄰 zone 的 1/10 之內)
+2. ρ_geom = dm/Vol 暴增 10⁴×(從 MESA 1e-7 → 1.77e-3)
+3. Helm seed e(ρ_mesa, T_mesa) 用 MESA 的 ρ=1e-7,但 runtime ρ=dm/Vol
+   → 不一致 → Helm 返回 e=1e-30(floor)
+4. 演化到 step 600 外層「突然甦醒」,e 從 1e-30 跳到 1e12,速度衝刺,
+   Newton 跟不上 → dt collapse
+
+### 雙管修復 (commit `6333017`)
+
+1. **外殼 Δr floor**:若 outermost Δr < 0.7·內部 Δr,把 face 往內移讓
+   殼間距至少達 0.7×。質量 dm 不變,只平滑幾何。
+2. **ρ_geom 一致性**:`h_rho = max(rho_mesa_interp, dm/Vol_k)`。
+   外層用 ρ_geom,核心 zones 仍用 MESA ρ。
+
+### 結果
+
+| 指標 | 修前 (db0222d) | 修後 (6333017) |
+|---|---|---|
+| step 700 前失敗 | 多 | **0** |
+| 總失敗(到 t=1.3e13s) | 101+ | **7** |
+| IC profile 外層 e_int | 1e-30 (floor) | 2e13 (physical) |
+| 最終 T_c 飽和點 | 6.68×10⁶ | 6.67×10⁶(相同) |
+
+dt collapse 被推後,但**同一 T_c 飽和點未變**。
+
+### Phase 5:Helm T_inv 微調(失敗回滾)
+
+嘗試:改 `helm_T_from_rho_e` 初始 T_guess 從固定 10⁴ 改成 ideal-ion
+估計 `T ≈ e/9.6e7`。目的:讓外殼 Helm 不要 converge 到 1280K noise。
+
+結果:T_phot 略升(1280K → 1388K),L_surf 略增(0.53 → 0.72 L☉),
+但 dt collapse 時間點從 t=1.3e13 s 前移到 t=3e12 s,失敗數增加。
+Newton 因 T_inv 變化路徑而變激進,反而更快卡住。已 revert。
+
+## 真正的點火障礙(本 session 未解)
+
+系統在 T_c ≈ 6.7×10⁶ K, ρ_c ≈ 28 g/cc 附近 **物理飽和**,不管怎麼
+調 Newton / IC 都到不了更深。推測是:
+
+1. **L_surf 上限**:當前 ~0.5-0.7 L☉,真實 pre-MS 1 M☉ Hayashi 應 1.5-3 L☉
+2. 太陽熱不出去 → 核心收縮被阻止
+3. 解開需要修 τ=2/3 photospheric 掃描(用 sub-zone 內插 / Eddington 大氣)
+   或放棄 grey atmosphere 用 MESA-style 外部 T(τ) 表
+
 ## 下次 session 要解的
 
 **優先級 1**:step 700 之後 dt collapse 的根因
