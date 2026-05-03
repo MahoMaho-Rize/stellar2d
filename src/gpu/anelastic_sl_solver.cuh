@@ -54,6 +54,8 @@ struct AnelasticSLSolver {
     std::vector<double> h_y_cgl;       // Chebyshev-Gauss-Lobatto nodes on [0, Ly]  (ascending)
     std::vector<double> h_rho;         // ρ_0 at CGL nodes
     std::vector<double> h_W_tilde;     // reduced-pressure Liouville potential
+    std::vector<double> h_dy_ds;       // y'(s) = dy/ds at CGL nodes (1.0 for identity map)
+    std::vector<double> h_s_cgl;       // CGL nodes in the stretched coordinate s ∈ [0, Ly]
     std::vector<double> h_mu;          // SL eigenvalues μ_n (ascending)
     std::vector<double> h_Psi;         // (ny, n_modes) column-major, CGL-grid eigenfunctions
     std::vector<double> h_cc_weights;  // Clenshaw-Curtis quadrature weights
@@ -107,6 +109,17 @@ struct AnelasticSLSolver {
     //
     // Activated when filter_alpha > 0 (set via ANSL_FILTER_ALPHA env var).
     enum class FilterBasis { CHEB, SL, EVP };
+    // Coordinate map s∈[0,Ly] → y∈[0,Ly] for SL regularisation near walls.
+    // "identity" : y = s (no change, legacy path)
+    // "tanh"     : y(s) = Ly/2 + (Ly/2) · tanh(β(2s/Ly − 1)) / tanh(β),
+    //              geometric stretch that clusters nodes near both walls
+    //              independently of ρ₀
+    // "logrho"   : y(s) = ρ₀⁻¹(exp(−s)), requires monotone ρ₀(y); makes W̃
+    //              bounded for Lane-Emden surface-type singularities
+    enum class CoordMap { IDENTITY, TANH, LOGRHO };
+    CoordMap coord_map = CoordMap::IDENTITY;
+    double   coord_beta = 2.0;  // tanh stretch strength
+
     double* d_y_filter = nullptr;
     FilterBasis filter_basis = FilterBasis::CHEB;
     double  filter_alpha  = 0.0;     // 0 disables the filter

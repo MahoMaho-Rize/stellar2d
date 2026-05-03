@@ -302,16 +302,91 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     std::vector<int> idx(ny);
     for (int k = 0; k <= N; ++k) idx[k] = N - k;
 
-    std::vector<double> y_asc(ny), D_scaled((size_t)ny * ny);
+    // ── Coordinate map s ∈ [0, Ly] → y ∈ [0, Ly] for SL regularisation ─────
+    // We place CGL nodes uniformly in the stretched coord s; the physical
+    // y(s) is a monotone-increasing map.  Differentiation in y is then
+    //   (d/dy) = (1/y'(s)) · (d/ds)
+    // obtained by post-multiplying the standard Chebyshev D_s by diag(1/y').
+    //
+    // Env vars: ANSL_COORD_MAP=identity|tanh|logrho, ANSL_COORD_BETA.
+    if (const char* s = std::getenv("ANSL_COORD_MAP")) {
+        std::string m(s);
+        if      (m == "identity") coord_map = CoordMap::IDENTITY;
+        else if (m == "tanh")     coord_map = CoordMap::TANH;
+        else if (m == "logrho")   coord_map = CoordMap::LOGRHO;
+        else {
+            std::fprintf(stderr, "ANSL_COORD_MAP must be identity|tanh|logrho.\n");
+            std::exit(1);
+        }
+    }
+    if (const char* s = std::getenv("ANSL_COORD_BETA")) {
+        double v = std::atof(s);
+        if (v > 0.0) coord_beta = v;
+    }
+
+    // s-grid: ascending in [0, Ly] (same formula as before, now s instead of y).
+    h_s_cgl.resize(ny);
     for (int k = 0; k < ny; ++k)
-        y_asc[k] = (1.0 + x_cheb[idx[k]]) * Ly / 2.0;  // ascending [0, Ly]
+        h_s_cgl[k] = (1.0 + x_cheb[idx[k]]) * Ly / 2.0;
+
+    // Build y(s) and y'(s) at each CGL node.  Identity and tanh are closed
+    // form and do not need ρ₀; logrho defers until after ρ₀ is built on y = s
+    // as a first guess, then iterates — but since we need h_rho on the FINAL
+    // y grid downstream, we handle logrho via a dedicated pre-pass below.
+    std::vector<double> y_asc(ny);
+    h_dy_ds.assign(ny, 1.0);
+
+    if (coord_map == CoordMap::IDENTITY) {
+        for (int k = 0; k < ny; ++k) {
+            y_asc[k] = h_s_cgl[k];
+            h_dy_ds[k] = 1.0;
+        }
+    } else if (coord_map == CoordMap::TANH) {
+        // y(s) = Ly/2 · (1 + tanh(β·(2s/Ly − 1))/tanh(β))
+        // y'(s) = β · sech²(β·ξ) / tanh(β)       with ξ = 2s/Ly − 1
+        //    (chain rule on ξ gives the factor of β — without it y' blows up
+        //    at small β, since tanh(β) ≈ β and sech²→1 leaves 1/β.)
+        const double b = coord_beta;
+        const double tb = std::tanh(b);
+        for (int k = 0; k < ny; ++k) {
+            double xi_s = 2.0 * h_s_cgl[k] / Ly - 1.0;    // ∈ [-1, 1]
+            double tbx = std::tanh(b * xi_s);
+            y_asc[k] = 0.5 * Ly * (1.0 + tbx / tb);
+            double sech2 = 1.0 / (std::cosh(b * xi_s) * std::cosh(b * xi_s));
+            h_dy_ds[k] = b * sech2 / tb;                  // dy/ds
+        }
+        y_asc.front() = 0.0;
+        y_asc.back()  = Ly;
+    } else {
+        // LOGRHO: y(s) = ρ₀⁻¹(exp(−α·s))  where α chosen so s=0 → y=0,
+        //                                          s=Ly → y=Ly
+        // Requires a fine sampling of ρ₀(y) on identity grid; built below.
+        // For now initialise as identity; we overwrite after ρ₀ is known.
+        for (int k = 0; k < ny; ++k) {
+            y_asc[k] = h_s_cgl[k];
+            h_dy_ds[k] = 1.0;
+        }
+    }
     h_y_cgl = y_asc;
 
-    // Chain rule: y = (1 + x) · Ly / 2  ⇒  dy/dx = Ly/2  ⇒  d/dy = (2/Ly) d/dx.
+    // D_scaled in s-coord (standard CGL on [0, Ly]): d/ds = (2/Ly) d/dx.
+    std::vector<double> D_scaled((size_t)ny * ny);
     double scale = 2.0 / Ly;
     for (int i = 0; i < ny; ++i) {
         for (int j = 0; j < ny; ++j) {
             D_scaled[(size_t)i * ny + j] = scale * D_raw[(size_t)idx[i] * (N + 1) + idx[j]];
+        }
+    }
+
+    // For non-identity coord maps: rescale each row by 1/y'(s_i), so that
+    //   (D_y f)_i = Σ_j D_scaled[i,j] f(y_j)    (acting on the y-nodes directly)
+    // is now d f / d y.  Chain rule: d/dy = (1/y'(s)) d/ds.
+    if (coord_map != CoordMap::IDENTITY) {
+        for (int i = 0; i < ny; ++i) {
+            double inv_dy = 1.0 / std::max(h_dy_ds[i], 1e-30);
+            for (int j = 0; j < ny; ++j) {
+                D_scaled[(size_t)i * ny + j] *= inv_dy;
+            }
         }
     }
 
@@ -353,15 +428,101 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
         std::exit(1);
     }
 
-    // W̃ on CGL.
+    // ── LOGRHO post-pass ─────────────────────────────────────────────────
+    // After h_rho(y_asc) is known (under the initial identity placement),
+    // rebuild y(s) so that s parametrises −ln(ρ₀/ρ_c).  Only sensible when
+    // ρ₀ is monotone-decreasing; Lane-Emden satisfies this.  For constant ρ₀
+    // the map collapses — skip silently and fall back to identity/tanh.
+    if (coord_map == CoordMap::LOGRHO && kind != "boussinesq" && kind != "stratified_n2") {
+        // Check monotone-descending h_rho; log variable u = -ln(ρ/ρ_c),
+        // ρ_c := h_rho[0].  s(y) = u(y) · Ly / u(Ly).
+        double rho_c = std::max(h_rho.front(), 1e-300);
+        double u_max = -std::log(std::max(h_rho.back() / rho_c, 1e-300));
+        if (u_max <= 0.0) {
+            std::fprintf(stderr,
+                "LOGRHO map: ρ₀ not monotone-decreasing (ρ_c=%.3g, ρ_surf=%.3g); "
+                "falling back to identity.\n", rho_c, h_rho.back());
+            coord_map = CoordMap::IDENTITY;
+        } else {
+            // Build dense samples of u(y) from the current identity-grid h_rho.
+            // Use log-linear interp to invert: for target u_q, find y(u_q).
+            std::vector<double> u_vec(ny);
+            for (int k = 0; k < ny; ++k)
+                u_vec[k] = -std::log(std::max(h_rho[k] / rho_c, 1e-300));
+            // u_vec is monotone-increasing in k.  Sample target u_q uniformly in s.
+            std::vector<double> y_new(ny), rho_new(ny);
+            for (int k = 0; k < ny; ++k) {
+                double sq = h_s_cgl[k];
+                double u_q = sq / Ly * u_max;    // linear in s
+                int j = 0;
+                while (j + 1 < ny && u_vec[j + 1] < u_q) ++j;
+                if (j + 1 >= ny) j = ny - 2;
+                double a = (u_q - u_vec[j]) / (u_vec[j + 1] - u_vec[j] + 1e-30);
+                y_new[k] = y_asc[j] + a * (y_asc[j + 1] - y_asc[j]);
+                rho_new[k] = rho_c * std::exp(-u_q);
+            }
+            y_new.front() = 0.0;
+            y_new.back()  = Ly;
+            rho_new.front() = rho_c;
+            rho_new.back()  = h_rho.back();
+            // Update grid and ρ.
+            y_asc  = y_new;
+            h_y_cgl = y_new;
+            h_rho  = rho_new;
+
+            // Compute y'(s) at CGL s-nodes by differentiating y(s) spectrally:
+            //   D_s · y(s)     (using the ORIGINAL Chebyshev D on s-grid, before
+            //                   the 1/y' rescale we applied earlier).
+            // Recompute D_scaled on the s-grid, apply to y_asc to get y'(s),
+            // then REDO the 1/y' rescaling below.
+            for (int i = 0; i < ny; ++i) {
+                for (int j = 0; j < ny; ++j) {
+                    D_scaled[(size_t)i * ny + j] =
+                        scale * D_raw[(size_t)idx[i] * (N + 1) + idx[j]];
+                }
+            }
+            for (int i = 0; i < ny; ++i) {
+                double dv = 0.0;
+                for (int j = 0; j < ny; ++j)
+                    dv += D_scaled[(size_t)i * ny + j] * y_asc[j];
+                h_dy_ds[i] = dv;
+            }
+            // Apply 1/y' rescale so D acts as d/dy.
+            for (int i = 0; i < ny; ++i) {
+                double inv_dy = 1.0 / std::max(h_dy_ds[i], 1e-30);
+                for (int j = 0; j < ny; ++j)
+                    D_scaled[(size_t)i * ny + j] *= inv_dy;
+            }
+            std::fprintf(stderr,
+                "  LOGRHO coord-map: ρ_c=%.4g, ρ_surf=%.4g, u_max=%.3g, "
+                "min(y')=%.3g, max(y')=%.3g\n",
+                rho_c, h_rho.back(), u_max,
+                *std::min_element(h_dy_ds.begin(), h_dy_ds.end()),
+                *std::max_element(h_dy_ds.begin(), h_dy_ds.end()));
+        }
+    }
+
+    // Diagnostic line for non-identity maps.
+    if (coord_map == CoordMap::TANH) {
+        double dy_min_ = *std::min_element(h_dy_ds.begin(), h_dy_ds.end());
+        double dy_max_ = *std::max_element(h_dy_ds.begin(), h_dy_ds.end());
+        std::fprintf(stderr,
+            "  TANH coord-map: β=%g, min(y')=%.3g, max(y')=%.3g (aspect=%.2g)\n",
+            coord_beta, dy_min_, dy_max_, dy_max_ / std::max(dy_min_, 1e-30));
+    }
+
+    // W̃ on CGL (now on y-grid, D already rescaled to d/dy).
     compute_W_tilde_cgl(h_y_cgl, h_rho, D_scaled, h_W_tilde);
 
-    // Clenshaw-Curtis weights on y (scale from [-1,1] to [0, Ly]).
+    // Clenshaw-Curtis weights (s-grid) scaled to physical y via chain rule:
+    //   ∫ f(y) dy = ∫ f(y(s)) · y'(s) ds ⇒ w_y[i] = w_s[i] · y'(s_i).
+    // Without the y' factor, SL orthonormality fails and the Poisson solve
+    // develops O(y') errors.
     std::vector<double> w_raw;
     cc_weights(N, w_raw);
     h_cc_weights.resize(ny);
     for (int k = 0; k < ny; ++k)
-        h_cc_weights[k] = w_raw[idx[k]] * Ly / 2.0;
+        h_cc_weights[k] = w_raw[idx[k]] * Ly / 2.0 * h_dy_ds[k];
 
     // Upload D_scaled to device for the apply_dy DGEMM path.  With F stored
     // row-major (ny × nx), its col-major reinterpretation is (nx × ny) with
