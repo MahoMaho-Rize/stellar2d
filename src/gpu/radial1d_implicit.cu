@@ -472,7 +472,8 @@ __global__ static void k_r1di_build_scaling(
     EOS eos, bool use_eos, double alpha1, double alpha2,
     int nz,
     double R_star,
-    int rad_on, double a_rad, double c_light, OpacityParams opa)
+    int rad_on, double a_rad, double c_light, OpacityParams opa,
+    int nuc_on, NuclearPPParams npars)
 {
     (void)v_face; (void)alpha1; (void)alpha2;
     int i = blockIdx.x*blockDim.x + threadIdx.x;
@@ -549,10 +550,21 @@ __global__ static void k_r1di_build_scaling(
         Le_rad = c_light * a_rad * T4 / (3.0 * kap * rho_bar * rho_bar * dr * dr);
     }
 
-    // Row-scale is the LARGER of the two — so whichever term is dominating
-    // in F_e sets the normalization. This prevents the HSE hydro scale from
-    // hiding rad-driven ||F_e|| at high resolution.
+    // Nuclear part: F_e^nuc ~ ε_pp. At pre-MS T=7e6, ρ=20 this is ~5e3
+    // erg/g/s — tiny vs cs³/R ~ 1e14 at the same state. Without adding
+    // it to the row floor, Newton tol=1e-8 in scaled space (|F|/Le < tol)
+    // admits ε_pp as noise and the solver false-converges with ΔU=0.
+    double Le_nuc = 0.0;
+    if (nuc_on) {
+        Le_nuc = nuclear_pp_epsilon(rho_c, T_i, npars);
+    }
+
+    // Row-scale is the LARGER of hydro / rad, but floored by nuc so
+    // ε-sized sources drive Newton instead of being scaled into noise.
+    // In a near-HSE state the true |F_e| ≈ ε_nuc + rad_imbalance, so
+    // setting Le to that magnitude gives the right sensitivity.
     double Le = fmax(Le_hydro, Le_rad);
+    if (Le_nuc > 0.0 && Le_nuc < Le) Le = Le_nuc;
     L[2*nz + i]    = Le;
     R_col[2*nz + i] = cs_c * cs_c;
     invL[2*nz + i] = 1.0 / fmax(Le, 1e-30);
@@ -707,11 +719,19 @@ void Radial1DSolver::build_scaling_implicit() {
     OpacityParams opa;
     if (radiation_enabled && use_eos) fill_opacity_params(opa);
     int rad_on = (radiation_enabled && use_eos) ? 1 : 0;
+    NuclearPPParams npars;
+    npars.X_hydrogen = nuc_X;
+    npars.epsilon_scale = nuc_epsilon_scale;
+    npars.T_floor = nuc_T_floor;
+    npars.T_scale = nuc_T_scale;
+    npars.q_burn = nuc_q_burn;
+    int nuc_on = (nuclear_enabled && use_eos) ? 1 : 0;
     k_r1di_build_scaling<<<(nz+B-1)/B, B>>>(
         lev.d_rho, lev.d_P, lev.d_e_int, lev.d_r, lev.d_v,
         d_scale_L, d_scale_R, d_scale_invL,
         eos, use_eos, viallet_alpha1, viallet_alpha2, nz, R_star,
-        rad_on, rad_a_rad, rad_c_light, opa);
+        rad_on, rad_a_rad, rad_c_light, opa,
+        nuc_on, npars);
 }
 
 // ---------------------------------------------------------------------
