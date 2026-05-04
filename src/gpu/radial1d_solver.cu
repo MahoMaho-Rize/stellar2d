@@ -10,6 +10,7 @@
 #include "radial1d_solver.cuh"
 #include "radial1d_kernels.cuh"
 #include "../physics/radiation_diffusion.cuh"
+#include "../physics/alpha_network.h"
 #include "fas_common.cuh"      // CUDA_CHECK macro
 #include <cstdio>
 #include <cstring>
@@ -177,6 +178,9 @@ void Radial1DSolver::init(int nz_in, double gam, double G, double cfl_in) {
     // Species arrays (allocated regardless; only used when species_enabled)
     mal(&d_X, nz);
     mal(&d_Y, nz);
+    // 13-species α-chain buffer (Phase D). Zero-initialised; populated by
+    // init_species_alpha() only when --species-mode alpha13 is selected.
+    mal(&d_X_spec, nz * alpha_net::N_SPEC);
 
     std::fprintf(stderr, "Radial1DSolver initialized: nz=%d zones, γ=%g, CFL=%g, CQ=%g, ZSH=%g\n",
                  nz, gamma, cfl, CQ, ZSH);
@@ -191,8 +195,9 @@ void Radial1DSolver::destroy() {
     f(lev.d_dt_cell); f(lev.d_scratch);
     f(d_T_work); f(d_F_work); f(d_dt_rad);
     f(d_X); f(d_Y);
+    f(d_X_spec);
     f(d_K_conv);
-    d_X = nullptr; d_Y = nullptr; d_K_conv = nullptr;
+    d_X = nullptr; d_Y = nullptr; d_X_spec = nullptr; d_K_conv = nullptr;
     std::memset(&lev, 0, sizeof(lev));
 }
 
@@ -793,7 +798,11 @@ double Radial1DSolver::step(double t, double t_end) {
         npars.T_scale = nuc_T_scale;
         npars.epsilon_scale = nuc_epsilon_scale;
         npars.q_burn = nuc_q_burn;
-        if (species_enabled) {
+        if (species_mode == SPEC_ALPHA13) {
+            // α-chain operator split is handled separately (Day 3). Skip
+            // pp-chain burn entirely so we don't corrupt e_int with a
+            // meaningless X→Y kernel run on zeroed d_X.
+        } else if (species_enabled) {
             k_rad1d_nuclear_pp_species<<<(nz+B-1)/B, B>>>(
                 lev.d_e_int, d_X, d_Y, lev.d_rho, nz, eos, npars, dt);
         } else {
@@ -895,14 +904,20 @@ Radial1DSolver::Diagnostics Radial1DSolver::compute_diagnostics() {
         npars.T_scale = nuc_T_scale;
         npars.epsilon_scale = nuc_epsilon_scale;
         npars.q_burn = nuc_q_burn;
-        if (species_enabled) {
-            k_rad1d_nuclear_L_species<<<(nz+B-1)/B, B>>>(
-                lev.d_rho, lev.d_e_int, d_X, lev.d_dm, scratch[0], nz, eos, npars);
+        if (species_mode == SPEC_ALPHA13) {
+            // L_nuc for alpha13 is computed inside the operator-split kernel
+            // (Day 3). Reported here as 0 until that's wired.
+            d.L_nuc = 0.0;
         } else {
-            k_rad1d_nuclear_L<<<(nz+B-1)/B, B>>>(
-                lev.d_rho, lev.d_e_int, lev.d_dm, scratch[0], nz, eos, npars);
+            if (species_enabled) {
+                k_rad1d_nuclear_L_species<<<(nz+B-1)/B, B>>>(
+                    lev.d_rho, lev.d_e_int, d_X, lev.d_dm, scratch[0], nz, eos, npars);
+            } else {
+                k_rad1d_nuclear_L<<<(nz+B-1)/B, B>>>(
+                    lev.d_rho, lev.d_e_int, lev.d_dm, scratch[0], nz, eos, npars);
+            }
+            d.L_nuc = gpu_reduce_sum_simple(scratch[0], nz);
         }
-        d.L_nuc = gpu_reduce_sum_simple(scratch[0], nz);
     } else {
         d.L_nuc = 0.0;
     }
@@ -1298,6 +1313,24 @@ void Radial1DSolver::download_species(std::vector<double>& X_cell,
     X_cell.resize(nz); Y_cell.resize(nz);
     CUDA_CHECK(cudaMemcpy(X_cell.data(), d_X, nz*sizeof(double), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(Y_cell.data(), d_Y, nz*sizeof(double), cudaMemcpyDeviceToHost));
+}
+
+void Radial1DSolver::init_species_alpha(const double* X_host) {
+    int nz = lev.nz;
+    size_t n = static_cast<size_t>(nz) * alpha_net::N_SPEC;
+    CUDA_CHECK(cudaMemcpy(d_X_spec, X_host, n * sizeof(double),
+                          cudaMemcpyHostToDevice));
+    species_mode = SPEC_ALPHA13;
+    species_enabled = true;
+    std::fprintf(stderr, "  Species init: alpha13 (%zu doubles uploaded)\n", n);
+}
+
+void Radial1DSolver::download_species_alpha(std::vector<double>& X_host) {
+    int nz = lev.nz;
+    size_t n = static_cast<size_t>(nz) * alpha_net::N_SPEC;
+    X_host.resize(n);
+    CUDA_CHECK(cudaMemcpy(X_host.data(), d_X_spec, n * sizeof(double),
+                          cudaMemcpyDeviceToHost));
 }
 
 // ============================================================

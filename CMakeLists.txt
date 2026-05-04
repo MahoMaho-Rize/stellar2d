@@ -356,6 +356,21 @@ if(USE_GPU)
     target_link_libraries(test_kap_table PRIVATE CUDA::cudart)
     add_test(NAME kap_table COMMAND test_kap_table)
 
+    # Phase D Day 1: round-trip test for Radial1DSolver's 13-species buffer.
+    add_executable(test_radial1d_alpha13 tests/test_radial1d_alpha13.cu
+        src/gpu/radial1d_solver.cu
+        src/gpu/radial1d_implicit.cu
+        src/physics/helmholtz_eos.cu
+        src/physics/opacity_table.cu
+        src/gpu/stellar_profile.cpp
+        ${TEST_COMMON_SOURCES})
+    target_include_directories(test_radial1d_alpha13 PRIVATE src)
+    target_compile_definitions(test_radial1d_alpha13 PRIVATE USE_GPU)
+    set_target_properties(test_radial1d_alpha13 PROPERTIES
+        CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_radial1d_alpha13 PRIVATE CUDA::cudart)
+    add_test(NAME radial1d_alpha13 COMMAND test_radial1d_alpha13)
+
     add_executable(test_coverage_critical tests/test_coverage_critical.cu
         ${TEST_COMMON_SOURCES}
         ${FAS_GPU_SOURCES}

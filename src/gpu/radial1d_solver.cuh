@@ -108,6 +108,16 @@ struct Radial1DSolver {
     double* d_X = nullptr;           // (nz) hydrogen mass fraction
     double* d_Y = nullptr;           // (nz) helium mass fraction
 
+    // Phase D: 13-species α-chain. Co-exists with (d_X, d_Y) but is the only
+    // path that couples to alpha_net::advance_substep(). species_mode switches
+    // which buffer the nuclear operator-split reads/writes.
+    //   pp      : legacy X→Y burn through pp_burn_kernel (default)
+    //   alpha13 : α-chain operator split (He4..Ni56), no pp-chain
+    // Layout: d_X_spec[k * N_SPEC + s], N_SPEC=13 fixed by alpha_net.
+    enum SpeciesMode : int { SPEC_PP = 0, SPEC_ALPHA13 = 1 };
+    int species_mode = SPEC_PP;
+    double* d_X_spec = nullptr;      // (nz * 13) alpha-chain composition
+
     // Radiation diffusion (explicit subcycled). If enabled, every hydro step
     // calls apply_radiation_diffusion(dt) which subcycles at the parabolic
     // radiation CFL (dt_rad ≪ dt_hydro typically; 1-10k subcycles per step).
@@ -421,4 +431,11 @@ struct Radial1DSolver {
     // Download species profile (size nz zones).
     void download_species(std::vector<double>& X_cell,
                           std::vector<double>& Y_cell);
+
+    // Phase D alpha-chain helpers. Layout: X_host[k*13 + s].
+    // init_species_alpha copies nz·13 doubles to d_X_spec; if species_mode is
+    // not already ALPHA13 it is set here. download mirrors the device buffer
+    // back into X_host (resized if too small).
+    void init_species_alpha(const double* X_host);
+    void download_species_alpha(std::vector<double>& X_host);
 };

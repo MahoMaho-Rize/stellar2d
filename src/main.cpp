@@ -23,6 +23,7 @@
 #include "gpu/simple_solver.cuh"
 #include "gpu/projection_solver.cuh"
 #include "gpu/radial1d_solver.cuh"
+#include "physics/alpha_network.h"
 #include "gpu/wb2d_solver.cuh"
 #include "gpu/ale2d_solver.cuh"
 #include "gpu/cart_lag_solver.cuh"
@@ -77,6 +78,7 @@ struct SimConfig {
     double nuc_T_scale = 1.0;
     double nuc_q_burn = 6.4e18;
     bool species_enabled = false;
+    std::string species_mode = "pp";   // radial1d: "pp" (X,Y) or "alpha13" (13 species)
     bool implicit_mode = false;      // radial1d: use BE + JFNK (step_implicit) instead of explicit RK2
     double dt_implicit = 0.0;        // fixed dt for --implicit;<=0 uses acoustic CFL × scale
     double dt_implicit_scale = 1.0;  // multiplier on CFL dt when dt_implicit<=0
@@ -350,6 +352,8 @@ int main(int argc, char** argv) {
             cfg.nuc_T_scale = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--species") == 0)
             cfg.species_enabled = true;
+        else if (std::strcmp(argv[i], "--species-mode") == 0 && i + 1 < argc)
+            cfg.species_mode = argv[++i];
         else if (std::strcmp(argv[i], "--ic-solar") == 0)
             cfg.ic_solar = true;
         else if (std::strcmp(argv[i], "--ic-rho-c") == 0 && i + 1 < argc)
@@ -981,7 +985,18 @@ int main(int argc, char** argv) {
                 r1d.nuc_q_burn = cfg.nuc_q_burn;
             }
             r1d.species_enabled = true;
-            std::printf("radial1d: species tracking ON (X→Y burn-up)\n");
+            if (cfg.species_mode == "alpha13") {
+                r1d.species_mode = Radial1DSolver::SPEC_ALPHA13;
+                std::printf("radial1d: species tracking ON (alpha13: 13-species α-chain)\n");
+            } else if (cfg.species_mode == "pp") {
+                r1d.species_mode = Radial1DSolver::SPEC_PP;
+                std::printf("radial1d: species tracking ON (pp: X→Y burn-up)\n");
+            } else {
+                std::fprintf(stderr,
+                    "ERROR: --species-mode must be 'pp' or 'alpha13' (got '%s')\n",
+                    cfg.species_mode.c_str());
+                return 1;
+            }
         }
         if (cfg.mlt_enabled) {
             r1d.mlt_enabled = true;
@@ -1025,7 +1040,20 @@ int main(int argc, char** argv) {
         }
         r1d.snapshot_hse();
         if (r1d.species_enabled) {
-            r1d.init_species_uniform(r1d.nuc_X, r1d.nuc_Y);
+            if (r1d.species_mode == Radial1DSolver::SPEC_ALPHA13) {
+                // Default alpha13 IC: everything as 4He (solar-like He layer).
+                // Realistic Sukhbold composition comes in via init_from_sukhbold
+                // (Day 2) overriding this.
+                int nz = r1d.lev.nz;
+                std::vector<double> Xa(static_cast<size_t>(nz)
+                                       * alpha_net::N_SPEC, 0.0);
+                for (int k = 0; k < nz; ++k)
+                    Xa[static_cast<size_t>(k) * alpha_net::N_SPEC
+                       + alpha_net::HE4] = 1.0;
+                r1d.init_species_alpha(Xa.data());
+            } else {
+                r1d.init_species_uniform(r1d.nuc_X, r1d.nuc_Y);
+            }
         }
         // Capture R(U_hse) BEFORE any perturbation so the well-balanced
         // subtraction references the true HSE, not the perturbed state.
