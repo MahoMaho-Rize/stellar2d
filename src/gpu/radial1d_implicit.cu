@@ -40,6 +40,8 @@ extern __global__ void k_rad1d_artificial_viscosity(
     const double*, const double*, const double*, double*, int, double, double);
 extern __global__ void k_rad1d_T_from_rho_e(
     const double*, const double*, double*, int, EOS);
+extern __global__ void k_rad1d_alpha_burn(
+    double*, double*, const double*, double, int, EOS, double, double*);
 
 // Diagnostic: L_surf with τ=2/3 photospheric BC. Walks optical depth from
 // outer boundary inward, identifies photosphere zone, uses T there in Stefan.
@@ -1687,7 +1689,16 @@ double Radial1DSolver::step_implicit(double t, double t_end, double dt_try) {
             // converged ρ, T of this step. This is operator-split *only
             // for species*, not for the energy source, which is fully
             // implicit.
-            if (nuclear_enabled && use_eos && species_enabled) {
+            if (use_eos && species_mode == SPEC_ALPHA13) {
+                // Phase D Day 3: α-chain operator split after Newton
+                // converges. Uses the (ρ, T) post-Newton, adds eps to e_int.
+                // Stiff α-net is NOT inside the Newton residual — keeping
+                // hydro Jacobian sane.
+                int nz = lev.nz;
+                k_rad1d_alpha_burn<<<(nz+B-1)/B, B>>>(
+                    lev.d_e_int, d_X_spec, lev.d_rho, dt,
+                    nz, eos, alpha_burn_T_min, /*out_L=*/nullptr);
+            } else if (nuclear_enabled && use_eos && species_enabled) {
                 int nz = lev.nz;
                 NuclearPPParams npars;
                 npars.X_hydrogen = nuc_X;

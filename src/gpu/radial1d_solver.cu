@@ -791,19 +791,23 @@ double Radial1DSolver::step(double t, double t_end) {
     // Final primitives
     launch_primitives(lev, nz, use_eos, gamma, eos, B);
 
-    // Nuclear burning (operator split; adds ε_pp · dt to e_int)
-    if (nuclear_enabled && use_eos) {
+    // Nuclear burning (operator split; adds ε_pp · dt or ε_alpha · dt to e_int).
+    // α-chain path only needs use_eos (it has its own full composition);
+    // pp-chain needs --nuclear explicitly to wire in.
+    if (use_eos && species_mode == SPEC_ALPHA13) {
+        // Phase D Day 3: α-chain operator split.  Uses post-hydro (ρ, T).
+        k_rad1d_alpha_burn<<<(nz+B-1)/B, B>>>(
+            lev.d_e_int, d_X_spec, lev.d_rho, dt,
+            nz, eos, alpha_burn_T_min, /*out_L=*/nullptr);
+        launch_primitives(lev, nz, use_eos, gamma, eos, B);
+    } else if (nuclear_enabled && use_eos) {
         NuclearPPParams npars;
         npars.X_hydrogen = nuc_X;
         npars.T_floor = nuc_T_floor;
         npars.T_scale = nuc_T_scale;
         npars.epsilon_scale = nuc_epsilon_scale;
         npars.q_burn = nuc_q_burn;
-        if (species_mode == SPEC_ALPHA13) {
-            // α-chain operator split is handled separately (Day 3). Skip
-            // pp-chain burn entirely so we don't corrupt e_int with a
-            // meaningless X→Y kernel run on zeroed d_X.
-        } else if (species_enabled) {
+        if (species_enabled) {
             k_rad1d_nuclear_pp_species<<<(nz+B-1)/B, B>>>(
                 lev.d_e_int, d_X, d_Y, lev.d_rho, nz, eos, npars, dt);
         } else {

@@ -2,6 +2,7 @@
 #include <cmath>
 #include "../eos.h"
 #include "../physics/nuclear_pp.h"
+#include "../physics/alpha_network.h"
 
 // Device kernels for 1D Lagrangian radial stellar hydrodynamics.
 // All kernels operate on Radial1DLevel's device arrays.
@@ -511,6 +512,46 @@ inline void k_rad1d_nuclear_L_species(
     double Xk = fmax(X[k], 0.0);
     double eps = nuclear_pp_epsilon_X(rho_k, T_k, Xk, pars);
     out_L[k] = eps * dm[k];
+}
+
+// ========================================================================
+// Phase D Day 3: 13-species α-chain operator split.
+//
+// After Newton converges (or RK2 finishes) we advance each zone's 13
+// α-chain mass fractions by dt at (ρ, T)_new using advance_substep from
+// alpha_network.h, which returns ∫ ε_nuc · dt in erg/g.  That specific
+// energy release is added to e_int.  Composition update and energy
+// release are bit-for-bit consistent across what alpha_net promised.
+//
+// Guard: skip zones below T_min (α-chain rates identically zero there),
+// which avoids wasting GPU time on the envelope in SN runs.
+// ========================================================================
+__global__
+inline void k_rad1d_alpha_burn(
+    double* __restrict__ e_int,      // (nz) erg/g, updated += eps_total
+    double* __restrict__ X_spec,     // (nz·13) mass fractions, updated in place
+    const double* __restrict__ rho,  // (nz)
+    double dt,
+    int nz, EOS eos, double T_min, double* __restrict__ out_L /* optional */)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double e_k   = fmax(e_int[k], 1e-30);
+    double T_k   = eos.temperature_from_rho_e(rho_k, e_k);
+    if (T_k < T_min) {
+        if (out_L) out_L[k] = 0.0;
+        return;
+    }
+    double X[alpha_net::N_SPEC];
+    int base = k * alpha_net::N_SPEC;
+    #pragma unroll
+    for (int s = 0; s < alpha_net::N_SPEC; ++s) X[s] = X_spec[base + s];
+    double eps = alpha_net::advance_substep(X, rho_k, T_k, dt);
+    #pragma unroll
+    for (int s = 0; s < alpha_net::N_SPEC; ++s) X_spec[base + s] = X[s];
+    e_int[k] = e_k + eps;
+    if (out_L) out_L[k] = eps / fmax(dt, 1e-30);   // ε [erg/g/s] · dm later
 }
 
 // Small utility: device-side EOS T(ρ, e) evaluation (for core-T diagnostic).

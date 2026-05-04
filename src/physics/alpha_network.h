@@ -479,12 +479,21 @@ ANET_HD inline void rhs(const double Y[N_SPEC], double rho, double T,
 // ──────────────────────────────────────────────────────────────────────────────
 // X ↔ Y helpers
 
+ANET_HD inline double A_of(int i) {
+    // Duplicate the table locally so device code doesn't reach out to a
+    // host-only constexpr array. Kept in sync with A_NUC above by construction.
+    constexpr double a[N_SPEC] = {
+        4.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0, 44.0, 48.0, 52.0, 56.0,
+    };
+    return a[i];
+}
+
 ANET_HD inline void X_to_Y(const double X[N_SPEC], double Y[N_SPEC]) {
-    for (int i = 0; i < N_SPEC; ++i) Y[i] = X[i] / A_NUC[i];
+    for (int i = 0; i < N_SPEC; ++i) Y[i] = X[i] / A_of(i);
 }
 
 ANET_HD inline void Y_to_X(const double Y[N_SPEC], double X[N_SPEC]) {
-    for (int i = 0; i < N_SPEC; ++i) X[i] = Y[i] * A_NUC[i];
+    for (int i = 0; i < N_SPEC; ++i) X[i] = Y[i] * A_of(i);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -117,6 +117,11 @@ struct Radial1DSolver {
     enum SpeciesMode : int { SPEC_PP = 0, SPEC_ALPHA13 = 1 };
     int species_mode = SPEC_PP;
     double* d_X_spec = nullptr;      // (nz * 13) alpha-chain composition
+    // Temperature below which the α-chain burn kernel is a no-op.  rhs()
+    // already short-circuits below 1e5 K; this floor avoids kernel launch
+    // cost in the cold envelope.  10⁸ K is safely below C+O burning
+    // threshold (T₉≈0.5) and 3α resonance (T₉≈0.1 for explosive).
+    double alpha_burn_T_min = 1.0e8;
 
     // Radiation diffusion (explicit subcycled). If enabled, every hydro step
     // calls apply_radiation_diffusion(dt) which subcycles at the parabolic

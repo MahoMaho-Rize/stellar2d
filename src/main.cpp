@@ -1262,7 +1262,13 @@ int main(int argc, char** argv) {
                     r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
                 }
                 std::vector<double> X_cell, Y_cell;
-                if (r1d.species_enabled) r1d.download_species(X_cell, Y_cell);
+                std::vector<double> X_alpha;   // flat (nz·13), zone-major
+                bool alpha_mode = r1d.species_enabled
+                    && r1d.species_mode == Radial1DSolver::SPEC_ALPHA13;
+                if (alpha_mode)
+                    r1d.download_species_alpha(X_alpha);
+                else if (r1d.species_enabled)
+                    r1d.download_species(X_cell, Y_cell);
                 char path[512];
                 std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
                 std::FILE* fp = std::fopen(path, "w");
@@ -1271,6 +1277,12 @@ int main(int argc, char** argv) {
                         "# t = %.10e  step = %d\n"
                         "# k r_face v_face rho P e_int T kap gamma1 grada gradr L_face mixing_type conv_vel%s\n",
                         t, step, r1d.species_enabled ? " X Y" : "");
+                } else if (alpha_mode) {
+                    std::fprintf(fp, "# t = %.10e  step = %d\n"
+                        "# k r_face v_face rho P e_int "
+                        "X_He4 X_C12 X_O16 X_Ne20 X_Mg24 X_Si28 X_S32 "
+                        "X_Ar36 X_Ca40 X_Ti44 X_Cr48 X_Fe52 X_Ni56\n",
+                        t, step);
                 } else if (r1d.species_enabled) {
                     std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int X Y\n", t, step);
                 } else {
@@ -1286,6 +1298,15 @@ int main(int argc, char** argv) {
                             L_face[k], mt_cell[k], vc_cell[k]);
                         if (r1d.species_enabled)
                             std::fprintf(fp, " %.6e %.6e", X_cell[k], Y_cell[k]);
+                        std::fprintf(fp, "\n");
+                    } else if (alpha_mode) {
+                        std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e",
+                                     k, r_face[k], v_face[k],
+                                     rho_cell[k], P_cell[k], e_cell[k]);
+                        for (int s = 0; s < alpha_net::N_SPEC; ++s)
+                            std::fprintf(fp, " %.6e",
+                                         X_alpha[static_cast<size_t>(k)
+                                                 * alpha_net::N_SPEC + s]);
                         std::fprintf(fp, "\n");
                     } else if (r1d.species_enabled) {
                         std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e %.6e %.6e\n",
