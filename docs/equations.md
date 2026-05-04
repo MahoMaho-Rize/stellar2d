@@ -1491,6 +1491,320 @@ tool. For Kraichnan cascade studies use the `pseudo_spectral` branch.
 
 ---
 
+## §18 Pseudo-Spectral Incompressible NS (`pseudo_spectral`)
+
+2D doubly-periodic Navier--Stokes in vorticity--streamfunction form, solved
+on a uniform $(N_x, N_y)$ grid by cuFFT R2C/C2R with Orszag skew-symmetric
+convection + IFRK3 integrating-factor viscosity + circular 2/3 dealiasing.
+See `docs/pseudo_spectral_design_2026-05-01.md` for benchmarking and
+background.
+
+### Vorticity--streamfunction primitives
+
+$$
+\frac{\partial \omega}{\partial t} + \mathbf{u}\cdot\nabla\omega
+  = \nu\,\nabla^{2}\omega,
+\qquad
+\nabla^{2}\psi = -\omega,
+\qquad
+u = \partial_y\psi,\;\; v = -\partial_x\psi.
+\tag{18.1}
+$$
+
+In spectral space the Poisson solve is diagonal:
+$\hat\psi(\mathbf{k}) = \hat\omega(\mathbf{k})/|\mathbf{k}|^{2}$ (with the
+$\mathbf{k}=0$ mode set to zero to fix the constant gauge).
+
+### Circular 2/3 dealiasing
+
+Let $k_{\max} = \min(N_x, N_y)\pi / L$ (assuming $L_x = L_y = L$).  The
+dealias mask zeroes out all modes with $|\mathbf{k}| > \tfrac{2}{3}k_{\max}$.
+
+$$
+\hat\omega(\mathbf{k}) \gets
+\begin{cases}
+\hat\omega(\mathbf{k}) & |\mathbf{k}| \le \tfrac{2}{3}k_{\max}\\
+0 & \text{otherwise}
+\end{cases}
+\tag{18.2}
+$$
+
+A circular rather than axis-aligned truncation avoids anisotropic
+under-resolution in the corners of $\mathbf{k}$-space.
+
+### Orszag skew-symmetric convection
+
+Two mathematically equivalent forms of $\mathbf{u}\cdot\nabla\omega$:
+
+$$
+N_A(\omega) \equiv \mathbf{u}\cdot\nabla\omega,
+\qquad
+N_C(\omega) \equiv \nabla\cdot(\mathbf{u}\,\omega)
+\tag{18.3}
+$$
+
+agree for $\nabla\cdot\mathbf{u}=0$ in the continuum.  After FFT truncation
+the two discretisations differ by $\mathcal{O}(\Delta k)$ terms that act
+as numerical dissipation.  Orszag (1971) shows the symmetrised form
+$N_S = \tfrac{1}{2}(N_A + N_C)$ is an anti-symmetric operator in the
+truncated spectral representation, so it exactly conserves both enstrophy
+$\sum |\hat\omega|^{2}$ and kinetic energy $\sum |\hat\omega|^{2}/|\mathbf{k}|^{2}$
+at the discrete level.
+
+$$
+\hat N_S(\mathbf{k}) = \tfrac{1}{2}\bigl[\hat N_A(\mathbf{k}) + \hat N_C(\mathbf{k})\bigr]
+\tag{18.4}
+$$
+
+CLI flag `--ps-adv-only` substitutes the advective-only form $\hat N_A$
+for reference.
+
+### Integrating-factor RK3 (IFRK3)
+
+Substitute $\hat\omega(\mathbf{k}, t) = e^{-\nu|\mathbf{k}|^{2} t}\,
+\hat w(\mathbf{k}, t)$.  The viscous term is absorbed exactly; the evolution
+equation for $\hat w$ reads
+
+$$
+\frac{\dd \hat w}{\dd t} = e^{+\nu|\mathbf{k}|^{2} t}\,
+\bigl[-\hat N_S(\hat\omega)\bigr]
+\tag{18.5}
+$$
+
+Integrated by Shu--Osher SSP-RK3 with integrating-factor weights
+$E \equiv e^{-\nu|\mathbf{k}|^{2}\Delta t}$:
+
+$$
+\begin{aligned}
+\hat\omega_{1}      &= E\,\hat\omega_{n} + \Delta t\,E\,\bigl[-\hat N_S(\hat\omega_{n})\bigr],\\
+\hat\omega_{2}      &= \tfrac{3}{4}E^{1/2}\hat\omega_{n}
+                       + \tfrac{1}{4}E^{-1/2}\hat\omega_{1}
+                       + \tfrac{1}{4}\Delta t\,E^{-1/2}\,\bigl[-\hat N_S(\hat\omega_{1})\bigr],\\
+\hat\omega_{n+1}    &= \tfrac{1}{3}E\,\hat\omega_{n}
+                       + \tfrac{2}{3}E^{1/2}\hat\omega_{2}
+                       + \tfrac{2}{3}\Delta t\,E^{1/2}\,\bigl[-\hat N_S(\hat\omega_{2})\bigr].
+\end{aligned}
+\tag{18.6}
+$$
+
+Viscous stability becomes unconditional (viscosity is mode-by-mode exact),
+so $\Delta t$ is set solely by the advective CFL $\Delta t \le C_{\text{CFL}}
+\,\Delta x / \max|\mathbf{u}|$, $C_{\text{CFL}} \approx 0.5$.
+
+### Effective viscosity diagnostic
+
+The actual dissipation rate of enstrophy $\mathcal{E} \equiv \tfrac{1}{2}\sum|\hat\omega|^{2}$
+is compared against the prescribed $\nu$ via
+
+$$
+\nu_{\text{eff}} \equiv -\frac{\dd\mathcal{E}/\dd t}
+                            {2\sum|\mathbf{k}|^{2}\,|\hat\omega(\mathbf{k})|^{2}}.
+\tag{18.7}
+$$
+
+A healthy run has $\nu_{\text{eff}}/\nu \to 1$ in the statistically steady
+regime.  Deviation signals numerical dissipation leakage (typically from
+insufficient dealiasing or $\Delta t$ too large).
+
+### Energy spectrum (ring average)
+
+$$
+E(k) = \frac{1}{2}\sum_{k - \tfrac{1}{2} < |\mathbf{k}'| \le k + \tfrac{1}{2}}
+        \frac{|\hat\omega(\mathbf{k}')|^{2}}{|\mathbf{k}'|^{2}}
+\tag{18.8}
+$$
+
+with $k$ binned in integer shells.  The forced-turbulence benchmark
+(`--test forced_turb`) shows a clean $k^{-3}$ enstrophy cascade past the
+injection scale and a modest $k^{-5/3}$ inverse-cascade tail.
+
+
+---
+
+## §19 Sturm--Liouville Spectral Basis (Phase 0 ext+ — 1D offline)
+
+This section documents the 1D Python solvers developed during Phase 0 ext+
+(2026-05-02..03) to certify the spectral approach for the
+reduced-pressure Poisson problem and the GYRE adiabatic pulsation
+eigenvalue problem.  These routines do **not** ship in the GPU solver —
+they are regression oracles and building blocks for the Phase 1
+Fourier--Chebyshev 2D solver.  The authoritative derivation of the
+spectral formulation and its convergence analysis is
+`docs/spectral_stratified_poisson_report_2026-05-03.md`; this section
+records the code-level contract.
+
+### Reduced-pressure Poisson operator (Fourier in $x$)
+
+Writing the reduced pressure $\pi = p/\rho_{0}$, the variable-density
+Poisson equation reads
+$\nabla\!\cdot(\rho_{0}\nabla\pi) = \tilde f$, and its Fourier mode
+$\hat\pi(k_x, r)$ satisfies
+
+$$
+\frac{\dd}{\dd r}\!\left[\rho_{0}(r)\,\frac{\dd\hat\pi}{\dd r}\right]
+- k_x^{2}\,\rho_{0}(r)\,\hat\pi = \hat{\tilde f}(k_x, r),
+\qquad r \in [a, b].
+\tag{19.1}
+$$
+
+### Chebyshev--Gauss--Lobatto collocation
+
+On the CGL grid $\xi_{j} = \cos(j\pi/N)$, $j = 0,\ldots,N$, mapped affinely
+to $r\in[a,b]$, and with $D$ the Trefethen spectral differentiation matrix
+(size $(N+1)\times(N+1)$):
+
+$$
+L_{N} = D\,R_{\rho}\,D - k_{x}^{2}\,R_{\rho},
+\qquad R_{\rho} \equiv \operatorname{diag}\bigl(\rho_{0}(r_{j})\bigr).
+\tag{19.2}
+$$
+
+Dirichlet BCs are imposed by strong collocation (unit rows at $j=0, N$).
+
+### Convergence regime (integer vs fractional surface exponent)
+
+For $\rho_{0}(r) \sim (R - r)^{\sigma}$ near the surface:
+
+$$
+\|\pi_{N} - \pi_{\text{exact}}\|_{\infty} \sim
+\begin{cases}
+\rho^{N} & \sigma \in \mathbb{Z}_{\ge 0} \quad\text{(spectral)}\\
+N^{-\sigma - 1/2} & \sigma \notin \mathbb{Z} \quad\text{(algebraic, Trefethen Thm 7.2)}
+\end{cases}
+\tag{19.3}
+$$
+
+Lane--Emden $n = 3$ (Eddington, $\sigma = 3$) is the only standard
+physically-motivated polytrope in the spectral-convergence branch;
+$n = 3/2$ (convective core) is in the $N^{-2}$ algebraic branch and
+requires a Jacobi-weighted basis (outside the current implementation).
+
+### Liouville potential (reference-only, not used in Phase 1)
+
+Under $\hat\pi = \rho_{0}^{-1/2}\,q$, equation (19.1) transforms to
+
+$$
+q'' + \widetilde W(r)\,q - k_x^{2}\,q = \tilde g,
+\qquad \widetilde W = \frac{\rho_{0}''}{2\rho_{0}} - \frac{(\rho_{0}')^{2}}{4\rho_{0}^{2}},
+\tag{19.4}
+$$
+
+exhibiting the $k_x$-independent Schr\"odinger structure.  Near the surface
+$\widetilde W \sim \sigma(\sigma - 2)/[4(R - r)^{2}]$.  The Liouville
+programme's original promise — "one basis diagonalises Poisson and the
+g-mode operator simultaneously" — fails in the strong sense: the Poisson
+operator's optimal prefactor is $\alpha_{\star}(\text{Poisson}) = 1 - \sigma/2$
+whereas the g-mode operator has $\beta_{\star}(\text{g-mode}) = \ell + 1$
+(different singular point, $r = 0$ vs $r = R$).  The operational consequence
+is that the Chebyshev mesh is shared but the operators are assembled and
+factorised independently; see the technical report §7 for the full analysis.
+
+### GYRE 4-variable adiabatic pulsation equations
+
+For $\ell$-mode oscillations of a non-rotating star, with
+$\alpha_{\text{grv}} = 1$ (full self-gravity), using the Unno et al.\
+(1989) non-dimensional variables $(y_{1}, y_{2}, y_{3}, y_{4})$:
+
+$$
+\begin{aligned}
+x\,\tfrac{\dd y_{1}}{\dd x} &=
+  (V_{g} - \ell - 1)\,y_{1}
+  + \Bigl(\tfrac{\lambda}{c_{1}\omega^{2}} - V_{g}\Bigr)\,y_{2}
+  + \tfrac{\lambda}{c_{1}\omega^{2}}\,y_{3},\\
+x\,\tfrac{\dd y_{2}}{\dd x} &=
+  (c_{1}\omega^{2} - A^{\star}_{\text{iso}})\,y_{1}
+  + (A^{\star} - U + 3 - \ell)\,y_{2}
+  - y_{4},\\
+x\,\tfrac{\dd y_{3}}{\dd x} &=
+  (3 - U - \ell)\,y_{3} + y_{4},\\
+x\,\tfrac{\dd y_{4}}{\dd x} &=
+  U A^{\star}\,y_{1} + U V_{g}\,y_{2}
+  + \lambda\,y_{3} + (2 - U - \ell)\,y_{4},
+\end{aligned}
+\tag{19.5}
+$$
+
+with $x = r/R$, $\lambda = \ell(\ell+1)$, $y_{3} = \Phi'/(gr)$,
+$y_{4} = (\dd\Phi'/\dd r)/g$.  Structure coefficients
+$V_{g} = V/\Gamma_{1}$, $A^{\star}$, $U$, $c_{1}$, $\Gamma_{1}$ follow
+the Unno et al.\ definitions and are read from the GYRE native
+polytropic file (`/tmp/gyre_run/poly3.txt` for Lane--Emden $n = 3$).
+
+### Regularity and vacuum boundary conditions
+
+Regularity at $x = 0$ and vacuum at $x = 1$:
+
+$$
+\begin{aligned}
+\text{inner: }\quad
+  & c_{1}\omega^{2} y_{1} - \ell y_{2} - \ell y_{3} = 0,\qquad \ell y_{3} - y_{4} = 0,\\
+\text{outer: }\quad
+  & y_{1} - y_{2} = 0,\qquad U y_{1} + (\ell + 1) y_{3} + y_{4} = 0.
+\end{aligned}
+\tag{19.6}
+$$
+
+### Generalised eigenvalue problem and benchmark
+
+After Chebyshev collocation on $x \in [0.01, 0.999]$ with $N+1$ nodes,
+(19.5) assembles into a $4(N+1)\times 4(N+1)$ generalised eigenproblem
+
+$$
+\mathsf{P}\,\mathbf{u} = \omega^{-2}\,\mathsf{Q}\,\mathbf{u},
+\tag{19.7}
+$$
+
+in which the inverse-$\omega^{2}$ structure of equation (19.5a) requires
+the generalised (linearised) form rather than a standard linear eigenproblem.
+At $N = 48$ ($192$ DOF) the first radial-order g-mode frequency
+$\omega^{2}_{n_{g}=1}(\ell=1)$ agrees with the GYRE reference to
+$5.9\times 10^{-7}$; the maximum relative error over the first ten
+radial orders is $1.5\times 10^{-6}$.  A $21\times$ reduction in DOF and
+$350\times$ lower maximum error compared with a staggered second-order
+finite-difference discretisation at $N_{r} = 1024$.
+
+### Barycentric Lagrange evaluation
+
+The $N + 1$ Chebyshev coefficients $\{a_{n}\}$ or nodal values
+$\{u_{j}\}$ define a continuous representation that is evaluable at any
+$r^{\star}$ via the barycentric formula
+
+$$
+u(r^{\star}) = \frac{\sum_{j} w_{j}\,u_{j}/(r^{\star} - r_{j})}
+                    {\sum_{j} w_{j}/(r^{\star} - r_{j})},
+\qquad
+w_{j} = (-1)^{j}\,c_{j},
+\tag{19.8}
+$$
+
+with $c_{0} = c_{N} = 1/2$, $c_{j} = 1$ otherwise (Berrut \&
+Trefethen 2004).  The evaluation is rounding-error stable, with error
+$\le 10^{-12}$, and is the mechanism by which a low-$N$ Chebyshev
+representation supports arbitrary-resolution output rendering.
+
+### Reproducibility
+
+Frozen regression oracles (`python <script>.py --verify` exits zero):
+
+- `scripts/gmode_exp_i_gyre_compat.py` — 2-var Cowling FD, GYRE Cowling
+  benchmark, max rel.\ diff.\ $5.6\times 10^{-4}$ at $N_{r} = 1024$.
+- `scripts/gmode_exp_j_full_gyre_compat.py` — 4-var full gravity FD,
+  GYRE full benchmark, max rel.\ diff.\ $5.3\times 10^{-4}$.
+- `scripts/gmode_exp_k_chebyshev_full.py` — 4-var full gravity Chebyshev,
+  GYRE full benchmark, max rel.\ diff.\ $1.5\times 10^{-6}$ at $N = 48$.
+- `scripts/spectral_analytical_ceiling.py` — three analytic ceiling
+  tests (manufactured Poisson, harmonic oscillator, Dirichlet
+  Laplacian); all reach $10^{-13}$ to $10^{-15}$ at $N \lesssim 64$.
+
+The continuous-representation demonstration
+(`scripts/spectral_resolution_demo.py`) shows the $N = 48$ Chebyshev
+basis produces the same eigenfunction at 4096-point barycentric
+sampling as the FD $N_{r} = 1024$ solution at the same points, to
+within the $N = 48$ discretisation error of $3.4\times 10^{-3}$.
+
+
+---
+
 ## Equation Index
 
 | Eq. | Description | Source file(s) |
@@ -1562,3 +1876,15 @@ tool. For Kraichnan cascade studies use the `pseudo_spectral` branch.
 | 17.3–17.5 | Colella-Sekora limiter | `cart_ale2_kernels.cu:ppm_cs_limit` |
 | 17.6 | Primitive→conservative flux | `cart_ale2_kernels.cu:k_cale2_remap_*_ppm_prim` |
 | 17.7–17.8 | Characteristic projection | `cart_ale2_kernels.cu:char_project_x`, `char_unproject_x`, `k_cale2_ppm_reconstruct_char` |
+| 18.1 | Vorticity--streamfunction NS | `pseudo_spectral_kernels.cu:k_spec_uv`, `k_spec_grad_omega` |
+| 18.2 | Circular 2/3 dealias | `pseudo_spectral_kernels.cu:k_init_wavenumbers`, `k_apply_dealias` |
+| 18.3–18.4 | Orszag skew-symmetric convection | `pseudo_spectral_kernels.cu:k_compute_skew_nonlinear`, `k_form_rhs_skew`; adv-only: `k_compute_adv_nonlinear`, `k_form_rhs_adv_only` |
+| 18.5–18.6 | IFRK3 integrating-factor RK3 | `pseudo_spectral_kernels.cu:k_ifrk_combine`, `pseudo_spectral_solver.cu:PseudoSpectralSolver::step` |
+| 18.7 | Effective viscosity diagnostic | `pseudo_spectral_kernels.cu:k_reduce_diag`, `k_reduce_k2E` |
+| 18.8 | Ring-averaged energy spectrum | `pseudo_spectral_kernels.cu:k_reduce_spectrum_bins`; post: `scripts/spectrum_pseudo_spectral.py` |
+| 19.1–19.2 | Reduced-pressure Chebyshev operator | `scripts/spectral_liouville_convergence_v2.py`, `reduced_pressure_chebyshev.py` |
+| 19.3 | Polytropic index convergence dichotomy | `scripts/spectral_liouville_convergence_v2.py` (empirical); `docs/polytropic_index_spectral_convergence_2026-05-03.md` (analysis) |
+| 19.4 | Liouville potential + α★/β★ prefactors | `scripts/spectral_liouville_beta_derivation.py`, `spectral_liouville_beta_gmode_check.py` |
+| 19.5–19.6 | GYRE 4-var adiabatic pulsation + BCs | `scripts/gmode_infra.py:solve_gmode_full_gyre_compat` (FD), `gmode_exp_k_chebyshev_full.py:solve_gmode_full_chebyshev` (spectral) |
+| 19.7 | Generalised eigenvalue problem | `scripts/gmode_exp_k_chebyshev_full.py` (Chebyshev), `gmode_exp_j_full_gyre_compat.py` (FD reference) |
+| 19.8 | Barycentric Lagrange evaluation | `scripts/spectral_resolution_demo.py` (uses `scipy.interpolate.BarycentricInterpolator`) |

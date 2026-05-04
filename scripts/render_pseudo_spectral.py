@@ -276,11 +276,32 @@ def render_one(args):
 
 
 def main():
-    run_dir = sys.argv[1]
-    out_path = (sys.argv[2] if len(sys.argv) > 2
+    # 解析位置 + 可選旗標
+    #   <run_dir> [out.mp4] [fps] [workers] [--cmap NAME] [--clip P]
+    # --cmap   渦度 panel 的色標(預設 RdBu_r)。常用:
+    #          twilight_shifted / seismic / coolwarm / PuOr_r / cmo.balance / cmo.curl
+    # --clip   clip percentile(預設 99)。90 / 95 讓細絲飽和,視覺衝擊更大。
+    args = sys.argv[1:]
+    cmap_name = "RdBu_r"
+    clip_p = 99.0
+    filt = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--cmap" and i + 1 < len(args):
+            cmap_name = args[i + 1]
+            i += 2
+        elif a == "--clip" and i + 1 < len(args):
+            clip_p = float(args[i + 1])
+            i += 2
+        else:
+            filt.append(a)
+            i += 1
+    run_dir = filt[0]
+    out_path = (filt[1] if len(filt) > 1
                 else os.path.join(run_dir, "pseudo_spectral.mp4"))
-    fps = int(sys.argv[3]) if len(sys.argv) > 3 else 30
-    n_workers = int(sys.argv[4]) if len(sys.argv) > 4 else min(16, os.cpu_count() or 4)
+    fps = int(filt[2]) if len(filt) > 2 else 30
+    n_workers = int(filt[3]) if len(filt) > 3 else min(16, os.cpu_count() or 4)
 
     t0 = time.time()
 
@@ -306,22 +327,31 @@ def main():
         sp_all.append(f.get("mach", np.zeros((ny, nx))).ravel())
 
     w_cat = np.concatenate(w_all)
-    w_lim = max(np.percentile(np.abs(w_cat), 99), 1e-5)
-    sp_hi = max(np.percentile(np.concatenate(sp_all), 99.5), 0.01)
+    w_lim = max(np.percentile(np.abs(w_cat), clip_p), 1e-5)
+    sp_hi = max(np.percentile(np.concatenate(sp_all), min(clip_p + 0.5, 99.9)), 0.01)
 
-    print(f"Color ranges: ω=+/-{w_lim:.2f}  |v|=[0, {sp_hi:.3f}]")
+    print(f"Color ranges (clip@{clip_p}%): ω=+/-{w_lim:.2f}  |v|=[0, {sp_hi:.3f}]")
+    print(f"Colormap: {cmap_name}")
 
     panels = [
-        {"field": "vorticity", "cmap": "RdBu_r", "vmin": -w_lim, "vmax": w_lim,
-         "log": False, "title": "Vorticity \u03c9"},
+        {"field": "vorticity", "cmap": cmap_name, "vmin": -w_lim, "vmax": w_lim,
+         "log": False, "title": f"Vorticity \u03c9  [{cmap_name}]"},
         {"field": "speed",     "cmap": "plasma", "vmin": 0,      "vmax": sp_hi,
          "log": False, "title": "Speed |v|"},
     ]
 
+    # 支援 cmocean 名稱 (cmo.XXX / cmocean.XXX)
+    def _load_cmap(name):
+        if name.startswith("cmo.") or name.startswith("cmocean."):
+            import cmocean  # type: ignore
+            short = name.split(".", 1)[1]
+            return getattr(cmocean.cm, short)
+        return plt.get_cmap(name)
+
     cmaps = {}
     for p in panels:
         if p["cmap"] not in cmaps:
-            cmaps[p["cmap"]] = plt.get_cmap(p["cmap"])
+            cmaps[p["cmap"]] = _load_cmap(p["cmap"])
 
     global _cmaps, _panels, _nx, _ny, _total_frames, _title, _frame_times
     _cmaps = cmaps
