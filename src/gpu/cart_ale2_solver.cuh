@@ -135,6 +135,28 @@ struct CartAle2Solver {
     //     ppm.cpp + characteristic.cpp (Stone+08 Appendix A, adiabatic hydro).
     int ppm_char = 1;
 
+    // ---- Newton cooling + bottom enthalpy-flux heating (optional) ----
+    // Newton cooling bleeds off heat at the top:
+    //   e ← e + (e_ref(y) − e)·α_cool·s_cool(y),   α_cool = 1 − exp(−dt/τ)
+    // where s_cool(y) is a cosine ramp: 0 below (1 − cool_top_frac)·Ly, 1 at top.
+    // Bottom enthalpy source injects L⊙-equivalent flux as a volumetric
+    // heating with exponential profile concentrated at the bottom:
+    //   q(y) = F_bot · g(y),   g(y) = w(y)/∫w dy,   w(y) = exp(−y/(heat_bot_frac·Ly))
+    //   de/dt = q(y) / ρ(y)
+    // In steady state ∫(top cooling) = ∫(bottom heating) = F_bot·Lx — classical
+    // Stein-Nordlund box convection driving. Density is never touched so mass &
+    // HSE are exactly preserved.
+    double *d_e_ref_y          = nullptr;  // per-row reference e_int (cooling target)
+    double *d_cool_weight_y    = nullptr;  // per-row cooling ramp weight (0 at bot, 1 at top)
+    double *d_heat_dedt_base_y = nullptr;  // per-row F_bot·g(y) [erg/(s·cm³)]
+    double tau_cool            = 0.0;      // Newton cooling timescale (s); 0 = disabled
+    double cool_top_frac       = 1.0;      // cooling active in top frac of column (1 = full)
+    double bottom_heat_flux    = 0.0;      // F_bot [erg/cm²/s]; 0 = disabled
+    double heat_bot_frac       = 0.05;     // heating depth fraction (e-fold of exp profile / Ly)
+    void alloc_cooling_ref(const std::vector<double>& e_ref_per_row);
+    void configure_thermal(double F_bot, double heat_bot_frac_, double cool_top_frac_);
+    void apply_cooling(double dt);
+
     // ---- Bookkeeping ----
     double dt_current = 0.0;
     int step_count = 0;
@@ -165,6 +187,19 @@ struct CartAle2Solver {
     // g_y is set to 0 inside this IC — ideal for watching pure KH roll-up.
     void init_kh_shear(double rho_light, double rho_heavy, double P0,
                        double vshear, double amp, int k);
+
+    // Plane-parallel stratified slab from a MESA envelope strip.  Loads a
+    // slab file emitted by scripts/make_local_convection_slab.py containing:
+    //   header line:  Ly Lx g_y gamma rho_top P_top T_top mu
+    //   data lines:   (ny+1) × (y, rho, P, T)   face-centered
+    // Sets g_y from the file and pairs naturally with --bc-x periodic
+    // --bc-y reflect.  Seeds a small entropy perturbation at the bottom to
+    // trigger overturning convection.
+    //   perturb_amp — δs/s relative bump (0.01 is plenty)
+    //   seed_k      — horizontal mode for the perturbation (default 4)
+    void init_local_convection(const std::string& slab_file,
+                               double perturb_amp = 0.01,
+                               int seed_k = 4);
 
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from

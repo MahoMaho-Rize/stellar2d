@@ -62,7 +62,7 @@ struct Wb2DSolver {
     double central_damp_r = 0.0;   // v_r damping radius at origin (0=off)
     double central_damp_alpha = 5.0;
     int limiter_type = 0;           // 0=minmod, 1=vanleer, 2=MC
-    int use_lm_hllc = 0;
+    int hllc_variant = 0;            // 0=standard, 1=Rieper LM-HLLC, 2=Minoshima LHLLC
 
     // Porting FAS stabilizers (safe under θ-symmetric IC;
     // disable n_angular_avg/n_pole_avg for non-axisymmetric cases like bubble).

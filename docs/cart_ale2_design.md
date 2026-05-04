@@ -15,6 +15,9 @@
 
 ### ✅ 适合
 - **恒星对流**(Lane-Emden backbone + 低 Mach 扰动,需要长时间 IE 机器精度守恒)
+- **MESA → local-box convection**(`--test local_convection`,radial1d ZAMS 薄片 +
+  Newton cooling,详见
+  [cart_ale2_local_convection_2026-05-03.md](cart_ale2_local_convection_2026-05-03.md))
 - **Compressible pulsation**(Cepheid / RR Lyrae 类,精确 PdV work)
 - **恒星质量抛射初期**(HSE + 出流,长时间质量守恒)
 - **Core collapse / bounce**(强 PdV,中等激波 capture)

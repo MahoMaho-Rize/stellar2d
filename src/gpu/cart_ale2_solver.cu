@@ -215,7 +215,136 @@ void CartAle2Solver::destroy() {
     f(d_pyd_xL);  f(d_pyd_xR);  f(d_pyd_yD);  f(d_pyd_yU);
     f(d_FSX); f(d_FSY);
     f(d_dt_cell); f(d_reduce_buf);
+    f(d_e_ref_y);
+    f(d_cool_weight_y);
+    f(d_heat_dedt_base_y);
     std::memset(this, 0, sizeof(*this));
+}
+
+// ============================================================
+// Newton cooling + bottom enthalpy-flux heating:
+//   e ← e + (e_ref(y) − e)·α_cool·s_cool(y) + q_base(y)/ρ · dt
+// α_cool = 1 − exp(−dt/τ); q_base(y) = F_bot·g(y), ∫g dy = 1.
+// s_cool(y) is a cosine ramp active in the top cool_top_frac of the column.
+// Density (dm/V) is untouched → mass conservation is exact.
+// ============================================================
+__global__ static void k_cale2_thermal_step(double* __restrict__ e_int,
+                                            const double* __restrict__ dm,
+                                            const double* __restrict__ Area0,
+                                            const double* __restrict__ e_ref_y,
+                                            const double* __restrict__ w_cool_y,
+                                            const double* __restrict__ q_base_y,
+                                            double alpha_cool, double dt,
+                                            int nx, int ny, int has_cool, int has_heat) {
+    int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    int jc = blockIdx.y * blockDim.y + threadIdx.y;
+    if (ic >= nx || jc >= ny) return;
+    int idx = ic * ny + jc;
+    double e = e_int[idx];
+    if (has_cool) {
+        double w = w_cool_y[jc];
+        double eref = e_ref_y[jc];
+        e += (eref - e) * alpha_cool * w;
+    }
+    if (has_heat) {
+        // q_base(y) is volumetric power density [erg/(s·cm³)].
+        // Per-cell Δe = q · dt / ρ, with ρ = dm / (Area0 · 1 cm depth-equiv).
+        double rho = dm[idx] / Area0[idx];
+        e += q_base_y[jc] * dt / rho;
+    }
+    e_int[idx] = e;
+}
+
+void CartAle2Solver::alloc_cooling_ref(const std::vector<double>& e_ref_per_row) {
+    if (d_e_ref_y) { cudaFree(d_e_ref_y); d_e_ref_y = nullptr; }
+    if ((int)e_ref_per_row.size() != ny) {
+        std::fprintf(stderr,
+            "  [alloc_cooling_ref] e_ref size=%zu != ny=%d\n",
+            e_ref_per_row.size(), ny);
+        std::abort();
+    }
+    CUDA_CHECK(cudaMalloc(&d_e_ref_y, ny * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_e_ref_y, e_ref_per_row.data(),
+                          ny * sizeof(double), cudaMemcpyHostToDevice));
+}
+
+void CartAle2Solver::configure_thermal(double F_bot,
+                                       double heat_bot_frac_,
+                                       double cool_top_frac_) {
+    bottom_heat_flux = F_bot;
+    if (heat_bot_frac_ > 0.0) heat_bot_frac = heat_bot_frac_;
+    if (cool_top_frac_ > 0.0) cool_top_frac = cool_top_frac_;
+
+    double Ly = g_Ly;
+    double dy = Ly / ny;
+
+    std::vector<double> h_wcool(ny, 1.0);
+    if (cool_top_frac < 1.0) {
+        double y_on = (1.0 - cool_top_frac) * Ly;    // cooling starts here
+        for (int jc = 0; jc < ny; ++jc) {
+            double yc = (jc + 0.5) * dy;
+            if (yc <= y_on) {
+                h_wcool[jc] = 0.0;
+            } else {
+                double u = (yc - y_on) / (Ly - y_on);   // 0 at start → 1 at top
+                h_wcool[jc] = 0.5 * (1.0 - std::cos(M_PI * u));
+            }
+        }
+    }
+    if (d_cool_weight_y) { cudaFree(d_cool_weight_y); d_cool_weight_y = nullptr; }
+    CUDA_CHECK(cudaMalloc(&d_cool_weight_y, ny * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_cool_weight_y, h_wcool.data(),
+                          ny * sizeof(double), cudaMemcpyHostToDevice));
+
+    std::vector<double> h_qbase(ny, 0.0);
+    if (F_bot > 0.0) {
+        double H = heat_bot_frac * Ly;
+        double wsum = 0.0;
+        std::vector<double> w(ny);
+        for (int jc = 0; jc < ny; ++jc) {
+            double yc = (jc + 0.5) * dy;
+            w[jc] = std::exp(-yc / H);
+            wsum += w[jc] * dy;
+        }
+        // q(y) = F_bot · g(y), ∫g dy = 1  → volumetric power density [erg/s/cm³]
+        for (int jc = 0; jc < ny; ++jc)
+            h_qbase[jc] = F_bot * w[jc] / wsum;
+    }
+    if (d_heat_dedt_base_y) { cudaFree(d_heat_dedt_base_y); d_heat_dedt_base_y = nullptr; }
+    CUDA_CHECK(cudaMalloc(&d_heat_dedt_base_y, ny * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_heat_dedt_base_y, h_qbase.data(),
+                          ny * sizeof(double), cudaMemcpyHostToDevice));
+
+    if (F_bot > 0.0) {
+        std::fprintf(stderr,
+            "  [thermal] bottom heat F=%.3e erg/cm²/s, e-fold H=%.3e cm (%.2f Ly); "
+            "cooling top frac=%.2f\n",
+            F_bot, heat_bot_frac * Ly, heat_bot_frac, cool_top_frac);
+    }
+}
+
+void CartAle2Solver::apply_cooling(double dt) {
+    bool has_cool = (tau_cool > 0.0 && d_e_ref_y != nullptr);
+    bool has_heat = (bottom_heat_flux > 0.0 && d_heat_dedt_base_y != nullptr);
+    if (!has_cool && !has_heat) return;
+
+    double alpha = has_cool ? (1.0 - std::exp(-dt / tau_cool)) : 0.0;
+
+    // Cool-weight buffer is allocated lazily on the first call when cooling is
+    // enabled but configure_thermal() was never invoked.
+    if (has_cool && d_cool_weight_y == nullptr) {
+        std::vector<double> ones(ny, 1.0);
+        CUDA_CHECK(cudaMalloc(&d_cool_weight_y, ny * sizeof(double)));
+        CUDA_CHECK(cudaMemcpy(d_cool_weight_y, ones.data(),
+                              ny * sizeof(double), cudaMemcpyHostToDevice));
+    }
+
+    dim3 B(16, 16);
+    dim3 G((nx + B.x - 1) / B.x, (ny + B.y - 1) / B.y);
+    k_cale2_thermal_step<<<G, B>>>(d_e_int, d_dm, d_Area0,
+                                   d_e_ref_y, d_cool_weight_y, d_heat_dedt_base_y,
+                                   alpha, dt, nx, ny,
+                                   has_cool ? 1 : 0, has_heat ? 1 : 0);
 }
 
 // ============================================================
@@ -372,6 +501,146 @@ void CartAle2Solver::init_hse_bubbles(double rho_base, double g_val,
             "    bubble[%zu]: center=(%g,%g), rb=%g, α=%g, β=%g\n",
             i, b.xc, b.yc, b.rb, b.alpha, b.beta);
     }
+}
+
+// ============================================================
+// Plane-parallel stratified slab (from a MESA envelope strip) + small
+// entropy seed at the bottom to trigger Rayleigh-Taylor-like overturning.
+// Reads the file written by scripts/make_local_convection_slab.py.
+// ============================================================
+void CartAle2Solver::init_local_convection(const std::string& slab_file,
+                                           double perturb_amp,
+                                           int seed_k) {
+    // Parse header + (ny_slab+1) face rows.
+    std::FILE* fp = std::fopen(slab_file.c_str(), "r");
+    if (!fp) {
+        std::fprintf(stderr,
+            "  init_local_convection: cannot open %s\n", slab_file.c_str());
+        std::abort();
+    }
+    auto skip_comments = [&](char* buf, int cap) -> bool {
+        while (std::fgets(buf, cap, fp)) {
+            const char* s = buf;
+            while (*s == ' ' || *s == '\t') ++s;
+            if (*s == '#' || *s == '\0' || *s == '\n') continue;
+            return true;
+        }
+        return false;
+    };
+    char line[512];
+    if (!skip_comments(line, sizeof(line))) {
+        std::fprintf(stderr, "  init_local_convection: header row missing\n");
+        std::fclose(fp); std::abort();
+    }
+    double Ly_file, Lx_file, g_file, gamma_file;
+    double rho_top, P_top, T_top, mu_file;
+    if (std::sscanf(line, "%lf %lf %lf %lf %lf %lf %lf %lf",
+                    &Ly_file, &Lx_file, &g_file, &gamma_file,
+                    &rho_top, &P_top, &T_top, &mu_file) != 8) {
+        std::fprintf(stderr, "  init_local_convection: bad header line\n");
+        std::fclose(fp); std::abort();
+    }
+    std::vector<double> ys, rhos, Ps;
+    while (skip_comments(line, sizeof(line))) {
+        double y, r, p, T;
+        if (std::sscanf(line, "%lf %lf %lf %lf", &y, &r, &p, &T) != 4) break;
+        ys.push_back(y); rhos.push_back(r); Ps.push_back(p);
+    }
+    std::fclose(fp);
+    int n_face = (int)ys.size();
+    if (n_face < 2) {
+        std::fprintf(stderr, "  init_local_convection: too few rows\n");
+        std::abort();
+    }
+    // Sanity: slab Ly should match init() Ly (to ~1e-6).  We trust init().
+    if (std::fabs(g_Ly - Ly_file) / Ly_file > 1e-4) {
+        std::fprintf(stderr,
+            "  [warn] init_local_convection: slab Ly=%g vs init Ly=%g — "
+            "using init Ly and rescaling.\n", Ly_file, g_Ly);
+    }
+
+    g_y = g_file;
+    // Slab uses ideal γ = 5/3; cart_ale2's `gamma` was fixed at init().
+    if (std::fabs(gamma - gamma_file) > 1e-6) {
+        std::fprintf(stderr,
+            "  [warn] init_local_convection: slab γ=%g vs solver γ=%g\n",
+            gamma_file, gamma);
+    }
+
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    // Helper: log-interpolate (ρ, P) at a given y using the slab data.
+    auto slab_lookup = [&](double y, double& rho_out, double& P_out) {
+        if (y <= ys.front()) { rho_out = rhos.front(); P_out = Ps.front(); return; }
+        if (y >= ys.back())  { rho_out = rhos.back();  P_out = Ps.back();  return; }
+        int lo = 0, hi = n_face - 1;
+        while (hi - lo > 1) {
+            int mid = (lo + hi) / 2;
+            if (ys[mid] <= y) lo = mid; else hi = mid;
+        }
+        double t = (y - ys[lo]) / (ys[hi] - ys[lo]);
+        rho_out = std::exp((1.0 - t) * std::log(rhos[lo]) + t * std::log(rhos[hi]));
+        P_out   = std::exp((1.0 - t) * std::log(Ps[lo])   + t * std::log(Ps[hi]));
+    };
+
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    std::vector<double> h_e_ref_y(ny, 0.0);
+    double Lx_box = g_Lx;
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double rho_hse, P_hse;
+            slab_lookup(Yc, rho_hse, P_hse);
+            if (ic == 0)
+                h_e_ref_y[jc] = P_hse / ((gamma - 1.0) * rho_hse);
+            // Bottom 10 % in y: add a sin(k·2π·x/Lx) entropy bump so the
+            // slab doesn't sit in perfect HSE forever.  Bump is δs/s, so
+            // we hold P and perturb ρ by δρ/ρ = -δs/(γ·s) · P_exp... simpler:
+            // perturb ρ directly by -δε·sin(...), keeping P fixed (this is
+            // an entropy perturbation because s = P/ρ^γ rises when ρ falls).
+            double env = 1.0;
+            double y_decay = 0.1 * g_Ly;
+            if (Yc < y_decay) {
+                env = std::exp(-Yc / (0.3 * y_decay));
+            } else {
+                env = 0.0;
+            }
+            double phase = 2.0 * M_PI * seed_k * Xc / Lx_box;
+            double d_rho = -perturb_amp * env * std::sin(phase);
+            double rho = rho_hse * (1.0 + d_rho);
+            double P   = P_hse;
+            double e   = P / ((gamma - 1.0) * rho);
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = e;
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_vX, 0, nnode*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_vY, 0, nnode*sizeof(double)));
+
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+
+    // Stash per-row e_ref(y) so Newton cooling can relax toward HSE
+    // whenever the caller sets tau_cool > 0.
+    alloc_cooling_ref(h_e_ref_y);
+
+    double cs_bot = std::sqrt(gamma * Ps.front() / rhos.front());
+    double cs_top = std::sqrt(gamma * Ps.back()  / rhos.back());
+    std::fprintf(stderr,
+        "  CartAle2 local_convection: slab=%s\n"
+        "    Ly=%.3e  Lx=%.3e  g=%.3e  γ=%.3f  (top ρ=%.3e, P=%.3e, T=%.3e)\n"
+        "    c_s top=%.3e bot=%.3e,  τ_dyn=Ly/c_s_top=%.3e  perturb=%.3g @ k=%d\n",
+        slab_file.c_str(), g_Ly, g_Lx, g_y, gamma, rho_top, P_top, T_top,
+        cs_top, cs_bot, g_Ly / cs_top, perturb_amp, seed_k);
 }
 
 // ============================================================
@@ -755,6 +1024,10 @@ double CartAle2Solver::step(double t, double t_end) {
 
     // Refresh node mass (dm redistributes a bit each step)
     k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+
+    // Optional Newton cooling toward the IC stratification (only applied
+    // if alloc_cooling_ref was called and tau_cool > 0).
+    apply_cooling(dt);
 
     step_count++;
     dt_current = dt;

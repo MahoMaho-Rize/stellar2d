@@ -255,7 +255,7 @@ void k_wb2d_residual(
     const double* P0, const double* rho0,
     const double* Pvsc_r, const double* Pvsc_t,
     double* res, int nr, int nt, int ng, double gam,
-    int lim_type, int use_lm_hllc) {
+    int lim_type, int hllc_variant) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat / nt, j = flat % nt;
@@ -312,7 +312,7 @@ void k_wb2d_residual(
         double qf = fmax(qL, qR);
         wl.P = fmax(P0f + ppL + qf, 1e-30);
         wr.P = fmax(P0f + ppR + qf, 1e-30);
-        return use_lm_hllc ? fas_hllc_lm(wl, wr, gam, true) : fas_hllc(wl, wr, gam, true);
+        return fas_hllc_dispatch(wl, wr, gam, true, hllc_variant);
     };
 
     FFlux4 fr_hi = hllc_r_face(i+1);
@@ -347,7 +347,7 @@ void k_wb2d_residual(
         double qf = fmax(qL, qR);
         wl.P = fmax(P0f + ppL + qf, 1e-30);
         wr.P = fmax(P0f + ppR + qf, 1e-30);
-        return use_lm_hllc ? fas_hllc_lm(wl, wr, gam, false) : fas_hllc(wl, wr, gam, false);
+        return fas_hllc_dispatch(wl, wr, gam, false, hllc_variant);
     };
 
     FFlux4 ft_hi = hllc_t_face(j+1);
@@ -396,7 +396,7 @@ void k_wb2d_residual_origin(
     const double* gr, const double* gr0,
     const double* P0, const double* rho0,
     const double* Pvsc_r,
-    double* res, int nr, int nt, int ng, double gam, int use_lm_hllc) {
+    double* res, int nr, int nt, int ng, double gam, int hllc_variant) {
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     if (j >= nt) return;
     int flat = j;
@@ -428,7 +428,7 @@ void k_wb2d_residual_origin(
     wr.P   = fmax(P0f + (wr.P - P0_1) + qf, 1e-30);
     wl.rho = fmax(r0f + (wl.rho - r0_0), 1e-20);
     wr.rho = fmax(r0f + (wr.rho - r0_1), 1e-20);
-    FFlux4 fr_hi = use_lm_hllc ? fas_hllc_lm(wl, wr, gam, true) : fas_hllc(wl, wr, gam, true);
+    FFlux4 fr_hi = fas_hllc_dispatch(wl, wr, gam, true, hllc_variant);
 
     double Ar_hi = ar[1*nt + j];
     double P0f_rhi = 0.5 * (P0_0 + P0_1);

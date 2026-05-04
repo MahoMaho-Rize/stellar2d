@@ -34,6 +34,10 @@ if(USE_GPU)
         src/gpu/fas_smoothers.cu
         src/gpu/fas_multigrid.cu
         src/gpu/fas_solver.cu
+        src/gpu/fas2_residual.cu
+        src/gpu/fas2_smoothers.cu
+        src/gpu/fas2_multigrid.cu
+        src/gpu/fas2_solver.cu
         src/gpu/simple_solver.cu
         src/gpu/projection_solver.cu
         src/gpu/strang_solver.cu
@@ -43,6 +47,9 @@ if(USE_GPU)
         src/gpu/lowmach_solver.cu
         src/gpu/gmg_gpu.cu
         src/gpu/radial1d_solver.cu
+        src/gpu/radial1d_implicit.cu
+        src/physics/helmholtz_eos.cu
+        src/physics/opacity_table.cu
         src/gpu/wb2d_solver.cu
         src/gpu/wb2d_kernels.cu
         src/gpu/ale2d_solver.cu
@@ -53,6 +60,9 @@ if(USE_GPU)
         src/gpu/cart_ale_kernels.cu
         src/gpu/cart_ale2_solver.cu
         src/gpu/cart_ale2_kernels.cu
+        src/gpu/cart_impl_solver.cu
+        src/gpu/cart_impl_residual.cu
+        src/gpu/cart_impl_jfnk.cu
         src/gpu/pseudo_spectral_solver.cu
         src/gpu/pseudo_spectral_kernels.cu
     )
@@ -295,6 +305,48 @@ if(USE_GPU)
     target_compile_definitions(test_fas_diagnose PRIVATE USE_GPU)
     set_target_properties(test_fas_diagnose PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_fas_diagnose PRIVATE CUDA::cudart)
+
+    add_executable(test_helm_l2 tests/test_helm_l2.cu)
+    target_include_directories(test_helm_l2 PRIVATE src)
+    target_compile_definitions(test_helm_l2 PRIVATE USE_GPU)
+    set_target_properties(test_helm_l2 PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_helm_l2 PRIVATE CUDA::cudart)
+    add_test(NAME helm_l2 COMMAND test_helm_l2)
+
+    add_executable(test_helm_eos tests/test_helm_eos.cu)
+    target_include_directories(test_helm_eos PRIVATE src)
+    target_compile_definitions(test_helm_eos PRIVATE USE_GPU)
+    set_target_properties(test_helm_eos PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_helm_eos PRIVATE CUDA::cudart)
+    add_test(NAME helm_eos COMMAND test_helm_eos)
+
+    add_executable(test_dual tests/test_dual.cu)
+    target_include_directories(test_dual PRIVATE src)
+    target_compile_definitions(test_dual PRIVATE USE_GPU)
+    set_target_properties(test_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_dual PRIVATE CUDA::cudart)
+    add_test(NAME dual COMMAND test_dual)
+
+    add_executable(test_helm_dual tests/test_helm_dual.cu src/physics/helmholtz_eos.cu)
+    target_include_directories(test_helm_dual PRIVATE src)
+    target_compile_definitions(test_helm_dual PRIVATE USE_GPU)
+    set_target_properties(test_helm_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_helm_dual PRIVATE CUDA::cudart)
+    add_test(NAME helm_dual COMMAND test_helm_dual)
+
+    add_executable(test_residual_dual tests/test_residual_dual.cu src/physics/helmholtz_eos.cu)
+    target_include_directories(test_residual_dual PRIVATE src)
+    target_compile_definitions(test_residual_dual PRIVATE USE_GPU)
+    set_target_properties(test_residual_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_residual_dual PRIVATE CUDA::cudart)
+    add_test(NAME residual_dual COMMAND test_residual_dual)
+
+    add_executable(test_kap_table tests/test_kap_table.cu)
+    target_include_directories(test_kap_table PRIVATE src)
+    target_compile_definitions(test_kap_table PRIVATE USE_GPU)
+    set_target_properties(test_kap_table PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(test_kap_table PRIVATE CUDA::cudart)
+    add_test(NAME kap_table COMMAND test_kap_table)
 
     add_executable(test_coverage_critical tests/test_coverage_critical.cu
         ${TEST_COMMON_SOURCES}
