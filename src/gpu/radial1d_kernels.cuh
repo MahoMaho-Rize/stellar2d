@@ -88,8 +88,30 @@ void k_rad1d_enclosed_mass(
     }
 }
 
+// Same as above but seeded with M_inner at M[0] — used when there is a
+// gravitating point mass inside the innermost face (e.g. proto-NS after
+// mass cut).  All downstream gravity/pressure terms use M[k] directly so
+// no other kernel needs to know about the offset.
+__global__
+void k_rad1d_enclosed_mass_offset(
+    const double* dm,
+    double* M,
+    int nz,
+    double M_inner)
+{
+    if (threadIdx.x != 0 || blockIdx.x != 0) return;
+    double acc = M_inner;
+    M[0] = M_inner;
+    for (int k = 0; k < nz; ++k) {
+        acc += dm[k];
+        M[k+1] = acc;
+    }
+}
+
 // ========================================================================
-// Gravity at faces: g[k] = G * M[k] / r[k]²  (g[0] = 0 by L'Hopital)
+// Gravity at faces: g[k] = G * M[k] / r[k]²  (g[0] = 0 by L'Hopital
+// when r[0]=0; when r[0]>0, inner face is treated as a piston wall and
+// the formula applies).
 // ========================================================================
 
 __global__
@@ -102,7 +124,8 @@ void k_rad1d_gravity(
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k > nz) return;
     double rk = r[k];
-    if (k == 0 || rk < 1e-20) {
+    if (rk < 1e-20) {
+        // Central face coincident with origin → L'Hopital gives g=0.
         g[k] = 0.0;
     } else {
         g[k] = G_const * M[k] / (rk * rk);

@@ -17,6 +17,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <array>
 
 // --- tree-reduction helpers: min of a float array, sum of a float array ---
 static double gpu_reduce_min_simple(const double* d_arr, int n) {
@@ -731,7 +732,7 @@ double Radial1DSolver::step(double t, double t_end) {
     if (t + dt > t_end) dt = t_end - t;
 
     // Enclosed mass + gravity (stays fixed during step: dm doesn't change)
-    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    launch_enclosed_mass();
     k_rad1d_gravity<<<(nf+B-1)/B, B>>>(lev.d_r, lev.d_M, lev.d_gr, nz, G_const);
 
     // Save state
@@ -766,7 +767,7 @@ double Radial1DSolver::step(double t, double t_end) {
     launch_primitives(lev, nz, use_eos, gamma, eos, B);
 
     // ===== RK2 Stage 2: recompute R at U*, apply dt again =====
-    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    launch_enclosed_mass();
     k_rad1d_gravity<<<(nf+B-1)/B, B>>>(lev.d_r, lev.d_M, lev.d_gr, nz, G_const);
     k_rad1d_artificial_viscosity<<<(nz+B-1)/B, B>>>(
         lev.d_v, lev.d_Vol, lev.d_P, lev.d_Pvsc, nz, CQ, ZSH);
@@ -860,7 +861,7 @@ Radial1DSolver::Diagnostics Radial1DSolver::compute_diagnostics() {
     int nz = lev.nz, B = 256;
     // Make sure primitives + enclosed mass are fresh
     launch_primitives(lev, nz, use_eos, gamma, eos, B);
-    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    launch_enclosed_mass();
 
     // 5 scratch arrays of size nz — reuse existing buffers where safe
     std::vector<double*> scratch(6);
@@ -1203,7 +1204,7 @@ void Radial1DSolver::download_profile_rich(
 
     // Refresh primitives + enclosed mass so rho, P, M are consistent.
     launch_primitives(lev, nz, use_eos, gamma, eos, B);
-    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    launch_enclosed_mass();
 
     // Allocate device scratch for rich fields.
     double *d_T, *d_kap, *d_g1, *d_ga, *d_gr, *d_Lf, *d_vc;
@@ -1251,7 +1252,7 @@ Radial1DSolver::ConvectionDiag Radial1DSolver::compute_convection_diag() {
 
     // Refresh primitives + enclosed mass
     launch_primitives(lev, nz, use_eos, gamma, eos, B);
-    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    launch_enclosed_mass();
 
     std::vector<double*> sc(4);
     for (int i = 0; i < 4; ++i) CUDA_CHECK(cudaMalloc(&sc[i], nz*sizeof(double)));
@@ -1313,6 +1314,232 @@ void Radial1DSolver::download_species(std::vector<double>& X_cell,
     X_cell.resize(nz); Y_cell.resize(nz);
     CUDA_CHECK(cudaMemcpy(X_cell.data(), d_X, nz*sizeof(double), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(Y_cell.data(), d_Y, nz*sizeof(double), cudaMemcpyDeviceToHost));
+}
+
+// ============================================================
+// init_from_sukhbold: read the 13-species Sukhbold IC file produced by
+// scripts/n49b/convert_sukhbold_ic.py, remap Sukhbold's Lagrangian zones
+// onto our equal-mass shells above the mass cut, upload the folded 13
+// α-chain mass fractions, and optionally deposit a thermal bomb.
+// ============================================================
+int Radial1DSolver::init_from_sukhbold(const char* ic_path,
+                                        double bomb_E,
+                                        double bomb_dm_msun) {
+    std::FILE* fp = std::fopen(ic_path, "r");
+    if (!fp) {
+        std::fprintf(stderr, "  init_from_sukhbold: cannot open %s\n", ic_path);
+        return 1;
+    }
+    char line[2048];
+    double M_star = -1.0, R_star = -1.0, M_in = -1.0, r_in = -1.0;
+    int n_in = -1, n_spec = -1;
+    // Parse header comment lines until the first data row.
+    long header_end = 0;
+    while (std::fgets(line, sizeof(line), fp)) {
+        if (line[0] != '#') {
+            // Rewind to start of this line for the data-row reader below.
+            std::fseek(fp, header_end, SEEK_SET);
+            break;
+        }
+        header_end = std::ftell(fp);
+        double v; int iv;
+        if      (std::sscanf(line, "# M_star_g %lf", &v) == 1)  M_star = v;
+        else if (std::sscanf(line, "# R_star_cm %lf", &v) == 1) R_star = v;
+        else if (std::sscanf(line, "# M_inner_g %lf", &v) == 1) M_in = v;
+        else if (std::sscanf(line, "# r_inner_cm %lf", &v) == 1) r_in = v;
+        else if (std::sscanf(line, "# n_zones %d", &iv) == 1)   n_in = iv;
+        else if (std::sscanf(line, "# n_species %d", &iv) == 1) n_spec = iv;
+    }
+    if (n_in <= 0 || n_spec != alpha_net::N_SPEC
+        || !(M_star > 0) || !(R_star > 0) || !(M_in > 0) || !(r_in > 0)) {
+        std::fprintf(stderr,
+            "  init_from_sukhbold: bad header in %s "
+            "(nz=%d, n_spec=%d, M*=%g, R*=%g, M_in=%g, r_in=%g)\n",
+            ic_path, n_in, n_spec, M_star, R_star, M_in, r_in);
+        std::fclose(fp);
+        return 2;
+    }
+
+    // Read rows (surface-first in file).
+    std::vector<double> m_f(n_in), r_f(n_in), rho_f(n_in), T_f(n_in), P_f(n_in);
+    std::vector<std::array<double, 13>> X_f(n_in);
+    for (int i = 0; i < n_in; ++i) {
+        if (!std::fgets(line, sizeof(line), fp)) {
+            std::fprintf(stderr,
+                "  init_from_sukhbold: truncated after %d rows\n", i);
+            std::fclose(fp);
+            return 3;
+        }
+        if (line[0] == '#' || line[0] == '\n') { --i; continue; }
+        int used = 0;
+        double vals[5 + 13];
+        char* p = line;
+        for (int c = 0; c < 5 + 13; ++c) {
+            if (std::sscanf(p, "%lf%n", &vals[c], &used) != 1) {
+                std::fprintf(stderr,
+                    "  init_from_sukhbold: parse fail row %d col %d\n", i, c);
+                std::fclose(fp);
+                return 4;
+            }
+            p += used;
+        }
+        m_f[i] = vals[0]; r_f[i] = vals[1]; rho_f[i] = vals[2];
+        T_f[i] = vals[3]; P_f[i] = vals[4];
+        for (int s = 0; s < 13; ++s) X_f[i][s] = vals[5 + s];
+    }
+    std::fclose(fp);
+
+    // Flip to core→surface (monotone increasing in m_enc, r).
+    std::reverse(m_f.begin(), m_f.end());
+    std::reverse(r_f.begin(), r_f.end());
+    std::reverse(rho_f.begin(), rho_f.end());
+    std::reverse(T_f.begin(), T_f.end());
+    std::reverse(P_f.begin(), P_f.end());
+    std::reverse(X_f.begin(), X_f.end());
+
+    int nz = lev.nz;
+    // Target: equal-mass shells between [M_in, M_star].
+    double M_total_eject = M_star - M_in;
+    double dm_t = M_total_eject / nz;
+    std::vector<double> M_target(nz + 1);
+    for (int k = 0; k <= nz; ++k) M_target[k] = M_in + k * dm_t;
+    M_target[nz] = M_star;
+
+    // Interpolate r at each face mass.
+    std::vector<double> h_r(nz + 1);
+    h_r[0] = r_in;
+    int j = 0;
+    for (int k = 1; k <= nz; ++k) {
+        double Mt = M_target[k];
+        if (Mt <= m_f[0]) {
+            // Target is between M_in and first Sukhbold zone (shouldn't
+            // normally happen — mass cut selects first zone above M_in).
+            double frac = (Mt - M_in) / (m_f[0] - M_in);
+            h_r[k] = r_in + frac * (r_f[0] - r_in);
+            continue;
+        }
+        while (j + 1 < n_in && m_f[j + 1] < Mt) ++j;
+        if (j + 1 >= n_in) { h_r[k] = R_star; continue; }
+        double t = (Mt - m_f[j]) / (m_f[j + 1] - m_f[j]);
+        h_r[k] = r_f[j] + t * (r_f[j + 1] - r_f[j]);
+    }
+    h_r[nz] = R_star;
+
+    // Zone-centered quantities at mass-center of each shell.
+    std::vector<double> h_dm(nz), h_rho(nz), h_T(nz), h_P(nz), h_e(nz);
+    std::vector<double> h_X(static_cast<size_t>(nz) * alpha_net::N_SPEC, 0.0);
+    j = 0;
+    for (int k = 0; k < nz; ++k) {
+        double dm_k = M_target[k + 1] - M_target[k];
+        double Mc = M_target[k] + 0.5 * dm_k;
+        if (Mc <= m_f[0]) {
+            h_rho[k] = rho_f[0]; h_T[k] = T_f[0]; h_P[k] = P_f[0];
+            for (int s = 0; s < 13; ++s)
+                h_X[static_cast<size_t>(k) * 13 + s] = X_f[0][s];
+        } else if (Mc >= m_f[n_in - 1]) {
+            h_rho[k] = rho_f[n_in - 1]; h_T[k] = T_f[n_in - 1];
+            h_P[k]   = P_f[n_in - 1];
+            for (int s = 0; s < 13; ++s)
+                h_X[static_cast<size_t>(k) * 13 + s] = X_f[n_in - 1][s];
+        } else {
+            while (j + 1 < n_in && m_f[j + 1] < Mc) ++j;
+            double t = (Mc - m_f[j]) / (m_f[j + 1] - m_f[j]);
+            h_rho[k] = rho_f[j] + t * (rho_f[j + 1] - rho_f[j]);
+            h_T[k]   = T_f[j]   + t * (T_f[j + 1]   - T_f[j]);
+            h_P[k]   = P_f[j]   + t * (P_f[j + 1]   - P_f[j]);
+            for (int s = 0; s < 13; ++s)
+                h_X[static_cast<size_t>(k) * 13 + s] =
+                    X_f[j][s] + t * (X_f[j + 1][s] - X_f[j][s]);
+        }
+        h_dm[k] = dm_k;
+
+        // Override rho by geometric consistency when interp ρ under-estimates it.
+        double rL = h_r[k], rR = h_r[k + 1];
+        double Vol = (4.0 / 3.0) * M_PI * (rR*rR*rR - rL*rL*rL);
+        if (Vol > 0.0) {
+            double rho_geom = dm_k / Vol;
+            if (rho_geom > h_rho[k]) h_rho[k] = rho_geom;
+        }
+
+        bool eos_needs_device = use_eos
+            && eos.type == static_cast<int>(EosType::HELMHOLTZ);
+        if (use_eos && !eos_needs_device) {
+            h_e[k] = eos.internal_energy(h_rho[k], h_P[k]);
+        } else {
+            h_e[k] = h_P[k] / ((gamma - 1.0) * h_rho[k]);
+        }
+    }
+
+    // Bomb: deposit bomb_E erg over the innermost zones totalling
+    // bomb_dm_msun * M_sun grams, counted outward from the mass cut.
+    constexpr double MSUN = 1.989e33;
+    if (bomb_E > 0.0 && bomb_dm_msun > 0.0) {
+        double bomb_dm_g = bomb_dm_msun * MSUN;
+        double dm_acc = 0.0;
+        int n_bomb = 0;
+        for (int k = 0; k < nz && dm_acc < bomb_dm_g; ++k) {
+            dm_acc += h_dm[k];
+            ++n_bomb;
+        }
+        double de_specific = bomb_E / std::max(dm_acc, 1.0);
+        for (int k = 0; k < n_bomb; ++k) {
+            h_e[k] += de_specific;
+            h_P[k] = (use_eos && !(use_eos && eos.type == static_cast<int>(EosType::HELMHOLTZ)))
+                     ? eos.pressure(h_rho[k], h_e[k])
+                     : (gamma - 1.0) * h_rho[k] * h_e[k];
+        }
+        std::fprintf(stderr,
+            "  init_from_sukhbold: bomb E=%.3e erg distributed over %d zones "
+            "(dm=%.3f Msun), Δε=%.3e erg/g\n",
+            bomb_E, n_bomb, dm_acc / MSUN, de_specific);
+    }
+
+    // Upload to device.
+    CUDA_CHECK(cudaMemcpy(lev.d_r,     h_r.data(),   (nz+1)*sizeof(double),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_r0,    h_r.data(),   (nz+1)*sizeof(double),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_dm,    h_dm.data(),  nz*sizeof(double),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_e_int, h_e.data(),   nz*sizeof(double),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_rho0,  h_rho.data(), nz*sizeof(double),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(lev.d_P0,    h_P.data(),   nz*sizeof(double),
+                          cudaMemcpyHostToDevice));
+    bool eos_needs_device = use_eos
+        && eos.type == static_cast<int>(EosType::HELMHOLTZ);
+    if (eos_needs_device) {
+        int block = 64, grid = (nz + block - 1) / block;
+        k_rad1d_e_from_rhoP<<<grid, block>>>(
+            lev.d_rho0, lev.d_P0, lev.d_e_int, nz, eos);
+        CUDA_CHECK(cudaDeviceSynchronize());
+    }
+    CUDA_CHECK(cudaMemset(lev.d_v, 0, (nz+1)*sizeof(double)));
+
+    // Proto-NS inner boundary + 13-species buffer.
+    M_inner = M_in;
+    r_inner_init = r_in;
+    P_surf_floor = h_P[nz - 1];
+    hse_set = true;
+
+    init_species_alpha(h_X.data());  // also sets species_mode=ALPHA13
+
+    std::fprintf(stderr,
+        "  init_from_sukhbold: nz=%d, M_star=%.3e g (%.2f Msun), "
+        "M_inner=%.3e g (%.2f Msun), R*=%.3e cm, r_inner=%.3e cm, "
+        "P_surf=%.3e\n",
+        nz, M_star, M_star / MSUN, M_in, M_in / MSUN, R_star, r_in, P_surf_floor);
+    return 0;
+}
+
+void Radial1DSolver::launch_enclosed_mass() {
+    int nz = lev.nz;
+    if (M_inner > 0.0) {
+        k_rad1d_enclosed_mass_offset<<<1, 1>>>(lev.d_dm, lev.d_M, nz, M_inner);
+    } else {
+        launch_enclosed_mass();
+    }
 }
 
 void Radial1DSolver::init_species_alpha(const double* X_host) {
@@ -1477,7 +1704,7 @@ void Radial1DSolver::refresh_K_conv_implicit() {
         CUDA_CHECK(cudaMalloc(&d_T_scratch, nz * sizeof(double)));
         cached_nz = nz;
     }
-    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    launch_enclosed_mass();
     k_rad1d_T_from_rhoe<<<(nz+B-1)/B, B>>>(
         lev.d_rho, lev.d_e_int, d_T_scratch, nz, eos);
     OpacityParams opa;
@@ -1765,7 +1992,7 @@ int Radial1DSolver::apply_radiation_diffusion_implicit(double dt_total, int k_st
 
     // Refresh enclosed mass for MLT gravity
     if (mlt_enabled) {
-        k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+        launch_enclosed_mass();
     }
 
     // Compute T^n from current (ρ, e_int)

@@ -101,6 +101,10 @@ struct SimConfig {
     std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/convert_mesa_ic.py output
     bool ic_mesa_seed_T = false;     // --ic-mesa-seed-T: seed (e,P) from Helm(ρ,T_MESA) instead of (ρ,P_MESA)
     int  ic_mesa_atm_zones = 0;      // --ic-mesa-atm-zones N: use hybrid zoning with N log-spaced outer atm zones (0=equal-mass)
+    // Phase D: Sukhbold+2018 13-species IC + thermal bomb
+    std::string ic_sukhbold_path;    // non-empty ⇒ IC from scripts/n49b/convert_sukhbold_ic.py
+    double bomb_E = 0.0;             // bomb energy (erg); 0 disables
+    double bomb_dm_msun = 0.1;       // spread bomb over this mass (Msun), inner-first
     int  atm_split = 0;              // --atm-split N: operator-split rad in outer N zones (usually = ic_mesa_atm_zones)
     bool rich_profile = false;       // --rich-profile: emit T, κ, ∇_ad, ∇_rad, L, conv_vel per zone
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
@@ -368,6 +372,12 @@ int main(int argc, char** argv) {
             cfg.ic_mesa_seed_T = true;
         else if (std::strcmp(argv[i], "--ic-mesa-atm-zones") == 0 && i + 1 < argc)
             cfg.ic_mesa_atm_zones = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-sukhbold") == 0 && i + 1 < argc)
+            cfg.ic_sukhbold_path = argv[++i];
+        else if (std::strcmp(argv[i], "--bomb-E") == 0 && i + 1 < argc)
+            cfg.bomb_E = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--bomb-dm") == 0 && i + 1 < argc)
+            cfg.bomb_dm_msun = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--atm-split") == 0 && i + 1 < argc)
             cfg.atm_split = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--rich-profile") == 0)
@@ -837,7 +847,8 @@ int main(int argc, char** argv) {
                || cfg.test_case == "gmode_exp_k"
                || cfg.test_case == "dns_triad"
                || cfg.test_case == "dns_triad_coupled"
-               || cfg.test_case == "local_convection") {
+               || cfg.test_case == "local_convection"
+               || cfg.test_case == "sukhbold_bomb") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -929,8 +940,11 @@ int main(int argc, char** argv) {
         // ===== 1D Lagrangian radial solver (MESA RSP-inspired) =====
         // Ignores the 2D Grid; uses nr as number of Lagrangian zones.
         // Lane-Emden specific; other test cases not supported yet.
-        if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
-            std::fprintf(stderr, "ERROR: radial1d solver only supports lane_emden / lane_emden_perturbed\n");
+        if (cfg.test_case != "lane_emden"
+            && cfg.test_case != "lane_emden_perturbed"
+            && cfg.test_case != "sukhbold_bomb") {
+            std::fprintf(stderr, "ERROR: radial1d solver only supports "
+                                  "lane_emden / lane_emden_perturbed / sukhbold_bomb\n");
             return 1;
         }
         Radial1DSolver r1d;
@@ -1003,7 +1017,21 @@ int main(int argc, char** argv) {
             r1d.mlt_alpha = cfg.mlt_alpha;
             std::printf("radial1d: MLT convection ON (α=%.2f)\n", cfg.mlt_alpha);
         }
-        if (!cfg.ic_mesa_path.empty()) {
+        if (!cfg.ic_sukhbold_path.empty()) {
+            std::printf("radial1d: Sukhbold IC from %s (bomb_E=%.2e erg, "
+                        "bomb_dm=%.3f Msun)\n",
+                        cfg.ic_sukhbold_path.c_str(),
+                        cfg.bomb_E, cfg.bomb_dm_msun);
+            if (r1d.init_from_sukhbold(cfg.ic_sukhbold_path.c_str(),
+                                       cfg.bomb_E,
+                                       cfg.bomb_dm_msun) != 0) {
+                std::fprintf(stderr, "ERROR: init_from_sukhbold failed\n");
+                return 1;
+            }
+            // init_from_sukhbold flips species_mode to ALPHA13 + uploads X.
+            cfg.species_enabled = true;
+            cfg.species_mode = "alpha13";
+        } else if (!cfg.ic_mesa_path.empty()) {
             std::printf("radial1d: MESA IC from %s (seed=%s, atm_zones=%d)\n",
                         cfg.ic_mesa_path.c_str(),
                         cfg.ic_mesa_seed_T ? "T" : "P",
@@ -1039,11 +1067,11 @@ int main(int argc, char** argv) {
             r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
         }
         r1d.snapshot_hse();
-        if (r1d.species_enabled) {
+        // init_from_sukhbold already uploaded the 13-species composition; for
+        // any other IC path, populate the species buffer here.
+        if (r1d.species_enabled && cfg.ic_sukhbold_path.empty()) {
             if (r1d.species_mode == Radial1DSolver::SPEC_ALPHA13) {
                 // Default alpha13 IC: everything as 4He (solar-like He layer).
-                // Realistic Sukhbold composition comes in via init_from_sukhbold
-                // (Day 2) overriding this.
                 int nz = r1d.lev.nz;
                 std::vector<double> Xa(static_cast<size_t>(nz)
                                        * alpha_net::N_SPEC, 0.0);

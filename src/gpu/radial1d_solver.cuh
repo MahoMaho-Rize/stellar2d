@@ -152,6 +152,15 @@ struct Radial1DSolver {
     // Surface pressure floor
     double P_surf_floor = 0.0;   // P at ghost zone beyond nz-1; set to initial P0[nz-1]
 
+    // Inner boundary (Phase D): when M_inner > 0, there's a gravitating
+    // point mass inside r[0] (proto-NS after core-collapse mass cut).
+    // M_inner is ADDED into M[0] by k_rad1d_enclosed_mass_offset; gravity
+    // at the inner face then follows g[0] = G·M_inner/r[0]².  v[0] is
+    // still pinned to 0 (rigid piston wall).  M_inner == 0 and r[0] == 0
+    // is the legacy r_in=0 origin boundary.
+    double M_inner = 0.0;        // proto-NS mass (g)
+    double r_inner_init = 0.0;   // r[0] at IC (cm) — diagnostic only
+
     // Compression dt limit (MESA: dt ≤ fraction * Δr / Δv)
     double comp_dt_fraction = 0.1;
 
@@ -191,6 +200,18 @@ struct Radial1DSolver {
     // Returns 0 on success, non-zero on parse/load failure.
     int init_from_mesa(const char* ic_path, bool seed_T = false,
                        int n_atm_zones = 0);
+
+    // Phase D: load a Sukhbold+2018 13-species IC (output of
+    // scripts/n49b/convert_sukhbold_ic.py).  On success M_inner and r[0]
+    // are set from the header, 13-species X_spec is uploaded, species_mode
+    // is switched to ALPHA13.
+    //
+    // bomb_E and bomb_dm specify a thermal bomb: e_int += bomb_E / bomb_dm
+    // distributed over the innermost zones totalling bomb_dm in mass,
+    // above r_inner.  Set bomb_E = 0 to skip.
+    int init_from_sukhbold(const char* ic_path,
+                           double bomb_E = 0.0,
+                           double bomb_dm = 0.1 /*Msun*/);
 
     // Apply a radial-only pressure perturbation: P *= (1 + amp*sin(π r/R))
     // Also adjust density self-consistently for adiabatic perturbation:
@@ -420,6 +441,9 @@ struct Radial1DSolver {
     void   build_precond_tridiag(double inv_dt);
     // Apply block-Thomas forward/backward sweep: M⁻¹ · v_in → Mv.
     void   apply_precond_tridiag(const double* d_v_in, double* d_Mv);
+    // Launch the appropriate enclosed-mass kernel.  If M_inner > 0, calls
+    // the offset variant so M[0] = M_inner (for proto-NS inner boundary).
+    void   launch_enclosed_mass();
     void   compute_R_implicit();       // evaluates R(U) into d_R using current (d_v,d_r,d_e_int)
     void   compute_F_implicit(double inv_dt);  // d_F = (d_U - d_Un)/dt - (d_R - d_R_hse)
     double residual_norm_implicit();

@@ -653,7 +653,7 @@ void Radial1DSolver::compute_R_implicit() {
     // Primitives + visc from current state
     prims_and_visc(*this);
     // Gravity + enclosed mass from current r
-    k_rad1d_enclosed_mass<<<1, 1>>>(lev.d_dm, lev.d_M, nz);
+    launch_enclosed_mass();
     k_rad1d_gravity<<<(nf+B-1)/B, B>>>(lev.d_r, lev.d_M, lev.d_gr, nz, G_const);
 
     NuclearPPParams npars;
