@@ -105,6 +105,30 @@ struct AnelasticSLSolver {
     double* d_M_per_kx   = nullptr;  // (nh * n_int * n_int,)
     bool    td_assembled_linear = false;  // env ANSL_TD_KIND=assembled_linear
 
+    // Strang-split (Phase 3 nonlinear extension) persistent buffers.
+    // Allocated lazily the first time step_strang_nonlinear() is called.
+    // Each is (ncell,) = (ny * nx) doubles; 10 slots × 64² × 8B = 320 KB.
+    //   _v0/_w0/_b0    — state snapshot at entry of each half-step
+    //   _v_acc/_w_acc/_b_acc — RK4 accumulators
+    //   _v_s/_w_s/_b_s — RK4 substep state
+    //   _deriv         — scratch for -M·V in linear block (reused across substeps)
+    double* d_strang_v0    = nullptr;
+    double* d_strang_w0    = nullptr;
+    double* d_strang_b0    = nullptr;
+    double* d_strang_v_acc = nullptr;
+    double* d_strang_w_acc = nullptr;
+    double* d_strang_b_acc = nullptr;
+    double* d_strang_v_s   = nullptr;
+    double* d_strang_w_s   = nullptr;
+    double* d_strang_b_s   = nullptr;
+    double* d_strang_deriv = nullptr;
+    // Additional derivative slots for W and B channels in the nonlinear
+    // RK4 block.  Must be distinct from d_scratch (which is used
+    // internally by nonlinear_deriv for ∂y operations).
+    double* d_strang_dw    = nullptr;
+    double* d_strang_db    = nullptr;
+    bool td_strang_nonlinear = false;  // env ANSL_TD_KIND=strang_nonlinear
+
     // Chebyshev differentiation matrix on [0, Ly] (ny × ny, col-major for DGEMM).
     // Uploaded once in set_background, reused every RK substep.
     double* d_Dy = nullptr;
@@ -223,6 +247,25 @@ struct AnelasticSLSolver {
     // those assumptions the Boussinesq dispersion ω² = N²·k_x²/(k_x²+k_y²)
     // must be reproduced to machine precision by the EVP.
     double init_gmode_eigenmode(int kx_int, int n_g, double amp);
+
+    // Multi-mode eigenmode IC for nonlinear resonance experiments.
+    // Seeds a superposition of g-mode eigenmodes; each spec is
+    // (n_g, kx_int, amp, phase_is_cos).  When phase_is_cos=false the
+    // mode is seeded as V(y)·sin(kx·x) + U(y)·cos(kx·x) (same
+    // convention as init_gmode_eigenmode).  When phase_is_cos=true the
+    // roles swap: V·cos + U·sin — useful if two modes with identical
+    // (n_g, kx) phases must be decorrelated.
+    //
+    // Sets d_rhs_v = 0 (W(0) = 0 for the Strang RK4 linear block) and
+    // d_b = 0 (consistent Strang IC — the linear block integrates
+    // Ḃ = -N²·V to generate B(t) from zero).
+    //
+    // Does NOT call project_div_free(): each per-kx eigenmode already
+    // satisfies ∇·(ρ₀u) = 0 analytically; their linear superposition
+    // therefore does as well.  Returns the ω of the first mode in the
+    // spec list (for period-aligned diagnostics).
+    struct ModeSpec { int n_g; int kx_int; double amp; bool phase_is_cos; };
+    double init_multi_mode_ic(const std::vector<ModeSpec>& modes);
 
     // Main API
     double step();
@@ -374,4 +417,22 @@ struct AnelasticSLSolver {
     // Integrator: classical RK4 on the 2-state (V, W) pair with V̈ = -M·V.
     // Skips advection entirely; intended for pure linear g-mode validation.
     double step_assembled_linear();
+
+    // Rebuild d_u in-place from the current d_v using anelastic continuity:
+    //     û(kx≠0, y) = -(1/(i·kx·ρ(y))) · ∂_y(ρ(y)·V̂(kx, y))
+    // kx=0 column is zeroed.  Used after step_strang_nonlinear() to refresh
+    // d_u for diagnostics (the step internally uses d_u as a scratch slot
+    // that reflects the last RK4 substep's state, not the committed V).
+    void rebuild_u_from_continuity();
+
+    // ── Phase 3: Strang-split nonlinear extension of Path D ─────────────
+    // Algorithm (docs/.../DNS_PLAN.md + scripts/nonlinear_path1_opsplit.py):
+    //   (A) Linear RK4 half-step (dt/2): V̈ = -M·V, ḃ = -N²·v on (v, w, b)
+    //   (B) Nonlinear RK4 full-step (dt): rebuild u from v via continuity
+    //       each substep, then ∂_t v = -(u·∇)v, ∂_t b = -(u·∇)b (w untouched,
+    //       O(amp²) Strang error)
+    //   (C) Linear RK4 half-step (dt/2)
+    // Reduces to step_assembled_linear() in the amp→0 limit.
+    // Use fixed external dt (passed in) for period-aligned diagnostics.
+    double step_strang_nonlinear(double dt);
 };

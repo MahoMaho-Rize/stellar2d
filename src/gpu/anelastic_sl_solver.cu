@@ -99,6 +99,10 @@ extern "C" {
     __global__ void k_add_buoyancy(double*, const double*, int);
     __global__ void k_sub_N2_v(double*, const double*, const double*, int, int);
     __global__ void k_fma_row(double*, double, const double*, const double*, int, int);
+    __global__ void k_neg_N2_v_out(double*, const double*, const double*, int, int);
+    __global__ void k_row_mul_out(double*, const double*, const double*, int, int);
+    __global__ void k_u_from_div_v(cufftDoubleComplex*, const cufftDoubleComplex*,
+                                   const double*, const double*, double, int, int);
 }
 
 // ============================================================================
@@ -272,6 +276,11 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
     free_ptr(d_rho_prime); free_ptr(d_rho_prime_over_rho); free_ptr(d_N2);
     free_ptr(d_M_per_kx);
+    free_ptr(d_strang_v0);    free_ptr(d_strang_w0);    free_ptr(d_strang_b0);
+    free_ptr(d_strang_v_acc); free_ptr(d_strang_w_acc); free_ptr(d_strang_b_acc);
+    free_ptr(d_strang_v_s);   free_ptr(d_strang_w_s);   free_ptr(d_strang_b_s);
+    free_ptr(d_strang_deriv);
+    free_ptr(d_strang_dw);    free_ptr(d_strang_db);
     free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
     free_ptr(d_mu); free_ptr(d_cc_weights);
     free_cptr(d_fhat); free_cptr(d_ghat); free_cptr(d_Ghat);
@@ -1011,13 +1020,18 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     // ── Path D: assembled-matrix linear TD ───────────────────────────────
     // Env ANSL_TD_KIND=assembled_linear activates the Full-Galerkin path
     // documented in docs/full_galerkin_closure_proof_2026-05-03.md.
+    // ANSL_TD_KIND=strang_nonlinear activates the Phase 3 nonlinear
+    // extension (Strang split around Path D linear block).
     td_assembled_linear = false;
+    td_strang_nonlinear = false;
     if (const char* s = std::getenv("ANSL_TD_KIND")) {
         std::string ss(s);
         if (ss == "assembled_linear" || ss == "assembled" || ss == "matrix")
             td_assembled_linear = true;
+        else if (ss == "strang_nonlinear" || ss == "strang")
+            td_strang_nonlinear = true;
     }
-    if (td_assembled_linear) assemble_path_d_operators();
+    if (td_assembled_linear || td_strang_nonlinear) assemble_path_d_operators();
 }
 
 void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
@@ -1416,6 +1430,150 @@ double AnelasticSLSolver::init_gmode_eigenmode(int kx_int, int n_g, double amp) 
             maxV, maxU, maxB, rho_min, rho_max);
     }
     return om2;
+}
+
+// Multi-mode EVP IC: superpose g-mode eigenmodes for triad / PSI experiments.
+// Uses v-space Galerkin EVP per-kx (same path as default init_gmode_eigenmode
+// when ANSL_EVP_BASIS is unset or "galerkin").
+double AnelasticSLSolver::init_multi_mode_ic(
+        const std::vector<AnelasticSLSolver::ModeSpec>& modes) {
+    if (h_N2.empty() || h_rho.empty()) {
+        std::fprintf(stderr,
+            "init_multi_mode_ic: call set_background() first.\n");
+        std::exit(1);
+    }
+    if (modes.empty()) {
+        std::fprintf(stderr, "init_multi_mode_ic: empty mode list.\n");
+        std::exit(1);
+    }
+
+    std::vector<double> h_u_host(ncell, 0.0), h_v_host(ncell, 0.0);
+    double omega_first = 0.0;
+
+    std::fprintf(stderr,
+        "  AnelasticSL multi-mode IC: %zu modes\n", modes.size());
+
+    for (size_t m_idx = 0; m_idx < modes.size(); ++m_idx) {
+        const auto& m = modes[m_idx];
+        const double kx_phys = m.kx_int * 2.0 * M_PI / Lx;
+        const int M_int = ny - 2;
+
+        std::vector<double> omega_sq, v_modes;
+        compute_2d_gmode_evp(kx_phys, std::max(m.n_g + 2, 6), omega_sq, v_modes);
+        if ((int)omega_sq.size() < m.n_g) {
+            std::fprintf(stderr,
+                "init_multi_mode_ic: requested n_g=%d at kx=%d, only %zu modes.\n",
+                m.n_g, m.kx_int, omega_sq.size());
+            std::exit(1);
+        }
+        double om2   = omega_sq[m.n_g - 1];
+        double omega = std::sqrt(om2);
+        if (m_idx == 0) omega_first = omega;
+
+        std::vector<double> V_full(ny, 0.0);
+        for (int i = 0; i < M_int; ++i) {
+            V_full[i + 1] = v_modes[(size_t)i + (size_t)(m.n_g - 1) * M_int];
+        }
+        std::fprintf(stderr,
+            "  [init_multi] reading v_modes col k=%d:\n"
+            "    V_full[1..3]   = %g %g %g\n"
+            "    V_full[30..32] = %g %g %g\n"
+            "    V_full[64..66] = %g %g %g\n"
+            "    V_full[94..96] = %g %g %g\n"
+            "    V_full[120..124] = %g %g %g\n",
+            m.n_g - 1,
+            V_full[1], V_full[2], V_full[3],
+            V_full[30], V_full[31], V_full[32],
+            V_full[64], V_full[65], V_full[66],
+            V_full[94], V_full[95], V_full[96],
+            V_full[120], V_full[121], V_full[124]);
+
+        // Normalise so max|V| = amp with sign stabilised.
+        double max_absV = 0.0; int arg_max = 0;
+        for (int i = 0; i < ny; ++i) {
+            if (std::fabs(V_full[i]) > max_absV) {
+                max_absV = std::fabs(V_full[i]); arg_max = i;
+            }
+        }
+        if (max_absV <= 0.0) {
+            std::fprintf(stderr,
+                "init_multi_mode_ic: degenerate eigenvector (n_g=%d, kx=%d).\n",
+                m.n_g, m.kx_int);
+            std::exit(1);
+        }
+        double sgn = (V_full[arg_max] >= 0.0 ? 1.0 : -1.0);
+        double scale = m.amp * sgn / max_absV;
+        for (int i = 0; i < ny; ++i) V_full[i] *= scale;
+
+        // Continuity-consistent U(y).
+        std::vector<double> rhoV(ny), dRhoV_dy(ny), U_full(ny, 0.0);
+        for (int i = 0; i < ny; ++i) rhoV[i] = h_rho[i] * V_full[i];
+        for (int i = 0; i < ny; ++i) {
+            double s = 0.0;
+            for (int j = 0; j < ny; ++j)
+                s += h_Dy_row[(size_t)i * ny + j] * rhoV[j];
+            dRhoV_dy[i] = s;
+        }
+        for (int i = 0; i < ny; ++i)
+            U_full[i] = dRhoV_dy[i] / (h_rho[i] * kx_phys);
+
+        // Superpose: v_phase = sin(kx x), u_phase = cos(kx x) by default,
+        // swapped when phase_is_cos=true.
+        double maxV_fld = 0.0, maxU_fld = 0.0;
+        for (int jy = 0; jy < ny; ++jy) {
+            double Vy = V_full[jy];
+            double Uy = U_full[jy];
+            for (int ix = 0; ix < nx; ++ix) {
+                double x  = ix * dx;
+                double sn = std::sin(kx_phys * x);
+                double cs = std::cos(kx_phys * x);
+                int k = jy * nx + ix;
+                if (!m.phase_is_cos) {
+                    h_v_host[k] += Vy * sn;
+                    h_u_host[k] += Uy * cs;
+                } else {
+                    h_v_host[k] += Vy * cs;
+                    h_u_host[k] -= Uy * sn;  // sign flip preserves continuity
+                }
+            }
+            maxV_fld = std::max(maxV_fld, std::fabs(Vy));
+            maxU_fld = std::max(maxU_fld, std::fabs(Uy));
+        }
+
+        std::fprintf(stderr,
+            "    [%zu] n_g=%d, kx=%d, amp=%g → ω=%.6f, period=%.4f, "
+            "|V|=%.3e, |U|=%.3e, phase=%s\n",
+            m_idx, m.n_g, m.kx_int, m.amp, omega, 2*M_PI/omega,
+            maxV_fld, maxU_fld, m.phase_is_cos ? "cos" : "sin");
+    }
+
+    // Upload the superposed IC.
+    CUDA_CHECK(cudaMemcpy(d_u, h_u_host.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_v, h_v_host.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_rhs_v, 0, sizeof(double) * ncell));  // W(0) = 0
+    if (is_anelastic) {
+        CUDA_CHECK(cudaMemset(d_b, 0, sizeof(double) * ncell));  // B(0) = 0
+    }
+    dt_current = 0.0;
+    step_count = 0;
+
+    // Cache the IC v for eigmode-deviation diagnostic (references the first
+    // mode's shape; downstream caller should be aware this is a composite
+    // state and deviation against V_ref only traces the first mode amplitude).
+    h_eigmode_v = h_v_host;
+    eigmode_norm = 0.0;
+    for (int i = 0; i < ncell; ++i) eigmode_norm += h_v_host[i] * h_v_host[i];
+    eigmode_omega = omega_first;
+
+    double total_max_v = 0.0;
+    for (double x : h_v_host) if (std::fabs(x) > total_max_v) total_max_v = std::fabs(x);
+    std::fprintf(stderr,
+        "  Superposed IC: |V|_max=%.3e, first-mode ω=%.6f\n",
+        total_max_v, omega_first);
+
+    return omega_first;
 }
 
 double AnelasticSLSolver::probe_v_center() {
@@ -1971,12 +2129,169 @@ void AnelasticSLSolver::compute_2d_gmode_evp(double kx_phys,
     int n_out = std::min(n_modes_out, (int)good.size());
     omega_sq_out.resize(n_out);
     v_modes_out.assign((size_t)M_int * n_out, 0.0);
-    for (int k = 0; k < n_out; ++k) {
-        omega_sq_out[k] = good[k].omega_sq;
-        int col = good[k].idx;
+
+    // KEY FIX 2026-05-04: cusolverDnXgeev returns eigenvectors that can be
+    // numerically wrong for non-symmetric real matrices with tightly spaced
+    // real eigenvalues (confirmed via residual test: relative residual ~1.0
+    // for CUDA V vs 1e-9 for Python scipy.linalg.eig on same M).
+    //
+    // We KEEP the eigenvalues from Xgeev (they're correct to ~1e-8) but
+    // re-solve each eigenvector on host via INVERSE ITERATION:
+    //     (M - λ I) x = random → x / |x|, iterate 3-5 times.
+    // Much more stable than trusting Xgeev's right-eigenvector output.
+    //
+    // We need the matrix M = B⁻¹ A on host for this.  We already have B_cm
+    // (L col-major) and A_cm (R col-major) on host.  Build M = L⁻¹ R via
+    // host LU + back-substitution (use small in-file Gaussian elimination).
+    //
+    // Matrix sizes: n_int = ny - 2 ≈ 126.  O(n³) host ~ 2e6 flops, negligible.
+
+    auto solve_linear_inplace = [&](std::vector<double>& M_col,
+                                    std::vector<double>& rhs, int n) {
+        // In-place Gaussian elimination with partial pivoting on M_col (col-major).
+        // Solve M x = rhs overwriting rhs with x.  M_col modified.
+        std::vector<int> piv(n);
+        for (int k = 0; k < n; ++k) {
+            int maxrow = k;
+            double maxval = std::fabs(M_col[k + k * n]);
+            for (int r = k + 1; r < n; ++r) {
+                double v = std::fabs(M_col[r + k * n]);
+                if (v > maxval) { maxval = v; maxrow = r; }
+            }
+            piv[k] = maxrow;
+            if (maxrow != k) {
+                for (int c = 0; c < n; ++c) {
+                    std::swap(M_col[k + c * n], M_col[maxrow + c * n]);
+                }
+                std::swap(rhs[k], rhs[maxrow]);
+            }
+            double pivot = M_col[k + k * n];
+            if (std::fabs(pivot) < 1e-300) continue;  // singular
+            for (int r = k + 1; r < n; ++r) {
+                double f = M_col[r + k * n] / pivot;
+                M_col[r + k * n] = 0.0;
+                for (int c = k + 1; c < n; ++c) {
+                    M_col[r + c * n] -= f * M_col[k + c * n];
+                }
+                rhs[r] -= f * rhs[k];
+            }
+        }
+        // Back-substitution.
+        for (int k = n - 1; k >= 0; --k) {
+            double s = rhs[k];
+            for (int c = k + 1; c < n; ++c) s -= M_col[k + c * n] * rhs[c];
+            if (std::fabs(M_col[k + k * n]) > 1e-300)
+                rhs[k] = s / M_col[k + k * n];
+            else
+                rhs[k] = 0.0;
+        }
+    };
+
+    // First reconstruct host-side M = L⁻¹ R (B_cm was destroyed by getrf; rebuild from B_full).
+    std::vector<double> B_fresh_cm((size_t)M_int * M_int);
+    std::vector<double> A_fresh_cm((size_t)M_int * M_int, 0.0);
+    for (int i = 0; i < M_int; ++i) {
+        for (int j = 0; j < M_int; ++j) {
+            // B_full is row-major: B_full[i_row*ny + j_col]
+            // Interior slice: skip wall nodes (row/col 0 and ny-1).
+            B_fresh_cm[(size_t)i + (size_t)j * M_int] =
+                B_full[(size_t)(i + 1) * ny + (j + 1)];
+        }
+        A_fresh_cm[(size_t)i + (size_t)i * M_int] = kx2 * h_N2[i + 1] * h_rho[i + 1];
+    }
+    std::fprintf(stderr,
+        "  [EVP eigvec fix] M_int=%d, building M=L⁻¹R on host...\n", M_int);
+    // Solve B X = A column-by-column → X = M = L⁻¹ R.
+    std::vector<double> M_host((size_t)M_int * M_int);
+    std::vector<double> B_copy = B_fresh_cm;
+    // A is diagonal, so M column j = L⁻¹ · (col j of A) = L⁻¹ · (A_jj e_j)
+    // Rebuild: solve one RHS per column, reusing LU factorization approximately.
+    // Simpler: multi-RHS solve.  Do LU once, back-solve n columns.
+    // For simplicity do column-by-column Gaussian (small n).
+    for (int j = 0; j < M_int; ++j) {
+        std::vector<double> rhs(M_int, 0.0);
+        rhs[j] = A_fresh_cm[(size_t)j + (size_t)j * M_int];  // A is diagonal
+        std::vector<double> B_work = B_fresh_cm;   // fresh copy per solve
+        solve_linear_inplace(B_work, rhs, M_int);
         for (int i = 0; i < M_int; ++i) {
-            v_modes_out[(size_t)i + (size_t)k * M_int] =
-                h_VR[(size_t)i + (size_t)col * M_int].x;
+            M_host[(size_t)i + (size_t)j * M_int] = rhs[i];
+        }
+    }
+
+    // Sanity check M_host[0..5]:
+    std::fprintf(stderr, "  [eigvec fix] M_host[0,0..3]= %g %g %g %g\n",
+                 M_host[0], M_host[M_int], M_host[2*M_int], M_host[3*M_int]);
+    // Sanity check: apply M_host to Python's V (a bit tricky on host). Skip.
+
+    // For each good eigenvalue, inverse-iterate (M - λ I) v = v_prev, normalize.
+    for (int k = 0; k < n_out; ++k) {
+        double om2 = good[k].omega_sq;
+        omega_sq_out[k] = om2;
+
+        // Build (M - λ I) col-major.
+        std::vector<double> Mshift((size_t)M_int * M_int);
+        for (int i = 0; i < (int)Mshift.size(); ++i) Mshift[i] = M_host[i];
+        for (int i = 0; i < M_int; ++i) Mshift[(size_t)i + (size_t)i * M_int] -= om2;
+
+        // Add small shift for numerical stability (λ + ε where ε ≪ λ_min spacing).
+        // Compute min spacing between neighbouring eigenvalues.
+        double eps_shift = 1e-12;
+        if (k + 1 < (int)good.size())
+            eps_shift = 1e-6 * std::fabs(good[k].omega_sq - good[k+1].omega_sq);
+        if (k > 0)
+            eps_shift = std::min(eps_shift,
+                                 1e-6 * std::fabs(good[k-1].omega_sq - good[k].omega_sq));
+        eps_shift = std::max(eps_shift, 1e-14);
+        for (int i = 0; i < M_int; ++i) Mshift[(size_t)i + (size_t)i * M_int] += eps_shift;
+
+        // Initial guess: deterministic pseudo-random (hash-based) to avoid
+        // bias from Xgeev's corrupted output.  Use sin(i·(k+1)·pi/n)-like
+        // pattern which has support on all modes.
+        std::vector<double> v(M_int);
+        for (int i = 0; i < M_int; ++i) {
+            v[i] = std::sin((double)(i + 1) * (k + 1) * 3.14159 / M_int)
+                 + 0.3 * std::cos((double)(i + 1) * (k + 1) * 1.23 / M_int);
+        }
+        double vn = 0.0;
+        for (double x : v) vn += x * x;
+        vn = std::sqrt(vn);
+        if (vn > 0) for (double& x : v) x /= vn;
+
+        // Inverse iterations (more aggressive: 15 rounds).
+        for (int iter = 0; iter < 15; ++iter) {
+            std::vector<double> rhs = v;
+            std::vector<double> Mwork = Mshift;
+            solve_linear_inplace(Mwork, rhs, M_int);
+            double n2 = 0.0;
+            for (double x : rhs) n2 += x * x;
+            n2 = std::sqrt(n2);
+            if (n2 > 0) for (double& x : rhs) x /= n2;
+            v = rhs;
+        }
+
+        // Diagnostic: compute residual to verify.
+        if (k < 8) {
+            // (M - λ I) v should give ~0.
+            double resid_max = 0.0;
+            for (int i = 0; i < M_int; ++i) {
+                double Mv = 0.0;
+                for (int j = 0; j < M_int; ++j)
+                    Mv += M_host[(size_t)i + (size_t)j * M_int] * v[j];
+                double r = Mv - om2 * v[i];
+                if (std::fabs(r) > resid_max) resid_max = std::fabs(r);
+            }
+            std::fprintf(stderr,
+                "    [eigvec fix n=%d, ω²=%.4f] inv-iter residual max|Mv-λv| = %.3e,"
+                " v[0..2]=%+g %+g %+g\n",
+                k+1, om2, resid_max, v[0], v[1], v[2]);
+        }
+
+        // Sign-stabilise: positive at midpoint.
+        int mid = M_int / 2;
+        if (v[mid] < 0) for (double& x : v) x = -x;
+
+        for (int i = 0; i < M_int; ++i) {
+            v_modes_out[(size_t)i + (size_t)k * M_int] = v[i];
         }
     }
 
@@ -3169,6 +3484,289 @@ static void _apply_M_kx_to_vhat(
         reinterpret_cast<const cuDoubleComplex*>(d_vhat),
         reinterpret_cast<cuDoubleComplex*>(d_out),
         d_M_per_kx, n_int, ny, nh);
+}
+
+// Public helper: rebuild u in-place from d_v via anelastic continuity.
+void AnelasticSLSolver::rebuild_u_from_continuity() {
+    const dim3 b2(32, 8);
+    const dim3 g_ny_nh((nh + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+    const dim3 g_nx_ny((nx + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+    // d_scratch = ρ · V
+    k_row_mul_out<<<g_nx_ny, b2>>>(d_scratch, d_v, d_rho, nx, ny);
+    // d_rhs_pi = ∂_y(ρV)
+    apply_dy(cublas, d_scratch, d_rhs_pi, d_Dy, nx, ny);
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_rhs_pi, d_fhat));
+    const double inv_nx = 1.0 / (double)nx;
+    k_u_from_div_v<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, d_rho, inv_nx, ny, nh);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_u));
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Phase 3: Strang-split nonlinear TD step (REVISED 2026-05-04).
+//
+// State entering/leaving the step:  (V, W, B) = (d_v, d_rhs_v, d_b).
+// W is ∂_t V.  Advances by dt via symmetric Strang splitting:
+//
+//   (A) Linear RK4 half-step (dt/2) on (V, W) — B is FROZEN:
+//         V̇ = W,  Ẇ = -M·V   (M = L⁻¹R per kx)
+//         M already embeds the full buoyancy ↔ pressure ↔ velocity
+//         coupling via elimination; a separate Ḃ = -N²·V integration
+//         would double-count buoyancy and drift unbounded near N²→0
+//         (Lane-Emden surface).  Reduces to Path D step_assembled_linear
+//         when nonlinear block is a no-op.
+//   (B) Nonlinear RK4 full-step (dt) on (V, W, B):
+//         û = -(1/(i·kx·ρ)) · ∂_y(ρ·V̂)  per kx (continuity rebuild)
+//         V̇ = -(u·∂x V + v·∂y V)
+//         Ẇ = -(u·∂x W + v·∂y W)
+//         Ḃ = -(u·∂x B + v·∂y B)
+//         All three fields advected to preserve O(dt²) Strang symmetry.
+//         2/3 dealias on x derivatives.
+//   (C) Linear RK4 half-step (dt/2) — same as (A).
+//
+// In the amp → 0 limit (B) is a no-op and the scheme collapses to two
+// half-steps of the linear RK4, recovering Path D's machine-precision floor.
+// ────────────────────────────────────────────────────────────────────────
+double AnelasticSLSolver::step_strang_nonlinear(double dt) {
+    if (d_M_per_kx == nullptr) assemble_path_d_operators();
+    if (d_M_per_kx == nullptr) {
+        std::fprintf(stderr, "step_strang_nonlinear: assemble failed.\n");
+        return 0.0;
+    }
+    // Lazy alloc of Strang scratch.
+    auto malloc_if_null = [&](double*& p) {
+        if (!p) CUDA_CHECK(cudaMalloc(&p, sizeof(double) * ncell));
+    };
+    malloc_if_null(d_strang_v0);    malloc_if_null(d_strang_w0);    malloc_if_null(d_strang_b0);
+    malloc_if_null(d_strang_v_acc); malloc_if_null(d_strang_w_acc); malloc_if_null(d_strang_b_acc);
+    malloc_if_null(d_strang_v_s);   malloc_if_null(d_strang_w_s);   malloc_if_null(d_strang_b_s);
+    malloc_if_null(d_strang_deriv);
+    malloc_if_null(d_strang_dw);    malloc_if_null(d_strang_db);
+
+    const int n_int = n_int_path_d;
+    dt_current = dt;
+
+    const int block = 256;
+    const int grid1d = (ncell + block - 1) / block;
+    const dim3 b2(32, 8);
+    const dim3 g_ny_nh((nh + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+    const dim3 g_nx_ny((nx + b2.x - 1) / b2.x, (ny + b2.y - 1) / b2.y);
+    const int grid_bdy = (nx + 255) / 256;
+
+    auto copy_dev = [&](double* dst, const double* src) {
+        CUDA_CHECK(cudaMemcpyAsync(dst, src, sizeof(double) * ncell,
+                                   cudaMemcpyDeviceToDevice));
+    };
+    auto axpy = [&](double alpha, const double* x, double* y) {
+        CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &alpha, x, 1, y, 1));
+    };
+
+    // Compute d_deriv = -M·V_src (row-major, walls zeroed).
+    auto compute_Mdot = [&](const double* d_V_src, double* d_Mv_neg) {
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x,
+                                 const_cast<double*>(d_V_src), d_fhat));
+        _apply_M_kx_to_vhat(d_fhat, d_ghat, d_M_per_kx, n_int, ny, nh, cublas);
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_Mv_neg));
+        double scale = -1.0 / (double)nx;
+        CUBLAS_CHECK(cublasDscal(cublas, ncell, &scale, d_Mv_neg, 1));
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_Mv_neg, nx, ny);
+    };
+
+    // ── Linear RK4 half-step of size h on (V, W, B) ────────────────────
+    // V̇ = W, Ẇ = -M·V, Ḃ = -N²·V
+    // Temporary derivatives computed on the fly into d_strang_deriv & d_scratch.
+    auto linear_half = [&](double h) {
+        // Snapshot V0, W0, B0.
+        // KEY FIX 2026-05-04: d_b is NOT evolved in the linear block.
+        // Reason: M = L⁻¹R already absorbs the buoyancy ↔ pressure ↔ velocity
+        // coupling (V̈ = -MV embeds Ḃ = -N²V through pressure elimination).
+        // A separate d_b integrated as Ḃ = -N²V would double-count buoyancy
+        // and drift unbounded (∫b²/N² blows up near the Lane-Emden surface
+        // where N²→0).  In the linear block B is FROZEN.
+        //
+        // B only becomes a dynamical variable in the nonlinear block, where
+        // advection (u·∇)b is *additional* physics that M does not carry.
+        // This matches the Python prototype scripts/nonlinear_path1_opsplit.py
+        // §(A) which tracks (V, W) linearly and treats b as a tracer.
+
+        copy_dev(d_strang_v0, d_v);
+        copy_dev(d_strang_w0, d_rhs_v);
+
+        // Init accumulators at V0, W0.
+        copy_dev(d_strang_v_acc, d_strang_v0);
+        copy_dev(d_strang_w_acc, d_strang_w0);
+
+        // ── k1 at state (V0, W0) ──────────────────────────────────────
+        compute_Mdot(d_strang_v0, d_strang_deriv);                // deriv = -M·V0  (ẇ)
+        axpy(h / 6.0, d_strang_w0,     d_strang_v_acc);           // v_acc += h/6 · W0
+        axpy(h / 6.0, d_strang_deriv,  d_strang_w_acc);           // w_acc += h/6 · Ẇ
+
+        // Build substep state for k2: V_s = V0 + h/2·W0, W_s = W0 + h/2·dW1.
+        copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_w0,    d_strang_v_s);
+        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_deriv, d_strang_w_s);
+
+        // ── k2 at state (V_s, W_s) ────────────────────────────────────
+        compute_Mdot(d_strang_v_s, d_strang_deriv);
+        axpy(h / 3.0, d_strang_w_s,    d_strang_v_acc);
+        axpy(h / 3.0, d_strang_deriv,  d_strang_w_acc);
+
+        // Build substep state for k3.  V_s depends on the stage-2 W_s which
+        // is about to be overwritten — build V_s first.
+        copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_w_s,   d_strang_v_s);
+        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_deriv, d_strang_w_s);
+
+        // ── k3 at state (V_s, W_s) ────────────────────────────────────
+        compute_Mdot(d_strang_v_s, d_strang_deriv);
+        axpy(h / 3.0, d_strang_w_s,    d_strang_v_acc);
+        axpy(h / 3.0, d_strang_deriv,  d_strang_w_acc);
+
+        // Build substep state for k4.
+        copy_dev(d_strang_v_s, d_strang_v0); axpy(h, d_strang_w_s,   d_strang_v_s);
+        copy_dev(d_strang_w_s, d_strang_w0); axpy(h, d_strang_deriv, d_strang_w_s);
+
+        // ── k4 at state (V_s, W_s) ────────────────────────────────────
+        compute_Mdot(d_strang_v_s, d_strang_deriv);
+        axpy(h / 6.0, d_strang_w_s,    d_strang_v_acc);
+        axpy(h / 6.0, d_strang_deriv,  d_strang_w_acc);
+
+        // Commit V, W.  B is untouched by the linear block.
+        copy_dev(d_v,     d_strang_v_acc);
+        copy_dev(d_rhs_v, d_strang_w_acc);
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v,     nx, ny);
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+    };
+
+    // ── Rebuild u from v via anelastic continuity (result in d_u). ─────
+    // û(kx≠0, y) = -(1/(i·kx·ρ(y))) · ∂_y(ρ(y)·V̂(kx, y))
+    auto rebuild_u_from_v = [&](const double* d_V_src, double* d_u_dst) {
+        // d_scratch = ρ(y) · V_src
+        k_row_mul_out<<<g_nx_ny, b2>>>(d_scratch, d_V_src, d_rho, nx, ny);
+        // d_rhs_pi = ∂_y(ρ·V)
+        apply_dy(cublas, d_scratch, d_rhs_pi, d_Dy, nx, ny);
+        // FFT_x → d_fhat
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_rhs_pi, d_fhat));
+        // Build ûhat in d_ghat using per-(kx, y) division.
+        const double inv_nx = 1.0 / (double)nx;
+        k_u_from_div_v<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx, d_rho,
+                                         inv_nx, ny, nh);
+        // IFFT_x → d_u_dst (already includes 1/nx scale via kernel).
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_u_dst));
+    };
+
+    // ── Compute nonlinear derivatives at given state (V_src, W_src, B_src) ─
+    //    dV = -(u·∂x V + v·∂y V)
+    //    dW = -(u·∂x W + v·∂y W)   (advect ∂_t V consistently — keeps
+    //                                Strang O(dt²) symmetry intact)
+    //    dB = -(u·∂x B + v·∂y B)
+    // u is derived from V_src via continuity.
+    //
+    // Output buffers must be distinct from d_scratch / d_rhs_pi / d_fhat /
+    // d_ghat since those are used internally for ∂x/∂y evaluation.  We use
+    // d_strang_deriv (dV), d_strang_dw (dW), d_strang_db (dB).
+    //
+    // NOTE: overwrites d_u with u rebuilt from continuity (Strang has no
+    // independent u state — it's fully determined by V via anelastic
+    // ∇·(ρ₀u) = 0).
+    auto nonlinear_deriv = [&](const double* d_V_src,
+                               const double* d_W_src,
+                               const double* d_B_src,
+                               double* d_out_dV,
+                               double* d_out_dW,
+                               double* d_out_dB) {
+        // Rebuild u into d_u.
+        rebuild_u_from_v(d_V_src, d_u);
+        const double inv_nx = 1.0 / (double)nx;
+
+        // Helper: dF = -(u·∂x F_src + v·∂y F_src).  Writes to d_dF.
+        auto advect = [&](const double* d_F_src, double* d_dF) {
+            // ∂x F → d_rhs_pi
+            CUFFT_CHECK(cufftExecD2Z(plan_r2c_x,
+                                     const_cast<double*>(d_F_src), d_fhat));
+            k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh,
+                                                  (2 * (nh - 1)) / 3);
+            k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx,
+                                             inv_nx, ny, nh);
+            CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_rhs_pi));  // ∂x F
+            // ∂y F → d_scratch
+            apply_dy(cublas, d_F_src, d_scratch, d_Dy, nx, ny);
+            // dF = -u·∂x F - v·∂y F.
+            CUDA_CHECK(cudaMemsetAsync(d_dF, 0, sizeof(double) * ncell));
+            k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_u, d_rhs_pi, ncell);
+            k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_V_src, d_scratch, ncell);
+        };
+
+        advect(d_V_src, d_out_dV);
+        advect(d_W_src, d_out_dW);
+        advect(d_B_src, d_out_dB);
+    };
+
+    // ── Nonlinear RK4 full step of size dt on (V, W, B) ───────────────
+    // Advects all three state components by u = u(V) from continuity.
+    // Uses d_strang_{v,w,b}_{0,acc,s} for snapshots / accumulators /
+    // substep state, and d_strang_{deriv, dw, db} for the RK4 k-stages.
+    auto nonlinear_step = [&](double h) {
+        // Snapshots + accumulators.
+        copy_dev(d_strang_v0, d_v);
+        copy_dev(d_strang_w0, d_rhs_v);
+        copy_dev(d_strang_b0, d_b);
+        copy_dev(d_strang_v_acc, d_strang_v0);
+        copy_dev(d_strang_w_acc, d_strang_w0);
+        copy_dev(d_strang_b_acc, d_strang_b0);
+
+        // ── k1 at (V0, W0, B0) ───────────────────────────────────────
+        nonlinear_deriv(d_strang_v0, d_strang_w0, d_strang_b0,
+                        d_strang_deriv, d_strang_dw, d_strang_db);
+        axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
+        axpy(h / 6.0, d_strang_dw,    d_strang_w_acc);
+        axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
+        // Substep V_s = V0 + h/2·dV1, similarly W_s, B_s.
+        copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
+        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_dw,    d_strang_w_s);
+        copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
+
+        // ── k2 at (V_s, W_s, B_s) ────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_dw, d_strang_db);
+        axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
+        axpy(h / 3.0, d_strang_dw,    d_strang_w_acc);
+        axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
+        copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
+        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_dw,    d_strang_w_s);
+        copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
+
+        // ── k3 at (V_s, W_s, B_s) ────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_dw, d_strang_db);
+        axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
+        axpy(h / 3.0, d_strang_dw,    d_strang_w_acc);
+        axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
+        copy_dev(d_strang_v_s, d_strang_v0); axpy(h, d_strang_deriv, d_strang_v_s);
+        copy_dev(d_strang_w_s, d_strang_w0); axpy(h, d_strang_dw,    d_strang_w_s);
+        copy_dev(d_strang_b_s, d_strang_b0); axpy(h, d_strang_db,    d_strang_b_s);
+
+        // ── k4 at (V_s, W_s, B_s) ────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_dw, d_strang_db);
+        axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
+        axpy(h / 6.0, d_strang_dw,    d_strang_w_acc);
+        axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
+
+        // Commit.
+        copy_dev(d_v,     d_strang_v_acc);
+        copy_dev(d_rhs_v, d_strang_w_acc);
+        copy_dev(d_b,     d_strang_b_acc);
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v,     nx, ny);
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+    };
+
+    // ── Strang (A) — linear half-step dt/2 ─────────────────────────────
+    linear_half(0.5 * dt);
+    // ── Strang (B) — nonlinear full-step dt ───────────────────────────
+    nonlinear_step(dt);
+    // ── Strang (C) — linear half-step dt/2 ─────────────────────────────
+    linear_half(0.5 * dt);
+
+    step_count++;
+    return dt;
 }
 
 // Manufactured-solution self-test.

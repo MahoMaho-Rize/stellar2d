@@ -218,6 +218,51 @@ __global__ void k_zero_y_boundary(double* f, int nx, int ny) {
     f[(ny - 1) * nx + ix]   = 0.0;
 }
 
+// ── store: dst[i] = -N²(y_i) · v[i]  (row-scaled product, overwrite) ───
+__global__ void k_neg_N2_v_out(double* dst, const double* v, const double* N2,
+                               int nx, int ny) {
+    int jy = blockIdx.y * blockDim.y + threadIdx.y;
+    int ix = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny || ix >= nx) return;
+    int k = jy * nx + ix;
+    dst[k] = -N2[jy] * v[k];
+}
+
+// ── Row-multiply store: dst[j, i] = rho(y_j) · src[j, i]  (overwrite) ──
+__global__ void k_row_mul_out(double* dst, const double* src,
+                              const double* row_scale, int nx, int ny) {
+    int jy = blockIdx.y * blockDim.y + threadIdx.y;
+    int ix = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny || ix >= nx) return;
+    int k = jy * nx + ix;
+    dst[k] = src[k] * row_scale[jy];
+}
+
+// ── û(kx, y) = -(1/(i·kx·ρ(y))) · ĝ(kx, y)  for kx≠0; û(0,·) = 0 ──────
+// Acts on cuFFT R2C output layout: d_out[jy*nh + kx_idx] = complex sample.
+// Computes û = (i / (kx · ρ(y))) · ĝ  (since -1/i = i).  Skips kx=0 column.
+// Also normalises by (1/nx) so the subsequent C2R produces properly-scaled
+// physical values (cuFFT C2R is unnormalised).
+__global__ void k_u_from_div_v(cufftDoubleComplex* d_out,
+                               const cufftDoubleComplex* d_g_hat,
+                               const double* d_kx, const double* d_rho,
+                               double inv_nx, int ny, int nh) {
+    int kx_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int jy     = blockIdx.y * blockDim.y + threadIdx.y;
+    if (kx_idx >= nh || jy >= ny) return;
+    int off = (size_t)jy * nh + kx_idx;
+    double kx = d_kx[kx_idx];
+    if (kx_idx == 0 || fabs(kx) < 1e-30) {
+        d_out[off].x = 0.0; d_out[off].y = 0.0;
+        return;
+    }
+    double inv = inv_nx / (kx * d_rho[jy]);
+    cufftDoubleComplex g = d_g_hat[off];
+    // û = (i / (kx·ρ)) · ĝ = inv · (i · (gr + i·gi)) = inv · (-gi + i·gr)
+    d_out[off].x = -inv * g.y;
+    d_out[off].y =  inv * g.x;
+}
+
 // ── max absolute value reduction (two-pass: blocks → scratch → host) ────
 __global__ void k_max_abs_pass1(
     const double* a, int n, double* out_blocks)
