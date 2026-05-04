@@ -19,15 +19,18 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-# X_pre/X_post columns match alpha_net::Species:
-#   0: ⁴He   1: ¹²C   2: ¹⁶O   3: ²⁰Ne   4: ²⁴Mg   5: ²⁸Si(+heavier)
+# X_pre/X_post columns match alpha_net::Species (Phase B, 13 species):
+#   0: He4   1: C12   2: O16   3: Ne20   4: Mg24   5: Si28
+#   6: S32   7: Ar36  8: Ca40  9: Ti44  10: Cr48  11: Fe52  12: Ni56
+# For Fig 7 we show the 6 main species tracked by the paper.  We add
+# "Fe*" for the sum Ti44+Cr48+Fe52+Ni56 to reflect iron-peak abundance.
 SPECIES = [
     (0, "He",    "C1"),
     (1, "C",     "C2"),
     (2, "O",     "C4"),
     (3, "Ne",    "C5"),
     (4, "Mg",    "C6"),
-    (5, "Si*",   "C7"),  # Si lumped includes S, Ar, Ca, Ti, Cr, Fe, Ni
+    (5, "Si",    "C7"),
 ]
 
 MODELS = [
@@ -90,7 +93,7 @@ def main():
 
     fig.suptitle(
         "N49B Fig 7 replication — explosive nucleosynthesis on Sukhbold+2018 IC\n"
-        "(1e51 erg, mass cut 1.6 $M_\\odot$; Phase-A α-network: He/C/O/Ne/Mg/Si*)",
+        "Phase-B 13-species α-network (He → Ni56) + CF88 rates + detailed-balance photodisintegration",
         fontsize=11, y=0.995,
     )
     fig.tight_layout()

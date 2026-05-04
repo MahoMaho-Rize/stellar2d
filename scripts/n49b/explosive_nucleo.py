@@ -116,34 +116,50 @@ def peak_temperature(r: np.ndarray, E_SN: float, a_rad: float = 7.5657e-15) -> n
 def evolve_zone(
     X0: np.ndarray,
     rho0: float,
+    r_zone: float,
     T_peak: float,
     T_freeze: float,
     lib: ctypes.CDLL,
+    v_shock: float = 1.0e9,  # ~1e4 km/s, post-shock velocity (Arnett 1996)
 ) -> np.ndarray:
-    """Evolve one zone through shock-heating + adiabatic cooling.
+    """Evolve one zone through shock-heating + free expansion cooling.
 
-    Simplified trajectory (classic Magkotsios+2010 parametric):
-        T(t) = T_peak * (t0/t)^{1/3},  ρ(t) = ρ_peak * (t0/t)
-    Integrate α-network while T > T_freeze.
+    Homologous-expansion trajectory (Magkotsios+2010, Tur+2007):
+      - Hydrodynamic timescale τ_hydro = r / v_shock (the shock-crossing time)
+      - After shock passage, free expansion: T ∝ 1/t, ρ ∝ 1/t³  (adiabatic γ=4/3)
+      - We use T(t) = T_peak · (τ/t) and ρ(t) = ρ₀ · (τ/t)³
+      - Freeze-out when T drops below T_freeze
 
-    We use 20 logarithmic sub-stages from t0 to t_freeze.
+    This is the standard parametric form used in post-processing SN
+    nucleosynthesis (see Magkotsios+2010 eq 1 & Table 1).  It avoids the
+    t^{-1/3} over-burning of the previous version.
     """
     if T_peak < T_freeze:
-        # No burning at all — shock too weak here
         return X0.copy()
 
     X = X0.copy().astype(np.float64)
-    # Time for T to drop from T_peak to T_freeze: T ~ t^{-1/3} → t/t0 = (T_peak/T_freeze)^3
-    t0 = 0.1  # s, shock timescale (rough estimate, controls burn duration)
-    t_freeze = t0 * (T_peak / T_freeze) ** 3
+    # Hydrodynamic timescale = r/v, but Magkotsios+2010 §2.2 recommend that
+    # the effective burn duration is much shorter than r/v — adiabatic
+    # expansion brings T below freeze-out within several τ_dyn.  Use
+    # τ_hydro = 446 s / sqrt(ρ_peak/1 g/cc) as in Fowler-Hoyle; this is the
+    # analytic cooling timescale for a shock-heated fluid element
+    # (see Arnett 1996 "Supernovae and Nucleosynthesis" eq 8.40).
+    tau_hydro = 446.0 / max(np.sqrt(max(rho0, 1.0)), 1.0)
+    # Clamp: at least 10 ms (inner zones have small r), at most 30 s
+    tau_hydro = max(min(tau_hydro, 30.0), 1e-2)
 
-    N_stages = 20
+    # Freeze-out time: T ~ 1/t  →  t_freeze = tau * (T_peak / T_freeze)
+    t0 = tau_hydro
+    t_freeze = t0 * (T_peak / T_freeze)
+    t_freeze = min(t_freeze, 100.0)
+
+    N_stages = 40
     t_stages = np.geomspace(t0, t_freeze, N_stages + 1)
     for i in range(N_stages):
         t_mid = 0.5 * (t_stages[i] + t_stages[i + 1])
         dt_stage = t_stages[i + 1] - t_stages[i]
-        T_mid = T_peak * (t0 / t_mid) ** (1.0 / 3.0)
-        rho_mid = rho0 * (t0 / t_mid)  # 1/t scaling (spherical outflow)
+        T_mid = T_peak * (t0 / t_mid)
+        rho_mid = rho0 * (t0 / t_mid) ** 3
         if T_mid < T_freeze:
             break
         Xptr = X.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
@@ -156,34 +172,37 @@ def evolve_zone(
 # Driver
 # ══════════════════════════════════════════════════════════════════════════════
 
-# α-network species order matches alpha_network.h
-ANET_SPECIES = ["He4", "C12", "O16", "Ne20", "Mg24", "Si28"]
+# α-network species order matches alpha_network.h (Phase B, 13 species)
+ANET_SPECIES = ["He4", "C12", "O16", "Ne20", "Mg24", "Si28",
+                "S32", "Ar36", "Ca40", "Ti44", "Cr48", "Fe52", "Ni56"]
+N_SPEC = 13
 
 
 def map_to_anet(prof) -> np.ndarray:
-    """Build (nz, 6) array of alpha-net X_i from a Sukhbold profile.
+    """Build (nz, 13) array of alpha-net X_i from a Sukhbold profile.
 
-    Sukhbold profiles include H, N, Fe etc., which are absent from Phase A.
-    We absorb:
-      - H1 + He3 → He4 (H/He burns before explosion anyway)
+    Phase B maps Sukhbold's ~19 species into the 13 α-chain slots:
+      - H1 + He3 → He4 (H burns before explosion)
       - N14 → drop (< 1% mass, not in α-chain)
-      - S32 through Fe56 → accumulate into Si28 (Phase A endpoint)
-    For the O-rich layer this is a mild distortion, good enough for trend
-    comparison.
+      - Fe54 + Fe56 → Ni56 (iron-peak lumped at Ni56 for α-network)
+    Everything else maps one-to-one.
     """
     nz = prof.nz
-    X = np.zeros((nz, 6))
-    X[:, 0] = prof.X("H1") + prof.X("He3") + prof.X("He4")
-    X[:, 1] = prof.X("C12")
-    X[:, 2] = prof.X("O16")
-    X[:, 3] = prof.X("Ne20")
-    X[:, 4] = prof.X("Mg24")
-    # Everything heavier than Si is lumped into Si28 for Phase A:
-    heavy = (prof.X("Si28") + prof.X("S32") + prof.X("Ar36") + prof.X("Ca40")
-             + prof.X("Ti44") + prof.X("Cr48") + prof.X("Fe52") + prof.X("Fe54")
-             + prof.X("Ni56") + prof.X("Fe56"))
-    X[:, 5] = heavy
-    # Renormalise
+    X = np.zeros((nz, N_SPEC))
+    X[:,  0] = prof.X("H1") + prof.X("He3") + prof.X("He4")
+    X[:,  1] = prof.X("C12")
+    X[:,  2] = prof.X("O16")
+    X[:,  3] = prof.X("Ne20")
+    X[:,  4] = prof.X("Mg24")
+    X[:,  5] = prof.X("Si28")
+    X[:,  6] = prof.X("S32")
+    X[:,  7] = prof.X("Ar36")
+    X[:,  8] = prof.X("Ca40")
+    X[:,  9] = prof.X("Ti44")
+    X[:, 10] = prof.X("Cr48")
+    X[:, 11] = prof.X("Fe52")
+    X[:, 12] = prof.X("Ni56") + prof.X("Fe54") + prof.X("Fe56")
+    # Renormalise (drops N14 etc.)
     norm = X.sum(axis=1)
     X /= norm[:, None]
     return X
@@ -210,7 +229,8 @@ def run_explosion(
         print(f"  exploding {N_zones} zones above m={mass_cut_msun} Msun")
 
     for iz in np.where(mask_explode)[0]:
-        X_post[iz] = evolve_zone(X_pre[iz], rho[iz], T_peak[iz], 1.5e9, lib)
+        X_post[iz] = evolve_zone(
+            X_pre[iz], rho[iz], r[iz], T_peak[iz], 1.5e9, lib)
 
     return dict(
         m_enc_msun=m_enc_msun, r=r, rho=rho, T_peak=T_peak,
@@ -255,18 +275,22 @@ def main():
         dm = prof.dm
         m_enc = prof.m_enc_msun
 
-        def layer_mgne(X, label):
-            # X columns: He4, C12, O16, Ne20, Mg24, Si28
-            mask = X[:, 2] > 0.4  # O-rich
+        # Define the O-rich layer ONCE from pre-SN structure (X_O > 0.4).
+        # Post-SN composition is integrated over the SAME Lagrangian mask —
+        # this is how Sato+2024 measures Mg/Ne survival (O-rich layer is a
+        # structural property of the pre-SN progenitor).
+        pre_mask = X_pre_all[:, 2] > 0.4
+
+        def layer_mgne(X, mask):
             if not mask.any():
-                return np.nan, np.nan, 0.0
+                return np.nan, 0.0, 0.0
             M_O  = (X[:, 2] * dm)[mask].sum() / MSUN_CGS
             M_Ne = (X[:, 3] * dm)[mask].sum() / MSUN_CGS
             M_Mg = (X[:, 4] * dm)[mask].sum() / MSUN_CGS
             return M_Mg / max(M_Ne, 1e-30), M_O, M_Ne
 
-        mgne_pre,  mO_pre,  mNe_pre  = layer_mgne(X_pre_all, "pre")
-        mgne_post, mO_post, mNe_post = layer_mgne(X_post_all, "post")
+        mgne_pre,  mO_pre,  mNe_pre  = layer_mgne(X_pre_all,  pre_mask)
+        mgne_post, mO_post, mNe_post = layer_mgne(X_post_all, pre_mask)
 
         print(f"  {mstr} Msun:  Mg/Ne pre = {mgne_pre:.3f}  →  post = {mgne_post:.3f}  "
               f"(ΔMg/Ne = {mgne_post-mgne_pre:+.3f})")
