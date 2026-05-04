@@ -346,6 +346,261 @@ ANET_HD inline void rate_fe52ag(const TFactors& tf, double den,
     rr = rev * term;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// aprox13e bypass rates — (α,p) channel for each α-chain step.
+//
+// Physical picture: parallel to A+α→B, there's a A+α→X+p path followed
+// by X+p→B.  X (the intermediate, e.g. Al27 for Mg→Si) is in QSE with
+// its production and destruction; its steady-state abundance is tiny.
+// In the "fast intermediate" limit the **effective forward rate** from
+// A to B through the (α,p) channel equals the rate-limiting step,
+// which is rate_Xap (the A+α→X+p leg) times Y_A·Y_α.
+//
+// We add this onto the aprox13 (α,γ) rate.  The reverse is governed by
+// rate_Xpg (X+p→B) leg backward, i.e. photodisintegration of B→X+p.
+//
+// Source: AMReX-Astro Microphysics networks/aprox21 actual_network.H
+// (Mg24_He4_to_Si28 wraps Mg24_He4_to_Al27_P + Al27_P_to_Si28).
+//
+// Convention: in AMReX aprox_rates.H rate_*ap uses "flipped" fr/rr
+//   rr  = forward  (A + α → X + p)
+//   fr  = reverse  (X + p → A + α)   [detailed balance]
+// And rate_*pg uses normal
+//   fr  = forward  (X + p → B)
+//   rr  = reverse  (B → X + p)
+//
+// For our purposes we only need the rate-limiting legs — so the
+// helper functions below return "(α,p) forward" and "(α,p) reverse"
+// in OUR convention (forward = A→B).
+//
+// Rates ported bit-for-bit from AMReX aprox_rates.H (lines 380–879).
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Mg24+α → Al27+p   (returns forward A+α→X+p as "fr_ap")
+ANET_HD inline double rate_mg24ap_fwd(const TFactors& tf, double den) {
+    constexpr double rc148 = 0.1;
+    constexpr double q1 = 1.0 / 0.024649;
+    double aa = 1.10e8 * tf.t9i23 * exp(-23.261 * tf.t9i13 - tf.t92 * q1);
+    double bb = 1.0 + 0.018 * tf.t913 + 12.85 * tf.t923 + 1.61 * tf.t9
+              + 89.87 * tf.t943 + 28.66 * tf.t953;
+    double term1 = aa * bb;
+    aa = 129.0 * tf.t9i32 * exp(-2.517 * tf.t9i);
+    bb = 5660.0 * pow(tf.t9, 3.5) * exp(-3.421 * tf.t9i);  // t972 = t9^{7/2}
+    double cc = rc148 * 3.89e-08 * tf.t9i32 * exp(-0.853 * tf.t9i);
+    double dd = rc148 * 8.18e-09 * tf.t9i32 * exp(-1.001 * tf.t9i);
+    double term2 = aa + bb + cc + dd;
+    double ee = (1.0/3.0) * exp(-9.792 * tf.t9i);
+    double ff = (2.0/3.0) * exp(-11.773 * tf.t9i);
+    double gg = 1.0 + ee + ff;
+    double term = (term1 + term2) / gg;
+    return den * term;
+}
+
+// Al27+p → Si28   (returns forward X+p→B as "fr_pg")
+// Champagne 1996 (AMReX aprox_rates.H:414)
+ANET_HD inline double rate_al27pg_fwd(const TFactors& tf, double den) {
+    double aa = 1.32e9 * tf.t9i23 * exp(-23.26 * tf.t9i13);
+    double bb = 3.22e-10 * tf.t9i32 * exp(-0.836 * tf.t9i) * 0.17;
+    double cc = 1.74 * tf.t9i32 * exp(-2.269 * tf.t9i);
+    double dd = 9.92 * tf.t9i32 * exp(-2.492 * tf.t9i);
+    double ee = 4.29e1 * tf.t9i32 * exp(-3.273 * tf.t9i);
+    double ff = 1.34e2 * tf.t9i32 * exp(-3.654 * tf.t9i);
+    double gg = 1.77e4 * pow(tf.t9, 0.53) * exp(-4.588 * tf.t9i);
+    double term = aa + bb + cc + dd + ee + ff + gg;
+    return den * term;
+}
+// Si28→Al27+p reverse photodisintegration rate (returns rr_pg photo on B)
+ANET_HD inline double rate_al27pg_rev(const TFactors& tf, double /*den*/) {
+    // As in rate_al27pg: rev = 1.13e11 * t932 * exp(-134.434/t9); rr = rev * term
+    // where term is the same forward term (without den factor).
+    double aa = 1.32e9 * tf.t9i23 * exp(-23.26 * tf.t9i13);
+    double bb = 3.22e-10 * tf.t9i32 * exp(-0.836 * tf.t9i) * 0.17;
+    double cc = 1.74 * tf.t9i32 * exp(-2.269 * tf.t9i);
+    double dd = 9.92 * tf.t9i32 * exp(-2.492 * tf.t9i);
+    double ee = 4.29e1 * tf.t9i32 * exp(-3.273 * tf.t9i);
+    double ff = 1.34e2 * tf.t9i32 * exp(-3.654 * tf.t9i);
+    double gg = 1.77e4 * pow(tf.t9, 0.53) * exp(-4.588 * tf.t9i);
+    double term = aa + bb + cc + dd + ee + ff + gg;
+    double rev = 1.13e11 * tf.t932 * exp(-134.434 * tf.t9i);
+    return rev * term;
+}
+
+// Si28+α → P31+p
+ANET_HD inline double rate_si28ap_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 2.798e-3 * z + 2.763e-3 * z2 - 2.341e-4 * z3;
+    double term = 4.16e13 * tf.t9i23 * exp(-25.631 * tf.t9i13 * aa);
+    return den * term;
+}
+// P31+p → S32 forward
+ANET_HD inline double rate_p31pg_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.928e-1 * z - 1.540e-2 * z2 + 6.444e-4 * z3;
+    double term = 1.08e16 * tf.t9i23 * exp(-27.042 * tf.t9i13 * aa);
+    return den * term;
+}
+// S32 → P31+p reverse photo
+ANET_HD inline double rate_p31pg_rev(const TFactors& tf, double /*den*/) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.928e-1 * z - 1.540e-2 * z2 + 6.444e-4 * z3;
+    double term = 1.08e16 * tf.t9i23 * exp(-27.042 * tf.t9i13 * aa);
+    double rev = 3.764e10 * tf.t932 * exp(-102.865 * tf.t9i);
+    return rev * term;
+}
+
+// S32+α → Cl35+p
+ANET_HD inline double rate_s32ap_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.041e-1 * z - 1.368e-2 * z2 + 6.969e-4 * z3;
+    double term = 1.27e16 * tf.t9i23 * exp(-31.044 * tf.t9i13 * aa);
+    return den * term;
+}
+// Cl35+p → Ar36 forward
+ANET_HD inline double rate_cl35pg_fwd(const TFactors& tf, double den) {
+    double aa = 1.0 + 1.761e-1 * tf.t9 - 1.322e-2 * tf.t92 + 5.245e-4 * tf.t93;
+    double term = 4.48e16 * tf.t9i23 * exp(-29.483 * tf.t9i13 * aa);
+    return den * term;
+}
+// Ar36 → Cl35+p reverse photo
+ANET_HD inline double rate_cl35pg_rev(const TFactors& tf, double /*den*/) {
+    double aa = 1.0 + 1.761e-1 * tf.t9 - 1.322e-2 * tf.t92 + 5.245e-4 * tf.t93;
+    double term = 4.48e16 * tf.t9i23 * exp(-29.483 * tf.t9i13 * aa);
+    double rev = 7.568e10 * tf.t932 * exp(-98.722 * tf.t9i);
+    return rev * term;
+}
+
+// Ar36+α → K39+p
+ANET_HD inline double rate_ar36ap_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 4.826e-3 * z - 5.534e-3 * z2 + 4.021e-4 * z3;
+    double term = 2.76e13 * tf.t9i23 * exp(-34.922 * tf.t9i13 * aa);
+    return den * term;
+}
+// K39+p → Ca40 forward
+ANET_HD inline double rate_k39pg_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.622e-1 * z - 1.119e-2 * z2 + 3.910e-4 * z3;
+    double term = 4.09e16 * tf.t9i23 * exp(-31.727 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_k39pg_rev(const TFactors& tf, double /*den*/) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.622e-1 * z - 1.119e-2 * z2 + 3.910e-4 * z3;
+    double term = 4.09e16 * tf.t9i23 * exp(-31.727 * tf.t9i13 * aa);
+    double rev = 7.600e10 * tf.t932 * exp(-96.657 * tf.t9i);
+    return rev * term;
+}
+
+// Ca40+α → Sc43+p
+ANET_HD inline double rate_ca40ap_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 - 1.206e-2 * z + 7.753e-3 * z2 - 5.071e-4 * z3;
+    double term = 4.54e14 * tf.t9i23 * exp(-32.177 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_sc43pg_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.023e-1 * z - 2.242e-3 * z2 - 5.463e-5 * z3;
+    double term = 3.85e16 * tf.t9i23 * exp(-33.234 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_sc43pg_rev(const TFactors& tf, double /*den*/) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.023e-1 * z - 2.242e-3 * z2 - 5.463e-5 * z3;
+    double term = 3.85e16 * tf.t9i23 * exp(-33.234 * tf.t9i13 * aa);
+    double rev = 1.525e11 * tf.t932 * exp(-100.475 * tf.t9i);
+    return rev * term;
+}
+
+// Ti44+α → V47+p
+ANET_HD inline double rate_ti44ap_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 2.655e-2 * z - 3.947e-3 * z2 + 2.522e-4 * z3;
+    double term = 6.54e20 * tf.t9i23 * exp(-66.678 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_v47pg_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 9.979e-2 * z - 2.269e-3 * z2 - 6.662e-5 * z3;
+    double term = 2.05e17 * tf.t9i23 * exp(-35.568 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_v47pg_rev(const TFactors& tf, double /*den*/) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 9.979e-2 * z - 2.269e-3 * z2 - 6.662e-5 * z3;
+    double term = 2.05e17 * tf.t9i23 * exp(-35.568 * tf.t9i13 * aa);
+    double rev = 7.649e10 * tf.t932 * exp(-93.999 * tf.t9i);
+    return rev * term;
+}
+
+// Cr48+α → Mn51+p
+ANET_HD inline double rate_cr48ap_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.384e-2 * z + 1.081e-3 * z2 - 5.933e-5 * z3;
+    double term = 1.83e26 * tf.t9i23 * exp(-86.741 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_mn51pg_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 8.922e-2 * z - 1.256e-3 * z2 - 9.453e-5 * z3;
+    double term = 3.77e17 * tf.t9i23 * exp(-37.516 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_mn51pg_rev(const TFactors& tf, double /*den*/) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 8.922e-2 * z - 1.256e-3 * z2 - 9.453e-5 * z3;
+    double term = 3.77e17 * tf.t9i23 * exp(-37.516 * tf.t9i13 * aa);
+    double rev = 1.150e11 * tf.t932 * exp(-85.667 * tf.t9i);
+    return rev * term;
+}
+
+// Fe52+α → Co55+p
+ANET_HD inline double rate_fe52ap_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 1.367e-2 * z + 7.428e-4 * z2 - 3.050e-5 * z3;
+    double term = 1.30e27 * tf.t9i23 * exp(-91.674 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_co55pg_fwd(const TFactors& tf, double den) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 9.894e-2 * z - 3.131e-3 * z2 - 2.160e-5 * z3;
+    double term = 1.21e18 * tf.t9i23 * exp(-39.604 * tf.t9i13 * aa);
+    return den * term;
+}
+ANET_HD inline double rate_co55pg_rev(const TFactors& tf, double /*den*/) {
+    double z = (tf.t9 < 10.0) ? tf.t9 : 10.0;
+    double z2 = z*z, z3 = z2*z;
+    double aa = 1.0 + 9.894e-2 * z - 3.131e-3 * z2 - 2.160e-5 * z3;
+    double term = 1.21e18 * tf.t9i23 * exp(-39.604 * tf.t9i13 * aa);
+    double rev = 1.537e11 * tf.t932 * exp(-83.382 * tf.t9i);
+    return rev * term;
+}
+
+// Phase E: compile-time flag to enable (α,p) bypass channels in RHS.
+// Default ON (physically more complete — "aprox13e" in the literature).
+// Set to false for strict aprox13 regression.
+#ifndef ALPHA_NET_USE_AP_BYPASS
+#define ALPHA_NET_USE_AP_BYPASS 1
+#endif
+
 // R12: O16+O16 → Si28+α  (no reverse in aprox13)
 ANET_HD inline void rate_o16o16(const TFactors& tf, double den,
                                  double& fr, double& rr) {
@@ -418,6 +673,34 @@ ANET_HD inline void rhs(const double Y[N_SPEC], double rho, double T,
     rate_o16o16 (tf, rho, fr12, rr12);
     rate_c12c12 (tf, rho, fr13, rr13);
     rate_c12o16 (tf, rho, fr14, rr14);
+
+#if ALPHA_NET_USE_AP_BYPASS
+    // (α,p) bypass: parallel channel A + α → X + p followed by X + p → B.
+    // In QSE limit the effective A→B flux through this channel is rate-
+    // limited by the slower of the two legs; at explosive-burning T₉≈3
+    // both legs are fast and the effective forward rate is well approx-
+    // imated by just rate_Xap (the A+α→X+p leg), which we add to fr*ag.
+    // Reverse (B→A+α) via (α,p) goes through B→X+p photodisintegration
+    // (rate_Xpg reverse); we add that to rr*ag.
+    //
+    // The 8 bypasses:
+    //   R4 (Mg+α↔Si): Mg24(α,p)Al27(p,γ)Si28
+    //   R5 (Si+α↔S):  Si28(α,p)P31(p,γ)S32
+    //   R6 (S+α↔Ar):  S32(α,p)Cl35(p,γ)Ar36
+    //   R7 (Ar+α↔Ca): Ar36(α,p)K39(p,γ)Ca40
+    //   R8 (Ca+α↔Ti): Ca40(α,p)Sc43(p,γ)Ti44
+    //   R9 (Ti+α↔Cr): Ti44(α,p)V47(p,γ)Cr48
+    //   R10(Cr+α↔Fe): Cr48(α,p)Mn51(p,γ)Fe52
+    //   R11(Fe+α↔Ni): Fe52(α,p)Co55(p,γ)Ni56
+    fr4  += rate_mg24ap_fwd(tf, rho);   rr4  += rate_al27pg_rev(tf, rho);
+    fr5  += rate_si28ap_fwd(tf, rho);   rr5  += rate_p31pg_rev(tf, rho);
+    fr6  += rate_s32ap_fwd (tf, rho);   rr6  += rate_cl35pg_rev(tf, rho);
+    fr7  += rate_ar36ap_fwd(tf, rho);   rr7  += rate_k39pg_rev(tf, rho);
+    fr8  += rate_ca40ap_fwd(tf, rho);   rr8  += rate_sc43pg_rev(tf, rho);
+    fr9  += rate_ti44ap_fwd(tf, rho);   rr9  += rate_v47pg_rev(tf, rho);
+    fr10 += rate_cr48ap_fwd(tf, rho);   rr10 += rate_mn51pg_rev(tf, rho);
+    fr11 += rate_fe52ap_fwd(tf, rho);   rr11 += rate_co55pg_rev(tf, rho);
+#endif
 
     // Reaction fluxes [mol/g/s]
     // 3α:  (1/6) · fr0 · Y_α³  forward;   rr0 · Y_C12  reverse
