@@ -65,6 +65,7 @@ struct SimpleSolver {
 
     SimpleLevel lev;
     double gamma, G_const, cfl_num;
+    EOS eos;
     double dt_current = 0.0, dt_prev = 0.0;
     double atm_rho_thresh = 0.0;
     int step_count = 0;

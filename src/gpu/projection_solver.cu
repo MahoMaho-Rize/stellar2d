@@ -33,10 +33,8 @@ __global__ void k_fas_ghost_t_s(double*, double*, double*, double*, int, int, in
 __global__ void k_fas_pole_lock(double*, int, int, int);
 __global__ void k_fas_shell_mass(const double*, const double*, double*, int, int, int);
 __global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double, double);
-__global__ void k_fas_atm_reset(double*, double*, double*, double*,
-    const double*, const double*, double, double, int, int, int);
-__global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
-    const double*, const double*, double, int, int, int);
+// k_fas_atm_reset declared in fas_common.cuh
+// k_fas_ghost_r_out_hse declared in fas_common.cuh
 __global__ void k_fas_angular_avg(double*, double*, double*, double*,
     const double*, int, int, int, int);
 __global__ void k_fas_pole_avg(double*, double*, double*, double*,
@@ -263,7 +261,8 @@ void k_proj_acoustic_cfl(const double* rho, const double* mr, const double* mt,
 
 // ========================= Init ========================
 
-void ProjSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
+void ProjSolver::init(const Grid& grid, const EOS& eos_in, double G, double cfl) {
+    eos = eos_in;
     gamma = eos.gamma; G_const = G; cfl_num = cfl;
     nr = grid.nr; nt = grid.ntheta; ng = grid.ng;
     total = (nr+2*ng)*(nt+2*ng);
@@ -450,7 +449,7 @@ void ProjSolver::launch_ghost() {
     if (use_hse_outer_bc && hse_set) {
         dim3 g((nt+B-1)/B, ng);
         k_fas_ghost_r_out_hse<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,
-            d_rho0, d_P0, 1.0/(gamma-1.0), nr,nt,ng);
+            d_rho0, d_P0, eos, nr,nt,ng);
     } else {
         dim3 g((nt+B-1)/B, ng);
         k_fas_ghost_r_out<<<g,B>>>(d_rho,d_mr,d_mt,d_rhoE,nr,nt,ng);
@@ -480,12 +479,12 @@ void ProjSolver::compute_residual() {
     k_fas_residual<<<(n+B-1)/B,B>>>(d_rho,d_mr,d_mt,d_rhoE,
         d_cell_volume,d_area_r,d_area_theta,d_r_center,d_r_face,
         d_theta_face,d_dr,d_dtheta,d_gr,d_gr0,d_P0,d_rho0,
-        d_res, nr,nt,ng,gamma,atm_rho_thresh, 1, 0, 0, 0);
+        d_res, nr,nt,ng,eos,atm_rho_thresh, 1, 0, 0, 0);
     if (!use_core_excision) {
         k_fas_residual_origin<<<(nt+B-1)/B,B>>>(d_rho,d_mr,d_mt,d_rhoE,
             d_cell_volume,d_area_r,d_area_theta,d_r_center,d_r_face,
             d_theta_face,d_dr,d_dtheta,d_gr,d_gr0,d_P0,d_rho0,
-            d_res, nr,nt,ng,gamma,atm_rho_thresh, 1, 0, 0, 0);
+            d_res, nr,nt,ng,eos,atm_rho_thresh, 1, 0, 0, 0);
     }
     // Subtract HSE defect
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(d_res, -1.0, d_hse_defect, 4*n);
@@ -620,7 +619,7 @@ double ProjSolver::step(double t, double t_end) {
         }
 
         k_fas_atm_reset<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
-            d_rho0, d_P0, atm_rho_thresh, 1.0/(gamma-1.0), nr, nt, ng, 0);
+            d_rho0, d_P0, atm_rho_thresh, eos, nr, nt, ng, 0);
 
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             d_rho, d_rhoE, d_cell_volume,

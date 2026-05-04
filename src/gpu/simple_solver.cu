@@ -39,17 +39,15 @@ __global__ void k_fas_ghost_t_s(double*, double*, double*, double*, int, int, in
 __global__ void k_fas_pole_lock(double*, int, int, int);
 __global__ void k_fas_shell_mass(const double*, const double*, double*, int, int, int);
 __global__ void k_fas_gravity_from_shells(const double*, const double*, double*, int, double, double);
-__global__ void k_fas_cfl(const double*, const double*, const double*, const double*,
-    const double*, const double*, const double*, const double*, double*,
-    int, int, int, double, double, int);
+// k_fas_cfl declared in fas_common.cuh
 __global__ void k_fas_assemble_blkjac(
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
-    const double*, double*, int, int, int, double, double);
+    const double*, double*, int, int, int, EOS, double);
 __global__ void k_fas_mom_diag(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
-    double*, int, int, int, double, double);
+    double*, int, int, int, double, EOS);
 __global__ void k_fas_smooth_blkjac(double*, double*, double*, double*,
     const double*, const double*, const double*, double, double, int, int, int);
 __global__ void k_fas_vstar(const double*, const double*, const double*, double, double*, double*, int);
@@ -61,10 +59,8 @@ __global__ void k_fas_simple_correct(double*, double*, double*, double*,
     const double*, const double*, const double*, const double*, const double*,
     const double*, double, int, int, int);
 __global__ void k_fas_bdf2_rhs(const double*, const double*, double*, double, double, double, int);
-__global__ void k_fas_atm_reset(double*, double*, double*, double*,
-    const double*, const double*, double, double, int, int, int);
-__global__ void k_fas_ghost_r_out_hse(double*, double*, double*, double*,
-    const double*, const double*, double, int, int, int);
+// k_fas_atm_reset declared in fas_common.cuh
+// k_fas_ghost_r_out_hse declared in fas_common.cuh
 __global__ void k_fas_angular_avg(double*, double*, double*, double*,
     const double*, int, int, int, int);
 __global__ void k_fas_pole_avg(double*, double*, double*, double*,
@@ -132,7 +128,8 @@ static void alloc_simple_level(SimpleLevel& lev) {
     CUDA_CHECK(cudaMemset(lev.d_gr0, 0, nr*sizeof(double)));
 }
 
-void SimpleSolver::init(const Grid& grid, const EOS& eos, double G, double cfl) {
+void SimpleSolver::init(const Grid& grid, const EOS& eos_in, double G, double cfl) {
+    eos = eos_in;
     gamma = eos.gamma; G_const = G; cfl_num = cfl;
     int nr = grid.nr, nt = grid.ntheta, ng = grid.ng;
     lev.nr = nr; lev.nt = nt; lev.ng = ng;
@@ -275,7 +272,7 @@ void SimpleSolver::launch_ghost() {
     if (use_hse_outer_bc && hse_set) {
         dim3 g((lev.nt+B-1)/B, lev.ng);
         k_fas_ghost_r_out_hse<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
-            lev.d_rho0, lev.d_P0, 1.0/(gamma-1.0), lev.nr,lev.nt,lev.ng);
+            lev.d_rho0, lev.d_P0, eos, lev.nr,lev.nt,lev.ng);
     } else {
         dim3 g((lev.nt+B-1)/B, lev.ng);
         k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng);
@@ -305,12 +302,12 @@ void SimpleSolver::compute_residual() {
     k_fas_residual<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
         lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
-        lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0, 0);
+        lev.d_res, lev.nr,lev.nt,lev.ng,eos,atm_rho_thresh, 1, 0, 0, 0);
     if (!use_core_excision) {
         k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
             lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
             lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr,lev.d_gr0,lev.d_P0,lev.d_rho0,
-            lev.d_res, lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, 1, 0, 0, 0);
+            lev.d_res, lev.nr,lev.nt,lev.ng,eos,atm_rho_thresh, 1, 0, 0, 0);
     }
     k_fas_axpy<<<(4*n+B-1)/B,B>>>(lev.d_res, -1.0, lev.d_hse_defect, 4*n);
 }
@@ -327,10 +324,10 @@ void SimpleSolver::assemble_precond(double g0_over_dt) {
     k_fas_assemble_blkjac<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_cell_volume,lev.d_area_r,lev.d_area_theta,lev.d_r_center,lev.d_r_face,
         lev.d_theta_face,lev.d_dr,lev.d_dtheta,lev.d_gr0,
-        lev.d_blk_inv, lev.nr,lev.nt,lev.ng,gamma,g0_over_dt);
+        lev.d_blk_inv, lev.nr,lev.nt,lev.ng,eos,g0_over_dt);
     k_fas_mom_diag<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_dr,lev.d_r_center,lev.d_r_face,lev.d_dtheta,
-        lev.d_Ap, lev.nr,lev.nt,lev.ng,g0_over_dt,gamma);
+        lev.d_Ap, lev.nr,lev.nt,lev.ng,g0_over_dt,eos);
 }
 
 double SimpleSolver::residual_norm() {
@@ -350,7 +347,7 @@ double SimpleSolver::compute_cfl_dt() {
     int n = lev.nr*lev.nt, B = 256;
     k_fas_cfl<<<(n+B-1)/B,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
         lev.d_dr,lev.d_r_center,lev.d_dtheta,lev.d_rho0,lev.d_dp,
-        lev.nr,lev.nt,lev.ng,gamma,atm_rho_thresh, n_angular_avg, 0);
+        lev.nr,lev.nt,lev.ng,eos,atm_rho_thresh, n_angular_avg, 0);
     double mn = gpu_reduce_min(lev.d_dp, lev.d_poisson_rhs, n);
     return cfl_num * mn;
 }
@@ -467,7 +464,7 @@ double SimpleSolver::step(double t, double t_end) {
         double E_before = fas_reduce_sum(d_EV, d_scr, n);
 
         k_fas_atm_reset<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
-            lev.d_rho0, lev.d_P0, atm_rho_thresh, 1.0/(gamma-1.0), lev.nr, lev.nt, lev.ng, 0);
+            lev.d_rho0, lev.d_P0, atm_rho_thresh, eos, lev.nr, lev.nt, lev.ng, 0);
 
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_rhoE, lev.d_cell_volume,

@@ -19,6 +19,7 @@
 #endif
 #include "gpu/lowmach_solver.h"
 #include "gpu/fas_solver.cuh"
+#include "gpu/fas2_solver.cuh"
 #include "gpu/simple_solver.cuh"
 #include "gpu/projection_solver.cuh"
 #include "gpu/radial1d_solver.cuh"
@@ -27,10 +28,12 @@
 #include "gpu/cart_lag_solver.cuh"
 #include "gpu/cart_ale_solver.cuh"
 #include "gpu/cart_ale2_solver.cuh"
+#include "gpu/cart_impl_solver.cuh"
 #include "gpu/pseudo_spectral_solver.cuh"
 #include "gpu/anelastic_sl_solver.cuh"
 #include "gpu/stellar_profile.h"
 #include "gpu/sph2d_spectral_solver.cuh"
+#include "physics/helmholtz_eos.cuh"
 #endif
 
 #include <cstdio>
@@ -64,7 +67,59 @@ struct SimConfig {
     std::string precond = "line_jacobi";         // preconditioner for lowmach solver
     Limiter limiter = Limiter::MINMOD;
     double perturb_amplitude = 1e-3;  // density perturbation for lane_emden_perturbed
+    bool radiation_enabled = false;
+    double rad_c_light = 100.0;       // reduced speed of light (code units); full c = very slow
+    bool nuclear_enabled = false;
+    double nuc_X = 0.7;
+    double nuc_Y = 0.28;
+    double nuc_epsilon_scale = 1.0;
+    double nuc_T_floor = 1.0e6;
+    double nuc_T_scale = 1.0;
+    double nuc_q_burn = 6.4e18;
+    bool species_enabled = false;
+    bool implicit_mode = false;      // radial1d: use BE + JFNK (step_implicit) instead of explicit RK2
+    double dt_implicit = 0.0;        // fixed dt for --implicit;<=0 uses acoustic CFL × scale
+    double dt_implicit_scale = 1.0;  // multiplier on CFL dt when dt_implicit<=0
+    bool no_viallet = false;         // dev toggle: disable Viallet L/R scaling in implicit
+    bool precond_tridiag = false;    // implicit: block-tridiag PC (assembled from 9 colored FD matvecs)
+    bool jfnk_autodiff = false;      // implicit: exact J·v via Dual<1> AD (replaces FD matvec)
+    bool no_rhse_subtract = false;   // implicit diagnostic: F = (U-Uⁿ)/dt - R(U) (skip R_hse term)
+    double newton_tol_override = 0.0;// implicit: override Newton ||F|| convergence tol (0 = solver default 1e-8)
+    int hse_resnap_interval = 0;     // implicit: re-snapshot R_hse every N steps (0=off)
+    double dt_thermal_frac = 0.0;    // implicit: dt ≤ frac · IE/L_surf (τ_KH cap, 0=off)
+    double dt_mach_cap = 0.0;        // implicit: shrink dt when max Mach exceeds this (0=off)
+    double rad_T_phot_floor = 0.0;   // implicit rad-in-F: min T_phot for Stefan BC (K, 0=off)
+    double nuc_compress_frac = 0.0;  // dynamic nuc scale: ε·dt/(cv·T) ≤ this (0=off)
+    bool ic_solar = false;           // if true, Lane-Emden IC in physical cgs matching sun
+    bool mlt_enabled = false;        // Böhm-Vitense MLT convection in BE rad solve
+    double mlt_alpha = 1.5;          // mixing length / pressure scale height
+    double ic_rho_c = -1.0;          // override central density; <0 = test default
+    double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
+    double ic_n_poly = 1.5;          // polytropic index for --ic-solar
+    std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/convert_mesa_ic.py output
+    bool ic_mesa_seed_T = false;     // --ic-mesa-seed-T: seed (e,P) from Helm(ρ,T_MESA) instead of (ρ,P_MESA)
+    int  ic_mesa_atm_zones = 0;      // --ic-mesa-atm-zones N: use hybrid zoning with N log-spaced outer atm zones (0=equal-mass)
+    int  atm_split = 0;              // --atm-split N: operator-split rad in outer N zones (usually = ic_mesa_atm_zones)
+    bool rich_profile = false;       // --rich-profile: emit T, κ, ∇_ad, ∇_rad, L, conv_vel per zone
     std::string bubble_mode = "pressure"; // "pressure" or "entropy"
+    // EOS selection
+    std::string eos_type = "ideal";   // "ideal" or "ideal_rad"
+    double eos_mu = 1.0;
+    double eos_rad_a = 0.1;           // radiation constant (code units)
+    // Helmholtz EOS
+    std::string helm_table_path = "third_party/helmholtz/helm_table.bin";
+    double helm_Abar = 1.28;          // solar: X≈0.73, Y≈0.25, Z≈0.02
+    double helm_Zbar = 1.13;
+    // MESA opacity tables — radial1d reads two binaries (lowT + highT) and
+    // stitches them at logT ≈ 4. --kap-prefix/--kap-lowT accept just the
+    // family tag (e.g. `gs98`, `lowT_fa05_gs98`); we append `_z<Z>.kapbin`.
+    std::string kap_highT_family = "gs98";
+    std::string kap_lowT_family  = "lowT_fa05_gs98";
+    double      kap_table_Z      = 0.02;
+    std::string kap_data_dir     = "third_party/mesa_kap";
+    bool        kap_use_table    = false;
+    double      kap_logT_lo_end   = 3.9;
+    double      kap_logT_hi_start = 4.1;
     // cart_ale --test hse_bubble parameters
     double bubble_xc = 0.5;
     double bubble_yc = 0.3;
@@ -75,7 +130,11 @@ struct SimConfig {
     // If none given, falls back to the single --bubble-* defaults.
     std::vector<std::array<double, 5>> bubbles;
     bool no_sponge = false;
-    bool lm_hllc = false;
+    // HLLC variant: 0=standard, 1=Rieper LM-HLLC, 2=Minoshima LHLLC.
+    // --lm-hllc  → 1 (back-compat)
+    // --lhllc    → 2 (low-dissipation HLLC, Athena++ port)
+    // --hllc <standard|lm|lhllc> — explicit form
+    int hllc_variant = 0;
     int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
     std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
     int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
@@ -93,6 +152,18 @@ struct SimConfig {
     std::string cart_ale2_ppm_space = "prim"; // cart_ale2: PPM recon space (prim | cons)
     bool cart_ale2_ppm_char = true;  // cart_ale2: project to characteristic variables (prim space only)
     int cart_ale2_kh_k = 0;   // cart_ale2: KH mode number (0 = IC default: k=2 shear, k=1 Lecoanet)
+    std::string cart_ale2_slab_file;   // cart_ale2 --test local_convection: slab stratification
+    double cart_ale2_slab_perturb = 0.01;  // entropy seed amplitude at slab bottom
+    int cart_ale2_slab_seed_k = 4;     // horizontal mode of entropy seed
+    double cart_ale2_cool_tau = 0.0;   // cart_ale2: Newton-cooling timescale (s). 0 = disabled.
+    // Bottom enthalpy-flux source (makes local_convection flux-driven so v_conv
+    // saturates at the MLT scale). Either --heat-flux F directly [erg/cm²/s],
+    // or --heat-lsun L + --heat-bot-R R → F = L/(4π R²).  0 = disabled.
+    double cart_ale2_heat_flux = 0.0;
+    double cart_ale2_heat_lsun = 0.0;
+    double cart_ale2_heat_bot_R = 0.0;
+    double cart_ale2_heat_bot_frac = 0.05; // e-fold of exp heating profile / Ly
+    double cart_ale2_cool_top_frac = 0.3;  // cooling confined to top frac of column
     // pseudo-spectral (偽譜法) 專用
     double ps_nu = 1e-4;          // 運動黏度
     double ps_Lx = 1.0;
@@ -233,6 +304,102 @@ int main(int argc, char** argv) {
             cfg.precond = argv[++i];
         else if (std::strcmp(argv[i], "--perturb") == 0 && i + 1 < argc)
             cfg.perturb_amplitude = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--eos") == 0 && i + 1 < argc)
+            cfg.eos_type = argv[++i];
+        else if (std::strcmp(argv[i], "--eos-mu") == 0 && i + 1 < argc)
+            cfg.eos_mu = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--eos-rad-a") == 0 && i + 1 < argc)
+            cfg.eos_rad_a = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--helm-table") == 0 && i + 1 < argc)
+            cfg.helm_table_path = argv[++i];
+        else if (std::strcmp(argv[i], "--helm-abar") == 0 && i + 1 < argc)
+            cfg.helm_Abar = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--helm-zbar") == 0 && i + 1 < argc)
+            cfg.helm_Zbar = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--kap") == 0)
+            cfg.kap_use_table = true;
+        else if (std::strcmp(argv[i], "--kap-highT") == 0 && i + 1 < argc)
+            cfg.kap_highT_family = argv[++i];
+        else if (std::strcmp(argv[i], "--kap-lowT") == 0 && i + 1 < argc)
+            cfg.kap_lowT_family = argv[++i];
+        else if (std::strcmp(argv[i], "--kap-Z") == 0 && i + 1 < argc)
+            cfg.kap_table_Z = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--kap-dir") == 0 && i + 1 < argc)
+            cfg.kap_data_dir = argv[++i];
+        else if (std::strcmp(argv[i], "--kap-logT-lo-end") == 0 && i + 1 < argc)
+            cfg.kap_logT_lo_end = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--kap-logT-hi-start") == 0 && i + 1 < argc)
+            cfg.kap_logT_hi_start = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--radiation") == 0)
+            cfg.radiation_enabled = true;
+        else if (std::strcmp(argv[i], "--rad-c") == 0 && i + 1 < argc)
+            cfg.rad_c_light = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuclear") == 0)
+            cfg.nuclear_enabled = true;
+        else if (std::strcmp(argv[i], "--nuc-x") == 0 && i + 1 < argc)
+            cfg.nuc_X = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-scale") == 0 && i + 1 < argc)
+            cfg.nuc_epsilon_scale = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-t-floor") == 0 && i + 1 < argc)
+            cfg.nuc_T_floor = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-y") == 0 && i + 1 < argc)
+            cfg.nuc_Y = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-q") == 0 && i + 1 < argc)
+            cfg.nuc_q_burn = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-t-scale") == 0 && i + 1 < argc)
+            cfg.nuc_T_scale = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--species") == 0)
+            cfg.species_enabled = true;
+        else if (std::strcmp(argv[i], "--ic-solar") == 0)
+            cfg.ic_solar = true;
+        else if (std::strcmp(argv[i], "--ic-rho-c") == 0 && i + 1 < argc)
+            cfg.ic_rho_c = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-rstar") == 0 && i + 1 < argc)
+            cfg.ic_R_star = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-n-poly") == 0 && i + 1 < argc)
+            cfg.ic_n_poly = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-mesa") == 0 && i + 1 < argc)
+            cfg.ic_mesa_path = argv[++i];
+        else if (std::strcmp(argv[i], "--ic-mesa-seed-T") == 0)
+            cfg.ic_mesa_seed_T = true;
+        else if (std::strcmp(argv[i], "--ic-mesa-atm-zones") == 0 && i + 1 < argc)
+            cfg.ic_mesa_atm_zones = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--atm-split") == 0 && i + 1 < argc)
+            cfg.atm_split = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--rich-profile") == 0)
+            cfg.rich_profile = true;
+        else if (std::strcmp(argv[i], "--G") == 0 && i + 1 < argc)
+            cfg.G = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--implicit") == 0)
+            cfg.implicit_mode = true;
+        else if (std::strcmp(argv[i], "--dt-implicit") == 0 && i + 1 < argc)
+            cfg.dt_implicit = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--dt-implicit-scale") == 0 && i + 1 < argc)
+            cfg.dt_implicit_scale = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--no-viallet") == 0)
+            cfg.no_viallet = true;
+        else if (std::strcmp(argv[i], "--precond-tridiag") == 0)
+            cfg.precond_tridiag = true;
+        else if (std::strcmp(argv[i], "--jfnk-autodiff") == 0)
+            cfg.jfnk_autodiff = true;
+        else if (std::strcmp(argv[i], "--no-rhse") == 0)
+            cfg.no_rhse_subtract = true;
+        else if (std::strcmp(argv[i], "--newton-tol") == 0 && i + 1 < argc)
+            cfg.newton_tol_override = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--hse-resnap") == 0 && i + 1 < argc)
+            cfg.hse_resnap_interval = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--dt-thermal-frac") == 0 && i + 1 < argc)
+            cfg.dt_thermal_frac = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--dt-mach-cap") == 0 && i + 1 < argc)
+            cfg.dt_mach_cap = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--rad-T-phot-floor") == 0 && i + 1 < argc)
+            cfg.rad_T_phot_floor = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--nuc-compress") == 0 && i + 1 < argc)
+            cfg.nuc_compress_frac = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--mlt") == 0)
+            cfg.mlt_enabled = true;
+        else if (std::strcmp(argv[i], "--mlt-alpha") == 0 && i + 1 < argc)
+            cfg.mlt_alpha = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-xc") == 0 && i + 1 < argc)
             cfg.bubble_xc = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--bubble-yc") == 0 && i + 1 < argc)
@@ -265,7 +432,15 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--no-sponge") == 0)
             cfg.no_sponge = true;
         else if (std::strcmp(argv[i], "--lm-hllc") == 0)
-            cfg.lm_hllc = true;
+            cfg.hllc_variant = 1;
+        else if (std::strcmp(argv[i], "--lhllc") == 0)
+            cfg.hllc_variant = 2;
+        else if (std::strcmp(argv[i], "--hllc") == 0 && i + 1 < argc) {
+            std::string v = argv[++i];
+            if (v == "lhllc") cfg.hllc_variant = 2;
+            else if (v == "lm") cfg.hllc_variant = 1;
+            else cfg.hllc_variant = 0;
+        }
         else if (std::strcmp(argv[i], "--radial-only") == 0)
             cfg.radial_only = true;
         else if (std::strcmp(argv[i], "--r-inner") == 0 && i + 1 < argc)
@@ -306,6 +481,24 @@ int main(int argc, char** argv) {
             cfg.cart_ale2_ppm_char = true;
         else if (std::strcmp(argv[i], "--cart-ale2-kh-k") == 0 && i + 1 < argc)
             cfg.cart_ale2_kh_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ic-slab") == 0 && i + 1 < argc)
+            cfg.cart_ale2_slab_file = argv[++i];
+        else if (std::strcmp(argv[i], "--slab-perturb") == 0 && i + 1 < argc)
+            cfg.cart_ale2_slab_perturb = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--slab-seed-k") == 0 && i + 1 < argc)
+            cfg.cart_ale2_slab_seed_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--cool-tau") == 0 && i + 1 < argc)
+            cfg.cart_ale2_cool_tau = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-flux") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_flux = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-lsun") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_lsun = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-bot-R") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_bot_R = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--heat-bot-frac") == 0 && i + 1 < argc)
+            cfg.cart_ale2_heat_bot_frac = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--cool-top-frac") == 0 && i + 1 < argc)
+            cfg.cart_ale2_cool_top_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
             cfg.ps_nu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)
@@ -471,12 +664,119 @@ int main(int argc, char** argv) {
                     cfg.R_outer, r_inner, cfg.M_core);
     } else if (cfg.mesh_type == "uniform") {
         grid.init_uniform(cfg.nr, cfg.ntheta, cfg.R_outer);
-        std::printf("Using uniform radial mesh\n");
+        // TEMP (sphere_impl preview): if --r-inner > 0 on uniform mesh, compute
+        // M_core the same way as mass mesh so pole_avg + core_excision wire up.
+        if (cfg.r_inner > 0 && (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed")) {
+            double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
+            auto le_sol = solve_lane_emden(n_poly);
+            double alpha2 = (n_poly + 1.0) * K_poly
+                            * std::pow(rho_c, 1.0 / n_poly - 1.0) / (4.0 * M_PI * G);
+            double alpha = std::sqrt(alpha2);
+            auto rho_func = [&](double r) -> double {
+                double xi = r / alpha;
+                if (xi >= le_sol.xi_1) return 1e-20;
+                auto it = std::lower_bound(le_sol.xi.begin(), le_sol.xi.end(), xi);
+                int idx = static_cast<int>(it - le_sol.xi.begin());
+                if (idx <= 0) return rho_c;
+                if (idx >= static_cast<int>(le_sol.xi.size())) return 1e-20;
+                double x0 = le_sol.xi[idx - 1], x1 = le_sol.xi[idx];
+                double t0 = le_sol.theta_le[idx - 1], t1 = le_sol.theta_le[idx];
+                double frac = (xi - x0) / (x1 - x0);
+                double theta_val = t0 + frac * (t1 - t0);
+                return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
+            };
+            const int nfine = 20000;
+            double dr_f = cfg.r_inner / nfine;
+            double m = 0.0;
+            for (int ii = 0; ii < nfine; ++ii) {
+                double r = (ii + 0.5) * dr_f;
+                m += 4.0 * M_PI * rho_func(r) * r * r * dr_f;
+            }
+            cfg.M_core = m;
+            std::printf("Using uniform radial mesh with r_inner=%.4f, M_core=%.5f (sphere_impl preview)\n",
+                        cfg.r_inner, cfg.M_core);
+        } else {
+            std::printf("Using uniform radial mesh\n");
+        }
     } else {
         grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
     }
 
-    EOS eos(cfg.gamma);
+    EOS eos;
+#ifdef USE_GPU
+    // Helmholtz table lives through the whole run; destroyed after solver loop.
+    HelmholtzTable helm_tbl;
+    bool helm_loaded = false;
+    KapTable kap_tbl_lowT, kap_tbl_highT;
+    bool kap_loaded = false;
+#endif
+    if (cfg.eos_type == "ideal_rad") {
+        eos = EOS::ideal_rad(cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
+        std::printf("EOS: ideal + radiation (γ=%.3f, μ=%.3f, a=%.3e)\n",
+                    cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
+    } else if (cfg.eos_type == "pre_ms") {
+        PreMsParams p;
+        // Use reasonable defaults; override via CLI later if needed.
+        // R_gas in code units: keep 1.0 (consistent with rest of code).
+        p.R_gas = 1.0 / cfg.eos_mu;  // inverse μ for code-unit consistency
+        p.a_rad = cfg.eos_rad_a;
+        eos = EOS::pre_ms(p);
+        std::printf("EOS: pre-MS Chabrier-Baraffe (T_diss=%.0f, T_ion=%.0f, μ_cold=%.2f → μ_hot=%.2f)\n",
+                    p.T_diss, p.T_ion, p.mu_cold, p.mu_hot);
+    } else if (cfg.eos_type == "helmholtz") {
+#ifdef USE_GPU
+        if (helm_tbl.load(nullptr, cfg.helm_table_path.c_str(), 0) != 0) {
+            std::fprintf(stderr,
+                "ERROR: failed to load Helmholtz table at %s — run\n"
+                "  tools/helm_convert <ascii> %s\n",
+                cfg.helm_table_path.c_str(), cfg.helm_table_path.c_str());
+            return 1;
+        }
+        helm_tbl.view.Abar = cfg.helm_Abar;
+        helm_tbl.view.Zbar = cfg.helm_Zbar;
+        eos = EOS::helmholtz(helm_tbl.view);
+        helm_loaded = true;
+        std::printf("EOS: Helmholtz (cococubed %dx%d, Abar=%.3f, Zbar=%.3f)\n",
+                    HELM_IMAX, HELM_JMAX, cfg.helm_Abar, cfg.helm_Zbar);
+#else
+        std::fprintf(stderr, "ERROR: --eos helmholtz requires USE_GPU build\n");
+        return 1;
+#endif
+    } else {
+        eos = EOS::ideal(cfg.gamma, cfg.eos_mu);
+    }
+
+#ifdef USE_GPU
+    // Optional MESA kap table pair (lowT + highT). Loaded once before the
+    // solver starts; the radial1d branch below hands the views to the solver.
+    if (cfg.kap_use_table) {
+        char z_buf[32];
+        std::snprintf(z_buf, sizeof(z_buf), "%g", cfg.kap_table_Z);
+        std::string z_tag = z_buf;
+        std::string high_path = cfg.kap_data_dir + "/" + cfg.kap_highT_family
+                              + "_z" + z_tag + ".kapbin";
+        std::string low_path  = cfg.kap_data_dir + "/" + cfg.kap_lowT_family
+                              + "_z" + z_tag + ".kapbin";
+        int rc_hi = kap_tbl_highT.load(high_path.c_str(), 0);
+        if (rc_hi != 0) {
+            std::fprintf(stderr,
+                "ERROR: failed to load high-T kap binary at %s (rc=%d)\n",
+                high_path.c_str(), rc_hi);
+            return 1;
+        }
+        int rc_lo = kap_tbl_lowT.load(low_path.c_str(), 0);
+        if (rc_lo != 0) {
+            std::fprintf(stderr,
+                "ERROR: failed to load low-T kap binary at %s (rc=%d)\n",
+                low_path.c_str(), rc_lo);
+            return 1;
+        }
+        kap_loaded = true;
+        std::printf("KAP: stitched {%s + %s} at Z=%s, seam logT ∈ [%.2f, %.2f]\n",
+                    cfg.kap_highT_family.c_str(), cfg.kap_lowT_family.c_str(),
+                    z_tag.c_str(), cfg.kap_logT_lo_end, cfg.kap_logT_hi_start);
+    }
+#endif
 
     State state;
     state.allocate(grid);
@@ -532,7 +832,8 @@ int main(int argc, char** argv) {
                || cfg.test_case == "gmode_eigenmode_td"
                || cfg.test_case == "gmode_exp_k"
                || cfg.test_case == "dns_triad"
-               || cfg.test_case == "dns_triad_coupled") {
+               || cfg.test_case == "dns_triad_coupled"
+               || cfg.test_case == "local_convection") {
         // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
         // cart_lag solver branch handles its own IC.
     } else {
@@ -576,7 +877,11 @@ int main(int argc, char** argv) {
     };
 
     auto configure_mass_mesh = [&](auto& solver) {
-        if (cfg.mesh_type != "mass") return;
+        // TEMP: extend to uniform mesh with --r-inner > 0 (sphere_impl preview test).
+        // Treat "uniform + r_inner>0" like mass mesh for pole_avg / core_excision wiring.
+        bool is_mass = (cfg.mesh_type == "mass");
+        bool is_uniform_with_rinner = (cfg.mesh_type == "uniform" && cfg.r_inner > 0);
+        if (!is_mass && !is_uniform_with_rinner) return;
         solver.use_hse_outer_bc = true;
         solver.use_core_excision = (cfg.r_inner > 0);
         solver.M_core = cfg.M_core;
@@ -626,8 +931,118 @@ int main(int argc, char** argv) {
         }
         Radial1DSolver r1d;
         r1d.init(cfg.nr, cfg.gamma, cfg.G, cfg.cfl);
-        r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
+        // Wire EOS: if user picked anything other than ideal, use EOS-aware kernels.
+        if (cfg.eos_type != "ideal") {
+            r1d.use_eos = true;
+            r1d.eos = eos;
+            std::printf("radial1d: EOS-aware kernels enabled (%s)\n", cfg.eos_type.c_str());
+        }
+        // Wire radiation diffusion
+        if (cfg.radiation_enabled) {
+            r1d.radiation_enabled = true;
+            r1d.rad_c_light = cfg.rad_c_light;
+            r1d.rad_a_rad = cfg.eos_rad_a > 0 ? cfg.eos_rad_a : 1.0;
+            std::printf("radial1d: radiation diffusion ON (c=%.3e, a=%.3e)\n",
+                        r1d.rad_c_light, r1d.rad_a_rad);
+        }
+        // Wire tabulated opacity, if loaded
+        if (kap_loaded) {
+            r1d.kap_use_table      = true;
+            r1d.kap_view_lowT      = kap_tbl_lowT.view;
+            r1d.kap_view_highT     = kap_tbl_highT.view;
+            r1d.kap_logT_lo_end    = cfg.kap_logT_lo_end;
+            r1d.kap_logT_hi_start  = cfg.kap_logT_hi_start;
+            r1d.kap_hydrogen_X     = cfg.nuc_X;     // composition slice
+            std::printf("radial1d: tabulated kap ON (X slice = %.3f)\n",
+                        r1d.kap_hydrogen_X);
+        }
+        // Wire nuclear burning
+        if (cfg.nuclear_enabled) {
+            r1d.nuclear_enabled = true;
+            r1d.nuc_X = cfg.nuc_X;
+            r1d.nuc_Y = cfg.nuc_Y;
+            r1d.nuc_epsilon_scale = cfg.nuc_epsilon_scale;
+            r1d.nuc_T_floor = cfg.nuc_T_floor;
+            r1d.nuc_T_scale = cfg.nuc_T_scale;
+            r1d.nuc_q_burn = cfg.nuc_q_burn;
+            std::printf("radial1d: pp-chain nuclear burning ON (X=%.2f, scale=%.3e, T_floor=%.3eK, T_scale=%.3e, q=%.3e)\n",
+                        r1d.nuc_X, r1d.nuc_epsilon_scale, r1d.nuc_T_floor, r1d.nuc_T_scale, r1d.nuc_q_burn);
+        }
+        // Wire species tracking (requires --nuclear)
+        if (cfg.species_enabled) {
+            if (!cfg.nuclear_enabled) {
+                std::fprintf(stderr, "WARN: --species without --nuclear has no effect; enabling nuclear\n");
+                r1d.nuclear_enabled = true;
+                r1d.nuc_X = cfg.nuc_X;
+                r1d.nuc_Y = cfg.nuc_Y;
+                r1d.nuc_epsilon_scale = cfg.nuc_epsilon_scale;
+                r1d.nuc_T_floor = cfg.nuc_T_floor;
+                r1d.nuc_T_scale = cfg.nuc_T_scale;
+                r1d.nuc_q_burn = cfg.nuc_q_burn;
+            }
+            r1d.species_enabled = true;
+            std::printf("radial1d: species tracking ON (X→Y burn-up)\n");
+        }
+        if (cfg.mlt_enabled) {
+            r1d.mlt_enabled = true;
+            r1d.mlt_alpha = cfg.mlt_alpha;
+            std::printf("radial1d: MLT convection ON (α=%.2f)\n", cfg.mlt_alpha);
+        }
+        if (!cfg.ic_mesa_path.empty()) {
+            std::printf("radial1d: MESA IC from %s (seed=%s, atm_zones=%d)\n",
+                        cfg.ic_mesa_path.c_str(),
+                        cfg.ic_mesa_seed_T ? "T" : "P",
+                        cfg.ic_mesa_atm_zones);
+            if (r1d.init_from_mesa(cfg.ic_mesa_path.c_str(),
+                                   cfg.ic_mesa_seed_T,
+                                   cfg.ic_mesa_atm_zones) != 0) {
+                std::fprintf(stderr, "ERROR: init_from_mesa failed\n");
+                return 1;
+            }
+        } else if (cfg.ic_solar) {
+            // Physical cgs Lane-Emden IC with user-specified (ρ_c, R_star, n).
+            // Derive K so that α·ξ_1 = R_star exactly.
+            //   α² = (n+1) K ρ_c^(1/n − 1) / (4πG)
+            //   ⇒ K = α² · 4πG · ρ_c^(1 − 1/n) / (n+1),  α = R_star / ξ_1
+            // Pre-computed ξ_1 for common n:
+            double n_pol = cfg.ic_n_poly;
+            // crude ξ_1 table: n=1.5 → 3.65375; n=3.0 → 6.89685
+            double xi1 = (std::fabs(n_pol - 1.5) < 1e-3) ? 3.65375
+                       : (std::fabs(n_pol - 3.0) < 1e-3) ? 6.89685
+                       : 3.65375;
+            double rho_c = (cfg.ic_rho_c > 0) ? cfg.ic_rho_c : 80.0;     // g/cc
+            double R_star = (cfg.ic_R_star > 0) ? cfg.ic_R_star : 7.0e10; // cm
+            double G_cgs = cfg.G; // user must pass --G 6.674e-8 or equivalent
+            double alpha = R_star / xi1;
+            double K_poly = alpha * alpha * 4.0 * M_PI * G_cgs
+                            * std::pow(rho_c, 1.0 - 1.0/n_pol)
+                            / (n_pol + 1.0);
+            std::printf("radial1d: solar polytrope IC  n=%.2f  ρ_c=%.3e g/cc  R⋆=%.3e cm  K=%.3e  G=%.3e\n",
+                        n_pol, rho_c, R_star, K_poly, G_cgs);
+            r1d.init_lane_emden(rho_c, K_poly, n_pol);
+        } else {
+            r1d.init_lane_emden(1.0, 1.0, 1.5);          // ρ_c=1, K=1, n=1.5
+        }
         r1d.snapshot_hse();
+        if (r1d.species_enabled) {
+            r1d.init_species_uniform(r1d.nuc_X, r1d.nuc_Y);
+        }
+        // Capture R(U_hse) BEFORE any perturbation so the well-balanced
+        // subtraction references the true HSE, not the perturbed state.
+        if (cfg.implicit_mode) {
+            r1d.implicit_enabled = true;
+            if (cfg.no_viallet) r1d.use_viallet_scaling = false;
+            r1d.precond_tridiag = cfg.precond_tridiag;
+            r1d.jfnk_autodiff   = cfg.jfnk_autodiff;
+            r1d.no_rhse_subtract = cfg.no_rhse_subtract;
+            r1d.rad_T_phot_floor = cfg.rad_T_phot_floor;
+            if (cfg.newton_tol_override > 0) r1d.newton_tol = cfg.newton_tol_override;
+            r1d.hse_resnap_interval = cfg.hse_resnap_interval;
+            r1d.nuc_compress_frac = cfg.nuc_compress_frac;
+            r1d.nz_atm_split = cfg.atm_split;
+            r1d.init_implicit();
+            r1d.snapshot_hse_implicit();
+        }
         if (cfg.test_case == "lane_emden_perturbed")
             r1d.apply_perturbation(cfg.perturb_amplitude);
 
@@ -638,11 +1053,77 @@ int main(int argc, char** argv) {
         char csv_path[512];
         std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
         std::FILE* csv = std::fopen(csv_path, "w");
-        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr\n");
+        if (cfg.species_enabled) {
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,mass_H,mass_He,X_core,X_surf,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super,T_phot,phot_zone,R_surf\n");
+        } else {
+            std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_vr,T_c,rho_c,L_nuc,L_surf,conv_mfrac,r_conv_in,r_conv_out,max_super,T_phot,phot_zone,R_surf\n");
+        }
 
         int frame = 0;
+        if (cfg.implicit_mode) {
+            std::printf("radial1d: IMPLICIT mode ON (Viallet=%s, Newton tol=%.1e, GMRES tol=%.1e)\n",
+                        r1d.use_viallet_scaling ? "on" : "off",
+                        r1d.newton_tol, r1d.gmres_tol);
+        }
         while (t < cfg.t_end && !g_interrupted) {
-            double dt = r1d.step(t, cfg.t_end);
+            double dt;
+            if (cfg.implicit_mode) {
+                // Adaptive dt control optimised for crossing τ_KH:
+                //   - Start from --dt-implicit (seed).
+                //   - On success, grow ×2 per accepted step; cap at --dt-implicit
+                //     if given (explicit ceiling) or at 10·τ_dyn otherwise.
+                //   - On failure, cut ×0.1 (not ×0.5) — aggressive because
+                //     stiff nuclear flashes usually need a big reset.
+                //   - Never fall back to explicit: accelerated nuclear would
+                //     blow up.
+                static double dt_req_state = 0.0;
+                double dt_seed = (cfg.dt_implicit > 0) ? cfg.dt_implicit
+                                                       : cfg.dt_implicit_scale * r1d.compute_dt();
+                if (dt_req_state <= 0.0) dt_req_state = dt_seed;
+                // Ceiling: explicit --dt-implicit if provided, else let it grow
+                // unbounded (user controls via --tend).
+                double dt_cap = (cfg.dt_implicit > 0) ? cfg.dt_implicit : 1e30;
+
+                dt = r1d.step_implicit(t, cfg.t_end, dt_req_state);
+                if (dt <= 0.0) {
+                    dt_req_state *= 0.1;
+                    if (dt_req_state < 1e-30) dt_req_state = 1e-30;
+                    std::fprintf(stderr,
+                        "  step %d: implicit FAILED, outer dt reset to %.3e\n",
+                        step, dt_req_state);
+                    dt = 0.0;
+                } else {
+                    // Geometric growth on success — cross many τ_dyn fast.
+                    dt_req_state = std::min(dt_cap, dt_req_state * 2.0);
+
+                    // Thermal-timescale cap: dt ≤ thermal_frac · IE / L_surf
+                    // (Kelvin-Helmholtz). Without this, once rad coupling
+                    // actually cools the star the outer dt grows ×2 per step
+                    // and overshoots a full τ_KH in one step, blowing the
+                    // solution past hydrostatic equilibrium.
+                    if (cfg.dt_thermal_frac > 0.0 || cfg.dt_mach_cap > 0.0) {
+                        Radial1DSolver::Diagnostics dg = r1d.compute_diagnostics();
+                        double L_tot = std::fabs(r1d.rad_impl_L_surf);
+                        if (cfg.dt_thermal_frac > 0.0
+                            && L_tot > 1e-30 && dg.total_internal_E > 0.0) {
+                            double tau_th = dg.total_internal_E / L_tot;
+                            double dt_th  = cfg.dt_thermal_frac * tau_th;
+                            if (dt_req_state > dt_th) dt_req_state = dt_th;
+                        }
+                        // Mach-based damping: if the last step's hydro solution
+                        // has transient velocities (operator-split rad can
+                        // leave momentum imbalance), shrink dt until the
+                        // transient decays below mach_cap.
+                        if (cfg.dt_mach_cap > 0.0 && dg.max_mach > cfg.dt_mach_cap) {
+                            double shrink = cfg.dt_mach_cap / dg.max_mach;
+                            if (shrink < 0.1) shrink = 0.1;
+                            dt_req_state *= shrink;
+                        }
+                    }
+                }
+            } else {
+                dt = r1d.step(t, cfg.t_end);
+            }
             t += dt;
             step++;
 
@@ -651,32 +1132,122 @@ int main(int argc, char** argv) {
 
             if (step % cfg.output_interval == 0) {
                 auto d = r1d.compute_diagnostics();
+                auto mlt = r1d.compute_convection_diag();
                 std::fprintf(stderr, "\n");
                 std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
                             step, t, dt, d.total_mass, d.total_E, d.max_vr, d.max_mach);
-                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
-                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
-                             d.total_grav_E, d.total_E, d.max_mach, d.max_vr);
+                if (r1d.nuclear_enabled) {
+                    double L_ratio = (r1d.rad_impl_L_surf > 0) ? d.L_nuc / r1d.rad_impl_L_surf : 0.0;
+                    std::printf("    ignition: T_c=%.3e K  ρ_c=%.3e g/cc  L_nuc=%.3e erg/s  L_nuc/L_surf=%.3e\n",
+                                d.T_c, d.rho_c, d.L_nuc, L_ratio);
+                }
+                if (r1d.radiation_enabled) {
+                    std::printf("    rad_BC:   phot_zone=%d  T_phot=%.3e K  tau_sum=%.3e  L_surf=%.3e erg/s\n",
+                                r1d.rad_impl_phot_zone, r1d.rad_impl_T_phot,
+                                r1d.rad_impl_tau_surf, r1d.rad_impl_L_surf);
+                }
+                if (mlt.n_conv_zones > 0) {
+                    std::printf("    MLT: conv_mass_frac=%.4f  r_conv=[%.3e,%.3e]  n_conv=%d  max_super=%.3e\n",
+                                mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer,
+                                mlt.n_conv_zones, mlt.max_superadiab);
+                }
+                // R_surf = outermost face radius (read once per CSV row)
+                double R_surf = 0.0;
+                {
+                    std::vector<double> r_f, v_f, rho_c3, P_c3, e_c3;
+                    r1d.download_profile(r_f, v_f, rho_c3, P_c3, e_c3);
+                    if (!r_f.empty()) R_surf = r_f.back();
+                }
+                if (r1d.species_enabled) {
+                    std::vector<double> X_c, Y_c;
+                    r1d.download_species(X_c, Y_c);
+                    // Mass-weighted totals over zones: need dm; use e_cell/P_cell buffers via profile
+                    std::vector<double> r_f, v_f, rho_c2, P_c2, e_c2;
+                    r1d.download_profile(r_f, v_f, rho_c2, P_c2, e_c2);
+                    const double PI43 = 4.188790204786391;
+                    double mH = 0.0, mHe = 0.0;
+                    for (int k = 0; k < r1d.lev.nz; ++k) {
+                        double rL = r_f[k], rR = r_f[k+1];
+                        double dmk = rho_c2[k] * PI43 * (rR*rR*rR - rL*rL*rL);
+                        mH  += dmk * X_c[k];
+                        mHe += dmk * Y_c[k];
+                    }
+                    double X_core = X_c.front();
+                    double X_surf = X_c.back();
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%.6e\n",
+                                 step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
+                                 d.T_c, d.rho_c, d.L_nuc,
+                                 mH, mHe, X_core, X_surf, r1d.rad_impl_L_surf,
+                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab,
+                                 r1d.rad_impl_T_phot, r1d.rad_impl_phot_zone, R_surf);
+                } else {
+                    std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%.6e\n",
+                                 step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                                 d.total_grav_E, d.total_E, d.max_mach, d.max_vr,
+                                 d.T_c, d.rho_c, d.L_nuc, r1d.rad_impl_L_surf,
+                                 mlt.conv_mass_frac, mlt.r_conv_inner, mlt.r_conv_outer, mlt.max_superadiab,
+                                 r1d.rad_impl_T_phot, r1d.rad_impl_phot_zone, R_surf);
+                }
                 std::fflush(csv);
 
-                // Dump profile as simple text
+                // Dump profile as simple text. When --rich-profile is set,
+                // also emit T, κ, Γ₁, ∇_ad, ∇_rad, L, mixing type, v_conv
+                // so scripts/pk_mesa_radial1d.py can compare per-field.
                 std::vector<double> r_face, v_face, rho_cell, P_cell, e_cell;
-                r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
+                std::vector<double> T_cell, kap_cell, g1_cell, ga_cell, gr_cell;
+                std::vector<double> L_face, vc_cell;
+                std::vector<int>    mt_cell;
+                if (cfg.rich_profile) {
+                    r1d.download_profile_rich(r_face, v_face, rho_cell, P_cell, e_cell,
+                                              T_cell, kap_cell, g1_cell, ga_cell, gr_cell,
+                                              L_face, mt_cell, vc_cell);
+                } else {
+                    r1d.download_profile(r_face, v_face, rho_cell, P_cell, e_cell);
+                }
+                std::vector<double> X_cell, Y_cell;
+                if (r1d.species_enabled) r1d.download_species(X_cell, Y_cell);
                 char path[512];
                 std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
                 std::FILE* fp = std::fopen(path, "w");
-                std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int\n", t, step);
-                for (int k = 0; k < r1d.lev.nz; ++k) {
-                    std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
-                                 k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k]);
+                if (cfg.rich_profile) {
+                    std::fprintf(fp,
+                        "# t = %.10e  step = %d\n"
+                        "# k r_face v_face rho P e_int T kap gamma1 grada gradr L_face mixing_type conv_vel%s\n",
+                        t, step, r1d.species_enabled ? " X Y" : "");
+                } else if (r1d.species_enabled) {
+                    std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int X Y\n", t, step);
+                } else {
+                    std::fprintf(fp, "# t = %.10e  step = %d\n# k r_face v_face rho P e_int\n", t, step);
                 }
-                // last face
+                for (int k = 0; k < r1d.lev.nz; ++k) {
+                    if (cfg.rich_profile) {
+                        std::fprintf(fp,
+                            "%d %.10e %.10e %.10e %.10e %.10e "
+                            "%.10e %.10e %.6e %.6e %.6e %.6e %d %.6e",
+                            k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k],
+                            T_cell[k], kap_cell[k], g1_cell[k], ga_cell[k], gr_cell[k],
+                            L_face[k], mt_cell[k], vc_cell[k]);
+                        if (r1d.species_enabled)
+                            std::fprintf(fp, " %.6e %.6e", X_cell[k], Y_cell[k]);
+                        std::fprintf(fp, "\n");
+                    } else if (r1d.species_enabled) {
+                        std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e %.6e %.6e\n",
+                                     k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k],
+                                     X_cell[k], Y_cell[k]);
+                    } else {
+                        std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
+                                     k, r_face[k], v_face[k], rho_cell[k], P_cell[k], e_cell[k]);
+                    }
+                }
+                // last face (velocity only; cell-centred fields don't apply)
                 std::fprintf(fp, "%d %.10e %.10e - - -\n", r1d.lev.nz, r_face[r1d.lev.nz], v_face[r1d.lev.nz]);
                 std::fclose(fp);
             }
         }
         std::fclose(csv);
         std::fprintf(stderr, "\n");
+        if (cfg.implicit_mode) r1d.destroy_implicit();
         r1d.destroy();
 
     } else if (cfg.solver_type == "projection") {
@@ -707,12 +1278,98 @@ int main(int argc, char** argv) {
         ops.destroy = [&]() { sim.destroy(); };
         run_time_loop(ops);
 
+    } else if (cfg.solver_type == "fas2") {
+        // ===== fas2: experimental fork of FAS for low-Mach robustness =====
+        // Clone of FasSolver with incremental fixes:
+        //   - CGS2 Gram-Schmidt (Knoll-Keyes 2004)
+        //   - Unit-normalize v in JFNK matvec (Trilinos NOX)
+        //   - Viallet 2016 eq 72 asymmetric L/R scaling
+        //   - Line-implicit-in-r preconditioner (cherry-pick from line-jacobi-precond)
+        FasSolver2 fas;
+        fas.use_simple_smoother = (cfg.precond != "block_jacobi");
+        // fas2-specific: --precond line_r toggles line-implicit-in-r JFNK preconditioner
+        fas.use_line_precond_r = (cfg.precond == "line_r");
+        fas.limiter_type = static_cast<int>(cfg.limiter);
+        fas.hllc_variant = cfg.hllc_variant;
+        fas.radial_only = cfg.radial_only;
+        fas.init(grid, eos, cfg.G, cfg.cfl);
+        if (cfg.radial_only)
+            std::printf("fas2 radial-only mode\n");
+        if (cfg.no_sponge) fas.sponge_kappa = 0.0;
+        configure_mass_mesh(fas);
+        if (cfg.mesh_type == "mass" && cfg.r_inner <= 0)
+            fas.central_damp_r = 0.15 * cfg.R_outer;
+        snapshot_hse_if_needed(fas);
+        fas.upload_state(grid, state);
+
+        FasLevel2& fl = fas.levels[0];
+        int snap_size = fl.total;
+        int max_snaps = static_cast<int>(cfg.t_end / (cfg.output_interval * 1e-5)) + 100;
+        long long bytes_per_snap = 4LL * snap_size * sizeof(double);
+        size_t mem_free = 0, mem_total = 0;
+        cudaMemGetInfo(&mem_free, &mem_total);
+        long long max_bytes = static_cast<long long>(mem_free) / 2;
+        if (max_snaps > max_bytes / bytes_per_snap)
+            max_snaps = static_cast<int>(max_bytes / bytes_per_snap);
+        if (max_snaps < 1) max_snaps = 1;
+
+        double* d_snap_buf = nullptr;
+        CUDA_CHECK(cudaMalloc(&d_snap_buf, (long long)max_snaps * 4 * snap_size * sizeof(double)));
+        std::vector<double> snap_times, snap_dts;
+        std::vector<int> snap_steps;
+        int n_snaps = 0;
+
+        SolverOps ops;
+        ops.progress_interval = 2000;
+        ops.step = [&](double t_, double te) { return fas.step(t_, te); };
+        ops.download = [&](const Grid&, State&, double dt_val) {
+            if (n_snaps >= max_snaps) return;
+            long long off = (long long)n_snaps * 4 * snap_size;
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off, fl.d_rho, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off + snap_size, fl.d_mr, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 2*snap_size, fl.d_mt, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            CUDA_CHECK(cudaMemcpy(d_snap_buf + off + 3*snap_size, fl.d_rhoE, snap_size*sizeof(double), cudaMemcpyDeviceToDevice));
+            snap_times.push_back(t);
+            snap_dts.push_back(dt_val);
+            snap_steps.push_back(step);
+            n_snaps++;
+        };
+        ops.destroy = [&]() {
+            if (g_interrupted)
+                std::printf("\nInterrupted at step %d, t=%.6e. ", step, t);
+            std::printf("Writing %d snapshots from GPU...\n", n_snaps);
+            std::vector<double> h_buf(4LL * snap_size);
+            for (int s = 0; s < n_snaps; ++s) {
+                long long off = (long long)s * 4 * snap_size;
+                CUDA_CHECK(cudaMemcpy(h_buf.data(), d_snap_buf + off, 4*snap_size*sizeof(double), cudaMemcpyDeviceToHost));
+                for (int ii = 0; ii < fl.nr; ++ii)
+                    for (int jj = 0; jj < fl.nt; ++jj) {
+                        int k = grid.idx(ii, jj);
+                        int kg = (ii + fl.ng) * (fl.nt + 2*fl.ng) + (jj + fl.ng);
+                        state.rho[k] = h_buf[kg];
+                        state.mr[k] = h_buf[snap_size + kg];
+                        state.mtheta[k] = h_buf[2*snap_size + kg];
+                        state.E[k] = h_buf[3*snap_size + kg];
+                    }
+                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
+                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
+                            snap_steps[s], snap_times[s], snap_dts[s], diag.total_mass, diag.total_energy);
+                char fname[512];
+                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), s + 1);
+                write_vtk(fname, grid, state, cfg.gamma);
+            }
+            cudaFree(d_snap_buf);
+            fas.download_state(grid, state);
+            fas.destroy();
+        };
+        run_time_loop(ops);
+
     } else if (cfg.solver_type == "fas" || cfg.solver_type == "explicit") {
         bool use_explicit = (cfg.solver_type == "explicit");
         FasSolver fas;
         fas.use_simple_smoother = (cfg.precond != "block_jacobi");
         fas.limiter_type = static_cast<int>(cfg.limiter);
-        fas.use_lm_hllc = cfg.lm_hllc;
+        fas.hllc_variant = cfg.hllc_variant;
         fas.radial_only = cfg.radial_only;
         fas.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.radial_only)
@@ -974,6 +1631,74 @@ int main(int argc, char** argv) {
         std::fclose(csv);
         std::fprintf(stderr, "\n");
         cale.destroy();
+    } else if (cfg.solver_type == "cart_impl") {
+        // ===== cart_impl: 2D Cartesian BE + JFNK low-Mach =====
+        // 借鑒 cart_ale2 的 Cartesian 均勻網格 + fas2 的 JFNK + Viallet scaling.
+        // 放棄球極座標,目標是解決 256² 擾動能真正演化(不被 BE 凍結).
+        CartImplSolver csol;
+        bool is_hse = (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed");
+        if (!is_hse) {
+            std::fprintf(stderr,
+                "cart_impl only supports --test hse / hse_perturbed for now\n");
+            return 1;
+        }
+        double Lx = 1.0, Ly = 1.0;
+        double g_val = 1.0;
+        double rho_base = 1.0;
+        csol.hllc_variant = cfg.hllc_variant;
+        csol.limiter_type = static_cast<int>(cfg.limiter);
+        csol.init(cfg.nr, cfg.ntheta, Lx, Ly, eos, cfg.gamma, g_val, cfg.cfl);
+
+        // Two-step init: HSE first, snapshot reference, then layer perturbation
+        csol.init_hse_polytrope(rho_base, 0.0);
+        csol.snapshot_hse();
+        if (cfg.test_case == "hse_perturbed" && cfg.perturb_amplitude != 0.0) {
+            csol.init_hse_polytrope(rho_base, cfg.perturb_amplitude);
+        }
+
+        std::timespec wall_start;
+        clock_gettime(CLOCK_MONOTONIC, &wall_start);
+
+        char csv_path[512];
+        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
+        std::FILE* csv = std::fopen(csv_path, "w");
+        std::fprintf(csv, "step,t,dt,mass,energy,max_v,max_mach\n");
+
+        // Initial frame
+        {
+            char path[512];
+            std::snprintf(path, sizeof(path), "%s/output_0000.vtk", run_dir.c_str());
+            csol.write_vtk(path);
+        }
+
+        int frame = 0;
+        int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
+        int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
+        while (t < cfg.t_end && !g_interrupted) {
+            double dt = csol.step(t, cfg.t_end);
+            t += dt;
+            step++;
+            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
+            if (step % diag_every == 0 || t >= cfg.t_end) {
+                auto d = csol.compute_diagnostics();
+                std::fprintf(stderr, "\n");
+                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|=%.3e Ma=%.3e\n",
+                            step, t, dt, d.mass, d.energy, d.max_v, d.max_mach);
+                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.6e,%.6e\n",
+                             step, t, dt, d.mass, d.energy, d.max_v, d.max_mach);
+                std::fflush(csv);
+            }
+            if (step % vtk_every == 0 || t >= cfg.t_end) {
+                ++frame;
+                char path[512];
+                std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", run_dir.c_str(), frame);
+                csol.write_vtk(path);
+            }
+        }
+        std::fclose(csv);
+        std::fprintf(stderr, "\n");
+        csol.destroy();
+
     } else if (cfg.solver_type == "cart_ale2") {
         // ===== cart_ale2: full periodic BC + PPM-in-remap (in development) =====
         CartAle2Solver cale;
@@ -981,6 +1706,7 @@ int main(int argc, char** argv) {
                        || cfg.test_case == "hse_bubble");
         bool is_kh = (cfg.test_case == "kh_shear");
         bool is_kh_lec = (cfg.test_case == "kh_lecoanet");
+        bool is_loc_conv = (cfg.test_case == "local_convection");
         double Lx = 1.0;
         // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
         // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
@@ -988,6 +1714,34 @@ int main(int argc, char** argv) {
                   : (is_hse || is_kh) ? 1.0
                   : 0.2;
         double gam = is_hse ? cfg.gamma : 1.4;
+        // local_convection: read slab header to get real Ly, Lx, γ in cgs.
+        if (is_loc_conv) {
+            if (cfg.cart_ale2_slab_file.empty()) {
+                std::fprintf(stderr,
+                    "local_convection requires --ic-slab <file>\n");
+                return 1;
+            }
+            std::FILE* fp = std::fopen(cfg.cart_ale2_slab_file.c_str(), "r");
+            if (!fp) {
+                std::fprintf(stderr,
+                    "cannot open slab file %s\n", cfg.cart_ale2_slab_file.c_str());
+                return 1;
+            }
+            char line[512];
+            while (std::fgets(line, sizeof(line), fp)) {
+                const char* s = line;
+                while (*s == ' ' || *s == '\t') ++s;
+                if (*s == '#' || *s == '\0' || *s == '\n') continue;
+                double Ly_f, Lx_f, gy_f, gamma_f, rho_t, P_t, T_t, mu_f;
+                if (std::sscanf(line, "%lf %lf %lf %lf %lf %lf %lf %lf",
+                                &Ly_f, &Lx_f, &gy_f, &gamma_f,
+                                &rho_t, &P_t, &T_t, &mu_f) == 8) {
+                    Ly = Ly_f; Lx = Lx_f; gam = gamma_f;
+                    break;
+                }
+            }
+            std::fclose(fp);
+        }
         cale.init(cfg.nr, cfg.ntheta, Lx, Ly, gam, cfg.cfl);
         cale.remap_order = cfg.cart_ale_remap_order;
         cale.CQ_lin  = cfg.cart_ale_cq_lin;
@@ -1054,6 +1808,38 @@ int main(int argc, char** argv) {
             }
             int k = (cfg.cart_ale2_kh_k > 0) ? cfg.cart_ale2_kh_k : 1;
             cale.init_kh_lecoanet(1.0, amp, 0.0, 10.0, k);
+        } else if (cfg.test_case == "local_convection") {
+            // Recommend --bc-x periodic --bc-y reflect.
+            if (!((cale.bc_mode & 1) && !(cale.bc_mode & 2))) {
+                std::fprintf(stderr,
+                    "  [warn] local_convection prefers --bc-x periodic --bc-y reflect; "
+                    "current bc_mode=%d\n", cale.bc_mode);
+            }
+            cale.init_local_convection(cfg.cart_ale2_slab_file,
+                                       cfg.cart_ale2_slab_perturb,
+                                       cfg.cart_ale2_slab_seed_k);
+            cale.tau_cool = cfg.cart_ale2_cool_tau;
+            if (cale.tau_cool > 0.0)
+                std::fprintf(stderr,
+                    "    Newton cooling ON: τ_cool=%.3e s\n", cale.tau_cool);
+
+            // Bottom enthalpy-flux heating.  Either F directly or L/(4π R²).
+            double F_bot = cfg.cart_ale2_heat_flux;
+            if (F_bot <= 0.0 && cfg.cart_ale2_heat_lsun > 0.0) {
+                if (cfg.cart_ale2_heat_bot_R <= 0.0) {
+                    std::fprintf(stderr,
+                        "  [error] --heat-lsun requires --heat-bot-R "
+                        "(bottom-face radius in cm)\n");
+                    return 1;
+                }
+                double R = cfg.cart_ale2_heat_bot_R;
+                F_bot = cfg.cart_ale2_heat_lsun / (4.0 * M_PI * R * R);
+            }
+            if (F_bot > 0.0 || cfg.cart_ale2_cool_top_frac < 1.0) {
+                cale.configure_thermal(F_bot,
+                                       cfg.cart_ale2_heat_bot_frac,
+                                       cfg.cart_ale2_cool_top_frac);
+            }
         } else {
             cale.init_sod();
         }
@@ -2265,7 +3051,7 @@ int main(int argc, char** argv) {
         // ===== Well-Balanced 2D Eulerian (MESA-stabilized) =====
         Wb2DSolver wb;
         wb.limiter_type = static_cast<int>(cfg.limiter);
-        wb.use_lm_hllc = cfg.lm_hllc ? 1 : 0;
+        wb.hllc_variant = cfg.hllc_variant;
         wb.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.mesh_type == "mass") {
             wb.n_pole_avg = cfg.ntheta / 2;
@@ -2471,6 +3257,11 @@ int main(int argc, char** argv) {
         std::snprintf(path, sizeof(path), "%s/output_final.vtk", run_dir.c_str());
         write_vtk(path, grid, state, cfg.gamma);
     }
+
+#ifdef USE_GPU
+    if (helm_loaded) helm_tbl.destroy();
+    if (kap_loaded) { kap_tbl_lowT.destroy(); kap_tbl_highT.destroy(); }
+#endif
 
     std::printf("Done.\n");
     return 0;

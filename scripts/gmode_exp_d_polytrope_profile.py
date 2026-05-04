@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gmode_infra as gi
-from mesa_profile import build_polytrope_fixture, read_profile
+from gmode_profile import build_polytrope_fixture, read_profile
 
 REF_DOC = "docs/gmode_experiments_2026-05-02.md"
 SCRIPT_REL = "scripts/gmode_exp_d_polytrope_profile.py"

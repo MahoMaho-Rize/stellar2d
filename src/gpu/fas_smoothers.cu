@@ -2,6 +2,7 @@
 
 #include "fas_solver.cuh"
 #include "fas_linalg.cuh"
+#include "../eos.h"
 #include <cmath>
 #include <vector>
 #include <algorithm>
@@ -16,7 +17,7 @@ void k_fas_assemble_blkjac(
     const double* dr, const double* dtheta,
     const double* gr0,
     double* blk_inv,
-    int nr, int nt, int ng, double gam, double inv_dt) {
+    int nr, int nt, int ng, EOS eos, double inv_dt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
@@ -26,15 +27,16 @@ void k_fas_assemble_blkjac(
     double vr_c = mr[k] / rho_c;
     double vt_c = mt[k] / rho_c;
     double KE_c = 0.5 * rho_c * (vr_c*vr_c + vt_c*vt_c);
-    double P_c = fmax((gam-1.0)*(rhoE[k] - KE_c), 1e-30);
-    double cs = sqrt(gam * P_c / rho_c);
+    double e_c = fmax((rhoE[k] - KE_c) / rho_c, 1e-30);
+    double P_c = fmax(eos.pressure(rho_c, e_c), 1e-30);
+    double cs = eos.sound_speed(rho_c, P_c);
     double r = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
     double invV = 1.0 / vol[flat];
 
     // Factor 2: MUSCL reconstruction doubles the effective stencil width vs donor-cell
     double sr = 2.0 * ((fabs(vr_c)+cs)/dr[i] + (fabs(vt_c)+cs)/(r*dtheta[j]));
-    // For total energy E: P = (γ-1)(E - ½ρv²), so ∂P/∂E = (γ-1)
-    double dP_drhoE = gam - 1.0;
+    // ∂P/∂(ρe): for ideal = γ-1, for radiation = eos.dP_drhoe(ρ, e)
+    double dP_drhoE = eos.dP_drhoe(rho_c, e_c);
 
     // Exact central-diff self-coefficient: b = (dh-dl)/(dl*dh)
     double dPdr_self = 0.0;
@@ -119,7 +121,7 @@ void k_fas_line_solve(
     const double* dr, const double* dtheta,
     const double* gr0,
     const double* v_in, double* Mv_out,
-    int nr, int nt, int ng, double gamma, double inv_dt) {
+    int nr, int nt, int ng, EOS eos, double inv_dt) {
     int j = blockIdx.x;
     if (j >= nt) return;
 
@@ -141,11 +143,13 @@ void k_fas_line_solve(
         double vr_c = mr[k] / rho_c;
         double vt_c = mt[k] / rho_c;
         double KE_c = 0.5 * rho_c * (vr_c*vr_c + vt_c*vt_c);
-        double P_c = fmax((gamma - 1.0) * (rhoE[k] - KE_c), 1e-30);
+        double e_c = fmax((rhoE[k] - KE_c) / rho_c, 1e-30);
+        double P_c = fmax(eos.pressure(rho_c, e_c), 1e-30);
+        double dP_drhoE = eos.dP_drhoe(rho_c, e_c);
         double r = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
         double invV = 1.0 / vol[flat];
 
-        double cs = sqrt(gamma * P_c / rho_c);
+        double cs = eos.sound_speed(rho_c, P_c);
         double Ar_hi = ar[(i+1)*nt+j], Ar_lo = ar[i*nt+j];
 
         // Transverse (θ) spectral radius only; r-direction captured by L/D/U + adv_self
@@ -175,7 +179,7 @@ void k_fas_line_solve(
             // Pressure coupling to i-1: dF_mr/d(rhoE_{i-1}) = -(γ-1)*dh/(dl*(dl+dh))
             double dl = r_center[i] - r_center[i-1];
             double dh = (i < nr-1) ? r_center[i+1] - r_center[i] : dl;
-            Lb[1*4+3] += -(gamma - 1.0) * dh / (dl * (dl + dh));
+            Lb[1*4+3] += -dP_drhoE * dh / (dl * (dl + dh));
         }
 
         // Upper block (coupling to i+1)
@@ -190,7 +194,7 @@ void k_fas_line_solve(
             // Pressure coupling to i+1: dF_mr/d(rhoE_{i+1}) = +(γ-1)*dl/(dh*(dl+dh))
             double dh = r_center[i+1] - r_center[i];
             double dl = (i > 0) ? r_center[i] - r_center[i-1] : dh;
-            Ub[1*4+3] += (gamma - 1.0) * dl / (dh * (dl + dh));
+            Ub[1*4+3] += dP_drhoE * dl / (dh * (dl + dh));
         }
 
         // Diagonal block
@@ -204,11 +208,11 @@ void k_fas_line_solve(
         // Pressure-energy coupling: dF_mr/d(rhoE_i) = (γ-1)*(dh-dl)/(dl*dh)
         if (i > 0 && i < nr-1) {
             double dl = r_center[i]-r_center[i-1], dh = r_center[i+1]-r_center[i];
-            Db[1*4+3] = (gamma-1.0) * (dh - dl) / (dl * dh);
+            Db[1*4+3] = dP_drhoE * (dh - dl) / (dl * dh);
         } else if (i == 0 && nr > 1) {
-            Db[1*4+3] = (gamma-1.0) / (r_center[1]-r_center[0]);
+            Db[1*4+3] = dP_drhoE / (r_center[1]-r_center[0]);
         } else if (i == nr-1 && nr >= 2) {
-            Db[1*4+3] = -(gamma-1.0) / (r_center[nr-1]-r_center[nr-2]);
+            Db[1*4+3] = -dP_drhoE / (r_center[nr-1]-r_center[nr-2]);
         }
 
         // Gravity-density coupling: dR_mr/d(rho) += g₀(r)
@@ -301,7 +305,7 @@ void k_fas_line_solve_theta(
     const double* dr, const double* dtheta,
     const double* gr0,
     const double* v_in, double* Mv_out,
-    int nr, int nt, int ng, double gamma, double inv_dt) {
+    int nr, int nt, int ng, EOS eos, double inv_dt) {
     int i = blockIdx.x;
     if (i >= nr) return;
 
@@ -324,8 +328,10 @@ void k_fas_line_solve_theta(
         double vr_c  = mr[k] / rho_c;
         double vt_c  = mt[k] / rho_c;
         double KE_c  = 0.5 * rho_c * (vr_c*vr_c + vt_c*vt_c);
-        double P_c   = fmax((gamma - 1.0) * (rhoE[k] - KE_c), 1e-30);
-        double cs    = sqrt(gamma * P_c / rho_c);
+        double e_c   = fmax((rhoE[k] - KE_c) / rho_c, 1e-30);
+        double P_c   = fmax(eos.pressure(rho_c, e_c), 1e-30);
+        double dP_drhoE = eos.dP_drhoe(rho_c, e_c);
+        double cs    = eos.sound_speed(rho_c, P_c);
         double r     = (i == 0 && r_face[1] > 1e-30) ? (2.0/3.0)*r_face[1] : r_center[i];
         double invV  = 1.0 / vol[flat];
 
@@ -358,7 +364,7 @@ void k_fas_line_solve_theta(
             double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
             double dl = tc_c - tc_m;
             double dh = (j < nt-1) ? 0.5*(theta_face[j+1]+theta_face[j+2]) - tc_c : dl;
-            Lb[2*4+3] += -(gamma - 1.0) * dh / (r * dl * (dl + dh));
+            Lb[2*4+3] += -dP_drhoE * dh / (r * dl * (dl + dh));
         }
 
         // ----- Upper block (coupling to j+1) -----
@@ -372,7 +378,7 @@ void k_fas_line_solve_theta(
             double tc_p = 0.5*(theta_face[j+1]+theta_face[j+2]);
             double dh = tc_p - tc_c;
             double dl = (j > 0) ? tc_c - 0.5*(theta_face[j-1]+theta_face[j]) : dh;
-            Ub[2*4+3] += -(gamma - 1.0) * dl / (r * dh * (dl + dh));
+            Ub[2*4+3] += -dP_drhoE * dl / (r * dh * (dl + dh));
         }
 
         // ----- Diagonal block -----
@@ -381,8 +387,7 @@ void k_fas_line_solve_theta(
         Db[0]  = diag_val;   Db[5]  = diag_val;
         Db[10] = diag_val;   Db[15] = diag_val;
 
-        // θ-pressure self-coupling: dF_mt/d(rhoE_j) = (γ-1)*(dh-dl)/(dl*dh*r)
-        double dP_drhoE = gamma - 1.0;
+        // θ-pressure self-coupling: dF_mt/d(rhoE_j) = dP/d(ρe)*(dh-dl)/(dl*dh*r)
         if (j > 0 && j < nt-1) {
             double tc_m = 0.5*(theta_face[j-1]+theta_face[j]);
             double tc_c = 0.5*(theta_face[j]+theta_face[j+1]);
@@ -499,7 +504,7 @@ void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
                     const double* dr, const double* rc, const double* rf,
                     const double* dtheta,
                     double* Ap, int nr, int nt, int ng,
-                    double inv_dt, double gam) {
+                    double inv_dt, EOS eos) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
@@ -507,8 +512,9 @@ void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
     double rho_c = fmax(rho[k], 1e-20);
     double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
     double KE = 0.5 * rho_c * (vr*vr + vt*vt);
-    double P = fmax((gam - 1.0) * (rhoE[k] - KE), 1e-30);
-    double cs = sqrt(gam * P / rho_c);
+    double e_c = fmax((rhoE[k] - KE) / rho_c, 1e-30);
+    double P = fmax(eos.pressure(rho_c, e_c), 1e-30);
+    double cs = eos.sound_speed(rho_c, P);
     double r_eff = (i == 0 && rf[1] > 1e-30) ? (2.0/3.0)*rf[1] : rc[i];
     Ap[flat] = inv_dt + (vr + cs)/dr[i] + (vt + cs)/(r_eff*dtheta[j]);
 }
@@ -618,11 +624,11 @@ void FasSolver::assemble_smoother(int l, double g0_over_dt) {
         lev.d_dr, lev.d_dtheta,
         lev.d_gr0,
         lev.d_blk_inv,
-        lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
+        lev.nr, lev.nt, lev.ng, eos, g0_over_dt);
     k_fas_mom_diag<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_dr, lev.d_r_center, lev.d_r_face, lev.d_dtheta,
-        lev.d_Ap, lev.nr, lev.nt, lev.ng, g0_over_dt, gamma);
+        lev.d_Ap, lev.nr, lev.nt, lev.ng, g0_over_dt, eos);
 }
 
 // Block Jacobi smooth: U ← U - ω · J⁻¹_diag · F(U)
@@ -677,7 +683,7 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                     lev.d_r_center, lev.d_r_face, lev.d_theta_face,
                     lev.d_dr, lev.d_dtheta, lev.d_gr0,
                     lev.d_res, scratch,
-                    lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
+                    lev.nr, lev.nt, lev.ng, eos, g0_over_dt);
             }
             k_fas_apply_line_correction<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
@@ -698,7 +704,7 @@ void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                     lev.d_r_center, lev.d_r_face, lev.d_theta_face,
                     lev.d_dr, lev.d_dtheta, lev.d_gr0,
                     lev.d_res, scratch,
-                    lev.nr, lev.nt, lev.ng, gamma, g0_over_dt);
+                    lev.nr, lev.nt, lev.ng, eos, g0_over_dt);
             }
             k_fas_apply_line_correction<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,

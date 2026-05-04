@@ -1,5 +1,7 @@
 #pragma once
 #include <cmath>
+#include "../eos.h"
+#include "../physics/nuclear_pp.h"
 
 // Device kernels for 1D Lagrangian radial stellar hydrodynamics.
 // All kernels operate on Radial1DLevel's device arrays.
@@ -40,6 +42,29 @@ void k_rad1d_zone_primitives(
     rho[k] = rho_k;
     double e_k = fmax(e_int[k], 1e-30);
     P[k] = (gam - 1.0) * rho_k * e_k;
+}
+
+// EOS-aware primitives kernel (overload). Uses EOS.pressure(ρ, e).
+__global__
+void k_rad1d_zone_primitives_eos(
+    const double* r,
+    const double* dm,
+    const double* e_int,
+    double* Vol,
+    double* rho,
+    double* P,
+    int nz, EOS eos)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rL = r[k], rR = r[k+1];
+    double Vk = PI43 * (rR*rR*rR - rL*rL*rL);
+    Vk = fmax(Vk, 1e-30);
+    Vol[k] = Vk;
+    double rho_k = dm[k] / Vk;
+    rho[k] = rho_k;
+    double e_k = fmax(e_int[k], 1e-30);
+    P[k] = eos.pressure(rho_k, e_k);
 }
 
 // ========================================================================
@@ -308,6 +333,27 @@ void k_rad1d_cfl(
     dt_cell[k] = fmin(dt_acoustic, dt_comp);
 }
 
+__global__
+void k_rad1d_cfl_eos(
+    const double* r, const double* v, const double* rho, const double* P,
+    double* dt_cell,
+    int nz, EOS eos, double comp_fraction)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double dr = r[k+1] - r[k];
+    dr = fmax(dr, 1e-30);
+    double Pk = fmax(P[k], 1e-30);
+    double rho_k = fmax(rho[k], 1e-30);
+    double cs = eos.sound_speed(rho_k, Pk);
+    double vmax = fmax(fabs(v[k]), fabs(v[k+1]));
+    double dt_acoustic = dr / (vmax + cs);
+    double dv_compress = v[k] - v[k+1];
+    double dt_comp = 1e30;
+    if (dv_compress > 1e-20) dt_comp = comp_fraction * dr / dv_compress;
+    dt_cell[k] = fmin(dt_acoustic, dt_comp);
+}
+
 // ========================================================================
 // Diagnostics:
 //   total_mass = Σ dm[k]                         (constant, sanity check)
@@ -345,11 +391,140 @@ void k_rad1d_diag_per_zone(
     double r_cell = 0.5 * (r[k] + r[k+1]);
     double M_cell = 0.5 * (M[k] + M[k+1]);
     out_PE[k] = (r_cell > 1e-20) ? -G_const * M_cell * dm_k / r_cell : 0.0;
-    // Mach
+    // Mach: floor cs to prevent surface rarefaction giving fake Mach=1e8
     double Pk = fmax(P[k], 1e-30);
     double rho_k = fmax(rho[k], 1e-30);
     double cs = sqrt(gam * Pk / rho_k);
     double vmag = fmax(fabs(v[k]), fabs(v[k+1]));
-    out_mach[k] = vmag / fmax(cs, 1e-30);
+    out_mach[k] = vmag / fmax(cs, 1.0);  // 1 cm/s floor — diagnostic only
+    out_vmax[k] = vmag;
+}
+
+// ========================================================================
+// Nuclear energy source: pp-chain heat release + hydrogen burn-up.
+// Updates e_int in place: e += dt · ε_pp(ρ, T, X)
+// Updates X in place:    X -= dt · ε_pp / q_burn  (clamped ≥ 0)
+// Updates Y in place:    Y += (X_old - X_new)    (helium bookkeeping)
+// If d_X / d_Y are nullptr, falls back to scalar pars.X_hydrogen and no
+// species evolution (legacy Phase 3 behavior).
+// ========================================================================
+__global__
+inline void k_rad1d_nuclear_pp(
+    double* e_int,
+    const double* rho,
+    int nz,
+    EOS eos,
+    NuclearPPParams pars,
+    double dt)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double eps = nuclear_pp_epsilon(rho_k, T_k, pars);
+    e_int[k] += dt * eps;
+}
+
+__global__
+inline void k_rad1d_nuclear_pp_species(
+    double* e_int,
+    double* X,              // (nz) hydrogen mass fraction (in/out)
+    double* Y,              // (nz) helium mass fraction   (in/out)
+    const double* rho,
+    int nz,
+    EOS eos,
+    NuclearPPParams pars,
+    double dt)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double Xk = fmax(X[k], 0.0);
+    double eps = nuclear_pp_epsilon_X(rho_k, T_k, Xk, pars);
+    // Energy release:
+    e_int[k] += dt * eps;
+    // Burn rate: dX/dt = -ε / q_burn. Clamp so X doesn't go negative within the step.
+    double dX = -dt * eps / fmax(pars.q_burn, 1e-30);
+    double Xnew = Xk + dX;
+    if (Xnew < 0.0) {
+        // Too aggressive for this step: re-scale so X lands at 0 exactly
+        // (conservation of mass: Y += Xk − Xnew = Xk)
+        dX = -Xk;
+        Xnew = 0.0;
+    }
+    X[k] = Xnew;
+    Y[k] = fmin(1.0, Y[k] + (-dX));
+}
+
+// ========================================================================
+// Diagnostics: per-zone ε_pp·dm (for integrated L_nuc). Writes out[k] = L_k
+// so host can reduce. Reads ρ, e, dm; computes T via EOS.
+// ========================================================================
+__global__
+inline void k_rad1d_nuclear_L(
+    const double* rho, const double* e_int, const double* dm,
+    double* out_L,
+    int nz, EOS eos, NuclearPPParams pars)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double eps = nuclear_pp_epsilon(rho_k, T_k, pars);
+    out_L[k] = eps * dm[k];
+}
+
+__global__
+inline void k_rad1d_nuclear_L_species(
+    const double* rho, const double* e_int, const double* X, const double* dm,
+    double* out_L,
+    int nz, EOS eos, NuclearPPParams pars)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double T_k = eos.temperature_from_rho_e(rho_k, fmax(e_int[k], 1e-30));
+    double Xk = fmax(X[k], 0.0);
+    double eps = nuclear_pp_epsilon_X(rho_k, T_k, Xk, pars);
+    out_L[k] = eps * dm[k];
+}
+
+// Small utility: device-side EOS T(ρ, e) evaluation (for core-T diagnostic).
+__global__
+inline void k_rad1d_T_from_rho_e(
+    const double* rho, const double* e_int, double* out_T,
+    int n, EOS eos)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= n) return;
+    double rho_k = fmax(rho[k], 1e-30);
+    double e_k = fmax(e_int[k], 1e-30);
+    out_T[k] = eos.temperature_from_rho_e(rho_k, e_k);
+}
+
+__global__
+void k_rad1d_diag_per_zone_eos(
+    const double* dm, const double* e_int, const double* rho, const double* P,
+    const double* v, const double* M, const double* r,
+    double* out_mass, double* out_KE, double* out_IE, double* out_PE,
+    double* out_mach, double* out_vmax,
+    int nz, EOS eos, double G_const)
+{
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k >= nz) return;
+    double dm_k = dm[k];
+    out_mass[k] = dm_k;
+    double vk = 0.5 * (v[k] + v[k+1]);
+    out_KE[k] = 0.5 * dm_k * vk * vk;
+    out_IE[k] = dm_k * e_int[k];
+    double r_cell = 0.5 * (r[k] + r[k+1]);
+    double M_cell = 0.5 * (M[k] + M[k+1]);
+    out_PE[k] = (r_cell > 1e-20) ? -G_const * M_cell * dm_k / r_cell : 0.0;
+    double Pk = fmax(P[k], 1e-30);
+    double rho_k = fmax(rho[k], 1e-30);
+    double cs = eos.sound_speed(rho_k, Pk);
+    double vmag = fmax(fabs(v[k]), fabs(v[k+1]));
+    out_mach[k] = vmag / fmax(cs, 1.0);  // 1 cm/s floor — diagnostic only
     out_vmax[k] = vmag;
 }

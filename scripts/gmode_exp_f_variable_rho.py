@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gmode_infra as gi
-from mesa_profile import build_polytrope_fixture, read_profile
+from gmode_profile import build_polytrope_fixture, read_profile
 from gmode_exp_e_anelastic_linop import solve_anelastic_2var
 
 REF_DOC = "docs/gmode_experiments_2026-05-02.md"

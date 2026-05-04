@@ -110,6 +110,7 @@ struct FasSolver {
     FasLevel levels[12];
 
     double gamma, G_const, cfl_num;
+    EOS eos;
     double dt_current = 0.0;
     double dt_prev = 0.0;
     double atm_rho_thresh = 0.0;
@@ -118,7 +119,7 @@ struct FasSolver {
     bool use_simple_smoother = true; // true=SIMPLE (Poisson-based), false=block Jacobi
     bool use_line_jacobi = true;     // Line-Jacobi preconditioner for GMRES (replaces block-Jacobi)
     int limiter_type = 0;            // 0=minmod, 1=van_leer, 2=MC
-    bool use_lm_hllc = false;        // low-Mach corrected HLLC (Rieper 2011)
+    int hllc_variant = 0;            // 0=standard, 1=Rieper LM-HLLC, 2=Minoshima LHLLC
     bool use_hse_outer_bc = false;   // HSE Dirichlet at outer radial boundary
     bool use_core_excision = false;  // r_face[0] > 0, skip origin kernel
     bool radial_only = false;        // enforce v_theta=0 and skip theta-direction work

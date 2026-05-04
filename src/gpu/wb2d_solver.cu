@@ -269,14 +269,14 @@ static void compute_residual(Wb2DSolver& S) {
         S.d_gr, S.d_gr0, S.d_P0, S.d_rho0,
         S.d_Pvsc_r, S.d_Pvsc_t,
         S.d_res, S.nr, S.nt, S.ng, S.gamma,
-        S.limiter_type, S.use_lm_hllc);
+        S.limiter_type, S.hllc_variant);
     // Origin cell (i=0) — overwrites row j=0..nt-1 of residual
     k_wb2d_residual_origin<<<(S.nt+B-1)/B, B>>>(
         S.d_rho, S.d_mr, S.d_mt, S.d_rhoE,
         S.d_cell_volume, S.d_area_r, S.d_r_face,
         S.d_gr, S.d_gr0, S.d_P0, S.d_rho0,
         S.d_Pvsc_r,
-        S.d_res, S.nr, S.nt, S.ng, S.gamma, S.use_lm_hllc);
+        S.d_res, S.nr, S.nt, S.ng, S.gamma, S.hllc_variant);
     // Subtract discrete HSE defect: R_WB(U) - R_WB(U₀)
     k_wb2d_axpy<<<(4*S.phys+B-1)/B, B>>>(S.d_res, -1.0, S.d_hse_defect, 4*S.phys);
 }
