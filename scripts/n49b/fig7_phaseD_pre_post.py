@@ -144,7 +144,8 @@ def main():
 
     fig.suptitle(
         "N49B Fig 7 replication — radial1d implicit 1D hydro SN explosion\n"
-        "13-species α-chain (aprox13 rates), mass-cut inner BC + thermal bomb",
+        "13-species α-chain + (α,p)(p,γ) bypass (aprox13e), "
+        "mass-cut inner BC + thermal bomb",
         fontsize=11, y=0.995,
     )
     fig.tight_layout()
