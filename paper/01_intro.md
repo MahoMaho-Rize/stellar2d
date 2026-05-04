@@ -2,12 +2,35 @@
 
 ## 1.1 Motivation and the central claim
 
-Nodal pseudo-spectral discretisations of variable-coefficient
-anelastic flow in which the elliptic operator is applied in
-*matrix-free* factored form --- that is, as a composition of
-differentiation, pointwise multiplication, and pointwise division
-kernels, without constructing the assembled matrix --- exhibit a
-structural operator-consistency gap at the discrete level.  When the
+**Scope of the contribution.**  The scheme proposed in this work
+remains a standard nodal pseudo-spectral (collocation) discretisation
+in the sense of Boyd [5], Trefethen [18], and Canuto et al.\ [3]:
+the polynomial basis, the collocation enforcement of the PDE at
+interior nodes, and the pointwise evaluation of nonlinear terms in
+physical space are all unchanged.  What changes is *how composite
+linear operators are realised* within this framework.  In the large
+majority of pseudo-spectral implementations, variable-coefficient
+elliptic operators are applied in matrix-free, factored form --- for
+instance, repeated differentiation followed by pointwise
+multiplication in nodal space --- rather than through explicit
+matrix construction.  We show that, for the specific case of
+variable-coefficient elliptic inverses appearing in time-stepping
+closures, this default implementation strategy can produce an
+operator-consistency gap that persists under any grid or time-step
+refinement, and that explicitly assembling the composite operator
+once at setup time restores the correct structure without altering
+the discretisation principle.  The contribution should therefore be
+read as an alternative *operator-realisation strategy* within the
+pseudo-spectral family, not as a new discretisation.  Throughout we
+use *assembled* in contrast to *matrix-free factorised* to designate
+this implementation choice.
+
+**Central claim.**  Nodal pseudo-spectral discretisations of
+variable-coefficient anelastic flow in which the elliptic operator is
+applied matrix-free --- that is, as a composition of differentiation,
+pointwise multiplication, and pointwise division kernels, without
+constructing the assembled matrix --- exhibit a structural
+operator-consistency gap at the discrete level.  When the
 resulting scheme is reduced to a scalar second-order oscillator by
 eliminating the momentum/pressure coupling, the gap manifests as
 an $\mathcal O(10^{-4})$ per-step deviation of an eigenmode from its
