@@ -93,7 +93,7 @@ def main():
 
     fig.suptitle(
         "N49B Fig 7 replication — explosive nucleosynthesis on Sukhbold+2018 IC\n"
-        "Phase-B 13-species α-network (He → Ni56) + CF88 rates + detailed-balance photodisintegration",
+        "Phase-C 13-species α-network (aprox13 rates ported from AMReX Microphysics)",
         fontsize=11, y=0.995,
     )
     fig.tight_layout()
