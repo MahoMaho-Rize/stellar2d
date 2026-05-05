@@ -29,6 +29,11 @@ set(SOURCES
     src/sim/helpers.cpp
     src/sim/setup.cpp
     src/sim/run_loop.cpp
+    src/drivers/projection.cpp
+    src/drivers/simple.cpp
+    src/drivers/ale2d.cpp
+    src/drivers/wb2d.cpp
+    src/drivers/lowmach.cpp
     src/main.cpp
 )
 

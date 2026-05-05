@@ -52,6 +52,7 @@
 #include "sim/helpers.h"
 #include "sim/setup.h"
 #include "sim/run_loop.h"
+#include "drivers/drivers.h"
 
 // g_interrupted is defined in sim/run_loop.cpp.
 static void handle_sigint(int) { g_interrupted = 1; }
@@ -421,33 +422,9 @@ int main(int argc, char** argv) {
         r1d.destroy();
 
     } else if (cfg.solver_type == "projection") {
-        ProjSolver proj;
-        proj.init(grid, eos, cfg.G, cfg.cfl);
-        if (cfg.no_sponge) proj.sponge_kappa = 0.0;
-        configure_mass_mesh(cfg, proj);
-        snapshot_hse_if_needed(cfg, ctx, proj);
-        proj.upload_state(grid, state);
-
-        SolverOps ops;
-        ops.step = [&](double t_, double te) { return proj.step(t_, te); };
-        ops.download = [&](const Grid& g, State& s, double) { proj.download_state(g, s); };
-        ops.destroy = [&]() { proj.destroy(); };
-        run_time_loop(cfg, ctx, t, step, ops);
-
+        if (int rc = run_projection(cfg, ctx, t, step); rc != 0) return rc;
     } else if (cfg.solver_type == "simple") {
-        SimpleSolver sim;
-        sim.init(grid, eos, cfg.G, cfg.cfl);
-        if (cfg.no_sponge) sim.sponge_kappa = 0.0;
-        configure_mass_mesh(cfg, sim);
-        snapshot_hse_if_needed(cfg, ctx, sim);
-        sim.upload_state(grid, state);
-
-        SolverOps ops;
-        ops.step = [&](double t_, double te) { return sim.step(t_, te); };
-        ops.download = [&](const Grid& g, State& s, double) { sim.download_state(g, s); };
-        ops.destroy = [&]() { sim.destroy(); };
-        run_time_loop(cfg, ctx, t, step, ops);
-
+        if (int rc = run_simple(cfg, ctx, t, step); rc != 0) return rc;
     } else if (cfg.solver_type == "fas2") {
         // ===== fas2: experimental fork of FAS for low-Mach robustness =====
         // Clone of FasSolver with incremental fixes:
@@ -2164,189 +2141,21 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "\n");
         sph.destroy();
     } else if (cfg.solver_type == "ale2d") {
-        // ===== 2D axisymmetric Lagrangian (Caramana compatible) =====
-        if (cfg.test_case != "lane_emden" && cfg.test_case != "lane_emden_perturbed") {
-            std::fprintf(stderr, "ERROR: ale2d currently supports lane_emden / lane_emden_perturbed only\n");
-            return 1;
-        }
-        Ale2DSolver ale;
-        ale.init(grid, eos, cfg.G, cfg.cfl);
-        ale.init_lane_emden(1.0, 1.0, 1.5);
-        ale.snapshot_hse();
-        if (cfg.test_case == "lane_emden_perturbed")
-            ale.apply_perturbation(cfg.perturb_amplitude);
-
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
-
-        char csv_path[512];
-        std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", run_dir.c_str());
-        std::FILE* csv = std::fopen(csv_path, "w");
-        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,total_E,max_mach,max_v\n");
-
-        int frame = 0;
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = ale.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % 200 == 0) print_progress(t, cfg.t_end, step, dt, wall_start);
-
-            if (step % cfg.output_interval == 0) {
-                auto d = ale.compute_diagnostics();
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e E=%.10e |v|_max=%.3e Mach_max=%.3e\n",
-                            step, t, dt, d.total_mass, d.total_E, d.max_v, d.max_mach);
-                std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
-                             step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
-                             d.total_grav_E, d.total_E, d.max_mach, d.max_v);
-                std::fflush(csv);
-
-                std::vector<double> rp, rhop, Pp, ep, vrp;
-                ale.download_radial_profile(rp, rhop, Pp, ep, vrp);
-                char path[512];
-                std::snprintf(path, sizeof(path), "%s/profile_%04d.txt", run_dir.c_str(), ++frame);
-                std::FILE* fp = std::fopen(path, "w");
-                std::fprintf(fp, "# t = %.10e  step = %d\n# ic r rho P e_int v_r\n", t, step);
-                for (int ic = 0; ic < ale.nr; ++ic)
-                    std::fprintf(fp, "%d %.10e %.10e %.10e %.10e %.10e\n",
-                                 ic, rp[ic], rhop[ic], Pp[ic], ep[ic], vrp[ic]);
-                std::fclose(fp);
-            }
-        }
-        std::fclose(csv);
-        std::fprintf(stderr, "\n");
-        ale.destroy();
+        if (int rc = run_ale2d(cfg, ctx, t, step); rc != 0) return rc;
     } else if (cfg.solver_type == "wb2d") {
-        // ===== Well-Balanced 2D Eulerian (MESA-stabilized) =====
-        Wb2DSolver wb;
-        wb.limiter_type = static_cast<int>(cfg.limiter);
-        wb.hllc_variant = cfg.hllc_variant;
-        wb.init(grid, eos, cfg.G, cfg.cfl);
-        if (cfg.mesh_type == "mass") {
-            wb.n_pole_avg = cfg.ntheta / 2;
-            if (cfg.r_inner <= 0) {
-                int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
-                wb.n_angular_avg = n_uni;
-                wb.central_damp_r = 0.15 * cfg.R_outer;
-            }
-        }
-        if (!cfg.no_sponge) wb.sponge_kappa = 100.0;
-
-        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
-            State state_hse;
-            state_hse.allocate(grid);
-            LaneEmdenParams lep;
-            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-            init_lane_emden(grid, state_hse, lep, cfg.gamma);
-            wb.upload_state(grid, state_hse);
-            wb.snapshot_hse();
-        }
-        wb.upload_state(grid, state);
-        if (!(cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble"))
-            wb.snapshot_hse();
-
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
-
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = wb.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % 200 == 0)
-                print_progress(t, cfg.t_end, step, dt, wall_start);
-
-            if (step % cfg.output_interval == 0) {
-                wb.download_state(grid, state);
-                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy);
-                char fname[512];
-                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk",
-                              run_dir.c_str(), step / cfg.output_interval);
-                write_vtk(fname, grid, state, cfg.gamma);
-            }
-        }
-        std::fprintf(stderr, "\n");
-        wb.download_state(grid, state);
-        wb.destroy();
+        if (int rc = run_wb2d(cfg, ctx, t, step); rc != 0) return rc;
     } else if (cfg.solver_type == "lowmach") {
-        // ===== GPU low-Mach path =====
-        PrecondType pc = PrecondType::LINE_JACOBI;
-        if (cfg.precond == "none")          pc = PrecondType::NONE;
-        else if (cfg.precond == "block_jacobi") pc = PrecondType::BLOCK_JACOBI;
-        else if (cfg.precond == "simple")   pc = PrecondType::SIMPLE;
-        else if (cfg.precond == "line_jacobi") pc = PrecondType::LINE_JACOBI;
-        else if (cfg.precond == "block_schur") pc = PrecondType::BLOCK_SCHUR;
-        else if (cfg.precond == "combined") pc = PrecondType::COMBINED;
-        else if (cfg.precond == "pbp")      pc = PrecondType::PBP;
-
-        LowMachSolver lm;
-        lm.init(grid, eos, cfg.G, cfg.cfl, pc);
-        if (cfg.no_sponge) lm.sponge_kappa = 0.0;
-        configure_mass_mesh(cfg, lm);
-        snapshot_hse_if_needed(cfg, ctx, lm);
-        lm.upload_state(grid, state);
-
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
-
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = lm.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % 200 == 0)
-                print_progress(t, cfg.t_end, step, dt, wall_start);
-
-            if (step % cfg.output_interval == 0) {
-                lm.download_state(grid, state);
-                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-
-                double max_vr = 0, max_vt = 0;
-                double rho_thresh = lm.atm_rho_thresh;
-                for (int i = 0; i < grid.nr; i++)
-                    for (int j = 0; j < grid.ntheta; j++) {
-                        int k = grid.idx(i, j);
-                        if (state.rho[k] < rho_thresh) continue;
-                        double rho = state.rho[k];
-                        max_vr = std::max(max_vr, std::fabs(state.mr[k] / rho));
-                        max_vt = std::max(max_vt, std::fabs(state.mtheta[k] / rho));
-                    }
-
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e  |vr|=%.3e |vt|=%.3e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy, max_vr, max_vt);
-
-                char fname[512];
-                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk", run_dir.c_str(), step / cfg.output_interval);
-                write_vtk(fname, grid, state, cfg.gamma);
-            }
-        }
-        std::fprintf(stderr, "\n");
-
-        lm.download_state(grid, state);
-        lm.destroy();
+        if (int rc = run_lowmach(cfg, ctx, t, step); rc != 0) return rc;
     } else {
 #ifdef USE_AMGX
-        // ===== GPU compressible path (HLLC + JFNK) =====
-        GpuSolver gpu;
-        gpu.init(grid, eos, cfg.G, cfg.cfl, cfg.limiter);
-        gpu.upload_state(grid, state);
-
-        SolverOps ops;
-        ops.step = [&](double t_, double te) { return gpu.step(t_, te); };
-        ops.download = [&](const Grid& g, State& s, double) { gpu.download_state(g, s); };
-        ops.destroy = [&]() { gpu.destroy(); };
-        run_time_loop(cfg, ctx, t, step, ops);
+        if (int rc = run_compressible(cfg, ctx, t, step); rc != 0) return rc;
 #else
         std::fprintf(stderr, "ERROR: --solver compressible requires AmgX. "
                      "Rebuild with -DAMGX_DIR=/path/to/amgx, or use --solver lowmach.\n");
         return 1;
 #endif
     }
+
 
 #else
     // ===== CPU path =====
