@@ -1,7 +1,7 @@
 // FAS solver orchestration: init, destroy, step, upload/download, snapshot_hse
 
 #include "fas_solver.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_linalg.cuh"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -376,7 +376,7 @@ void FasSolver::snapshot_hse() {
 
     // Compute HSE defect on each level: R_WB(U₀) with U₀ = (ρ₀, 0, 0, P₀/(γ-1))
     // This residual should be ~0 but is nonzero due to discrete ∇P₀ ≠ ρ₀g₀.
-    // We store it and subtract from fas_rhs during restrict_defect.
+    // We store it and subtract from gpu_rhs during restrict_defect.
     for (int l = 0; l < n_levels; ++l) {
         FasLevel& lev = levels[l];
         int ln = lev.nr * lev.nt, B2 = 256;
@@ -424,8 +424,8 @@ void FasSolver::snapshot_hse() {
 }
 
 // ========================= BDF2 rhs kernel ========================
-// fas_rhs = -(α₁·Uⁿ + α₂·Uⁿ⁻¹) / dt_n
-// For BE (step 0): α₁=-1, α₂=0 → fas_rhs = Uⁿ/dt
+// gpu_rhs = -(α₁·Uⁿ + α₂·Uⁿ⁻¹) / dt_n
+// For BE (step 0): α₁=-1, α₂=0 → gpu_rhs = Uⁿ/dt
 
 __global__
 void k_fas_bdf2_rhs(const double* Un, const double* Un_prev,
@@ -674,7 +674,7 @@ double FasSolver::step(double t, double t_end) {
         }
         double g0_over_dt = gamma0 / dt;
 
-        // Set fas_rhs = -(α₁·Uⁿ + α₂·Uⁿ⁻¹) / dt
+        // Set gpu_rhs = -(α₁·Uⁿ + α₂·Uⁿ⁻¹) / dt
         k_fas_bdf2_rhs<<<(4*n+B-1)/B,B>>>(
             finest.d_Un, finest.d_Un_prev, finest.d_fas_rhs,
             alpha1, alpha2, 1.0/dt, 4*n);
@@ -728,8 +728,8 @@ double FasSolver::step(double t, double t_end) {
     k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_rhoE, finest.d_cell_volume,
         d_rhoV, d_EV, finest.nr, finest.nt, finest.ng);
-    double M_before = fas_reduce_sum(d_rhoV, d_scratch, n);
-    double E_before = fas_reduce_sum(d_EV, d_scratch, n);
+    double M_before = gpu_reduce_sum(d_rhoV, d_scratch, n);
+    double E_before = gpu_reduce_sum(d_EV, d_scratch, n);
 
     if (sponge_r_start < sponge_r_top) {
         k_fas_sponge<<<(n+B-1)/B,B>>>(
@@ -750,8 +750,8 @@ double FasSolver::step(double t, double t_end) {
     k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
         finest.d_rho, finest.d_rhoE, finest.d_cell_volume,
         d_rhoV, d_EV, finest.nr, finest.nt, finest.ng);
-    double M_after = fas_reduce_sum(d_rhoV, d_scratch, n);
-    double E_after = fas_reduce_sum(d_EV, d_scratch, n);
+    double M_after = gpu_reduce_sum(d_rhoV, d_scratch, n);
+    double E_after = gpu_reduce_sum(d_EV, d_scratch, n);
 
     if (interior_volume > 0) {
         double dM = (M_before - M_after) / interior_volume;
@@ -812,7 +812,7 @@ void k_fas_rk_update(double* rho, double* mr, double* mt, double* rhoE,
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;  // skip atmosphere
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  += dt_val * R[flat];
     mr[k]   += dt_val * R[n + flat];
@@ -825,7 +825,7 @@ void k_fas_rk_average(double* rho, double* mr, double* mt, double* rhoE,
                       const double* Un, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  = 0.5 * (Un[flat]     + rho[k]);
     mr[k]   = 0.5 * (Un[n+flat]   + mr[k]);
@@ -940,8 +940,8 @@ double FasSolver::step_explicit(double t, double t_end) {
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_rhoE, lev.d_cell_volume,
             d_rhoV, d_EV, lev.nr, lev.nt, lev.ng);
-        double M_before = fas_reduce_sum(d_rhoV, d_scr, n);
-        double E_before = fas_reduce_sum(d_EV, d_scr, n);
+        double M_before = gpu_reduce_sum(d_rhoV, d_scr, n);
+        double E_before = gpu_reduce_sum(d_EV, d_scr, n);
 
         if (sponge_r_start < sponge_r_top) {
             k_fas_sponge<<<(n+B-1)/B,B>>>(
@@ -961,8 +961,8 @@ double FasSolver::step_explicit(double t, double t_end) {
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_rhoE, lev.d_cell_volume,
             d_rhoV, d_EV, lev.nr, lev.nt, lev.ng);
-        double M_after = fas_reduce_sum(d_rhoV, d_scr, n);
-        double E_after = fas_reduce_sum(d_EV, d_scr, n);
+        double M_after = gpu_reduce_sum(d_rhoV, d_scr, n);
+        double E_after = gpu_reduce_sum(d_EV, d_scr, n);
 
         if (interior_volume > 0) {
             double dM = (M_before - M_after) / interior_volume;

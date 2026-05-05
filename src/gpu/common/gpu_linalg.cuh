@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include <cmath>
 #include <vector>
 
@@ -94,7 +94,7 @@ inline void k_fas_reduce_sum(const double* in, double* out, int n) {
     if (tid == 0) out[blockIdx.x] = sdata[0];
 }
 
-static inline double fas_reduce_sum(const double* d_data, double* d_scratch, int n) {
+static inline double gpu_reduce_sum(const double* d_data, double* d_scratch, int n) {
     int B = 256;
     int nblocks = (n + 2 * B - 1) / (2 * B);
     k_fas_reduce_sum<<<nblocks, B, B * sizeof(double)>>>(d_data, d_scratch, n);
@@ -114,7 +114,7 @@ inline void k_fas_pack_flat(const double* rho, const double* mr,
                             double* out, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     out[flat] = rho[k]; out[n+flat] = mr[k];
     out[2*n+flat] = mt[k]; out[3*n+flat] = rhoE[k];
@@ -126,7 +126,7 @@ inline void k_fas_unpack_flat(double* rho, double* mr,
                               const double* in, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k] = in[flat]; mr[k] = in[n+flat];
     mt[k] = in[2*n+flat]; rhoE[k] = in[3*n+flat];
@@ -151,7 +151,7 @@ inline void k_fas_perturb(double* rho, double* mr, double* mt, double* rhoE,
                           const double* z, double eps, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  += eps * z[flat];
     mr[k]   += eps * z[n+flat];

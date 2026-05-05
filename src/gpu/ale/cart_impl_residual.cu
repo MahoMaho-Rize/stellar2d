@@ -5,11 +5,11 @@
 //   ∂U/∂t + ∂F_x/∂x + ∂F_y/∂y = S(U)
 //   S = (0, 0, -ρ·g_y, -ρ·vy·g_y)   (constant downward gravity)
 //
-// Fluxes use HLLC dispatch (reuse fas_hllc_dispatch from fas_hllc.cuh).
+// Fluxes use HLLC dispatch (reuse gpu_hllc_dispatch from gpu_hllc.cuh).
 // MUSCL reconstruction on primitives (ρ, vx, vy, P).
 
 #include "cart_impl_solver.cuh"
-#include "fas_hllc.cuh"
+#include "gpu_hllc.cuh"
 
 static __host__ __device__ __forceinline__
 int ci_idx(int i, int j, int ny, int ng) {
@@ -233,7 +233,7 @@ __global__ void k_ci_compute_F(
 __device__ __forceinline__
 void ci_recon(double vm1, double v0, double vp1, double vp2,
               double& L, double& R, int lim) {
-    fas_recon(vm1, v0, vp1, vp2, L, R, lim);
+    gpu_recon(vm1, v0, vp1, vp2, L, R, lim);
 }
 
 // Convert conserved → primitive at ghost-aware index
@@ -304,11 +304,11 @@ __global__ void k_ci_residual(
 
     // HLLC x-flux: radial=true means use .vr as normal (here vx == vr for x-direction)
     // We pass radial=true for x, and the struct field vr=vx, vt=vy.
-    FFlux4 F_xp = fas_hllc_dispatch(wL_xp, wR_xp, eos, true, hllc_variant);
-    FFlux4 F_xm = fas_hllc_dispatch(wL_xm, wR_xm, eos, true, hllc_variant);
+    FFlux4 F_xp = gpu_hllc_dispatch(wL_xp, wR_xp, eos, true, hllc_variant);
+    FFlux4 F_xm = gpu_hllc_dispatch(wL_xm, wR_xm, eos, true, hllc_variant);
 
     // ----- y faces: j-1/2 and j+1/2 -----
-    // For y direction: we want normal=vy. Use radial=false so fas_hllc treats
+    // For y direction: we want normal=vy. Use radial=false so gpu_hllc treats
     // .vt as normal. Pass swapped prim: vr<->vt (we need to remap).
     // Simpler: swap vr/vt in y-direction prims.
     auto yprim = [](FPrim w) { FPrim o; o.rho=w.rho; o.vr=w.vt; o.vt=w.vr; o.P=w.P; return o; };
@@ -326,8 +326,8 @@ __global__ void k_ci_residual(
     #undef REC_Y
 
     // HLLC y-flux (radial=true here too, since after swap .vr holds vy)
-    FFlux4 F_yp_s = fas_hllc_dispatch(wLy_p, wRy_p, eos, true, hllc_variant);
-    FFlux4 F_ym_s = fas_hllc_dispatch(wLy_m, wRy_m, eos, true, hllc_variant);
+    FFlux4 F_yp_s = gpu_hllc_dispatch(wLy_p, wRy_p, eos, true, hllc_variant);
+    FFlux4 F_ym_s = gpu_hllc_dispatch(wLy_m, wRy_m, eos, true, hllc_variant);
     // Unswap flux: (f_rho, f_mr, f_mt, f_E) in swapped frame → true f for (ρ, ρvx, ρvy, E):
     // swapped: vr=vy so f_mr here is momentum in swapped-vr = true ρvy flux
     //          f_mt is ρvy·vx (original ρvx component in y-flux)

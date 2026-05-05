@@ -1,8 +1,8 @@
 // FAS residual evaluation: ghost cells, gravity, HLLC flux divergence, floor, sponge, CFL
 
 #include "fas2_solver.cuh"
-#include "fas_hllc.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_hllc.cuh"
+#include "gpu_linalg.cuh"
 #include "eos.h"
 #include <cmath>
 #include <vector>
@@ -15,7 +15,7 @@ __global__ void k_fas2_ghost_r_in(double* rho, double* mr, double* mt, double* r
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y + 1;
     if (j >= nt || g > ng) return;
-    int kg = fas_idx(-g,j,nt,ng), kp = fas_idx(g-1,j,nt,ng);
+    int kg = gpu_idx(-g,j,nt,ng), kp = gpu_idx(g-1,j,nt,ng);
     rho[kg]=rho[kp]; mr[kg]=-mr[kp]; mt[kg]=mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
@@ -24,7 +24,7 @@ __global__ void k_fas2_ghost_r_out(double* rho, double* mr, double* mt, double* 
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y;
     if (j >= nt || g >= ng) return;
-    int kg = fas_idx(nr+g,j,nt,ng), kp = fas_idx(nr-1,j,nt,ng);
+    int kg = gpu_idx(nr+g,j,nt,ng), kp = gpu_idx(nr-1,j,nt,ng);
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
@@ -35,7 +35,7 @@ __global__ void k_fas2_ghost_r_out_hse(double* rho, double* mr, double* mt, doub
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y;
     if (j >= nt || g >= ng) return;
-    int kg = fas_idx(nr+g, j, nt, ng);
+    int kg = gpu_idx(nr+g, j, nt, ng);
     int flat_last = (nr-1)*nt + j;
     double rho_r = fmax(rho0[flat_last], 1e-20);
     rho[kg]  = rho_r;
@@ -50,7 +50,7 @@ __global__ void k_fas2_ghost_t_n(double* rho, double* mr, double* mt, double* rh
     int g = blockIdx.y + 1;
     if (ii >= nr+2*ng || g > ng) return;
     int i = ii - ng;
-    int kg = fas_idx(i,-g,nt,ng), kp = fas_idx(i,g-1,nt,ng);
+    int kg = gpu_idx(i,-g,nt,ng), kp = gpu_idx(i,g-1,nt,ng);
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=-mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
@@ -60,15 +60,15 @@ __global__ void k_fas2_ghost_t_s(double* rho, double* mr, double* mt, double* rh
     int g = blockIdx.y;
     if (ii >= nr+2*ng || g >= ng) return;
     int i = ii - ng;
-    int kg = fas_idx(i,nt+g,nt,ng), kp = fas_idx(i,nt-1-g,nt,ng);
+    int kg = gpu_idx(i,nt+g,nt,ng), kp = gpu_idx(i,nt-1-g,nt,ng);
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=-mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
 __global__ void k_fas2_pole_lock(double* mt, int nr, int nt, int ng) {
     int i = blockIdx.x * blockDim.x + threadIdx.x - ng;
     if (i < -ng || i >= nr + ng) return;
-    mt[fas_idx(i, 0, nt, ng)] = 0.0;
-    mt[fas_idx(i, nt - 1, nt, ng)] = 0.0;
+    mt[gpu_idx(i, 0, nt, ng)] = 0.0;
+    mt[gpu_idx(i, nt - 1, nt, ng)] = 0.0;
 }
 
 void FasSolver2::launch_ghost(int l) {
@@ -100,7 +100,7 @@ void k_fas2_shell_mass(const double* rho, const double* vol,
     int tid = threadIdx.x;
     double s = 0.0;
     for (int j = tid; j < nt; j += blockDim.x)
-        s += rho[fas_idx(i,j,nt,ng)] * vol[i*nt+j];
+        s += rho[gpu_idx(i,j,nt,ng)] * vol[i*nt+j];
     smem[tid] = s;
     __syncthreads();
     for (int st = blockDim.x/2; st > 0; st >>= 1) {
@@ -183,7 +183,7 @@ void k_fas2_residual(
     // All cells use WB — prevents O(h²/ρ) spurious acceleration in low-density surface
     int wb_local = use_wellbalance;
 
-    int k = fas_idx(i,j,nt,ng);
+    int k = gpu_idx(i,j,nt,ng);
     double invV = 1.0 / vol[flat];
 
     double rho_c = fmax(rho[k], 1e-20);
@@ -197,7 +197,7 @@ void k_fas2_residual(
     // ===== Flux-level WB-MUSCL+HLLC =====
     // Helper: primitives from FAS state (rhoE = total energy E = ρe + ½ρv²)
     auto W = [&](int ii, int jj) -> FPrim {
-        int kk = fas_idx(ii,jj,nt,ng);
+        int kk = gpu_idx(ii,jj,nt,ng);
         double r_ = fmax(rho[kk], 1e-20);
         double vr_ = mr[kk] / r_, vt_ = mt[kk] / r_;
         double e_ = fmax((rhoE[kk] - 0.5*r_*(vr_*vr_ + vt_*vt_)) / r_, 1e-30);
@@ -218,15 +218,15 @@ void k_fas2_residual(
     auto hllc_r_face = [&](int face_i) -> FFlux4 {
         FPrim wa=W(face_i-2,j), wb_=W(face_i-1,j), wc=W(face_i,j), wd=W(face_i+1,j);
         double ppL,ppR,rpL,rpR;
-        fas_recon(wa.P-P0r(face_i-2), wb_.P-P0r(face_i-1), wc.P-P0r(face_i), wd.P-P0r(face_i+1), ppL, ppR, lim_type);
-        fas_recon(wa.rho-r0r(face_i-2), wb_.rho-r0r(face_i-1), wc.rho-r0r(face_i), wd.rho-r0r(face_i+1), rpL, rpR, lim_type);
+        gpu_recon(wa.P-P0r(face_i-2), wb_.P-P0r(face_i-1), wc.P-P0r(face_i), wd.P-P0r(face_i+1), ppL, ppR, lim_type);
+        gpu_recon(wa.rho-r0r(face_i-2), wb_.rho-r0r(face_i-1), wc.rho-r0r(face_i), wd.rho-r0r(face_i+1), rpL, rpR, lim_type);
         double P0f = 0.5*(P0r(face_i-1)+P0r(face_i)), r0f = 0.5*(r0r(face_i-1)+r0r(face_i));
         FPrim wl, wr;
-        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
-        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
+        gpu_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
+        gpu_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
         wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
         wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-        return fas_hllc_dispatch(wl, wr, eos, true, hllc_variant);
+        return gpu_hllc_dispatch(wl, wr, eos, true, hllc_variant);
     };
     FFlux4 fr_hi = hllc_r_face(i+1);
     FFlux4 fr_lo = hllc_r_face(i);
@@ -248,15 +248,15 @@ void k_fas2_residual(
         auto hllc_t_face = [&](int face_j) -> FFlux4 {
             FPrim wa=W(i,face_j-2), wb_=W(i,face_j-1), wc=W(i,face_j), wd=W(i,face_j+1);
             double ppL,ppR,rpL,rpR;
-            fas_recon(wa.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc.P-P0t(face_j), wd.P-P0t(face_j+1), ppL, ppR, lim_type);
-            fas_recon(wa.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc.rho-r0t(face_j), wd.rho-r0t(face_j+1), rpL, rpR, lim_type);
+            gpu_recon(wa.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc.P-P0t(face_j), wd.P-P0t(face_j+1), ppL, ppR, lim_type);
+            gpu_recon(wa.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc.rho-r0t(face_j), wd.rho-r0t(face_j+1), rpL, rpR, lim_type);
             double P0f = 0.5*(P0t(face_j-1)+P0t(face_j)), r0f = 0.5*(r0t(face_j-1)+r0t(face_j));
             FPrim wl, wr;
-            fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
-            fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
+            gpu_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
+            gpu_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
             wl.rho = fmax(r0f+rpL, 1e-20); wr.rho = fmax(r0f+rpR, 1e-20);
             wl.P = fmax(P0f+ppL, 1e-30); wr.P = fmax(P0f+ppR, 1e-30);
-            return fas_hllc_dispatch(wl, wr, eos, false, hllc_variant);
+            return gpu_hllc_dispatch(wl, wr, eos, false, hllc_variant);
         };
         FFlux4 ft_hi = hllc_t_face(j+1);
         FFlux4 ft_lo = hllc_t_face(j);
@@ -317,7 +317,7 @@ void k_fas2_residual_origin(
     int flat = j;
     int n = nr*nt;
 
-    int k = fas_idx(0, j, nt, ng);
+    int k = gpu_idx(0, j, nt, ng);
     double invV = 1.0 / vol[flat];
 
     double rho_c = fmax(rho[k], 1e-20);
@@ -332,7 +332,7 @@ void k_fas2_residual_origin(
 
     // Helper to get primitives (rhoE = total energy)
     auto W = [&](int ii, int jj) -> FPrim {
-        int kk = fas_idx(ii,jj,nt,ng);
+        int kk = gpu_idx(ii,jj,nt,ng);
         double r_ = fmax(rho[kk], 1e-20);
         double vr_ = mr[kk]/r_, vt_ = mt[kk]/r_;
         double e_ = fmax((rhoE[kk] - 0.5*r_*(vr_*vr_+vt_*vt_)) / r_, 1e-30);
@@ -353,7 +353,7 @@ void k_fas2_residual_origin(
         wr.P = fmax(P0f + (wr.P - P0r(1)), 1e-30);
         wl.rho = fmax(r0f + (wl.rho - r0r(0)), 1e-20);
         wr.rho = fmax(r0f + (wr.rho - r0r(1)), 1e-20);
-        FFlux4 fr_hi = fas_hllc_dispatch(wl, wr, eos, true, hllc_variant);
+        FFlux4 fr_hi = gpu_hllc_dispatch(wl, wr, eos, true, hllc_variant);
 
         // θ-face fluxes: computed for symmetry with k_fas2_residual but unused in origin cell
         // (origin cell is a wedge touching r=0; all θ-cells share the same point).
@@ -362,15 +362,15 @@ void k_fas2_residual_origin(
             auto hllc_t_face = [&](int face_j) -> FFlux4 {
                 FPrim wa_=W(0,face_j-2), wb_=W(0,face_j-1), wc_=W(0,face_j), wd_=W(0,face_j+1);
                 double ppL,ppR,rpL,rpR;
-                fas_recon(wa_.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc_.P-P0t(face_j), wd_.P-P0t(face_j+1), ppL, ppR, lim_type);
-                fas_recon(wa_.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc_.rho-r0t(face_j), wd_.rho-r0t(face_j+1), rpL, rpR, lim_type);
+                gpu_recon(wa_.P-P0t(face_j-2), wb_.P-P0t(face_j-1), wc_.P-P0t(face_j), wd_.P-P0t(face_j+1), ppL, ppR, lim_type);
+                gpu_recon(wa_.rho-r0t(face_j-2), wb_.rho-r0t(face_j-1), wc_.rho-r0t(face_j), wd_.rho-r0t(face_j+1), rpL, rpR, lim_type);
                 double P0ff = 0.5*(P0t(face_j-1)+P0t(face_j)), r0ff = 0.5*(r0t(face_j-1)+r0t(face_j));
                 FPrim wll, wrr;
-                fas_recon(wa_.vr, wb_.vr, wc_.vr, wd_.vr, wll.vr, wrr.vr, lim_type);
-                fas_recon(wa_.vt, wb_.vt, wc_.vt, wd_.vt, wll.vt, wrr.vt, lim_type);
+                gpu_recon(wa_.vr, wb_.vr, wc_.vr, wd_.vr, wll.vr, wrr.vr, lim_type);
+                gpu_recon(wa_.vt, wb_.vt, wc_.vt, wd_.vt, wll.vt, wrr.vt, lim_type);
                 wll.rho = fmax(r0ff+rpL, 1e-20); wrr.rho = fmax(r0ff+rpR, 1e-20);
                 wll.P = fmax(P0ff+ppL, 1e-30); wrr.P = fmax(P0ff+ppR, 1e-30);
-                return fas_hllc_dispatch(wll, wrr, eos, false, hllc_variant);
+                return gpu_hllc_dispatch(wll, wrr, eos, false, hllc_variant);
             };
             (void)hllc_t_face(j+1);
             (void)hllc_t_face(j);
@@ -428,7 +428,7 @@ void k_fas2_transport_step(
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;
     int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i,j,nt,ng);
+    int k = gpu_idx(i,j,nt,ng);
     int n = nr*nt;
 
     double rho_c = fmax(rho[k], 1e-20);
@@ -487,17 +487,17 @@ void FasSolver2::compute_residual(int l) {
 __global__
 void k_fas2_compute_F(double* F, const double* R, const double* rho, const double* mr,
                      const double* mt, const double* rhoE,
-                     const double* fas_rhs,
+                     const double* gpu_rhs,
                      double inv_dt, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int n = nr*nt;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
-    // F = R(U) - (U - Uⁿ)/dt, but fas_rhs encodes Uⁿ/dt + τ
-    F[flat]       = R[flat]       - inv_dt*rho[k]  + fas_rhs[flat];
-    F[n + flat]   = R[n + flat]   - inv_dt*mr[k]   + fas_rhs[n + flat];
-    F[2*n + flat] = R[2*n + flat] - inv_dt*mt[k]   + fas_rhs[2*n + flat];
-    F[3*n + flat] = R[3*n + flat] - inv_dt*rhoE[k] + fas_rhs[3*n + flat];
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
+    // F = R(U) - (U - Uⁿ)/dt, but gpu_rhs encodes Uⁿ/dt + τ
+    F[flat]       = R[flat]       - inv_dt*rho[k]  + gpu_rhs[flat];
+    F[n + flat]   = R[n + flat]   - inv_dt*mr[k]   + gpu_rhs[n + flat];
+    F[2*n + flat] = R[2*n + flat] - inv_dt*mt[k]   + gpu_rhs[2*n + flat];
+    F[3*n + flat] = R[3*n + flat] - inv_dt*rhoE[k] + gpu_rhs[3*n + flat];
 }
 
 void FasSolver2::compute_F(int l, double g0_over_dt) {
@@ -515,7 +515,7 @@ void k_fas2_floor(double* rho, double* mr, double* mt, double* rhoE,
                  int nr, int nt, int ng, double gam) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     double r = rho[k], E = rhoE[k];
     if (isnan(r) || isnan(E) || isnan(mr[k]) || isnan(mt[k])) {
         rho[k] = 1e-20; mr[k] = 0.0; mt[k] = 0.0; rhoE[k] = 1e-20;
@@ -560,7 +560,7 @@ void k_fas2_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
                      int nr, int nt, int ng, int strict_atm_only) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
 
     bool is_atm = rho0[flat] < atm_thresh;
     // evacuated trigger: injects mass when rho drops below 1% of rho0 — disabled in strict mode
@@ -597,7 +597,7 @@ void k_fas2_rhoV_EV(const double* rho, const double* rhoE, const double* vol,
                    int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     double V = vol[flat];
     rhoV_out[flat] = rho[k] * V;
     EV_out[flat]   = rhoE[k] * V;
@@ -615,7 +615,7 @@ void k_fas2_conserve_correct(double* rho, double* rhoE,
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     rho[k]  += delta_rho_per_vol;
     rhoE[k] += delta_E_per_vol;
 }
@@ -643,7 +643,7 @@ void k_fas2_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
 
     double sum_rho = 0, sum_mr = 0, sum_mt = 0, sum_rhoE = 0, sum_vol = 0;
     for (int j = tid; j < nt; j += blockDim.x) {
-        int k = fas_idx(i, j, nt, ng);
+        int k = gpu_idx(i, j, nt, ng);
         double v = vol[i * nt + j];
         sum_rho  += rho[k] * v;
         sum_mr   += mr[k] * v;
@@ -674,7 +674,7 @@ void k_fas2_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
     double avg_rhoE = s_rhoE[0] * inv_V;
 
     for (int j = tid; j < nt; j += blockDim.x) {
-        int k = fas_idx(i, j, nt, ng);
+        int k = gpu_idx(i, j, nt, ng);
         rho[k]  = avg_rho;
         mr[k]   = avg_mr;
         mt[k]   = 0.0;  // no θ-momentum at origin
@@ -699,7 +699,7 @@ void k_fas2_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
     {
         double sum_rho = 0, sum_mr = 0, sum_rhoE = 0, sum_vol = 0;
         for (int j = 0; j < n_pole && j < nt; ++j) {
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             double v = vol[i * nt + j];
             sum_rho  += rho[k] * v;
             sum_mr   += mr[k] * v;
@@ -711,7 +711,7 @@ void k_fas2_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
         double avg_mr   = sum_mr * inv_V;
         double avg_rhoE = sum_rhoE * inv_V;
         for (int j = 0; j < n_pole && j < nt; ++j) {
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             rho[k]  = avg_rho;
             mr[k]   = avg_mr;
             mt[k]   = 0.0;
@@ -724,7 +724,7 @@ void k_fas2_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
         double sum_rho = 0, sum_mr = 0, sum_rhoE = 0, sum_vol = 0;
         for (int j = nt - n_pole; j < nt; ++j) {
             if (j < 0) continue;
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             double v = vol[i * nt + j];
             sum_rho  += rho[k] * v;
             sum_mr   += mr[k] * v;
@@ -737,7 +737,7 @@ void k_fas2_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
         double avg_rhoE = sum_rhoE * inv_V;
         for (int j = nt - n_pole; j < nt; ++j) {
             if (j < 0) continue;
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             rho[k]  = avg_rho;
             mr[k]   = avg_mr;
             mt[k]   = 0.0;
@@ -764,7 +764,7 @@ void k_fas2_central_damp(double* mr, double* rhoE,
     if (r >= r_damp) return;
 
     double f = exp(-alpha * (1.0 - r / r_damp));
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
     double rho_c = fmax(rho[k], 1e-20);
     double vr_old = mr[k] / rho_c;
     double vr_new = vr_old * f;
@@ -883,7 +883,7 @@ void k_fas2_cfl(const double* rho, const double* mr, const double* mt, const dou
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) { out[flat] = 1e30; return; }
     int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i,j,nt,ng);
+    int k = gpu_idx(i,j,nt,ng);
     double rho_c = fmax(rho[k], 1e-20);
     if (rho_c < 0.01 * rho0[flat]) { out[flat] = 1e30; return; }
     double vr = fabs(mr[k] / rho_c);

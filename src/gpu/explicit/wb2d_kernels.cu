@@ -1,10 +1,10 @@
 // Well-Balanced 2D Eulerian solver kernels.
 //
-// All kernels are self-contained (only depend on fas_idx / CUDA_CHECK macro and
-// inline HLLC/MUSCL helpers in fas_hllc.cuh). No new header is exposed.
+// All kernels are self-contained (only depend on gpu_idx / CUDA_CHECK macro and
+// inline HLLC/MUSCL helpers in gpu_hllc.cuh). No new header is exposed.
 
-#include "fas_common.cuh"
-#include "fas_hllc.cuh"
+#include "gpu_common.cuh"
+#include "gpu_hllc.cuh"
 #include <cmath>
 
 // ===============================================================
@@ -16,7 +16,7 @@ void k_wb2d_ghost_r_in(double* rho, double* mr, double* mt, double* rhoE,
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y + 1;
     if (j >= nt || g > ng) return;
-    int kg = fas_idx(-g, j, nt, ng), kp = fas_idx(g-1, j, nt, ng);
+    int kg = gpu_idx(-g, j, nt, ng), kp = gpu_idx(g-1, j, nt, ng);
     rho[kg] = rho[kp]; mr[kg] = -mr[kp]; mt[kg] = mt[kp]; rhoE[kg] = rhoE[kp];
 }
 
@@ -27,7 +27,7 @@ void k_wb2d_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y;
     if (j >= nt || g >= ng) return;
-    int kg = fas_idx(nr+g, j, nt, ng);
+    int kg = gpu_idx(nr+g, j, nt, ng);
     int flat_last = (nr-1)*nt + j;
     rho[kg]  = fmax(rho0[flat_last], 1e-20);
     mr[kg]   = 0.0;
@@ -42,7 +42,7 @@ void k_wb2d_ghost_t_n(double* rho, double* mr, double* mt, double* rhoE,
     int g = blockIdx.y + 1;
     if (ii >= nr + 2*ng || g > ng) return;
     int i = ii - ng;
-    int kg = fas_idx(i, -g, nt, ng), kp = fas_idx(i, g-1, nt, ng);
+    int kg = gpu_idx(i, -g, nt, ng), kp = gpu_idx(i, g-1, nt, ng);
     rho[kg] = rho[kp]; mr[kg] = mr[kp]; mt[kg] = -mt[kp]; rhoE[kg] = rhoE[kp];
 }
 
@@ -53,7 +53,7 @@ void k_wb2d_ghost_t_s(double* rho, double* mr, double* mt, double* rhoE,
     int g = blockIdx.y;
     if (ii >= nr + 2*ng || g >= ng) return;
     int i = ii - ng;
-    int kg = fas_idx(i, nt+g, nt, ng), kp = fas_idx(i, nt-1-g, nt, ng);
+    int kg = gpu_idx(i, nt+g, nt, ng), kp = gpu_idx(i, nt-1-g, nt, ng);
     rho[kg] = rho[kp]; mr[kg] = mr[kp]; mt[kg] = -mt[kp]; rhoE[kg] = rhoE[kp];
 }
 
@@ -61,8 +61,8 @@ __global__
 void k_wb2d_pole_lock(double* mt, int nr, int nt, int ng) {
     int i = blockIdx.x * blockDim.x + threadIdx.x - ng;
     if (i < -ng || i >= nr + ng) return;
-    mt[fas_idx(i, 0, nt, ng)] = 0.0;
-    mt[fas_idx(i, nt - 1, nt, ng)] = 0.0;
+    mt[gpu_idx(i, 0, nt, ng)] = 0.0;
+    mt[gpu_idx(i, nt - 1, nt, ng)] = 0.0;
 }
 
 // ===============================================================
@@ -77,7 +77,7 @@ void k_wb2d_shell_mass(const double* rho, const double* vol,
     int tid = threadIdx.x;
     double s = 0.0;
     for (int j = tid; j < nt; j += blockDim.x)
-        s += rho[fas_idx(i, j, nt, ng)] * vol[i*nt + j];
+        s += rho[gpu_idx(i, j, nt, ng)] * vol[i*nt + j];
     smem[tid] = s;
     __syncthreads();
     for (int st = blockDim.x/2; st > 0; st >>= 1) {
@@ -133,7 +133,7 @@ void k_wb2d_tw_viscosity(const double* rho, const double* mr, const double* mt,
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat / nt, j = flat % nt;
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
 
     double rho_c = fmax(rho[k], 1e-20);
     double vr_c = mr[k] / rho_c, vt_c = mt[k] / rho_c;
@@ -142,14 +142,14 @@ void k_wb2d_tw_viscosity(const double* rho, const double* mr, const double* mt,
     double V = vol[flat];
 
     // v_r neighbors (ghost cells are filled so i-1/i+1 are safe)
-    int km = fas_idx(i-1, j, nt, ng);
-    int kp = fas_idx(i+1, j, nt, ng);
+    int km = gpu_idx(i-1, j, nt, ng);
+    int kp = gpu_idx(i+1, j, nt, ng);
     double vr_m = mr[km] / fmax(rho[km], 1e-20);
     double vr_p = mr[kp] / fmax(rho[kp], 1e-20);
     double dvr = 0.5 * (vr_m - vr_p);
 
-    int ks = fas_idx(i, j-1, nt, ng);
-    int kn = fas_idx(i, j+1, nt, ng);
+    int ks = gpu_idx(i, j-1, nt, ng);
+    int kn = gpu_idx(i, j+1, nt, ng);
     double vt_s = mt[ks] / fmax(rho[ks], 1e-20);
     double vt_n = mt[kn] / fmax(rho[kn], 1e-20);
     double dvt = 0.5 * (vt_s - vt_n);
@@ -174,7 +174,7 @@ void k_wb2d_floor(double* rho, double* mr, double* mt, double* rhoE,
                   int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
 
     double r = rho[k], E = rhoE[k];
     if (isnan(r) || isnan(E) || isnan(mr[k]) || isnan(mt[k])) {
@@ -212,7 +212,7 @@ void k_wb2d_cfl(const double* rho, const double* mr, const double* mt,
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat / nt, j = flat % nt;
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
 
     double rho_c = fmax(rho[k], 1e-20);
     // Skip near-vacuum cells (below floor)
@@ -227,12 +227,12 @@ void k_wb2d_cfl(const double* rho, const double* mr, const double* mt,
     double dt_t = r_center[i] * dtheta[j] / (fabs(vt) + cs);
 
     // compression limit (v_inner > v_outer means compression)
-    double vr_m = mr[fas_idx(i-1,j,nt,ng)] / fmax(rho[fas_idx(i-1,j,nt,ng)], 1e-20);
-    double vr_p = mr[fas_idx(i+1,j,nt,ng)] / fmax(rho[fas_idx(i+1,j,nt,ng)], 1e-20);
+    double vr_m = mr[gpu_idx(i-1,j,nt,ng)] / fmax(rho[gpu_idx(i-1,j,nt,ng)], 1e-20);
+    double vr_p = mr[gpu_idx(i+1,j,nt,ng)] / fmax(rho[gpu_idx(i+1,j,nt,ng)], 1e-20);
     double dvr = 0.5 * (vr_m - vr_p);
 
-    double vt_s = mt[fas_idx(i,j-1,nt,ng)] / fmax(rho[fas_idx(i,j-1,nt,ng)], 1e-20);
-    double vt_n = mt[fas_idx(i,j+1,nt,ng)] / fmax(rho[fas_idx(i,j+1,nt,ng)], 1e-20);
+    double vt_s = mt[gpu_idx(i,j-1,nt,ng)] / fmax(rho[gpu_idx(i,j-1,nt,ng)], 1e-20);
+    double vt_n = mt[gpu_idx(i,j+1,nt,ng)] / fmax(rho[gpu_idx(i,j+1,nt,ng)], 1e-20);
     double dvt = 0.5 * (vt_s - vt_n);
 
     double dt_cr = (dvr > 0.0) ? comp_dt_frac * dr[i] / dvr : 1e30;
@@ -261,7 +261,7 @@ void k_wb2d_residual(
     int i = flat / nt, j = flat % nt;
     int n = nr * nt;
 
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
     double invV = 1.0 / vol[flat];
 
     double rho_c = fmax(rho[k], 1e-20);
@@ -269,7 +269,7 @@ void k_wb2d_residual(
     double r = r_center[i];
 
     auto W = [&](int ii, int jj) -> FPrim {
-        int kk = fas_idx(ii, jj, nt, ng);
+        int kk = gpu_idx(ii, jj, nt, ng);
         double r_ = fmax(rho[kk], 1e-20);
         double vr_ = mr[kk] / r_, vt_ = mt[kk] / r_;
         FPrim w;
@@ -295,24 +295,24 @@ void k_wb2d_residual(
     auto hllc_r_face = [&](int face_i) -> FFlux4 {
         FPrim wa = W(face_i-2, j), wb_ = W(face_i-1, j), wc = W(face_i, j), wd = W(face_i+1, j);
         double ppL, ppR, rpL, rpR;
-        fas_recon(wa.P - P0r_lam(face_i-2), wb_.P - P0r_lam(face_i-1),
+        gpu_recon(wa.P - P0r_lam(face_i-2), wb_.P - P0r_lam(face_i-1),
                   wc.P - P0r_lam(face_i),   wd.P - P0r_lam(face_i+1),
                   ppL, ppR, lim_type);
-        fas_recon(wa.rho - r0r_lam(face_i-2), wb_.rho - r0r_lam(face_i-1),
+        gpu_recon(wa.rho - r0r_lam(face_i-2), wb_.rho - r0r_lam(face_i-1),
                   wc.rho - r0r_lam(face_i),   wd.rho - r0r_lam(face_i+1),
                   rpL, rpR, lim_type);
         double P0f = 0.5 * (P0r_lam(face_i-1) + P0r_lam(face_i));
         double r0f = 0.5 * (r0r_lam(face_i-1) + r0r_lam(face_i));
         FPrim wl, wr;
-        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
-        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
+        gpu_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
+        gpu_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
         wl.rho = fmax(r0f + rpL, 1e-20); wr.rho = fmax(r0f + rpR, 1e-20);
         // TW viscosity adds to pressure: use max(Q_L, Q_R) to stay single-valued
         double qL = Qr(face_i-1, j), qR = Qr(face_i, j);
         double qf = fmax(qL, qR);
         wl.P = fmax(P0f + ppL + qf, 1e-30);
         wr.P = fmax(P0f + ppR + qf, 1e-30);
-        return fas_hllc_dispatch(wl, wr, gam, true, hllc_variant);
+        return gpu_hllc_dispatch(wl, wr, gam, true, hllc_variant);
     };
 
     FFlux4 fr_hi = hllc_r_face(i+1);
@@ -331,23 +331,23 @@ void k_wb2d_residual(
     auto hllc_t_face = [&](int face_j) -> FFlux4 {
         FPrim wa = W(i, face_j-2), wb_ = W(i, face_j-1), wc = W(i, face_j), wd = W(i, face_j+1);
         double ppL, ppR, rpL, rpR;
-        fas_recon(wa.P - P0t_lam(face_j-2), wb_.P - P0t_lam(face_j-1),
+        gpu_recon(wa.P - P0t_lam(face_j-2), wb_.P - P0t_lam(face_j-1),
                   wc.P - P0t_lam(face_j),   wd.P - P0t_lam(face_j+1),
                   ppL, ppR, lim_type);
-        fas_recon(wa.rho - r0t_lam(face_j-2), wb_.rho - r0t_lam(face_j-1),
+        gpu_recon(wa.rho - r0t_lam(face_j-2), wb_.rho - r0t_lam(face_j-1),
                   wc.rho - r0t_lam(face_j),   wd.rho - r0t_lam(face_j+1),
                   rpL, rpR, lim_type);
         double P0f = 0.5 * (P0t_lam(face_j-1) + P0t_lam(face_j));
         double r0f = 0.5 * (r0t_lam(face_j-1) + r0t_lam(face_j));
         FPrim wl, wr;
-        fas_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
-        fas_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
+        gpu_recon(wa.vr, wb_.vr, wc.vr, wd.vr, wl.vr, wr.vr, lim_type);
+        gpu_recon(wa.vt, wb_.vt, wc.vt, wd.vt, wl.vt, wr.vt, lim_type);
         wl.rho = fmax(r0f + rpL, 1e-20); wr.rho = fmax(r0f + rpR, 1e-20);
         double qL = Qt(i, face_j-1), qR = Qt(i, face_j);
         double qf = fmax(qL, qR);
         wl.P = fmax(P0f + ppL + qf, 1e-30);
         wr.P = fmax(P0f + ppR + qf, 1e-30);
-        return fas_hllc_dispatch(wl, wr, gam, false, hllc_variant);
+        return gpu_hllc_dispatch(wl, wr, gam, false, hllc_variant);
     };
 
     FFlux4 ft_hi = hllc_t_face(j+1);
@@ -401,7 +401,7 @@ void k_wb2d_residual_origin(
     if (j >= nt) return;
     int flat = j;
     int n = nr * nt;
-    int k = fas_idx(0, j, nt, ng);
+    int k = gpu_idx(0, j, nt, ng);
     double invV = 1.0 / vol[flat];
 
     double rho_c = fmax(rho[k], 1e-20);
@@ -409,7 +409,7 @@ void k_wb2d_residual_origin(
 
     // Outer r face: first-order HLLC on perturbations + WB subtraction
     auto W = [&](int ii, int jj) -> FPrim {
-        int kk = fas_idx(ii, jj, nt, ng);
+        int kk = gpu_idx(ii, jj, nt, ng);
         double r_ = fmax(rho[kk], 1e-20);
         double vr_ = mr[kk] / r_, vt_ = mt[kk] / r_;
         FPrim w;
@@ -428,7 +428,7 @@ void k_wb2d_residual_origin(
     wr.P   = fmax(P0f + (wr.P - P0_1) + qf, 1e-30);
     wl.rho = fmax(r0f + (wl.rho - r0_0), 1e-20);
     wr.rho = fmax(r0f + (wr.rho - r0_1), 1e-20);
-    FFlux4 fr_hi = fas_hllc_dispatch(wl, wr, gam, true, hllc_variant);
+    FFlux4 fr_hi = gpu_hllc_dispatch(wl, wr, gam, true, hllc_variant);
 
     double Ar_hi = ar[1*nt + j];
     double P0f_rhi = 0.5 * (P0_0 + P0_1);
@@ -459,7 +459,7 @@ void k_wb2d_pack(const double* rho, const double* mr, const double* mt,
                  int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     out[flat]       = rho[k];
     out[n + flat]   = mr[k];
@@ -472,7 +472,7 @@ void k_wb2d_unpack(double* rho, double* mr, double* mt, double* rhoE,
                    const double* in, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  = in[flat];
     mr[k]   = in[n + flat];
@@ -486,7 +486,7 @@ void k_wb2d_rk_update(double* rho, double* mr, double* mt, double* rhoE,
                       int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  += dt_val * R[flat];
     mr[k]   += dt_val * R[n + flat];
@@ -499,7 +499,7 @@ void k_wb2d_rk_average(double* rho, double* mr, double* mt, double* rhoE,
                        const double* Un, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  = 0.5 * (Un[flat]       + rho[k]);
     mr[k]   = 0.5 * (Un[n + flat]   + mr[k]);
@@ -534,7 +534,7 @@ void k_wb2d_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
 
     double sum_rho = 0, sum_mr = 0, sum_mt = 0, sum_rhoE = 0, sum_vol = 0;
     for (int j = tid; j < nt; j += blockDim.x) {
-        int k = fas_idx(i, j, nt, ng);
+        int k = gpu_idx(i, j, nt, ng);
         double v = vol[i*nt + j];
         sum_rho  += rho[k] * v;
         sum_mr   += mr[k] * v;
@@ -559,7 +559,7 @@ void k_wb2d_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
     double a_rho = s_rho[0]*inv_V, a_mr = s_mr[0]*inv_V;
     double a_mt = s_mt[0]*inv_V, a_rhoE = s_rhoE[0]*inv_V;
     for (int j = tid; j < nt; j += blockDim.x) {
-        int k = fas_idx(i, j, nt, ng);
+        int k = gpu_idx(i, j, nt, ng);
         rho[k] = a_rho; mr[k] = a_mr; mt[k] = 0.0; rhoE[k] = a_rhoE;
     }
 }
@@ -578,14 +578,14 @@ void k_wb2d_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
     {
         double sr = 0, sm = 0, se = 0, sv = 0;
         for (int j = 0; j < n_pole && j < nt; ++j) {
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             double v = vol[i*nt + j];
             sr += rho[k]*v; sm += mr[k]*v; se += rhoE[k]*v; sv += v;
         }
         double inv = 1.0/fmax(sv, 1e-30);
         double ar = sr*inv, am = sm*inv, ae = se*inv;
         for (int j = 0; j < n_pole && j < nt; ++j) {
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             rho[k] = ar; mr[k] = am; mt[k] = 0.0; rhoE[k] = ae;
         }
     }
@@ -594,7 +594,7 @@ void k_wb2d_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
         double sr = 0, sm = 0, se = 0, sv = 0;
         for (int j = nt - n_pole; j < nt; ++j) {
             if (j < 0) continue;
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             double v = vol[i*nt + j];
             sr += rho[k]*v; sm += mr[k]*v; se += rhoE[k]*v; sv += v;
         }
@@ -602,7 +602,7 @@ void k_wb2d_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
         double ar = sr*inv, am = sm*inv, ae = se*inv;
         for (int j = nt - n_pole; j < nt; ++j) {
             if (j < 0) continue;
-            int k = fas_idx(i, j, nt, ng);
+            int k = gpu_idx(i, j, nt, ng);
             rho[k] = ar; mr[k] = am; mt[k] = 0.0; rhoE[k] = ae;
         }
     }
@@ -627,7 +627,7 @@ void k_wb2d_sponge(double* rho, double* mr, double* mt, double* rhoE,
     double kappa = kappa_max * 0.5 * (1.0 - cos(M_PI * xi));
     double alpha = dt_s * kappa;
     double damp = 1.0 / (1.0 + alpha);
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
     double mr_old = mr[k], mt_old = mt[k];
     mr[k] *= damp;
     mt[k] *= damp;
@@ -652,7 +652,7 @@ void k_wb2d_central_damp(double* mr, double* rhoE,
     double r = r_center[i];
     if (r >= r_damp) return;
     double f = exp(-alpha * (1.0 - r / r_damp));
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
     double rho_c = fmax(rho[k], 1e-20);
     double vr_old = mr[k] / rho_c;
     double vr_new = vr_old * f;

@@ -11,7 +11,7 @@
 // VRAM frame pool + binary VTK writer 風格複用 cart_ale2。
 
 #include "pseudo_spectral_solver.cuh"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include <curand_kernel.h>
 #include <cstdio>
 #include <cstring>

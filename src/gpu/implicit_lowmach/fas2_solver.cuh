@@ -51,7 +51,7 @@ struct FasLevel2 {
 
     // Pre-computed WB residual of HSE state: R_WB(U₀) on this level (4*phys)
     // Should be ~0 but nonzero due to discrete HSE inconsistency.
-    // Subtracted from fas_rhs after restrict_defect to ensure F(U₀)=0 exactly.
+    // Subtracted from gpu_rhs after restrict_defect to ensure F(U₀)=0 exactly.
     double *d_hse_defect;
 
     // 1D gravity arrays

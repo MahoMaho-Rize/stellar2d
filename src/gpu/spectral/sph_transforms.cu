@@ -8,7 +8,7 @@
 //     後續若需要上 SHTns,可替換此函式而不動上層 API。
 
 #include "sph_transforms.cuh"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include <cstdio>
 #include <cmath>
 #include <vector>

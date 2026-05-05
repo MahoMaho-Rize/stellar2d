@@ -8,18 +8,18 @@ struct FFlux4 { double f_rho, f_mr, f_mt, f_E; };
 // limiter_type: 0=minmod, 1=van_leer, 2=MC
 // Eq. (3.1): minmod limiter.
 __device__ __forceinline__
-double fas_minmod(double a, double b) {
+double gpu_minmod(double a, double b) {
     return (a*b <= 0.0) ? 0.0 : (fabs(a) < fabs(b) ? a : b);
 }
 
 // Eq. (3.2): van Leer harmonic limiter.
 __device__ __forceinline__
-double fas_van_leer(double a, double b) {
+double gpu_van_leer(double a, double b) {
     return (a*b <= 0.0) ? 0.0 : 2.0*a*b/(a+b);
 }
 
 __device__ __forceinline__
-double fas_mc(double a, double b) {
+double gpu_mc(double a, double b) {
     if (a*b <= 0.0) return 0.0;
     double c = 0.5*(a+b);
     double s = (a > 0.0) ? 1.0 : -1.0;
@@ -27,22 +27,22 @@ double fas_mc(double a, double b) {
 }
 
 __device__ __forceinline__
-double fas_limit(double a, double b, int lim_type) {
-    if (lim_type == 2) return fas_mc(a, b);
-    if (lim_type == 1) return fas_van_leer(a, b);
-    return fas_minmod(a, b);
+double gpu_limit(double a, double b, int lim_type) {
+    if (lim_type == 2) return gpu_mc(a, b);
+    if (lim_type == 1) return gpu_van_leer(a, b);
+    return gpu_minmod(a, b);
 }
 
 // Eq. (3.3-3.5): MUSCL reconstruction at face i+1/2.
 __device__ __forceinline__
-void fas_recon(double vm1, double v0, double vp1, double vp2,
+void gpu_recon(double vm1, double v0, double vp1, double vp2,
                double& L, double& R, int lim_type = 0) {
-    L = v0   + 0.5 * fas_limit(v0 - vm1, vp1 - v0, lim_type);
-    R = vp1  - 0.5 * fas_limit(vp1 - v0, vp2 - vp1, lim_type);
+    L = v0   + 0.5 * gpu_limit(v0 - vm1, vp1 - v0, lim_type);
+    R = vp1  - 0.5 * gpu_limit(vp1 - v0, vp2 - vp1, lim_type);
 }
 
 __device__
-inline FFlux4 fas_hllc(FPrim wl, FPrim wr, EOS eos, bool radial) {
+inline FFlux4 gpu_hllc(FPrim wl, FPrim wr, EOS eos, bool radial) {
     double rhol=wl.rho, rhor=wr.rho, pl=wl.P, pr=wr.P;
     double ul = radial ? wl.vr : wl.vt;
     double ur = radial ? wr.vr : wr.vt;
@@ -88,18 +88,18 @@ inline FFlux4 fas_hllc(FPrim wl, FPrim wr, EOS eos, bool radial) {
     else if (s_star >= 0.0) { auto fl=phys_flux(rhol,ul,vtl,pl); return star_flux(rhol,ul,vtl,pl,sl,fl); }
     else if (sr >= 0.0) { auto fr=phys_flux(rhor,ur,vtr,pr); return star_flux(rhor,ur,vtr,pr,sr,fr); }
     else return phys_flux(rhor,ur,vtr,pr);
-} // end fas_hllc(EOS)
+} // end gpu_hllc(EOS)
 
 // Backward-compatible overload for ideal-gas callers (wb2d etc.) that pass a bare γ.
 __device__
-inline FFlux4 fas_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
-    return fas_hllc(wl, wr, EOS::ideal(gamma), radial);
+inline FFlux4 gpu_hllc(FPrim wl, FPrim wr, double gamma, bool radial) {
+    return gpu_hllc(wl, wr, EOS::ideal(gamma), radial);
 }
 
 // Low-Mach corrected HLLC (Rieper 2011): reduces pressure dissipation when M→0.
 // Scales pressure jump by local Mach number to prevent O(1/M) viscosity.
 __device__
-inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, EOS eos, bool radial) {
+inline FFlux4 gpu_hllc_lm(FPrim wl, FPrim wr, EOS eos, bool radial) {
     double rhol=wl.rho, rhor=wr.rho, pl=wl.P, pr=wr.P;
     double ul = radial ? wl.vr : wl.vt;
     double ur = radial ? wr.vr : wr.vt;
@@ -156,11 +156,11 @@ inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, EOS eos, bool radial) {
     else if (s_star >= 0.0) { auto fl=phys_flux(rhol,ul,vtl,pl); return star_flux(rhol,ul,vtl,pl,sl,fl); }
     else if (sr >= 0.0) { auto fr=phys_flux(rhor,ur,vtr,pr); return star_flux(rhor,ur,vtr,pr,sr,fr); }
     else return phys_flux(rhor,ur,vtr,pr);
-} // end fas_hllc_lm(EOS)
+} // end gpu_hllc_lm(EOS)
 
 __device__
-inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
-    return fas_hllc_lm(wl, wr, EOS::ideal(gamma), radial);
+inline FFlux4 gpu_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
+    return gpu_hllc_lm(wl, wr, EOS::ideal(gamma), radial);
 }
 
 // Minoshima 2021 Low-dissipation HLLC (LHLLC).
@@ -169,7 +169,7 @@ inline FFlux4 fas_hllc_lm(FPrim wl, FPrim wr, double gamma, bool radial) {
 // Also uses PVRS middle state + ql/qr nonlinear wave correction (Toro 10.5.2).
 // Carbuncle-cure shock detector (th) omitted — would require tangential stencil.
 __device__
-inline FFlux4 fas_lhllc(FPrim wl, FPrim wr, EOS eos, bool radial) {
+inline FFlux4 gpu_lhllc(FPrim wl, FPrim wr, EOS eos, bool radial) {
     double rhol=wl.rho, rhor=wr.rho, pl=wl.P, pr=wr.P;
     double ul  = radial ? wl.vr : wl.vt;
     double ur  = radial ? wr.vr : wr.vt;
@@ -273,24 +273,24 @@ inline FFlux4 fas_lhllc(FPrim wl, FPrim wr, EOS eos, bool radial) {
     }
     f.f_E = sl*fl.f_E + sr*fr.f_E + sm*cp*am;
     return f;
-} // end fas_lhllc(EOS)
+} // end gpu_lhllc(EOS)
 
 __device__
-inline FFlux4 fas_lhllc(FPrim wl, FPrim wr, double gamma, bool radial) {
-    return fas_lhllc(wl, wr, EOS::ideal(gamma), radial);
+inline FFlux4 gpu_lhllc(FPrim wl, FPrim wr, double gamma, bool radial) {
+    return gpu_lhllc(wl, wr, EOS::ideal(gamma), radial);
 }
 
 // Unified dispatch — variant: 0=standard HLLC, 1=Rieper LM-HLLC, 2=Minoshima LHLLC.
 __device__ __forceinline__
-FFlux4 fas_hllc_dispatch(FPrim wl, FPrim wr, EOS eos, bool radial, int variant) {
-    if (variant == 2) return fas_lhllc(wl, wr, eos, radial);
-    if (variant == 1) return fas_hllc_lm(wl, wr, eos, radial);
-    return fas_hllc(wl, wr, eos, radial);
+FFlux4 gpu_hllc_dispatch(FPrim wl, FPrim wr, EOS eos, bool radial, int variant) {
+    if (variant == 2) return gpu_lhllc(wl, wr, eos, radial);
+    if (variant == 1) return gpu_hllc_lm(wl, wr, eos, radial);
+    return gpu_hllc(wl, wr, eos, radial);
 }
 
 __device__ __forceinline__
-FFlux4 fas_hllc_dispatch(FPrim wl, FPrim wr, double gamma, bool radial, int variant) {
-    if (variant == 2) return fas_lhllc(wl, wr, gamma, radial);
-    if (variant == 1) return fas_hllc_lm(wl, wr, gamma, radial);
-    return fas_hllc(wl, wr, gamma, radial);
+FFlux4 gpu_hllc_dispatch(FPrim wl, FPrim wr, double gamma, bool radial, int variant) {
+    if (variant == 2) return gpu_lhllc(wl, wr, gamma, radial);
+    if (variant == 1) return gpu_hllc_lm(wl, wr, gamma, radial);
+    return gpu_hllc(wl, wr, gamma, radial);
 }

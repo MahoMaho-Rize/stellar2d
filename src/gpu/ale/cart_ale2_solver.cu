@@ -10,8 +10,8 @@
 //   6. Refresh node mass from (possibly unchanged) dm.
 
 #include "cart_ale2_solver.cuh"
-#include "fas_common.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_common.cuh"
+#include "gpu_linalg.cuh"
 #include <cstdio>
 #include <cstring>
 #include <cmath>

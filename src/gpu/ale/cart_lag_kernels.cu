@@ -20,7 +20,7 @@
 // Subcell force = ½ (F_edge(k-1→k) + F_edge(k→k+1)).
 
 #include "cart_lag_solver.cuh"
-#include "fas_common.cuh"  // CUDA_CHECK
+#include "gpu_common.cuh"  // CUDA_CHECK
 #include <cmath>
 
 #ifndef M_PI

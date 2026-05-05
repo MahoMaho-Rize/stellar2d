@@ -20,7 +20,7 @@
 // remap and redistributed back afterwards.)
 
 #include "cart_ale_solver.cuh"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include <cmath>
 
 #ifndef M_PI

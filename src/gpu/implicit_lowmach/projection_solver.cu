@@ -2,8 +2,8 @@
 // One explicit HLLC step + one Poisson solve per timestep.
 
 #include "projection_solver.cuh"
-#include "fas_hllc.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_hllc.cuh"
+#include "gpu_linalg.cuh"
 #include <cstdio>
 #include <cmath>
 #include <vector>
@@ -59,7 +59,7 @@ void k_proj_remove_pressure(double* mr, double* mt, double* rhoE,
     if (rho0[flat] < atm_thresh) return;
     int i = flat/nt, j = flat%nt;
     if (i == 0) return;  // origin handled separately (or skip)
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
 
     double rho_c = fmax(rho[k], 1e-20);
     double vr = mr[k] / rho_c;
@@ -74,7 +74,7 @@ void k_proj_remove_pressure(double* mr, double* mt, double* rhoE,
     // We add back +dt·∇P to undo it.
     // Use cell-center pressure for gradient reconstruction:
     auto get_P = [&](int ii, int jj) -> double {
-        int kk = fas_idx(ii, jj, nt, ng);
+        int kk = gpu_idx(ii, jj, nt, ng);
         double r_ = fmax(rho[kk], 1e-20);
         double vr_ = mr[kk]/r_, vt_ = mt[kk]/r_;
         double KE_ = 0.5*r_*(vr_*vr_ + vt_*vt_);
@@ -111,7 +111,7 @@ void k_proj_rk_update(double* rho, double* mr, double* mt, double* rhoE,
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  += dt_val * R[flat];
     mr[k]   += dt_val * R[n + flat];
@@ -125,7 +125,7 @@ void k_proj_rk_average(double* rho, double* mr, double* mt, double* rhoE,
                        const double* Un, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  = 0.5*(Un[flat]     + rho[k]);
     mr[k]   = 0.5*(Un[n+flat]   + mr[k]);
@@ -148,13 +148,13 @@ void k_proj_div_vel(const double* rho, const double* mr, const double* mt,
     // Face velocities by averaging adjacent cell momenta/density
     auto get_vr = [&](int ii, int jj) -> double {
         if (ii < 0 || ii >= nr) return 0.0;
-        int kk = fas_idx(ii, jj, nt, ng);
+        int kk = gpu_idx(ii, jj, nt, ng);
         double r = fmax(rho[kk], 1e-20);
         return mr[kk] / r;
     };
     auto get_vt = [&](int ii, int jj) -> double {
         if (jj < 0 || jj >= nt) return 0.0;
-        int kk = fas_idx(ii, jj, nt, ng);
+        int kk = gpu_idx(ii, jj, nt, ng);
         double r = fmax(rho[kk], 1e-20);
         return mt[kk] / r;
     };
@@ -175,7 +175,7 @@ void k_proj_alpha(const double* rho, const double* rho0, double atm_thresh,
                   double dt_val, double* alpha, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     double r = fmax(rho[k], 1e-20);
     alpha[flat] = (rho0[flat] >= atm_thresh) ? dt_val / r : 0.0;
 }
@@ -193,7 +193,7 @@ void k_proj_correct(double* mr, double* mt, double* rhoE,
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;
     int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
 
     // ∂δp/∂r (central difference)
     double dp_dr = 0.0;
@@ -247,7 +247,7 @@ void k_proj_acoustic_cfl(const double* rho, const double* mr, const double* mt,
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) { out[flat] = 1e30; return; }
     int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
     double rho_c = fmax(rho[k], 1e-20);
     double vr = fabs(mr[k] / rho_c);
     double vt = fabs(mt[k] / rho_c);
@@ -608,8 +608,8 @@ double ProjSolver::step(double t, double t_end) {
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             d_rho, d_rhoE, d_cell_volume,
             d_rhoV, d_EV, nr, nt, ng);
-        double M_before = fas_reduce_sum(d_rhoV, d_scr, n);
-        double E_before = fas_reduce_sum(d_EV, d_scr, n);
+        double M_before = gpu_reduce_sum(d_rhoV, d_scr, n);
+        double E_before = gpu_reduce_sum(d_EV, d_scr, n);
 
         if (sponge_r_start < sponge_r_top) {
             k_fas_sponge<<<(n+B-1)/B,B>>>(d_rho, d_mr, d_mt, d_rhoE,
@@ -624,8 +624,8 @@ double ProjSolver::step(double t, double t_end) {
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             d_rho, d_rhoE, d_cell_volume,
             d_rhoV, d_EV, nr, nt, ng);
-        double M_after = fas_reduce_sum(d_rhoV, d_scr, n);
-        double E_after = fas_reduce_sum(d_EV, d_scr, n);
+        double M_after = gpu_reduce_sum(d_rhoV, d_scr, n);
+        double E_after = gpu_reduce_sum(d_EV, d_scr, n);
 
         if (interior_volume > 0) {
             double dM = (M_before - M_after) / interior_volume;

@@ -3,7 +3,7 @@
 #include "grid.h"
 #include "state.h"
 #include "eos.h"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include "gmg_gpu.cuh"
 
 // Semi-implicit pressure projection solver for compressible Euler + self-gravity.

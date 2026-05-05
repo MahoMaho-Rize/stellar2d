@@ -11,7 +11,7 @@
 // ============================================================
 
 #include "fas_solver.cuh"
-#include "fas_hllc.cuh"
+#include "gpu_hllc.cuh"
 #include "lowmach_solver.h"
 #include "simple_solver.cuh"
 #include "projection_solver.cuh"

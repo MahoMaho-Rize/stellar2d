@@ -25,7 +25,7 @@
 // Node total force is the sum over the ≤4 incident cells.
 
 #include "ale2d_solver.cuh"
-#include "fas_common.cuh"  // CUDA_CHECK
+#include "gpu_common.cuh"  // CUDA_CHECK
 #include <cmath>
 
 #ifndef M_PI

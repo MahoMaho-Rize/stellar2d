@@ -10,7 +10,7 @@
 //   7. IFRK3 combine(線性耗散 exp 積分)
 
 #include "sph2d_spectral_solver.cuh"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include <cstdio>
 #include <cstring>
 #include <cmath>

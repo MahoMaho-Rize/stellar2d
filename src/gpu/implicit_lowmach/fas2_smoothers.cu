@@ -1,7 +1,7 @@
 // FAS smoothers: block-Jacobi, SIMPLE pressure correction, GMRES(k)
 
 #include "fas2_solver.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_linalg.cuh"
 #include "eos.h"
 #include <cmath>
 #include <vector>
@@ -21,7 +21,7 @@ void k_fas2_assemble_blkjac(
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i,j,nt,ng);
+    int k = gpu_idx(i,j,nt,ng);
 
     double rho_c = fmax(rho[k], 1e-20);
     double vr_c = mr[k] / rho_c;
@@ -137,7 +137,7 @@ void k_fas2_line_solve(
 
     for (int i = tid; i < nr; i += blockDim.x) {
         int flat = i * nt + j;
-        int k = fas_idx(i, j, nt, ng);
+        int k = gpu_idx(i, j, nt, ng);
 
         double rho_c = fmax(rho[k], 1e-20);
         double vr_c = mr[k] / rho_c;
@@ -159,12 +159,12 @@ void k_fas2_line_solve(
 
         double vf_lo = 0.0, vf_hi = 0.0;
         if (i > 0) {
-            double rl = fmax(rho[fas_idx(i-1,j,nt,ng)], 1e-20);
-            vf_lo = 0.5 * (mr[fas_idx(i-1,j,nt,ng)] / rl + vr_c);
+            double rl = fmax(rho[gpu_idx(i-1,j,nt,ng)], 1e-20);
+            vf_lo = 0.5 * (mr[gpu_idx(i-1,j,nt,ng)] / rl + vr_c);
         }
         if (i < nr - 1) {
-            double rr = fmax(rho[fas_idx(i+1,j,nt,ng)], 1e-20);
-            vf_hi = 0.5 * (vr_c + mr[fas_idx(i+1,j,nt,ng)] / rr);
+            double rr = fmax(rho[gpu_idx(i+1,j,nt,ng)], 1e-20);
+            vf_hi = 0.5 * (vr_c + mr[gpu_idx(i+1,j,nt,ng)] / rr);
         }
 
         // Lower block (coupling to i-1)
@@ -322,7 +322,7 @@ void k_fas2_line_solve_theta(
     // ---------- Assembly (parallel over j) ----------
     for (int j = tid; j < nt; j += blockDim.x) {
         int flat = i * nt + j;
-        int k = fas_idx(i, j, nt, ng);
+        int k = gpu_idx(i, j, nt, ng);
 
         double rho_c = fmax(rho[k], 1e-20);
         double vr_c  = mr[k] / rho_c;
@@ -344,12 +344,12 @@ void k_fas2_line_solve_theta(
         // θ-face velocities
         double vf_lo = 0.0, vf_hi = 0.0;
         if (j > 0) {
-            double rl = fmax(rho[fas_idx(i,j-1,nt,ng)], 1e-20);
-            vf_lo = 0.5 * (mt[fas_idx(i,j-1,nt,ng)] / rl + vt_c);
+            double rl = fmax(rho[gpu_idx(i,j-1,nt,ng)], 1e-20);
+            vf_lo = 0.5 * (mt[gpu_idx(i,j-1,nt,ng)] / rl + vt_c);
         }
         if (j < nt - 1) {
-            double rr = fmax(rho[fas_idx(i,j+1,nt,ng)], 1e-20);
-            vf_hi = 0.5 * (vt_c + mt[fas_idx(i,j+1,nt,ng)] / rr);
+            double rr = fmax(rho[gpu_idx(i,j+1,nt,ng)], 1e-20);
+            vf_hi = 0.5 * (vt_c + mt[gpu_idx(i,j+1,nt,ng)] / rr);
         }
 
         // ----- Lower block (coupling to j-1) -----
@@ -488,7 +488,7 @@ void k_fas2_apply_line_correction(
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     int n = nr*nt;
     rho[k]  -= omega * corr[flat];
     mr[k]   -= omega * corr[n + flat];
@@ -508,7 +508,7 @@ void k_fas2_mom_diag(const double* rho, const double* mr, const double* mt,
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i,j,nt,ng);
+    int k = gpu_idx(i,j,nt,ng);
     double rho_c = fmax(rho[k], 1e-20);
     double vr = fabs(mr[k]/rho_c), vt = fabs(mt[k]/rho_c);
     double KE = 0.5 * rho_c * (vr*vr + vt*vt);
@@ -574,7 +574,7 @@ void k_fas2_simple_correct(
     if (rho0[flat] < atm_thresh) return;
     int n = nr*nt;
     int i = flat/nt, j = flat%nt;
-    int k = fas_idx(i,j,nt,ng);
+    int k = gpu_idx(i,j,nt,ng);
     double rho_c = fmax(rho[k], 1e-20);
 
     // Pressure gradient of δp
@@ -642,7 +642,7 @@ void k_fas2_smooth_blkjac(
     if (flat >= nr*nt) return;
     if (rho0[flat] < atm_thresh) return;
     int n = nr*nt;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
     const double* B = &blk_inv[flat*16];
     double f0 = F[flat], f1 = F[n+flat], f2 = F[2*n+flat], f3 = F[3*n+flat];
     rho[k]  -= omega * (B[0]*f0 + B[1]*f1 + B[2]*f2 + B[3]*f3);
@@ -781,7 +781,7 @@ __global__ void k_fas2_build_scaling(
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int i = flat / nt, j = flat % nt;
-    int k = fas_idx(i, j, nt, ng);
+    int k = gpu_idx(i, j, nt, ng);
     int n = nr * nt;
 
     double rho_ref = fmax(rho0[flat], 1e-20);

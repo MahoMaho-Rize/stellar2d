@@ -3,7 +3,7 @@
 #include "grid.h"
 #include "state.h"
 #include "eos.h"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include "gmg_gpu.cuh"
 
 // FAS (Full Approximation Scheme) nonlinear multigrid for the low-Mach
@@ -51,7 +51,7 @@ struct FasLevel {
 
     // Pre-computed WB residual of HSE state: R_WB(U₀) on this level (4*phys)
     // Should be ~0 but nonzero due to discrete HSE inconsistency.
-    // Subtracted from fas_rhs after restrict_defect to ensure F(U₀)=0 exactly.
+    // Subtracted from gpu_rhs after restrict_defect to ensure F(U₀)=0 exactly.
     double *d_hse_defect;
 
     // 1D gravity arrays

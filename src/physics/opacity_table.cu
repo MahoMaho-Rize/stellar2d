@@ -1,5 +1,5 @@
 #include "opacity_table.cuh"
-#include "fas_common.cuh"   // CUDA_CHECK
+#include "gpu_common.cuh"   // CUDA_CHECK
 
 #include <cstdio>
 #include <cstdlib>

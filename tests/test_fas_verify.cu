@@ -2,23 +2,23 @@
 // test_fas_verify.cu — Verification tests for polar GPU solvers
 //
 // Tests the shared components used by explicit/FAS/SIMPLE/projection:
-//   1. fas_minmod: limiter correctness
-//   2. fas_recon: MUSCL reconstruction accuracy
-//   3. fas_hllc: uniform flux, Sod, contact, radial/theta modes
+//   1. gpu_minmod: limiter correctness
+//   2. gpu_recon: MUSCL reconstruction accuracy
+//   3. gpu_hllc: uniform flux, Sod, contact, radial/theta modes
 //   4. Polar ghost cells: r-inner reflect, r-outer outflow, θ-poles
 //   5. Explicit solver HSE preservation (Lane-Emden, 10 steps)
 //   6. Grid convergence: self-convergence of explicit solver
 // ============================================================
 
 #include "fas_solver.cuh"
-#include "fas_hllc.cuh"
+#include "gpu_hllc.cuh"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>
 #include <algorithm>
 
-// Host-side index function (mirrors fas_idx which is __device__)
+// Host-side index function (mirrors gpu_idx which is __device__)
 static inline int h_fas_idx(int i, int j, int nt, int ng) {
     return (i + ng) * (nt + 2 * ng) + (j + ng);
 }
@@ -34,13 +34,13 @@ static int n_fail = 0, n_pass = 0;
 __global__ void k_test_minmod(const double* a, const double* b, double* out, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
-    out[i] = fas_minmod(a[i], b[i]);
+    out[i] = gpu_minmod(a[i], b[i]);
 }
 
 __global__ void k_test_recon(const double* v, double* L, double* R, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n - 3) return;  // need stencil of 4
-    fas_recon(v[i], v[i+1], v[i+2], v[i+3], L[i], R[i]);
+    gpu_recon(v[i], v[i+1], v[i+2], v[i+3], L[i], R[i]);
 }
 
 __global__ void k_test_hllc(const double* Lp, const double* Rp, double* F,
@@ -49,7 +49,7 @@ __global__ void k_test_hllc(const double* Lp, const double* Rp, double* F,
     if (i >= n) return;
     FPrim wl = {Lp[i*4+0], Lp[i*4+1], Lp[i*4+2], Lp[i*4+3]};
     FPrim wr = {Rp[i*4+0], Rp[i*4+1], Rp[i*4+2], Rp[i*4+3]};
-    FFlux4 f = fas_hllc(wl, wr, gamma, radial);
+    FFlux4 f = gpu_hllc(wl, wr, gamma, radial);
     F[i*4+0] = f.f_rho; F[i*4+1] = f.f_mr;
     F[i*4+2] = f.f_mt;  F[i*4+3] = f.f_E;
 }
@@ -83,7 +83,7 @@ int main()
     // ================================================================
     // 1. MINMOD LIMITER
     // ================================================================
-    std::printf("[1] fas_minmod limiter\n");
+    std::printf("[1] gpu_minmod limiter\n");
     {
         double h_a[] = { 1.0, -1.0,  1.0, 2.0,  0.0,  1e-15, -3.0};
         double h_b[] = { 1.0, -1.0, -1.0, 1.0,  0.0,  1e-15, -5.0};
@@ -101,14 +101,14 @@ int main()
         bool ok = true;
         for (int i = 0; i < n; i++)
             if (std::fabs(h_o[i] - exp[i]) > 1e-15 * std::fmax(1.0, std::fabs(exp[i]))) ok = false;
-        CHECK(ok, "fas_minmod: all 7 cases correct");
+        CHECK(ok, "gpu_minmod: all 7 cases correct");
         cudaFree(d_a); cudaFree(d_b); cudaFree(d_o);
     }
 
     // ================================================================
-    // 2. MUSCL RECONSTRUCTION (fas_recon)
+    // 2. MUSCL RECONSTRUCTION (gpu_recon)
     // ================================================================
-    std::printf("\n[2] fas_recon: MUSCL reconstruction\n");
+    std::printf("\n[2] gpu_recon: MUSCL reconstruction\n");
     {
         // Constant profile: v = [1, 1, 1, 1, 1] → L=R=1
         // Linear profile: v = [1, 2, 3, 4, 5] → L=2.5, R=3.5 (at face between v[1]=2 and v[2]=3)
@@ -144,9 +144,9 @@ int main()
     }
 
     // ================================================================
-    // 3. fas_hllc: UNIFORM STATE, SOD, CONTACT, RADIAL/THETA
+    // 3. gpu_hllc: UNIFORM STATE, SOD, CONTACT, RADIAL/THETA
     // ================================================================
-    std::printf("\n[3] fas_hllc Riemann solver\n");
+    std::printf("\n[3] gpu_hllc Riemann solver\n");
     {
         // 3a. Uniform state (radial mode): flux = physical flux
         double rho=1, vr=0.5, vt=0.3, P=1;

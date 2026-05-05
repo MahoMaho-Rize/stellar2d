@@ -20,7 +20,7 @@
 //   A_k = 4π r_k²;  g_k = G·M_k/r_k²   (g_0 = 0)
 
 #include "radial1d_solver.cuh"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include "physics/nuclear_pp.h"
 #include "radial1d_residual_dual.cuh"
 

@@ -2,9 +2,9 @@
 // Reuses FAS kernels for residual, ghost cells, gravity, floor, sponge, block-Jacobi, SIMPLE.
 
 #include "simple_solver.cuh"
-#include "fas_common.cuh"
-#include "fas_hllc.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_common.cuh"
+#include "gpu_hllc.cuh"
+#include "gpu_linalg.cuh"
 #include <cstdio>
 #include <cmath>
 #include <vector>
@@ -460,8 +460,8 @@ double SimpleSolver::step(double t, double t_end) {
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_rhoE, lev.d_cell_volume,
             d_rhoV, d_EV, lev.nr, lev.nt, lev.ng);
-        double M_before = fas_reduce_sum(d_rhoV, d_scr, n);
-        double E_before = fas_reduce_sum(d_EV, d_scr, n);
+        double M_before = gpu_reduce_sum(d_rhoV, d_scr, n);
+        double E_before = gpu_reduce_sum(d_EV, d_scr, n);
 
         k_fas_atm_reset<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_rho0, lev.d_P0, atm_rho_thresh, eos, lev.nr, lev.nt, lev.ng, 0);
@@ -469,8 +469,8 @@ double SimpleSolver::step(double t, double t_end) {
         k_fas_rhoV_EV<<<(n+B-1)/B,B>>>(
             lev.d_rho, lev.d_rhoE, lev.d_cell_volume,
             d_rhoV, d_EV, lev.nr, lev.nt, lev.ng);
-        double M_after = fas_reduce_sum(d_rhoV, d_scr, n);
-        double E_after = fas_reduce_sum(d_EV, d_scr, n);
+        double M_after = gpu_reduce_sum(d_rhoV, d_scr, n);
+        double E_after = gpu_reduce_sum(d_EV, d_scr, n);
 
         if (interior_volume > 0) {
             double dM = (M_before - M_after) / interior_volume;

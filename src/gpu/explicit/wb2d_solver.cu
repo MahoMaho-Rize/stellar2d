@@ -2,8 +2,8 @@
 // Kernels live in wb2d_kernels.cu.
 
 #include "wb2d_solver.cuh"
-#include "fas_common.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_common.cuh"
+#include "gpu_linalg.cuh"
 #include <cstdio>
 #include <cstring>
 #include <cmath>

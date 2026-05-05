@@ -15,7 +15,7 @@
 #include "eos.h"
 
 __device__ __forceinline__
-int fas_idx(int i, int j, int nt, int ng) {
+int gpu_idx(int i, int j, int nt, int ng) {
     return (i + ng) * (nt + 2 * ng) + (j + ng);
 }
 
@@ -27,7 +27,7 @@ __global__ void k_fas_sponge(double* rho, double* mr, double* mt, double* rhoE,
 
 __global__ void k_fas_compute_F(double* F, const double* R,
     const double* rho, const double* mr, const double* mt, const double* rhoE,
-    const double* fas_rhs, double inv_dt, int nr, int nt, int ng);
+    const double* gpu_rhs, double inv_dt, int nr, int nt, int ng);
 
 // Residual kernels (needed by explicit stepper)
 // radial_only=1: skip theta-face HLLC + MUSCL; set mt-channel residual to 0

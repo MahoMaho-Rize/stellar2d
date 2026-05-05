@@ -1,8 +1,8 @@
 // Cartesian 2D staggered quad Lagrangian — orchestration.
 
 #include "cart_lag_solver.cuh"
-#include "fas_common.cuh"
-#include "fas_linalg.cuh"   // gpu_reduce_min
+#include "gpu_common.cuh"
+#include "gpu_linalg.cuh"   // gpu_reduce_min
 #include <cstdio>
 #include <cstring>
 #include <cmath>

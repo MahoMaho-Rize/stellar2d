@@ -7,7 +7,7 @@
 
 #include "strang_solver.cuh"
 #include "strang_device.cuh"    // MC limiter, HSE, cons2prim, Euler flux
-#include "fas_common.cuh"       // CUDA_CHECK macro
+#include "gpu_common.cuh"       // CUDA_CHECK macro
 
 #include <cstdio>
 #include <cstdlib>

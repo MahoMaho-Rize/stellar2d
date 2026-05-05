@@ -1,7 +1,7 @@
 // FAS multigrid: restriction, prolongation, V-cycle, solve
 
 #include "fas_solver.cuh"
-#include "fas_linalg.cuh"
+#include "gpu_linalg.cuh"
 #include <cmath>
 #include <vector>
 
@@ -101,19 +101,19 @@ void k_fas_assemble_coarse_rhs(
     const double* R_H,     // R(U_H) after restrict + compute_residual
     const double* rho_H, const double* mr_H, const double* mt_H, const double* rhoE_H,
     const double* defect,  // restricted fine-level defect
-    double* fas_rhs,
+    double* gpu_rhs,
     double inv_dt, int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     int n = nr*nt;
-    int k = fas_idx(flat/nt, flat%nt, nt, ng);
+    int k = gpu_idx(flat/nt, flat%nt, nt, ng);
 
-    // fas_rhs = U_H/dt - R(U_H) + defect
-    // So F = R(U_H) - U_H/dt + fas_rhs = defect (initially)
-    fas_rhs[flat]       = inv_dt*rho_H[k]  - R_H[flat]       + defect[flat];
-    fas_rhs[n + flat]   = inv_dt*mr_H[k]   - R_H[n + flat]   + defect[n + flat];
-    fas_rhs[2*n + flat] = inv_dt*mt_H[k]   - R_H[2*n + flat] + defect[2*n + flat];
-    fas_rhs[3*n + flat] = inv_dt*rhoE_H[k] - R_H[3*n + flat] + defect[3*n + flat];
+    // gpu_rhs = U_H/dt - R(U_H) + defect
+    // So F = R(U_H) - U_H/dt + gpu_rhs = defect (initially)
+    gpu_rhs[flat]       = inv_dt*rho_H[k]  - R_H[flat]       + defect[flat];
+    gpu_rhs[n + flat]   = inv_dt*mr_H[k]   - R_H[n + flat]   + defect[n + flat];
+    gpu_rhs[2*n + flat] = inv_dt*mt_H[k]   - R_H[2*n + flat] + defect[2*n + flat];
+    gpu_rhs[3*n + flat] = inv_dt*rhoE_H[k] - R_H[3*n + flat] + defect[3*n + flat];
 }
 
 void FasSolver::restrict_defect(int fine, int coarse, double g0_over_dt) {

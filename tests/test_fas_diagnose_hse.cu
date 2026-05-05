@@ -8,7 +8,7 @@
 // ============================================================
 
 #include "fas_solver.cuh"
-#include "fas_hllc.cuh"
+#include "gpu_hllc.cuh"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>

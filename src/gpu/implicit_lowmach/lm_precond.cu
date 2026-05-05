@@ -2,7 +2,7 @@
 
 #include "lowmach_solver.h"
 #include "lm_common.cuh"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include <algorithm>
 
 // ========================= Variable scaling =============================

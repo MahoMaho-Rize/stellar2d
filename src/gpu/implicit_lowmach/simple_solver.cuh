@@ -3,7 +3,7 @@
 #include "grid.h"
 #include "state.h"
 #include "eos.h"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include "gmg_gpu.cuh"
 
 // SIMPLE pressure-correction solver for the compressible Euler equations.

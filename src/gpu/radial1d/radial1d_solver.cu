@@ -10,7 +10,7 @@
 #include "radial1d_solver.cuh"
 #include "radial1d_kernels.cuh"
 #include "physics/radiation_diffusion.cuh"
-#include "fas_common.cuh"      // CUDA_CHECK macro
+#include "gpu_common.cuh"      // CUDA_CHECK macro
 #include <cstdio>
 #include <cstring>
 #include <cmath>

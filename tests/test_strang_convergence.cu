@@ -9,7 +9,7 @@
 
 #include "strang_solver.cuh"
 #include "strang_device.cuh"
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 #include <cstdio>
 #include <cmath>
 #include <vector>

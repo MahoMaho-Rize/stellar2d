@@ -1,9 +1,9 @@
 #pragma once
 
 // fas2_common: k_fas2_* forward declarations for the fas2 solver family.
-// Reuses fas_common.cuh for shared utilities (fas_idx, CUDA_CHECK,
+// Reuses fas_common.cuh for shared utilities (gpu_idx, CUDA_CHECK,
 // mat4_invert/solve/mul), since those are identical across fas / fas2.
-#include "fas_common.cuh"
+#include "gpu_common.cuh"
 
 #ifdef __CUDACC__
 
@@ -14,7 +14,7 @@ __global__ void k_fas2_sponge(double* rho, double* mr, double* mt, double* rhoE,
 
 __global__ void k_fas2_compute_F(double* F, const double* R,
     const double* rho, const double* mr, const double* mt, const double* rhoE,
-    const double* fas_rhs, double inv_dt, int nr, int nt, int ng);
+    const double* gpu_rhs, double inv_dt, int nr, int nt, int ng);
 
 __global__ void k_fas2_residual(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
