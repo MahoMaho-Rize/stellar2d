@@ -38,6 +38,11 @@ set(SOURCES
     src/drivers/cart_ale.cpp
     src/drivers/cart_impl.cpp
     src/drivers/cart_ale2.cpp
+    src/drivers/fas.cpp
+    src/drivers/fas2.cpp
+    src/drivers/radial1d.cpp
+    src/drivers/pseudo_spectral.cpp
+    src/drivers/sph2d_spectral.cpp
     src/main.cpp
 )
 
