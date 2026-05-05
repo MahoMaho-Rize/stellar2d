@@ -25,6 +25,26 @@ set(SOURCES
     src/init/sedov.cpp
     src/init/jeans.cpp
     src/init/evrard.cpp
+    src/cli/options.cpp
+    src/sim/helpers.cpp
+    src/sim/setup.cpp
+    src/sim/run_loop.cpp
+    src/drivers/projection.cpp
+    src/drivers/simple.cpp
+    src/drivers/ale2d.cpp
+    src/drivers/wb2d.cpp
+    src/drivers/lowmach.cpp
+    src/drivers/cart_lag.cpp
+    src/drivers/cart_ale.cpp
+    src/drivers/cart_impl.cpp
+    src/drivers/cart_ale2.cpp
+    src/drivers/fas.cpp
+    src/drivers/fas2.cpp
+    src/drivers/radial1d.cpp
+    src/drivers/pseudo_spectral.cpp
+    src/drivers/anelastic_sl.cpp
+    src/drivers/sph2d_spectral.cpp
+    src/drivers/cpu.cpp
     src/main.cpp
 )
 
