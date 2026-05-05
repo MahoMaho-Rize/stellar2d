@@ -433,7 +433,7 @@ int run_anelastic_sl(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                 "# kx_int=%d n_g=%d amp=%g omega=%.15e period=%.15e dt=%.15e steps_per_period=%d\n",
                 kx_int, n_g, amp, om_evp, T_period, dt, steps_per_period);
             std::fprintf(probe,
-                "# t  v_center  eigmode_dev  E_total  E_k1  E_k2  E_k3  E_k4  max_abs_v\n");
+                "# t  v_center  eigmode_dev  E_total  E_k1  E_k2  E_k3  E_k4  max_abs_v  H_im\n");
 
             // Grab weights and grid for host-side diagnostics.
             std::vector<double> y_cgl, w_cc(cfg.nr, 0.0);
@@ -522,10 +522,14 @@ int run_anelastic_sl(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                 double dev = ansl.eigmode_deviation();
                 double max_v = 0.0;
                 for (double x : h_v) if (std::fabs(x) > max_v) max_v = std::fabs(x);
+                // H_IM — symplectic Hamiltonian ½⟨W,W⟩ + ½⟨V,MV⟩; the true
+                // conserved quantity of the assembled V̈ = −M V system (the
+                // anelastic E_total above drifts stroboscopically under IM).
+                double H_im = ansl.hamiltonian_im();
                 std::fprintf(probe,
-                    "%.10e %.10e %.10e %.15e %.15e %.15e %.15e %.15e %.10e\n",
+                    "%.10e %.10e %.10e %.15e %.15e %.15e %.15e %.15e %.10e %.15e\n",
                     t_now, v_c, dev, E_total,
-                    Emk[1], Emk[2], Emk[3], Emk[4], max_v);
+                    Emk[1], Emk[2], Emk[3], Emk[4], max_v, H_im);
             };
 
             // Sample at t=0.
@@ -534,11 +538,38 @@ int run_anelastic_sl(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
             std::timespec wall_start;
             clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
+            // ANSL_TD_KIND can replace the default Strang-nonlinear RK4 step
+            // with a linear-only integrator (amp → 0 linear-block studies).
+            //   implicit_midpoint  : 2nd-order symplectic, ΔH ≈ round-off,
+            //                        O((ωdt)³) phase.
+            //   exp_propagator     : per-kx eigendecomp → exact cos/sin
+            //                        propagator.  Both phase AND amplitude
+            //                        to round-off.  Used to isolate Strang
+            //                        commutator from linear-block error.
+            //   strang_exp_nonlinear : Strang(Exp(dt/2), NL_RK4(dt), Exp(dt/2)).
+            const bool use_im  = ansl.td_implicit_midpoint;
+            const bool use_exp = ansl.td_exp_propagator;
+            if (use_im) {
+                std::fprintf(stderr,
+                    "  TD kind: implicit_midpoint (linear-only symplectic)\n");
+            }
+            if (use_exp) {
+                std::fprintf(stderr,
+                    "  TD kind: exp_propagator (linear-only exact cos/sin)\n");
+            }
+            if (ansl.td_strang_exp_nonlinear) {
+                std::fprintf(stderr,
+                    "  TD kind: strang_exp_nonlinear "
+                    "(Exp(dt/2) ∘ NL_RK4(dt) ∘ Exp(dt/2))\n");
+            }
+
             double t_now = 0.0;
             int samples = 1;
             for (int p = 0; p < n_periods && !g_interrupted; ++p) {
                 for (int k = 0; k < steps_per_period && !g_interrupted; ++k) {
-                    ansl.step_strang_nonlinear(dt);
+                    if      (use_exp) ansl.step_exp_propagator(dt);
+                    else if (use_im)  ansl.step_implicit_midpoint(dt);
+                    else              ansl.step_strang_nonlinear(dt);
                     t_now += dt;
                 }
                 diagnostics(t_now);
@@ -644,16 +675,33 @@ int run_anelastic_sl(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                 for (int k = 0; k <= N; ++k) w_cc[k] = w[N - k] * cfg.ps_Ly / 2.0;
             }
 
-            // Snapshot cadence (periods).  ANSL_DNS_SNAP_EVERY=N writes binary
-            // (u, v, b) float32 cubes to <ctx.run_dir>/snapshots/snap_NNNN.bin
-            // after every N periods; 0 disables snapshotting.
+            // Snapshot cadence.
+            // ANSL_DNS_SNAP_EVERY       = N  snapshot every N diagnostic
+            //                                  samples (legacy, "every N periods"
+            //                                  when diag_every_step=0) — writes
+            //                                  binary (u,v,b) float32 cubes to
+            //                                  <ctx.run_dir>/snapshots/snap_NNNN.bin
+            // ANSL_DNS_SNAP_EVERY_STEP  = N  snapshot every N solver steps
+            //                                  (overrides SNAP_EVERY when >0;
+            //                                  decoupled from diagnostics, uses
+            //                                  VRAM-buffered frame pool mirroring
+            //                                  cart_ale2's alloc_frame_buffer)
             int snap_every = env_int("ANSL_DNS_SNAP_EVERY", 0);
+            int snap_every_step = env_int("ANSL_DNS_SNAP_EVERY_STEP", 0);
             std::string snap_dir = ctx.run_dir + "/snapshots";
             if (snap_every > 0) {
                 std::string cmd = "mkdir -p '" + snap_dir + "'";
                 (void)std::system(cmd.c_str());
             }
             int snap_idx = 0;
+            int snap_written = 0;
+            if (snap_every_step > 0) {
+                int headroom_mb = 4096;
+                if (const char* s = std::getenv("ANSL_SNAP_HEADROOM_MB")) {
+                    int v = std::atoi(s); if (v > 0) headroom_mb = v;
+                }
+                ansl.alloc_snap_buffer(headroom_mb, ctx.run_dir);
+            }
 
             auto diagnostics = [&](double t_now) {
                 std::vector<double> h_u, h_v, h_b;
@@ -722,16 +770,16 @@ int run_anelastic_sl(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                     Emk[1], Emk[2], Emk[3], Emk[4], Emk[5], Emk[6], E_pot);
                 std::fflush(probe);
 
-                // Snapshot dump for visualisation.
-                if (snap_every > 0 && (snap_idx % snap_every == 0)) {
+                // Legacy per-period snapshot (ANSL_DNS_SNAP_EVERY) — only
+                // triggers when step-based snapshotting is off.
+                if (snap_every_step <= 0 && snap_every > 0
+                    && (snap_idx % snap_every == 0)) {
                     char snap_path[768];
                     std::snprintf(snap_path, sizeof(snap_path),
-                                  "%s/snap_%04d.bin", snap_dir.c_str(), snap_idx);
+                                  "%s/snap_%06d.bin", snap_dir.c_str(),
+                                  snap_written);
                     FILE* sf = std::fopen(snap_path, "wb");
                     if (sf) {
-                        // Header: ny, nx, t (double).  Payload: u, v, b as
-                        // float32 row-major (ny × nx), one field after the
-                        // other.  Python np.fromfile / np.memmap can read this.
                         int32_t hdr[2] = { (int32_t)ny, (int32_t)nx };
                         std::fwrite(hdr, sizeof(int32_t), 2, sf);
                         std::fwrite(&t_now, sizeof(double), 1, sf);
@@ -744,31 +792,57 @@ int run_anelastic_sl(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                         for (int i = 0; i < nc; ++i) buf[i] = (float)h_b[i];
                         std::fwrite(buf.data(), sizeof(float), nc, sf);
                         std::fclose(sf);
+                        ++snap_written;
                     }
                 }
                 ++snap_idx;
             };
 
             diagnostics(0.0);
+            if (snap_every_step > 0) ansl.capture_snap(0.0, 0);
 
             std::timespec wall_start;
             clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
+            // Diagnostics sampling rate.  ANSL_DIAG_EVERY_STEP=N samples
+            // every N solver steps.  0 = once per period (legacy).
+            // For triad analysis you need dt_sample < T_min/2 (half-period
+            // of the fastest kinetic-energy oscillation, 2·ω_c here) to
+            // avoid aliasing.
+            int diag_every_step = env_int("ANSL_DIAG_EVERY_STEP", 0);
+
             double t_now = 0.0;
             int samples = 1;
+            int global_step = 0;
             for (int p = 0; p < n_periods && !g_interrupted; ++p) {
                 for (int k = 0; k < steps_per_period && !g_interrupted; ++k) {
                     ansl.step_strang_nonlinear(dt);
                     t_now += dt;
+                    ++global_step;
+                    if (diag_every_step > 0 &&
+                        global_step % diag_every_step == 0) {
+                        diagnostics(t_now);
+                        ++samples;
+                    }
+                    if (snap_every_step > 0 &&
+                        global_step % snap_every_step == 0) {
+                        ansl.capture_snap(t_now, global_step);
+                    }
                 }
-                diagnostics(t_now);
-                ++samples;
+                if (diag_every_step <= 0) {
+                    diagnostics(t_now);
+                    ++samples;
+                }
                 if ((p + 1) % 10 == 0 || p == n_periods - 1) {
                     print_progress(t_now, (double)n_periods * T_period,
                                    (p + 1) * steps_per_period, dt, wall_start);
                 }
             }
             std::fclose(probe);
+            if (snap_every_step > 0) {
+                ansl.flush_snaps_to_disk();
+                ansl.free_snap_buffer();
+            }
             std::fprintf(stderr,
                 "  DNS triad-coupled probe written to %s (%d samples)\n",
                 probe_path, samples);

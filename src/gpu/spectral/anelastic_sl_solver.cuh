@@ -3,6 +3,7 @@
 #include <cufft.h>
 #include <cublas_v2.h>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -105,6 +106,71 @@ struct AnelasticSLSolver {
     double* d_M_per_kx   = nullptr;  // (nh * n_int * n_int,)
     bool    td_assembled_linear = false;  // env ANSL_TD_KIND=assembled_linear
 
+    // ── Implicit midpoint (2nd-order symplectic) per-kx LU factorizations ──
+    // For each x-Fourier mode kx_idx with α = dt²/4, the per-mode system is:
+    //     A_k = I_{n_int} + α · M_k           (LU factored, reused every step)
+    //     P_k = A_k⁻¹ · (I − α M_k)            (not stored; applied via two solves)
+    //     Q_k = dt · A_k⁻¹                    (applied by scaling the RHS)
+    // After V_{n+1} is obtained, W_{n+1} = (2/dt)·(V_{n+1} − V_n) − W_n.
+    //
+    // For the linear Hamiltonian system V̈ = −M V, implicit midpoint is
+    // exactly symplectic: the Cayley transform (I − αM)(I + αM)⁻¹ has unit
+    // modulus on every eigenvalue of M, so |V|² + (MV, V) (the quadratic
+    // Hamiltonian) is preserved to round-off — orders of magnitude below the
+    // RK4 O((ωdt)¹⁰) amplitude leak floor we see in step_assembled_linear.
+    //
+    // Implementation choice: rather than LU-factor A_k on-device and solve
+    // every step, we invert A_k on the host once per dt (n_int ≤ 62, nh ≤ 33,
+    // cost negligible) and pre-compute two explicit real matrices:
+    //     B_k = A_k⁻¹ · (I − α M_k)   (V → V coupling per step)
+    //     C_k = dt · A_k⁻¹           (W → V coupling per step)
+    // so each step's V update is two M-style applies in frequency space:
+    //     V̂_{n+1}(kx) = B_k V̂_n(kx) + C_k Ŵ_n(kx)
+    // followed by  W_{n+1} = (2/dt)(V_{n+1} − V_n) − W_n  (pointwise in physical).
+    // Layout (col-major, same as M_per_kx):
+    //   d_B_per_kx[kx_idx * n_int² + col*n_int + row] = B_k[row, col]
+    //   d_C_per_kx[kx_idx * n_int² + col*n_int + row] = C_k[row, col]
+    //   im_dt_cached = dt at which B/C were built (rebuild if caller changes dt)
+    double* d_B_per_kx     = nullptr;
+    double* d_C_per_kx     = nullptr;
+    double  im_dt_cached   = 0.0;
+    bool    td_implicit_midpoint = false;  // env ANSL_TD_KIND=implicit_midpoint
+
+    // ── Exponential propagator (exact-to-round-off linear TD) ─────────────
+    // For each kx with M_k = Q_k Λ_k Q_k⁻¹ (Λ = diag(ω_n²), ω_n ≥ 0 from Lane-
+    // Emden GEP), the exact solution of V̈ = −M V over dt is the 2×2 block:
+    //     V_{n+1} = cos(√M dt) V_n + (sin(√M dt)/√M) W_n
+    //     W_{n+1} = −√M sin(√M dt) V_n + cos(√M dt) W_n
+    // Each function-of-matrix is assembled as  Q · diag(f(ω_n)) · Q⁻¹  on
+    // host once per dt and shipped as four per-kx real matrix slabs, applied
+    // with the same k_apply_M_kx kernel as M_per_kx.
+    //
+    // Cost: 4 apply_M_kx per step (vs IM's 2, RK4's 4-per-substage).  Phase
+    // AND amplitude preserved to round-off for the linear block; scheme
+    // is exactly symplectic (Q orthogonalises a symmetric positive pair,
+    // propagator commutes with M) — strictly stronger than IM.
+    //
+    // Storage layout (col-major, same as M_per_kx / B_per_kx):
+    //   d_Tvv_per_kx = cos(√M_k dt)                 V → V
+    //   d_Tvw_per_kx = sin(√M_k dt) / √M_k          W → V
+    //   d_Twv_per_kx = −√M_k sin(√M_k dt)           V → W  (negative)
+    //   d_Tww_per_kx = cos(√M_k dt)  (= d_Tvv)      W → W
+    // We keep d_Tvv and d_Tww as separate pointers even though their values
+    // are equal, for clarity at apply time; duplicate storage is negligible
+    // at 64² × nh=33 (~1 MB extra).
+    double* d_Tvv_per_kx      = nullptr;
+    double* d_Tvw_per_kx      = nullptr;
+    double* d_Twv_per_kx      = nullptr;
+    double* d_Tww_per_kx      = nullptr;
+    // Dedicated complex scratch of size ncplx = nh·ny, allocated lazily the
+    // first time step_exp_propagator is called.  Needed because d_Qhat and
+    // d_Ghat are sized nh·n_modes (n_modes ≤ ny/2 typically) and cannot hold
+    // a full FFT-x complex buffer.
+    cufftDoubleComplex* d_exp_scratch = nullptr;
+    double  exp_dt_cached     = 0.0;
+    bool    td_exp_propagator = false;  // env ANSL_TD_KIND=exp_propagator
+    bool    td_strang_exp_nonlinear = false;  // env ANSL_TD_KIND=strang_exp_nonlinear
+
     // Strang-split (Phase 3 nonlinear extension) persistent buffers.
     // Allocated lazily the first time step_strang_nonlinear() is called.
     // Each is (ncell,) = (ny * nx) doubles; 10 slots × 64² × 8B = 320 KB.
@@ -122,10 +188,11 @@ struct AnelasticSLSolver {
     double* d_strang_w_s   = nullptr;
     double* d_strang_b_s   = nullptr;
     double* d_strang_deriv = nullptr;
-    // Additional derivative slots for W and B channels in the nonlinear
-    // RK4 block.  Must be distinct from d_scratch (which is used
-    // internally by nonlinear_deriv for ∂y operations).
-    double* d_strang_dw    = nullptr;
+    // Additional derivative slot for B channel in the nonlinear RK4 block.
+    // Must be distinct from d_scratch (used internally by nonlinear_deriv
+    // for ∂y operations).  d_strang_dw was removed 2026-05-04 when W
+    // advection was dropped from the nonlinear block — see solver.cu.
+    double* d_strang_dw    = nullptr;  // kept for ABI stability; unused
     double* d_strang_db    = nullptr;
     bool td_strang_nonlinear = false;  // env ANSL_TD_KIND=strang_nonlinear
 
@@ -418,6 +485,48 @@ struct AnelasticSLSolver {
     // Skips advection entirely; intended for pure linear g-mode validation.
     double step_assembled_linear();
 
+    // One-step linear-only implicit-midpoint TD (symplectic).  Reads d_v,
+    // d_rhs_v (W), writes d_v, d_rhs_v at t+dt.  d_b untouched (buoyancy
+    // already eliminated by M).  The nonlinear RK4 block is NOT called from
+    // here — this is the "Strang(A) without Strang(B)" path for measuring
+    // the linear-block floor in isolation.  Caller passes a fixed dt so LU
+    // factors of A_k = I + (dt²/4)·M_k stay cached.
+    //
+    // Pass criterion (Experiment "IM-vs-RK4"): amp=1e-6 × 500 T_a, ΔE/E
+    // should be < 1e-12 (8+ decades below RK4's -8e-7/T floor).
+    double step_implicit_midpoint(double dt);
+
+    // One-step linear-only exponential propagator (exact over dt to round-off).
+    // Reads d_v, d_rhs_v, writes them at t+dt.  d_b untouched.  Caller passes
+    // fixed dt so the four per-kx propagator matrices stay cached.
+    //
+    // Mathematical guarantee: on the V̈ = −M V system this integrator has
+    // zero phase error and zero amplitude error per step (modulo Q/Q⁻¹
+    // conditioning and libm cos/sin round-off).  Compare IM which has
+    // O((ωdt)³) phase and RK4 which has O((ωdt)¹⁰) amplitude drift.
+    //
+    // Useful for: (a) isolating Strang O(dt²·amp³) commutator from linear
+    // block contamination; (b) long-time triad Manley-Rowe envelope where
+    // phase error leaks into slow-mode amplitudes.
+    double step_exp_propagator(double dt);
+
+    // Strang-split nonlinear step with Exp propagator as the linear block.
+    // Algorithm:  Exp(dt/2) ∘ NL_RK4(dt) ∘ Exp(dt/2)  on (V, W, B).
+    // Same nonlinear block as step_strang_nonlinear (advection + Galerkin
+    // V_K closure).  Useful at amp ≳ 1e-3 to isolate Strang commutator
+    // error from linear-block contamination.  Cache: Exp propagators built
+    // at dt/2 (distinct from step_exp_propagator's dt cache).
+    double step_strang_exp_nonlinear(double dt);
+
+    // Diagnostic: return the symplectic invariant of the linear IM scheme
+    //     H_IM = ½ ⟨W, W⟩_CC + ½ ⟨V, M V⟩_CC
+    // where ⟨·,·⟩_CC is the Clenshaw-Curtis-weighted y-integral × uniform-x
+    // average.  This is the exact conserved Hamiltonian of the discrete
+    // system V̈ = −M V (in contrast to the anelastic physical KE ρ(u²+v²)/2,
+    // which is only a time-average conserved quantity for the continuous
+    // equations and drifts stroboscopically when IM has phase error).
+    double hamiltonian_im();
+
     // Rebuild d_u in-place from the current d_v using anelastic continuity:
     //     û(kx≠0, y) = -(1/(i·kx·ρ(y))) · ∂_y(ρ(y)·V̂(kx, y))
     // kx=0 column is zeroed.  Used after step_strang_nonlinear() to refresh
@@ -435,4 +544,30 @@ struct AnelasticSLSolver {
     // Reduces to step_assembled_linear() in the amp→0 limit.
     // Use fixed external dt (passed in) for period-aligned diagnostics.
     double step_strang_nonlinear(double dt);
+
+    // ── VRAM-buffered snapshot pool (dense every-step DNS diagnostics) ──
+    // Same pattern as cart_ale2_solver's alloc_frame_buffer / capture_frame /
+    // flush_frames_to_disk.  Each captured frame packs (u_rebuilt, v, b) as
+    // float32 cell-centered fields in a contiguous device arena; when the
+    // arena fills, a single D2H copy + packed binary write lands everything.
+    //
+    // Buffer layout:  d_snap_pool[frame_count][3][ncell]  (float32)
+    // Disk layout:    one file "<run_dir>/snapshots.bin" with header
+    //                 [int32 ny, int32 nx, int32 nfields=3, int32 reserved]
+    //                 then records [double t, float u[ny*nx], float v[ny*nx],
+    //                 float b[ny*nx]]  (times array is host-side).
+    float* d_snap_pool = nullptr;
+    int snap_capacity = 0;
+    int snap_count = 0;
+    int snap_total = 0;
+    std::vector<double> snap_times;
+    std::vector<int>    snap_steps;
+    std::string snap_run_dir;
+    FILE*       snap_fp = nullptr;
+    std::vector<char> snap_iobuf;
+
+    void alloc_snap_buffer(int headroom_mb, const std::string& run_dir);
+    void capture_snap(double t, int step);
+    void flush_snaps_to_disk();
+    void free_snap_buffer();
 };

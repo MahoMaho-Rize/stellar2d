@@ -103,6 +103,9 @@ extern "C" {
     __global__ void k_row_mul_out(double*, const double*, const double*, int, int);
     __global__ void k_u_from_div_v(cufftDoubleComplex*, const cufftDoubleComplex*,
                                    const double*, const double*, double, int, int);
+    __global__ void k_zero_kx0_column(cufftDoubleComplex*, int, int);
+    __global__ void k_ansl_pack_snap(const double*, const double*,
+                                     const double*, float*, int);
 }
 
 // ============================================================================
@@ -276,6 +279,11 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
     free_ptr(d_rho_prime); free_ptr(d_rho_prime_over_rho); free_ptr(d_N2);
     free_ptr(d_M_per_kx);
+    free_ptr(d_B_per_kx);
+    free_ptr(d_C_per_kx);
+    free_ptr(d_Tvv_per_kx); free_ptr(d_Tvw_per_kx);
+    free_ptr(d_Twv_per_kx); free_ptr(d_Tww_per_kx);
+    free_cptr(d_exp_scratch);
     free_ptr(d_strang_v0);    free_ptr(d_strang_w0);    free_ptr(d_strang_b0);
     free_ptr(d_strang_v_acc); free_ptr(d_strang_w_acc); free_ptr(d_strang_b_acc);
     free_ptr(d_strang_v_s);   free_ptr(d_strang_w_s);   free_ptr(d_strang_b_s);
@@ -290,6 +298,7 @@ void AnelasticSLSolver::free_all() {
     if (plan_r2c_x) { cufftDestroy(plan_r2c_x); plan_r2c_x = 0; }
     if (plan_c2r_x) { cufftDestroy(plan_c2r_x); plan_c2r_x = 0; }
     if (cublas)     { cublasDestroy(cublas); cublas = nullptr; }
+    free_snap_buffer();
 }
 
 // Build CGL grid on [0, Ly], compute ρ_0 from requested profile,
@@ -1024,14 +1033,26 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     // extension (Strang split around Path D linear block).
     td_assembled_linear = false;
     td_strang_nonlinear = false;
+    td_implicit_midpoint = false;
+    td_exp_propagator   = false;
+    td_strang_exp_nonlinear = false;
     if (const char* s = std::getenv("ANSL_TD_KIND")) {
         std::string ss(s);
         if (ss == "assembled_linear" || ss == "assembled" || ss == "matrix")
             td_assembled_linear = true;
         else if (ss == "strang_nonlinear" || ss == "strang")
             td_strang_nonlinear = true;
+        else if (ss == "implicit_midpoint" || ss == "im" || ss == "symplectic")
+            td_implicit_midpoint = true;
+        else if (ss == "exp_propagator" || ss == "exp" || ss == "exact"
+                 || ss == "phase_exact")
+            td_exp_propagator = true;
+        else if (ss == "strang_exp_nonlinear" || ss == "strang_exp")
+            td_strang_exp_nonlinear = true;
     }
-    if (td_assembled_linear || td_strang_nonlinear) assemble_path_d_operators();
+    if (td_assembled_linear || td_strang_nonlinear || td_implicit_midpoint
+        || td_exp_propagator || td_strang_exp_nonlinear)
+        assemble_path_d_operators();
 }
 
 void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
@@ -3416,6 +3437,707 @@ double AnelasticSLSolver::step_assembled_linear() {
     return dt;
 }
 
+// Forward decls for the per-kx apply kernels (defined below next to
+// step_assembled_linear's k_apply_M_kx).
+__global__ static void k_apply_M_kx_add(
+        const cuDoubleComplex* vhat_in,
+        cuDoubleComplex* vhat_out,
+        const double* M_per_kx,
+        int n_int, int ny, int nh);
+
+// ── Implicit-midpoint per-kx B_k, C_k builder (host) ────────────────────
+// For each kx_idx:
+//     A_k = I + α M_k,    α = dt²/4
+//     B_k = A_k⁻¹ (I − α M_k)
+//     C_k = dt · A_k⁻¹
+// Both stored col-major in d_B_per_kx, d_C_per_kx so k_apply_M_kx (and
+// k_apply_M_kx_add) can reuse the same indexing pattern as d_M_per_kx.
+//
+// Stability / symplecticity: (I + αM)⁻¹ (I − αM) is the Cayley transform
+// of M; on M's eigenpair (ω², V) it returns (1 − αω²)/(1 + αω²), which
+// has modulus exactly 1 in floating point only up to round-off.  The
+// quadratic Hamiltonian ½ Wᵀ W + ½ Vᵀ M V is preserved to that level.
+//
+// Singular kx=0 case: we simply store identity in B_0 (inert) and zero
+// in C_0, following the same convention as assemble_path_d_operators.
+static void build_im_per_kx(
+        const double* h_M_per_kx, int n_int, int nh,
+        double dt,
+        std::vector<double>& h_B, std::vector<double>& h_C) {
+    const size_t per_kx = (size_t)n_int * n_int;
+    h_B.assign((size_t)nh * per_kx, 0.0);
+    h_C.assign((size_t)nh * per_kx, 0.0);
+    const double alpha = 0.25 * dt * dt;
+
+    // Workspaces (col-major throughout to match d_M_per_kx storage).
+    std::vector<double> A((size_t)n_int * n_int);
+    std::vector<double> IminusAM((size_t)n_int * n_int);
+    std::vector<double> aug((size_t)n_int * 2 * n_int);  // [A | I]
+
+    for (int kx_idx = 0; kx_idx < nh; ++kx_idx) {
+        const double* M = &h_M_per_kx[(size_t)kx_idx * per_kx];
+
+        // Build A = I + α M  and  T = I − α M  (both col-major).
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                double m_ij = M[(size_t)j * n_int + i];  // M[i,j] col-major
+                A[(size_t)j * n_int + i]        =  alpha * m_ij;
+                IminusAM[(size_t)j * n_int + i] = -alpha * m_ij;
+            }
+            A[(size_t)i * n_int + i]        += 1.0;
+            IminusAM[(size_t)i * n_int + i] += 1.0;
+        }
+
+        if (kx_idx == 0) {
+            // V̂_{n+1}(0) = V̂_n(0) (identity), W unchanged: keep B_0=I, C_0=0.
+            for (int i = 0; i < n_int; ++i)
+                h_B[(size_t)kx_idx * per_kx + (size_t)i * n_int + i] = 1.0;
+            continue;
+        }
+
+        // Gauss-Jordan invert A in place via augmented [A | I] (row-major
+        // within aug for simpler elimination arithmetic).
+        const int W2 = 2 * n_int;
+        std::fill(aug.begin(), aug.end(), 0.0);
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                // aug row i col j = A[i,j] from col-major slab
+                aug[(size_t)i * W2 + j] = A[(size_t)j * n_int + i];
+            }
+            aug[(size_t)i * W2 + (n_int + i)] = 1.0;
+        }
+        for (int piv = 0; piv < n_int; ++piv) {
+            int ipiv_row = piv;
+            double best = std::fabs(aug[(size_t)piv * W2 + piv]);
+            for (int r = piv + 1; r < n_int; ++r) {
+                double v = std::fabs(aug[(size_t)r * W2 + piv]);
+                if (v > best) { best = v; ipiv_row = r; }
+            }
+            if (best < 1e-300) {
+                std::fprintf(stderr,
+                    "  [IM] kx_idx=%d: singular A_k (pivot=%.3e, dt=%.3e)\n",
+                    kx_idx, best, dt);
+                std::exit(1);
+            }
+            if (ipiv_row != piv) {
+                for (int c = 0; c < W2; ++c) {
+                    std::swap(aug[(size_t)piv * W2 + c],
+                              aug[(size_t)ipiv_row * W2 + c]);
+                }
+            }
+            double inv_p = 1.0 / aug[(size_t)piv * W2 + piv];
+            for (int c = 0; c < W2; ++c) aug[(size_t)piv * W2 + c] *= inv_p;
+            for (int r = 0; r < n_int; ++r) {
+                if (r == piv) continue;
+                double f = aug[(size_t)r * W2 + piv];
+                if (f == 0.0) continue;
+                for (int c = 0; c < W2; ++c)
+                    aug[(size_t)r * W2 + c] -= f * aug[(size_t)piv * W2 + c];
+            }
+        }
+
+        // A⁻¹ lives in the right half of `aug` (row-major).  Compute
+        // B_k = A⁻¹ · (I − α M) and C_k = dt · A⁻¹, storing col-major.
+        double* Bslab = &h_B[(size_t)kx_idx * per_kx];
+        double* Cslab = &h_C[(size_t)kx_idx * per_kx];
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                // Bslab[i,j] = Σ_k A⁻¹[i,k] · (I−αM)[k,j]
+                double s_B = 0.0;
+                for (int k = 0; k < n_int; ++k) {
+                    double ainv_ik = aug[(size_t)i * W2 + (n_int + k)];
+                    double t_kj    = IminusAM[(size_t)j * n_int + k]; // col-major
+                    s_B += ainv_ik * t_kj;
+                }
+                Bslab[(size_t)j * n_int + i] = s_B;
+                // Cslab[i,j] = dt · A⁻¹[i,j]
+                Cslab[(size_t)j * n_int + i] = dt * aug[(size_t)i * W2 + (n_int + j)];
+            }
+        }
+    }
+}
+
+// ── Public API: step_implicit_midpoint ──────────────────────────────────
+// Symplectic 2nd-order linear TD via the Cayley transform (I+αM)⁻¹(I−αM).
+// Caller passes fixed dt; we build B_k, C_k on first call (or if dt changes)
+// and upload to d_B_per_kx, d_C_per_kx.
+//
+// Per step:
+//   1) FFT_x(V_n)  → d_fhat  ;  FFT_x(W_n) → d_ghat    (both complex, row-major)
+//   2) d_ghat ← C · d_ghat  (overwrite: W → C·W)
+//   3) d_ghat += B · d_fhat   (accumulate: + B·V)
+//   4) IFFT_x(d_ghat) → d_v, rescale by 1/nx, zero walls
+//   5) W_{n+1} = (2/dt)(V_{n+1} − V_n) − W_n   (physical-space pointwise)
+double AnelasticSLSolver::step_implicit_midpoint(double dt) {
+    if (d_M_per_kx == nullptr) assemble_path_d_operators();
+    if (d_M_per_kx == nullptr) {
+        std::fprintf(stderr, "step_implicit_midpoint: assemble failed.\n");
+        return 0.0;
+    }
+    const int n_int = n_int_path_d;
+    const size_t per_kx = (size_t)n_int * n_int;
+
+    // Build / refresh B_k, C_k if dt changed (or first call).
+    if (d_B_per_kx == nullptr || d_C_per_kx == nullptr
+        || im_dt_cached != dt) {
+        std::vector<double> h_M((size_t)nh * per_kx);
+        CUDA_CHECK(cudaMemcpy(h_M.data(), d_M_per_kx,
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyDeviceToHost));
+        std::vector<double> h_B, h_C;
+        build_im_per_kx(h_M.data(), n_int, nh, dt, h_B, h_C);
+
+        if (d_B_per_kx) cudaFree(d_B_per_kx);
+        if (d_C_per_kx) cudaFree(d_C_per_kx);
+        CUDA_CHECK(cudaMalloc(&d_B_per_kx, sizeof(double) * (size_t)nh * per_kx));
+        CUDA_CHECK(cudaMalloc(&d_C_per_kx, sizeof(double) * (size_t)nh * per_kx));
+        CUDA_CHECK(cudaMemcpy(d_B_per_kx, h_B.data(),
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_C_per_kx, h_C.data(),
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyHostToDevice));
+        im_dt_cached = dt;
+        std::fprintf(stderr,
+            "  [IM] built B_k, C_k for dt=%.6e (nh=%d, n_int=%d)\n",
+            dt, nh, n_int);
+    }
+
+    // Snapshot V_n, W_n for W_{n+1} update (physical-space).
+    CUDA_CHECK(cudaMemcpyAsync(d_u_orig, d_v,     sizeof(double) * ncell,
+                               cudaMemcpyDeviceToDevice));
+    CUDA_CHECK(cudaMemcpyAsync(d_v_orig, d_rhs_v, sizeof(double) * ncell,
+                               cudaMemcpyDeviceToDevice));
+
+    // FFT_x(V_n) → d_fhat (complex ny × nh, row-major).
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_v,     d_fhat));
+    // FFT_x(W_n) → d_pihat — need a complex scratch of size ncplx = ny·nh.
+    // d_pihat is the pressure-Poisson output buffer (unused during linear-
+    // only step_implicit_midpoint); d_fhat/d_ghat are the V and RHS slots.
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_rhs_v, d_pihat));
+
+    // d_ghat = C_k · Ŵ_n  (overwrite; zeros walls and kx=0).
+    _apply_M_kx_to_vhat(d_pihat, d_ghat, d_C_per_kx, n_int, ny, nh, cublas);
+    // d_ghat += B_k · V̂_n   (accumulate; kx=0 left at 0 since both zero it).
+    dim3 grid_kx(nh); dim3 block_row(n_int);
+    k_apply_M_kx_add<<<grid_kx, block_row>>>(
+        reinterpret_cast<const cuDoubleComplex*>(d_fhat),
+        reinterpret_cast<cuDoubleComplex*>(d_ghat),
+        d_B_per_kx, n_int, ny, nh);
+
+    // IFFT_x(d_ghat) → d_v (unnormalised; scale by 1/nx).
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_v));
+    double inv_nx = 1.0 / (double)nx;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_v, 1));
+
+    // Dirichlet walls on V_{n+1} (round-off hygiene).
+    int grid_bdy = (nx + 255) / 256;
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+
+    // W_{n+1} = (2/dt)·(V_{n+1} − V_n) − W_n
+    //        = −W_n + (2/dt)·V_{n+1} − (2/dt)·V_n
+    // In-place on d_rhs_v (holds W_n initially):
+    //   d_rhs_v ← −d_rhs_v
+    //   d_rhs_v ← d_rhs_v + (2/dt) · d_v
+    //   d_rhs_v ← d_rhs_v − (2/dt) · d_u_orig
+    double neg_one = -1.0;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &neg_one, d_rhs_v, 1));
+    double two_over_dt = 2.0 / dt;
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &two_over_dt,
+                             d_v,     1, d_rhs_v, 1));
+    double neg_two_over_dt = -two_over_dt;
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &neg_two_over_dt,
+                             d_u_orig, 1, d_rhs_v, 1));
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+
+    dt_current = dt;
+    step_count++;
+    return dt;
+}
+
+// ── Exp propagator: per-kx EVP + explicit propagator assembly ──────────
+// For each kx > 0 we need the eigendecomposition of M_k = L_k⁻¹ R_k so
+// that propagator matrices
+//     f(M) = Q diag(f(ω²_n)) Q⁻¹
+// can be pre-baked for the four scalar fields cos(ω dt), sin(ω dt)/ω,
+// −ω sin(ω dt), cos(ω dt).
+//
+// Why not symmetrize:  the collocation L_k = −D^T·diag(ρ)·D + k²·diag(ρ)
+// appears symmetric on paper (L_{ij} = L_{ji} if one uses A = D^T ρ D with
+// symmetric D, but our D is the non-symmetric CGL differentiation matrix,
+// so L turns out non-symmetric in general and Cholesky fails).  Available
+// symmetric forms require weighting by CC quadrature and give a different
+// operator than the one used in assemble_path_d_operators / step_assembled_
+// linear — we would be integrating a subtly different system.
+//
+// Path taken:  Xgeev on M_k to get real eigenvalues (trusted; imag parts
+// typically ~1e-17 per compute_2d_gmode_evp), then host **inverse iteration**
+// polishes each eigenvector (exactly the recipe from compute_2d_gmode_evp
+// lines ~2143 onwards).  Q⁻¹ is computed by host Gauss-Jordan; we report
+// ‖QQ⁻¹ − I‖_∞ to stderr so the user can catch bad conditioning.
+//
+// Runtime cost of the setup: per-kx one Xgeev + n_int inverse iterations.
+// At 64² (nh=33, n_int=62) the setup runs in <1 s total, one-off.
+
+// Inverse iteration of (M − λ I) x = previous x.  Solves via Gaussian
+// elimination with partial pivoting, 5 iterations (exponential error
+// reduction of 1/Δλ per iter, enough for well-separated eigenvalues).
+static void inverse_iteration_eigvec(
+        const std::vector<double>& M_col,   // col-major, n×n
+        int n, double lambda,
+        std::vector<double>& out_vec) {
+    // Build (M − λI) col-major.
+    std::vector<double> A(M_col);
+    for (int i = 0; i < n; ++i) A[(size_t)i + (size_t)i * n] -= lambda;
+
+    // Seed vector: deterministic pseudo-random (avoid orthogonality
+    // collisions with other eigenvectors).
+    out_vec.resize(n);
+    for (int i = 0; i < n; ++i)
+        out_vec[i] = std::sin(0.7 * (i + 1) + 0.1 * lambda);
+    // Normalize.
+    double norm = 0.0;
+    for (double v : out_vec) norm += v * v;
+    norm = 1.0 / std::sqrt(std::max(norm, 1e-300));
+    for (double& v : out_vec) v *= norm;
+
+    // LU factor (A, partial pivot).  Done in place on a mutable copy.
+    std::vector<double> LU(A);
+    std::vector<int> piv(n);
+    for (int k = 0; k < n; ++k) {
+        int imax = k; double vmax = std::fabs(LU[(size_t)k + (size_t)k * n]);
+        for (int r = k + 1; r < n; ++r) {
+            double v = std::fabs(LU[(size_t)r + (size_t)k * n]);
+            if (v > vmax) { vmax = v; imax = r; }
+        }
+        piv[k] = imax;
+        if (imax != k) {
+            for (int c = 0; c < n; ++c)
+                std::swap(LU[(size_t)k + (size_t)c * n],
+                          LU[(size_t)imax + (size_t)c * n]);
+        }
+        double pivot = LU[(size_t)k + (size_t)k * n];
+        // If pivot is essentially zero, (M − λI) is singular — good,
+        // but we perturb to avoid division by zero.
+        if (std::fabs(pivot) < 1e-300) pivot = 1e-300;
+        LU[(size_t)k + (size_t)k * n] = pivot;
+        for (int r = k + 1; r < n; ++r) {
+            double f = LU[(size_t)r + (size_t)k * n] / pivot;
+            LU[(size_t)r + (size_t)k * n] = f;
+            for (int c = k + 1; c < n; ++c)
+                LU[(size_t)r + (size_t)c * n] -=
+                    f * LU[(size_t)k + (size_t)c * n];
+        }
+    }
+
+    auto lu_solve = [&](std::vector<double>& rhs) {
+        // Apply permutations.
+        for (int k = 0; k < n; ++k)
+            if (piv[k] != k) std::swap(rhs[k], rhs[piv[k]]);
+        // Forward substitute (L with implicit 1's on diagonal).
+        for (int k = 0; k < n; ++k) {
+            double s = rhs[k];
+            for (int j = 0; j < k; ++j) s -= LU[(size_t)k + (size_t)j * n] * rhs[j];
+            rhs[k] = s;
+        }
+        // Back substitute (U).
+        for (int k = n - 1; k >= 0; --k) {
+            double s = rhs[k];
+            for (int j = k + 1; j < n; ++j) s -= LU[(size_t)k + (size_t)j * n] * rhs[j];
+            rhs[k] = s / LU[(size_t)k + (size_t)k * n];
+        }
+    };
+
+    // 5 inverse iterations.
+    for (int iter = 0; iter < 5; ++iter) {
+        lu_solve(out_vec);
+        double s = 0.0;
+        for (double v : out_vec) s += v * v;
+        s = 1.0 / std::sqrt(std::max(s, 1e-300));
+        for (double& v : out_vec) v *= s;
+    }
+}
+
+// Host Gauss-Jordan inverse of col-major n×n matrix A.  Overwrites A with A⁻¹.
+static void host_gj_invert(std::vector<double>& A, int n) {
+    const int W2 = 2 * n;
+    std::vector<double> aug((size_t)n * W2, 0.0);
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j)
+            aug[(size_t)i * W2 + j] = A[(size_t)i + (size_t)j * n];
+        aug[(size_t)i * W2 + (n + i)] = 1.0;
+    }
+    for (int p = 0; p < n; ++p) {
+        int imax = p; double vmax = std::fabs(aug[(size_t)p * W2 + p]);
+        for (int r = p + 1; r < n; ++r) {
+            double v = std::fabs(aug[(size_t)r * W2 + p]);
+            if (v > vmax) { vmax = v; imax = r; }
+        }
+        if (vmax < 1e-300) {
+            std::fprintf(stderr, "  [Exp] host_gj_invert: singular (pivot %.3e)\n", vmax);
+            std::exit(1);
+        }
+        if (imax != p)
+            for (int c = 0; c < W2; ++c)
+                std::swap(aug[(size_t)p * W2 + c], aug[(size_t)imax * W2 + c]);
+        double inv_p = 1.0 / aug[(size_t)p * W2 + p];
+        for (int c = 0; c < W2; ++c) aug[(size_t)p * W2 + c] *= inv_p;
+        for (int r = 0; r < n; ++r) {
+            if (r == p) continue;
+            double f = aug[(size_t)r * W2 + p];
+            if (f == 0.0) continue;
+            for (int c = 0; c < W2; ++c)
+                aug[(size_t)r * W2 + c] -= f * aug[(size_t)p * W2 + c];
+        }
+    }
+    // Extract inverse into A (col-major).
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            A[(size_t)i + (size_t)j * n] = aug[(size_t)i * W2 + (n + j)];
+}
+
+// Sinc helper:  sin(ω dt)/ω → dt as ω → 0.  Uses Taylor branch for small |x|.
+static inline double sin_over_omega(double omega, double dt) {
+    double x = omega * dt;
+    if (std::fabs(x) < 1e-4) {
+        double x2 = x * x;
+        // dt * (1 − x²/6 + x⁴/120 − ...)
+        return dt * (1.0 - x2 / 6.0 + x2 * x2 / 120.0);
+    }
+    return std::sin(x) / omega;
+}
+
+// Build four per-kx propagator slabs (col-major) from M_k eigendecomposition.
+// Inputs:
+//   h_M_per_kx : (nh, n_int²) col-major M_k slabs (already on host)
+// Outputs (col-major, n_int²-stride):
+//   h_Tvv = cos(√M dt),   h_Tvw = sin(√M dt)/√M,
+//   h_Twv = −√M sin(√M dt), h_Tww = cos(√M dt)  (== h_Tvv).
+//
+// Strategy per kx (kx ≥ 1):
+//   1. Download M_k → host.
+//   2. cusolverDnXgeev → real eigenvalues λ_n (eigenvectors ignored).
+//   3. Host inverse iteration per λ_n → eigenvector φ_n.
+//   4. Gauss-Jordan invert Φ (columns φ_n) → Φ⁻¹.
+//   5. Emit T = Φ · diag(f(ω_n)) · Φ⁻¹  with ω_n = √λ_n for the four f's.
+//
+// Report ‖QQ⁻¹ − I‖_∞ to stderr; if > 1e-6 the propagator is untrustworthy
+// and we abort (conditioning too bad, would need SVD-based pseudoinverse).
+static void build_exp_per_kx(
+        const double* h_M_per_kx,   // (nh, n_int²) col-major
+        int n_int, int nh,
+        double dt,
+        std::vector<double>& h_Tvv,
+        std::vector<double>& h_Tvw,
+        std::vector<double>& h_Twv,
+        std::vector<double>& h_Tww) {
+    const size_t per_kx = (size_t)n_int * n_int;
+    h_Tvv.assign((size_t)nh * per_kx, 0.0);
+    h_Tvw.assign((size_t)nh * per_kx, 0.0);
+    h_Twv.assign((size_t)nh * per_kx, 0.0);
+    h_Tww.assign((size_t)nh * per_kx, 0.0);
+
+    // cuSOLVER device buffers reused across kx (freed at the end).
+    cusolverDnHandle_t solver = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreate(&solver));
+    cusolverDnParams_t params = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreateParams(&params));
+
+    double *d_M = nullptr;
+    cuDoubleComplex *d_Mc = nullptr, *d_Wc = nullptr;
+    int *d_info = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_M,  sizeof(double) * (size_t)n_int * n_int));
+    CUDA_CHECK(cudaMalloc(&d_Mc, sizeof(cuDoubleComplex) * (size_t)n_int * n_int));
+    CUDA_CHECK(cudaMalloc(&d_Wc, sizeof(cuDoubleComplex) * n_int));
+    CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
+
+    size_t work_d = 0, work_h = 0;
+    CUSOLVER_CHECK(cusolverDnXgeev_bufferSize(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_NOVECTOR,
+        (int64_t)n_int,
+        CUDA_C_64F, d_Mc, (int64_t)n_int,
+        CUDA_C_64F, d_Wc,
+        CUDA_C_64F, nullptr, (int64_t)n_int,
+        CUDA_C_64F, nullptr, (int64_t)n_int,
+        CUDA_C_64F, &work_d, &work_h));
+    void *d_work = nullptr; void *h_work = nullptr;
+    if (work_d) CUDA_CHECK(cudaMalloc(&d_work, work_d));
+    if (work_h) h_work = std::malloc(work_h);
+
+    std::vector<double> M_col((size_t)n_int * n_int);
+    std::vector<cuDoubleComplex> h_Wc_buf(n_int);
+    std::vector<double> Phi((size_t)n_int * n_int);
+    std::vector<double> Phi_inv((size_t)n_int * n_int);
+    std::vector<double> eigvec(n_int), omega(n_int);
+
+    double worst_cond = 0.0;
+    int worst_kx = -1;
+    for (int kx_idx = 0; kx_idx < nh; ++kx_idx) {
+        if (kx_idx == 0) continue;  // drift, skipped by k_apply_M_kx anyway
+
+        // Copy M_k slab (col-major) to host buffer + to device for Xgeev.
+        const double* slab = &h_M_per_kx[(size_t)kx_idx * per_kx];
+        std::copy(slab, slab + per_kx, M_col.data());
+
+        // Pack into complex on device for Xgeev.
+        CUDA_CHECK(cudaMemcpy(d_M, M_col.data(), sizeof(double) * per_kx,
+                              cudaMemcpyHostToDevice));
+        int blk = 256;
+        int grid_mc = ((int)per_kx + blk - 1) / blk;
+        k_real_to_cplx_local<<<grid_mc, blk>>>(d_Mc, d_M, (int)per_kx);
+
+        CUSOLVER_CHECK(cusolverDnXgeev(
+            solver, params,
+            CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_NOVECTOR,
+            (int64_t)n_int,
+            CUDA_C_64F, d_Mc, (int64_t)n_int,
+            CUDA_C_64F, d_Wc,
+            CUDA_C_64F, nullptr, (int64_t)n_int,
+            CUDA_C_64F, nullptr, (int64_t)n_int,
+            CUDA_C_64F, d_work, work_d, h_work, work_h, d_info));
+        int h_info = 0;
+        CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+        if (h_info != 0) {
+            std::fprintf(stderr,
+                "  [Exp] kx_idx=%d: Xgeev info=%d\n", kx_idx, h_info);
+            std::exit(1);
+        }
+
+        CUDA_CHECK(cudaMemcpy(h_Wc_buf.data(), d_Wc,
+                              sizeof(cuDoubleComplex) * n_int,
+                              cudaMemcpyDeviceToHost));
+
+        // Extract real eigenvalues; warn if large imag ratio.
+        // (M has real entries; eigenvalues come in complex conjugate pairs
+        // if any are complex.  Physical g-mode EVP produces real-positive
+        // eigenvalues; imag parts should be ~1e-17.)
+        double max_im_ratio = 0.0;
+        std::vector<double> eigvals(n_int);
+        for (int k = 0; k < n_int; ++k) {
+            double re = h_Wc_buf[k].x, im = h_Wc_buf[k].y;
+            eigvals[k] = re;
+            double ratio = std::fabs(im) / (std::fabs(re) + 1e-30);
+            if (ratio > max_im_ratio) max_im_ratio = ratio;
+        }
+        if (max_im_ratio > 1e-6) {
+            std::fprintf(stderr,
+                "  [Exp] kx_idx=%d: eigenvalue max_im_ratio=%.3e (may be poorly conditioned)\n",
+                kx_idx, max_im_ratio);
+        }
+
+        // Inverse iteration per eigenvalue to build Φ (col-major, columns = φ_n).
+        for (int k = 0; k < n_int; ++k) {
+            inverse_iteration_eigvec(M_col, n_int, eigvals[k], eigvec);
+            for (int i = 0; i < n_int; ++i)
+                Phi[(size_t)i + (size_t)k * n_int] = eigvec[i];
+            double om = std::sqrt(std::max(eigvals[k], 0.0));
+            omega[k] = om;
+        }
+
+        // Invert Φ via host Gauss-Jordan.
+        Phi_inv = Phi;
+        host_gj_invert(Phi_inv, n_int);
+
+        // Check conditioning: ‖QQ⁻¹ − I‖_∞.
+        double worst_this = 0.0;
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                double s = 0.0;
+                for (int k = 0; k < n_int; ++k)
+                    s += Phi[(size_t)i + (size_t)k * n_int]
+                       * Phi_inv[(size_t)k + (size_t)j * n_int];
+                double target = (i == j) ? 1.0 : 0.0;
+                double err = std::fabs(s - target);
+                if (err > worst_this) worst_this = err;
+            }
+        }
+        if (worst_this > worst_cond) { worst_cond = worst_this; worst_kx = kx_idx; }
+        if (worst_this > 1e-6) {
+            std::fprintf(stderr,
+                "  [Exp] kx_idx=%d: ‖QQ⁻¹−I‖∞=%.3e (eigenvectors untrusted)\n",
+                kx_idx, worst_this);
+        }
+
+        // Assemble four propagator matrices for this kx.
+        //   T_f[i,j] = Σ_k Φ[i,k] · f(ω_k) · Φ⁻¹[k,j]
+        double* Svv = &h_Tvv[(size_t)kx_idx * per_kx];
+        double* Svw = &h_Tvw[(size_t)kx_idx * per_kx];
+        double* Swv = &h_Twv[(size_t)kx_idx * per_kx];
+        double* Sww = &h_Tww[(size_t)kx_idx * per_kx];
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                double acc_vv = 0.0, acc_vw = 0.0, acc_wv = 0.0;
+                for (int k = 0; k < n_int; ++k) {
+                    double phi_ik = Phi    [(size_t)i + (size_t)k * n_int];
+                    double pi_kj  = Phi_inv[(size_t)k + (size_t)j * n_int];
+                    double om_k   = omega[k];
+                    double c      = std::cos(om_k * dt);
+                    double soo    = sin_over_omega(om_k, dt);
+                    double s_om   = om_k * std::sin(om_k * dt);
+                    acc_vv += phi_ik * c   * pi_kj;
+                    acc_vw += phi_ik * soo * pi_kj;
+                    acc_wv += phi_ik * (-s_om) * pi_kj;
+                }
+                Svv[(size_t)i + (size_t)j * n_int] = acc_vv;
+                Svw[(size_t)i + (size_t)j * n_int] = acc_vw;
+                Swv[(size_t)i + (size_t)j * n_int] = acc_wv;
+                Sww[(size_t)i + (size_t)j * n_int] = acc_vv;
+            }
+        }
+    }
+
+    std::fprintf(stderr,
+        "  [Exp] worst ‖QQ⁻¹ − I‖∞ = %.3e  (at kx_idx=%d)\n",
+        worst_cond, worst_kx);
+
+    // Cleanup.
+    if (d_work) cudaFree(d_work);
+    if (h_work) std::free(h_work);
+    cudaFree(d_M); cudaFree(d_Mc); cudaFree(d_Wc); cudaFree(d_info);
+    cusolverDnDestroyParams(params);
+    cusolverDnDestroy(solver);
+}
+
+double AnelasticSLSolver::step_exp_propagator(double dt) {
+    if (d_M_per_kx == nullptr) assemble_path_d_operators();
+    if (d_M_per_kx == nullptr) {
+        std::fprintf(stderr, "step_exp_propagator: assemble failed.\n");
+        return 0.0;
+    }
+    const int n_int = n_int_path_d;
+    const size_t per_kx = (size_t)n_int * n_int;
+
+    if (d_Tvv_per_kx == nullptr || exp_dt_cached != dt) {
+        // Download M slabs from device, call build_exp_per_kx.
+        std::vector<double> h_M((size_t)nh * per_kx);
+        CUDA_CHECK(cudaMemcpy(h_M.data(), d_M_per_kx,
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyDeviceToHost));
+        std::vector<double> h_Tvv, h_Tvw, h_Twv, h_Tww;
+        build_exp_per_kx(h_M.data(), n_int, nh, dt,
+                         h_Tvv, h_Tvw, h_Twv, h_Tww);
+
+        if (d_Tvv_per_kx) cudaFree(d_Tvv_per_kx);
+        if (d_Tvw_per_kx) cudaFree(d_Tvw_per_kx);
+        if (d_Twv_per_kx) cudaFree(d_Twv_per_kx);
+        if (d_Tww_per_kx) cudaFree(d_Tww_per_kx);
+        size_t B = sizeof(double) * (size_t)nh * per_kx;
+        CUDA_CHECK(cudaMalloc(&d_Tvv_per_kx, B));
+        CUDA_CHECK(cudaMalloc(&d_Tvw_per_kx, B));
+        CUDA_CHECK(cudaMalloc(&d_Twv_per_kx, B));
+        CUDA_CHECK(cudaMalloc(&d_Tww_per_kx, B));
+        CUDA_CHECK(cudaMemcpy(d_Tvv_per_kx, h_Tvv.data(), B, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_Tvw_per_kx, h_Tvw.data(), B, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_Twv_per_kx, h_Twv.data(), B, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_Tww_per_kx, h_Tww.data(), B, cudaMemcpyHostToDevice));
+        exp_dt_cached = dt;
+        std::fprintf(stderr,
+            "  [Exp] built T_{vv,vw,wv,ww} for dt=%.6e (nh=%d, n_int=%d)\n",
+            dt, nh, n_int);
+    }
+
+    // Lazy-allocate the dedicated ncplx-sized complex scratch.
+    if (d_exp_scratch == nullptr) {
+        CUDA_CHECK(cudaMalloc(&d_exp_scratch,
+                              sizeof(cufftDoubleComplex) * (size_t)ncplx));
+    }
+
+    // FFT_x(V_n), FFT_x(W_n) → d_fhat, d_pihat.
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_v,     d_fhat));
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_rhs_v, d_pihat));
+
+    // V̂_{n+1} = Tvv·V̂ + Tvw·Ŵ  into d_ghat.
+    _apply_M_kx_to_vhat(d_fhat, d_ghat, d_Tvv_per_kx, n_int, ny, nh, cublas);
+    dim3 grid_kx(nh); dim3 block_row(n_int);
+    k_apply_M_kx_add<<<grid_kx, block_row>>>(
+        reinterpret_cast<const cuDoubleComplex*>(d_pihat),
+        reinterpret_cast<cuDoubleComplex*>(d_ghat),
+        d_Tvw_per_kx, n_int, ny, nh);
+
+    // Ŵ_{n+1} = Twv·V̂ + Tww·Ŵ  into d_exp_scratch.
+    _apply_M_kx_to_vhat(d_fhat, d_exp_scratch, d_Twv_per_kx,
+                        n_int, ny, nh, cublas);
+    k_apply_M_kx_add<<<grid_kx, block_row>>>(
+        reinterpret_cast<const cuDoubleComplex*>(d_pihat),
+        reinterpret_cast<cuDoubleComplex*>(d_exp_scratch),
+        d_Tww_per_kx, n_int, ny, nh);
+
+    // IFFT_x both; scale by 1/nx; zero walls.
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat,        d_v));
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_exp_scratch, d_rhs_v));
+    double inv_nx = 1.0 / (double)nx;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_v,     1));
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_rhs_v, 1));
+    int grid_bdy = (nx + 255) / 256;
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_v,     nx, ny);
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+
+    dt_current = dt;
+    step_count++;
+    return dt;
+}
+
+// ── H_IM diagnostic ─────────────────────────────────────────────────────
+// Computes H = ½ ⟨W,W⟩ + ½ ⟨V, M V⟩ with the same Clenshaw-Curtis · 1/nx
+// quadrature convention as the dispatch diagnostics (dns_triad path).
+// Uses d_pihat and d_ghat as complex scratch (safe outside pressure solve),
+// d_rhs_pi as real scratch for the physical-space image of M·V.
+double AnelasticSLSolver::hamiltonian_im() {
+    if (d_M_per_kx == nullptr) return std::nan("");
+    const int n_int = n_int_path_d;
+
+    // FFT(V) → d_pihat, apply M, IFFT back to d_rhs_pi, divide by nx.
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_v, d_pihat));
+    _apply_M_kx_to_vhat(d_pihat, d_ghat, d_M_per_kx, n_int, ny, nh, cublas);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_rhs_pi));
+    double inv_nx = 1.0 / (double)nx;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_rhs_pi, 1));
+
+    // Download V, M·V, W, and compute the quadratic form on host.
+    std::vector<double> h_V(ncell), h_MV(ncell), h_W(ncell);
+    CUDA_CHECK(cudaMemcpy(h_V.data(),  d_v,     sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_MV.data(), d_rhs_pi, sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_W.data(),  d_rhs_v, sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+
+    // Reproduce the Clenshaw-Curtis w_cc[jy] used in dispatch diagnostics
+    // (same recipe as scripts/nonlinear_paths_infra.py).
+    std::vector<double> w_cc(ny, 0.0);
+    {
+        int N = ny - 1;
+        std::vector<double> w(N + 1, 0.0);
+        for (int k = 0; k <= N; ++k) {
+            double s = 0.0;
+            int J = N / 2;
+            for (int j = 1; j <= J; ++j) {
+                double b = (2 * j != N) ? 2.0 : 1.0;
+                s += b / (4.0 * j * j - 1) *
+                     std::cos(2.0 * j * k * M_PI / N);
+            }
+            w[k] = (1.0 - s) * 2.0 / (double)N;
+        }
+        w[0] /= 2.0; w[N] /= 2.0;
+        for (int k = 0; k <= N; ++k) w_cc[k] = w[N - k] * Ly / 2.0;
+    }
+
+    double ke = 0.0, pe = 0.0;
+    for (int jy = 0; jy < ny; ++jy) {
+        double w = w_cc[jy];
+        double row_kw = 0.0, row_pw = 0.0;
+        for (int ix = 0; ix < nx; ++ix) {
+            int k = jy * nx + ix;
+            row_kw += h_W[k]  * h_W[k];
+            row_pw += h_V[k]  * h_MV[k];
+        }
+        ke += 0.5 * w * row_kw / (double)nx;
+        pe += 0.5 * w * row_pw / (double)nx;
+    }
+    return ke + pe;
+}
+
 // Apply M_kx per x-Fourier mode: for each kx_idx (skipping kx=0),
 //     v_hat_out[row, kx] = Σ_col M_{kx}[row, col] · v_hat_in[col, kx]
 // with row, col ∈ [0, n_int) mapping to interior y-nodes [1, ny-1).
@@ -3484,6 +4206,32 @@ static void _apply_M_kx_to_vhat(
         reinterpret_cast<const cuDoubleComplex*>(d_vhat),
         reinterpret_cast<cuDoubleComplex*>(d_out),
         d_M_per_kx, n_int, ny, nh);
+}
+
+// Accumulate variant:  d_out += M_per_kx · d_vhat  (no zero, no wall writes).
+// Used by step_implicit_midpoint to combine  V̂_{n+1} = B·V̂_n + C·Ŵ_n  in
+// two passes.  Skips kx=0 (which stays at whatever the caller initialized).
+__global__ static void k_apply_M_kx_add(
+        const cuDoubleComplex* vhat_in,
+        cuDoubleComplex* vhat_out,
+        const double* M_per_kx,
+        int n_int, int ny, int nh) {
+    int kx_idx = blockIdx.x;
+    int row = threadIdx.x;
+    if (kx_idx >= nh || row >= n_int) return;
+    if (kx_idx == 0) return;  // kx=0 frozen at caller's init value
+    const double* M = M_per_kx + (size_t)kx_idx * (size_t)n_int * n_int;
+    double sum_re = 0.0, sum_im = 0.0;
+    for (int col = 0; col < n_int; ++col) {
+        double m_rc = M[(size_t)col * n_int + row];
+        cuDoubleComplex vin = vhat_in[(size_t)(col + 1) * nh + kx_idx];
+        sum_re += m_rc * vin.x;
+        sum_im += m_rc * vin.y;
+    }
+    int jy_out = row + 1;
+    size_t off = (size_t)jy_out * nh + kx_idx;
+    vhat_out[off].x += sum_re;
+    vhat_out[off].y += sum_im;
 }
 
 // Public helper: rebuild u in-place from d_v via anelastic continuity.
@@ -3558,6 +4306,43 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
     };
     auto axpy = [&](double alpha, const double* x, double* y) {
         CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &alpha, x, 1, y, 1));
+    };
+
+    // Project out the kx=0 (x-mean) column of a physical field in-place.
+    // Required after the nonlinear block: (u·∇)v generates a DC Reynolds-
+    // stress mode  ⟨v⟩_x(y) ≠ 0  that anelastic continuity forbids (see
+    // k_zero_kx0_column in anelastic_sl_kernels.cu).  Uses d_fhat / d_ghat
+    // as scratch — safe to call between RK4 substeps because those buffers
+    // are regenerated each FFT.  scale = 1/nx absorbs the unnormalised
+    // cuFFT C2R.
+    const int grid_ny_1d = (ny + 255) / 256;
+    auto zero_kx0 = [&](double* d_field) {
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_field, d_fhat));
+        k_zero_kx0_column<<<grid_ny_1d, 256>>>(d_fhat, ny, nh);
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_fhat, d_field));
+        double s = 1.0 / (double)nx;
+        CUBLAS_CHECK(cublasDscal(cublas, ncell, &s, d_field, 1));
+    };
+
+    // ── Galerkin V_K projection  (bandlimit to 2/3 rule in x) ─────────
+    // Projects a physical-space field onto V_K = {v : v̂_k = 0, |k| > K}
+    // with K = (nh-1)·2/3.  Also zeros the k=0 column (anelastic mean-flow
+    // constraint), so this is the canonical "Galerkin anelastic" projector
+    // P_{V_K ∩ ⟨v⟩_x=0} applied to a real field.
+    //
+    // Key: when EVERY RHS of the flow is projected through P, the
+    // discrete system lives entirely on V_K — no aliasing contamination,
+    // no energy leakage to unresolved modes, and the Hamiltonian H|_{V_K}
+    // is the exact conserved quantity (Galerkin truncation turns the
+    // infinite-dim PDE into a finite-dim Hamiltonian system).
+    const int kx_cut = (2 * (nh - 1)) / 3;
+    auto project_VK = [&](double* d_field) {
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_field, d_fhat));
+        k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, kx_cut);
+        k_zero_kx0_column<<<grid_ny_1d, 256>>>(d_fhat, ny, nh);
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_fhat, d_field));
+        double s = 1.0 / (double)nx;
+        CUBLAS_CHECK(cublasDscal(cublas, ncell, &s, d_field, 1));
     };
 
     // Compute d_deriv = -M·V_src (row-major, walls zeroed).
@@ -3652,121 +4437,152 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_u_dst));
     };
 
-    // ── Compute nonlinear derivatives at given state (V_src, W_src, B_src) ─
+    // ── Compute nonlinear derivatives at given state (V_src, B_src) ─────
     //    dV = -(u·∂x V + v·∂y V)
-    //    dW = -(u·∂x W + v·∂y W)   (advect ∂_t V consistently — keeps
-    //                                Strang O(dt²) symmetry intact)
     //    dB = -(u·∂x B + v·∂y B)
-    // u is derived from V_src via continuity.
+    // u is derived from V_src via continuity.  W is NOT advected here —
+    // Python prototype scripts/nonlinear_path1_opsplit.py keeps W frozen
+    // through the nonlinear block (O(amp²) Strang error, cf. 2.3 of
+    // docs/dns_expA_triad_gpu_2026-05-04.md).  Advecting W as a passive
+    // scalar injected systematic energy drift in high-kx seeded modes
+    // (kx=5 mode-b lost 95%/100 periods, diagnosed 2026-05-04).
     //
     // Output buffers must be distinct from d_scratch / d_rhs_pi / d_fhat /
     // d_ghat since those are used internally for ∂x/∂y evaluation.  We use
-    // d_strang_deriv (dV), d_strang_dw (dW), d_strang_db (dB).
+    // d_strang_deriv (dV), d_strang_db (dB).
     //
     // NOTE: overwrites d_u with u rebuilt from continuity (Strang has no
     // independent u state — it's fully determined by V via anelastic
     // ∇·(ρ₀u) = 0).
     auto nonlinear_deriv = [&](const double* d_V_src,
-                               const double* d_W_src,
                                const double* d_B_src,
                                double* d_out_dV,
-                               double* d_out_dW,
                                double* d_out_dB) {
         // Rebuild u into d_u.
         rebuild_u_from_v(d_V_src, d_u);
         const double inv_nx = 1.0 / (double)nx;
 
-        // Helper: dF = -(u·∂x F_src + v·∂y F_src).  Writes to d_dF.
+        // Helper: dF = -(u·∂x F_src + v·∂y F_src), Galerkin-projected onto
+        // V_K at the end.  Bandlimiting ∂x F before the pointwise product
+        // is necessary but not sufficient — the product itself re-populates
+        // the unresolved modes via k1+k2 mixing.  project_VK on the output
+        // closes the Galerkin loop.
         auto advect = [&](const double* d_F_src, double* d_dF) {
-            // ∂x F → d_rhs_pi
+            // ∂x F → d_rhs_pi  (input fhat dealiased pre-derivative).
             CUFFT_CHECK(cufftExecD2Z(plan_r2c_x,
                                      const_cast<double*>(d_F_src), d_fhat));
-            k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh,
-                                                  (2 * (nh - 1)) / 3);
+            k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, kx_cut);
             k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx,
                                              inv_nx, ny, nh);
-            CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_rhs_pi));  // ∂x F
+            CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_rhs_pi));
             // ∂y F → d_scratch
             apply_dy(cublas, d_F_src, d_scratch, d_Dy, nx, ny);
-            // dF = -u·∂x F - v·∂y F.
+            // dF = -u·∂x F - v·∂y F
             CUDA_CHECK(cudaMemsetAsync(d_dF, 0, sizeof(double) * ncell));
             k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_u, d_rhs_pi, ncell);
             k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_V_src, d_scratch, ncell);
+            // Galerkin closure: project the quadratic product back onto V_K.
+            project_VK(d_dF);
         };
 
         advect(d_V_src, d_out_dV);
-        advect(d_W_src, d_out_dW);
         advect(d_B_src, d_out_dB);
     };
 
-    // ── Nonlinear RK4 full step of size dt on (V, W, B) ───────────────
-    // Advects all three state components by u = u(V) from continuity.
-    // Uses d_strang_{v,w,b}_{0,acc,s} for snapshots / accumulators /
-    // substep state, and d_strang_{deriv, dw, db} for the RK4 k-stages.
+    // ── Nonlinear RK4 full step of size dt on (V, B) ──────────────────
+    // Advects V and B only by u = u(V) from continuity; W is frozen.
+    // Uses d_strang_{v,b}_{0,acc,s} for snapshots / accumulators /
+    // substep state, and d_strang_{deriv, db} for the RK4 k-stages.
     auto nonlinear_step = [&](double h) {
-        // Snapshots + accumulators.
+        // Snapshots + accumulators (V, B only; W is frozen).
         copy_dev(d_strang_v0, d_v);
-        copy_dev(d_strang_w0, d_rhs_v);
         copy_dev(d_strang_b0, d_b);
         copy_dev(d_strang_v_acc, d_strang_v0);
-        copy_dev(d_strang_w_acc, d_strang_w0);
         copy_dev(d_strang_b_acc, d_strang_b0);
 
-        // ── k1 at (V0, W0, B0) ───────────────────────────────────────
-        nonlinear_deriv(d_strang_v0, d_strang_w0, d_strang_b0,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k1 at (V0, B0) ───────────────────────────────────────────
+        nonlinear_deriv(d_strang_v0, d_strang_b0,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 6.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
-        // Substep V_s = V0 + h/2·dV1, similarly W_s, B_s.
         copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
-        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_dw,    d_strang_w_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
 
-        // ── k2 at (V_s, W_s, B_s) ────────────────────────────────────
-        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k2 at (V_s, B_s) ────────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 3.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
         copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
-        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_dw,    d_strang_w_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
 
-        // ── k3 at (V_s, W_s, B_s) ────────────────────────────────────
-        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k3 at (V_s, B_s) ────────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 3.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
         copy_dev(d_strang_v_s, d_strang_v0); axpy(h, d_strang_deriv, d_strang_v_s);
-        copy_dev(d_strang_w_s, d_strang_w0); axpy(h, d_strang_dw,    d_strang_w_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(h, d_strang_db,    d_strang_b_s);
 
-        // ── k4 at (V_s, W_s, B_s) ────────────────────────────────────
-        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k4 at (V_s, B_s) ────────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 6.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
 
-        // Commit.
-        copy_dev(d_v,     d_strang_v_acc);
-        copy_dev(d_rhs_v, d_strang_w_acc);
-        copy_dev(d_b,     d_strang_b_acc);
-        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v,     nx, ny);
-        k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+        // Commit.  W (d_rhs_v) is untouched — retains the value left by
+        // the preceding linear half-step.
+        copy_dev(d_v, d_strang_v_acc);
+        copy_dev(d_b, d_strang_b_acc);
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+        // Galerkin closure:  P_{V_K} on state.  Also absorbs the k=0
+        // anelastic mean-flow projection (diagnosed 2026-05-04: without
+        // it E(k=0) drained E_b via Reynolds stress; project_VK includes
+        // that operation).  Even though each advect() already projected
+        // its own output, a fresh RK4 accumulator is a linear combination
+        // of projected fields, so v_acc ∈ V_K algebraically — the call
+        // here is defensive against round-off drift.
+        project_VK(d_v);
+        project_VK(d_b);
+        // zero_y_boundary a second time: FFT round-trip can leak 1e-16
+        // into the walls.
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+    };
+
+    // Linear-block choice:  if td_strang_exp_nonlinear is on, replace the
+    // RK4 linear_half lambda with the exact exponential propagator at dt/2.
+    // step_exp_propagator caches four propagator slabs per distinct dt, so
+    // calling it with dt/2 just populates a different cache slot than the
+    // linear-only ANSL_TD_KIND=exp_propagator mode would.  exp_dt_cached is
+    // shared, so the cache is rebuilt every time dt flips between dt and
+    // dt/2 — but we never call both paths in the same run, so steady-state
+    // reuse is fine.
+    auto exp_half = [&](double h) {
+        step_exp_propagator(h);
     };
 
     // ── Strang (A) — linear half-step dt/2 ─────────────────────────────
-    linear_half(0.5 * dt);
+    if (td_strang_exp_nonlinear) exp_half(0.5 * dt);
+    else                          linear_half(0.5 * dt);
     // ── Strang (B) — nonlinear full-step dt ───────────────────────────
     nonlinear_step(dt);
     // ── Strang (C) — linear half-step dt/2 ─────────────────────────────
-    linear_half(0.5 * dt);
+    if (td_strang_exp_nonlinear) exp_half(0.5 * dt);
+    else                          linear_half(0.5 * dt);
 
     step_count++;
     return dt;
+}
+
+// Thin wrapper exposing step_strang_nonlinear's body under an explicit name
+// when the Exp-prop linear block is desired.  This just forces td_strang_
+// exp_nonlinear=true for the duration of the call (no-op if already true).
+double AnelasticSLSolver::step_strang_exp_nonlinear(double dt) {
+    bool prev = td_strang_exp_nonlinear;
+    td_strang_exp_nonlinear = true;
+    double out = step_strang_nonlinear(dt);
+    td_strang_exp_nonlinear = prev;
+    return out;
 }
 
 // Manufactured-solution self-test.
@@ -3919,4 +4735,113 @@ void AnelasticSLSolver::download_omega(std::vector<double>& h_omega) {
     h_omega.resize(ncell);
     CUDA_CHECK(cudaMemcpy(h_omega.data(), d_omega, sizeof(double) * ncell,
                           cudaMemcpyDeviceToHost));
+}
+
+// ── VRAM snapshot ring (see cuh comments; mirrors cart_ale2 frame buffer) ─
+
+void AnelasticSLSolver::alloc_snap_buffer(int headroom_mb,
+                                          const std::string& run_dir) {
+    snap_run_dir = run_dir;
+    size_t free_b = 0, total_b = 0;
+    cudaMemGetInfo(&free_b, &total_b);
+    size_t headroom_b = (size_t)headroom_mb * 1024ull * 1024ull;
+    if (free_b <= headroom_b) {
+        std::fprintf(stderr,
+            "  AnSL snap buffer: only %.2f GB free, %.2f GB headroom — disabling\n",
+            free_b / 1.0e9, headroom_b / 1.0e9);
+        snap_capacity = 0;
+        return;
+    }
+    size_t pool_b = free_b - headroom_b;
+    size_t per_frame_b = (size_t)ncell * 3ull * sizeof(float);
+    snap_capacity = (int)(pool_b / per_frame_b);
+    if (snap_capacity < 4) snap_capacity = 4;
+    size_t actual_b = (size_t)snap_capacity * per_frame_b;
+    if (cudaMalloc(&d_snap_pool, actual_b) != cudaSuccess) {
+        snap_capacity = (int)(((size_t)(free_b * 0.5)) / per_frame_b);
+        if (snap_capacity < 4) snap_capacity = 4;
+        actual_b = (size_t)snap_capacity * per_frame_b;
+        CUDA_CHECK(cudaMalloc(&d_snap_pool, actual_b));
+    }
+    snap_count = 0;
+    snap_total = 0;
+    snap_times.clear();
+    snap_steps.clear();
+
+    // Open packed binary file once; 16 MB iobuf for coalesced fwrite.
+    std::string path = run_dir + "/snapshots.bin";
+    snap_fp = std::fopen(path.c_str(), "wb");
+    if (!snap_fp) {
+        std::fprintf(stderr,
+            "  AnSL snap buffer: failed to open %s — disabling\n",
+            path.c_str());
+        cudaFree(d_snap_pool); d_snap_pool = nullptr; snap_capacity = 0;
+        return;
+    }
+    snap_iobuf.resize(16 * 1024 * 1024);
+    std::setvbuf(snap_fp, snap_iobuf.data(), _IOFBF, snap_iobuf.size());
+    int32_t hdr[4] = { (int32_t)ny, (int32_t)nx, 3, 0 };
+    std::fwrite(hdr, sizeof(int32_t), 4, snap_fp);
+
+    std::fprintf(stderr,
+        "  AnSL snap buffer: %d frames × %.2f MB = %.2f GB "
+        "(free was %.2f GB, headroom %.2f GB) → %s\n",
+        snap_capacity, per_frame_b / 1.0e6, actual_b / 1.0e9,
+        free_b / 1.0e9, headroom_b / 1.0e9, path.c_str());
+}
+
+void AnelasticSLSolver::capture_snap(double t, int step) {
+    if (!d_snap_pool || snap_capacity == 0) return;
+    if (snap_count >= snap_capacity) {
+        flush_snaps_to_disk();
+    }
+    // u is derived from v via continuity; refresh d_u before packing.
+    rebuild_u_from_continuity();
+    int B = 256;
+    int grid = (ncell + B - 1) / B;
+    float* slot = d_snap_pool + (size_t)snap_count * 3ull * (size_t)ncell;
+    k_ansl_pack_snap<<<grid, B>>>(d_u, d_v, d_b, slot, ncell);
+    snap_times.push_back(t);
+    snap_steps.push_back(step);
+    snap_count++;
+}
+
+void AnelasticSLSolver::flush_snaps_to_disk() {
+    if (snap_count == 0 || !d_snap_pool || !snap_fp) {
+        snap_count = 0;
+        snap_times.clear();
+        snap_steps.clear();
+        return;
+    }
+    size_t per_frame = (size_t)ncell * 3ull;
+    std::vector<float> host((size_t)snap_count * per_frame);
+    CUDA_CHECK(cudaMemcpy(host.data(), d_snap_pool,
+                          host.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    std::fprintf(stderr,
+        "  AnSL snap flush: %d frames (%.2f MB) → snapshots.bin ...",
+        snap_count, host.size() * sizeof(float) / 1.0e6);
+    std::fflush(stderr);
+    // Record layout on disk: [double t, float u[ncell], float v[ncell],
+    // float b[ncell]] repeated for each frame.
+    for (int f = 0; f < snap_count; ++f) {
+        double t = snap_times[f];
+        std::fwrite(&t, sizeof(double), 1, snap_fp);
+        std::fwrite(host.data() + (size_t)f * per_frame,
+                    sizeof(float), per_frame, snap_fp);
+        ++snap_total;
+    }
+    std::fprintf(stderr, " done (total %d)\n", snap_total);
+    snap_count = 0;
+    snap_times.clear();
+    snap_steps.clear();
+}
+
+void AnelasticSLSolver::free_snap_buffer() {
+    if (snap_fp) { std::fflush(snap_fp); std::fclose(snap_fp); snap_fp = nullptr; }
+    if (d_snap_pool) { cudaFree(d_snap_pool); d_snap_pool = nullptr; }
+    snap_capacity = snap_count = snap_total = 0;
+    snap_times.clear();
+    snap_steps.clear();
+    snap_iobuf.clear();
 }
