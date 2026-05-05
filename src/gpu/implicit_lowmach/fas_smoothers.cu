@@ -1,8 +1,8 @@
 // FAS smoothers: block-Jacobi, SIMPLE pressure correction, GMRES(k)
 
-#include "fas2_solver.cuh"
+#include "fas_solver.cuh"
 #include "fas_linalg.cuh"
-#include "../eos.h"
+#include "eos.h"
 #include <cmath>
 #include <vector>
 #include <algorithm>
@@ -10,7 +10,7 @@
 // ========================= Block Jacobi smoother ========================
 
 __global__
-void k_fas2_assemble_blkjac(
+void k_fas_assemble_blkjac(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face, const double* theta_face,
@@ -114,7 +114,7 @@ void k_fas2_assemble_blkjac(
 // One GPU block per θ-line; sequential Thomas algorithm on thread 0.
 
 __global__
-void k_fas2_line_solve(
+void k_fas_line_solve(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face, const double* theta_face,
@@ -293,12 +293,12 @@ void k_fas2_line_solve(
 
 // ========================= Theta-line Thomas sweep ========================
 // For each r-line (fixed i), solve the 4×4 block-tridiagonal system along θ.
-// Mirrors k_fas2_line_solve but sweeps in the θ direction.
+// Mirrors k_fas_line_solve but sweeps in the θ direction.
 // One GPU block per r-line; sequential Thomas algorithm on thread 0.
 // Captures θ-advection, θ-pressure gradient, and geometric source coupling.
 
 __global__
-void k_fas2_line_solve_theta(
+void k_fas_line_solve_theta(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face, const double* theta_face,
@@ -481,7 +481,7 @@ void k_fas2_line_solve_theta(
 
 // Apply line-solve correction with atmosphere masking
 __global__
-void k_fas2_apply_line_correction(
+void k_fas_apply_line_correction(
     double* rho, double* mr, double* mt, double* rhoE,
     const double* corr, const double* rho0, double atm_thresh,
     double omega, int nr, int nt, int ng) {
@@ -499,7 +499,7 @@ void k_fas2_apply_line_correction(
 // ========================= SIMPLE smoother kernels ========================
 
 __global__
-void k_fas2_mom_diag(const double* rho, const double* mr, const double* mt,
+void k_fas_mom_diag(const double* rho, const double* mr, const double* mt,
                     const double* rhoE,
                     const double* dr, const double* rc, const double* rf,
                     const double* dtheta,
@@ -520,7 +520,7 @@ void k_fas2_mom_diag(const double* rho, const double* mr, const double* mt,
 }
 
 __global__
-void k_fas2_vstar(const double* F, const double* Ap, const double* rho0,
+void k_fas_vstar(const double* F, const double* Ap, const double* rho0,
                  double atm_thresh, double* vr_s, double* vt_s, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
@@ -531,7 +531,7 @@ void k_fas2_vstar(const double* F, const double* Ap, const double* rho0,
 }
 
 __global__
-void k_fas2_div(const double* vr_s, const double* vt_s,
+void k_fas_div(const double* vr_s, const double* vt_s,
                const double* vol, const double* ar, const double* at,
                double* div_out, int nr, int nt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -547,21 +547,21 @@ void k_fas2_div(const double* vr_s, const double* vt_s,
 }
 
 __global__
-void k_fas2_prhs(const double* div_v, double* rhs, int nr, int nt) {
+void k_fas_prhs(const double* div_v, double* rhs, int nr, int nt) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
     rhs[flat] = (flat/nt == nr-1) ? 0.0 : div_v[flat];
 }
 
 __global__
-void k_fas2_inv_ap(const double* Ap, double* alpha, int n) {
+void k_fas_inv_ap(const double* Ap, double* alpha, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) alpha[i] = 1.0 / Ap[i];
 }
 
 // SIMPLE correction: momentum via Poisson-corrected velocity, ρ/E via block-inverse
 __global__
-void k_fas2_simple_correct(
+void k_fas_simple_correct(
     double* rho, double* mr, double* mt, double* rhoE,
     const double* F, const double* blk_inv,
     const double* vr_s, const double* vt_s,
@@ -614,10 +614,10 @@ void k_fas2_simple_correct(
 
 // ========================= SIMPLE smoother ========================
 
-void FasSolver2::assemble_smoother(int l, double g0_over_dt) {
-    FasLevel2& lev = levels[l];
+void FasSolver::assemble_smoother(int l, double g0_over_dt) {
+    FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
-    k_fas2_assemble_blkjac<<<(n+B-1)/B,B>>>(
+    k_fas_assemble_blkjac<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
         lev.d_r_center, lev.d_r_face, lev.d_theta_face,
@@ -625,7 +625,7 @@ void FasSolver2::assemble_smoother(int l, double g0_over_dt) {
         lev.d_gr0,
         lev.d_blk_inv,
         lev.nr, lev.nt, lev.ng, eos, g0_over_dt);
-    k_fas2_mom_diag<<<(n+B-1)/B,B>>>(
+    k_fas_mom_diag<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_dr, lev.d_r_center, lev.d_r_face, lev.d_dtheta,
         lev.d_Ap, lev.nr, lev.nt, lev.ng, g0_over_dt, eos);
@@ -633,7 +633,7 @@ void FasSolver2::assemble_smoother(int l, double g0_over_dt) {
 
 // Block Jacobi smooth: U ← U - ω · J⁻¹_diag · F(U)
 __global__
-void k_fas2_smooth_blkjac(
+void k_fas_smooth_blkjac(
     double* rho, double* mr, double* mt, double* rhoE,
     const double* F, const double* blk_inv,
     const double* rho0, double atm_thresh,
@@ -651,8 +651,8 @@ void k_fas2_smooth_blkjac(
     rhoE[k] -= omega * (B[12]*f0 + B[13]*f1 + B[14]*f2 + B[15]*f3);
 }
 
-void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
-    FasLevel2& lev = levels[l];
+void FasSolver::smooth(int l, double dt, double g0_over_dt, int n_iters) {
+    FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     bool verbose = false;
 
@@ -675,9 +675,9 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                 size_t smem_r = lev.nr * 56 * sizeof(double);
                 int threads_r = std::min(lev.nr, 256);
                 // Opt-in to extended shared memory when needed (>48 KB)
-                cudaFuncSetAttribute(k_fas2_line_solve,
+                cudaFuncSetAttribute(k_fas_line_solve,
                     cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem_r);
-                k_fas2_line_solve<<<lev.nt, threads_r, smem_r>>>(
+                k_fas_line_solve<<<lev.nt, threads_r, smem_r>>>(
                     lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                     lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
                     lev.d_r_center, lev.d_r_face, lev.d_theta_face,
@@ -685,7 +685,7 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                     lev.d_res, scratch,
                     lev.nr, lev.nt, lev.ng, eos, g0_over_dt);
             }
-            k_fas2_apply_line_correction<<<(n+B-1)/B,B>>>(
+            k_fas_apply_line_correction<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                 scratch, lev.d_rho0, atm_rho_thresh,
                 OMEGA, lev.nr, lev.nt, lev.ng);
@@ -696,9 +696,9 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
             {
                 size_t smem_t = lev.nt * 56 * sizeof(double);
                 int threads_t = std::min(lev.nt, 256);
-                cudaFuncSetAttribute(k_fas2_line_solve_theta,
+                cudaFuncSetAttribute(k_fas_line_solve_theta,
                     cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem_t);
-                k_fas2_line_solve_theta<<<lev.nr, threads_t, smem_t>>>(
+                k_fas_line_solve_theta<<<lev.nr, threads_t, smem_t>>>(
                     lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                     lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
                     lev.d_r_center, lev.d_r_face, lev.d_theta_face,
@@ -706,7 +706,7 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
                     lev.d_res, scratch,
                     lev.nr, lev.nt, lev.ng, eos, g0_over_dt);
             }
-            k_fas2_apply_line_correction<<<(n+B-1)/B,B>>>(
+            k_fas_apply_line_correction<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                 scratch, lev.d_rho0, atm_rho_thresh,
                 OMEGA, lev.nr, lev.nt, lev.ng);
@@ -715,7 +715,7 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
         } else {
             // ===== Fallback: point-wise block-Jacobi =====
             compute_F(l, g0_over_dt);
-            k_fas2_smooth_blkjac<<<(n+B-1)/B,B>>>(
+            k_fas_smooth_blkjac<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                 lev.d_res, lev.d_blk_inv,
                 lev.d_rho0, atm_rho_thresh,
@@ -726,17 +726,17 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
         // ===== SIMPLE pressure correction (elliptic coupling) =====
         if (use_simple_smoother) {
             compute_F(l, g0_over_dt);
-            k_fas2_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
+            k_fas_vstar<<<(n+B-1)/B,B>>>(lev.d_res, lev.d_Ap,
                 lev.d_rho0, atm_rho_thresh,
                 lev.d_vr_s, lev.d_vt_s, n);
-            k_fas2_div<<<(n+B-1)/B,B>>>(lev.d_vr_s, lev.d_vt_s,
+            k_fas_div<<<(n+B-1)/B,B>>>(lev.d_vr_s, lev.d_vt_s,
                 lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
                 lev.d_div_s, lev.nr, lev.nt);
-            k_fas2_inv_ap<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
-            k_fas2_prhs<<<(n+B-1)/B,B>>>(lev.d_div_s, lev.d_poisson_rhs, lev.nr, lev.nt);
+            k_fas_inv_ap<<<(n+B-1)/B,B>>>(lev.d_Ap, lev.d_inv_Ap, n);
+            k_fas_prhs<<<(n+B-1)/B,B>>>(lev.d_div_s, lev.d_poisson_rhs, lev.nr, lev.nt);
             CUDA_CHECK(cudaMemset(lev.d_dp, 0, n*sizeof(double)));
             lev.pressure_gmg.solve_varcoeff(lev.d_inv_Ap, lev.d_poisson_rhs, lev.d_dp, 2, 1e-2);
-            k_fas2_simple_correct<<<(n+B-1)/B,B>>>(
+            k_fas_simple_correct<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                 lev.d_res, lev.d_blk_inv,
                 lev.d_vr_s, lev.d_vt_s,
@@ -748,7 +748,7 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
         }
 
         if (l == 0 && sponge_r_start < sponge_r_top) {
-            k_fas2_sponge<<<(n+B-1)/B,B>>>(
+            k_fas_sponge<<<(n+B-1)/B,B>>>(
                 lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                 lev.d_rho0, lev.d_P0, lev.d_r_center,
                 sponge_r_start, sponge_r_top, sponge_kappa, dt,
@@ -757,67 +757,3 @@ void FasSolver2::smooth(int l, double dt, double g0_over_dt, int n_iters) {
         }
     }
 }
-
-// ========================= Viallet 2016 eq 72 scaling ========================
-//
-// Build cell-local diagonal scaling L (residual side) and R (correction side).
-// Using HSE reference state ρ₀, P₀ for stability across Newton iterations,
-// plus current |v| for the velocity-floor asymmetry.
-//
-//   L[ρ]  = ρ₀                             R[ρ]  = ρ₀
-//   L[mr] = ρ₀·max(|v_r|, α₁·c_s)          R[mr] = max(|v_r|, α₂·c_s)
-//   L[mt] = ρ₀·max(|v_θ|, α₁·c_s)          R[mt] = max(|v_θ|, α₂·c_s)
-//   L[E]  = ρ₀·c_s²                        R[E]  = c_s²
-//
-// The residual F has dimensions of (unknown)/time, so we scale L_i = scale(U_i)/dt.
-// The correction δU has dimensions of (unknown), so R_i = scale(U_i).
-// We also pre-compute invL = 1/L.
-__global__ void k_fas2_build_scaling(
-    const double* rho, const double* mr, const double* mt,
-    const double* rho0, const double* P0,
-    double* L, double* R, double* invL,
-    EOS eos, double alpha1, double alpha2,
-    int nr, int nt, int ng) {
-    int flat = blockIdx.x * blockDim.x + threadIdx.x;
-    if (flat >= nr*nt) return;
-    int i = flat / nt, j = flat % nt;
-    int k = fas_idx(i, j, nt, ng);
-    int n = nr * nt;
-
-    double rho_ref = fmax(rho0[flat], 1e-20);
-    double P_ref   = fmax(P0[flat], 1e-30);
-    double cs_ref  = eos.sound_speed(rho_ref, P_ref);
-
-    double rho_c = fmax(rho[k], 1e-20);
-    double vr = fabs(mr[k] / rho_c);
-    double vt = fabs(mt[k] / rho_c);
-
-    // L (residual side) — small α₁ floor: don't wash out low-Mach signal
-    double L_rho = rho_ref;
-    double L_mr  = rho_ref * fmax(vr, alpha1 * cs_ref);
-    double L_mt  = rho_ref * fmax(vt, alpha1 * cs_ref);
-    double L_E   = rho_ref * cs_ref * cs_ref;
-
-    // R (correction side) — large α₂ floor: don't let tiny δU pass convergence test
-    double R_rho = rho_ref;
-    double R_mr  = fmax(vr, alpha2 * cs_ref);
-    double R_mt  = fmax(vt, alpha2 * cs_ref);
-    double R_E   = cs_ref * cs_ref;
-
-    L[0*n + flat] = L_rho;     L[1*n + flat] = L_mr;
-    L[2*n + flat] = L_mt;      L[3*n + flat] = L_E;
-    R[0*n + flat] = R_rho;     R[1*n + flat] = R_mr;
-    R[2*n + flat] = R_mt;      R[3*n + flat] = R_E;
-    invL[0*n + flat] = 1.0 / L_rho;
-    invL[1*n + flat] = 1.0 / L_mr;
-    invL[2*n + flat] = 1.0 / L_mt;
-    invL[3*n + flat] = 1.0 / L_E;
-}
-
-// Multiply vector d_x by diagonal d_D in place: d_x[i] *= d_D[i]
-__global__ void k_fas2_scale_by_diag(double* d_x, const double* d_D, int N) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= N) return;
-    d_x[i] *= d_D[i];
-}
-

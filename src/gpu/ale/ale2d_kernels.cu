@@ -24,7 +24,7 @@
 //   F_k = ½ · (P+Q) · [A_edge(k−1→k) + A_edge(k→k+1)]
 // Node total force is the sum over the ≤4 incident cells.
 
-#include "../../src/gpu/ale2d_solver.cuh"
+#include "ale2d_solver.cuh"
 #include "fas_common.cuh"  // CUDA_CHECK
 #include <cmath>
 

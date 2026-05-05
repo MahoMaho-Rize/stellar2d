@@ -12,7 +12,7 @@
 } while(0)
 
 #ifdef __CUDACC__
-#include "../eos.h"
+#include "eos.h"
 
 __device__ __forceinline__
 int fas_idx(int i, int j, int nt, int ng) {

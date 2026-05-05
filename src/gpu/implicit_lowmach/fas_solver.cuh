@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
-#include "fas2_common.cuh"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
+#include "fas_common.cuh"
 #include "gmg_gpu.cuh"
 
 // FAS (Full Approximation Scheme) nonlinear multigrid for the low-Mach
@@ -19,7 +19,7 @@
 //   4. Prolongate: u_h += P·(u_H - Î·u_h)
 //   5. Post-smooth
 
-struct FasLevel2 {
+struct FasLevel {
     int nr, nt, ng;
     int total;  // (nr + 2*ng) * (nt + 2*ng)
     int phys;   // nr * nt
@@ -78,23 +78,10 @@ struct FasLevel2 {
     double *d_gmres_Ubak;             // state backup for matvec, size 4*phys
     double *d_Fk;                     // saved F(U) for JFNK matvec, size 4*phys
     double *d_gmres_w;                // matvec scratch, size 4*phys
-
-    // Viallet 2016 eq 72 per-cell asymmetric scaling (fas2 fix 3/4).
-    // Size 4*phys each. Rebuilt each Newton iter from (ρ₀, P₀, current state).
-    //   L[eq,cell]: left scale  (applied to residual F before Krylov)
-    //   R[eq,cell]: right scale (applied to δV → δU after Krylov)
-    //   invL[eq,cell] = 1/L: cached for matvec output scaling
-    //
-    // L_ρ = ρ₀                             R_ρ = ρ₀
-    // L_m = ρ₀·max(|v|, α₁·c_s)  α₁=1e-5   R_m = max(|v|, α₂·c_s)  α₂=1
-    // L_E = ρ₀·c_s²                        R_E = c_s²
-    double *d_scale_L;
-    double *d_scale_R;
-    double *d_scale_invL;
     GmgGpu pressure_gmg;   // per-level pressure Poisson solver
 };
 
-struct FasSolver2 {
+struct FasSolver {
     void init(const Grid& grid, const EOS& eos, double G, double cfl);
     void destroy();
 
@@ -120,7 +107,7 @@ struct FasSolver2 {
     double compute_cfl_dt();
 
     int n_levels = 0;
-    FasLevel2 levels[12];
+    FasLevel levels[12];
 
     double gamma, G_const, cfl_num;
     EOS eos;
@@ -145,19 +132,6 @@ struct FasSolver2 {
     double sponge_r_top = 0.0;
     double sponge_kappa = 100.0;
     double interior_volume = 0.0;  // total volume of cells with ρ₀ >= atm_thresh
-
-    // Viallet 2016 eq 72 scaling parameters.
-    // α₁=1e-5 (L, residual side) - small floor keeps low-Mach momentum signal
-    // α₂=1    (R, correction side) - large floor prevents tiny δU from passing tol
-    double music_alpha1 = 1e-5;
-    double music_alpha2 = 1.0;
-    bool use_music_scaling = true;  // set false to mimic pre-fix FAS behavior
-
-    // Line-implicit-in-r preconditioner (fas2 fix 4/4). When true, replaces
-    // point-block-Jacobi M⁻¹ with a block-tri-diagonal solve along each
-    // θ column. Captures the radial stiff eigendirection exactly — essential
-    // on log-spaced radial meshes where innermost cells drive spectral radius.
-    bool use_line_precond_r = false;  // set true to enable
 
     static constexpr int NU1 = 4;     // pre-smooth iterations
     static constexpr int NU2 = 4;     // post-smooth iterations

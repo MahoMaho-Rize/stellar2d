@@ -2,10 +2,10 @@
 
 #ifdef USE_AMGX
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
-#include "../hydro/reconstruct.h"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
+#include "hydro/reconstruct.h"
 #include "gmg_gpu.cuh"
 #include <amgx_c.h>
 #include <string>

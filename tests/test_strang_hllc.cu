@@ -9,9 +9,9 @@
 //   5. HSE column: vertical HLLC flux difference ≈ dp̄/dy
 // ============================================================
 
-#include "gpu/strang_solver.cuh"
-#include "gpu/strang_device.cuh"
-#include "gpu/fas_common.cuh"
+#include "strang_solver.cuh"
+#include "strang_device.cuh"
+#include "fas_common.cuh"
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>

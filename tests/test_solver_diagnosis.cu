@@ -12,7 +12,7 @@
 // D6. Per-equation breakdown: which equation's residual dominates after correction?
 // D7. Transition dt anatomy: compare state changes at dt=1e-7 vs dt=5e-7
 
-#include "gpu/lowmach_solver.h"
+#include "lowmach_solver.h"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>

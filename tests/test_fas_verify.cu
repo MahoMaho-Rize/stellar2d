@@ -10,8 +10,8 @@
 //   6. Grid convergence: self-convergence of explicit solver
 // ============================================================
 
-#include "gpu/fas_solver.cuh"
-#include "gpu/fas_hllc.cuh"
+#include "fas_solver.cuh"
+#include "fas_hllc.cuh"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>

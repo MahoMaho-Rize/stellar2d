@@ -1,7 +1,7 @@
 #pragma once
 #include <cmath>
-#include "../eos.h"
-#include "../physics/nuclear_pp.h"
+#include "eos.h"
+#include "physics/nuclear_pp.h"
 
 // Device kernels for 1D Lagrangian radial stellar hydrodynamics.
 // All kernels operate on Radial1DLevel's device arrays.

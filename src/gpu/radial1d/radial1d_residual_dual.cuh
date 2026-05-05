@@ -16,11 +16,11 @@
 //
 // Nuclear pp included inline when nuclear_on (composition-independent form).
 
-#include "../physics/dual.cuh"
-#include "../physics/helmholtz_eos_dual.cuh"
-#include "../physics/nuclear_pp.h"
-#include "../physics/opacity.h"
-#include "../eos.h"
+#include "physics/dual.cuh"
+#include "physics/helmholtz_eos_dual.cuh"
+#include "physics/nuclear_pp.h"
+#include "physics/opacity.h"
+#include "eos.h"
 
 namespace dualR {
 

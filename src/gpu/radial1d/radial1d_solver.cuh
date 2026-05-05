@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
-#include "../physics/opacity_table.cuh"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
+#include "physics/opacity_table.cuh"
 
 // 1D radial Lagrangian stellar hydrodynamics solver (MESA RSP-inspired).
 //

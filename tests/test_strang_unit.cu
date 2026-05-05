@@ -8,9 +8,9 @@
 // 5. HLLC vacuum/near-vacuum safety
 // ============================================================
 
-#include "gpu/strang_solver.cuh"
-#include "gpu/strang_device.cuh"
-#include "gpu/fas_common.cuh"
+#include "strang_solver.cuh"
+#include "strang_device.cuh"
+#include "fas_common.cuh"
 #include <cstdio>
 #include <cmath>
 #include <vector>

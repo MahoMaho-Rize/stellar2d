@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
 #include "fas_common.cuh"
 
 // Cartesian 2D implicit Backward-Euler low-Mach solver.

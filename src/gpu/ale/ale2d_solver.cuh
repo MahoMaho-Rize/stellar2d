@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
 
 // 2D axisymmetric Lagrangian hydro solver (ALE, Phase A1+A2).
 //

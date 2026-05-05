@@ -30,63 +30,82 @@ set(SOURCES
 
 if(USE_GPU)
     list(APPEND SOURCES
-        src/gpu/fas_residual.cu
-        src/gpu/fas_smoothers.cu
-        src/gpu/fas_multigrid.cu
-        src/gpu/fas_solver.cu
-        src/gpu/fas2_residual.cu
-        src/gpu/fas2_smoothers.cu
-        src/gpu/fas2_multigrid.cu
-        src/gpu/fas2_solver.cu
-        src/gpu/simple_solver.cu
-        src/gpu/projection_solver.cu
-        src/gpu/strang_solver.cu
-        src/gpu/lm_residual.cu
-        src/gpu/lm_precond.cu
-        src/gpu/lm_krylov.cu
-        src/gpu/lowmach_solver.cu
-        src/gpu/gmg_gpu.cu
-        src/gpu/radial1d_solver.cu
-        src/gpu/radial1d_implicit.cu
+        # --- implicit / low-Mach / FAS family -------------------------------
+        src/gpu/implicit_lowmach/fas_residual.cu
+        src/gpu/implicit_lowmach/fas_smoothers.cu
+        src/gpu/implicit_lowmach/fas_multigrid.cu
+        src/gpu/implicit_lowmach/fas_solver.cu
+        src/gpu/implicit_lowmach/fas2_residual.cu
+        src/gpu/implicit_lowmach/fas2_smoothers.cu
+        src/gpu/implicit_lowmach/fas2_multigrid.cu
+        src/gpu/implicit_lowmach/fas2_solver.cu
+        src/gpu/implicit_lowmach/simple_solver.cu
+        src/gpu/implicit_lowmach/projection_solver.cu
+        src/gpu/implicit_lowmach/lm_residual.cu
+        src/gpu/implicit_lowmach/lm_precond.cu
+        src/gpu/implicit_lowmach/lm_krylov.cu
+        src/gpu/implicit_lowmach/lowmach_solver.cu
+        # --- explicit 2D Euler ----------------------------------------------
+        src/gpu/explicit/strang_solver.cu
+        src/gpu/explicit/wb2d_solver.cu
+        src/gpu/explicit/wb2d_kernels.cu
+        # --- common device utilities ----------------------------------------
+        src/gpu/common/gmg_gpu.cu
+        # --- Lagrangian / ALE family ----------------------------------------
+        src/gpu/ale/ale2d_solver.cu
+        src/gpu/ale/ale2d_kernels.cu
+        src/gpu/ale/cart_lag_solver.cu
+        src/gpu/ale/cart_lag_kernels.cu
+        src/gpu/ale/cart_ale_solver.cu
+        src/gpu/ale/cart_ale_kernels.cu
+        src/gpu/ale/cart_ale2_solver.cu
+        src/gpu/ale/cart_ale2_kernels.cu
+        src/gpu/ale/cart_impl_solver.cu
+        src/gpu/ale/cart_impl_residual.cu
+        src/gpu/ale/cart_impl_jfnk.cu
+        # --- spectral family ------------------------------------------------
+        src/gpu/spectral/pseudo_spectral_solver.cu
+        src/gpu/spectral/pseudo_spectral_kernels.cu
+        src/gpu/spectral/anelastic_sl_solver.cu
+        src/gpu/spectral/anelastic_sl_kernels.cu
+        src/gpu/spectral/sph_transforms.cu
+        src/gpu/spectral/sph2d_spectral_solver.cu
+        src/gpu/spectral/sph2d_spectral_kernels.cu
+        # --- 1D Lagrangian implicit -----------------------------------------
+        src/gpu/radial1d/radial1d_solver.cu
+        src/gpu/radial1d/radial1d_implicit.cu
+        src/gpu/radial1d/stellar_profile.cpp
+        # --- physics (shared, not under gpu/) -------------------------------
         src/physics/helmholtz_eos.cu
         src/physics/opacity_table.cu
-        src/gpu/wb2d_solver.cu
-        src/gpu/wb2d_kernels.cu
-        src/gpu/ale2d_solver.cu
-        src/gpu/ale2d_kernels.cu
-        src/gpu/cart_lag_solver.cu
-        src/gpu/cart_lag_kernels.cu
-        src/gpu/cart_ale_solver.cu
-        src/gpu/cart_ale_kernels.cu
-        src/gpu/cart_ale2_solver.cu
-        src/gpu/cart_ale2_kernels.cu
-        src/gpu/cart_impl_solver.cu
-        src/gpu/cart_impl_residual.cu
-        src/gpu/cart_impl_jfnk.cu
-        src/gpu/pseudo_spectral_solver.cu
-        src/gpu/pseudo_spectral_kernels.cu
-        src/gpu/anelastic_sl_solver.cu
-        src/gpu/anelastic_sl_kernels.cu
-        src/gpu/stellar_profile.cpp
-        src/gpu/sph_transforms.cu
-        src/gpu/sph2d_spectral_solver.cu
-        src/gpu/sph2d_spectral_kernels.cu
     )
     set(LOWMACH_SOURCES
-        src/gpu/lm_residual.cu
-        src/gpu/lm_precond.cu
-        src/gpu/lm_krylov.cu
-        src/gpu/lowmach_solver.cu
-        src/gpu/gmg_gpu.cu
+        src/gpu/implicit_lowmach/lm_residual.cu
+        src/gpu/implicit_lowmach/lm_precond.cu
+        src/gpu/implicit_lowmach/lm_krylov.cu
+        src/gpu/implicit_lowmach/lowmach_solver.cu
+        src/gpu/common/gmg_gpu.cu
     )
     if(AMGX_DIR)
-        list(APPEND SOURCES src/gpu/gpu_solver.cu)
+        list(APPEND SOURCES src/gpu/common/gpu_solver.cu)
     endif()
 endif()
 
 add_executable(stellar2d ${SOURCES})
 
-target_include_directories(stellar2d PRIVATE src)
+# Make every gpu/ subdirectory available on the include path, so cross-directory
+# #include "fas_common.cuh" / "gmg_gpu.cuh" / "sph_transforms.cuh" etc. keep
+# working after the 2026-05-05 layout reorg (see chore/repo-layout).
+set(GPU_INCLUDE_DIRS
+    src
+    src/gpu/common
+    src/gpu/explicit
+    src/gpu/implicit_lowmach
+    src/gpu/ale
+    src/gpu/spectral
+    src/gpu/radial1d
+)
+target_include_directories(stellar2d PRIVATE ${GPU_INCLUDE_DIRS})
 
 set(AMGX_DIR "" CACHE PATH "Path to AmgX installation")
 
@@ -135,16 +154,16 @@ set(TEST_COMMON_SOURCES
 )
 
 add_executable(test_unit tests/test_unit.cpp ${TEST_COMMON_SOURCES})
-target_include_directories(test_unit PRIVATE src)
+target_include_directories(test_unit PRIVATE ${GPU_INCLUDE_DIRS})
 add_test(NAME unit COMMAND test_unit)
 
 add_executable(test_exact tests/test_exact.cpp ${TEST_COMMON_SOURCES})
-target_include_directories(test_exact PRIVATE src)
+target_include_directories(test_exact PRIVATE ${GPU_INCLUDE_DIRS})
 add_test(NAME exact COMMAND test_exact)
 
 add_executable(test_pitfalls tests/test_pitfalls.cpp ${TEST_COMMON_SOURCES}
     src/init/sedov.cpp)
-target_include_directories(test_pitfalls PRIVATE src)
+target_include_directories(test_pitfalls PRIVATE ${GPU_INCLUDE_DIRS})
 add_test(NAME pitfalls COMMAND test_pitfalls)
 
 # GPU lowmach solver tests (no AmgX dependency)
@@ -153,7 +172,7 @@ if(USE_GPU)
         ${TEST_COMMON_SOURCES}
         ${LOWMACH_SOURCES}
     )
-    target_include_directories(test_lowmach PRIVATE src)
+    target_include_directories(test_lowmach PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_lowmach PRIVATE USE_GPU)
     set_target_properties(test_lowmach PROPERTIES
         CUDA_STANDARD 17
@@ -166,7 +185,7 @@ if(USE_GPU)
         ${TEST_COMMON_SOURCES}
         ${LOWMACH_SOURCES}
     )
-    target_include_directories(test_solver_diagnosis PRIVATE src)
+    target_include_directories(test_solver_diagnosis PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_solver_diagnosis PRIVATE USE_GPU)
     set_target_properties(test_solver_diagnosis PROPERTIES
         CUDA_STANDARD 17
@@ -178,7 +197,7 @@ if(USE_GPU)
         ${TEST_COMMON_SOURCES}
         ${LOWMACH_SOURCES}
     )
-    target_include_directories(test_precond_quality PRIVATE src)
+    target_include_directories(test_precond_quality PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_precond_quality PRIVATE USE_GPU)
     set_target_properties(test_precond_quality PROPERTIES
         CUDA_STANDARD 17
@@ -190,7 +209,7 @@ if(USE_GPU)
         ${TEST_COMMON_SOURCES}
         ${LOWMACH_SOURCES}
     )
-    target_include_directories(test_newton_tuning PRIVATE src)
+    target_include_directories(test_newton_tuning PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_newton_tuning PRIVATE USE_GPU)
     set_target_properties(test_newton_tuning PROPERTIES
         CUDA_STANDARD 17
@@ -202,7 +221,7 @@ if(USE_GPU)
         ${TEST_COMMON_SOURCES}
         ${LOWMACH_SOURCES}
     )
-    target_include_directories(test_eps_sweep PRIVATE src)
+    target_include_directories(test_eps_sweep PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_eps_sweep PRIVATE USE_GPU)
     set_target_properties(test_eps_sweep PROPERTIES
         CUDA_STANDARD 17
@@ -235,72 +254,72 @@ target_link_options(stellar2d PRIVATE
 
 if(USE_GPU)
     add_executable(test_mini tests/test_mini.cu ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
-    target_include_directories(test_mini PRIVATE src)
+    target_include_directories(test_mini PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_mini PRIVATE USE_GPU)
     set_target_properties(test_mini PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_mini PRIVATE CUDA::cudart)
 
     add_executable(test_strang_init tests/test_strang_init.cu
-        src/gpu/strang_solver.cu)
-    target_include_directories(test_strang_init PRIVATE src)
+        src/gpu/explicit/strang_solver.cu)
+    target_include_directories(test_strang_init PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_strang_init PRIVATE USE_GPU)
     set_target_properties(test_strang_init PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_strang_init PRIVATE CUDA::cudart)
     add_test(NAME strang_init COMMAND test_strang_init)
 
     add_executable(test_strang_muscl tests/test_strang_muscl.cu
-        src/gpu/strang_solver.cu)
-    target_include_directories(test_strang_muscl PRIVATE src)
+        src/gpu/explicit/strang_solver.cu)
+    target_include_directories(test_strang_muscl PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_strang_muscl PRIVATE USE_GPU)
     set_target_properties(test_strang_muscl PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_strang_muscl PRIVATE CUDA::cudart)
     add_test(NAME strang_muscl COMMAND test_strang_muscl)
 
     add_executable(test_strang_hllc tests/test_strang_hllc.cu
-        src/gpu/strang_solver.cu)
-    target_include_directories(test_strang_hllc PRIVATE src)
+        src/gpu/explicit/strang_solver.cu)
+    target_include_directories(test_strang_hllc PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_strang_hllc PRIVATE USE_GPU)
     set_target_properties(test_strang_hllc PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_strang_hllc PRIVATE CUDA::cudart)
     add_test(NAME strang_hllc COMMAND test_strang_hllc)
 
     add_executable(test_strang_step tests/test_strang_step.cu
-        src/gpu/strang_solver.cu)
-    target_include_directories(test_strang_step PRIVATE src)
+        src/gpu/explicit/strang_solver.cu)
+    target_include_directories(test_strang_step PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_strang_step PRIVATE USE_GPU)
     set_target_properties(test_strang_step PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_strang_step PRIVATE CUDA::cudart)
     add_test(NAME strang_step COMMAND test_strang_step)
 
     add_executable(test_strang_unit tests/test_strang_unit.cu
-        src/gpu/strang_solver.cu)
-    target_include_directories(test_strang_unit PRIVATE src)
+        src/gpu/explicit/strang_solver.cu)
+    target_include_directories(test_strang_unit PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_strang_unit PRIVATE USE_GPU)
     set_target_properties(test_strang_unit PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_strang_unit PRIVATE CUDA::cudart)
     add_test(NAME strang_unit COMMAND test_strang_unit)
 
     add_executable(test_strang_convergence tests/test_strang_convergence.cu
-        src/gpu/strang_solver.cu)
-    target_include_directories(test_strang_convergence PRIVATE src)
+        src/gpu/explicit/strang_solver.cu)
+    target_include_directories(test_strang_convergence PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_strang_convergence PRIVATE USE_GPU)
     set_target_properties(test_strang_convergence PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_strang_convergence PRIVATE CUDA::cudart)
     add_test(NAME strang_convergence COMMAND test_strang_convergence)
 
     set(FAS_GPU_SOURCES
-        src/gpu/fas_residual.cu
-        src/gpu/fas_smoothers.cu
-        src/gpu/fas_multigrid.cu
-        src/gpu/fas_solver.cu
-        src/gpu/simple_solver.cu
-        src/gpu/projection_solver.cu
-        src/gpu/gmg_gpu.cu
+        src/gpu/implicit_lowmach/fas_residual.cu
+        src/gpu/implicit_lowmach/fas_smoothers.cu
+        src/gpu/implicit_lowmach/fas_multigrid.cu
+        src/gpu/implicit_lowmach/fas_solver.cu
+        src/gpu/implicit_lowmach/simple_solver.cu
+        src/gpu/implicit_lowmach/projection_solver.cu
+        src/gpu/common/gmg_gpu.cu
     )
     add_executable(test_fas_verify tests/test_fas_verify.cu
         ${TEST_COMMON_SOURCES}
         ${FAS_GPU_SOURCES})
-    target_include_directories(test_fas_verify PRIVATE src)
+    target_include_directories(test_fas_verify PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_fas_verify PRIVATE USE_GPU)
     set_target_properties(test_fas_verify PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_fas_verify PRIVATE CUDA::cudart)
@@ -309,48 +328,48 @@ if(USE_GPU)
     add_executable(test_fas_diagnose tests/test_fas_diagnose_hse.cu
         ${TEST_COMMON_SOURCES}
         ${FAS_GPU_SOURCES})
-    target_include_directories(test_fas_diagnose PRIVATE src)
+    target_include_directories(test_fas_diagnose PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_fas_diagnose PRIVATE USE_GPU)
     set_target_properties(test_fas_diagnose PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_fas_diagnose PRIVATE CUDA::cudart)
 
     add_executable(test_helm_l2 tests/test_helm_l2.cu)
-    target_include_directories(test_helm_l2 PRIVATE src)
+    target_include_directories(test_helm_l2 PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_helm_l2 PRIVATE USE_GPU)
     set_target_properties(test_helm_l2 PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_helm_l2 PRIVATE CUDA::cudart)
     add_test(NAME helm_l2 COMMAND test_helm_l2)
 
     add_executable(test_helm_eos tests/test_helm_eos.cu)
-    target_include_directories(test_helm_eos PRIVATE src)
+    target_include_directories(test_helm_eos PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_helm_eos PRIVATE USE_GPU)
     set_target_properties(test_helm_eos PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_helm_eos PRIVATE CUDA::cudart)
     add_test(NAME helm_eos COMMAND test_helm_eos)
 
     add_executable(test_dual tests/test_dual.cu)
-    target_include_directories(test_dual PRIVATE src)
+    target_include_directories(test_dual PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_dual PRIVATE USE_GPU)
     set_target_properties(test_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_dual PRIVATE CUDA::cudart)
     add_test(NAME dual COMMAND test_dual)
 
     add_executable(test_helm_dual tests/test_helm_dual.cu src/physics/helmholtz_eos.cu)
-    target_include_directories(test_helm_dual PRIVATE src)
+    target_include_directories(test_helm_dual PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_helm_dual PRIVATE USE_GPU)
     set_target_properties(test_helm_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_helm_dual PRIVATE CUDA::cudart)
     add_test(NAME helm_dual COMMAND test_helm_dual)
 
     add_executable(test_residual_dual tests/test_residual_dual.cu src/physics/helmholtz_eos.cu)
-    target_include_directories(test_residual_dual PRIVATE src)
+    target_include_directories(test_residual_dual PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_residual_dual PRIVATE USE_GPU)
     set_target_properties(test_residual_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_residual_dual PRIVATE CUDA::cudart)
     add_test(NAME residual_dual COMMAND test_residual_dual)
 
     add_executable(test_kap_table tests/test_kap_table.cu)
-    target_include_directories(test_kap_table PRIVATE src)
+    target_include_directories(test_kap_table PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_kap_table PRIVATE USE_GPU)
     set_target_properties(test_kap_table PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_kap_table PRIVATE CUDA::cudart)
@@ -362,7 +381,7 @@ if(USE_GPU)
         ${LOWMACH_SOURCES}
         src/init/jeans.cpp
         src/init/evrard.cpp)
-    target_include_directories(test_coverage_critical PRIVATE src)
+    target_include_directories(test_coverage_critical PRIVATE ${GPU_INCLUDE_DIRS})
     target_compile_definitions(test_coverage_critical PRIVATE USE_GPU)
     set_target_properties(test_coverage_critical PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
     target_link_libraries(test_coverage_critical PRIVATE CUDA::cudart)
@@ -370,6 +389,6 @@ if(USE_GPU)
 
     # Stellar profile (Lane-Emden + GYRE structure coefficients) — host-only, no CUDA
     add_executable(test_stellar_profile tests/test_stellar_profile.cpp
-        src/gpu/stellar_profile.cpp)
-    target_include_directories(test_stellar_profile PRIVATE src)
+        src/gpu/radial1d/stellar_profile.cpp)
+    target_include_directories(test_stellar_profile PRIVATE ${GPU_INCLUDE_DIRS})
 endif()

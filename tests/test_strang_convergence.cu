@@ -7,9 +7,9 @@
 // Run at N = 64, 128, 256. Verify L1 error ratio ≈ 4.
 // ============================================================
 
-#include "gpu/strang_solver.cuh"
-#include "gpu/strang_device.cuh"
-#include "gpu/fas_common.cuh"
+#include "strang_solver.cuh"
+#include "strang_device.cuh"
+#include "fas_common.cuh"
 #include <cstdio>
 #include <cmath>
 #include <vector>

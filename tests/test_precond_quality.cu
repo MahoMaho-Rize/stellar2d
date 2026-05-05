@@ -13,7 +13,7 @@
 //   ./test_precond_quality              (default: BLOCK_JACOBI)
 //   ./test_precond_quality --all        (sweep all preconditioner types)
 
-#include "gpu/lowmach_solver.h"
+#include "lowmach_solver.h"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>

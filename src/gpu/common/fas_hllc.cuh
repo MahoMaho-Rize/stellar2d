@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../eos.h"
+#include "eos.h"
 
 struct FPrim { double rho, vr, vt, P; };
 struct FFlux4 { double f_rho, f_mr, f_mt, f_E; };

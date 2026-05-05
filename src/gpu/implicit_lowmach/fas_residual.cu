@@ -1,16 +1,16 @@
 // FAS residual evaluation: ghost cells, gravity, HLLC flux divergence, floor, sponge, CFL
 
-#include "fas2_solver.cuh"
+#include "fas_solver.cuh"
 #include "fas_hllc.cuh"
 #include "fas_linalg.cuh"
-#include "../eos.h"
+#include "eos.h"
 #include <cmath>
 #include <vector>
 #include <algorithm>
 
 // ========================= Ghost cells ============================
 
-__global__ void k_fas2_ghost_r_in(double* rho, double* mr, double* mt, double* rhoE,
+__global__ void k_fas_ghost_r_in(double* rho, double* mr, double* mt, double* rhoE,
                                   int nr, int nt, int ng) {
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y + 1;
@@ -19,7 +19,7 @@ __global__ void k_fas2_ghost_r_in(double* rho, double* mr, double* mt, double* r
     rho[kg]=rho[kp]; mr[kg]=-mr[kp]; mt[kg]=mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
-__global__ void k_fas2_ghost_r_out(double* rho, double* mr, double* mt, double* rhoE,
+__global__ void k_fas_ghost_r_out(double* rho, double* mr, double* mt, double* rhoE,
                                    int nr, int nt, int ng) {
     int j = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y;
@@ -28,7 +28,7 @@ __global__ void k_fas2_ghost_r_out(double* rho, double* mr, double* mt, double* 
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
-__global__ void k_fas2_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
+__global__ void k_fas_ghost_r_out_hse(double* rho, double* mr, double* mt, double* rhoE,
                                        const double* rho0, const double* P0,
                                        EOS eos,
                                        int nr, int nt, int ng) {
@@ -44,7 +44,7 @@ __global__ void k_fas2_ghost_r_out_hse(double* rho, double* mr, double* mt, doub
     rhoE[kg] = fmax(rho_r * eos.internal_energy(rho_r, P0[flat_last]), 1e-20);
 }
 
-__global__ void k_fas2_ghost_t_n(double* rho, double* mr, double* mt, double* rhoE,
+__global__ void k_fas_ghost_t_n(double* rho, double* mr, double* mt, double* rhoE,
                                  int nr, int nt, int ng) {
     int ii = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y + 1;
@@ -54,7 +54,7 @@ __global__ void k_fas2_ghost_t_n(double* rho, double* mr, double* mt, double* rh
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=-mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
-__global__ void k_fas2_ghost_t_s(double* rho, double* mr, double* mt, double* rhoE,
+__global__ void k_fas_ghost_t_s(double* rho, double* mr, double* mt, double* rhoE,
                                  int nr, int nt, int ng) {
     int ii = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y;
@@ -64,35 +64,35 @@ __global__ void k_fas2_ghost_t_s(double* rho, double* mr, double* mt, double* rh
     rho[kg]=rho[kp]; mr[kg]=mr[kp]; mt[kg]=-mt[kp]; rhoE[kg]=rhoE[kp];
 }
 
-__global__ void k_fas2_pole_lock(double* mt, int nr, int nt, int ng) {
+__global__ void k_fas_pole_lock(double* mt, int nr, int nt, int ng) {
     int i = blockIdx.x * blockDim.x + threadIdx.x - ng;
     if (i < -ng || i >= nr + ng) return;
     mt[fas_idx(i, 0, nt, ng)] = 0.0;
     mt[fas_idx(i, nt - 1, nt, ng)] = 0.0;
 }
 
-void FasSolver2::launch_ghost(int l) {
-    FasLevel2& lev = levels[l];
+void FasSolver::launch_ghost(int l) {
+    FasLevel& lev = levels[l];
     int B=256;
-    { dim3 g((lev.nt+B-1)/B, lev.ng); k_fas2_ghost_r_in<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
+    { dim3 g((lev.nt+B-1)/B, lev.ng); k_fas_ghost_r_in<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     if (use_hse_outer_bc && hse_set) {
         dim3 g((lev.nt+B-1)/B, lev.ng);
-        k_fas2_ghost_r_out_hse<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
+        k_fas_ghost_r_out_hse<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,
             lev.d_rho0, lev.d_P0, eos, lev.nr,lev.nt,lev.ng);
     } else {
         dim3 g((lev.nt+B-1)/B, lev.ng);
-        k_fas2_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng);
+        k_fas_ghost_r_out<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng);
     }
-    { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas2_ghost_t_n<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
-    { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas2_ghost_t_s<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
+    { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_n<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
+    { dim3 g((lev.nr+2*lev.ng+B-1)/B, lev.ng); k_fas_ghost_t_s<<<g,B>>>(lev.d_rho,lev.d_mr,lev.d_mt,lev.d_rhoE,lev.nr,lev.nt,lev.ng); }
     int ntot = lev.nr + 2*lev.ng;
-    k_fas2_pole_lock<<<(ntot+B-1)/B,B>>>(lev.d_mt, lev.nr, lev.nt, lev.ng);
+    k_fas_pole_lock<<<(ntot+B-1)/B,B>>>(lev.d_mt, lev.nr, lev.nt, lev.ng);
 }
 
 // ========================= 1D radial gravity ========================
 
 __global__
-void k_fas2_shell_mass(const double* rho, const double* vol,
+void k_fas_shell_mass(const double* rho, const double* vol,
                       double* shell, int nr, int nt, int ng) {
     int i = blockIdx.x;
     if (i >= nr) return;
@@ -111,7 +111,7 @@ void k_fas2_shell_mass(const double* rho, const double* vol,
 }
 
 __global__
-void k_fas2_gravity_from_shells(const double* shell_mass, const double* rc,
+void k_fas_gravity_from_shells(const double* shell_mass, const double* rc,
                                 double* gr, int nr, double G,
                                 double M_core) {
     extern __shared__ double smem[];
@@ -146,15 +146,15 @@ void k_fas2_gravity_from_shells(const double* shell_mass, const double* rc,
     }
 }
 
-void FasSolver2::compute_gravity_1d(int l) {
-    FasLevel2& lev = levels[l];
+void FasSolver::compute_gravity_1d(int l) {
+    FasLevel& lev = levels[l];
     int B = std::min(lev.nt, 256);
-    k_fas2_shell_mass<<<lev.nr, B, B*sizeof(double)>>>(
+    k_fas_shell_mass<<<lev.nr, B, B*sizeof(double)>>>(
         lev.d_rho, lev.d_cell_volume, lev.d_shell_mass, lev.nr, lev.nt, lev.ng);
     // Round up to power of 2 for prefix scan
     int np2 = 1;
     while (np2 < lev.nr) np2 <<= 1;
-    k_fas2_gravity_from_shells<<<1, np2, np2*sizeof(double)>>>(
+    k_fas_gravity_from_shells<<<1, np2, np2*sizeof(double)>>>(
         lev.d_shell_mass, lev.d_r_center, lev.d_gr, lev.nr, G_const, M_core);
 }
 
@@ -162,7 +162,7 @@ void FasSolver2::compute_gravity_1d(int l) {
 // Standard kernel for i >= 1 (all non-singular cells).
 
 __global__
-void k_fas2_residual(
+void k_fas_residual(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face,
@@ -177,7 +177,7 @@ void k_fas2_residual(
     int i = flat/nt, j = flat%nt;
     int n = nr*nt;
 
-    // i==0 handled by k_fas2_residual_origin (unless core excision: r_face[0]>0)
+    // i==0 handled by k_fas_residual_origin (unless core excision: r_face[0]>0)
     if (i == 0 && r_face[0] < 1e-30) return;
 
     // All cells use WB — prevents O(h²/ρ) spurious acceleration in low-density surface
@@ -301,7 +301,7 @@ void k_fas2_residual(
 // which divided by V gives 1.5/r_face[1] — the volume-averaged <1/r>.
 
 __global__
-void k_fas2_residual_origin(
+void k_fas_residual_origin(
     const double* rho, const double* mr, const double* mt, const double* rhoE,
     const double* vol, const double* ar, const double* at,
     const double* r_center, const double* r_face,
@@ -355,7 +355,7 @@ void k_fas2_residual_origin(
         wr.rho = fmax(r0f + (wr.rho - r0r(1)), 1e-20);
         FFlux4 fr_hi = fas_hllc_dispatch(wl, wr, eos, true, hllc_variant);
 
-        // θ-face fluxes: computed for symmetry with k_fas2_residual but unused in origin cell
+        // θ-face fluxes: computed for symmetry with k_fas_residual but unused in origin cell
         // (origin cell is a wedge touching r=0; all θ-cells share the same point).
         // Skip entirely under radial_only.
         if (!radial_only) {
@@ -417,7 +417,7 @@ void k_fas2_residual_origin(
 // signal speed.  Each sweep propagates wave errors ~ω_cfl grid cells.
 // Uses R (not F) because F contains a 1/dt time term that would blow up.
 __global__
-void k_fas2_transport_step(
+void k_fas_transport_step(
     double* rho, double* mr, double* mt, double* rhoE,
     const double* R,
     const double* dr, const double* r_center, const double* r_face,
@@ -449,13 +449,13 @@ void k_fas2_transport_step(
     rhoE[k] += dtau * R[3*n + flat];
 }
 
-void FasSolver2::compute_residual(int l) {
-    FasLevel2& lev = levels[l];
+void FasSolver::compute_residual(int l) {
+    FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     launch_ghost(l);
     compute_gravity_1d(l);
     int wb = 1;
-    k_fas2_residual<<<(n+B-1)/B,B>>>(
+    k_fas_residual<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
         lev.d_r_center, lev.d_r_face, lev.d_theta_face,
@@ -465,7 +465,7 @@ void FasSolver2::compute_residual(int l) {
         lev.nr, lev.nt, lev.ng, eos, atm_rho_thresh, wb, limiter_type, hllc_variant,
         (int)radial_only);
     if (!use_core_excision) {
-        k_fas2_residual_origin<<<(lev.nt+B-1)/B,B>>>(
+        k_fas_residual_origin<<<(lev.nt+B-1)/B,B>>>(
             lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
             lev.d_cell_volume, lev.d_area_r, lev.d_area_theta,
             lev.d_r_center, lev.d_r_face, lev.d_theta_face,
@@ -485,7 +485,7 @@ void FasSolver2::compute_residual(int l) {
 // We store it in d_res (overwrite spatial residual).
 
 __global__
-void k_fas2_compute_F(double* F, const double* R, const double* rho, const double* mr,
+void k_fas_compute_F(double* F, const double* R, const double* rho, const double* mr,
                      const double* mt, const double* rhoE,
                      const double* fas_rhs,
                      double inv_dt, int nr, int nt, int ng) {
@@ -500,18 +500,18 @@ void k_fas2_compute_F(double* F, const double* R, const double* rho, const doubl
     F[3*n + flat] = R[3*n + flat] - inv_dt*rhoE[k] + fas_rhs[3*n + flat];
 }
 
-void FasSolver2::compute_F(int l, double g0_over_dt) {
-    FasLevel2& lev = levels[l];
+void FasSolver::compute_F(int l, double g0_over_dt) {
+    FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
     compute_residual(l);
-    k_fas2_compute_F<<<(n+B-1)/B,B>>>(
+    k_fas_compute_F<<<(n+B-1)/B,B>>>(
         lev.d_res, lev.d_res, lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_fas_rhs, g0_over_dt, lev.nr, lev.nt, lev.ng);
 }
 // ========================= Floor ========================
 
 __global__
-void k_fas2_floor(double* rho, double* mr, double* mt, double* rhoE,
+void k_fas_floor(double* rho, double* mr, double* mt, double* rhoE,
                  int nr, int nt, int ng, double gam) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nr*nt) return;
@@ -533,16 +533,16 @@ void k_fas2_floor(double* rho, double* mr, double* mt, double* rhoE,
     rhoE[k] = e_int + KE;
 }
 
-void FasSolver2::apply_floor(int l) {
-    FasLevel2& lev = levels[l];
+void FasSolver::apply_floor(int l) {
+    FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt, B = 256;
-    k_fas2_floor<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
+    k_fas_floor<<<(n+B-1)/B,B>>>(lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
                                    lev.nr, lev.nt, lev.ng, gamma);
 }
 
 // Zero theta-momentum everywhere (incl. ghosts) — enforces v_theta=0 invariant
 __global__
-void k_fas2_zero_mt(double* mt, int nr, int nt, int ng) {
+void k_fas_zero_mt(double* mt, int nr, int nt, int ng) {
     int total = (nr + 2*ng) * (nt + 2*ng);
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k >= total) return;
@@ -554,7 +554,7 @@ void k_fas2_zero_mt(double* mt, int nr, int nt, int ng) {
 // Prevents numerical noise in near-vacuum from poisoning the implicit solve.
 
 __global__
-void k_fas2_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
+void k_fas_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
                      const double* rho0, const double* P0,
                      double atm_thresh, EOS eos,
                      int nr, int nt, int ng, int strict_atm_only) {
@@ -592,7 +592,7 @@ void k_fas2_atm_reset(double* rho, double* mr, double* mt, double* rhoE,
 // ========================= Conservation helpers ==============================
 // Compute ρ·V and E·V per cell (for global reduce before/after atm_reset)
 __global__
-void k_fas2_rhoV_EV(const double* rho, const double* rhoE, const double* vol,
+void k_fas_rhoV_EV(const double* rho, const double* rhoE, const double* vol,
                    double* rhoV_out, double* EV_out,
                    int nr, int nt, int ng) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -607,7 +607,7 @@ void k_fas2_rhoV_EV(const double* rho, const double* rhoE, const double* vol,
 // delta_rho_per_vol = ΔM / V_interior  (density correction, uniform)
 // delta_E_per_vol   = ΔE / V_interior  (energy density correction, uniform)
 __global__
-void k_fas2_conserve_correct(double* rho, double* rhoE,
+void k_fas_conserve_correct(double* rho, double* rhoE,
                             const double* rho0,
                             double atm_thresh,
                             double delta_rho_per_vol, double delta_E_per_vol,
@@ -626,7 +626,7 @@ void k_fas2_conserve_correct(double* rho, double* rhoE,
 // One block per shell (i), threads reduce over j.
 
 __global__
-void k_fas2_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
+void k_fas_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
                        const double* vol,
                        int n_avg, int nr, int nt, int ng) {
     int i = blockIdx.x;
@@ -689,7 +689,7 @@ void k_fas2_angular_avg(double* rho, double* mr, double* mt, double* rhoE,
 // One block per radial shell, threads reduce over the n_pole cells.
 
 __global__
-void k_fas2_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
+void k_fas_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
                     const double* vol,
                     int n_pole, int nr, int nt, int ng) {
     int i = blockIdx.x;
@@ -753,7 +753,7 @@ void k_fas2_pole_avg(double* rho, double* mr, double* mt, double* rhoE,
 // Damping factor: v_r *= exp(-alpha * (1 - r/r_damp)) for r < r_damp
 
 __global__
-void k_fas2_central_damp(double* mr, double* rhoE,
+void k_fas_central_damp(double* mr, double* rhoE,
                         const double* rho, const double* r_center,
                         double r_damp, double alpha,
                         int nr, int nt, int ng) {
@@ -781,7 +781,7 @@ void k_fas2_central_damp(double* mr, double* rhoE,
 // convective instability from reaching the boundary.
 
 __global__
-void k_fas2_sponge(double* rho, double* mr, double* mt, double* rhoE,
+void k_fas_sponge(double* rho, double* mr, double* mt, double* rhoE,
                   const double* rho0, const double* P0,
                   const double* r_center,
                   double r_sp, double r_tp, double kappa_max, double dt_s,
@@ -814,8 +814,8 @@ void k_fas2_sponge(double* rho, double* mr, double* mt, double* rhoE,
 
 // ========================= Residual norm ========================
 
-double FasSolver2::residual_norm(int l) {
-    FasLevel2& lev = levels[l];
+double FasSolver::residual_norm(int l) {
+    FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt;
     int n4 = 4 * n;
     std::vector<double> h(n4);
@@ -835,8 +835,8 @@ double FasSolver2::residual_norm(int l) {
 }
 
 // Detailed residual norm with per-equation and per-region breakdown
-void FasSolver2::residual_norm_detail(int l, const char* label) {
-    FasLevel2& lev = levels[l];
+void FasSolver::residual_norm_detail(int l, const char* label) {
+    FasLevel& lev = levels[l];
     int n = lev.nr * lev.nt;
     int n4 = 4 * n;
     std::vector<double> h(n4);
@@ -874,7 +874,7 @@ void FasSolver2::residual_norm_detail(int l, const char* label) {
 // ========================= CFL dt ========================
 
 __global__
-void k_fas2_cfl(const double* rho, const double* mr, const double* mt, const double* rhoE,
+void k_fas_cfl(const double* rho, const double* mr, const double* mt, const double* rhoE,
                const double* dr, const double* r_center, const double* dtheta,
                const double* rho0, double* out,
                int nr, int nt, int ng, EOS eos, double atm_thresh,
@@ -902,10 +902,10 @@ void k_fas2_cfl(const double* rho, const double* mr, const double* mt, const dou
     }
 }
 
-double FasSolver2::compute_cfl_dt() {
-    FasLevel2& lev = levels[0];
+double FasSolver::compute_cfl_dt() {
+    FasLevel& lev = levels[0];
     int n = lev.nr * lev.nt, B = 256;
-    k_fas2_cfl<<<(n+B-1)/B,B>>>(
+    k_fas_cfl<<<(n+B-1)/B,B>>>(
         lev.d_rho, lev.d_mr, lev.d_mt, lev.d_rhoE,
         lev.d_dr, lev.d_r_center, lev.d_dtheta,
         lev.d_rho0, lev.d_res,

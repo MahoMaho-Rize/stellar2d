@@ -21,7 +21,7 @@
 
 #include "radial1d_solver.cuh"
 #include "fas_common.cuh"
-#include "../physics/nuclear_pp.h"
+#include "physics/nuclear_pp.h"
 #include "radial1d_residual_dual.cuh"
 
 // Forward declare kernels from radial1d_kernels.cuh (defined in radial1d_solver.cu TU).

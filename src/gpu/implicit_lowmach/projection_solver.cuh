@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
 #include "fas_common.cuh"
 #include "gmg_gpu.cuh"
 

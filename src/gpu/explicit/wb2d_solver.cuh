@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
 
 // Well-Balanced 2D Eulerian solver with MESA-inspired stabilization.
 //

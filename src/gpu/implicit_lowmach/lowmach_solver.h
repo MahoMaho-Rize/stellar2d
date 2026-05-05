@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../grid.h"
-#include "../state.h"
-#include "../eos.h"
+#include "grid.h"
+#include "state.h"
+#include "eos.h"
 #include "gmg_gpu.cuh"
 
 // Low-Mach fully-implicit GPU solver for stellar evolution.

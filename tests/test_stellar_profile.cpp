@@ -4,7 +4,7 @@
 // Usage:
 //   python scripts/build_poly3_python.py
 //   ./build/test_stellar_profile /tmp/poly3_ref.csv
-#include "gpu/stellar_profile.h"
+#include "stellar_profile.h"
 
 #include <cmath>
 #include <cstdio>

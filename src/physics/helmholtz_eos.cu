@@ -1,5 +1,5 @@
 #include "helmholtz_eos.cuh"
-#include "../gpu/fas_common.cuh"  // CUDA_CHECK
+#include "fas_common.cuh"  // CUDA_CHECK
 
 #include <cstdio>
 #include <cstdlib>
