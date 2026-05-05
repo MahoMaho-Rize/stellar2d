@@ -136,6 +136,41 @@ struct AnelasticSLSolver {
     double  im_dt_cached   = 0.0;
     bool    td_implicit_midpoint = false;  // env ANSL_TD_KIND=implicit_midpoint
 
+    // ── Exponential propagator (exact-to-round-off linear TD) ─────────────
+    // For each kx with M_k = Q_k Λ_k Q_k⁻¹ (Λ = diag(ω_n²), ω_n ≥ 0 from Lane-
+    // Emden GEP), the exact solution of V̈ = −M V over dt is the 2×2 block:
+    //     V_{n+1} = cos(√M dt) V_n + (sin(√M dt)/√M) W_n
+    //     W_{n+1} = −√M sin(√M dt) V_n + cos(√M dt) W_n
+    // Each function-of-matrix is assembled as  Q · diag(f(ω_n)) · Q⁻¹  on
+    // host once per dt and shipped as four per-kx real matrix slabs, applied
+    // with the same k_apply_M_kx kernel as M_per_kx.
+    //
+    // Cost: 4 apply_M_kx per step (vs IM's 2, RK4's 4-per-substage).  Phase
+    // AND amplitude preserved to round-off for the linear block; scheme
+    // is exactly symplectic (Q orthogonalises a symmetric positive pair,
+    // propagator commutes with M) — strictly stronger than IM.
+    //
+    // Storage layout (col-major, same as M_per_kx / B_per_kx):
+    //   d_Tvv_per_kx = cos(√M_k dt)                 V → V
+    //   d_Tvw_per_kx = sin(√M_k dt) / √M_k          W → V
+    //   d_Twv_per_kx = −√M_k sin(√M_k dt)           V → W  (negative)
+    //   d_Tww_per_kx = cos(√M_k dt)  (= d_Tvv)      W → W
+    // We keep d_Tvv and d_Tww as separate pointers even though their values
+    // are equal, for clarity at apply time; duplicate storage is negligible
+    // at 64² × nh=33 (~1 MB extra).
+    double* d_Tvv_per_kx      = nullptr;
+    double* d_Tvw_per_kx      = nullptr;
+    double* d_Twv_per_kx      = nullptr;
+    double* d_Tww_per_kx      = nullptr;
+    // Dedicated complex scratch of size ncplx = nh·ny, allocated lazily the
+    // first time step_exp_propagator is called.  Needed because d_Qhat and
+    // d_Ghat are sized nh·n_modes (n_modes ≤ ny/2 typically) and cannot hold
+    // a full FFT-x complex buffer.
+    cufftDoubleComplex* d_exp_scratch = nullptr;
+    double  exp_dt_cached     = 0.0;
+    bool    td_exp_propagator = false;  // env ANSL_TD_KIND=exp_propagator
+    bool    td_strang_exp_nonlinear = false;  // env ANSL_TD_KIND=strang_exp_nonlinear
+
     // Strang-split (Phase 3 nonlinear extension) persistent buffers.
     // Allocated lazily the first time step_strang_nonlinear() is called.
     // Each is (ncell,) = (ny * nx) doubles; 10 slots × 64² × 8B = 320 KB.
@@ -460,6 +495,28 @@ struct AnelasticSLSolver {
     // Pass criterion (Experiment "IM-vs-RK4"): amp=1e-6 × 500 T_a, ΔE/E
     // should be < 1e-12 (8+ decades below RK4's -8e-7/T floor).
     double step_implicit_midpoint(double dt);
+
+    // One-step linear-only exponential propagator (exact over dt to round-off).
+    // Reads d_v, d_rhs_v, writes them at t+dt.  d_b untouched.  Caller passes
+    // fixed dt so the four per-kx propagator matrices stay cached.
+    //
+    // Mathematical guarantee: on the V̈ = −M V system this integrator has
+    // zero phase error and zero amplitude error per step (modulo Q/Q⁻¹
+    // conditioning and libm cos/sin round-off).  Compare IM which has
+    // O((ωdt)³) phase and RK4 which has O((ωdt)¹⁰) amplitude drift.
+    //
+    // Useful for: (a) isolating Strang O(dt²·amp³) commutator from linear
+    // block contamination; (b) long-time triad Manley-Rowe envelope where
+    // phase error leaks into slow-mode amplitudes.
+    double step_exp_propagator(double dt);
+
+    // Strang-split nonlinear step with Exp propagator as the linear block.
+    // Algorithm:  Exp(dt/2) ∘ NL_RK4(dt) ∘ Exp(dt/2)  on (V, W, B).
+    // Same nonlinear block as step_strang_nonlinear (advection + Galerkin
+    // V_K closure).  Useful at amp ≳ 1e-3 to isolate Strang commutator
+    // error from linear-block contamination.  Cache: Exp propagators built
+    // at dt/2 (distinct from step_exp_propagator's dt cache).
+    double step_strang_exp_nonlinear(double dt);
 
     // Diagnostic: return the symplectic invariant of the linear IM scheme
     //     H_IM = ½ ⟨W, W⟩_CC + ½ ⟨V, M V⟩_CC

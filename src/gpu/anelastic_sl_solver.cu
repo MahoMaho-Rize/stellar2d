@@ -281,6 +281,9 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_M_per_kx);
     free_ptr(d_B_per_kx);
     free_ptr(d_C_per_kx);
+    free_ptr(d_Tvv_per_kx); free_ptr(d_Tvw_per_kx);
+    free_ptr(d_Twv_per_kx); free_ptr(d_Tww_per_kx);
+    free_cptr(d_exp_scratch);
     free_ptr(d_strang_v0);    free_ptr(d_strang_w0);    free_ptr(d_strang_b0);
     free_ptr(d_strang_v_acc); free_ptr(d_strang_w_acc); free_ptr(d_strang_b_acc);
     free_ptr(d_strang_v_s);   free_ptr(d_strang_w_s);   free_ptr(d_strang_b_s);
@@ -1031,6 +1034,8 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     td_assembled_linear = false;
     td_strang_nonlinear = false;
     td_implicit_midpoint = false;
+    td_exp_propagator   = false;
+    td_strang_exp_nonlinear = false;
     if (const char* s = std::getenv("ANSL_TD_KIND")) {
         std::string ss(s);
         if (ss == "assembled_linear" || ss == "assembled" || ss == "matrix")
@@ -1039,8 +1044,14 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
             td_strang_nonlinear = true;
         else if (ss == "implicit_midpoint" || ss == "im" || ss == "symplectic")
             td_implicit_midpoint = true;
+        else if (ss == "exp_propagator" || ss == "exp" || ss == "exact"
+                 || ss == "phase_exact")
+            td_exp_propagator = true;
+        else if (ss == "strang_exp_nonlinear" || ss == "strang_exp")
+            td_strang_exp_nonlinear = true;
     }
-    if (td_assembled_linear || td_strang_nonlinear || td_implicit_midpoint)
+    if (td_assembled_linear || td_strang_nonlinear || td_implicit_midpoint
+        || td_exp_propagator || td_strang_exp_nonlinear)
         assemble_path_d_operators();
 }
 
@@ -3644,6 +3655,429 @@ double AnelasticSLSolver::step_implicit_midpoint(double dt) {
     return dt;
 }
 
+// ── Exp propagator: per-kx EVP + explicit propagator assembly ──────────
+// For each kx > 0 we need the eigendecomposition of M_k = L_k⁻¹ R_k so
+// that propagator matrices
+//     f(M) = Q diag(f(ω²_n)) Q⁻¹
+// can be pre-baked for the four scalar fields cos(ω dt), sin(ω dt)/ω,
+// −ω sin(ω dt), cos(ω dt).
+//
+// Why not symmetrize:  the collocation L_k = −D^T·diag(ρ)·D + k²·diag(ρ)
+// appears symmetric on paper (L_{ij} = L_{ji} if one uses A = D^T ρ D with
+// symmetric D, but our D is the non-symmetric CGL differentiation matrix,
+// so L turns out non-symmetric in general and Cholesky fails).  Available
+// symmetric forms require weighting by CC quadrature and give a different
+// operator than the one used in assemble_path_d_operators / step_assembled_
+// linear — we would be integrating a subtly different system.
+//
+// Path taken:  Xgeev on M_k to get real eigenvalues (trusted; imag parts
+// typically ~1e-17 per compute_2d_gmode_evp), then host **inverse iteration**
+// polishes each eigenvector (exactly the recipe from compute_2d_gmode_evp
+// lines ~2143 onwards).  Q⁻¹ is computed by host Gauss-Jordan; we report
+// ‖QQ⁻¹ − I‖_∞ to stderr so the user can catch bad conditioning.
+//
+// Runtime cost of the setup: per-kx one Xgeev + n_int inverse iterations.
+// At 64² (nh=33, n_int=62) the setup runs in <1 s total, one-off.
+
+// Inverse iteration of (M − λ I) x = previous x.  Solves via Gaussian
+// elimination with partial pivoting, 5 iterations (exponential error
+// reduction of 1/Δλ per iter, enough for well-separated eigenvalues).
+static void inverse_iteration_eigvec(
+        const std::vector<double>& M_col,   // col-major, n×n
+        int n, double lambda,
+        std::vector<double>& out_vec) {
+    // Build (M − λI) col-major.
+    std::vector<double> A(M_col);
+    for (int i = 0; i < n; ++i) A[(size_t)i + (size_t)i * n] -= lambda;
+
+    // Seed vector: deterministic pseudo-random (avoid orthogonality
+    // collisions with other eigenvectors).
+    out_vec.resize(n);
+    for (int i = 0; i < n; ++i)
+        out_vec[i] = std::sin(0.7 * (i + 1) + 0.1 * lambda);
+    // Normalize.
+    double norm = 0.0;
+    for (double v : out_vec) norm += v * v;
+    norm = 1.0 / std::sqrt(std::max(norm, 1e-300));
+    for (double& v : out_vec) v *= norm;
+
+    // LU factor (A, partial pivot).  Done in place on a mutable copy.
+    std::vector<double> LU(A);
+    std::vector<int> piv(n);
+    for (int k = 0; k < n; ++k) {
+        int imax = k; double vmax = std::fabs(LU[(size_t)k + (size_t)k * n]);
+        for (int r = k + 1; r < n; ++r) {
+            double v = std::fabs(LU[(size_t)r + (size_t)k * n]);
+            if (v > vmax) { vmax = v; imax = r; }
+        }
+        piv[k] = imax;
+        if (imax != k) {
+            for (int c = 0; c < n; ++c)
+                std::swap(LU[(size_t)k + (size_t)c * n],
+                          LU[(size_t)imax + (size_t)c * n]);
+        }
+        double pivot = LU[(size_t)k + (size_t)k * n];
+        // If pivot is essentially zero, (M − λI) is singular — good,
+        // but we perturb to avoid division by zero.
+        if (std::fabs(pivot) < 1e-300) pivot = 1e-300;
+        LU[(size_t)k + (size_t)k * n] = pivot;
+        for (int r = k + 1; r < n; ++r) {
+            double f = LU[(size_t)r + (size_t)k * n] / pivot;
+            LU[(size_t)r + (size_t)k * n] = f;
+            for (int c = k + 1; c < n; ++c)
+                LU[(size_t)r + (size_t)c * n] -=
+                    f * LU[(size_t)k + (size_t)c * n];
+        }
+    }
+
+    auto lu_solve = [&](std::vector<double>& rhs) {
+        // Apply permutations.
+        for (int k = 0; k < n; ++k)
+            if (piv[k] != k) std::swap(rhs[k], rhs[piv[k]]);
+        // Forward substitute (L with implicit 1's on diagonal).
+        for (int k = 0; k < n; ++k) {
+            double s = rhs[k];
+            for (int j = 0; j < k; ++j) s -= LU[(size_t)k + (size_t)j * n] * rhs[j];
+            rhs[k] = s;
+        }
+        // Back substitute (U).
+        for (int k = n - 1; k >= 0; --k) {
+            double s = rhs[k];
+            for (int j = k + 1; j < n; ++j) s -= LU[(size_t)k + (size_t)j * n] * rhs[j];
+            rhs[k] = s / LU[(size_t)k + (size_t)k * n];
+        }
+    };
+
+    // 5 inverse iterations.
+    for (int iter = 0; iter < 5; ++iter) {
+        lu_solve(out_vec);
+        double s = 0.0;
+        for (double v : out_vec) s += v * v;
+        s = 1.0 / std::sqrt(std::max(s, 1e-300));
+        for (double& v : out_vec) v *= s;
+    }
+}
+
+// Host Gauss-Jordan inverse of col-major n×n matrix A.  Overwrites A with A⁻¹.
+static void host_gj_invert(std::vector<double>& A, int n) {
+    const int W2 = 2 * n;
+    std::vector<double> aug((size_t)n * W2, 0.0);
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j)
+            aug[(size_t)i * W2 + j] = A[(size_t)i + (size_t)j * n];
+        aug[(size_t)i * W2 + (n + i)] = 1.0;
+    }
+    for (int p = 0; p < n; ++p) {
+        int imax = p; double vmax = std::fabs(aug[(size_t)p * W2 + p]);
+        for (int r = p + 1; r < n; ++r) {
+            double v = std::fabs(aug[(size_t)r * W2 + p]);
+            if (v > vmax) { vmax = v; imax = r; }
+        }
+        if (vmax < 1e-300) {
+            std::fprintf(stderr, "  [Exp] host_gj_invert: singular (pivot %.3e)\n", vmax);
+            std::exit(1);
+        }
+        if (imax != p)
+            for (int c = 0; c < W2; ++c)
+                std::swap(aug[(size_t)p * W2 + c], aug[(size_t)imax * W2 + c]);
+        double inv_p = 1.0 / aug[(size_t)p * W2 + p];
+        for (int c = 0; c < W2; ++c) aug[(size_t)p * W2 + c] *= inv_p;
+        for (int r = 0; r < n; ++r) {
+            if (r == p) continue;
+            double f = aug[(size_t)r * W2 + p];
+            if (f == 0.0) continue;
+            for (int c = 0; c < W2; ++c)
+                aug[(size_t)r * W2 + c] -= f * aug[(size_t)p * W2 + c];
+        }
+    }
+    // Extract inverse into A (col-major).
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            A[(size_t)i + (size_t)j * n] = aug[(size_t)i * W2 + (n + j)];
+}
+
+// Sinc helper:  sin(ω dt)/ω → dt as ω → 0.  Uses Taylor branch for small |x|.
+static inline double sin_over_omega(double omega, double dt) {
+    double x = omega * dt;
+    if (std::fabs(x) < 1e-4) {
+        double x2 = x * x;
+        // dt * (1 − x²/6 + x⁴/120 − ...)
+        return dt * (1.0 - x2 / 6.0 + x2 * x2 / 120.0);
+    }
+    return std::sin(x) / omega;
+}
+
+// Build four per-kx propagator slabs (col-major) from M_k eigendecomposition.
+// Inputs:
+//   h_M_per_kx : (nh, n_int²) col-major M_k slabs (already on host)
+// Outputs (col-major, n_int²-stride):
+//   h_Tvv = cos(√M dt),   h_Tvw = sin(√M dt)/√M,
+//   h_Twv = −√M sin(√M dt), h_Tww = cos(√M dt)  (== h_Tvv).
+//
+// Strategy per kx (kx ≥ 1):
+//   1. Download M_k → host.
+//   2. cusolverDnXgeev → real eigenvalues λ_n (eigenvectors ignored).
+//   3. Host inverse iteration per λ_n → eigenvector φ_n.
+//   4. Gauss-Jordan invert Φ (columns φ_n) → Φ⁻¹.
+//   5. Emit T = Φ · diag(f(ω_n)) · Φ⁻¹  with ω_n = √λ_n for the four f's.
+//
+// Report ‖QQ⁻¹ − I‖_∞ to stderr; if > 1e-6 the propagator is untrustworthy
+// and we abort (conditioning too bad, would need SVD-based pseudoinverse).
+static void build_exp_per_kx(
+        const double* h_M_per_kx,   // (nh, n_int²) col-major
+        int n_int, int nh,
+        double dt,
+        std::vector<double>& h_Tvv,
+        std::vector<double>& h_Tvw,
+        std::vector<double>& h_Twv,
+        std::vector<double>& h_Tww) {
+    const size_t per_kx = (size_t)n_int * n_int;
+    h_Tvv.assign((size_t)nh * per_kx, 0.0);
+    h_Tvw.assign((size_t)nh * per_kx, 0.0);
+    h_Twv.assign((size_t)nh * per_kx, 0.0);
+    h_Tww.assign((size_t)nh * per_kx, 0.0);
+
+    // cuSOLVER device buffers reused across kx (freed at the end).
+    cusolverDnHandle_t solver = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreate(&solver));
+    cusolverDnParams_t params = nullptr;
+    CUSOLVER_CHECK(cusolverDnCreateParams(&params));
+
+    double *d_M = nullptr;
+    cuDoubleComplex *d_Mc = nullptr, *d_Wc = nullptr;
+    int *d_info = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_M,  sizeof(double) * (size_t)n_int * n_int));
+    CUDA_CHECK(cudaMalloc(&d_Mc, sizeof(cuDoubleComplex) * (size_t)n_int * n_int));
+    CUDA_CHECK(cudaMalloc(&d_Wc, sizeof(cuDoubleComplex) * n_int));
+    CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
+
+    size_t work_d = 0, work_h = 0;
+    CUSOLVER_CHECK(cusolverDnXgeev_bufferSize(
+        solver, params,
+        CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_NOVECTOR,
+        (int64_t)n_int,
+        CUDA_C_64F, d_Mc, (int64_t)n_int,
+        CUDA_C_64F, d_Wc,
+        CUDA_C_64F, nullptr, (int64_t)n_int,
+        CUDA_C_64F, nullptr, (int64_t)n_int,
+        CUDA_C_64F, &work_d, &work_h));
+    void *d_work = nullptr; void *h_work = nullptr;
+    if (work_d) CUDA_CHECK(cudaMalloc(&d_work, work_d));
+    if (work_h) h_work = std::malloc(work_h);
+
+    std::vector<double> M_col((size_t)n_int * n_int);
+    std::vector<cuDoubleComplex> h_Wc_buf(n_int);
+    std::vector<double> Phi((size_t)n_int * n_int);
+    std::vector<double> Phi_inv((size_t)n_int * n_int);
+    std::vector<double> eigvec(n_int), omega(n_int);
+
+    double worst_cond = 0.0;
+    int worst_kx = -1;
+    for (int kx_idx = 0; kx_idx < nh; ++kx_idx) {
+        if (kx_idx == 0) continue;  // drift, skipped by k_apply_M_kx anyway
+
+        // Copy M_k slab (col-major) to host buffer + to device for Xgeev.
+        const double* slab = &h_M_per_kx[(size_t)kx_idx * per_kx];
+        std::copy(slab, slab + per_kx, M_col.data());
+
+        // Pack into complex on device for Xgeev.
+        CUDA_CHECK(cudaMemcpy(d_M, M_col.data(), sizeof(double) * per_kx,
+                              cudaMemcpyHostToDevice));
+        int blk = 256;
+        int grid_mc = ((int)per_kx + blk - 1) / blk;
+        k_real_to_cplx_local<<<grid_mc, blk>>>(d_Mc, d_M, (int)per_kx);
+
+        CUSOLVER_CHECK(cusolverDnXgeev(
+            solver, params,
+            CUSOLVER_EIG_MODE_NOVECTOR, CUSOLVER_EIG_MODE_NOVECTOR,
+            (int64_t)n_int,
+            CUDA_C_64F, d_Mc, (int64_t)n_int,
+            CUDA_C_64F, d_Wc,
+            CUDA_C_64F, nullptr, (int64_t)n_int,
+            CUDA_C_64F, nullptr, (int64_t)n_int,
+            CUDA_C_64F, d_work, work_d, h_work, work_h, d_info));
+        int h_info = 0;
+        CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+        if (h_info != 0) {
+            std::fprintf(stderr,
+                "  [Exp] kx_idx=%d: Xgeev info=%d\n", kx_idx, h_info);
+            std::exit(1);
+        }
+
+        CUDA_CHECK(cudaMemcpy(h_Wc_buf.data(), d_Wc,
+                              sizeof(cuDoubleComplex) * n_int,
+                              cudaMemcpyDeviceToHost));
+
+        // Extract real eigenvalues; warn if large imag ratio.
+        // (M has real entries; eigenvalues come in complex conjugate pairs
+        // if any are complex.  Physical g-mode EVP produces real-positive
+        // eigenvalues; imag parts should be ~1e-17.)
+        double max_im_ratio = 0.0;
+        std::vector<double> eigvals(n_int);
+        for (int k = 0; k < n_int; ++k) {
+            double re = h_Wc_buf[k].x, im = h_Wc_buf[k].y;
+            eigvals[k] = re;
+            double ratio = std::fabs(im) / (std::fabs(re) + 1e-30);
+            if (ratio > max_im_ratio) max_im_ratio = ratio;
+        }
+        if (max_im_ratio > 1e-6) {
+            std::fprintf(stderr,
+                "  [Exp] kx_idx=%d: eigenvalue max_im_ratio=%.3e (may be poorly conditioned)\n",
+                kx_idx, max_im_ratio);
+        }
+
+        // Inverse iteration per eigenvalue to build Φ (col-major, columns = φ_n).
+        for (int k = 0; k < n_int; ++k) {
+            inverse_iteration_eigvec(M_col, n_int, eigvals[k], eigvec);
+            for (int i = 0; i < n_int; ++i)
+                Phi[(size_t)i + (size_t)k * n_int] = eigvec[i];
+            double om = std::sqrt(std::max(eigvals[k], 0.0));
+            omega[k] = om;
+        }
+
+        // Invert Φ via host Gauss-Jordan.
+        Phi_inv = Phi;
+        host_gj_invert(Phi_inv, n_int);
+
+        // Check conditioning: ‖QQ⁻¹ − I‖_∞.
+        double worst_this = 0.0;
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                double s = 0.0;
+                for (int k = 0; k < n_int; ++k)
+                    s += Phi[(size_t)i + (size_t)k * n_int]
+                       * Phi_inv[(size_t)k + (size_t)j * n_int];
+                double target = (i == j) ? 1.0 : 0.0;
+                double err = std::fabs(s - target);
+                if (err > worst_this) worst_this = err;
+            }
+        }
+        if (worst_this > worst_cond) { worst_cond = worst_this; worst_kx = kx_idx; }
+        if (worst_this > 1e-6) {
+            std::fprintf(stderr,
+                "  [Exp] kx_idx=%d: ‖QQ⁻¹−I‖∞=%.3e (eigenvectors untrusted)\n",
+                kx_idx, worst_this);
+        }
+
+        // Assemble four propagator matrices for this kx.
+        //   T_f[i,j] = Σ_k Φ[i,k] · f(ω_k) · Φ⁻¹[k,j]
+        double* Svv = &h_Tvv[(size_t)kx_idx * per_kx];
+        double* Svw = &h_Tvw[(size_t)kx_idx * per_kx];
+        double* Swv = &h_Twv[(size_t)kx_idx * per_kx];
+        double* Sww = &h_Tww[(size_t)kx_idx * per_kx];
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                double acc_vv = 0.0, acc_vw = 0.0, acc_wv = 0.0;
+                for (int k = 0; k < n_int; ++k) {
+                    double phi_ik = Phi    [(size_t)i + (size_t)k * n_int];
+                    double pi_kj  = Phi_inv[(size_t)k + (size_t)j * n_int];
+                    double om_k   = omega[k];
+                    double c      = std::cos(om_k * dt);
+                    double soo    = sin_over_omega(om_k, dt);
+                    double s_om   = om_k * std::sin(om_k * dt);
+                    acc_vv += phi_ik * c   * pi_kj;
+                    acc_vw += phi_ik * soo * pi_kj;
+                    acc_wv += phi_ik * (-s_om) * pi_kj;
+                }
+                Svv[(size_t)i + (size_t)j * n_int] = acc_vv;
+                Svw[(size_t)i + (size_t)j * n_int] = acc_vw;
+                Swv[(size_t)i + (size_t)j * n_int] = acc_wv;
+                Sww[(size_t)i + (size_t)j * n_int] = acc_vv;
+            }
+        }
+    }
+
+    std::fprintf(stderr,
+        "  [Exp] worst ‖QQ⁻¹ − I‖∞ = %.3e  (at kx_idx=%d)\n",
+        worst_cond, worst_kx);
+
+    // Cleanup.
+    if (d_work) cudaFree(d_work);
+    if (h_work) std::free(h_work);
+    cudaFree(d_M); cudaFree(d_Mc); cudaFree(d_Wc); cudaFree(d_info);
+    cusolverDnDestroyParams(params);
+    cusolverDnDestroy(solver);
+}
+
+double AnelasticSLSolver::step_exp_propagator(double dt) {
+    if (d_M_per_kx == nullptr) assemble_path_d_operators();
+    if (d_M_per_kx == nullptr) {
+        std::fprintf(stderr, "step_exp_propagator: assemble failed.\n");
+        return 0.0;
+    }
+    const int n_int = n_int_path_d;
+    const size_t per_kx = (size_t)n_int * n_int;
+
+    if (d_Tvv_per_kx == nullptr || exp_dt_cached != dt) {
+        // Download M slabs from device, call build_exp_per_kx.
+        std::vector<double> h_M((size_t)nh * per_kx);
+        CUDA_CHECK(cudaMemcpy(h_M.data(), d_M_per_kx,
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyDeviceToHost));
+        std::vector<double> h_Tvv, h_Tvw, h_Twv, h_Tww;
+        build_exp_per_kx(h_M.data(), n_int, nh, dt,
+                         h_Tvv, h_Tvw, h_Twv, h_Tww);
+
+        if (d_Tvv_per_kx) cudaFree(d_Tvv_per_kx);
+        if (d_Tvw_per_kx) cudaFree(d_Tvw_per_kx);
+        if (d_Twv_per_kx) cudaFree(d_Twv_per_kx);
+        if (d_Tww_per_kx) cudaFree(d_Tww_per_kx);
+        size_t B = sizeof(double) * (size_t)nh * per_kx;
+        CUDA_CHECK(cudaMalloc(&d_Tvv_per_kx, B));
+        CUDA_CHECK(cudaMalloc(&d_Tvw_per_kx, B));
+        CUDA_CHECK(cudaMalloc(&d_Twv_per_kx, B));
+        CUDA_CHECK(cudaMalloc(&d_Tww_per_kx, B));
+        CUDA_CHECK(cudaMemcpy(d_Tvv_per_kx, h_Tvv.data(), B, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_Tvw_per_kx, h_Tvw.data(), B, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_Twv_per_kx, h_Twv.data(), B, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_Tww_per_kx, h_Tww.data(), B, cudaMemcpyHostToDevice));
+        exp_dt_cached = dt;
+        std::fprintf(stderr,
+            "  [Exp] built T_{vv,vw,wv,ww} for dt=%.6e (nh=%d, n_int=%d)\n",
+            dt, nh, n_int);
+    }
+
+    // Lazy-allocate the dedicated ncplx-sized complex scratch.
+    if (d_exp_scratch == nullptr) {
+        CUDA_CHECK(cudaMalloc(&d_exp_scratch,
+                              sizeof(cufftDoubleComplex) * (size_t)ncplx));
+    }
+
+    // FFT_x(V_n), FFT_x(W_n) → d_fhat, d_pihat.
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_v,     d_fhat));
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_rhs_v, d_pihat));
+
+    // V̂_{n+1} = Tvv·V̂ + Tvw·Ŵ  into d_ghat.
+    _apply_M_kx_to_vhat(d_fhat, d_ghat, d_Tvv_per_kx, n_int, ny, nh, cublas);
+    dim3 grid_kx(nh); dim3 block_row(n_int);
+    k_apply_M_kx_add<<<grid_kx, block_row>>>(
+        reinterpret_cast<const cuDoubleComplex*>(d_pihat),
+        reinterpret_cast<cuDoubleComplex*>(d_ghat),
+        d_Tvw_per_kx, n_int, ny, nh);
+
+    // Ŵ_{n+1} = Twv·V̂ + Tww·Ŵ  into d_exp_scratch.
+    _apply_M_kx_to_vhat(d_fhat, d_exp_scratch, d_Twv_per_kx,
+                        n_int, ny, nh, cublas);
+    k_apply_M_kx_add<<<grid_kx, block_row>>>(
+        reinterpret_cast<const cuDoubleComplex*>(d_pihat),
+        reinterpret_cast<cuDoubleComplex*>(d_exp_scratch),
+        d_Tww_per_kx, n_int, ny, nh);
+
+    // IFFT_x both; scale by 1/nx; zero walls.
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat,        d_v));
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_exp_scratch, d_rhs_v));
+    double inv_nx = 1.0 / (double)nx;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_v,     1));
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_rhs_v, 1));
+    int grid_bdy = (nx + 255) / 256;
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_v,     nx, ny);
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+
+    dt_current = dt;
+    step_count++;
+    return dt;
+}
+
 // ── H_IM diagnostic ─────────────────────────────────────────────────────
 // Computes H = ½ ⟨W,W⟩ + ½ ⟨V, M V⟩ with the same Clenshaw-Curtis · 1/nx
 // quadrature convention as the dispatch diagnostics (dns_triad path).
@@ -4115,15 +4549,40 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
     };
 
+    // Linear-block choice:  if td_strang_exp_nonlinear is on, replace the
+    // RK4 linear_half lambda with the exact exponential propagator at dt/2.
+    // step_exp_propagator caches four propagator slabs per distinct dt, so
+    // calling it with dt/2 just populates a different cache slot than the
+    // linear-only ANSL_TD_KIND=exp_propagator mode would.  exp_dt_cached is
+    // shared, so the cache is rebuilt every time dt flips between dt and
+    // dt/2 — but we never call both paths in the same run, so steady-state
+    // reuse is fine.
+    auto exp_half = [&](double h) {
+        step_exp_propagator(h);
+    };
+
     // ── Strang (A) — linear half-step dt/2 ─────────────────────────────
-    linear_half(0.5 * dt);
+    if (td_strang_exp_nonlinear) exp_half(0.5 * dt);
+    else                          linear_half(0.5 * dt);
     // ── Strang (B) — nonlinear full-step dt ───────────────────────────
     nonlinear_step(dt);
     // ── Strang (C) — linear half-step dt/2 ─────────────────────────────
-    linear_half(0.5 * dt);
+    if (td_strang_exp_nonlinear) exp_half(0.5 * dt);
+    else                          linear_half(0.5 * dt);
 
     step_count++;
     return dt;
+}
+
+// Thin wrapper exposing step_strang_nonlinear's body under an explicit name
+// when the Exp-prop linear block is desired.  This just forces td_strang_
+// exp_nonlinear=true for the duration of the call (no-op if already true).
+double AnelasticSLSolver::step_strang_exp_nonlinear(double dt) {
+    bool prev = td_strang_exp_nonlinear;
+    td_strang_exp_nonlinear = true;
+    double out = step_strang_nonlinear(dt);
+    td_strang_exp_nonlinear = prev;
+    return out;
 }
 
 // Manufactured-solution self-test.

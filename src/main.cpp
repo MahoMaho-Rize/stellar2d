@@ -2574,24 +2574,37 @@ int main(int argc, char** argv) {
             std::timespec wall_start;
             clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
-            // When ANSL_TD_KIND=implicit_midpoint, replace the Strang nonlinear
-            // step with the linear-only symplectic IM step.  In the amp→0
-            // limit both schemes should follow the same linear dynamics; the
-            // comparison target is E_k1 drift per T_a, where IM (Cayley
-            // transform, |λ|=1 exact) is expected to reach round-off floor
-            // and beat RK4's O((ωdt)¹⁰) amplitude leak.
-            const bool use_im = ansl.td_implicit_midpoint;
+            // ANSL_TD_KIND can replace the default Strang-nonlinear RK4 step
+            // with a linear-only integrator (amp → 0 linear-block studies).
+            //   implicit_midpoint  : 2nd-order symplectic, ΔH ≈ round-off,
+            //                        O((ωdt)³) phase.
+            //   exp_propagator     : per-kx eigendecomp → exact cos/sin
+            //                        propagator.  Both phase AND amplitude
+            //                        to round-off.  Used to isolate Strang
+            //                        commutator from linear-block error.
+            const bool use_im  = ansl.td_implicit_midpoint;
+            const bool use_exp = ansl.td_exp_propagator;
             if (use_im) {
                 std::fprintf(stderr,
                     "  TD kind: implicit_midpoint (linear-only symplectic)\n");
+            }
+            if (use_exp) {
+                std::fprintf(stderr,
+                    "  TD kind: exp_propagator (linear-only exact cos/sin)\n");
+            }
+            if (ansl.td_strang_exp_nonlinear) {
+                std::fprintf(stderr,
+                    "  TD kind: strang_exp_nonlinear "
+                    "(Exp(dt/2) ∘ NL_RK4(dt) ∘ Exp(dt/2))\n");
             }
 
             double t_now = 0.0;
             int samples = 1;
             for (int p = 0; p < n_periods && !g_interrupted; ++p) {
                 for (int k = 0; k < steps_per_period && !g_interrupted; ++k) {
-                    if (use_im) ansl.step_implicit_midpoint(dt);
-                    else        ansl.step_strang_nonlinear(dt);
+                    if      (use_exp) ansl.step_exp_propagator(dt);
+                    else if (use_im)  ansl.step_implicit_midpoint(dt);
+                    else              ansl.step_strang_nonlinear(dt);
                     t_now += dt;
                 }
                 diagnostics(t_now);
