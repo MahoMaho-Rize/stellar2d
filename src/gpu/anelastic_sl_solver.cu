@@ -104,6 +104,8 @@ extern "C" {
     __global__ void k_u_from_div_v(cufftDoubleComplex*, const cufftDoubleComplex*,
                                    const double*, const double*, double, int, int);
     __global__ void k_zero_kx0_column(cufftDoubleComplex*, int, int);
+    __global__ void k_ansl_pack_snap(const double*, const double*,
+                                     const double*, float*, int);
 }
 
 // ============================================================================
@@ -291,6 +293,7 @@ void AnelasticSLSolver::free_all() {
     if (plan_r2c_x) { cufftDestroy(plan_r2c_x); plan_r2c_x = 0; }
     if (plan_c2r_x) { cufftDestroy(plan_c2r_x); plan_c2r_x = 0; }
     if (cublas)     { cublasDestroy(cublas); cublas = nullptr; }
+    free_snap_buffer();
 }
 
 // Build CGL grid on [0, Ly], compute ρ_0 from requested profile,
@@ -3963,4 +3966,113 @@ void AnelasticSLSolver::download_omega(std::vector<double>& h_omega) {
     h_omega.resize(ncell);
     CUDA_CHECK(cudaMemcpy(h_omega.data(), d_omega, sizeof(double) * ncell,
                           cudaMemcpyDeviceToHost));
+}
+
+// ── VRAM snapshot ring (see cuh comments; mirrors cart_ale2 frame buffer) ─
+
+void AnelasticSLSolver::alloc_snap_buffer(int headroom_mb,
+                                          const std::string& run_dir) {
+    snap_run_dir = run_dir;
+    size_t free_b = 0, total_b = 0;
+    cudaMemGetInfo(&free_b, &total_b);
+    size_t headroom_b = (size_t)headroom_mb * 1024ull * 1024ull;
+    if (free_b <= headroom_b) {
+        std::fprintf(stderr,
+            "  AnSL snap buffer: only %.2f GB free, %.2f GB headroom — disabling\n",
+            free_b / 1.0e9, headroom_b / 1.0e9);
+        snap_capacity = 0;
+        return;
+    }
+    size_t pool_b = free_b - headroom_b;
+    size_t per_frame_b = (size_t)ncell * 3ull * sizeof(float);
+    snap_capacity = (int)(pool_b / per_frame_b);
+    if (snap_capacity < 4) snap_capacity = 4;
+    size_t actual_b = (size_t)snap_capacity * per_frame_b;
+    if (cudaMalloc(&d_snap_pool, actual_b) != cudaSuccess) {
+        snap_capacity = (int)(((size_t)(free_b * 0.5)) / per_frame_b);
+        if (snap_capacity < 4) snap_capacity = 4;
+        actual_b = (size_t)snap_capacity * per_frame_b;
+        CUDA_CHECK(cudaMalloc(&d_snap_pool, actual_b));
+    }
+    snap_count = 0;
+    snap_total = 0;
+    snap_times.clear();
+    snap_steps.clear();
+
+    // Open packed binary file once; 16 MB iobuf for coalesced fwrite.
+    std::string path = run_dir + "/snapshots.bin";
+    snap_fp = std::fopen(path.c_str(), "wb");
+    if (!snap_fp) {
+        std::fprintf(stderr,
+            "  AnSL snap buffer: failed to open %s — disabling\n",
+            path.c_str());
+        cudaFree(d_snap_pool); d_snap_pool = nullptr; snap_capacity = 0;
+        return;
+    }
+    snap_iobuf.resize(16 * 1024 * 1024);
+    std::setvbuf(snap_fp, snap_iobuf.data(), _IOFBF, snap_iobuf.size());
+    int32_t hdr[4] = { (int32_t)ny, (int32_t)nx, 3, 0 };
+    std::fwrite(hdr, sizeof(int32_t), 4, snap_fp);
+
+    std::fprintf(stderr,
+        "  AnSL snap buffer: %d frames × %.2f MB = %.2f GB "
+        "(free was %.2f GB, headroom %.2f GB) → %s\n",
+        snap_capacity, per_frame_b / 1.0e6, actual_b / 1.0e9,
+        free_b / 1.0e9, headroom_b / 1.0e9, path.c_str());
+}
+
+void AnelasticSLSolver::capture_snap(double t, int step) {
+    if (!d_snap_pool || snap_capacity == 0) return;
+    if (snap_count >= snap_capacity) {
+        flush_snaps_to_disk();
+    }
+    // u is derived from v via continuity; refresh d_u before packing.
+    rebuild_u_from_continuity();
+    int B = 256;
+    int grid = (ncell + B - 1) / B;
+    float* slot = d_snap_pool + (size_t)snap_count * 3ull * (size_t)ncell;
+    k_ansl_pack_snap<<<grid, B>>>(d_u, d_v, d_b, slot, ncell);
+    snap_times.push_back(t);
+    snap_steps.push_back(step);
+    snap_count++;
+}
+
+void AnelasticSLSolver::flush_snaps_to_disk() {
+    if (snap_count == 0 || !d_snap_pool || !snap_fp) {
+        snap_count = 0;
+        snap_times.clear();
+        snap_steps.clear();
+        return;
+    }
+    size_t per_frame = (size_t)ncell * 3ull;
+    std::vector<float> host((size_t)snap_count * per_frame);
+    CUDA_CHECK(cudaMemcpy(host.data(), d_snap_pool,
+                          host.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    std::fprintf(stderr,
+        "  AnSL snap flush: %d frames (%.2f MB) → snapshots.bin ...",
+        snap_count, host.size() * sizeof(float) / 1.0e6);
+    std::fflush(stderr);
+    // Record layout on disk: [double t, float u[ncell], float v[ncell],
+    // float b[ncell]] repeated for each frame.
+    for (int f = 0; f < snap_count; ++f) {
+        double t = snap_times[f];
+        std::fwrite(&t, sizeof(double), 1, snap_fp);
+        std::fwrite(host.data() + (size_t)f * per_frame,
+                    sizeof(float), per_frame, snap_fp);
+        ++snap_total;
+    }
+    std::fprintf(stderr, " done (total %d)\n", snap_total);
+    snap_count = 0;
+    snap_times.clear();
+    snap_steps.clear();
+}
+
+void AnelasticSLSolver::free_snap_buffer() {
+    if (snap_fp) { std::fflush(snap_fp); std::fclose(snap_fp); snap_fp = nullptr; }
+    if (d_snap_pool) { cudaFree(d_snap_pool); d_snap_pool = nullptr; }
+    snap_capacity = snap_count = snap_total = 0;
+    snap_times.clear();
+    snap_steps.clear();
+    snap_iobuf.clear();
 }

@@ -3,6 +3,7 @@
 #include <cufft.h>
 #include <cublas_v2.h>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -436,4 +437,30 @@ struct AnelasticSLSolver {
     // Reduces to step_assembled_linear() in the amp→0 limit.
     // Use fixed external dt (passed in) for period-aligned diagnostics.
     double step_strang_nonlinear(double dt);
+
+    // ── VRAM-buffered snapshot pool (dense every-step DNS diagnostics) ──
+    // Same pattern as cart_ale2_solver's alloc_frame_buffer / capture_frame /
+    // flush_frames_to_disk.  Each captured frame packs (u_rebuilt, v, b) as
+    // float32 cell-centered fields in a contiguous device arena; when the
+    // arena fills, a single D2H copy + packed binary write lands everything.
+    //
+    // Buffer layout:  d_snap_pool[frame_count][3][ncell]  (float32)
+    // Disk layout:    one file "<run_dir>/snapshots.bin" with header
+    //                 [int32 ny, int32 nx, int32 nfields=3, int32 reserved]
+    //                 then records [double t, float u[ny*nx], float v[ny*nx],
+    //                 float b[ny*nx]]  (times array is host-side).
+    float* d_snap_pool = nullptr;
+    int snap_capacity = 0;
+    int snap_count = 0;
+    int snap_total = 0;
+    std::vector<double> snap_times;
+    std::vector<int>    snap_steps;
+    std::string snap_run_dir;
+    FILE*       snap_fp = nullptr;
+    std::vector<char> snap_iobuf;
+
+    void alloc_snap_buffer(int headroom_mb, const std::string& run_dir);
+    void capture_snap(double t, int step);
+    void flush_snaps_to_disk();
+    void free_snap_buffer();
 };

@@ -300,5 +300,17 @@ __global__ void k_max_abs_pass1(
     if (tid == 0) out_blocks[blockIdx.x] = s[0];
 }
 
+// ── Pack (u, v, b) double → float32 frame slot for VRAM ring buffer ────
+// out[0..ncell)        = u (float)
+// out[ncell..2*ncell)  = v (float)
+// out[2*ncell..3*ncell)= b (float)
+__global__ void k_ansl_pack_snap(const double* u, const double* v,
+                                 const double* b, float* out, int ncell) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= ncell) return;
+    out[i]             = (float)u[i];
+    out[i + ncell]     = (float)v[i];
+    out[i + 2 * ncell] = (float)b[i];
+}
 
 }  // extern "C"

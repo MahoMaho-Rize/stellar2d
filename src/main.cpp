@@ -2683,13 +2683,32 @@ int main(int argc, char** argv) {
             // Snapshot cadence (periods).  ANSL_DNS_SNAP_EVERY=N writes binary
             // (u, v, b) float32 cubes to <run_dir>/snapshots/snap_NNNN.bin
             // after every N periods; 0 disables snapshotting.
+            // ANSL_DNS_SNAP_EVERY       = N  snapshot every N diagnostic
+            //                                  samples (legacy, "every N periods"
+            //                                  when diag_every_step=0)
+            // ANSL_DNS_SNAP_EVERY_STEP  = N  snapshot every N solver steps
+            //                                  (overrides SNAP_EVERY when >0;
+            //                                  decoupled from diagnostics)
             int snap_every = env_int("ANSL_DNS_SNAP_EVERY", 0);
+            int snap_every_step = env_int("ANSL_DNS_SNAP_EVERY_STEP", 0);
             std::string snap_dir = run_dir + "/snapshots";
             if (snap_every > 0) {
                 std::string cmd = "mkdir -p '" + snap_dir + "'";
                 (void)std::system(cmd.c_str());
             }
             int snap_idx = 0;
+            int snap_written = 0;
+            // Step-based snapshots use a VRAM-buffered frame pool (same
+            // design as cart_ale2's alloc_frame_buffer/capture_frame/
+            // flush_frames_to_disk).  Allocation deferred to after the
+            // simulation starts so CUDA context is live.
+            if (snap_every_step > 0) {
+                int headroom_mb = 4096;
+                if (const char* s = std::getenv("ANSL_SNAP_HEADROOM_MB")) {
+                    int v = std::atoi(s); if (v > 0) headroom_mb = v;
+                }
+                ansl.alloc_snap_buffer(headroom_mb, run_dir);
+            }
 
             auto diagnostics = [&](double t_now) {
                 std::vector<double> h_u, h_v, h_b;
@@ -2758,16 +2777,16 @@ int main(int argc, char** argv) {
                     Emk[1], Emk[2], Emk[3], Emk[4], Emk[5], Emk[6], E_pot);
                 std::fflush(probe);
 
-                // Snapshot dump for visualisation.
-                if (snap_every > 0 && (snap_idx % snap_every == 0)) {
+                // Legacy per-period snapshot (ANSL_DNS_SNAP_EVERY) — only
+                // triggers when step-based snapshotting is off.
+                if (snap_every_step <= 0 && snap_every > 0
+                    && (snap_idx % snap_every == 0)) {
                     char snap_path[768];
                     std::snprintf(snap_path, sizeof(snap_path),
-                                  "%s/snap_%04d.bin", snap_dir.c_str(), snap_idx);
+                                  "%s/snap_%06d.bin", snap_dir.c_str(),
+                                  snap_written);
                     FILE* sf = std::fopen(snap_path, "wb");
                     if (sf) {
-                        // Header: ny, nx, t (double).  Payload: u, v, b as
-                        // float32 row-major (ny × nx), one field after the
-                        // other.  Python np.fromfile / np.memmap can read this.
                         int32_t hdr[2] = { (int32_t)ny, (int32_t)nx };
                         std::fwrite(hdr, sizeof(int32_t), 2, sf);
                         std::fwrite(&t_now, sizeof(double), 1, sf);
@@ -2780,31 +2799,58 @@ int main(int argc, char** argv) {
                         for (int i = 0; i < nc; ++i) buf[i] = (float)h_b[i];
                         std::fwrite(buf.data(), sizeof(float), nc, sf);
                         std::fclose(sf);
+                        ++snap_written;
                     }
                 }
                 ++snap_idx;
             };
 
+
             diagnostics(0.0);
+            if (snap_every_step > 0) ansl.capture_snap(0.0, 0);
 
             std::timespec wall_start;
             clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
+            // Diagnostics sampling rate.  ANSL_DIAG_EVERY_STEP=N samples
+            // every N solver steps.  0 = once per period (legacy).
+            // For triad analysis you need dt_sample < T_min/2 (half-period
+            // of the fastest kinetic-energy oscillation, 2·ω_c here) to
+            // avoid aliasing.
+            int diag_every_step = env_int("ANSL_DIAG_EVERY_STEP", 0);
+
             double t_now = 0.0;
             int samples = 1;
+            int global_step = 0;
             for (int p = 0; p < n_periods && !g_interrupted; ++p) {
                 for (int k = 0; k < steps_per_period && !g_interrupted; ++k) {
                     ansl.step_strang_nonlinear(dt);
                     t_now += dt;
+                    ++global_step;
+                    if (diag_every_step > 0 &&
+                        global_step % diag_every_step == 0) {
+                        diagnostics(t_now);
+                        ++samples;
+                    }
+                    if (snap_every_step > 0 &&
+                        global_step % snap_every_step == 0) {
+                        ansl.capture_snap(t_now, global_step);
+                    }
                 }
-                diagnostics(t_now);
-                ++samples;
+                if (diag_every_step <= 0) {
+                    diagnostics(t_now);
+                    ++samples;
+                }
                 if ((p + 1) % 10 == 0 || p == n_periods - 1) {
                     print_progress(t_now, (double)n_periods * T_period,
                                    (p + 1) * steps_per_period, dt, wall_start);
                 }
             }
             std::fclose(probe);
+            if (snap_every_step > 0) {
+                ansl.flush_snaps_to_disk();
+                ansl.free_snap_buffer();
+            }
             std::fprintf(stderr,
                 "  DNS triad-coupled probe written to %s (%d samples)\n",
                 probe_path, samples);
