@@ -44,6 +44,7 @@ set(SOURCES
     src/drivers/pseudo_spectral.cpp
     src/drivers/anelastic_sl.cpp
     src/drivers/sph2d_spectral.cpp
+    src/drivers/cpu.cpp
     src/main.cpp
 )
 

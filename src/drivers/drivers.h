@@ -12,6 +12,10 @@
 // Return 0 on successful completion, non-zero on fatal solver error. The
 // value is propagated straight to main()'s return code.
 
+#ifndef USE_GPU
+int run_cpu             (SimConfig& cfg, SimContext& ctx, double& t, int& step);
+#endif
+
 #ifdef USE_GPU
 int run_radial1d        (SimConfig& cfg, SimContext& ctx, double& t, int& step);
 int run_projection      (SimConfig& cfg, SimContext& ctx, double& t, int& step);
