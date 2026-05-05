@@ -52,6 +52,21 @@ def load_all_snaps(snap_dir):
             np.stack(bs))
 
 
+def build_y_grid(ny, Ly, coord_map, beta):
+    """Reconstruct CUDA's y-grid.  coord_map='cgl' uses standard CGL;
+    'tanh' mirrors ANSL_COORD_MAP=tanh ANSL_COORD_BETA=beta (default 2).
+    Must match the solver's grid or imshow's y-axis labels will be wrong."""
+    N = ny - 1
+    xcheb = np.cos(np.pi * np.arange(N + 1) / N)
+    s_asc = (1.0 + xcheb[::-1]) * Ly / 2.0
+    if coord_map == "cgl":
+        return s_asc
+    if coord_map == "tanh":
+        u = beta * (2.0 * s_asc / Ly - 1.0)
+        return 0.5 * Ly + 0.5 * Ly * np.tanh(u) / np.tanh(beta)
+    raise ValueError(f"unknown coord_map: {coord_map}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("snap_dir", help="path to snapshots/ dir")
@@ -59,6 +74,12 @@ def main():
     ap.add_argument("--outprefix", default="paper/figures/fig7_")
     ap.add_argument("--gifpath", default="runs/dns_expE1_triad.gif")
     ap.add_argument("--fps",     type=int, default=30)
+    ap.add_argument("--coord-map", choices=["cgl", "tanh"], default="tanh",
+                    help="must match CUDA's ANSL_COORD_MAP (default tanh, "
+                         "consistent with dns_triad_coupled runs)")
+    ap.add_argument("--coord-beta", type=float, default=2.0,
+                    help="must match CUDA's ANSL_COORD_BETA")
+    ap.add_argument("--Ly", type=float, default=1.0)
     args = ap.parse_args()
 
     ts, us, vs, bs = load_all_snaps(args.snap_dir)
@@ -72,12 +93,12 @@ def main():
     n_periods = ts / T_period
     print(f"  domain: Ny={ny} × Nx={nx}, periods: 0 → {n_periods[-1]:.1f}")
 
-    # Grid (CGL-in-y, uniform-in-x for display).
+    # Grid: match CUDA's coordinate map for correct y-axis display.
     x = np.linspace(0, 1, nx, endpoint=False)
-    # Build CGL-on-[0, Ly] mirroring src/gpu/anelastic_sl_solver.cu's recipe:
-    N = ny - 1
-    xcheb = np.cos(np.pi * np.arange(N + 1) / N)
-    y = (1.0 + xcheb[::-1]) * 1.0 / 2.0   # ascending
+    y = build_y_grid(ny, args.Ly, args.coord_map, args.coord_beta)
+    print(f"  grid: coord_map={args.coord_map}  "
+          f"(y range {y.min():.3f}..{y.max():.3f}, "
+          f"min dy={np.min(np.diff(y)):.3e})")
 
     # ── Fig 7.3: v, u, b snapshots at t=0 and a later mixing time ──────
     # Pick mixing time as the period where E_k6 peaks in the first burst.

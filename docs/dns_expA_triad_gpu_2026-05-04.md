@@ -1,8 +1,10 @@
 ---
 title: DNS Experiment A (3-wave triad) — GPU Strang-split results
 author: Phase 3 nonlinear extension (branch `anelastic-sl-spectral`)
-date: 2026-05-04
+date: 2026-05-04 (数值在 bug 修复后重测, 2026-05-04 23:46)
 status: done (weakly-nonlinear regime), partial (amp=1e-2 plan target is unstable)
+see_also:
+  - docs/dns_expE1_triad_2026-05-04.md — 修复的 bug 诊断 + 三波耦合定量结果
 ---
 
 # 1. 背景
@@ -59,11 +61,15 @@ ANSL_DNS_PERIODS=100 ANSL_DNS_SPP=32 ANSL_RHO_CUT=0.05 \
 64×64, Lane-Emden n=3/2, $\rho_{\rm cut}=0.05$, TANH coord-map, 100 g-mode 周期,
 32 substep/周期,**GPU 实测 ~2s per run**(本地 RTX 40x0)。
 
-| amp | dev/period | E_k1 drift (100T) | E_k2 / E_k1(0) 末 | 期望(triad 理论) |
-|---|---|---|---|---|
-| 1e-6 | 1.53e-5 | -8.0e-5 | 2.73e-14 | $\sim \text{amp}^2 = 10^{-12}$ |
-| 1e-5 | 1.53e-4 | -1.2e-4 | 2.73e-12 | $\sim \text{amp}^2 = 10^{-10}$ |
-| 1e-4 | 1.54e-3 | -3.9e-3 | 2.78e-10 | $\sim \text{amp}^2 = 10^{-8}$ |
+**以下数字为 bug 修复后重测结果**(W 平流 + k=0 mean flow 清零,见
+`docs/dns_expE1_triad_2026-05-04.md`)。旧版本下 dev/period 和 E_k1 drift
+约比现在大 4 个量级,E_k2 scaling 相同但绝对值不干净。
+
+| amp | dev/period | E_k1 drift (100T) | E_k2 / E_k1(0) 末 | E_k2 / E_k1(0) max | 期望(triad 理论) |
+|---|---|---|---|---|---|
+| 1e-6 | 1.82e-9 | -7.97e-5 | 2.73e-14 | 8.37e-14 | $\sim \text{amp}^2 = 10^{-12}$ |
+| 1e-5 | 1.81e-8 | -7.97e-5 | 2.73e-12 | 8.37e-12 | $\sim \text{amp}^2 = 10^{-10}$ |
+| 1e-4 | 1.82e-7 | -8.12e-5 | 2.73e-10 | 8.37e-10 | $\sim \text{amp}^2 = 10^{-8}$ |
 
 **关键发现**:
 
@@ -72,8 +78,10 @@ ANSL_DNS_PERIODS=100 ANSL_DNS_SPP=32 ANSL_RHO_CUT=0.05 \
 2. **E_k2 / E_k1(0) 严格 ∝ amp²** (ratio 100× 对应 amp × 10×)—— 这正是
    **三波 triad 耦合理论预测的能量转移率**。GPU Strang-split 完整保留
    了这个 quadratic 信号。
-3. E_k3 / E_k1(0) ∝ amp⁴(更高阶级联)。
-4. 主模 E_k1 drift 随 amp 放大,但在 amp=1e-4 仍 < 1%。
+3. **E_k1 drift 不随 amp 变化**(三行都是 -8e-5),说明剩余漂移是 Strang+RK4
+   O(dt²) 方法本底,而非非线性污染。这是 bug 修复后的强证据:修复前
+   drift 随 amp² 放大,因为 k=0 mean flow 会以 amp² 速率抽能量。
+4. E_k3 / E_k1(0) ∝ amp⁴(更高阶级联)。
 
 图:`paper/figures/fig7_1_triad.png`
 

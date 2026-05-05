@@ -118,8 +118,12 @@ def main():
                     "a": (na, ka, wa), "b": (nb, kb, wb), "c": (nc, kc_, wc),
                     "detune": detune, "V_abc": abs(V),
                 })
-    # Rank by (small detune) × (large overlap): maximize V/detune.
-    triads.sort(key=lambda t: t["detune"] - 1.0 * np.log10(t["V_abc"] + 1e-20))
+    # Rank by Σ_log (sum of signed log-scales): small detune + large overlap.
+    # Old formula `detune - log10(V_abc)` mixed linear detune (0..0.02) with
+    # 0..20 range log-overlap, so ranking was effectively just by overlap.
+    # Now both live on log10 so they're comparable; lower score = better.
+    triads.sort(key=lambda t: np.log10(max(t["detune"], 1e-20))
+                             - np.log10(t["V_abc"] + 1e-20))
     print(f"── [TRIAD]  ω_a + ω_b ≈ ω_c,  k_a + k_b = k_c   (detune ≤ {args.detune}) ──")
     print("   a: (n,k,ω)              b: (n,k,ω)              c: (n,k,ω)              detune     |V_abc|")
     for t in triads[:args.top]:
@@ -157,7 +161,8 @@ def main():
                 "p": (np_, kp, wp), "d": (nd, kd, wd),
                 "detune": detune, "V_pdd": abs(V), "note": "k_p=2k_d"
             })
-    psi.sort(key=lambda t: t["detune"] - 1.0 * np.log10(t["V_pdd"] + 1e-20))
+    psi.sort(key=lambda t: np.log10(max(t["detune"], 1e-20))
+                           - np.log10(t["V_pdd"] + 1e-20))
     print(f"── [PSI]    ω_p ≈ 2 ω_d   (detune ≤ {args.detune}) ──")
     print("   parent                   daughter                 detune     |V_pdd|  note")
     for t in psi[:args.top]:

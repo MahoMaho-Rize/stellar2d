@@ -24,6 +24,11 @@ for amp in amps:
     path = f"runs/dns_expA/triad_amp{amp}.csv"
     data = np.loadtxt(path, comments="#")
     # columns: t, v_center, eigmode_dev, E_total, E_k1, E_k2, E_k3, E_k4, max_abs_v
+    m = np.isfinite(data[:, 2:8]).all(axis=1)
+    if m.sum() < len(data):
+        print(f"  amp={amp}: dropped {len(data) - m.sum()} non-finite rows "
+              f"(blowup)")
+    data = data[m]
     t = data[:, 0]
     dev = data[:, 2]
     Et = data[:, 3]
