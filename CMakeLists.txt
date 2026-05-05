@@ -94,7 +94,7 @@ endif()
 add_executable(stellar2d ${SOURCES})
 
 # Make every gpu/ subdirectory available on the include path, so cross-directory
-# #include "fas_common.cuh" / "gmg_gpu.cuh" / "sph_transforms.cuh" etc. keep
+# #include "gpu_common.cuh" / "gmg_gpu.cuh" / "sph_transforms.cuh" etc. keep
 # working after the 2026-05-05 layout reorg (see chore/repo-layout).
 set(GPU_INCLUDE_DIRS
     src
@@ -153,6 +153,7 @@ set(TEST_COMMON_SOURCES
     src/init/lane_emden.cpp
 )
 
+# Host-only tests (no CUDA)
 add_executable(test_unit tests/test_unit.cpp ${TEST_COMMON_SOURCES})
 target_include_directories(test_unit PRIVATE ${GPU_INCLUDE_DIRS})
 add_test(NAME unit COMMAND test_unit)
@@ -165,70 +166,6 @@ add_executable(test_pitfalls tests/test_pitfalls.cpp ${TEST_COMMON_SOURCES}
     src/init/sedov.cpp)
 target_include_directories(test_pitfalls PRIVATE ${GPU_INCLUDE_DIRS})
 add_test(NAME pitfalls COMMAND test_pitfalls)
-
-# GPU lowmach solver tests (no AmgX dependency)
-if(USE_GPU)
-    add_executable(test_lowmach tests/test_lowmach.cu
-        ${TEST_COMMON_SOURCES}
-        ${LOWMACH_SOURCES}
-    )
-    target_include_directories(test_lowmach PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_lowmach PRIVATE USE_GPU)
-    set_target_properties(test_lowmach PROPERTIES
-        CUDA_STANDARD 17
-        CUDA_SEPARABLE_COMPILATION ON
-    )
-    target_link_libraries(test_lowmach PRIVATE CUDA::cudart)
-    add_test(NAME lowmach COMMAND test_lowmach)
-
-    add_executable(test_solver_diagnosis tests/test_solver_diagnosis.cu
-        ${TEST_COMMON_SOURCES}
-        ${LOWMACH_SOURCES}
-    )
-    target_include_directories(test_solver_diagnosis PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_solver_diagnosis PRIVATE USE_GPU)
-    set_target_properties(test_solver_diagnosis PROPERTIES
-        CUDA_STANDARD 17
-        CUDA_SEPARABLE_COMPILATION ON
-    )
-    target_link_libraries(test_solver_diagnosis PRIVATE CUDA::cudart)
-
-    add_executable(test_precond_quality tests/test_precond_quality.cu
-        ${TEST_COMMON_SOURCES}
-        ${LOWMACH_SOURCES}
-    )
-    target_include_directories(test_precond_quality PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_precond_quality PRIVATE USE_GPU)
-    set_target_properties(test_precond_quality PROPERTIES
-        CUDA_STANDARD 17
-        CUDA_SEPARABLE_COMPILATION ON
-    )
-    target_link_libraries(test_precond_quality PRIVATE CUDA::cudart)
-
-    add_executable(test_newton_tuning tests/test_newton_tuning.cu
-        ${TEST_COMMON_SOURCES}
-        ${LOWMACH_SOURCES}
-    )
-    target_include_directories(test_newton_tuning PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_newton_tuning PRIVATE USE_GPU)
-    set_target_properties(test_newton_tuning PROPERTIES
-        CUDA_STANDARD 17
-        CUDA_SEPARABLE_COMPILATION ON
-    )
-    target_link_libraries(test_newton_tuning PRIVATE CUDA::cudart)
-
-    add_executable(test_eps_sweep tests/test_eps_sweep.cu
-        ${TEST_COMMON_SOURCES}
-        ${LOWMACH_SOURCES}
-    )
-    target_include_directories(test_eps_sweep PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_eps_sweep PRIVATE USE_GPU)
-    set_target_properties(test_eps_sweep PROPERTIES
-        CUDA_STANDARD 17
-        CUDA_SEPARABLE_COMPILATION ON
-    )
-    target_link_libraries(test_eps_sweep PRIVATE CUDA::cudart)
-endif()
 
 # Python integration tests (if pytest is available)
 find_program(PYTEST_EXECUTABLE pytest)
@@ -252,61 +189,29 @@ target_link_options(stellar2d PRIVATE
     $<$<CONFIG:Debug>:-fsanitize=address>
 )
 
+# ── GPU tests ────────────────────────────────────────────────────────
+# Helper: register one CUDA test executable with the usual boilerplate
+# (GPU_INCLUDE_DIRS, USE_GPU define, CUDA_STANDARD 17, CUDA_SEPARABLE_COMPILATION,
+# CUDA::cudart). Pass NO_CTEST to skip add_test() for diagnostic-only binaries.
+#
+# Usage:
+#   add_gpu_test(<name> <source.cu> [EXTRA_SOURCES ...] [NO_CTEST])
+function(add_gpu_test name source)
+    cmake_parse_arguments(PARSE_ARGV 2 T "NO_CTEST" "" "EXTRA_SOURCES")
+    add_executable(test_${name} ${source} ${T_EXTRA_SOURCES})
+    target_include_directories(test_${name} PRIVATE ${GPU_INCLUDE_DIRS})
+    target_compile_definitions(test_${name} PRIVATE USE_GPU)
+    set_target_properties(test_${name} PROPERTIES
+        CUDA_STANDARD 17
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+    target_link_libraries(test_${name} PRIVATE CUDA::cudart)
+    if(NOT T_NO_CTEST)
+        add_test(NAME ${name} COMMAND test_${name})
+    endif()
+endfunction()
+
 if(USE_GPU)
-    add_executable(test_mini tests/test_mini.cu ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
-    target_include_directories(test_mini PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_mini PRIVATE USE_GPU)
-    set_target_properties(test_mini PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_mini PRIVATE CUDA::cudart)
-
-    add_executable(test_strang_init tests/test_strang_init.cu
-        src/gpu/explicit/strang_solver.cu)
-    target_include_directories(test_strang_init PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_strang_init PRIVATE USE_GPU)
-    set_target_properties(test_strang_init PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_strang_init PRIVATE CUDA::cudart)
-    add_test(NAME strang_init COMMAND test_strang_init)
-
-    add_executable(test_strang_muscl tests/test_strang_muscl.cu
-        src/gpu/explicit/strang_solver.cu)
-    target_include_directories(test_strang_muscl PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_strang_muscl PRIVATE USE_GPU)
-    set_target_properties(test_strang_muscl PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_strang_muscl PRIVATE CUDA::cudart)
-    add_test(NAME strang_muscl COMMAND test_strang_muscl)
-
-    add_executable(test_strang_hllc tests/test_strang_hllc.cu
-        src/gpu/explicit/strang_solver.cu)
-    target_include_directories(test_strang_hllc PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_strang_hllc PRIVATE USE_GPU)
-    set_target_properties(test_strang_hllc PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_strang_hllc PRIVATE CUDA::cudart)
-    add_test(NAME strang_hllc COMMAND test_strang_hllc)
-
-    add_executable(test_strang_step tests/test_strang_step.cu
-        src/gpu/explicit/strang_solver.cu)
-    target_include_directories(test_strang_step PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_strang_step PRIVATE USE_GPU)
-    set_target_properties(test_strang_step PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_strang_step PRIVATE CUDA::cudart)
-    add_test(NAME strang_step COMMAND test_strang_step)
-
-    add_executable(test_strang_unit tests/test_strang_unit.cu
-        src/gpu/explicit/strang_solver.cu)
-    target_include_directories(test_strang_unit PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_strang_unit PRIVATE USE_GPU)
-    set_target_properties(test_strang_unit PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_strang_unit PRIVATE CUDA::cudart)
-    add_test(NAME strang_unit COMMAND test_strang_unit)
-
-    add_executable(test_strang_convergence tests/test_strang_convergence.cu
-        src/gpu/explicit/strang_solver.cu)
-    target_include_directories(test_strang_convergence PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_strang_convergence PRIVATE USE_GPU)
-    set_target_properties(test_strang_convergence PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_strang_convergence PRIVATE CUDA::cudart)
-    add_test(NAME strang_convergence COMMAND test_strang_convergence)
-
     set(FAS_GPU_SOURCES
         src/gpu/implicit_lowmach/fas_residual.cu
         src/gpu/implicit_lowmach/fas_smoothers.cu
@@ -316,76 +221,56 @@ if(USE_GPU)
         src/gpu/implicit_lowmach/projection_solver.cu
         src/gpu/common/gmg_gpu.cu
     )
-    add_executable(test_fas_verify tests/test_fas_verify.cu
-        ${TEST_COMMON_SOURCES}
-        ${FAS_GPU_SOURCES})
-    target_include_directories(test_fas_verify PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_fas_verify PRIVATE USE_GPU)
-    set_target_properties(test_fas_verify PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_fas_verify PRIVATE CUDA::cudart)
-    add_test(NAME fas_verify COMMAND test_fas_verify)
 
-    add_executable(test_fas_diagnose tests/test_fas_diagnose_hse.cu
-        ${TEST_COMMON_SOURCES}
-        ${FAS_GPU_SOURCES})
-    target_include_directories(test_fas_diagnose PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_fas_diagnose PRIVATE USE_GPU)
-    set_target_properties(test_fas_diagnose PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_fas_diagnose PRIVATE CUDA::cudart)
+    # lowmach-family tests (some are diagnostic-only, no CTest)
+    add_gpu_test(lowmach            tests/test_lowmach.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
+    add_gpu_test(solver_diagnosis   tests/test_solver_diagnosis.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES} NO_CTEST)
+    add_gpu_test(precond_quality    tests/test_precond_quality.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES} NO_CTEST)
+    add_gpu_test(newton_tuning      tests/test_newton_tuning.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES} NO_CTEST)
+    add_gpu_test(eps_sweep          tests/test_eps_sweep.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES} NO_CTEST)
+    add_gpu_test(mini               tests/test_mini.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES} NO_CTEST)
 
-    add_executable(test_helm_l2 tests/test_helm_l2.cu)
-    target_include_directories(test_helm_l2 PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_helm_l2 PRIVATE USE_GPU)
-    set_target_properties(test_helm_l2 PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_helm_l2 PRIVATE CUDA::cudart)
-    add_test(NAME helm_l2 COMMAND test_helm_l2)
+    # Strang explicit-solver tests
+    add_gpu_test(strang_init        tests/test_strang_init.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
+    add_gpu_test(strang_muscl       tests/test_strang_muscl.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
+    add_gpu_test(strang_hllc        tests/test_strang_hllc.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
+    add_gpu_test(strang_step        tests/test_strang_step.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
+    add_gpu_test(strang_unit        tests/test_strang_unit.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
+    add_gpu_test(strang_convergence tests/test_strang_convergence.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
 
-    add_executable(test_helm_eos tests/test_helm_eos.cu)
-    target_include_directories(test_helm_eos PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_helm_eos PRIVATE USE_GPU)
-    set_target_properties(test_helm_eos PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_helm_eos PRIVATE CUDA::cudart)
-    add_test(NAME helm_eos COMMAND test_helm_eos)
+    # FAS multigrid tests
+    add_gpu_test(fas_verify         tests/test_fas_verify.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${FAS_GPU_SOURCES})
+    add_gpu_test(fas_diagnose       tests/test_fas_diagnose_hse.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${FAS_GPU_SOURCES} NO_CTEST)
 
-    add_executable(test_dual tests/test_dual.cu)
-    target_include_directories(test_dual PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_dual PRIVATE USE_GPU)
-    set_target_properties(test_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_dual PRIVATE CUDA::cudart)
-    add_test(NAME dual COMMAND test_dual)
+    # Standalone CUDA unit tests (no extra solver sources)
+    add_gpu_test(helm_l2            tests/test_helm_l2.cu)
+    add_gpu_test(helm_eos           tests/test_helm_eos.cu)
+    add_gpu_test(dual               tests/test_dual.cu)
+    add_gpu_test(kap_table          tests/test_kap_table.cu)
+    add_gpu_test(helm_dual          tests/test_helm_dual.cu
+                 EXTRA_SOURCES src/physics/helmholtz_eos.cu)
+    add_gpu_test(residual_dual      tests/test_residual_dual.cu
+                 EXTRA_SOURCES src/physics/helmholtz_eos.cu)
 
-    add_executable(test_helm_dual tests/test_helm_dual.cu src/physics/helmholtz_eos.cu)
-    target_include_directories(test_helm_dual PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_helm_dual PRIVATE USE_GPU)
-    set_target_properties(test_helm_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_helm_dual PRIVATE CUDA::cudart)
-    add_test(NAME helm_dual COMMAND test_helm_dual)
-
-    add_executable(test_residual_dual tests/test_residual_dual.cu src/physics/helmholtz_eos.cu)
-    target_include_directories(test_residual_dual PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_residual_dual PRIVATE USE_GPU)
-    set_target_properties(test_residual_dual PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_residual_dual PRIVATE CUDA::cudart)
-    add_test(NAME residual_dual COMMAND test_residual_dual)
-
-    add_executable(test_kap_table tests/test_kap_table.cu)
-    target_include_directories(test_kap_table PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_kap_table PRIVATE USE_GPU)
-    set_target_properties(test_kap_table PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_kap_table PRIVATE CUDA::cudart)
-    add_test(NAME kap_table COMMAND test_kap_table)
-
-    add_executable(test_coverage_critical tests/test_coverage_critical.cu
-        ${TEST_COMMON_SOURCES}
-        ${FAS_GPU_SOURCES}
-        ${LOWMACH_SOURCES}
-        src/init/jeans.cpp
-        src/init/evrard.cpp)
-    target_include_directories(test_coverage_critical PRIVATE ${GPU_INCLUDE_DIRS})
-    target_compile_definitions(test_coverage_critical PRIVATE USE_GPU)
-    set_target_properties(test_coverage_critical PROPERTIES CUDA_STANDARD 17 CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(test_coverage_critical PRIVATE CUDA::cudart)
-    add_test(NAME coverage_critical COMMAND test_coverage_critical)
+    # Coverage omnibus
+    add_gpu_test(coverage_critical  tests/test_coverage_critical.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${FAS_GPU_SOURCES}
+                               ${LOWMACH_SOURCES}
+                               src/init/jeans.cpp src/init/evrard.cpp)
 
     # Stellar profile (Lane-Emden + GYRE structure coefficients) — host-only, no CUDA
     add_executable(test_stellar_profile tests/test_stellar_profile.cpp
