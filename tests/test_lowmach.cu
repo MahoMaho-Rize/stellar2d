@@ -15,7 +15,7 @@
 // Compile: nvcc -DUSE_GPU ... (see CMakeLists.txt gpu_test target)
 // Run:     ./test_lowmach      (returns 0 if all pass)
 
-#include "gpu/lowmach_solver.h"
+#include "lowmach_solver.h"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>

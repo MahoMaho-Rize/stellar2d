@@ -8,9 +8,9 @@
 //   4. Hancock half-step: face values evolve correctly
 // ============================================================
 
-#include "gpu/strang_solver.cuh"
-#include "gpu/strang_device.cuh"  // d_mc_limit
-#include "gpu/fas_common.cuh"
+#include "strang_solver.cuh"
+#include "strang_device.cuh"  // d_mc_limit
+#include "gpu_common.cuh"
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>

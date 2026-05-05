@@ -10,12 +10,12 @@
 // P7: Init routines (jeans, evrard, bubble) positivity
 // ============================================================
 
-#include "gpu/fas_solver.cuh"
-#include "gpu/fas_hllc.cuh"
-#include "gpu/lowmach_solver.h"
-#include "gpu/simple_solver.cuh"
-#include "gpu/projection_solver.cuh"
-#include "gpu/gmg_gpu.cuh"
+#include "fas_solver.cuh"
+#include "gpu_hllc.cuh"
+#include "lowmach_solver.h"
+#include "simple_solver.cuh"
+#include "projection_solver.cuh"
+#include "gmg_gpu.cuh"
 #include "init/lane_emden.h"
 #include "init/jeans.h"
 #include "init/evrard.h"

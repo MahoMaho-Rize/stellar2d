@@ -36,4 +36,4 @@ jobs:
         run: pip install numpy scipy pillow matplotlib
 
       - name: Syntax check scripts
-        run: python -m py_compile scripts/render_video_fast.py && python -m py_compile scripts/render_cartesian.py
+        run: python -m py_compile scripts/render/render_video_fast.py && python -m py_compile scripts/render/render_cartesian.py

@@ -8,7 +8,7 @@
 // gas and pp-chain. Small + deterministic so diffs are obvious.
 
 #include "../src/physics/dual.cuh"
-#include "../src/gpu/radial1d_residual_dual.cuh"
+#include "radial1d_residual_dual.cuh"
 #include "../src/physics/nuclear_pp.h"
 #include "../src/eos.h"
 #include "../src/physics/helmholtz_eos.cuh"

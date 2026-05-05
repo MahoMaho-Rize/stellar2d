@@ -8,8 +8,8 @@
 //   4. CFL: dt is reasonable and stable
 // ============================================================
 
-#include "gpu/strang_solver.cuh"
-#include "gpu/fas_common.cuh"
+#include "strang_solver.cuh"
+#include "gpu_common.cuh"
 #include <cstdio>
 #include <cmath>
 #include <vector>

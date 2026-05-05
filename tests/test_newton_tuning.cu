@@ -9,7 +9,7 @@
 //   - Clamp factor: 0.01, 0.05, 0.1, 0.3, 1.0
 //   - Preconditioner: BLOCK_JACOBI, LINE_JACOBI
 
-#include "gpu/lowmach_solver.h"
+#include "lowmach_solver.h"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>
