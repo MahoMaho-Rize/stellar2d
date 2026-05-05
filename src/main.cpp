@@ -49,73 +49,12 @@
 #include <sys/stat.h>
 
 #include "cli/options.h"
+#include "sim/helpers.h"
+#include "sim/setup.h"
 
 static volatile sig_atomic_t g_interrupted = 0;
 static void handle_sigint(int) { g_interrupted = 1; }
 
-
-static void extract_density(const Grid& grid, const State& state, std::vector<double>& rho_cells) {
-    int nr = grid.nr, nt = grid.ntheta;
-    rho_cells.resize(nr * nt);
-    for (int i = 0; i < nr; ++i)
-        for (int j = 0; j < nt; ++j)
-            rho_cells[i * nt + j] = state.rho[grid.idx(i, j)];
-}
-
-static double compute_lane_emden_R_star(double n_poly, double K_poly, double rho_c, double G) {
-    auto sol = solve_lane_emden(n_poly);
-    double alpha2 = (n_poly + 1.0) * K_poly
-                    * std::pow(rho_c, 1.0 / n_poly - 1.0)
-                    / (4.0 * M_PI * G);
-    double alpha = std::sqrt(alpha2);
-    return alpha * sol.xi_1;
-}
-
-static double compute_lane_emden_R_outer(double n_poly, double K_poly, double rho_c, double G) {
-    return compute_lane_emden_R_star(n_poly, K_poly, rho_c, G) * 1.1;
-}
-
-static void print_progress(double t, double t_end, int step, double dt,
-                           std::timespec& t_start) {
-    double frac = t / t_end;
-    int pct = static_cast<int>(frac * 100.0);
-    if (pct > 100) pct = 100;
-
-    int bar_width = 30;
-    int filled = static_cast<int>(frac * bar_width);
-
-    std::timespec t_now;
-    clock_gettime(CLOCK_MONOTONIC, &t_now);
-    double elapsed = (t_now.tv_sec - t_start.tv_sec)
-                   + (t_now.tv_nsec - t_start.tv_nsec) * 1e-9;
-
-    double eta = (frac > 1e-6) ? elapsed / frac * (1.0 - frac) : 0.0;
-
-    std::fprintf(stderr, "\r  [");
-    for (int i = 0; i < bar_width; ++i)
-        std::fputc(i < filled ? '#' : '.', stderr);
-    std::fprintf(stderr, "] %3d%%  step %-8d  t=%.3e  dt=%.2e  elapsed %.0fs  ETA %.0fs  ",
-                 pct, step, t, dt, elapsed, eta);
-    std::fflush(stderr);
-}
-
-// Build a traceable run directory: runs/<test>_<nr>x<nt>_<timestamp>/
-// Returns the path string (e.g. "runs/lane_emden_64x32_20260428_153012/").
-static std::string make_run_dir(const SimConfig& cfg) {
-    std::time_t now = std::time(nullptr);
-    std::tm* lt = std::localtime(&now);
-    char ts[32];
-    std::strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", lt);
-
-    char dirname[512];
-    std::snprintf(dirname, sizeof(dirname), "%s/%s_%dx%d_%s",
-                  cfg.run_base.c_str(), cfg.test_case.c_str(),
-                  cfg.nr, cfg.ntheta, ts);
-
-    mkdir(cfg.run_base.c_str(), 0755);
-    mkdir(dirname, 0755);
-    return std::string(dirname);
-}
 
 int main(int argc, char** argv) {
     std::signal(SIGINT, handle_sigint);
@@ -125,273 +64,23 @@ int main(int argc, char** argv) {
 
     if (int rc = parse_cli(argc, argv, cfg); rc != 0) return rc;
 
-    if (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
-        || cfg.test_case == "bubble") {
-        if (cfg.mesh_type == "mass")
-            cfg.R_outer = compute_lane_emden_R_star(1.5, 1.0, 1.0, cfg.G);
-        else
-            cfg.R_outer = compute_lane_emden_R_outer(1.5, 1.0, 1.0, cfg.G);
-    }
+    SimContext ctx;
+    if (int rc = setup_simulation(cfg, ctx); rc != 0) return rc;
 
-    std::printf("stellar2d - 2D Axisymmetric Euler + Self-Gravity\n");
-    std::printf("Test case: %s, mesh: %s\n", cfg.test_case.c_str(), cfg.mesh_type.c_str());
-    std::printf("Grid: %d x %d, R_outer = %.6f\n", cfg.nr, cfg.ntheta, cfg.R_outer);
-
-    Grid grid;
-    if (cfg.mesh_type == "equimass" &&
-        (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
-         || cfg.test_case == "bubble")) {
-        double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
-        auto le_sol = solve_lane_emden(n_poly);
-        double alpha2 = (n_poly + 1.0) * K_poly
-                        * std::pow(rho_c, 1.0 / n_poly - 1.0) / (4.0 * M_PI * G);
-        double alpha = std::sqrt(alpha2);
-
-        auto rho_func = [&](double r) -> double {
-            double xi = r / alpha;
-            if (xi >= le_sol.xi_1) return 1e-20;
-            // Interpolate Lane-Emden solution
-            auto it = std::lower_bound(le_sol.xi.begin(), le_sol.xi.end(), xi);
-            int idx = static_cast<int>(it - le_sol.xi.begin());
-            if (idx <= 0) return rho_c;
-            if (idx >= static_cast<int>(le_sol.xi.size())) return 1e-20;
-            double x0 = le_sol.xi[idx - 1], x1 = le_sol.xi[idx];
-            double t0 = le_sol.theta_le[idx - 1], t1 = le_sol.theta_le[idx];
-            double frac = (xi - x0) / (x1 - x0);
-            double theta_val = t0 + frac * (t1 - t0);
-            return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
-        };
-
-        grid.init_equimass(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func);
-        std::printf("Using equimass radial mesh based on Lane-Emden density\n");
-    } else if (cfg.mesh_type == "mass" &&
-               (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed"
-                || cfg.test_case == "bubble")) {
-        double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
-        auto le_sol = solve_lane_emden(n_poly);
-        double alpha2 = (n_poly + 1.0) * K_poly
-                        * std::pow(rho_c, 1.0 / n_poly - 1.0) / (4.0 * M_PI * G);
-        double alpha = std::sqrt(alpha2);
-
-        auto rho_func = [&](double r) -> double {
-            double xi = r / alpha;
-            if (xi >= le_sol.xi_1) return 1e-20;
-            auto it = std::lower_bound(le_sol.xi.begin(), le_sol.xi.end(), xi);
-            int idx = static_cast<int>(it - le_sol.xi.begin());
-            if (idx <= 0) return rho_c;
-            if (idx >= static_cast<int>(le_sol.xi.size())) return 1e-20;
-            double x0 = le_sol.xi[idx - 1], x1 = le_sol.xi[idx];
-            double t0 = le_sol.theta_le[idx - 1], t1 = le_sol.theta_le[idx];
-            double frac = (xi - x0) / (x1 - x0);
-            double theta_val = t0 + frac * (t1 - t0);
-            return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
-        };
-
-        double r_inner = (cfg.r_inner >= 0) ? cfg.r_inner : 0.0;
-        cfg.r_inner = r_inner;
-
-        if (r_inner > 0) {
-            const int nfine = 20000;
-            double dr_f = r_inner / nfine;
-            double m = 0.0;
-            for (int ii = 0; ii < nfine; ++ii) {
-                double r = (ii + 0.5) * dr_f;
-                m += 4.0 * M_PI * rho_func(r) * r * r * dr_f;
-            }
-            cfg.M_core = m;
-        }
-
-        grid.init_mass_shell(cfg.nr, cfg.ntheta, cfg.R_outer, rho_func, r_inner);
-        cfg.no_sponge = true;
-        std::printf("Using hybrid mass-shell mesh (R_star=%.6f, r_inner=%.4f, M_core=%.5f, HSE outer BC)\n",
-                    cfg.R_outer, r_inner, cfg.M_core);
-    } else if (cfg.mesh_type == "uniform") {
-        grid.init_uniform(cfg.nr, cfg.ntheta, cfg.R_outer);
-        // TEMP (sphere_impl preview): if --r-inner > 0 on uniform mesh, compute
-        // M_core the same way as mass mesh so pole_avg + core_excision wire up.
-        if (cfg.r_inner > 0 && (cfg.test_case == "lane_emden" || cfg.test_case == "lane_emden_perturbed")) {
-            double n_poly = 1.5, K_poly = 1.0, rho_c = 1.0, G = cfg.G;
-            auto le_sol = solve_lane_emden(n_poly);
-            double alpha2 = (n_poly + 1.0) * K_poly
-                            * std::pow(rho_c, 1.0 / n_poly - 1.0) / (4.0 * M_PI * G);
-            double alpha = std::sqrt(alpha2);
-            auto rho_func = [&](double r) -> double {
-                double xi = r / alpha;
-                if (xi >= le_sol.xi_1) return 1e-20;
-                auto it = std::lower_bound(le_sol.xi.begin(), le_sol.xi.end(), xi);
-                int idx = static_cast<int>(it - le_sol.xi.begin());
-                if (idx <= 0) return rho_c;
-                if (idx >= static_cast<int>(le_sol.xi.size())) return 1e-20;
-                double x0 = le_sol.xi[idx - 1], x1 = le_sol.xi[idx];
-                double t0 = le_sol.theta_le[idx - 1], t1 = le_sol.theta_le[idx];
-                double frac = (xi - x0) / (x1 - x0);
-                double theta_val = t0 + frac * (t1 - t0);
-                return rho_c * std::pow(std::max(theta_val, 1e-15), n_poly);
-            };
-            const int nfine = 20000;
-            double dr_f = cfg.r_inner / nfine;
-            double m = 0.0;
-            for (int ii = 0; ii < nfine; ++ii) {
-                double r = (ii + 0.5) * dr_f;
-                m += 4.0 * M_PI * rho_func(r) * r * r * dr_f;
-            }
-            cfg.M_core = m;
-            std::printf("Using uniform radial mesh with r_inner=%.4f, M_core=%.5f (sphere_impl preview)\n",
-                        cfg.r_inner, cfg.M_core);
-        } else {
-            std::printf("Using uniform radial mesh\n");
-        }
-    } else {
-        grid.init(cfg.nr, cfg.ntheta, cfg.R_outer, cfg.log_alpha);
-    }
-
-    EOS eos;
+    // Local aliases so the (still-inlined) solver branches below keep working
+    // without modification. The coming steps migrate each branch into its own
+    // run_xxx(cfg, ctx) driver; until then we expose ctx members as bare names.
+    Grid& grid = ctx.grid;
+    State& state = ctx.state;
+    EOS& eos = ctx.eos;
+    std::string& run_dir = ctx.run_dir;
 #ifdef USE_GPU
-    // Helmholtz table lives through the whole run; destroyed after solver loop.
-    HelmholtzTable helm_tbl;
-    bool helm_loaded = false;
-    KapTable kap_tbl_lowT, kap_tbl_highT;
-    bool kap_loaded = false;
+    HelmholtzTable& helm_tbl = ctx.helm_tbl;
+    bool& helm_loaded = ctx.helm_loaded;
+    KapTable& kap_tbl_lowT = ctx.kap_tbl_lowT;
+    KapTable& kap_tbl_highT = ctx.kap_tbl_highT;
+    bool& kap_loaded = ctx.kap_loaded;
 #endif
-    if (cfg.eos_type == "ideal_rad") {
-        eos = EOS::ideal_rad(cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
-        std::printf("EOS: ideal + radiation (γ=%.3f, μ=%.3f, a=%.3e)\n",
-                    cfg.gamma, cfg.eos_mu, cfg.eos_rad_a);
-    } else if (cfg.eos_type == "pre_ms") {
-        PreMsParams p;
-        // Use reasonable defaults; override via CLI later if needed.
-        // R_gas in code units: keep 1.0 (consistent with rest of code).
-        p.R_gas = 1.0 / cfg.eos_mu;  // inverse μ for code-unit consistency
-        p.a_rad = cfg.eos_rad_a;
-        eos = EOS::pre_ms(p);
-        std::printf("EOS: pre-MS Chabrier-Baraffe (T_diss=%.0f, T_ion=%.0f, μ_cold=%.2f → μ_hot=%.2f)\n",
-                    p.T_diss, p.T_ion, p.mu_cold, p.mu_hot);
-    } else if (cfg.eos_type == "helmholtz") {
-#ifdef USE_GPU
-        if (helm_tbl.load(nullptr, cfg.helm_table_path.c_str(), 0) != 0) {
-            std::fprintf(stderr,
-                "ERROR: failed to load Helmholtz table at %s — run\n"
-                "  tools/helm_convert <ascii> %s\n",
-                cfg.helm_table_path.c_str(), cfg.helm_table_path.c_str());
-            return 1;
-        }
-        helm_tbl.view.Abar = cfg.helm_Abar;
-        helm_tbl.view.Zbar = cfg.helm_Zbar;
-        eos = EOS::helmholtz(helm_tbl.view);
-        helm_loaded = true;
-        std::printf("EOS: Helmholtz (cococubed %dx%d, Abar=%.3f, Zbar=%.3f)\n",
-                    HELM_IMAX, HELM_JMAX, cfg.helm_Abar, cfg.helm_Zbar);
-#else
-        std::fprintf(stderr, "ERROR: --eos helmholtz requires USE_GPU build\n");
-        return 1;
-#endif
-    } else {
-        eos = EOS::ideal(cfg.gamma, cfg.eos_mu);
-    }
-
-#ifdef USE_GPU
-    // Optional MESA kap table pair (lowT + highT). Loaded once before the
-    // solver starts; the radial1d branch below hands the views to the solver.
-    if (cfg.kap_use_table) {
-        char z_buf[32];
-        std::snprintf(z_buf, sizeof(z_buf), "%g", cfg.kap_table_Z);
-        std::string z_tag = z_buf;
-        std::string high_path = cfg.kap_data_dir + "/" + cfg.kap_highT_family
-                              + "_z" + z_tag + ".kapbin";
-        std::string low_path  = cfg.kap_data_dir + "/" + cfg.kap_lowT_family
-                              + "_z" + z_tag + ".kapbin";
-        int rc_hi = kap_tbl_highT.load(high_path.c_str(), 0);
-        if (rc_hi != 0) {
-            std::fprintf(stderr,
-                "ERROR: failed to load high-T kap binary at %s (rc=%d)\n",
-                high_path.c_str(), rc_hi);
-            return 1;
-        }
-        int rc_lo = kap_tbl_lowT.load(low_path.c_str(), 0);
-        if (rc_lo != 0) {
-            std::fprintf(stderr,
-                "ERROR: failed to load low-T kap binary at %s (rc=%d)\n",
-                low_path.c_str(), rc_lo);
-            return 1;
-        }
-        kap_loaded = true;
-        std::printf("KAP: stitched {%s + %s} at Z=%s, seam logT ∈ [%.2f, %.2f]\n",
-                    cfg.kap_highT_family.c_str(), cfg.kap_lowT_family.c_str(),
-                    z_tag.c_str(), cfg.kap_logT_lo_end, cfg.kap_logT_hi_start);
-    }
-#endif
-
-    State state;
-    state.allocate(grid);
-
-    if (cfg.test_case == "lane_emden") {
-        LaneEmdenParams lep;
-        lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-        init_lane_emden(grid, state, lep, cfg.gamma);
-    } else if (cfg.test_case == "lane_emden_perturbed") {
-        LaneEmdenParams lep;
-        lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-        init_lane_emden_perturbed(grid, state, lep, cfg.gamma, cfg.perturb_amplitude);
-    } else if (cfg.test_case == "bubble") {
-        LaneEmdenParams lep;
-        lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-        if (cfg.bubble_mode == "entropy") {
-            init_lane_emden_bubble_entropy(grid, state, lep, cfg.gamma,
-                                           0.5, M_PI/3.0, 0.15, 0.5);
-            std::printf("Bubble mode: entropy (constant pressure, density perturbation)\n");
-        } else {
-            init_lane_emden_bubble(grid, state, lep, cfg.gamma,
-                                   0.5, M_PI/3.0, 0.15, 0.5);
-        }
-    } else if (cfg.test_case == "sedov") {
-        SedovParams sp;
-        sp.rho_0 = 1.0; sp.E_blast = 1.0; sp.r_blast = 0.05;
-        init_sedov(grid, state, sp, cfg.gamma);
-    } else if (cfg.test_case == "jeans") {
-        JeansParams jp;
-        jp.rho_0 = 1.0; jp.cs = 1.0; jp.G = cfg.G; jp.epsilon = 1e-3;
-        jp.k_r = 2.0 * M_PI / cfg.R_outer; jp.k_theta = 2.0;
-        init_jeans(grid, state, jp, cfg.gamma);
-    } else if (cfg.test_case == "evrard") {
-        EvrardParams ep;
-        ep.M = 1.0; ep.R = 1.0; ep.G = cfg.G;
-        init_evrard(grid, state, ep, cfg.gamma);
-    } else if (cfg.test_case == "hse" || cfg.test_case == "hse_perturbed"
-               || cfg.test_case == "hse_bubble" || cfg.test_case == "sod"
-               || cfg.test_case == "kh_shear" || cfg.test_case == "forced_turb"
-               || cfg.test_case == "kh_lecoanet"
-               || cfg.test_case == "taylor_green"
-               || cfg.test_case == "double_shear_layer"
-               || cfg.test_case == "vortex_merger"
-               || cfg.test_case == "quad_vortex_merger"
-               || cfg.test_case == "rossby_wave"
-               || cfg.test_case == "jovian_bands"
-               || cfg.test_case == "sl_basis_check"
-               || cfg.test_case == "sl_poisson_test"
-               || cfg.test_case == "sl_poisson_test_boussinesq"
-               || cfg.test_case == "kh_shear_boussinesq"
-               || cfg.test_case == "gmode_pulsation"
-               || cfg.test_case == "gmode_2d_evp"
-               || cfg.test_case == "gmode_eigenmode_td"
-               || cfg.test_case == "gmode_exp_k"
-               || cfg.test_case == "dns_triad"
-               || cfg.test_case == "dns_triad_coupled"
-               || cfg.test_case == "local_convection") {
-        // Cart-Lagrangian-only test cases — no Grid/State initialization needed;
-        // cart_lag solver branch handles its own IC.
-    } else {
-        std::fprintf(stderr, "Unknown test case: %s\n", cfg.test_case.c_str());
-        return 1;
-    }
-
-    std::string run_dir = make_run_dir(cfg);
-    std::printf("Output directory: %s/\n", run_dir.c_str());
-
-    {
-        char path[512];
-        std::snprintf(path, sizeof(path), "%s/output_0000.vtk", run_dir.c_str());
-        write_vtk(path, grid, state, cfg.gamma);
-    }
 
     double t = 0.0;
     int step = 0;
@@ -2802,8 +2491,7 @@ int main(int argc, char** argv) {
     }
 
 #ifdef USE_GPU
-    if (helm_loaded) helm_tbl.destroy();
-    if (kap_loaded) { kap_tbl_lowT.destroy(); kap_tbl_highT.destroy(); }
+    ctx.destroy_tables();
 #endif
 
     std::printf("Done.\n");

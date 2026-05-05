@@ -26,6 +26,8 @@ set(SOURCES
     src/init/jeans.cpp
     src/init/evrard.cpp
     src/cli/options.cpp
+    src/sim/helpers.cpp
+    src/sim/setup.cpp
     src/main.cpp
 )
 
