@@ -40,7 +40,7 @@ not expose newer flags (`--ppm`, `--bc-x`, ...) — for full control use
 ## Solvers
 
 Selected via `--solver <name>`. Table lists intended use and key references.
-See [docs/equations.md](docs/equations.md) for the authoritative math and
+See [docs/projects/spectral_liouville/equations.md](docs/projects/spectral_liouville/equations.md) for the authoritative math and
 [CLAUDE.md](CLAUDE.md) for the asset-preservation policy.
 
 | Solver | Grid | Status | Use for |
@@ -53,10 +53,10 @@ See [docs/equations.md](docs/equations.md) for the authoritative math and
 | `radial1d` | 1D radial | ✅ stable | MESA-style 1D, baseline for ALE radial regression |
 | `compressible` | polar | ⚠️ requires AmgX | Legacy HLLC + AmgX Poisson |
 | `wb2d` | polar | ⚠️ perturbation dies ~t=2 | Well-balanced Euler family, kept as reference |
-| `ale2d` | polar | ⚠️ axisymmetric hoop bug | Axisymmetric Caramana; see `docs/ale_hoop_stress_fix.md` |
+| `ale2d` | polar | ⚠️ axisymmetric hoop bug | Axisymmetric Caramana; see `docs/design/ale_hoop_stress_fix.md` |
 | `cart_lag` | Cartesian | ⚠️ HSE dt degenerates | Pure Lagrangian reference (hourglass mode over long HSE) |
 | `cart_ale` | Cartesian | ✅ stable | Cartesian ALE baseline (reflective walls only) |
-| `cart_ale2` | Cartesian | ✅ stable | **cart_ale + periodic BC + PPM + char projection.** Intended for compressible stellar convection. See [docs/cart_ale2_design.md](docs/cart_ale2_design.md). |
+| `cart_ale2` | Cartesian | ✅ stable | **cart_ale + periodic BC + PPM + char projection.** Intended for compressible stellar convection. See [docs/design/cart_ale2_design.md](docs/design/cart_ale2_design.md). |
 
 `strang` exists in `src/gpu/strang_solver.*` and is exercised by the
 Strang test suite; it is not currently wired into `main.cpp` dispatch.
@@ -337,22 +337,22 @@ stellar2d/
 
 ## Documentation
 
-- [docs/equations.md](docs/equations.md) — Authoritative equation reference (§1–§17)
+- [docs/projects/spectral_liouville/equations.md](docs/projects/spectral_liouville/equations.md) — Authoritative equation reference (§1–§17)
 - [docs/pitfalls.md](docs/pitfalls.md) — Bug log with root cause (P01–P31)
-- [docs/cart_ale2_design.md](docs/cart_ale2_design.md) — cart_ale2 design + KH benchmark results + scope policy
-- [docs/ale_design.md](docs/ale_design.md) — Axisymmetric ale2d design notes
-- [docs/ale_hoop_stress_fix.md](docs/ale_hoop_stress_fix.md) — ale2d hoop-stress patch plan
-- [docs/ale_rezone_design.md](docs/ale_rezone_design.md) — Original ALE rezone strategy (cart_lag → cart_ale)
+- [docs/design/cart_ale2_design.md](docs/design/cart_ale2_design.md) — cart_ale2 design + KH benchmark results + scope policy
+- [docs/design/ale_design.md](docs/design/ale_design.md) — Axisymmetric ale2d design notes
+- [docs/design/ale_hoop_stress_fix.md](docs/design/ale_hoop_stress_fix.md) — ale2d hoop-stress patch plan
+- [docs/design/ale_rezone_design.md](docs/design/ale_rezone_design.md) — Original ALE rezone strategy (cart_lag → cart_ale)
 - [docs/cart_ale_progress_2026-05-01.md](docs/cart_ale_progress_2026-05-01.md) — cart_ale day-1 journal
 - [docs/cart_ale_2nd_order_remap_2026-05-02.md](docs/cart_ale_2nd_order_remap_2026-05-02.md) — 2nd-order remap progress
-- [docs/lag2d_design.md](docs/lag2d_design.md) — Lag2d legacy notes
-- [docs/wb2d_design.md](docs/wb2d_design.md) — wb2d design notes
+- [docs/design/lag2d_design.md](docs/design/lag2d_design.md) — Lag2d legacy notes
+- [docs/design/wb2d_design.md](docs/design/wb2d_design.md) — wb2d design notes
 - [docs/provenance.md](docs/provenance.md) — Figure/data filename and footer convention
 - [CLAUDE.md](CLAUDE.md) — Solver asset-preservation rules (read first before modifying existing solvers)
 
 ## Equation-code traceability
 
-Every numbered equation in `docs/equations.md` is the authoritative
+Every numbered equation in `docs/projects/spectral_liouville/equations.md` is the authoritative
 specification. Source comments of the form `// Eq. (X.Y)` point at the
 corresponding equation. If code disagrees with the document, the code
 has a bug.
