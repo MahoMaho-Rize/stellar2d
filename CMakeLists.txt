@@ -28,6 +28,7 @@ set(SOURCES
     src/cli/options.cpp
     src/sim/helpers.cpp
     src/sim/setup.cpp
+    src/sim/run_loop.cpp
     src/main.cpp
 )
 

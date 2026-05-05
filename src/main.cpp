@@ -51,8 +51,9 @@
 #include "cli/options.h"
 #include "sim/helpers.h"
 #include "sim/setup.h"
+#include "sim/run_loop.h"
 
-static volatile sig_atomic_t g_interrupted = 0;
+// g_interrupted is defined in sim/run_loop.cpp.
 static void handle_sigint(int) { g_interrupted = 1; }
 
 
@@ -89,69 +90,6 @@ int main(int argc, char** argv) {
 
 #ifdef USE_GPU
     // ── Solver adapter: type-erased callbacks for the time-stepping loop ──
-    struct SolverOps {
-        std::function<double(double, double)> step;
-        std::function<void(const Grid&, State&, double dt)> download;
-        std::function<void()> destroy;
-        int progress_interval = 200;
-    };
-
-    auto snapshot_hse_if_needed = [&](auto& solver) {
-        if (cfg.test_case == "lane_emden_perturbed" || cfg.test_case == "bubble") {
-            State state_hse;
-            state_hse.allocate(grid);
-            LaneEmdenParams lep;
-            lep.n_poly = 1.5; lep.rho_c = 1.0; lep.K_poly = 1.0; lep.G = cfg.G;
-            init_lane_emden(grid, state_hse, lep, cfg.gamma);
-            solver.upload_state(grid, state_hse);
-            solver.snapshot_hse();
-        }
-    };
-
-    auto configure_mass_mesh = [&](auto& solver) {
-        // TEMP: extend to uniform mesh with --r-inner > 0 (sphere_impl preview test).
-        // Treat "uniform + r_inner>0" like mass mesh for pole_avg / core_excision wiring.
-        bool is_mass = (cfg.mesh_type == "mass");
-        bool is_uniform_with_rinner = (cfg.mesh_type == "uniform" && cfg.r_inner > 0);
-        if (!is_mass && !is_uniform_with_rinner) return;
-        solver.use_hse_outer_bc = true;
-        solver.use_core_excision = (cfg.r_inner > 0);
-        solver.M_core = cfg.M_core;
-        solver.n_pole_avg = cfg.ntheta / 2;
-        if (cfg.r_inner <= 0) {
-            int n_uni = static_cast<int>(0.15 * cfg.R_outer / (cfg.R_outer / cfg.nr));
-            solver.n_angular_avg = n_uni;
-        }
-    };
-
-    auto run_time_loop = [&](SolverOps& ops) {
-        std::timespec wall_start;
-        clock_gettime(CLOCK_MONOTONIC, &wall_start);
-
-        while (t < cfg.t_end && !g_interrupted) {
-            double dt = ops.step(t, cfg.t_end);
-            t += dt;
-            step++;
-
-            if (step % ops.progress_interval == 0)
-                print_progress(t, cfg.t_end, step, dt, wall_start);
-
-            if (step % cfg.output_interval == 0) {
-                ops.download(grid, state, dt);
-                Diagnostics diag = compute_diagnostics(grid, state, cfg.gamma);
-                std::fprintf(stderr, "\n");
-                std::printf("Step %6d  t = %.6e  dt = %.3e  M = %.10e  E = %.10e\n",
-                            step, t, dt, diag.total_mass, diag.total_energy);
-                char fname[512];
-                std::snprintf(fname, sizeof(fname), "%s/output_%04d.vtk",
-                              run_dir.c_str(), step / cfg.output_interval);
-                write_vtk(fname, grid, state, cfg.gamma);
-            }
-        }
-        std::fprintf(stderr, "\n");
-        ops.download(grid, state, 0.0);
-        ops.destroy();
-    };
 
     if (cfg.solver_type == "radial1d") {
         // ===== 1D Lagrangian radial solver (MESA RSP-inspired) =====
@@ -486,29 +424,29 @@ int main(int argc, char** argv) {
         ProjSolver proj;
         proj.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.no_sponge) proj.sponge_kappa = 0.0;
-        configure_mass_mesh(proj);
-        snapshot_hse_if_needed(proj);
+        configure_mass_mesh(cfg, proj);
+        snapshot_hse_if_needed(cfg, ctx, proj);
         proj.upload_state(grid, state);
 
         SolverOps ops;
         ops.step = [&](double t_, double te) { return proj.step(t_, te); };
         ops.download = [&](const Grid& g, State& s, double) { proj.download_state(g, s); };
         ops.destroy = [&]() { proj.destroy(); };
-        run_time_loop(ops);
+        run_time_loop(cfg, ctx, t, step, ops);
 
     } else if (cfg.solver_type == "simple") {
         SimpleSolver sim;
         sim.init(grid, eos, cfg.G, cfg.cfl);
         if (cfg.no_sponge) sim.sponge_kappa = 0.0;
-        configure_mass_mesh(sim);
-        snapshot_hse_if_needed(sim);
+        configure_mass_mesh(cfg, sim);
+        snapshot_hse_if_needed(cfg, ctx, sim);
         sim.upload_state(grid, state);
 
         SolverOps ops;
         ops.step = [&](double t_, double te) { return sim.step(t_, te); };
         ops.download = [&](const Grid& g, State& s, double) { sim.download_state(g, s); };
         ops.destroy = [&]() { sim.destroy(); };
-        run_time_loop(ops);
+        run_time_loop(cfg, ctx, t, step, ops);
 
     } else if (cfg.solver_type == "fas2") {
         // ===== fas2: experimental fork of FAS for low-Mach robustness =====
@@ -528,10 +466,10 @@ int main(int argc, char** argv) {
         if (cfg.radial_only)
             std::printf("fas2 radial-only mode\n");
         if (cfg.no_sponge) fas.sponge_kappa = 0.0;
-        configure_mass_mesh(fas);
+        configure_mass_mesh(cfg, fas);
         if (cfg.mesh_type == "mass" && cfg.r_inner <= 0)
             fas.central_damp_r = 0.15 * cfg.R_outer;
-        snapshot_hse_if_needed(fas);
+        snapshot_hse_if_needed(cfg, ctx, fas);
         fas.upload_state(grid, state);
 
         FasLevel2& fl = fas.levels[0];
@@ -594,7 +532,7 @@ int main(int argc, char** argv) {
             fas.download_state(grid, state);
             fas.destroy();
         };
-        run_time_loop(ops);
+        run_time_loop(cfg, ctx, t, step, ops);
 
     } else if (cfg.solver_type == "fas" || cfg.solver_type == "explicit") {
         bool use_explicit = (cfg.solver_type == "explicit");
@@ -607,10 +545,10 @@ int main(int argc, char** argv) {
         if (cfg.radial_only)
             std::printf("Radial-only mode: v_theta=0 enforced, theta fluxes and atm_reset skipped\n");
         if (cfg.no_sponge) fas.sponge_kappa = 0.0;
-        configure_mass_mesh(fas);
+        configure_mass_mesh(cfg, fas);
         if (cfg.mesh_type == "mass" && cfg.r_inner <= 0)
             fas.central_damp_r = 0.15 * cfg.R_outer;
-        snapshot_hse_if_needed(fas);
+        snapshot_hse_if_needed(cfg, ctx, fas);
         fas.upload_state(grid, state);
 
         // GPU snapshot buffer: store frames in VRAM, write all at end
@@ -677,7 +615,7 @@ int main(int argc, char** argv) {
             fas.download_state(grid, state);
             fas.destroy();
         };
-        run_time_loop(ops);
+        run_time_loop(cfg, ctx, t, step, ops);
 
     } else if (cfg.solver_type == "cart_lag") {
         // ===== Cartesian 2D Lagrangian (Caramana compatible, planar) =====
@@ -2348,8 +2286,8 @@ int main(int argc, char** argv) {
         LowMachSolver lm;
         lm.init(grid, eos, cfg.G, cfg.cfl, pc);
         if (cfg.no_sponge) lm.sponge_kappa = 0.0;
-        configure_mass_mesh(lm);
-        snapshot_hse_if_needed(lm);
+        configure_mass_mesh(cfg, lm);
+        snapshot_hse_if_needed(cfg, ctx, lm);
         lm.upload_state(grid, state);
 
         std::timespec wall_start;
@@ -2402,7 +2340,7 @@ int main(int argc, char** argv) {
         ops.step = [&](double t_, double te) { return gpu.step(t_, te); };
         ops.download = [&](const Grid& g, State& s, double) { gpu.download_state(g, s); };
         ops.destroy = [&]() { gpu.destroy(); };
-        run_time_loop(ops);
+        run_time_loop(cfg, ctx, t, step, ops);
 #else
         std::fprintf(stderr, "ERROR: --solver compressible requires AmgX. "
                      "Rebuild with -DAMGX_DIR=/path/to/amgx, or use --solver lowmach.\n");
