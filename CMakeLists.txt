@@ -25,6 +25,7 @@ set(SOURCES
     src/init/sedov.cpp
     src/init/jeans.cpp
     src/init/evrard.cpp
+    src/cli/options.cpp
     src/main.cpp
 )
 
