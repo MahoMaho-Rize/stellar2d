@@ -2469,7 +2469,7 @@ int main(int argc, char** argv) {
                 "# kx_int=%d n_g=%d amp=%g omega=%.15e period=%.15e dt=%.15e steps_per_period=%d\n",
                 kx_int, n_g, amp, om_evp, T_period, dt, steps_per_period);
             std::fprintf(probe,
-                "# t  v_center  eigmode_dev  E_total  E_k1  E_k2  E_k3  E_k4  max_abs_v\n");
+                "# t  v_center  eigmode_dev  E_total  E_k1  E_k2  E_k3  E_k4  max_abs_v  H_im\n");
 
             // Grab weights and grid for host-side diagnostics.
             std::vector<double> y_cgl, w_cc(cfg.nr, 0.0);
@@ -2558,10 +2558,14 @@ int main(int argc, char** argv) {
                 double dev = ansl.eigmode_deviation();
                 double max_v = 0.0;
                 for (double x : h_v) if (std::fabs(x) > max_v) max_v = std::fabs(x);
+                // H_IM — symplectic Hamiltonian ½⟨W,W⟩ + ½⟨V,MV⟩; the true
+                // conserved quantity of the assembled V̈ = −M V system (the
+                // anelastic E_total above drifts stroboscopically under IM).
+                double H_im = ansl.hamiltonian_im();
                 std::fprintf(probe,
-                    "%.10e %.10e %.10e %.15e %.15e %.15e %.15e %.15e %.10e\n",
+                    "%.10e %.10e %.10e %.15e %.15e %.15e %.15e %.15e %.10e %.15e\n",
                     t_now, v_c, dev, E_total,
-                    Emk[1], Emk[2], Emk[3], Emk[4], max_v);
+                    Emk[1], Emk[2], Emk[3], Emk[4], max_v, H_im);
             };
 
             // Sample at t=0.
@@ -2570,11 +2574,24 @@ int main(int argc, char** argv) {
             std::timespec wall_start;
             clock_gettime(CLOCK_MONOTONIC, &wall_start);
 
+            // When ANSL_TD_KIND=implicit_midpoint, replace the Strang nonlinear
+            // step with the linear-only symplectic IM step.  In the amp→0
+            // limit both schemes should follow the same linear dynamics; the
+            // comparison target is E_k1 drift per T_a, where IM (Cayley
+            // transform, |λ|=1 exact) is expected to reach round-off floor
+            // and beat RK4's O((ωdt)¹⁰) amplitude leak.
+            const bool use_im = ansl.td_implicit_midpoint;
+            if (use_im) {
+                std::fprintf(stderr,
+                    "  TD kind: implicit_midpoint (linear-only symplectic)\n");
+            }
+
             double t_now = 0.0;
             int samples = 1;
             for (int p = 0; p < n_periods && !g_interrupted; ++p) {
                 for (int k = 0; k < steps_per_period && !g_interrupted; ++k) {
-                    ansl.step_strang_nonlinear(dt);
+                    if (use_im) ansl.step_implicit_midpoint(dt);
+                    else        ansl.step_strang_nonlinear(dt);
                     t_now += dt;
                 }
                 diagnostics(t_now);

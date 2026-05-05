@@ -279,6 +279,8 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_rho); free_ptr(d_rho_sqrt_inv);
     free_ptr(d_rho_prime); free_ptr(d_rho_prime_over_rho); free_ptr(d_N2);
     free_ptr(d_M_per_kx);
+    free_ptr(d_B_per_kx);
+    free_ptr(d_C_per_kx);
     free_ptr(d_strang_v0);    free_ptr(d_strang_w0);    free_ptr(d_strang_b0);
     free_ptr(d_strang_v_acc); free_ptr(d_strang_w_acc); free_ptr(d_strang_b_acc);
     free_ptr(d_strang_v_s);   free_ptr(d_strang_w_s);   free_ptr(d_strang_b_s);
@@ -1028,14 +1030,18 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     // extension (Strang split around Path D linear block).
     td_assembled_linear = false;
     td_strang_nonlinear = false;
+    td_implicit_midpoint = false;
     if (const char* s = std::getenv("ANSL_TD_KIND")) {
         std::string ss(s);
         if (ss == "assembled_linear" || ss == "assembled" || ss == "matrix")
             td_assembled_linear = true;
         else if (ss == "strang_nonlinear" || ss == "strang")
             td_strang_nonlinear = true;
+        else if (ss == "implicit_midpoint" || ss == "im" || ss == "symplectic")
+            td_implicit_midpoint = true;
     }
-    if (td_assembled_linear || td_strang_nonlinear) assemble_path_d_operators();
+    if (td_assembled_linear || td_strang_nonlinear || td_implicit_midpoint)
+        assemble_path_d_operators();
 }
 
 void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
@@ -3420,6 +3426,284 @@ double AnelasticSLSolver::step_assembled_linear() {
     return dt;
 }
 
+// Forward decls for the per-kx apply kernels (defined below next to
+// step_assembled_linear's k_apply_M_kx).
+__global__ static void k_apply_M_kx_add(
+        const cuDoubleComplex* vhat_in,
+        cuDoubleComplex* vhat_out,
+        const double* M_per_kx,
+        int n_int, int ny, int nh);
+
+// ── Implicit-midpoint per-kx B_k, C_k builder (host) ────────────────────
+// For each kx_idx:
+//     A_k = I + α M_k,    α = dt²/4
+//     B_k = A_k⁻¹ (I − α M_k)
+//     C_k = dt · A_k⁻¹
+// Both stored col-major in d_B_per_kx, d_C_per_kx so k_apply_M_kx (and
+// k_apply_M_kx_add) can reuse the same indexing pattern as d_M_per_kx.
+//
+// Stability / symplecticity: (I + αM)⁻¹ (I − αM) is the Cayley transform
+// of M; on M's eigenpair (ω², V) it returns (1 − αω²)/(1 + αω²), which
+// has modulus exactly 1 in floating point only up to round-off.  The
+// quadratic Hamiltonian ½ Wᵀ W + ½ Vᵀ M V is preserved to that level.
+//
+// Singular kx=0 case: we simply store identity in B_0 (inert) and zero
+// in C_0, following the same convention as assemble_path_d_operators.
+static void build_im_per_kx(
+        const double* h_M_per_kx, int n_int, int nh,
+        double dt,
+        std::vector<double>& h_B, std::vector<double>& h_C) {
+    const size_t per_kx = (size_t)n_int * n_int;
+    h_B.assign((size_t)nh * per_kx, 0.0);
+    h_C.assign((size_t)nh * per_kx, 0.0);
+    const double alpha = 0.25 * dt * dt;
+
+    // Workspaces (col-major throughout to match d_M_per_kx storage).
+    std::vector<double> A((size_t)n_int * n_int);
+    std::vector<double> IminusAM((size_t)n_int * n_int);
+    std::vector<double> aug((size_t)n_int * 2 * n_int);  // [A | I]
+
+    for (int kx_idx = 0; kx_idx < nh; ++kx_idx) {
+        const double* M = &h_M_per_kx[(size_t)kx_idx * per_kx];
+
+        // Build A = I + α M  and  T = I − α M  (both col-major).
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                double m_ij = M[(size_t)j * n_int + i];  // M[i,j] col-major
+                A[(size_t)j * n_int + i]        =  alpha * m_ij;
+                IminusAM[(size_t)j * n_int + i] = -alpha * m_ij;
+            }
+            A[(size_t)i * n_int + i]        += 1.0;
+            IminusAM[(size_t)i * n_int + i] += 1.0;
+        }
+
+        if (kx_idx == 0) {
+            // V̂_{n+1}(0) = V̂_n(0) (identity), W unchanged: keep B_0=I, C_0=0.
+            for (int i = 0; i < n_int; ++i)
+                h_B[(size_t)kx_idx * per_kx + (size_t)i * n_int + i] = 1.0;
+            continue;
+        }
+
+        // Gauss-Jordan invert A in place via augmented [A | I] (row-major
+        // within aug for simpler elimination arithmetic).
+        const int W2 = 2 * n_int;
+        std::fill(aug.begin(), aug.end(), 0.0);
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                // aug row i col j = A[i,j] from col-major slab
+                aug[(size_t)i * W2 + j] = A[(size_t)j * n_int + i];
+            }
+            aug[(size_t)i * W2 + (n_int + i)] = 1.0;
+        }
+        for (int piv = 0; piv < n_int; ++piv) {
+            int ipiv_row = piv;
+            double best = std::fabs(aug[(size_t)piv * W2 + piv]);
+            for (int r = piv + 1; r < n_int; ++r) {
+                double v = std::fabs(aug[(size_t)r * W2 + piv]);
+                if (v > best) { best = v; ipiv_row = r; }
+            }
+            if (best < 1e-300) {
+                std::fprintf(stderr,
+                    "  [IM] kx_idx=%d: singular A_k (pivot=%.3e, dt=%.3e)\n",
+                    kx_idx, best, dt);
+                std::exit(1);
+            }
+            if (ipiv_row != piv) {
+                for (int c = 0; c < W2; ++c) {
+                    std::swap(aug[(size_t)piv * W2 + c],
+                              aug[(size_t)ipiv_row * W2 + c]);
+                }
+            }
+            double inv_p = 1.0 / aug[(size_t)piv * W2 + piv];
+            for (int c = 0; c < W2; ++c) aug[(size_t)piv * W2 + c] *= inv_p;
+            for (int r = 0; r < n_int; ++r) {
+                if (r == piv) continue;
+                double f = aug[(size_t)r * W2 + piv];
+                if (f == 0.0) continue;
+                for (int c = 0; c < W2; ++c)
+                    aug[(size_t)r * W2 + c] -= f * aug[(size_t)piv * W2 + c];
+            }
+        }
+
+        // A⁻¹ lives in the right half of `aug` (row-major).  Compute
+        // B_k = A⁻¹ · (I − α M) and C_k = dt · A⁻¹, storing col-major.
+        double* Bslab = &h_B[(size_t)kx_idx * per_kx];
+        double* Cslab = &h_C[(size_t)kx_idx * per_kx];
+        for (int i = 0; i < n_int; ++i) {
+            for (int j = 0; j < n_int; ++j) {
+                // Bslab[i,j] = Σ_k A⁻¹[i,k] · (I−αM)[k,j]
+                double s_B = 0.0;
+                for (int k = 0; k < n_int; ++k) {
+                    double ainv_ik = aug[(size_t)i * W2 + (n_int + k)];
+                    double t_kj    = IminusAM[(size_t)j * n_int + k]; // col-major
+                    s_B += ainv_ik * t_kj;
+                }
+                Bslab[(size_t)j * n_int + i] = s_B;
+                // Cslab[i,j] = dt · A⁻¹[i,j]
+                Cslab[(size_t)j * n_int + i] = dt * aug[(size_t)i * W2 + (n_int + j)];
+            }
+        }
+    }
+}
+
+// ── Public API: step_implicit_midpoint ──────────────────────────────────
+// Symplectic 2nd-order linear TD via the Cayley transform (I+αM)⁻¹(I−αM).
+// Caller passes fixed dt; we build B_k, C_k on first call (or if dt changes)
+// and upload to d_B_per_kx, d_C_per_kx.
+//
+// Per step:
+//   1) FFT_x(V_n)  → d_fhat  ;  FFT_x(W_n) → d_ghat    (both complex, row-major)
+//   2) d_ghat ← C · d_ghat  (overwrite: W → C·W)
+//   3) d_ghat += B · d_fhat   (accumulate: + B·V)
+//   4) IFFT_x(d_ghat) → d_v, rescale by 1/nx, zero walls
+//   5) W_{n+1} = (2/dt)(V_{n+1} − V_n) − W_n   (physical-space pointwise)
+double AnelasticSLSolver::step_implicit_midpoint(double dt) {
+    if (d_M_per_kx == nullptr) assemble_path_d_operators();
+    if (d_M_per_kx == nullptr) {
+        std::fprintf(stderr, "step_implicit_midpoint: assemble failed.\n");
+        return 0.0;
+    }
+    const int n_int = n_int_path_d;
+    const size_t per_kx = (size_t)n_int * n_int;
+
+    // Build / refresh B_k, C_k if dt changed (or first call).
+    if (d_B_per_kx == nullptr || d_C_per_kx == nullptr
+        || im_dt_cached != dt) {
+        std::vector<double> h_M((size_t)nh * per_kx);
+        CUDA_CHECK(cudaMemcpy(h_M.data(), d_M_per_kx,
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyDeviceToHost));
+        std::vector<double> h_B, h_C;
+        build_im_per_kx(h_M.data(), n_int, nh, dt, h_B, h_C);
+
+        if (d_B_per_kx) cudaFree(d_B_per_kx);
+        if (d_C_per_kx) cudaFree(d_C_per_kx);
+        CUDA_CHECK(cudaMalloc(&d_B_per_kx, sizeof(double) * (size_t)nh * per_kx));
+        CUDA_CHECK(cudaMalloc(&d_C_per_kx, sizeof(double) * (size_t)nh * per_kx));
+        CUDA_CHECK(cudaMemcpy(d_B_per_kx, h_B.data(),
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_C_per_kx, h_C.data(),
+                              sizeof(double) * (size_t)nh * per_kx,
+                              cudaMemcpyHostToDevice));
+        im_dt_cached = dt;
+        std::fprintf(stderr,
+            "  [IM] built B_k, C_k for dt=%.6e (nh=%d, n_int=%d)\n",
+            dt, nh, n_int);
+    }
+
+    // Snapshot V_n, W_n for W_{n+1} update (physical-space).
+    CUDA_CHECK(cudaMemcpyAsync(d_u_orig, d_v,     sizeof(double) * ncell,
+                               cudaMemcpyDeviceToDevice));
+    CUDA_CHECK(cudaMemcpyAsync(d_v_orig, d_rhs_v, sizeof(double) * ncell,
+                               cudaMemcpyDeviceToDevice));
+
+    // FFT_x(V_n) → d_fhat (complex ny × nh, row-major).
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_v,     d_fhat));
+    // FFT_x(W_n) → d_pihat — need a complex scratch of size ncplx = ny·nh.
+    // d_pihat is the pressure-Poisson output buffer (unused during linear-
+    // only step_implicit_midpoint); d_fhat/d_ghat are the V and RHS slots.
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_rhs_v, d_pihat));
+
+    // d_ghat = C_k · Ŵ_n  (overwrite; zeros walls and kx=0).
+    _apply_M_kx_to_vhat(d_pihat, d_ghat, d_C_per_kx, n_int, ny, nh, cublas);
+    // d_ghat += B_k · V̂_n   (accumulate; kx=0 left at 0 since both zero it).
+    dim3 grid_kx(nh); dim3 block_row(n_int);
+    k_apply_M_kx_add<<<grid_kx, block_row>>>(
+        reinterpret_cast<const cuDoubleComplex*>(d_fhat),
+        reinterpret_cast<cuDoubleComplex*>(d_ghat),
+        d_B_per_kx, n_int, ny, nh);
+
+    // IFFT_x(d_ghat) → d_v (unnormalised; scale by 1/nx).
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_v));
+    double inv_nx = 1.0 / (double)nx;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_v, 1));
+
+    // Dirichlet walls on V_{n+1} (round-off hygiene).
+    int grid_bdy = (nx + 255) / 256;
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+
+    // W_{n+1} = (2/dt)·(V_{n+1} − V_n) − W_n
+    //        = −W_n + (2/dt)·V_{n+1} − (2/dt)·V_n
+    // In-place on d_rhs_v (holds W_n initially):
+    //   d_rhs_v ← −d_rhs_v
+    //   d_rhs_v ← d_rhs_v + (2/dt) · d_v
+    //   d_rhs_v ← d_rhs_v − (2/dt) · d_u_orig
+    double neg_one = -1.0;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &neg_one, d_rhs_v, 1));
+    double two_over_dt = 2.0 / dt;
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &two_over_dt,
+                             d_v,     1, d_rhs_v, 1));
+    double neg_two_over_dt = -two_over_dt;
+    CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &neg_two_over_dt,
+                             d_u_orig, 1, d_rhs_v, 1));
+    k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+
+    dt_current = dt;
+    step_count++;
+    return dt;
+}
+
+// ── H_IM diagnostic ─────────────────────────────────────────────────────
+// Computes H = ½ ⟨W,W⟩ + ½ ⟨V, M V⟩ with the same Clenshaw-Curtis · 1/nx
+// quadrature convention as the dispatch diagnostics (dns_triad path).
+// Uses d_pihat and d_ghat as complex scratch (safe outside pressure solve),
+// d_rhs_pi as real scratch for the physical-space image of M·V.
+double AnelasticSLSolver::hamiltonian_im() {
+    if (d_M_per_kx == nullptr) return std::nan("");
+    const int n_int = n_int_path_d;
+
+    // FFT(V) → d_pihat, apply M, IFFT back to d_rhs_pi, divide by nx.
+    CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_v, d_pihat));
+    _apply_M_kx_to_vhat(d_pihat, d_ghat, d_M_per_kx, n_int, ny, nh, cublas);
+    CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_rhs_pi));
+    double inv_nx = 1.0 / (double)nx;
+    CUBLAS_CHECK(cublasDscal(cublas, ncell, &inv_nx, d_rhs_pi, 1));
+
+    // Download V, M·V, W, and compute the quadratic form on host.
+    std::vector<double> h_V(ncell), h_MV(ncell), h_W(ncell);
+    CUDA_CHECK(cudaMemcpy(h_V.data(),  d_v,     sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_MV.data(), d_rhs_pi, sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_W.data(),  d_rhs_v, sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+
+    // Reproduce the Clenshaw-Curtis w_cc[jy] used in dispatch diagnostics
+    // (same recipe as scripts/nonlinear_paths_infra.py).
+    std::vector<double> w_cc(ny, 0.0);
+    {
+        int N = ny - 1;
+        std::vector<double> w(N + 1, 0.0);
+        for (int k = 0; k <= N; ++k) {
+            double s = 0.0;
+            int J = N / 2;
+            for (int j = 1; j <= J; ++j) {
+                double b = (2 * j != N) ? 2.0 : 1.0;
+                s += b / (4.0 * j * j - 1) *
+                     std::cos(2.0 * j * k * M_PI / N);
+            }
+            w[k] = (1.0 - s) * 2.0 / (double)N;
+        }
+        w[0] /= 2.0; w[N] /= 2.0;
+        for (int k = 0; k <= N; ++k) w_cc[k] = w[N - k] * Ly / 2.0;
+    }
+
+    double ke = 0.0, pe = 0.0;
+    for (int jy = 0; jy < ny; ++jy) {
+        double w = w_cc[jy];
+        double row_kw = 0.0, row_pw = 0.0;
+        for (int ix = 0; ix < nx; ++ix) {
+            int k = jy * nx + ix;
+            row_kw += h_W[k]  * h_W[k];
+            row_pw += h_V[k]  * h_MV[k];
+        }
+        ke += 0.5 * w * row_kw / (double)nx;
+        pe += 0.5 * w * row_pw / (double)nx;
+    }
+    return ke + pe;
+}
+
 // Apply M_kx per x-Fourier mode: for each kx_idx (skipping kx=0),
 //     v_hat_out[row, kx] = Σ_col M_{kx}[row, col] · v_hat_in[col, kx]
 // with row, col ∈ [0, n_int) mapping to interior y-nodes [1, ny-1).
@@ -3488,6 +3772,32 @@ static void _apply_M_kx_to_vhat(
         reinterpret_cast<const cuDoubleComplex*>(d_vhat),
         reinterpret_cast<cuDoubleComplex*>(d_out),
         d_M_per_kx, n_int, ny, nh);
+}
+
+// Accumulate variant:  d_out += M_per_kx · d_vhat  (no zero, no wall writes).
+// Used by step_implicit_midpoint to combine  V̂_{n+1} = B·V̂_n + C·Ŵ_n  in
+// two passes.  Skips kx=0 (which stays at whatever the caller initialized).
+__global__ static void k_apply_M_kx_add(
+        const cuDoubleComplex* vhat_in,
+        cuDoubleComplex* vhat_out,
+        const double* M_per_kx,
+        int n_int, int ny, int nh) {
+    int kx_idx = blockIdx.x;
+    int row = threadIdx.x;
+    if (kx_idx >= nh || row >= n_int) return;
+    if (kx_idx == 0) return;  // kx=0 frozen at caller's init value
+    const double* M = M_per_kx + (size_t)kx_idx * (size_t)n_int * n_int;
+    double sum_re = 0.0, sum_im = 0.0;
+    for (int col = 0; col < n_int; ++col) {
+        double m_rc = M[(size_t)col * n_int + row];
+        cuDoubleComplex vin = vhat_in[(size_t)(col + 1) * nh + kx_idx];
+        sum_re += m_rc * vin.x;
+        sum_im += m_rc * vin.y;
+    }
+    int jy_out = row + 1;
+    size_t off = (size_t)jy_out * nh + kx_idx;
+    vhat_out[off].x += sum_re;
+    vhat_out[off].y += sum_im;
 }
 
 // Public helper: rebuild u in-place from d_v via anelastic continuity.

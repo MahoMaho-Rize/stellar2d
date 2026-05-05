@@ -106,6 +106,36 @@ struct AnelasticSLSolver {
     double* d_M_per_kx   = nullptr;  // (nh * n_int * n_int,)
     bool    td_assembled_linear = false;  // env ANSL_TD_KIND=assembled_linear
 
+    // ── Implicit midpoint (2nd-order symplectic) per-kx LU factorizations ──
+    // For each x-Fourier mode kx_idx with α = dt²/4, the per-mode system is:
+    //     A_k = I_{n_int} + α · M_k           (LU factored, reused every step)
+    //     P_k = A_k⁻¹ · (I − α M_k)            (not stored; applied via two solves)
+    //     Q_k = dt · A_k⁻¹                    (applied by scaling the RHS)
+    // After V_{n+1} is obtained, W_{n+1} = (2/dt)·(V_{n+1} − V_n) − W_n.
+    //
+    // For the linear Hamiltonian system V̈ = −M V, implicit midpoint is
+    // exactly symplectic: the Cayley transform (I − αM)(I + αM)⁻¹ has unit
+    // modulus on every eigenvalue of M, so |V|² + (MV, V) (the quadratic
+    // Hamiltonian) is preserved to round-off — orders of magnitude below the
+    // RK4 O((ωdt)¹⁰) amplitude leak floor we see in step_assembled_linear.
+    //
+    // Implementation choice: rather than LU-factor A_k on-device and solve
+    // every step, we invert A_k on the host once per dt (n_int ≤ 62, nh ≤ 33,
+    // cost negligible) and pre-compute two explicit real matrices:
+    //     B_k = A_k⁻¹ · (I − α M_k)   (V → V coupling per step)
+    //     C_k = dt · A_k⁻¹           (W → V coupling per step)
+    // so each step's V update is two M-style applies in frequency space:
+    //     V̂_{n+1}(kx) = B_k V̂_n(kx) + C_k Ŵ_n(kx)
+    // followed by  W_{n+1} = (2/dt)(V_{n+1} − V_n) − W_n  (pointwise in physical).
+    // Layout (col-major, same as M_per_kx):
+    //   d_B_per_kx[kx_idx * n_int² + col*n_int + row] = B_k[row, col]
+    //   d_C_per_kx[kx_idx * n_int² + col*n_int + row] = C_k[row, col]
+    //   im_dt_cached = dt at which B/C were built (rebuild if caller changes dt)
+    double* d_B_per_kx     = nullptr;
+    double* d_C_per_kx     = nullptr;
+    double  im_dt_cached   = 0.0;
+    bool    td_implicit_midpoint = false;  // env ANSL_TD_KIND=implicit_midpoint
+
     // Strang-split (Phase 3 nonlinear extension) persistent buffers.
     // Allocated lazily the first time step_strang_nonlinear() is called.
     // Each is (ncell,) = (ny * nx) doubles; 10 slots × 64² × 8B = 320 KB.
@@ -419,6 +449,26 @@ struct AnelasticSLSolver {
     // Integrator: classical RK4 on the 2-state (V, W) pair with V̈ = -M·V.
     // Skips advection entirely; intended for pure linear g-mode validation.
     double step_assembled_linear();
+
+    // One-step linear-only implicit-midpoint TD (symplectic).  Reads d_v,
+    // d_rhs_v (W), writes d_v, d_rhs_v at t+dt.  d_b untouched (buoyancy
+    // already eliminated by M).  The nonlinear RK4 block is NOT called from
+    // here — this is the "Strang(A) without Strang(B)" path for measuring
+    // the linear-block floor in isolation.  Caller passes a fixed dt so LU
+    // factors of A_k = I + (dt²/4)·M_k stay cached.
+    //
+    // Pass criterion (Experiment "IM-vs-RK4"): amp=1e-6 × 500 T_a, ΔE/E
+    // should be < 1e-12 (8+ decades below RK4's -8e-7/T floor).
+    double step_implicit_midpoint(double dt);
+
+    // Diagnostic: return the symplectic invariant of the linear IM scheme
+    //     H_IM = ½ ⟨W, W⟩_CC + ½ ⟨V, M V⟩_CC
+    // where ⟨·,·⟩_CC is the Clenshaw-Curtis-weighted y-integral × uniform-x
+    // average.  This is the exact conserved Hamiltonian of the discrete
+    // system V̈ = −M V (in contrast to the anelastic physical KE ρ(u²+v²)/2,
+    // which is only a time-average conserved quantity for the continuous
+    // equations and drifts stroboscopically when IM has phase error).
+    double hamiltonian_im();
 
     // Rebuild d_u in-place from the current d_v using anelastic continuity:
     //     û(kx≠0, y) = -(1/(i·kx·ρ(y))) · ∂_y(ρ(y)·V̂(kx, y))
