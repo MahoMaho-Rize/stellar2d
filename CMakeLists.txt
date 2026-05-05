@@ -42,6 +42,7 @@ set(SOURCES
     src/drivers/fas2.cpp
     src/drivers/radial1d.cpp
     src/drivers/pseudo_spectral.cpp
+    src/drivers/anelastic_sl.cpp
     src/drivers/sph2d_spectral.cpp
     src/main.cpp
 )
