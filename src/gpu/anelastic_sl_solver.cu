@@ -103,6 +103,7 @@ extern "C" {
     __global__ void k_row_mul_out(double*, const double*, const double*, int, int);
     __global__ void k_u_from_div_v(cufftDoubleComplex*, const cufftDoubleComplex*,
                                    const double*, const double*, double, int, int);
+    __global__ void k_zero_kx0_column(cufftDoubleComplex*, int, int);
 }
 
 // ============================================================================
@@ -3560,6 +3561,43 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         CUBLAS_CHECK(cublasDaxpy(cublas, ncell, &alpha, x, 1, y, 1));
     };
 
+    // Project out the kx=0 (x-mean) column of a physical field in-place.
+    // Required after the nonlinear block: (u·∇)v generates a DC Reynolds-
+    // stress mode  ⟨v⟩_x(y) ≠ 0  that anelastic continuity forbids (see
+    // k_zero_kx0_column in anelastic_sl_kernels.cu).  Uses d_fhat / d_ghat
+    // as scratch — safe to call between RK4 substeps because those buffers
+    // are regenerated each FFT.  scale = 1/nx absorbs the unnormalised
+    // cuFFT C2R.
+    const int grid_ny_1d = (ny + 255) / 256;
+    auto zero_kx0 = [&](double* d_field) {
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_field, d_fhat));
+        k_zero_kx0_column<<<grid_ny_1d, 256>>>(d_fhat, ny, nh);
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_fhat, d_field));
+        double s = 1.0 / (double)nx;
+        CUBLAS_CHECK(cublasDscal(cublas, ncell, &s, d_field, 1));
+    };
+
+    // ── Galerkin V_K projection  (bandlimit to 2/3 rule in x) ─────────
+    // Projects a physical-space field onto V_K = {v : v̂_k = 0, |k| > K}
+    // with K = (nh-1)·2/3.  Also zeros the k=0 column (anelastic mean-flow
+    // constraint), so this is the canonical "Galerkin anelastic" projector
+    // P_{V_K ∩ ⟨v⟩_x=0} applied to a real field.
+    //
+    // Key: when EVERY RHS of the flow is projected through P, the
+    // discrete system lives entirely on V_K — no aliasing contamination,
+    // no energy leakage to unresolved modes, and the Hamiltonian H|_{V_K}
+    // is the exact conserved quantity (Galerkin truncation turns the
+    // infinite-dim PDE into a finite-dim Hamiltonian system).
+    const int kx_cut = (2 * (nh - 1)) / 3;
+    auto project_VK = [&](double* d_field) {
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_field, d_fhat));
+        k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, kx_cut);
+        k_zero_kx0_column<<<grid_ny_1d, 256>>>(d_fhat, ny, nh);
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_fhat, d_field));
+        double s = 1.0 / (double)nx;
+        CUBLAS_CHECK(cublasDscal(cublas, ncell, &s, d_field, 1));
+    };
+
     // Compute d_deriv = -M·V_src (row-major, walls zeroed).
     auto compute_Mdot = [&](const double* d_V_src, double* d_Mv_neg) {
         CUFFT_CHECK(cufftExecD2Z(plan_r2c_x,
@@ -3652,110 +3690,116 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_u_dst));
     };
 
-    // ── Compute nonlinear derivatives at given state (V_src, W_src, B_src) ─
+    // ── Compute nonlinear derivatives at given state (V_src, B_src) ─────
     //    dV = -(u·∂x V + v·∂y V)
-    //    dW = -(u·∂x W + v·∂y W)   (advect ∂_t V consistently — keeps
-    //                                Strang O(dt²) symmetry intact)
     //    dB = -(u·∂x B + v·∂y B)
-    // u is derived from V_src via continuity.
+    // u is derived from V_src via continuity.  W is NOT advected here —
+    // Python prototype scripts/nonlinear_path1_opsplit.py keeps W frozen
+    // through the nonlinear block (O(amp²) Strang error, cf. 2.3 of
+    // docs/dns_expA_triad_gpu_2026-05-04.md).  Advecting W as a passive
+    // scalar injected systematic energy drift in high-kx seeded modes
+    // (kx=5 mode-b lost 95%/100 periods, diagnosed 2026-05-04).
     //
     // Output buffers must be distinct from d_scratch / d_rhs_pi / d_fhat /
     // d_ghat since those are used internally for ∂x/∂y evaluation.  We use
-    // d_strang_deriv (dV), d_strang_dw (dW), d_strang_db (dB).
+    // d_strang_deriv (dV), d_strang_db (dB).
     //
     // NOTE: overwrites d_u with u rebuilt from continuity (Strang has no
     // independent u state — it's fully determined by V via anelastic
     // ∇·(ρ₀u) = 0).
     auto nonlinear_deriv = [&](const double* d_V_src,
-                               const double* d_W_src,
                                const double* d_B_src,
                                double* d_out_dV,
-                               double* d_out_dW,
                                double* d_out_dB) {
         // Rebuild u into d_u.
         rebuild_u_from_v(d_V_src, d_u);
         const double inv_nx = 1.0 / (double)nx;
 
-        // Helper: dF = -(u·∂x F_src + v·∂y F_src).  Writes to d_dF.
+        // Helper: dF = -(u·∂x F_src + v·∂y F_src), Galerkin-projected onto
+        // V_K at the end.  Bandlimiting ∂x F before the pointwise product
+        // is necessary but not sufficient — the product itself re-populates
+        // the unresolved modes via k1+k2 mixing.  project_VK on the output
+        // closes the Galerkin loop.
         auto advect = [&](const double* d_F_src, double* d_dF) {
-            // ∂x F → d_rhs_pi
+            // ∂x F → d_rhs_pi  (input fhat dealiased pre-derivative).
             CUFFT_CHECK(cufftExecD2Z(plan_r2c_x,
                                      const_cast<double*>(d_F_src), d_fhat));
-            k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh,
-                                                  (2 * (nh - 1)) / 3);
+            k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, kx_cut);
             k_mult_ikx_out<<<g_ny_nh, b2>>>(d_ghat, d_fhat, d_kx,
                                              inv_nx, ny, nh);
-            CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_rhs_pi));  // ∂x F
+            CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_ghat, d_rhs_pi));
             // ∂y F → d_scratch
             apply_dy(cublas, d_F_src, d_scratch, d_Dy, nx, ny);
-            // dF = -u·∂x F - v·∂y F.
+            // dF = -u·∂x F - v·∂y F
             CUDA_CHECK(cudaMemsetAsync(d_dF, 0, sizeof(double) * ncell));
             k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_u, d_rhs_pi, ncell);
             k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_V_src, d_scratch, ncell);
+            // Galerkin closure: project the quadratic product back onto V_K.
+            project_VK(d_dF);
         };
 
         advect(d_V_src, d_out_dV);
-        advect(d_W_src, d_out_dW);
         advect(d_B_src, d_out_dB);
     };
 
-    // ── Nonlinear RK4 full step of size dt on (V, W, B) ───────────────
-    // Advects all three state components by u = u(V) from continuity.
-    // Uses d_strang_{v,w,b}_{0,acc,s} for snapshots / accumulators /
-    // substep state, and d_strang_{deriv, dw, db} for the RK4 k-stages.
+    // ── Nonlinear RK4 full step of size dt on (V, B) ──────────────────
+    // Advects V and B only by u = u(V) from continuity; W is frozen.
+    // Uses d_strang_{v,b}_{0,acc,s} for snapshots / accumulators /
+    // substep state, and d_strang_{deriv, db} for the RK4 k-stages.
     auto nonlinear_step = [&](double h) {
-        // Snapshots + accumulators.
+        // Snapshots + accumulators (V, B only; W is frozen).
         copy_dev(d_strang_v0, d_v);
-        copy_dev(d_strang_w0, d_rhs_v);
         copy_dev(d_strang_b0, d_b);
         copy_dev(d_strang_v_acc, d_strang_v0);
-        copy_dev(d_strang_w_acc, d_strang_w0);
         copy_dev(d_strang_b_acc, d_strang_b0);
 
-        // ── k1 at (V0, W0, B0) ───────────────────────────────────────
-        nonlinear_deriv(d_strang_v0, d_strang_w0, d_strang_b0,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k1 at (V0, B0) ───────────────────────────────────────────
+        nonlinear_deriv(d_strang_v0, d_strang_b0,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 6.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
-        // Substep V_s = V0 + h/2·dV1, similarly W_s, B_s.
         copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
-        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_dw,    d_strang_w_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
 
-        // ── k2 at (V_s, W_s, B_s) ────────────────────────────────────
-        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k2 at (V_s, B_s) ────────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 3.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
         copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
-        copy_dev(d_strang_w_s, d_strang_w0); axpy(0.5 * h, d_strang_dw,    d_strang_w_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
 
-        // ── k3 at (V_s, W_s, B_s) ────────────────────────────────────
-        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k3 at (V_s, B_s) ────────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 3.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
         copy_dev(d_strang_v_s, d_strang_v0); axpy(h, d_strang_deriv, d_strang_v_s);
-        copy_dev(d_strang_w_s, d_strang_w0); axpy(h, d_strang_dw,    d_strang_w_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(h, d_strang_db,    d_strang_b_s);
 
-        // ── k4 at (V_s, W_s, B_s) ────────────────────────────────────
-        nonlinear_deriv(d_strang_v_s, d_strang_w_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_dw, d_strang_db);
+        // ── k4 at (V_s, B_s) ────────────────────────────────────────
+        nonlinear_deriv(d_strang_v_s, d_strang_b_s,
+                        d_strang_deriv, d_strang_db);
         axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
-        axpy(h / 6.0, d_strang_dw,    d_strang_w_acc);
         axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
 
-        // Commit.
-        copy_dev(d_v,     d_strang_v_acc);
-        copy_dev(d_rhs_v, d_strang_w_acc);
-        copy_dev(d_b,     d_strang_b_acc);
-        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v,     nx, ny);
-        k_zero_y_boundary<<<grid_bdy, 256>>>(d_rhs_v, nx, ny);
+        // Commit.  W (d_rhs_v) is untouched — retains the value left by
+        // the preceding linear half-step.
+        copy_dev(d_v, d_strang_v_acc);
+        copy_dev(d_b, d_strang_b_acc);
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
+        // Galerkin closure:  P_{V_K} on state.  Also absorbs the k=0
+        // anelastic mean-flow projection (diagnosed 2026-05-04: without
+        // it E(k=0) drained E_b via Reynolds stress; project_VK includes
+        // that operation).  Even though each advect() already projected
+        // its own output, a fresh RK4 accumulator is a linear combination
+        // of projected fields, so v_acc ∈ V_K algebraically — the call
+        // here is defensive against round-off drift.
+        project_VK(d_v);
+        project_VK(d_b);
+        // zero_y_boundary a second time: FFT round-trip can leak 1e-16
+        // into the walls.
+        k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
     };
 
     // ── Strang (A) — linear half-step dt/2 ─────────────────────────────

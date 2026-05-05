@@ -122,10 +122,11 @@ struct AnelasticSLSolver {
     double* d_strang_w_s   = nullptr;
     double* d_strang_b_s   = nullptr;
     double* d_strang_deriv = nullptr;
-    // Additional derivative slots for W and B channels in the nonlinear
-    // RK4 block.  Must be distinct from d_scratch (which is used
-    // internally by nonlinear_deriv for ∂y operations).
-    double* d_strang_dw    = nullptr;
+    // Additional derivative slot for B channel in the nonlinear RK4 block.
+    // Must be distinct from d_scratch (used internally by nonlinear_deriv
+    // for ∂y operations).  d_strang_dw was removed 2026-05-04 when W
+    // advection was dropped from the nonlinear block — see solver.cu.
+    double* d_strang_dw    = nullptr;  // kept for ABI stability; unused
     double* d_strang_db    = nullptr;
     bool td_strang_nonlinear = false;  // env ANSL_TD_KIND=strang_nonlinear
 

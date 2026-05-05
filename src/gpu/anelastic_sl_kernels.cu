@@ -218,6 +218,22 @@ __global__ void k_zero_y_boundary(double* f, int nx, int ny) {
     f[(ny - 1) * nx + ix]   = 0.0;
 }
 
+// ── Zero the kx=0 (x-mean) column of a cuFFT R2C spectrum ──────────
+// Layout: d_fhat[jy * nh + 0] = DC coefficient for row jy.
+// Used to project out x-mean flow produced by the nonlinear block.
+// Anelastic continuity ∇·(ρ₀u)=0 plus Dirichlet walls v(0)=v(Ly)=0
+// forbid a nonzero ⟨v⟩_x: any such mean would need ⟨u⟩_x with
+// ∂_y(ρ⟨u⟩)=0, which has only the trivial solution under v-walls →
+// k=0 component is an unphysical Reynolds-stress-driven DC sink.
+__global__ void k_zero_kx0_column(cufftDoubleComplex* d_fhat,
+                                  int ny, int nh) {
+    int jy = blockIdx.x * blockDim.x + threadIdx.x;
+    if (jy >= ny) return;
+    size_t off = (size_t)jy * nh + 0;
+    d_fhat[off].x = 0.0;
+    d_fhat[off].y = 0.0;
+}
+
 // ── store: dst[i] = -N²(y_i) · v[i]  (row-scaled product, overwrite) ───
 __global__ void k_neg_N2_v_out(double* dst, const double* v, const double* N2,
                                int nx, int ny) {
