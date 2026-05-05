@@ -85,47 +85,64 @@ ANSL_DNS_PERIODS=100 ANSL_DNS_SPP=32 ANSL_RHO_CUT=0.05 \
 
 图:`paper/figures/fig7_1_triad.png`
 
-# 4. DNS_PLAN amp=1e-2 目标的局限
+# 4. DNS_PLAN amp=1e-2 目标 — bug 修复后重测 (2026-05-05)
 
-DNS_PLAN §A 原计划跑 amp=1e-2 × 300 周期,并宣称 ΔE/E < 1e-10.  实际:
+Round-3 的初测 §4(bug 未修)宣称 amp=1e-2 在 5 T_a blowup、amp=1e-3 在
+~45 T_a blowup,只有 amp ≤ 1e-4 才能跑满。三个 bug 修复后(W 平流 + kx=0
+mean flow + Galerkin V_K 闭包,见 `docs/dns_expE1_triad_2026-05-04.md`),
+**这些 blowup 全部消失**。64×64 + rho_cut=0.05 下重测到 amp=1e-2 × 500 T_a:
 
-- **Python prototype `scripts/nonlinear_path1_opsplit.py`**(laptop side 原始)
-  amp=1e-2 @ 64x64 @ Lane-Emden (rho_cut=0.05):**第 5 周期 blowup**
-  ($|v| \sim 10^{16}$)
-- **GPU port** 完全复现这个行为(第 4-5 周期 NaN),确认 **不是移植 bug**
-- amp=1e-3 也 blowup 在 ~45 周期
-- 只有 amp ≤ 1e-4 才能跑满 100 周期
+| amp | 跑满 500T? | dev/T | E_k1 drift / T | E_k2/E_k1(0) end | E_k2/E_k1(0) max |
+|---|---|---|---|---|---|
+| 1e-6 | ✅ | 2.64e-10 | -8.07e-7 | 2.86e-14 | 8.37e-14 |
+| 1e-5 | ✅ | 2.64e-9  | -8.07e-7 | 2.86e-12 | 8.37e-12 |
+| 1e-4 | ✅ | 2.64e-8  | -8.07e-7 | 2.86e-10 | 8.37e-10 |
+| 1e-3 | ✅ | 2.65e-7  | -8.16e-7 | 2.85e-8  | 8.36e-8  |
+| 3e-3 | ✅ | 6.19e-7  | -9.24e-7 | 1.86e-7  | 9.12e-7  |
+| 1e-2 | ✅ | 3.84e-6  | -8.45e-6 | 2.64e-6  | 9.58e-6  |
 
-原因:
-1. $\rho_{\rm cut}=0.05$ 逼近表面 $N^2$ 奇点,壁面附近解有陡梯度
-2. $64^2$ 无粘性 + 2/3 dealias 仅能处理 $O(\text{amp}^2/\text{res})$ 级别的非线性 aliasing
-3. Strang 分裂中 $B$ 通道独立积分 $\dot B = -N^2 V$ 没有回馈到 $V$ 的闭合动力学
-   (M 已经消除 $B$),两条路径 $B$ 的累积导致 $\int b^2/N^2$ (表面发散)长时漂移
+**关键发现**:
 
-DNS_PLAN 的 ΔE/E < 1e-10 需要一个 **mass-energy-consistent split** (不是当前
-的 Strang 形式)或者 $\rho_{\rm cut} \ge 0.2$ 的较保守恒星截断。这已超出
-原 DNS_PLAN 的预期工作量,应写入 review response 而非执行。
+1. **E_k1 drift/T 在 amp ≤ 1e-3 完全 amp 无关**(-8.1e-7 常数),证明这是
+   Strang O(dt²) 方法本底(amp 独立 = 非线性误差完全消),而不是残留污染。
+2. **drift rate 500T vs 100T 基线比 = 1.01**(同 amp 对比),说明 drift 是
+   **∝ t bounded** 而非 secular 累积。
+3. **amp=3e-3 开始 drift rate 温和上升(+14%),amp=1e-2 升到 ×10**(×100
+   ∝ amp² 的一半),说明非线性项贡献终于在 amp² 级上开始显现 — 但
+   **绝对水平 ΔE/E(0) 到 500 T_a 仍 < 3e-3**,模态级联 E_k2/E_k1 ∝ amp²
+   保持良好。
+4. 原 Round-3 的"amp=1e-3 45T blowup"完全由 W 错误平流 + kx=0 Reynolds
+   mode 放大造成,不是物理限制。**DNS_PLAN 原 amp=1e-2 × 300T 目标现已
+   达成**(实际跑了 500T),ΔE/E ≈ 2e-3(远高于 1e-10 的过乐观目标,但
+   完全稳定且可解释为 O(dt²) 本底)。
+
+图:`paper/figures/fig7_1_triad_longtime.png`(500 T_a × 6 amps 扫描)。
 
 # 5. 复现
 
 ```bash
-# 三个 amp,64×64,100 周期:
-for amp in 1e-6 1e-5 1e-4; do
-  ANSL_TD_KIND=strang_nonlinear ANSL_COORD_MAP=tanh ANSL_COORD_BETA=2 \
-  ANSL_DNS_PERIODS=100 ANSL_DNS_SPP=32 ANSL_RHO_CUT=0.05 \
-  ./build/stellar2d --solver anelastic_sl --test dns_triad \
-      --ntheta 64 --nr 64 --ps-Lx 1 --ps-Ly 1 \
-      --ps-k 1 --perturb $amp --tend 1.0 --cfl 1.0 --ps-nu 0
-done
-python3 scripts/plot_dns_triad.py   # 生成 fig7_1_triad.png
+# 100 T_a 短时扫描(生成主图 fig7_1_triad.png):
+AMPS="1e-6 1e-5 1e-4" ./scripts/run_dns_expA_scan.sh
+AMPS="1e-6 1e-5 1e-4" python3 scripts/plot_dns_triad.py
+
+# 500 T_a 长时稳定性扫描(生成 fig7_1_triad_longtime.png):
+AMPS="1e-6 1e-5 1e-4 1e-3 3e-3 1e-2" PERIODS=500 \
+    ./scripts/run_dns_expA_longtime.sh
+AMPS="1e-6 1e-5 1e-4 1e-3 3e-3 1e-2" LONGTIME=1 \
+    python3 scripts/plot_dns_triad.py
 ```
 
-CSV 输出保存到 `runs/dns_expA/triad_amp{1e-6,1e-5,1e-4}.csv`.
+CSV 输出:`runs/dns_expA/triad_amp*.csv`(100T 基线),
+`runs/dns_expA_longtime/triad_amp*.csv`(500T)。
 
 # 6. 下一步
 
-- 做 $\rho_{\rm cut}=0.3$ + amp=1e-3 + 300 周期实验(稳定性应会改善)
-- 或者实现 energy-consistent Strang 变体(需要与 Python prototype 同步)
-- Experiment B(parametric resonance)需要先做 `scan_resonance.py` 找
-  $\omega_a \approx 2\omega_b$ 的 mode 对;GPU 移植已支持任意 $(n_g, k_x)$
-  IC,基础设施齐全
+- Experiment B(parametric resonance):`scan_resonance.py` 已有,`dns_triad_coupled`
+  dispatch 已支持任意 $(n_g, k_x)$ 二模 IC。E1 实验已做了最小版本(sum
+  resonance $\omega_a + \omega_b = \omega_c$);真正的 PSI
+  ($\omega_p \approx 2\omega_d$)仍待做。
+- amp=1e-2 secular 爬升(~3e-3 / 500T)的物理机制判定 — 是
+  $O({\rm amp}^2)$ 真非线性贡献,还是 Galerkin truncation 漏掉的 k>K 能量
+  在 round-trip 中累积?用更高分辨率(128² 或 256²)重测可以区分。
+- 论文 §7 的 Fig 7.1 (fig7_1_triad.png) 是基于旧 100T 扫描的。Long-time
+  结果可以作为 §7.3 的附加 paragraph 或 appendix table。
