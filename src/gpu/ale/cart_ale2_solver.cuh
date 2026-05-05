@@ -189,7 +189,7 @@ struct CartAle2Solver {
                        double vshear, double amp, int k);
 
     // Plane-parallel stratified slab from a MESA envelope strip.  Loads a
-    // slab file emitted by scripts/make_local_convection_slab.py containing:
+    // slab file emitted by scripts/render/make_local_convection_slab.py containing:
     //   header line:  Ly Lx g_y gamma rho_top P_top T_top mu
     //   data lines:   (ny+1) × (y, rho, P, T)   face-centered
     // Sets g_y from the file and pairs naturally with --bc-x periodic

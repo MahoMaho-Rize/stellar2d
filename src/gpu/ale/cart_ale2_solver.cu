@@ -506,7 +506,7 @@ void CartAle2Solver::init_hse_bubbles(double rho_base, double g_val,
 // ============================================================
 // Plane-parallel stratified slab (from a MESA envelope strip) + small
 // entropy seed at the bottom to trigger Rayleigh-Taylor-like overturning.
-// Reads the file written by scripts/make_local_convection_slab.py.
+// Reads the file written by scripts/render/make_local_convection_slab.py.
 // ============================================================
 void CartAle2Solver::init_local_convection(const std::string& slab_file,
                                            double perturb_amp,

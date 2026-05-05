@@ -157,8 +157,8 @@ Expect `E` conserved to ~10 digits.
                   --bc-x periodic --bc-y periodic \
                   --remap-order 2 --ppm \
                   --tend 5 --vtk-dt 0.025 --frame-buffer
-python scripts/render_kh.py runs/kh_lecoanet_256x512_*
-python scripts/spectrum_kh.py runs/kh_lecoanet_256x512_*
+python scripts/render/render_kh.py runs/kh_lecoanet_256x512_*
+python scripts/pseudo_spectral/spectrum_kh.py runs/kh_lecoanet_256x512_*
 ```
 
 ### Stellar oscillation (low-Mach JFNK)

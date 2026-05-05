@@ -164,7 +164,7 @@ struct Radial1DSolver {
     // Central density rho_c, polytropic constant K, index n.
     void init_lane_emden(double rho_c, double K_poly, double n_poly);
 
-    // Initialize from a MESA profile written by scripts/convert_mesa_ic.py.
+    // Initialize from a MESA profile written by scripts/mesa/convert_mesa_ic.py.
     // Re-binned to the solver's own `nz` Lagrangian shells by equal-mass
     // shells; (rho, T, P, e, X, Y) interpolated linearly in m_enc. Sets
     // v=0 everywhere, fills d_rho0/d_P0/d_r0 with the mapped HSE state,

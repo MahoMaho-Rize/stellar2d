@@ -4,7 +4,7 @@
 // Phase 1a scope: CPU precompute of SL basis (Chebyshev collocation + LAPACK
 // via cuSOLVER in host mode), device-side buffer allocation.  No time stepping
 // yet.  Sanity check: W̃ at CGL nodes should match the reduced-pressure Liouville
-// potential verified in scripts/reduced_pressure_chebyshev.py.
+// potential verified in scripts/spectral/reduced_pressure_chebyshev.py.
 
 #include "anelastic_sl_solver.cuh"
 
@@ -824,7 +824,7 @@ void AnelasticSLSolver::set_background(const std::string& kind, double rho_cut) 
     CUDA_CHECK(cudaMemcpy(d_mu, h_mu.data(),
                           sizeof(double) * n_modes, cudaMemcpyHostToDevice));
 
-    // CC-normalized spectral-Galerkin basis (matches scripts/reduced_pressure_chebyshev.py).
+    // CC-normalized spectral-Galerkin basis (matches scripts/spectral/reduced_pressure_chebyshev.py).
     // Note: the h_Psi currently contains cuSOLVER's Euclidean-orthonormal eigenvectors.
     // Re-normalize to CC inner product: <ψ_m, ψ_n>_cc = Σ_j w_cc,j ψ_m[j] ψ_n[j] = δ_mn.
     // (Already done above, but the Euclidean normalisation happened in eigh.)
@@ -3585,7 +3585,7 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         //
         // B only becomes a dynamical variable in the nonlinear block, where
         // advection (u·∇)b is *additional* physics that M does not carry.
-        // This matches the Python prototype scripts/nonlinear_path1_opsplit.py
+        // This matches the Python prototype scripts/spectral/nonlinear_path1_opsplit.py
         // §(A) which tracks (V, W) linearly and treats b as a tracer.
 
         copy_dev(d_strang_v0, d_v);

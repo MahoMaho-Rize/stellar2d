@@ -252,7 +252,7 @@ struct PseudoSpectralSolver {
     Diagnostics compute_diagnostics(double t_eval = 0.0);
 
     // GPU ring-integrate: 算 E(k) per bin (長度 nbins),寫入 out。
-    // 規則 (與 scripts/spectrum_pseudo_spectral.py 一致):
+    // 規則 (與 scripts/pseudo_spectral/spectrum_pseudo_spectral.py 一致):
     //   Σ_k E(k)·dk = KE_total
     void compute_spectrum_bins(std::vector<double>& out);
 

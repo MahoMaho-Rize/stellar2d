@@ -96,7 +96,7 @@ struct SimConfig {
     double ic_rho_c = -1.0;          // override central density; <0 = test default
     double ic_R_star = -1.0;         // override target stellar radius (cgs); <0 = derive from K
     double ic_n_poly = 1.5;          // polytropic index for --ic-solar
-    std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/convert_mesa_ic.py output
+    std::string ic_mesa_path;        // non-empty ⇒ take IC from scripts/mesa/convert_mesa_ic.py output
     bool ic_mesa_seed_T = false;     // --ic-mesa-seed-T: seed (e,P) from Helm(ρ,T_MESA) instead of (ρ,P_MESA)
     int  ic_mesa_atm_zones = 0;      // --ic-mesa-atm-zones N: use hybrid zoning with N log-spaced outer atm zones (0=equal-mass)
     int  atm_split = 0;              // --atm-split N: operator-split rad in outer N zones (usually = ic_mesa_atm_zones)
@@ -1193,7 +1193,7 @@ int main(int argc, char** argv) {
 
                 // Dump profile as simple text. When --rich-profile is set,
                 // also emit T, κ, Γ₁, ∇_ad, ∇_rad, L, mixing type, v_conv
-                // so scripts/pk_mesa_radial1d.py can compare per-field.
+                // so scripts/mesa/pk_mesa_radial1d.py can compare per-field.
                 std::vector<double> r_face, v_face, rho_cell, P_cell, e_cell;
                 std::vector<double> T_cell, kap_cell, g1_cell, ga_cell, gr_cell;
                 std::vector<double> L_face, vc_cell;
@@ -2136,7 +2136,7 @@ int main(int argc, char** argv) {
         }
 
         if (cfg.test_case == "gmode_exp_k") {
-            // CUDA port of scripts/gmode_exp_k_chebyshev_full.py
+            // CUDA port of scripts/gmode/gmode_exp_k_chebyshev_full.py
             int N = (cfg.nr > 0 ? cfg.nr : 64);
             int ell = 1;
             int n_modes_req = 10;
@@ -2476,7 +2476,7 @@ int main(int argc, char** argv) {
             ansl.download_y(y_cgl);
             {
                 // Reproduce Clenshaw-Curtis weights on [0, Ly] (same recipe as
-                // Python scripts/nonlinear_paths_infra.py).  Ly from config.
+                // Python scripts/spectral/nonlinear_paths_infra.py).  Ly from config.
                 int N = cfg.nr - 1;
                 std::vector<double> w(N + 1, 0.0);
                 for (int k = 0; k <= N; ++k) {
@@ -2595,7 +2595,7 @@ int main(int argc, char** argv) {
             // Seeds TWO eigenmodes (a, b) and watches the resonance partner
             // (c = a + b in wavenumber) grow from numerical noise.
             //
-            // Default mode selection (from scripts/scan_resonance.py on
+            // Default mode selection (from scripts/spectral/scan_resonance.py on
             // Lane-Emden n=3/2, rho_cut=0.1, Ny=128):
             //   a = (n_g=4, kx=1, ω≈0.6402)
             //   b = (n_g=3, kx=2, ω≈1.1751)

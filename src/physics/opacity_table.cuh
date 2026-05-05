@@ -8,7 +8,7 @@
 //                          in device memory)
 //   - kap_eval / kap_eval_Xslice trilinear interpolation in (X, logT, logR)
 //
-// Table layout on disk (see scripts/convert_mesa_kap.py for the writer):
+// Table layout on disk (see scripts/mesa/convert_mesa_kap.py for the writer):
 //
 //   128 B header (magic "KAPv1" + family[48] + Z + n_X + n_logT + n_logR
 //                 + logT_min/max + logR_min/max + reserved)

@@ -1049,7 +1049,7 @@ PseudoSpectralSolver::Diagnostics PseudoSpectralSolver::compute_diagnostics(doub
 // ============================================================
 // GPU ring-integrated energy spectrum
 //
-// 對照 scripts/spectrum_pseudo_spectral.py:compute_spectrum
+// 對照 scripts/pseudo_spectral/spectrum_pseudo_spectral.py:compute_spectrum
 //   E_mode = (dA/N)·½·(|û|²+|v̂|²) = (Lx·Ly/N⁴)·½·|ω̂|²/k²
 //   bin    = round(|k|/dk),  dk = 2π/max(Lx,Ly)
 //   E(k)   = Σ_mode E_mode_in_bin / dk   (密度)

@@ -376,7 +376,7 @@ struct AnelasticSLSolver {
 
     // ────────────────────────────────────────────────────────────────────
     // Exp K: 4-var full GYRE-compatible g-mode EVP on CGL grid
-    // (see scripts/gmode_exp_k_chebyshev_full.py for derivation)
+    // (see scripts/gmode/gmode_exp_k_chebyshev_full.py for derivation)
     //
     // Inputs are per-node stellar structure coefficients (all length Nr),
     // ell is the spherical harmonic degree.
@@ -426,7 +426,7 @@ struct AnelasticSLSolver {
     void rebuild_u_from_continuity();
 
     // ── Phase 3: Strang-split nonlinear extension of Path D ─────────────
-    // Algorithm (docs/.../DNS_PLAN.md + scripts/nonlinear_path1_opsplit.py):
+    // Algorithm (docs/.../DNS_PLAN.md + scripts/spectral/nonlinear_path1_opsplit.py):
     //   (A) Linear RK4 half-step (dt/2): V̈ = -M·V, ḃ = -N²·v on (v, w, b)
     //   (B) Nonlinear RK4 full-step (dt): rebuild u from v via continuity
     //       each substep, then ∂_t v = -(u·∇)v, ∂_t b = -(u·∇)b (w untouched,

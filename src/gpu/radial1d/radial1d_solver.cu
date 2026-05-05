@@ -293,7 +293,7 @@ void Radial1DSolver::init_lane_emden(double rho_c, double K_poly, double n_poly)
 }
 
 // ============================================================
-// init_from_mesa: read scripts/convert_mesa_ic.py output, remap MESA's
+// init_from_mesa: read scripts/mesa/convert_mesa_ic.py output, remap MESA's
 // non-uniform zones onto our equal-mass Lagrangian shells.
 //
 // MESA profile ordering: index 0 = surface, N-1 = core. We flip to core→
