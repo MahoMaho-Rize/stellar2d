@@ -118,6 +118,40 @@ mean flow + Galerkin V_K 闭包,见 `docs/dns_expE1_triad_2026-05-04.md`),
 
 图:`paper/figures/fig7_1_triad_longtime.png`(500 T_a × 6 amps 扫描)。
 
+## 4.1 amp=1e-2 secular 尾巴的物理归因 (2026-05-05)
+
+上表显示 amp=1e-2 drift rate = -8.4e-6/T,是 amp ≤ 1e-3 "Strang floor" 的
+×10 倍。这超出的部分是什么?两个候选假设:
+
+- **H1 (Galerkin truncation)**:64² + 2/3 dealias 留 K ≈ 21。amp=1e-2 下
+  二次 Reynolds stress 产生的能量漏到 k > K 被 project_VK 丢掉,长期
+  累积表现为 drift。若为真,**更高分辨率下 drift rate 应降低**。
+- **H2 (Strang commutator)**:Strang 分裂的 O(dt²) 交叉项 [L, N] 作用在
+  velocity ~ amp 上产生 Δv ~ dt²·amp²,能量贡献 2v·Δv ~ dt²·amp³。
+  若为真,**drift rate 与分辨率无关,但与 amp 成三次方**。
+
+**判决**:128² 和 256² 重跑 amp ∈ {1e-3, 1e-2} × 500 T_a:
+
+| res | amp=1e-3 rate | amp=1e-2 rate | ratio 1e-2/1e-3 |
+|---|---|---|---|
+| 64²  | -8.162e-7 | -8.446e-6 | 10.35 |
+| 128² | -8.163e-7 | -8.467e-6 | 10.37 |
+| 256² | -8.163e-7 | -8.446e-6 | 10.35 |
+
+- **drift rate 在 64→256 间差 < 0.3%** → H1 (Galerkin truncation) 排除。
+- excess drift 超出 Strang floor 部分:amp=1e-3 下 9.2e-9,amp=1e-2 下
+  7.6e-6,**ratio = 830 ≈ 10^2.92**,→ 近似 amp³,符合 H2 commutator 预测。
+- 系数 C = excess/amp³ ≈ 7.6(1e-2)vs 9.2(1e-3),一致在 20% 以内,
+  符合"高阶 Strang 误差在 amp² 级稳定"的 leading-order 行为。
+
+**结论**:amp=1e-2 下的 secular 尾巴是 Strang 分裂本身的
+$\mathcal O(\Delta t^2 \cdot [\mathsf L, \mathsf N] \cdot v)$ 误差,
+**不是**非线性项漏出 resolution 的数值 artefact。这是方法本底,与
+Python prototype `scripts/nonlinear_path1_opsplit.py` 的误差理论一致。
+
+图:`paper/figures/fig7_1_triad_resconv.png`(左:rate vs N 平坦确认;
+右:时间序列在同 amp 下跨分辨率完全重叠)。
+
 # 5. 复现
 
 ```bash

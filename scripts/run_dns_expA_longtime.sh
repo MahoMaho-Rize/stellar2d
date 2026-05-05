@@ -22,7 +22,7 @@ RHO_CUT="${RHO_CUT:-0.05}"
 NR="${NR:-64}"
 NTHETA="${NTHETA:-64}"
 
-OUTDIR=runs/dns_expA_longtime
+OUTDIR="${OUTDIR:-runs/dns_expA_longtime}"
 mkdir -p "$OUTDIR"
 
 for amp in $AMPS; do
