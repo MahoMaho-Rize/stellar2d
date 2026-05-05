@@ -1,5 +1,5 @@
 #include "opacity_table.cuh"
-#include "../gpu/fas_common.cuh"   // CUDA_CHECK
+#include "gpu_common.cuh"   // CUDA_CHECK
 
 #include <cstdio>
 #include <cstdlib>
@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------
 // KAPv1 binary loader.
 //
-// Produced by scripts/convert_mesa_kap.py — refer to that module for the
+// Produced by scripts/mesa/convert_mesa_kap.py — refer to that module for the
 // full layout. We re-derive the payload offsets here so the loader is
 // self-contained.
 //
@@ -37,7 +37,7 @@ int KapTable::load(const char* bin_path, cudaStream_t s) {
     std::FILE* fp = std::fopen(bin_path, "rb");
     if (!fp) {
         std::fprintf(stderr,
-            "kap_table: cannot open %s — run scripts/convert_mesa_kap.py first\n",
+            "kap_table: cannot open %s — run scripts/mesa/convert_mesa_kap.py first\n",
             bin_path);
         return 2;
     }

@@ -7,8 +7,8 @@
 //   3. Does the WB residual vanish? Or is there a systematic defect?
 // ============================================================
 
-#include "gpu/fas_solver.cuh"
-#include "gpu/fas_hllc.cuh"
+#include "fas_solver.cuh"
+#include "gpu_hllc.cuh"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>

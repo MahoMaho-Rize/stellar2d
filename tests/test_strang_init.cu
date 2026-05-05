@@ -9,7 +9,7 @@
 //   5. VTK file written successfully
 // ============================================================
 
-#include "gpu/strang_solver.cuh"
+#include "strang_solver.cuh"
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>

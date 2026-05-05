@@ -1,7 +1,7 @@
 // Perturbation amplitude vs dt ceiling sweep.
 // Tests the hypothesis: smaller initial perturbation → larger acceptable dt.
 
-#include "gpu/lowmach_solver.h"
+#include "lowmach_solver.h"
 #include "init/lane_emden.h"
 #include <cstdio>
 #include <cmath>

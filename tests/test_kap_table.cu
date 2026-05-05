@@ -7,7 +7,7 @@
 //      sanity check and prints κ [cm²/g].
 //
 // The ASCII reference values for the probes are hard-coded from the
-// `scripts/verify_mesa_kapbin.py` dump on the same binary, so any drift
+// `scripts/verify/verify_mesa_kapbin.py` dump on the same binary, so any drift
 // between host/device or bilinear paths shows up immediately.
 
 #include "../src/physics/opacity_table.cuh"
