@@ -187,14 +187,26 @@ def main() -> int:
     # HSE stratification.
     rho, p, T = build_hse_profile(y_nodes)
 
-    # Effective g_y for cart_ale2 slab format (single-g assumption).
-    # Use the mean over the convective layer (y ∈ [1, 2]).
+    # Effective g_y for cart_ale2 slab format (single-g fallback for
+    # header — actual physics will use the variable g(y) column below).
     y_conv = np.linspace(1.0, 2.0, 200)
     g_mean_conv = g_of_y(y_conv).mean()
-    # cart_ale2 expects +g_y (downward on y-axis).  Since our y increases
-    # upward and gravity points downward (toward smaller y), g_y is positive
-    # (Andrassy: "g … pointed towards the negative y axis").
     g_eff = g_mean_conv
+
+    # Variable gravity: Andrassy Eq. 1 evaluated at each y_node.
+    g_y_arr = g_of_y(y_nodes)
+
+    # Andrassy heating profile (Eq. 5): q̇(y) = q̇₀ sin(8π(y-1))  for y ∈ [1, 9/8]
+    # else zero.  Note: the original spec uses y ∈ [1, 9/8] = 1 heat-layer
+    # width = 1/8.  In our shifted coordinate y' = y - 1, the heating is in
+    # y' ∈ [0, 1/8] → use sin(8π·y').  Units: volumetric power density
+    # [erg/s/cm³] in dimensionless code units.
+    y_shifted = y_nodes - Y_BOTTOM
+    q_dot_arr = np.where(
+        (y_shifted >= 0.0) & (y_shifted <= 1.0/8.0),
+        Q_DOT_0 * np.sin(8.0 * np.pi * y_shifted),
+        0.0,
+    )
 
     # Header "top" values.
     rho_top = float(rho[-1])
@@ -216,14 +228,16 @@ def main() -> int:
             f"{Ly:.10e} {args.lx:.10e} {g_eff:.10e} {GAMMA_EOS:.10e} "
             f"{rho_top:.10e} {p_top:.10e} {T_top:.10e} {mu_stored:.10e}\n"
         )
-        f.write(f"# y_cm rho P T\n")
+        f.write(f"# y_cm rho P T g_y(optional) qdot(optional)\n")
         # cart_ale2 wants y starting at 0 (slab-relative coordinate).
         # Shift Andrassy's y∈[1,3] → y'∈[0,2].
-        y_shifted = y_nodes - Y_BOTTOM
         for i in range(ny + 1):
+            # 5th col = g(y), 6th col = q̇(y).  cart_ale2's init_local_convection
+            # auto-detects both.
             f.write(
                 f"{y_shifted[i]:.10e} {rho[i]:.10e} "
-                f"{p[i]:.10e} {T[i]:.10e}\n"
+                f"{p[i]:.10e} {T[i]:.10e} "
+                f"{g_y_arr[i]:.10e} {q_dot_arr[i]:.10e}\n"
             )
 
     # HSE residual diagnostic with variable g.

@@ -28,6 +28,7 @@ __global__ void k_cale2_node_forces(const double*, const double*, const double*,
     double*, double*, double*, double*, int, int);
 __global__ void k_cale2_zero(double*, int);
 __global__ void k_cale2_add_gravity(const double*, double*, double, int);
+__global__ void k_cale2_add_gravity_var(const double*, double*, const double*, int, int);
 __global__ void k_cale2_bc_reflective(const double*, const double*, double*, double*,
     double*, double*, double*, double*, int, int, int);
 __global__ void k_cale2_node_update(double*, double*, double*, double*,
@@ -218,6 +219,7 @@ void CartAle2Solver::destroy() {
     f(d_e_ref_y);
     f(d_cool_weight_y);
     f(d_heat_dedt_base_y);
+    f(d_gy_node);
     std::memset(this, 0, sizeof(*this));
 }
 
@@ -266,6 +268,100 @@ void CartAle2Solver::alloc_cooling_ref(const std::vector<double>& e_ref_per_row)
     CUDA_CHECK(cudaMalloc(&d_e_ref_y, ny * sizeof(double)));
     CUDA_CHECK(cudaMemcpy(d_e_ref_y, e_ref_per_row.data(),
                           ny * sizeof(double), cudaMemcpyHostToDevice));
+}
+
+// ============================================================
+// Variable gravity g(y) configuration.  Input: one g value per node row
+// (length = nnode_y = ny + 1) in the same units as scalar g_y (downward
+// positive — force is -g·m).  Also caches the reference potential
+// Φ(Y_row) = -∫₀^Y g(y') dy' (trapezoid on the uniform initial grid) for
+// use in the total-PE diagnostic after particles drift.
+// ============================================================
+void CartAle2Solver::configure_variable_gravity(
+        const std::vector<double>& gy_per_node_row) {
+    if ((int)gy_per_node_row.size() != nnode_y) {
+        std::fprintf(stderr,
+            "configure_variable_gravity: expected %d entries, got %zu\n",
+            nnode_y, gy_per_node_row.size());
+        return;
+    }
+    h_gy_node_ref = gy_per_node_row;
+
+    // Φ(Y_node) = -∫₀^Y g dy.  In cart_ale2 gravity is defined so that the
+    // node force is FY += -g·m (i.e. g is the magnitude of downward pull,
+    // and Y increases upward), so Φ(Y) = +∫₀^Y g dy (raising a mass
+    // against gravity costs +g·dy of potential energy).
+    h_phi_node_ref.assign(nnode_y, 0.0);
+    double dy = g_Ly / (double)ny;
+    for (int jn = 1; jn < nnode_y; ++jn) {
+        double g_avg = 0.5 * (h_gy_node_ref[jn - 1] + h_gy_node_ref[jn]);
+        h_phi_node_ref[jn] = h_phi_node_ref[jn - 1] + g_avg * dy;
+    }
+
+    // Upload to device.
+    if (d_gy_node == nullptr)
+        CUDA_CHECK(cudaMalloc(&d_gy_node, nnode_y * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_gy_node, h_gy_node_ref.data(),
+                          nnode_y * sizeof(double), cudaMemcpyHostToDevice));
+
+    // Report.
+    double g_min = h_gy_node_ref[0], g_max = h_gy_node_ref[0];
+    for (double v : h_gy_node_ref) { g_min = std::min(g_min, v); g_max = std::max(g_max, v); }
+    std::fprintf(stderr,
+        "  [gravity] variable g(y): range [%.4e, %.4e], Φ(top)=%.4e\n",
+        g_min, g_max, h_phi_node_ref.back());
+}
+
+// Replace the canned exp(-y/H) heating shape with a user-supplied
+// volumetric profile.  Used by Andrassy 2022 pilot which wants
+// q̇(y) = q̇₀ sin(8π(y-1)) on a narrow band [1, 9/8].
+void CartAle2Solver::configure_heating_profile(
+        const std::vector<double>& qdot_per_row,
+        double cool_top_frac_) {
+    if ((int)qdot_per_row.size() != ny) {
+        std::fprintf(stderr,
+            "configure_heating_profile: expected %d entries, got %zu\n",
+            ny, qdot_per_row.size());
+        return;
+    }
+    cool_top_frac = cool_top_frac_;
+
+    // Total integrated heating for a log line; F_bot isn't strictly defined
+    // here (no single "bottom flux" since heating may be interior) but we
+    // repurpose it as ∫q̇ dy · 1 cell thickness ≈ total volumetric power
+    // per unit x-extent.  Setting bottom_heat_flux > 0 is the existing
+    // "has_heat" gate in apply_cooling.
+    double dy = g_Ly / (double)ny;
+    double integral = 0.0;
+    for (double q : qdot_per_row) integral += q * dy;
+    bottom_heat_flux = std::max(integral, 1e-300);  // non-zero ⇒ has_heat=true
+
+    // Cooling weight: reset per cool_top_frac.
+    std::vector<double> h_wcool(ny, 1.0);
+    if (cool_top_frac < 1.0) {
+        double y_on = (1.0 - cool_top_frac) * g_Ly;
+        for (int jc = 0; jc < ny; ++jc) {
+            double yc = (jc + 0.5) * dy;
+            if (yc <= y_on) h_wcool[jc] = 0.0;
+            else {
+                double u = (yc - y_on) / (g_Ly - y_on);
+                h_wcool[jc] = 0.5 * (1.0 - std::cos(M_PI * u));
+            }
+        }
+    }
+    if (d_cool_weight_y) { cudaFree(d_cool_weight_y); d_cool_weight_y = nullptr; }
+    CUDA_CHECK(cudaMalloc(&d_cool_weight_y, ny * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_cool_weight_y, h_wcool.data(),
+                          ny * sizeof(double), cudaMemcpyHostToDevice));
+
+    if (d_heat_dedt_base_y) { cudaFree(d_heat_dedt_base_y); d_heat_dedt_base_y = nullptr; }
+    CUDA_CHECK(cudaMalloc(&d_heat_dedt_base_y, ny * sizeof(double)));
+    CUDA_CHECK(cudaMemcpy(d_heat_dedt_base_y, qdot_per_row.data(),
+                          ny * sizeof(double), cudaMemcpyHostToDevice));
+
+    std::fprintf(stderr,
+        "  [thermal] custom q̇(y) profile, ∫q̇ dy = %.6e, cooling top frac=%.3f\n",
+        integral, cool_top_frac);
 }
 
 void CartAle2Solver::configure_thermal(double F_bot,
@@ -541,10 +637,23 @@ void CartAle2Solver::init_local_convection(const std::string& slab_file,
         std::fclose(fp); std::abort();
     }
     std::vector<double> ys, rhos, Ps;
-    while (skip_comments(line, sizeof(line))) {
-        double y, r, p, T;
-        if (std::sscanf(line, "%lf %lf %lf %lf", &y, &r, &p, &T) != 4) break;
-        ys.push_back(y); rhos.push_back(r); Ps.push_back(p);
+    std::vector<double> gs_from_file;       // optional column 5: g(y)
+    std::vector<double> qs_from_file;       // optional column 6: q̇(y) [erg/s/cm³]
+    // We can't use skip_comments alone here because of an optional
+    // trailing "# g_profile" section.  Do manual parsing: read all
+    // non-comment lines; classify by token count.
+    while (std::fgets(line, (int)sizeof(line), fp)) {
+        const char* s = line;
+        while (*s == ' ' || *s == '\t') ++s;
+        if (*s == '#' || *s == '\0' || *s == '\n') continue;
+        double y, r, p, T, g_val, q_val;
+        int k = std::sscanf(line, "%lf %lf %lf %lf %lf %lf",
+                            &y, &r, &p, &T, &g_val, &q_val);
+        if (k >= 4) {
+            ys.push_back(y); rhos.push_back(r); Ps.push_back(p);
+            if (k >= 5) gs_from_file.push_back(g_val);
+            if (k >= 6) qs_from_file.push_back(q_val);
+        }
     }
     std::fclose(fp);
     int n_face = (int)ys.size();
@@ -633,6 +742,48 @@ void CartAle2Solver::init_local_convection(const std::string& slab_file,
     // whenever the caller sets tau_cool > 0.
     alloc_cooling_ref(h_e_ref_y);
 
+    // Optional variable gravity g(y): interpolate slab column 5 (if present)
+    // to node rows using the Y_node spacing and call configure_variable_gravity.
+    if (!gs_from_file.empty() && (int)gs_from_file.size() == n_face) {
+        std::vector<double> g_node(nnode_y, 0.0);
+        double dy_node = g_Ly / (double)ny;
+        // Build interp from slab (ys, gs_from_file) — same monotone table.
+        auto g_lookup = [&](double y) -> double {
+            if (y <= ys.front()) return gs_from_file.front();
+            if (y >= ys.back())  return gs_from_file.back();
+            int lo = 0, hi = n_face - 1;
+            while (hi - lo > 1) {
+                int mid = (lo + hi) / 2;
+                if (ys[mid] <= y) lo = mid; else hi = mid;
+            }
+            double t = (y - ys[lo]) / (ys[hi] - ys[lo]);
+            return (1.0 - t) * gs_from_file[lo] + t * gs_from_file[hi];
+        };
+        for (int jn = 0; jn < nnode_y; ++jn)
+            g_node[jn] = g_lookup(jn * dy_node);
+        configure_variable_gravity(g_node);
+    }
+
+    // Optional q̇(y) heating profile: interpolate slab column 6 onto cell rows.
+    if (!qs_from_file.empty() && (int)qs_from_file.size() == n_face) {
+        std::vector<double> q_cell(ny, 0.0);
+        double dy_cell = g_Ly / (double)ny;
+        auto q_lookup = [&](double y) -> double {
+            if (y <= ys.front()) return qs_from_file.front();
+            if (y >= ys.back())  return qs_from_file.back();
+            int lo = 0, hi = n_face - 1;
+            while (hi - lo > 1) {
+                int mid = (lo + hi) / 2;
+                if (ys[mid] <= y) lo = mid; else hi = mid;
+            }
+            double t = (y - ys[lo]) / (ys[hi] - ys[lo]);
+            return (1.0 - t) * qs_from_file[lo] + t * qs_from_file[hi];
+        };
+        for (int jc = 0; jc < ny; ++jc)
+            q_cell[jc] = q_lookup((jc + 0.5) * dy_cell);
+        configure_heating_profile(q_cell, /*cool_top_frac=*/1.0);
+    }
+
     double cs_bot = std::sqrt(gamma * Ps.front() / rhos.front());
     double cs_top = std::sqrt(gamma * Ps.back()  / rhos.back());
     std::fprintf(stderr,
@@ -641,6 +792,11 @@ void CartAle2Solver::init_local_convection(const std::string& slab_file,
         "    c_s top=%.3e bot=%.3e,  τ_dyn=Ly/c_s_top=%.3e  perturb=%.3g @ k=%d\n",
         slab_file.c_str(), g_Ly, g_Lx, g_y, gamma, rho_top, P_top, T_top,
         cs_top, cs_bot, g_Ly / cs_top, perturb_amp, seed_k);
+    if (d_gy_node != nullptr)
+        std::fprintf(stderr, "    Variable gravity g(y) enabled (%d nodes)\n", nnode_y);
+    if (!qs_from_file.empty())
+        std::fprintf(stderr, "    q̇(y) profile from slab file (%zu entries) loaded\n",
+                     qs_from_file.size());
 }
 
 // ============================================================
@@ -828,7 +984,9 @@ double CartAle2Solver::step(double t, double t_end) {
     k_cale2_zero<<<BNode, B>>>(d_FY, nnode);
     k_cale2_node_forces<<<BCell, B>>>(d_X, d_Y, d_P, d_Q,
                                      d_FX, d_FY, d_FSX, d_FSY, nx, ny);
-    if (g_y != 0.0)
+    if (d_gy_node != nullptr)
+        k_cale2_add_gravity_var<<<BNode, B>>>(d_mnode, d_FY, d_gy_node, nnode_x, nnode_y);
+    else if (g_y != 0.0)
         k_cale2_add_gravity<<<BNode, B>>>(d_mnode, d_FY, g_y, nnode);
 
     k_cale2_bc_reflective<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, d_vX, d_vY,
@@ -1061,6 +1219,33 @@ CartAle2Solver::Diagnostics CartAle2Solver::compute_diagnostics() {
     bool x_per = (bc_mode & 1) != 0;
     bool y_per = (bc_mode & 2) != 0;
     double max_vy = 0.0;
+    // PE: prefer variable-g Φ(Y_node) if configured, else scalar g_y·Y.
+    // Under variable gravity the reference Φ is cached in h_phi_node_ref,
+    // keyed by the node-row index jn (same as during upload).  For a node
+    // whose Y has drifted from the nominal row value we interpolate
+    // Φ linearly in Y.
+    const bool use_var_g = !h_phi_node_ref.empty();
+    // Pre-build a monotone (Y_ref, Φ_ref) table from h_phi_node_ref (this
+    // is Y_init at node rows, same uniform spacing as the initial grid).
+    std::vector<double> y_tab, phi_tab;
+    if (use_var_g) {
+        y_tab.resize(nnode_y);
+        phi_tab = h_phi_node_ref;
+        double dy = g_Ly / (double)ny;
+        for (int jn = 0; jn < nnode_y; ++jn) y_tab[jn] = jn * dy;
+    }
+    auto phi_at = [&](double y) {
+        if (!use_var_g) return g_y * y;
+        // Linear interpolation into (y_tab, phi_tab), clamp outside.
+        if (y <= y_tab.front()) return phi_tab.front();
+        if (y >= y_tab.back())  return phi_tab.back();
+        // Uniform spacing → direct index.
+        double dy = y_tab[1] - y_tab[0];
+        double f = y / dy;
+        int j = (int)f; if (j < 0) j = 0; if (j >= nnode_y - 1) j = nnode_y - 2;
+        double t = f - j;
+        return (1.0 - t) * phi_tab[j] + t * phi_tab[j + 1];
+    };
     for (int in = 0; in < nnode_x; ++in) {
         if (x_per && in == nnode_x - 1) continue;
         for (int jn = 0; jn < nnode_y; ++jn) {
@@ -1070,7 +1255,7 @@ CartAle2Solver::Diagnostics CartAle2Solver::compute_diagnostics() {
             d.total_KE += 0.5 * h_m[n] * v2;
             d.max_v = std::max(d.max_v, std::sqrt(v2));
             max_vy = std::max(max_vy, std::fabs(h_vY[n]));
-            d.total_PE += h_m[n] * g_y * h_Y[n];
+            d.total_PE += h_m[n] * phi_at(h_Y[n]);
         }
     }
     // Temporary diagnostic: print max |vy| to stderr to help trace spurious

@@ -110,6 +110,16 @@ struct CartAle2Solver {
     // BC mode (bit 0: x-periodic, bit 1: y-periodic). 0 = reflective walls.
     int bc_mode = 0;
     double g_y = 0.0;                // downward gravity magnitude (pulls −y)
+    // Variable gravity g(y): if non-null, used INSTEAD of scalar g_y
+    // (the scalar is still used for the PE "headline" diagnostic though).
+    // Stored at node rows:  nnode_y = ny + 1 values = g(Y_node_row).
+    // Upload via configure_variable_gravity(h_gy_per_node_row).
+    // Potential Φ(y) = -∫₀ʸ g(y') dy' is stored in h_phi_per_node_row for
+    // the total-PE diagnostic to remain meaningful (PE = Σ m·Φ(Y_node)).
+    double* d_gy_node = nullptr;       // (nnode_y,) — g(Y_row) at node rows
+    std::vector<double> h_gy_node_ref; // host copy (for re-upload/logging)
+    std::vector<double> h_phi_node_ref;// Φ(Y_row) for PE diagnostic
+    void configure_variable_gravity(const std::vector<double>& gy_per_node_row);
     // Remap order: 1 = donor-cell (legacy, kept for regression), 2 = MUSCL-in-remap
     // with slope limiter (Kucharik-Shashkov 2012). Default is 2.
     int remap_order = 2;
@@ -155,6 +165,16 @@ struct CartAle2Solver {
     double heat_bot_frac       = 0.05;     // heating depth fraction (e-fold of exp profile / Ly)
     void alloc_cooling_ref(const std::vector<double>& e_ref_per_row);
     void configure_thermal(double F_bot, double heat_bot_frac_, double cool_top_frac_);
+    // Inject an arbitrary volumetric heating profile q̇(y) [erg/s/cm³],
+    // one value per cell row (length = ny).  Overrides any heating shape
+    // set by configure_thermal.  cool_top_frac is also reset from the
+    // argument so Andrassy-style cases (no Newton cooling, only reflective
+    // walls + heating) can disable the cosine ramp by passing 1.0.
+    //
+    // Caller is responsible for normalising such that ∫q̇(y) dy = L_tot
+    // in the domain's physical units.
+    void configure_heating_profile(const std::vector<double>& qdot_per_row,
+                                   double cool_top_frac_ = 1.0);
     void apply_cooling(double dt);
 
     // ---- Bookkeeping ----

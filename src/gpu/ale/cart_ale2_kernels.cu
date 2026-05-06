@@ -223,6 +223,20 @@ void k_cale2_add_gravity(const double* mnode, double* FY,
     FY[i] += -g_val * mnode[i];
 }
 
+// Variable gravity: g value per NODE-ROW (row index jn = i / nnode_x).
+// FY layout: column-major over (ix, iy) flattened — see cart_ale2_solver.cu
+// for exact: node index i = ix * nnode_y + iy  (see k_cale2_node_update).
+__global__
+void k_cale2_add_gravity_var(const double* mnode, double* FY,
+                             const double* gy_per_row,
+                             int nnode_x, int nnode_y) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int nnode = nnode_x * nnode_y;
+    if (i >= nnode) return;
+    int iy = i % nnode_y;   // matches ix*nnode_y + iy flattening
+    FY[i] += -gy_per_row[iy] * mnode[i];
+}
+
 // ============================================================
 // Reflective walls: pin positions at initial (X0, Y0) on boundary,
 // and zero the wall-normal force/velocity components each step.
