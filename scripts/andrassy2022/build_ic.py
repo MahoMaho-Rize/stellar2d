@@ -121,7 +121,7 @@ def mu_of_y(y: np.ndarray) -> np.ndarray:
 
 def build_hse_profile(y: np.ndarray,
                        rho_bot: float = 1.0,
-                       p_bot: float = 1.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+                       p_bot: float = 3.0 / 5.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """HSE with g(y) and piecewise effective γ, fine-grid RK4.
 
     dp/dy = -ρ g(y)
