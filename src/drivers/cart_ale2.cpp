@@ -169,7 +169,9 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
             return 1;
         }
         cale.init_andrassy2022(cfg.cart_ale2_slab_file,
-                               cfg.cart_ale2_andrassy_amp);
+                               cfg.cart_ale2_andrassy_amp,
+                               cfg.cart_ale2_andrassy_seed,
+                               cfg.cart_ale2_andrassy_noise);
         // No Newton cooling per paper §2.2; heating comes from slab column 6,
         // set inside init_andrassy2022 via configure_heating_profile.
         cale.tau_cool = 0.0;

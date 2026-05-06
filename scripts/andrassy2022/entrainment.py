@@ -33,11 +33,14 @@ except ImportError:
     plt = None
 
 
-def compute_entrained_mass(vtk_path: Path) -> tuple[float, float]:
+def compute_entrained_mass(vtk_path: Path, buffer: float = 0.1) -> tuple[float, float]:
     """Return (y_ub_local, M_e) for this VTK frame.
 
-    M_e = ∫_{y<y_ub} ρ·X dV, integrated as Σ_cells ρ·X·dV using uniform dA.
-    Only counts mass that has been *dragged down* into the conv layer.
+    M_e = ∫_{y < y_ub − buffer} ρ·X dV, integrated as Σ_cells ρ·X·dV using
+    uniform dA.  Only counts mass that has been *dragged down* into the
+    conv-layer bulk (excluding the transition zone near y_ub to match
+    Andrassy §3.1 bulk-averaging convention).  Set buffer=0 to integrate
+    up to y_ub directly.
     """
     data = parse_vtk(vtk_path)
     # Try to read species_X as a scalar.
@@ -63,7 +66,7 @@ def compute_entrained_mass(vtk_path: Path) -> tuple[float, float]:
     prof = horizontal_profiles(data)
     y_ub_local = find_y_ub(prof)
     y_c = prof["y"]
-    mask_conv = y_c < y_ub_local  # row mask
+    mask_conv = y_c < (y_ub_local - buffer)   # row mask, with buffer
     M_e = 0.0
     for jy in range(ny):
         if not mask_conv[jy]:

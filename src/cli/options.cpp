@@ -225,6 +225,10 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.cart_ale2_cool_top_frac = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--andrassy-amp") == 0 && i + 1 < argc)
             cfg.cart_ale2_andrassy_amp = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--andrassy-seed") == 0 && i + 1 < argc)
+            cfg.cart_ale2_andrassy_seed = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--andrassy-noise") == 0 && i + 1 < argc)
+            cfg.cart_ale2_andrassy_noise = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
             cfg.ps_nu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)

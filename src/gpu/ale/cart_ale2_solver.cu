@@ -57,6 +57,12 @@ __global__ void k_cale2_species_remap_east(const double*, const double*, const d
 __global__ void k_cale2_species_remap_north(const double*, const double*, const double*, const double*,
     const double*, const double*, double*, int, int, int);
 __global__ void k_cale2_species_finalize(const double*, const double*, double*, double*, int);
+__global__ void k_cale2_species_density(const double*, const double*, double*, int);
+__global__ void k_cale2_species_slopes(const double*, double*, double*, int, int, double, double, int, int);
+__global__ void k_cale2_species_remap_east_2nd(const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, double*, int, int, double, double, int);
+__global__ void k_cale2_species_remap_north_2nd(const double*, const double*, const double*, const double*,
+    const double*, const double*, const double*, double*, int, int, double, double, int);
 __global__ void k_cale2_rebuild_node_v(const double*, const double*, const double*,
     double*, double*, int, int, int);
 __global__ void k_cale2_bc_velocity(double*, double*, int, int, int);
@@ -227,6 +233,7 @@ void CartAle2Solver::destroy() {
     f(d_heat_dedt_base_y);
     f(d_gy_node);
     f(d_species_X); f(d_mX); f(d_mX_new);
+    f(d_mXd); f(d_mXd_sx); f(d_mXd_sy);
     std::memset(this, 0, sizeof(*this));
 }
 
@@ -242,6 +249,9 @@ void CartAle2Solver::init_tracer_ramp(double y_lo, double y_hi) {
         CUDA_CHECK(cudaMalloc(&d_species_X, ncell * sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_mX,        ncell * sizeof(double)));
         CUDA_CHECK(cudaMalloc(&d_mX_new,    ncell * sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_mXd,       ncell * sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_mXd_sx,    ncell * sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_mXd_sy,    ncell * sizeof(double)));
     }
     std::vector<double> h_Y(nnode);
     CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
@@ -869,7 +879,9 @@ void CartAle2Solver::init_local_convection(const std::string& slab_file,
 // q̇(y)/q̇₀ auto-envelopes the perturbation to the heating layer.
 // ============================================================
 void CartAle2Solver::init_andrassy2022(const std::string& slab_file,
-                                       double delta_rho_amp) {
+                                       double delta_rho_amp,
+                                       int noise_seed,
+                                       double noise_amp) {
     // Parse slab file — reuse the same 6-col reader from init_local_convection.
     std::FILE* fp = std::fopen(slab_file.c_str(), "r");
     if (!fp) {
@@ -956,6 +968,18 @@ void CartAle2Solver::init_andrassy2022(const std::string& slab_file,
     std::vector<double> h_dm(ncell), h_e(ncell);
     std::vector<double> h_e_ref_y(ny, 0.0);
     double Lx_box = g_Lx;
+    // Deterministic PRNG for ensemble noise: splitmix64 hash keyed by
+    // (seed, ic, jc) so repeat runs with same seed are bit-identical.
+    auto hash_rand = [&](int seed, int ic, int jc) -> double {
+        uint64_t s = ((uint64_t)(uint32_t)seed * 0x9E3779B97F4A7C15ULL)
+                   ^ ((uint64_t)(uint32_t)ic  * 0xD1B54A32D192ED03ULL)
+                   ^ ((uint64_t)(uint32_t)jc  * 0xAEF17502108EF2D9ULL);
+        s ^= s >> 30; s *= 0xBF58476D1CE4E5B9ULL;
+        s ^= s >> 27; s *= 0x94D049BB133111EBULL;
+        s ^= s >> 31;
+        return ((double)(s & 0x7FFFFFFFFFFFFFFFULL)) /
+               (double)0x7FFFFFFFFFFFFFFFULL * 2.0 - 1.0;
+    };
     for (int ic = 0; ic < nx; ++ic)
         for (int jc = 0; jc < ny; ++jc) {
             int flat = ic*ny + jc;
@@ -975,6 +999,12 @@ void CartAle2Solver::init_andrassy2022(const std::string& slab_file,
             // Density perturbation.  Pressure untouched (isobaric seed, same
             // convention as Andrassy and our original init_local_convection).
             double d_rho_rel = delta_rho_amp * q_env * x_factor;
+            // Ensemble noise: add uniform [-1, 1]·noise_amp·q_env on top.
+            // Gated by noise_seed >= 0 so paper-exact IC (seed=-1) stays
+            // bit-identical.
+            if (noise_seed >= 0 && noise_amp > 0.0) {
+                d_rho_rel += noise_amp * q_env * hash_rand(noise_seed, ic, jc);
+            }
             double rho = rho_hse * (1.0 + d_rho_rel);
             double P   = P_hse;
             double e   = P / ((gamma - 1.0) * rho);
@@ -1396,22 +1426,43 @@ double CartAle2Solver::step(double t, double t_end) {
     // Finalize dm, e_int from accumulators
     k_cale2_remap_finalize_cells<<<BCell, B>>>(d_dm_new, d_ie_new, d_dm, d_e_int, ncell);
 
-    // Passive species tracer X: donor-cell swept flux of species mass mX=X·dm.
-    // Runs regardless of remap_order — tracer uses 1st-order by design (fine
-    // for Andrassy entrainment bulk diagnostic; bulk rate dominated by BC).
+    // Passive species tracer X: conservative swept flux of species mass mX=X·dm.
+    // Order matches hydro remap_order:  1 = donor-cell, ≥2 = MUSCL minmod-limited
+    // linear reconstruction at swept-region centroid (Kucharik-Shashkov 2012).
+    // MUSCL cuts tracer numerical diffusion by ~10×, essential for M_e diagnostic.
     if (tracer_enabled && d_mX != nullptr) {
         k_cale2_species_init_scratch<<<BCell, B>>>(d_mX, d_mX_new, ncell);
-        if (n_east > 0) {
-            int BE = (n_east + B - 1) / B;
-            k_cale2_species_remap_east<<<BE, B>>>(
-                d_X0, d_Y0, d_X, d_Y, d_mX, d_Area0, d_mX_new,
-                nx, ny, bc_mode);
-        }
-        if (n_north > 0) {
-            int BN = (n_north + B - 1) / B;
-            k_cale2_species_remap_north<<<BN, B>>>(
-                d_X0, d_Y0, d_X, d_Y, d_mX, d_Area0, d_mX_new,
-                nx, ny, bc_mode);
+        if (remap_order >= 2) {
+            k_cale2_species_density<<<BCell, B>>>(d_mX, d_Area0, d_mXd, ncell);
+            k_cale2_species_slopes<<<BCell, B>>>(d_mXd, d_mXd_sx, d_mXd_sy,
+                nx, ny, dx_u, dy_u, remap_limiter, bc_mode);
+            if (n_east > 0) {
+                int BE = (n_east + B - 1) / B;
+                k_cale2_species_remap_east_2nd<<<BE, B>>>(
+                    d_X0, d_Y0, d_X, d_Y,
+                    d_mXd, d_mXd_sx, d_mXd_sy, d_mX_new,
+                    nx, ny, dx_u, dy_u, bc_mode);
+            }
+            if (n_north > 0) {
+                int BN = (n_north + B - 1) / B;
+                k_cale2_species_remap_north_2nd<<<BN, B>>>(
+                    d_X0, d_Y0, d_X, d_Y,
+                    d_mXd, d_mXd_sx, d_mXd_sy, d_mX_new,
+                    nx, ny, dx_u, dy_u, bc_mode);
+            }
+        } else {
+            if (n_east > 0) {
+                int BE = (n_east + B - 1) / B;
+                k_cale2_species_remap_east<<<BE, B>>>(
+                    d_X0, d_Y0, d_X, d_Y, d_mX, d_Area0, d_mX_new,
+                    nx, ny, bc_mode);
+            }
+            if (n_north > 0) {
+                int BN = (n_north + B - 1) / B;
+                k_cale2_species_remap_north<<<BN, B>>>(
+                    d_X0, d_Y0, d_X, d_Y, d_mX, d_Area0, d_mX_new,
+                    nx, ny, bc_mode);
+            }
         }
         k_cale2_species_finalize<<<BCell, B>>>(d_mX_new, d_dm, d_mX, d_species_X, ncell);
     }

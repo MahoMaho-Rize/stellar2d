@@ -2088,3 +2088,151 @@ void k_cale2_species_finalize(const double* mX_new, const double* dm,
     mX[c] = mX_new[c];
     X[c]  = fmin(fmax(mX_new[c] / m, 0.0), 1.0);
 }
+
+// ============================================================
+// 2nd-order MUSCL species remap.  Same recipe as Kucharik-Shashkov hydro
+// remap: build per-cell density mXd = mX/V0, minmod-limited linear slopes
+// (sx, sy), evaluate at swept-region centroid.  Reduces tracer numerical
+// diffusion by ~10× (from O(Δx) to O(Δx²) in smooth regions) — critical
+// for the Andrassy entrainment diagnostic M_e(t).
+// ============================================================
+__global__
+void k_cale2_species_density(const double* mX, const double* Area0,
+                             double* mXd, int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    double V = fmax(Area0[c], 1e-30);
+    mXd[c] = mX[c] / V;
+}
+
+__global__
+void k_cale2_species_slopes(const double* mXd, double* sx, double* sy,
+                            int nx, int ny, double dx_u, double dy_u,
+                            int limiter_id, int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nx*ny) return;
+    int ic = flat / ny, jc = flat % ny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    double fc = mXd[flat];
+    double sxv = 0.0, syv = 0.0;
+    bool has_left  = (ic > 0)        || x_per;
+    bool has_right = (ic < nx - 1)   || x_per;
+    if (has_left && has_right) {
+        int icL = (ic == 0)      ? nx - 1 : ic - 1;
+        int icR = (ic == nx - 1) ? 0      : ic + 1;
+        double dfL = (fc - mXd[icL*ny + jc]) / dx_u;
+        double dfR = (mXd[icR*ny + jc] - fc) / dx_u;
+        sxv = apply_limiter(dfL, dfR, limiter_id);
+    }
+    bool has_down = (jc > 0)       || y_per;
+    bool has_up   = (jc < ny - 1)  || y_per;
+    if (has_down && has_up) {
+        int jcD = (jc == 0)      ? ny - 1 : jc - 1;
+        int jcU = (jc == ny - 1) ? 0      : jc + 1;
+        double dfD = (fc - mXd[ic*ny + jcD]) / dy_u;
+        double dfU = (mXd[ic*ny + jcU] - fc) / dy_u;
+        syv = apply_limiter(dfD, dfU, limiter_id);
+    }
+    sx[flat] = sxv;
+    sy[flat] = syv;
+}
+
+__global__
+void k_cale2_species_remap_east_2nd(const double* X0, const double* Y0,
+                                    const double* X,  const double* Y,
+                                    const double* mXd,
+                                    const double* mXd_sx, const double* mXd_sy,
+                                    double* mX_new,
+                                    int nx, int ny, double dx_u, double dy_u,
+                                    int bc_mode) {
+    bool x_per = (bc_mode & 1) != 0;
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n_edges = x_per ? nx * ny : (nx - 1) * ny;
+    if (flat >= n_edges) return;
+    int ic = flat / ny, jc = flat % ny;
+    int nny = ny + 1;
+    int nA = caln(ic+1, jc,   nny);
+    int nB = caln(ic+1, jc+1, nny);
+    double Ax = X0[nA], Ay = Y0[nA];
+    double Bx = X0[nB], By = Y0[nB];
+    double Anx = X[nA], Any = Y[nA];
+    double Bnx = X[nB], Bny = Y[nB];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+    int cL = calc(ic, jc, ny);
+    int cR_idx = ic + 1;
+    if (x_per && cR_idx >= nx) cR_idx = 0;
+    int cR = calc(cR_idx, jc, ny);
+    int donor = (As > 0.0) ? cL : cR;
+    double V_sweep = fabs(As);
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double ex = cx - xd, ey = cy - yd;
+    if (x_per) {
+        double Lx_full = nx * dx_u;
+        if      (ex >  0.5 * Lx_full) ex -= Lx_full;
+        else if (ex < -0.5 * Lx_full) ex += Lx_full;
+    }
+    double d_mX = (mXd[donor] + mXd_sx[donor]*ex + mXd_sy[donor]*ey) * V_sweep;
+    if (As > 0.0) {
+        atomicAdd(&mX_new[cL], -d_mX);
+        atomicAdd(&mX_new[cR],  d_mX);
+    } else {
+        atomicAdd(&mX_new[cR], -d_mX);
+        atomicAdd(&mX_new[cL],  d_mX);
+    }
+}
+
+__global__
+void k_cale2_species_remap_north_2nd(const double* X0, const double* Y0,
+                                     const double* X,  const double* Y,
+                                     const double* mXd,
+                                     const double* mXd_sx, const double* mXd_sy,
+                                     double* mX_new,
+                                     int nx, int ny, double dx_u, double dy_u,
+                                     int bc_mode) {
+    bool y_per = (bc_mode & 2) != 0;
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int ny_eff = y_per ? ny : (ny - 1);
+    int n_edges = nx * ny_eff;
+    if (flat >= n_edges) return;
+    int ic = flat / ny_eff, jc = flat % ny_eff;
+    int nny = ny + 1;
+    int nW = caln(ic,   jc+1, nny);
+    int nE = caln(ic+1, jc+1, nny);
+    double Ax = X0[nE], Ay = Y0[nE];
+    double Anx = X[nE],  Any = Y[nE];
+    double Bx = X0[nW], By = Y0[nW];
+    double Bnx = X[nW],  Bny = Y[nW];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+    int cD = calc(ic, jc, ny);
+    int cU_idx = jc + 1;
+    if (y_per && cU_idx >= ny) cU_idx = 0;
+    int cU = calc(ic, cU_idx, ny);
+    int donor = (As > 0.0) ? cD : cU;
+    double V_sweep = fabs(As);
+    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
+    double cy = 0.25 * (Ay + Any + Bny + By);
+    int dic = donor / ny, djc = donor % ny;
+    double xd = (dic + 0.5) * dx_u;
+    double yd = (djc + 0.5) * dy_u;
+    double ex = cx - xd, ey = cy - yd;
+    if (y_per) {
+        double Ly_full = ny * dy_u;
+        if      (ey >  0.5 * Ly_full) ey -= Ly_full;
+        else if (ey < -0.5 * Ly_full) ey += Ly_full;
+    }
+    double d_mX = (mXd[donor] + mXd_sx[donor]*ex + mXd_sy[donor]*ey) * V_sweep;
+    if (As > 0.0) {
+        atomicAdd(&mX_new[cD], -d_mX);
+        atomicAdd(&mX_new[cU],  d_mX);
+    } else {
+        atomicAdd(&mX_new[cU], -d_mX);
+        atomicAdd(&mX_new[cD],  d_mX);
+    }
+}

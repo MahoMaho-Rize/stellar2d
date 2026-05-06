@@ -123,7 +123,9 @@ struct SimConfig {
     // cart_ale2 --test andrassy2022 (A&A 659 A193 idealized O-shell benchmark):
     // uses init_andrassy2022() which reads a 6-col slab from build_ic.py
     // (y, ρ, P, T, g(y), q̇(y)) and applies Eq. 6 density perturbation.
-    double cart_ale2_andrassy_amp = 5.0e-5;   // Eq. 6 δρ/ρ amplitude (paper value)
+    double cart_ale2_andrassy_amp  = 5.0e-5;  // Eq. 6 δρ/ρ amplitude (paper value)
+    int    cart_ale2_andrassy_seed = -1;      // -1 = paper-exact; ≥0 adds noise
+    double cart_ale2_andrassy_noise = 0.0;    // ensemble noise amplitude
     // pseudo-spectral (偽譜法) 專用
     double ps_nu = 1e-4;          // 運動黏度
     double ps_Lx = 1.0;

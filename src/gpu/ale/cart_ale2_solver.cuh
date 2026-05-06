@@ -182,6 +182,10 @@ struct CartAle2Solver {
     double* d_species_X = nullptr;   // per-cell mass fraction X ∈ [0, 1]
     double* d_mX        = nullptr;   // species mass = X·dm (conservative scalar)
     double* d_mX_new    = nullptr;   // remap scratch
+    // 2nd-order (MUSCL) tracer remap scratch: ref-volume density mX/V0 + slopes.
+    double* d_mXd       = nullptr;
+    double* d_mXd_sx    = nullptr;
+    double* d_mXd_sy    = nullptr;
     void init_tracer_ramp(double y_lo, double y_hi);
     double total_species_mass();
     // Inject an arbitrary volumetric heating profile q̇(y) [erg/s/cm³],
@@ -256,8 +260,14 @@ struct CartAle2Solver {
     // 2D note: Andrassy Eq. 6 includes a z-factor [sin(3πz')−cos(πz')] for
     // 3D.  Our 2D slab has x only; we use just the x-factor, which keeps
     // the mean-0 property (triggers with minimal l=0 bias).
+    // noise_seed: if >=0, add a deterministic pseudo-random δρ/ρ of amplitude
+    // noise_amp on top of the Eq. 6 two-mode seed.  Lets us generate multiple
+    // independent realizations for ensemble statistics (2D has broad v_rms
+    // scatter so a 5-10 seed ensemble is needed for tight error bars).
     void init_andrassy2022(const std::string& slab_file,
-                           double delta_rho_amp = 5.0e-5);
+                           double delta_rho_amp = 5.0e-5,
+                           int    noise_seed    = -1,
+                           double noise_amp     = 0.0);
 
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
