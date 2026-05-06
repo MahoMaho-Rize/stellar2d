@@ -19,6 +19,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_kh = (cfg.test_case == "kh_shear");
     bool is_kh_lec = (cfg.test_case == "kh_lecoanet");
     bool is_loc_conv = (cfg.test_case == "local_convection");
+    bool is_andrassy = (cfg.test_case == "andrassy2022");
     double Lx = 1.0;
     // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
     // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
@@ -26,8 +27,10 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
               : (is_hse || is_kh) ? 1.0
               : 0.2;
     double gam = is_hse ? cfg.gamma : 1.4;
-    // local_convection: read slab header to get real Ly, Lx, γ in cgs.
-    if (is_loc_conv) {
+    // andrassy2022 uses γ=5/3 (paper §2.2).
+    if (is_andrassy) gam = 5.0 / 3.0;
+    // local_convection / andrassy2022: read slab header to get real Ly, Lx, γ.
+    if (is_loc_conv || is_andrassy) {
         if (cfg.cart_ale2_slab_file.empty()) {
             std::fprintf(stderr,
                 "local_convection requires --ic-slab <file>\n");
@@ -152,6 +155,24 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                                    cfg.cart_ale2_heat_bot_frac,
                                    cfg.cart_ale2_cool_top_frac);
         }
+    } else if (cfg.test_case == "andrassy2022") {
+        // Andrassy 2022 uses reflective walls in y, periodic in x.
+        if (!((cale.bc_mode & 1) && !(cale.bc_mode & 2))) {
+            std::fprintf(stderr,
+                "  [warn] andrassy2022 requires --bc-x periodic --bc-y reflect; "
+                "current bc_mode=%d\n", cale.bc_mode);
+        }
+        if (cfg.cart_ale2_slab_file.empty()) {
+            std::fprintf(stderr,
+                "  [error] andrassy2022 requires --ic-slab "
+                "(6-col slab from scripts/andrassy2022/build_ic.py)\n");
+            return 1;
+        }
+        cale.init_andrassy2022(cfg.cart_ale2_slab_file,
+                               cfg.cart_ale2_andrassy_amp);
+        // No Newton cooling per paper §2.2; heating comes from slab column 6,
+        // set inside init_andrassy2022 via configure_heating_profile.
+        cale.tau_cool = 0.0;
     } else {
         cale.init_sod();
     }

@@ -230,7 +230,8 @@ static int setup_ic(const SimConfig& cfg, Grid& grid, State& state) {
                || cfg.test_case == "gmode_exp_k"
                || cfg.test_case == "dns_triad"
                || cfg.test_case == "dns_triad_coupled"
-               || cfg.test_case == "local_convection") {
+               || cfg.test_case == "local_convection"
+               || cfg.test_case == "andrassy2022") {
         // Grid-less test cases — each solver branch initialises its own IC.
     } else {
         std::fprintf(stderr, "Unknown test case: %s\n", cfg.test_case.c_str());

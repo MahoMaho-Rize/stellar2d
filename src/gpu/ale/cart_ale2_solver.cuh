@@ -221,6 +221,25 @@ struct CartAle2Solver {
                                double perturb_amp = 0.01,
                                int seed_k = 4);
 
+    // Andrassy+ 2022 (A&A 659 A193) idealized O-shell convection IC.
+    // Loads the 6-column slab (y, ρ, P, T, g(y), q̇(y)) emitted by
+    // scripts/andrassy2022/build_ic.py and applies Eq. 6 density
+    // perturbation EXACTLY as specified in the paper:
+    //
+    //   δρ(x,y)/ρ₀ = Δρ_amp · [q̇(y)/q̇₀] · [sin(3πx')+cos(πx')]
+    //
+    // where x' ∈ [-1, 1] runs across the domain (periodic).  The y-envelope
+    // q̇(y)/q̇₀ localises the seed to the heating layer per the paper.
+    //
+    // Default Δρ_amp = 5e-5 (paper value).  No Newton cooling, heating
+    // profile loaded from slab column 6, variable gravity from column 5.
+    //
+    // 2D note: Andrassy Eq. 6 includes a z-factor [sin(3πz')−cos(πz')] for
+    // 3D.  Our 2D slab has x only; we use just the x-factor, which keeps
+    // the mean-0 property (triggers with minimal l=0 bias).
+    void init_andrassy2022(const std::string& slab_file,
+                           double delta_rho_amp = 5.0e-5);
+
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
     // Athena inputs/hydro/athinput.lecoanet_kh: vflow=1, amp=0.01,

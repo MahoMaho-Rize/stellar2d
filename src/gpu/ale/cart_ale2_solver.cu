@@ -800,6 +800,168 @@ void CartAle2Solver::init_local_convection(const std::string& slab_file,
 }
 
 // ============================================================
+// Andrassy 2022 IC: same slab format as init_local_convection, but the
+// density perturbation follows Andrassy Eq. 6 exactly instead of the
+// init_local_convection's simple k-mode exp-envelope seed.
+//
+// Eq. 6 (2D projection, z-factor dropped):
+//   δρ(x,y)/ρ₀(y) = Δ · [q̇(y)/q̇₀] · [sin(3π·x') + cos(π·x')]
+// with x' = 2x/Lx - 1 ∈ [-1, 1] per Andrassy's "x ∈ [-1, 1]" convention.
+// q̇(y)/q̇₀ auto-envelopes the perturbation to the heating layer.
+// ============================================================
+void CartAle2Solver::init_andrassy2022(const std::string& slab_file,
+                                       double delta_rho_amp) {
+    // Parse slab file — reuse the same 6-col reader from init_local_convection.
+    std::FILE* fp = std::fopen(slab_file.c_str(), "r");
+    if (!fp) {
+        std::fprintf(stderr,
+            "  init_andrassy2022: cannot open %s\n", slab_file.c_str());
+        std::abort();
+    }
+    auto skip_comments = [&](char* buf, int cap) -> bool {
+        while (std::fgets(buf, cap, fp)) {
+            const char* s = buf;
+            while (*s == ' ' || *s == '\t') ++s;
+            if (*s == '#' || *s == '\0' || *s == '\n') continue;
+            return true;
+        }
+        return false;
+    };
+    char line[512];
+    if (!skip_comments(line, sizeof(line))) {
+        std::fprintf(stderr, "  init_andrassy2022: header missing\n");
+        std::fclose(fp); std::abort();
+    }
+    double Ly_f, Lx_f, g_f, gam_f, rho_top, P_top, T_top, mu_f;
+    if (std::sscanf(line, "%lf %lf %lf %lf %lf %lf %lf %lf",
+                    &Ly_f, &Lx_f, &g_f, &gam_f,
+                    &rho_top, &P_top, &T_top, &mu_f) != 8) {
+        std::fprintf(stderr, "  init_andrassy2022: bad header\n");
+        std::fclose(fp); std::abort();
+    }
+    std::vector<double> ys, rhos, Ps;
+    std::vector<double> gs_file, qs_file;
+    while (std::fgets(line, (int)sizeof(line), fp)) {
+        const char* s = line;
+        while (*s == ' ' || *s == '\t') ++s;
+        if (*s == '#' || *s == '\0' || *s == '\n') continue;
+        double y, r, p, T, gg, qq;
+        int k = std::sscanf(line, "%lf %lf %lf %lf %lf %lf",
+                            &y, &r, &p, &T, &gg, &qq);
+        if (k >= 4) {
+            ys.push_back(y); rhos.push_back(r); Ps.push_back(p);
+            if (k >= 5) gs_file.push_back(gg);
+            if (k >= 6) qs_file.push_back(qq);
+        }
+    }
+    std::fclose(fp);
+    int n_face = (int)ys.size();
+    if (n_face < 2) {
+        std::fprintf(stderr, "  init_andrassy2022: too few rows\n");
+        std::abort();
+    }
+    if (qs_file.empty()) {
+        std::fprintf(stderr,
+            "  init_andrassy2022: slab missing q̇ column (need 6-col format)\n");
+        std::abort();
+    }
+
+    g_y = g_f;
+    if (std::fabs(gamma - gam_f) > 1e-6)
+        std::fprintf(stderr,
+            "  [warn] init_andrassy2022: slab γ=%g vs solver γ=%g\n", gam_f, gamma);
+
+    // Node coord download for cell centers.
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    // Monotone interp helpers on the slab.
+    auto interp = [&](const std::vector<double>& vals, double y) -> double {
+        if (y <= ys.front()) return vals.front();
+        if (y >= ys.back())  return vals.back();
+        int lo = 0, hi = n_face - 1;
+        while (hi - lo > 1) {
+            int mid = (lo + hi) / 2;
+            if (ys[mid] <= y) lo = mid; else hi = mid;
+        }
+        double t = (y - ys[lo]) / (ys[hi] - ys[lo]);
+        return (1.0 - t) * vals[lo] + t * vals[hi];
+    };
+    double q0_max = 0.0;
+    for (double q : qs_file) q0_max = std::max(q0_max, q);
+    if (q0_max <= 0.0) q0_max = 1.0;  // fallback; shouldn't happen
+
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    std::vector<double> h_e_ref_y(ny, 0.0);
+    double Lx_box = g_Lx;
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double rho_hse = interp(rhos, Yc);
+            double P_hse   = interp(Ps,   Yc);
+            double q_env   = interp(qs_file, Yc) / q0_max;  // ∈ [0, 1]
+            if (ic == 0)
+                h_e_ref_y[jc] = P_hse / ((gamma - 1.0) * rho_hse);
+
+            // Andrassy Eq. 6 x-factor using x' = 2x/Lx - 1 ∈ [-1, 1].
+            double xp = 2.0 * Xc / Lx_box - 1.0;
+            double x_factor = std::sin(3.0 * M_PI * xp) + std::cos(M_PI * xp);
+            // Density perturbation.  Pressure untouched (isobaric seed, same
+            // convention as Andrassy and our original init_local_convection).
+            double d_rho_rel = delta_rho_amp * q_env * x_factor;
+            double rho = rho_hse * (1.0 + d_rho_rel);
+            double P   = P_hse;
+            double e   = P / ((gamma - 1.0) * rho);
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = e;
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_vX, 0, nnode*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_vY, 0, nnode*sizeof(double)));
+
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+
+    // HSE reference for optional Newton cooling (not used by Andrassy 2022
+    // spec but we upload so τ_cool > 0 still works if the user flips it).
+    alloc_cooling_ref(h_e_ref_y);
+
+    // Variable gravity from slab col 5.
+    if (!gs_file.empty() && (int)gs_file.size() == n_face) {
+        std::vector<double> g_node(nnode_y, 0.0);
+        double dy_node = g_Ly / (double)ny;
+        for (int jn = 0; jn < nnode_y; ++jn)
+            g_node[jn] = interp(gs_file, jn * dy_node);
+        configure_variable_gravity(g_node);
+    }
+
+    // Heating profile from slab col 6.
+    std::vector<double> q_cell(ny, 0.0);
+    double dy_cell = g_Ly / (double)ny;
+    for (int jc = 0; jc < ny; ++jc)
+        q_cell[jc] = interp(qs_file, (jc + 0.5) * dy_cell);
+    configure_heating_profile(q_cell, /*cool_top_frac=*/1.0);
+
+    double cs_bot = std::sqrt(gamma * Ps.front() / rhos.front());
+    double cs_top = std::sqrt(gamma * Ps.back()  / rhos.back());
+    std::fprintf(stderr,
+        "  CartAle2 Andrassy 2022 IC: slab=%s\n"
+        "    Ly=%.3e  Lx=%.3e  γ=%.3f  (top ρ=%.3e, P=%.3e, T=%.3e)\n"
+        "    c_s top=%.3e bot=%.3e,  τ_sc=Ly/c_s_top=%.3e\n"
+        "    δρ/ρ Eq. 6 amplitude=%.3g (paper: 5e-5)\n",
+        slab_file.c_str(), g_Ly, g_Lx, gamma, rho_top, P_top, T_top,
+        cs_top, cs_bot, g_Ly / cs_top, delta_rho_amp);
+}
+
+// ============================================================
 // Classic KH shear: two horizontal bands with opposite vx, isobaric,
 // zero gravity. Gaussian perturbation in vy near each interface seeds
 // the instability.
