@@ -90,7 +90,8 @@ def rprof_time_series(root: Path, code: str, res: int):
         sigma_vx = rd["STDEV_VX"]; sigma_vy = rd["STDEV_VY"]
         sigma_vz = rd.get("STDEV_VZ", np.zeros_like(sigma_vx))
         v_rms = np.sqrt(sigma_vx**2 + sigma_vy**2 + sigma_vz**2)
-        # y_ub from pseudo-entropy rise (match our diagnose.py convention).
+        # y_ub from pseudo-entropy rise (match diagnose.py: 0.1% threshold,
+        # start search at Schwarzschild boundary y_paper=2.0).
         A = rd["P"] / rd["RHO"]**(5.0/3.0)
         mask_base = (y > 1.2) & (y < 1.8)
         if mask_base.sum() < 4:
@@ -99,7 +100,7 @@ def rprof_time_series(root: Path, code: str, res: int):
             A_conv = A[mask_base].mean()
             y_ub = y[-1]
             for j, yj in enumerate(y):
-                if yj >= 1.8 and A[j] > A_conv * 1.01:
+                if yj >= 2.0 and A[j] > A_conv * 1.001:
                     y_ub = yj; break
         # Bulk mass-weighted v_rms² then sqrt.
         def bulk(mask):
