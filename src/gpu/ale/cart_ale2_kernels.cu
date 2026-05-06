@@ -910,8 +910,19 @@ void k_cale2_remap_east_2nd(const double* X0, const double* Y0,
     double V_sweep = fabs(As);
 
     // Swept-region centroid (4-point average — OK for small skinny quads).
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
 
     // Donor cell centroid on the uniform reference mesh.
     int dic = donor / ny, djc = donor % ny;
@@ -991,8 +1002,19 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
 
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
@@ -1509,8 +1531,19 @@ void k_cale2_remap_east_ppm(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -1597,8 +1630,19 @@ void k_cale2_remap_north_ppm(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -1694,8 +1738,19 @@ void k_cale2_remap_east_ppm_prim(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -1790,8 +1845,19 @@ void k_cale2_remap_north_ppm_prim(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -2166,8 +2232,19 @@ void k_cale2_species_remap_east_2nd(const double* X0, const double* Y0,
     int cR = calc(cR_idx, jc, ny);
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -2216,8 +2293,19 @@ void k_cale2_species_remap_north_2nd(const double* X0, const double* Y0,
     int cU = calc(ic, cU_idx, ny);
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
