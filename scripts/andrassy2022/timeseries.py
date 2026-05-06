@@ -35,19 +35,23 @@ except ImportError:
     plt = None
 
 
-def vtk_time(path: Path, diag_csv_map: dict, output_interval: int) -> float:
+def vtk_time(path: Path, diag_csv_map: dict, output_interval: int,
+             vtk_dt: float = 0.0) -> float:
     """Estimate simulation time for VTK frame `output_XXXX.vtk`.
 
-    The driver writes VTK every `output_interval` steps, so frame N
-    corresponds to step (N+1)*output_interval (index base 1).  We then
-    look up the nearest recorded step in diagnostics.csv.
+    If --vtk-dt > 0 (time-based output), frame N was written at t = (N+1)·Δt
+    (index base 1; cart_ale2 driver increments `frame` before writing).
+    Otherwise the driver writes every `output_interval` steps, so frame N
+    corresponds to step (N+1)·output_interval — look up the nearest recorded
+    step in diagnostics.csv.
     """
     m = re.search(r"output_(\d+)\.vtk", path.name)
     if m is None:
         return float("nan")
     frame_idx = int(m.group(1))
+    if vtk_dt > 0.0:
+        return (frame_idx + 1) * vtk_dt
     step_target = (frame_idx + 1) * output_interval
-    # Find closest step in CSV map.
     steps = np.array(sorted(diag_csv_map.keys()))
     if steps.size == 0:
         return float("nan")
@@ -124,6 +128,9 @@ def main() -> int:
     ap.add_argument("--andrassy-res", type=int, default=256)
     ap.add_argument("--output-interval", type=int, default=4000,
                     help="VTK output interval in steps (must match driver)")
+    ap.add_argument("--vtk-dt", type=float, default=12.06,
+                    help="VTK output interval in simulation time (matches "
+                         "driver --vtk-dt; 0 disables and uses step-based)")
     ap.add_argument("--out-dir", type=Path, required=True)
     args = ap.parse_args()
 
@@ -139,7 +146,7 @@ def main() -> int:
     print(f"Processing {len(vtk_files)} VTK frames")
     rows = []
     for i, f in enumerate(vtk_files):
-        t = vtk_time(f, diag_map, args.output_interval)
+        t = vtk_time(f, diag_map, args.output_interval, args.vtk_dt)
         data = parse_vtk(f)
         prof = horizontal_profiles(data)
         y_ub_local = find_y_ub(prof)
