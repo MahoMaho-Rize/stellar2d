@@ -1,0 +1,683 @@
+                                                 Draft version August 19, 2025
+                                                 Typeset using LATEX twocolumn style in AASTeX7
+
+
+
+
+                                                 Stochasticity in Stellar Yields Reflected in Theoretical Dust Masses Estimates Across all Type II
+                                                                                        Supernova Progenitors
+                                                                       Archana Purushothaman,1 Arkaprabha Sarangi,1 and S. K. Jeena1
+                                                               1 Indian Institute of Astrophysics, 100 Feet Rd, Koramangala, Bengaluru, Karnataka 560034, India
+
+
+
+                                                                                                        ABSTRACT
+                                                         Core-collapse supernovae (CCSNe) are among the primary sources of dust in galaxies. In this
+                                                       study, we derive theoretical upper limits on dust masses as a function of supernova (SN) progenitors
+arXiv:2508.12933v1 [astro-ph.SR] 18 Aug 2025
+
+
+
+
+                                                       with initial masses between 9 and 120 M⊙ , based on previously established models of dust formation
+                                                       chemistry in CCSNe. We find that O-rich dust, particularly silicates, dominates the dust budget, with
+                                                       masses ranging from 0.02 to 0.9 M⊙ , and that the total mass of O-rich dust increases with progenitor
+                                                       mass. C-rich amorphous carbon dust is significant for lower-mass progenitors (up to 15 M⊙ ), but its
+                                                       mass never exceeds 0.05 M⊙ . For progenitors up to 30 M⊙ , we provide best-fit functions describing
+                                                       the masses of O-rich dust, C-rich dust, and CO molecules. A large stochastic variation is found in the
+                                                       predicted masses of silicate dust, which correlates with the randomness of shell-merger events in the
+                                                       pre-explosion phases of massive stars. Furthermore, we show that the dust mass for a given progenitor
+                                                       can vary by a factor of 2–5, reflecting differences in pre-explosion abundance profiles predicted by
+                                                       the stellar evolution codes KEPLER and MESA. We emphasize that the final dust yield in CCSNe is
+                                                       primarily determined by stochastic stellar yields and uncertainties in pre-explosion nucleosynthesis,
+                                                       while explosion properties mainly influence the timescales of dust formation.
+
+
+                                                       Keywords: Supernova — Dust formation — Astrochemistry — Stellar evolution models
+
+                                                                 1. BACKGROUND                                     ∼0.1 M⊙ within a couple of years (A. Sarangi et al.
+                                                  In the last few decades, supernovae (SNe), especially            2018; A. Sluder et al. 2018). They do not converge well
+                                               CCSNe, have been confirmed as sources of dust in galax-             with the observed, gradual, and controlled rates of dust
+                                               ies (M. Matsuura et al. 2015; T. Szalai et al. 2019; R.             formation in SN ejecta that continue for several decades
+                                               Wesson & A. Bevan 2021; M. Niculescu-Duvaz et al.                   (R. Wesson & A. Bevan 2021; C. Gall et al. 2014). If
+                                               2021). Mid-infrared (mid-IR) observations using the                 dust is produced early and/or in optically thick clumps,
+                                               James Webb Space Telescope (JWST ) over the last two                IR fluxes may not accurately reflect the dust masses
+                                               years have revealed dust masses exceeding 0.02 M⊙ in                present in the system (E. Dwek et al. 2019). CCSNe
+                                               several decade-old SNe (M. Shahbandeh et al. 2023; M.               subclasses such as Type II-P, IIn, IIb, Ib, and Ic are
+                                               Shahbandeh et al. 2025; A. Sarangi et al. 2025). SNe                expected to form dust at different rates or in different
+                                               such as SN 2004et and SN 2005af were found to be dom-               locations; however, observations alone are insufficient to
+                                               inated by C-rich, amorphous carbon dust (M. Shahban-                distinguish between these scenarios. The final mass of
+                                               deh et al. 2023; A. Sarangi et al. 2025). On the other              dust is also intricately related to the late-stage evolution
+                                               hand, SN 2017eaw and SN 2005ip showed signs of O-                   of massive stars – how much mass the stars lose prior to
+                                               rich, silicate dust features (M. Shahbandeh et al. 2023,            their explosions, if dust will form before the explosion
+                                               2025). The location of dust around the SN remains am-               in the wind, and if it will survive after the explosion.
+                                               biguous, with possible sites including dust in the sur-               In the early universe, SNe from the short-lived massive
+                                               rounding CSM and/or newly formed dust in the ejecta                 stars are expected to be the primary source of dust (R.
+                                               or post-shock cooling gas (M. Shahbandeh et al. 2025).              Schneider & R. Maiolino 2023; E. Dwek & I. Cherchneff
+                                                  In general, theoretical models of SN dust formation              2011). They are also known to be major dust producers
+                                               predict rapid dust synthesis to grow dust masses to                 in local galaxies (M. Matsuura et al. 2011). In this study,
+                                                                                                                   we derive the theoretical upper limits of dust masses and
+                                                                                                                   their chemical compositions across thinly spaced bins of
+                                               Corresponding author: Arkaprabha Sarangi                            progenitor masses from 9 to 120 M⊙ of solar metallicity.
+                                               Email: arkaprabha.sarangi@iiap.res.in                               The results are valid irrespective of the SN subclass and
+2
+
+explosion properties (eg, explosion energy, 56 Ni mass,       yields, and explosion properties. Each of these fac-
+clumpiness).                                                  tors are significant for dust formation. Stellar evolu-
+                                                              tion codes like KEPLER (S. E. Woosley et al. 2002; T.
+          2. RATIONALE OF THIS STUDY                          Rauscher et al. 2002; S. E. Woosley & T. A. Weaver
+   The objective of this study is to derive an empirical      1995b; S. E. Woosley & A. Heger 2007; T. A. Weaver
+relation between dust mass, dust composition and pro-         et al. 1978) and MESA (B. Paxton et al. 2011, 2013, 2015)
+genitor mass. Detailed chemical modeling of dust forma-       simulate the evolution of a progenitor star from the pre-
+tion in SNe (A. Sarangi & I. Cherchneff 2015; A. Sarangi      main sequence, throughout all the burning phases and
+et al. 2018) tracks the formation of molecules, clusters,     nucleosynthesis channels till the point of CC.
+and condensation of large clusters into dust. We use             The elemental yields in the stellar evolution mod-
+those results to constrain the abundances and chronol-        els show considerable variations based on progenitor
+ogy of molecules and dust synthesis in SN ejecta. This        masses, especially in their post-main sequence phases.
+enables us to determine the upper limit of each dust          We use pre-explosion yields from a finely spaced grid of
+type for a given progenitor based on yields obtained          200 progenitors with main sequence masses between 9
+from stellar evolution models (S. E. Woosley & T. A.          to 120 M⊙ using the simulations of T. Sukhbold et al.
+Weaver 1995a; B. Paxton et al. 2011).                         (2016) 2 . CCSNe progenitors are expected to be less
+   The paper is arranged in the following order: In Sec-      than 25 M⊙ (S. J. Smartt 2009), and in that range (9-
+tion 3, we discuss the observational and theoretical per-     25 M⊙ ) the grid has a spacing of 0.1–0.5 M⊙ . Since
+spectives of SN progenitors. Section 4 describes the          our study focuses on the theoretical upper limit of dust
+conditions for dust formation after those progenitors ex-     masses, we also present some larger progenitors using
+plode as SNe. In Section 5 we quantify the upper limits       the available data. In Figure 1 (top), we show the strat-
+of dust masses derived from this study. Section 5.1 fo-       ified internal chemical profile of a 15 M⊙ star. Only pre-
+cuses on the stochastic nature of derived dust masses,        explosion models were available for this large sample of
+with reference to stellar evolution processes, namely         progenitor masses. We consider that for the alpha ele-
+shell merging and compactness of the stellar models.          ments, which are the primary constituents of dust, the
+Thereafter, in Section 5.2, we provide analytic functions     pre- and post-explosion abundance profiles are compa-
+that describe dust masses as a function of progenitor         rable, as we show in Figure 1 (top) (middle).
+masses. In light of our results, in Section 6, we show
+                                                                  4. CONDITIONS FOR DUST FORMATION
+the sensitivity of our study in comparison to other stel-
+lar evolution models. Finally, Section 7 discusses the          Dust formation models suggest that SN ejecta un-
+findings and their relevance to SN observations.              dergo nucleation and condensation phases, with efficient
+                                                              dust formation occurring within the first few years post-
+         3. SUPERNOVAE PROGENITORS                            explosion (I. Cherchneff & E. Dwek 2009; A. Sarangi
+                                                              et al. 2018; A. Sarangi 2022). The process involves
+  Massive stars, with initial masses larger than 8 M⊙
+                                                              gas-phase chemistry in the nucleation phase, leading
+are considered to be the progenitors of CCSNe (A. Heger
+                                                              to the synthesis of molecules and gas-phase clusters.
+et al. 2003; G. Meynet & A. Maeder 2003). There are
+                                                              This is followed by condensation, where these precur-
+large uncertainties in determining the progenitor masses
+                                                              sor molecules grow into larger dust grains and clusters
+of SNe from pre-SN imaging or light curve modeling.
+                                                              through coagulation, coalescence, and accretion on the
+As an example, for the nearby SN 2023ixf, the reported
+                                                              surface.
+progenitor is found to be of masses spanning a wide
+                                                                The chemical abundance in the ejecta has a significant
+range between 9 to 22 M⊙ (Z. Niu et al. 2023; C. Liu
+                                                              influence on the nature of the dust formed. In a simi-
+et al. 2023; J. L. Pledger & M. M. Shara 2023; C. D.
+                                                              lar approach to our previous dust models (A. Sarangi
+Kilpatrick et al. 2023; J. E. Jencson et al. 2023; J. M. M.
+                                                              et al. 2018), we assume that the ejecta is character-
+Neustadt et al. 2024; D. Xiang et al. 2024; S. D. Van
+                                                              ized by stratified mass zones (Si/S, O/Si/Mg, He/C,
+Dyk et al. 2024; C. Ransome et al. 2024; Y.-J. Qin et al.
+                                                              H) with initial chemical composition derived using stel-
+2024; M. Soraisam et al. 2023; B. Hsu et al. 2024; M. C.
+                                                              lar evolution models (T. Sukhbold et al. 2016, 2018).
+Bersten et al. 2024; T. J. Moriya & A. Singh 2024; A.
+                                                              The gas within each zone/layer is microscopically mixed,
+Singh et al. 2024; L. Ferrari et al. 2024). It is safe to
+                                                              and there is no macroscopic mixing between the zones.
+say, we have no CCSNe with an accurate determination
+of their progenitor mass.
+  Given their unique evolutionary channels, each pro-          2 KEPLER     data:  https://wwwmpa.mpa-garching.mpg.de/
+genitor will differ in its abundance distribution, final        ccsnarchive/data/SEWBJ 2015/index.html
+                                                                                                                                                         3
+
+
+
+
+                                                                                                                             15 M⊙
+
+
+
+
+                        108
+                                                                                                          105                         20 M Progenitor
+                        106                                                 Post-SNe / Pre-SNe Ratio
+Post-SNe / Pre-SNe Ratio
+
+
+
+
+                                                     15 M Progenitor
+                        104                                                                               102
+                        102
+                        100                                                                          10 1
+                       10 2                                     He
+                                                                C                                    10 4                                       He
+                                                                                                                                                C
+                       10 4                                     O                                                                               O
+                       10 6
+                                                                Mg
+                                                                Si
+                                                                                                     10 7                                       Mg
+                                                                                                                                                Si
+                                 2   4         6          8            10                                       2   4         6          8              10
+                                     Mass Coordinate (M )                                                           Mass Coordinate (M )
+                                                                                                          102
+                                                                            C/O ratio (number of atoms)
+
+
+
+
+                           101
+                                                                                                          101
+Mass of shell (M )
+
+
+
+
+                           100                                                                                                          C/O = 1
+                                                                                                          100
+                       10 1                                   Si/S
+                                                              O/Si/Mg                                  10 1
+                                                              C/O                                                              13 M           19 M
+                       10 2                                   He/C                                     10 2                    15 M           21 M
+                                                              H                                                                17 M
+                       10 3 101                                  102                                   10 3 2        4         6         8              10
+                                     Progenitor Mass (M )                                                           Mass coordinates (M )
+      Figure 1. Top: Stratified zones of a 15 M⊙ progenitor from T. Sukhbold et al. (2016), illustrating the classic “onion-shell”
+      layering structure. The detailed mass fraction distribution of key elements within each zone is also illustrated, highlighting
+      compositional transitions between zones.     Middle: Ratio of elemental abundances in post-explosion to pre-explosion from
+      stellar evolution models for 15 M⊙ (left) and 20 M⊙ (right) progenitors, respectively. Bottom left: Masses of zones across
+      all progenitors from T. Sukhbold et al. (2016). The He/C and the H zones become negligible/non-existent around 32 M⊙
+      progenitor onward, and the O/Si/Mg zone shows a steady increase across all progenitors. Bottom right: Carbon to Oxygen
+      (C/O) ratio by number of atoms for various M⊙ progenitors. The dotted black line represents C/O = 1 . The zones where
+      C/O > 1 will produce predominantly C-rich dust and C/O < 1 produce O-rich dust.
+4
+
+Based on the unique chemistry of each zone (due to           impacts the composition of dust, since O-rich dust is
+variations in abundances, temperature profile, densities,    formed in the inner Si/S and O/Si/Mg zones, while C-
+clumpiness, radioactive decay energy etc.), molecules        rich dust in formed in the He/C zone. The mass of the
+and dust grains differ in timescale of formation, final      He/C zone remains almost identical over all progenitor
+mass, chemical composition, and size distributions. As       masses until 25 M⊙ , however, the C/O ratio does show
+previous SN dust chemistry models (A. Sarangi 2022),         significant variation (see C/O ratio in Figure 1, bottom-
+we have considered two major dust categories, O-rich         right). The O/Si/Mg zone, otherwise also called the
+dust – silicates, alumina, and C-rich dust – amorphous       O-core, increases in mass with progenitor mass, thereby
+carbon. In addition, C-rich dust grains of silicon car-      making O-rich dust grains more likely to be abundant.
+bide also form in trace amounts but are never a major           Extensive studies of dust formation chemistry reveal
+component in mass, so we do not include it here.             that SiO and CO molecules are abundantly formed in
+   Oxygen-rich dust is known to form in regions where        the SN ejecta (A. Sarangi & I. Cherchneff 2013, 2015; A.
+silicon and oxygen abundances are high. Mg-silicates,        Sarangi et al. 2018). SiO acts as a precursor or initiator
+mainly of chemical type [Mg2 SiO4 ]n are expected to         to dust formation, leading to the pathway of forming
+form in SN ejecta. All the zones are efficient in form-      silicate dust. The CO molecule, on the other hand, is
+ing silicate dust. However, given the abundances, the        an adversary or competitor to dust production, as it
+majority of silicates are formed in the O/Si/Mg zone.        sequesters the carbon and oxygen atoms, which are key
+Silicates are often known to be most abundant dust in        constituents of dust.
+SNe, as detected in SN 2005ip, SN 2017eaw or Cas A
+(M. Shahbandeh et al. 2023, 2025; R. G. Arendt et al.
+2014) by their signature 9.7 and 18 µm features (J. M.               5. UPPER LIMIT OF DUST MASSES
+van Breemen et al. 2011). Theoretical models have pre-
+                                                               The epoch when dust formation commences, and the
+dicted silicates to start forming rapidly in the ejecta as
+                                                             rate at which it proceeds, is influenced by the local con-
+soon as a year post-explosion (A. Sarangi et al. 2025,
+                                                             ditions such as density, clumpiness, temperature etc.
+2018).
+                                                             However, irrespective of the rate of dust formation, pre-
+   Apart from silicates, aluminum oxide or amorphous
+                                                             vious models have found for the cases of 12, 15, 19 or
+alumina, of chemical type [Al2 O3 ]n , is also an abun-
+                                                             20 M⊙ progenitors (A. Sarangi et al. 2018; A. Sarangi
+dantly formed O-rich dust species. Importantly, though,
+                                                             2022), that the final dust mass in each zone is limited by
+the abundance of Al is altered significantly during the
+                                                             the abundance of the least abundant element among the
+explosive nuclear burning phase, and hence we cannot
+                                                             dust constituents in each zone, after CO molecules are
+use the pre-explosion abundance profile for Al. We have
+                                                             formed. To explain with an example – for silicate dust
+used the O to Al ratio in the O/Si/Mg zone (where alu-
+                                                             in the O/Si/Mg zone, first CO molecules are formed,
+mina forms) from the post-explosion profile of a 15 M⊙
+                                                             which lock up C and O atoms in equal proportions. Fol-
+progenitor, modeled using the KEPLER code, and scaled
+                                                             lowing that, clusters of Mg-silicates are formed in mass
+it for other progenitors as well.
+                                                             that is limited by the least abundant of the Mg, Si, or
+   Amorphous carbon is the only abundantly produced
+                                                             O atoms, in the proportion of the atomic constituents
+C-rich dust component in SNe. A critical factor to form
+                                                             of [Mg2 SiO4 ]n (for integer n > 2). In the same way, in
+C-rich dust is the carbon-to-oxygen ratio of the ambi-
+                                                             the He/C zone, once all the CO molecules are formed,
+ent/local medium. In the zones, where C/O <= 1, all
+                                                             the remainder of the C atoms form chains and rings,
+the C-atoms are found to be locked in CO molecules.
+                                                             ultimately condensing to amorphous carbon dust – the
+CO molecules are efficiently formed in the ejecta and
+                                                             mass limited by the remaining C-atom in the gas, post
+does not break down easily due to their large binding
+                                                             CO molecule formation. SiO molecules, formed in the
+energy. However, that leaves no scope to synthesize C-
+                                                             gas as early as CO molecules, ultimately deplete in sil-
+dust in such zones, which are formed through clusters of
+                                                             icate dust. Other O-bearing atoms, such as AlO, MgO,
+pure carbon chains and rings. In massive stars, the He-
+                                                             SO, etc., may still form in the gas if there are residual
+rich region, as shown in Fig. 1 (top, bottom-right), is
+                                                             O atoms.
+uniquely C-rich, and allows to form amorphous carbon
+                                                               Based on this chronology, we can estimate the dust
+dust when suitable conditions are met (A. Sarangi & I.
+                                                             masses of each type that is formed in each zone, which
+Cherchneff 2013).
+                                                             will be the theoretical upper limit.
+   Progenitors of various masses evolve differently, lead-
+                                                               Using the formalism described above, we find the up-
+ing to a variation in the sizes of the shells, as we show
+                                                             per limit of O-rich (silicates and alumina) and C-rich
+in Fig. 1 (bottom-left). The mass of the shells directly
+                                                             (amorphous carbon) dust for all progenitors between 9-
+                                                                                                                            5
+
+                                  Upper limit of dust mass for all progenitors
+                 100
+Dust mass (M )
+
+
+             10 1
+             10 2                                                                                         Am-Carbon
+                                                                                                          Silicate
+                                                                                                          Alumina
+             10 3 10                           20      30 40         60                                80 100 120
+                                                Progenitor Mass (M )
+   Figure 2. Upper limits of amorphous carbon, silicates, and alumina dust across all progenitors are shown. The C-rich dust
+   is represented by amorphous carbon (Am-Carbon in blue). The O-rich dust is the combined mass of the silicates (red) and
+   alumina (green) dust, which are the most abundant species of the O-rich dust. The upper limit of the total dust mass, which
+   is the sum of the C-rich and O-rich dust masses, is plotted in black.
+
+   120 M⊙ (main sequence mass), which were simulated by            we find some clear spikes in silicate mass, which vary
+   T. Sukhbold et al. (2016) using the KEPLER code.                between 0.03 to 0.9 M⊙ .
+      In Figure 2, we show the masses of dust for each
+   progenitor. A 9 M⊙ progenitor produces 0.025 M⊙ of                         5.1. Shell merging and compactness
+   dust, which is the smallest dust mass in this set, while           We find that the large fluctuations in silicate mass can
+   a 25.5 M⊙ star with a dust mass of 0.9 M⊙ is the high-          be attributed to the significant fluctuations in the mass
+   est mass of dust we report. As expected, the mass of            of Si and Mg in the O-core, as shown in Figure 3 (top-
+   O-rich dust (silicates, alumina) increases with progeni-        panel). The effect is especially pronounced in Si mass,
+   tor mass, since the size of the O-core (O/Si/Mg zone) is        which is correlated to the likely convective boundary
+   found to increase proportionately (see Figure 1, bottom-        mixing between the inner Si and ONe core, prior to the
+   left). Mass of C-rich, amorphous carbon dust is found           explosion (A. Davis et al. 2019). From the yields of T.
+   to vary between 0.012 to 0.043 M⊙ , with the maximum            Sukhbold et al. (2016), we find that the shell merging
+   occurring in progenitors with initial masses between 13         or boundary mixing scenario, as it is termed, leads to
+   and 14 M⊙ . The mass of C-rich dust drops to negligi-           an increase in Si abundances in the O/Si/Mg zone to
+   ble quantities for stars with initial mass larger than 26       more than an order of magnitude. For example, Fig-
+   M⊙ . O-rich dust, namely silicates, dominates the dust          ure 3 (top-panel) shows Si-mass of only 5×10−3 M⊙ in
+   composition almost always, for progenitors with initial         19.5 M⊙ progenitor compared to 0.4 M⊙ in 20.5 M⊙
+   mass above 12 M⊙ , except for a few cases between 15            progenitor. The degree of shell merging may vary from
+   and 16 M⊙ .                                                     partial boundary mixing to complete shell mergers. This
+      CO molecules are formed consistently in all progeni-         effect significantly alters the silicate dust masses post-
+   tors, where the mass (upper limit) increases gradually          explosion, making dust a crucial tool to probe between
+   from 0.02 M⊙ to as large as 1 M⊙ for a progenitor with          different stellar evolutionary channels.
+   an initial mass of 26 M⊙ .                                         The probability of the shell merging scenario and its
+      Importantly, we find considerable fluctuations in            markers are extensively studied by B. Côté et al. (2020);
+   masses of silicate dust in the progenitors with initial         L. Roberti et al. (2025). There is debate if such stochas-
+   masses between 10 and 26 M⊙ , as evident in Figure              ticity arises due to numerical effects, rather than being
+   2. While silicate masses reach about 0.1 M⊙ for stellar         physical. Simulations in 3-D also exhibit similar effects
+   progenitors with initial masses of 12–15 M⊙ , it is only        with faster convective velocities (F. Rizzuti et al. 2024).
+   about 0.025 M⊙ for progenitors with initial masses be-             The evolution of the progenitors has also been char-
+   tween 15–18 M⊙ . For progenitors with initial masses            acterized by a compactness parameter ξ2.5 , which quan-
+   above 18 M⊙ , the variations are even more dramatic, as         tifies how centrally concentrated the mass distribution
+                                                                   is within the inner 2.5 M⊙ of a pre-SN star. The com-
+   6
+
+                                      100                                                                      T. Sukhbold et al. (2016) has applied it to the grid
+         Total mass of element (M )
+                                               KEPLER                                                       of KEPLER models (shown in Figure 3, middle-panel),
+                                                                                                            to demonstrate the likelihood of explosion for the pre-
+                                  10 1                                                                      SN models. The less compact pre-SN structures (ξ2.5
+                                                                                                            typically less than 0.28) are assumed to be more likely
+                                                                                                            to explode as SNe (T. Ertl et al. 2016).
+                                  10 2                                                                         The derived compactness parameter of a massive star
+                                                                                  Magnesium                 is also correlated to the boundary shell mixing (A. Davis
+                                                                                  Silicon                   et al. 2019), where larger degrees of mixing are at-
+                                  10 3 10                15        20        25           30                tributed to smaller values of compactness parameters,
+                                                         Progenitor Mass (M )                               therefore more likely to explode as SNe. In this study,
+                                                                                                            we find that the shell mixing leads to an enhancement in
+                  0.8                       Compactness                                   0.5               silicate dust mass, and therefore, we predict an overall
+                                            O-rich dust                                                     larger mass of dust in those scenarios. This correlations
+                                                                                          0.4               point to the inference that the progenitors, which are
+Dust Mass (M )
+
+
+
+
+                  0.6
+
+                                                                                              Compactness
+                                                                                                            more likely to explode as SNe (less compact) will also
+                                                                                          0.3               be capable of producing more dust. Figure 3 (middle-
+                  0.4                                                                                       panel) shows the comparison of the compactness param-
+                                                                                          0.2               eter and O-rich dust mass. A straight forward correla-
+                  0.2                                                                     0.1
+                                                                                                            tion between the two is not visible in this figure, but
+                                                                                                            can be demonstrated better in the zoomed-in version
+
+                  0.0                                                                     0.0               (19.5 to 21 M⊙ ) that we present in the bottom-panel
+                                      10         15         20        25             30                     of the same figure. The zoomed-in version reflects the
+                                                 Mass of progenitor (M )                                    anti-correlation of the O-rich dust masses to the com-
+                                                                                          0.6               pactness of various progenitors, which is then correlated
+                  0.8 Zoomed-in figure of 19.5 M 21.0 M region                                              to the shell-merging scenario and explodability.
+                                                                                          0.5
+                                            Compactness                                                                     5.2. Best-fit dust masses
+Dust mass (M )
+
+
+
+
+                  0.6                       O-rich dust                                   0.4
+                                                                                              Compactness
+
+
+
+
+                                                                                                               To derive a general trend for the dependence of dust
+                                                                                                            mass (md ) on the progenitor’s initial mass (Ms ), we fit
+                  0.4                                                                     0.3               the O-rich dust, C-rich dust, and CO molecular mass as
+                                                                                          0.2               a function of progenitor mass. We limit this fitting to
+                  0.2                                                                                       progenitors up to 30 M⊙ . Here, we provide the best-
+                                                                                          0.1               fit functions, the fitting constants, and their associated
+                                                                                                            errors (expressed as percentages, given in parentheses).
+                  0.0
+                   19.5                            20.0           20.5                21.0                  Figure 4 shows all the best-fit scenarios.
+                                                 Mass of progenitor (M )                                       For O-rich dust, due to the large fluctuations, we could
+                                                                                                            not fit a single function to all the dust masses. The
+   Figure 3. Top: Abundances of Si and Mg atoms in the
+                                                                                                            upper and lower bound to the power-law fit is given as,
+   O/Si/Mg zone across all progenitors up to 30 M⊙ from
+   KEPLER data (T. Sukhbold et al. (2016)). See Section 5.1
+   for context.   Middle: The correlation between compact-
+                                                                                                                              md (Ms ) = a × Msb                   (2)
+   ness parameter (in blue) and mass of O-rich dust (in red).
+   Compactness parameter (Equation 1) is used as a tracer of                                                where a = 8.00 × 10−6 , b = 3.50 for upper bound limit
+   shell merging scenario explained in Section 5.1. Bottom:                                                 and a = 2.90 × 10−4 , b = 1.74 for lower bound limit.
+   Zoomed-in view of the 19.5 to 21 M⊙ region, showing com-
+   pactness parameter and mass of O-rich dust.                                                                For C-rich dust, we fit the function in two phases, with
+                                                                                                            a break at Ms = 12 M⊙ , as given below,
+   pactness parameter is calculated using the mass coordi-
+   nate where the infall velocity exceeds 1000 km s−1 (E.                                                                 md (Ms ) = −aMs2 + bMs + c               (3)
+   O’Connor & C. D. Ott 2011),
+                                                                                                            where a = 7.55 × 10−3 (5.26), b = 0.166(5.08), c =
+                                                                                                            −0.879(5.08) for Ms ≤ 12M⊙ , and a = 3.90 ×
+                                                                 2.5
+                                                ξ2.5 =                                          (1)         10−5 (22.5), b = −5.88 × 10−4 (62.5), c = −0.053(6.90)
+                                                          R(2.5 M⊙ )/1000 km
+                                                                                                                                               7
+
+            100                                                                       100   C-rich Dust Mass             Polynomial fit
+
+
+                                                                                                                            x <= 12 M
+        10 1                                                                      10 1
+Mass (M )
+
+
+
+
+                                                                    Mass (M )
+                                                                                                                            x > 12 M
+
+
+
+        10 2                                                                      10 2
+                   O-rich Dust Mass               Powerlaw fit
+                                                     Upper bound
+                                                     Lower bound
+        10 3 10              15        20       25            30                  10 3 10            15        20        25               30
+                             Progenitor Mass (M )                                                    Progenitor Mass (M )
+            100                                                                       100
+
+
+
+
+                                                                    Dust mass ratio
+        10 1
+Mass (M )
+
+
+
+
+                                                                                  10 1
+
+        10 2                                                                      10 2      C-rich dust / O-rich dust
+                  Logarithmic fit               CO Mass                                        Powerlaw fit
+        10 3 10              15        20       25            30                  10 3 10            15        20       25                30
+                             Progenitor Mass (M )                                                    Progenitor Mass (M )
+  Figure 4. The mass of O-rich dust (Top left), C-rich dust (Top right), the ratio of C-rich to O-rich dust (Bottom right),
+  and the mass of CO molecules (Bottom left) across all progenitor masses up to 30 M⊙ are fitted with various fitting functions.
+  Please see Section 5.2 for the fitting formulae and constants.
+
+  for Ms > 12M⊙ .                                                          SN 2017eaw, SN 2016adj, SN 2020oi), 10−4 –10−3 M⊙
+                                                                           of CO were detected in the first couple of years post-
+    The ratio of C-rich to O-rich dust is a crucial indicator              explosion, which may not reflect the final mass (J. Rho
+  of the SN progenitor and explosion properties. Obser-                    et al. 2018; R. Kotak et al. 2009; D. P. K. Banerjee et al.
+  vationally, it is very significant when analyzing IR emis-               2018; J. Rho et al. 2021; A. Fassia et al. 2001).
+  sion from SN dust. The large scatter in the O-rich dust
+  masses is reflected in the dust mass ratio as well. The                               6. COMPARISON WITH MESA MODELS
+  power-law fit is given below:                                               The large scatter in the predicted upper limit of dust
+                                                                           masses in SNe motivated us to test the sensitivity of our
+                         mC/O (Ms ) = a × Msb                 (4)          findings using simulation results of the stellar evolution
+  where a = 7.50 × 10−3 (88.8), b = −3.50(20.08).                          code MESA (B. Paxton et al. 2011, 2015). We apply a
+                                                                           similar approach to derive dust masses in a sample of
+    For CO molecules, the trend is relatively well defined,                SNe that originates from progenitors with initial masses
+  with a gradual increase with progenitor mass, given by,                  between 10 and 22 M⊙ , evolved using MESA, from E.
+                                                                           Laplace et al. (2021) 3 . We find that the O-rich dust
+                     m(Ms ) = a log(Ms − b) + c               (5)          masses still showcase notable fluctuations, with masses
+                                                                           between 0.2 and 0.7 M⊙ , as shown in Figure 5. More-
+  where a = 0.90(42.8), b = −4.50(65.4), c = −2.35(56.1).                  over, the mass of silicate dust is in most cases about
+                                                                           2–5 times larger than what we find using KEPLER mod-
+    Due to lack of late time observations, CO mass for                     els (shown in Figure 2). In this case, O-rich dust al-
+  SNe in general, is not well quantified. Masses of 0.02–1
+  M⊙ of CO molecules are reported in SN 1987A (M. Mat-
+                                                                               3 MESA data: https://zenodo.org/doi/10.5281/zenodo.13645155
+  suura 2017). In other cases (eg. SN 1998S, SN 2004et,
+   8
+
+                 100                                                                            100
+
+
+
+
+                                                                   Total mass of element (M )
+                                                                                                      MESA
+Dust Mass (M )
+
+
+
+             10 1
+                                                                                            10 1
+             10 2
+                        C-rich dust                    MESA                                                                     Magnesium
+                        O-rich dust                    KEPLER                                                                   Silicon
+             10 3      12       14       16       18      20                                10 2      12      14      16       18    20
+                                Progenitor Mass (M )                                                         Progenitor Mass (M )
+   Figure 5. Left: Comparison between the C-rich (solid lines) and O-rich (dotted lines) dust masses using MESA (E. Laplace et al.
+   2021) and KEPLER (T. Sukhbold et al. 2016) models. The larger dust masses in the MESA is attributed to the larger abundance
+   in the pre-SN data, compared to the KEPLER model. Right: Total mass of elements in the O/Si/Mg zone across progenitor
+   masses from MESA data.
+   ways dominates C-rich dust, and the final dust masses                        2015; M. Matsuura 2017; T. Temim et al. 2017; I. De
+   (both O-rich and C-rich) are larger than KEPLER mod-                         Looze et al. 2017; R. Wesson et al. 2023).
+   els. We further compare the Si and Mg abundances,                               Our findings theoretically limit the maximum dust
+   shown in Figure 2 (right), to draw parallels with the T.                     masses that can form in SNe. We find that the final
+   Sukhbold et al. (2016) models. In the (E. Laplace et al.                     dust masses range between 0.025 M⊙ to 0.9 M⊙ , across
+   2021) models, Si mass in the O/Si/Mg zone does not                           progenitors. O-rich dust, especially Mg-silicates, is most
+   vary as widely as in the case of the T. Sukhbold et al.                      often the primary dust component. The general trend
+   (2016) models; however, there is still considerable vari-                    suggests that the mass of silicate dust is proportional
+   ation that directly reflects in the estimated silicate dust                  to the progenitor mass up to about 30 M⊙ . Mass of
+   masses.                                                                      amorphous carbon dust is the maximum in the smaller
+     Our finding concludes that dust masses and composi-                        progenitors, with initial mass less than 15 M⊙ .
+   tions vary by 3–5 times for the same progenitor mass,                           We reflect on the large scatter in dust masses across
+   based on the stellar model used; it is indeed a huge un-                     progenitors of varying initial mass. We find that the pro-
+   certainty that needs better understanding and finer res-                     genitors that underwent convective boundary shell mix-
+   olution in initial progenitor masses.                                        ing between distinct nuclear burning zones, are associ-
+                                                                                ated with larger dust mass production. The progenitors
+                                                                                which has undergone shell mixing or merging are likely
+                   7. CONCLUSIONS AND DISCUSSIONS                               to be less compact (smaller compactness parameter, A.
+      Most IR observations of SNe are limited to only the                       Davis et al. 2019), and therefore more likely to explode
+   first couple of years post-explosion. It remains uncer-                      as SNe, and also these are the progenitors that will pro-
+   tain if the observed dust is newly formed or surviving                       duce more dust. This can be a reason why many SN
+   pre-SN dust in the ambient medium. The majority of                           remnants are reported to host dust masses larger than
+   SNe in those epochs are reported to form dust masses                         0.5 M⊙ , since the stars that exploded as SNe are the ones
+   less than 0.01 M⊙ (the complete library can be found                         that are capable of producing large dust masses, post-
+   at https://nebulousresearch.org/dustmasses/). Mid-IR                         explosion. However, this explodability factor is mostly
+   observations using JWST have increased the estimated                         important for progenitors above initial mass of 19 M⊙ ,
+   dust masses, with most SNe found to host dust between                        below which most of the progenitors are likely to explode
+   0.01-0.1 M⊙ (M. Shahbandeh et al. 2023, 2025; T. Sza-                        as CCSNe (T. Sukhbold et al. 2016). On the other hand,
+   lai et al. 2025; A. Sarangi et al. 2025). The presence of                    the shell merging scenario impacts dust masses through-
+   colder dust, outside of the mid-IR detection limits, can-                    out all progenitor masses, leading to a stochasticity in
+   not be ruled out. It is generally proposed that all SNe                      dust mass predictions.
+   will form close to 0.5 M⊙ of dust after a few decades                           It is also possible that all SNe will not produce dust
+   post-explosion, based on the detections of cold dust in                      masses of 0.5 M⊙ , or more. From observations with
+   SNe such as SN 1987A, SN 1995N, the crab nebula, Cas                         JWST in the mid-IR, even at late times, when the ejecta
+   A, and SNR G54.1+0.3 (P. J. Owen & M. J. Barlow                              is expected to be optically thin at these wavelengths,
+                                                                                                                                9
+
+we have confirmation of dust masses up to 0.1 M⊙ (M.               scopic mixing between the zones. The mass of silicate
+Shahbandeh et al. 2023, 2025; A. Sarangi et al. 2025).             dust is unlikely to increase if the outer zones of Si/O/Mg
+The upper limits derived in this study aligns better with          and He/C are mixed microscopically, since in both the
+a 0.1–0.3 M⊙ range.                                                zones, the atoms of Si and Mg are already locked in dust
+   We also show that the upper limits of dust masses,              grains in the unmixed case. In that regard, the upper
+and their compositions, can be very sensitive to the               limit of dust masses predicted in this study will remain
+choice of the stellar evolution models, and can vary by            valid, even if we consider microscopic mixing between
+2–5 times for the same progenitor mass. We used and                zones, post-explosion.
+compared yields from the stellar evolution codes KEPLER              Theoretical model by A. Sluder et al. (2018) finds
+(S. E. Woosley & T. A. Weaver 1995b; S. E. Woosley                 MgO-clusters to be the most abundant dust component
+& A. Heger 2007) and MESA (B. Paxton et al. 2011,                  in SN, dominating over silicates, which boosts the dust
+2015), which have differences in nuclear reaction net-             mass to 0.5 M⊙ . We argue that MgO molecules are not
+work, reaction rates, and energy transport mechanisms              favored by chemistry (K. M. Bell & R. C. Fortenberry
+(T. Sukhbold & S. E. Woosley 2014; S. Jones et al. 2015).          2025; D. Gobrecht et al. 2023; A. Sarangi & I. Cherchneff
+The processes that lead to such random nature of stel-             2013), and also signatures of such dust composition are
+lar yields and their distributions in the stellar core are         not observationally supported. So we limit our O-rich
+poorly understood, which directly reflects on the pre-             dust to silicates and alumina.
+dicted dust masses. Since most of these alpha elements               Our results suggest that even though the SN explo-
+get locked in dust, we can use observations of dust in             sion properties, such as explosion energy, 56 Ni mass,
+the IR as an ideal tool to quantify the stellar yields in          clumpiness, or pre-explosion mass-loss rates, affect the
+the post-explosion era, and thereby constrain the stellar          timescale of dust formation, but the final mass is con-
+evolutionary channels.                                             trolled by the random nature of the stellar yields. We
+   In this study, we assumed stratified zones of Si/S,             need more studies to understand if such stochastic yields
+O/Si/Mg, O/C, He/C and H, without microscopic mix-                 of massive stars, as predicted by stellar evolution mod-
+ing between the layers. From qualitative analysis, we              els, are represented in post-explosion abundances.
+can comment that if we allow mixing between the zones,
+the mass of C-rich dust is likely to decrease consider-
+ably. The free O-atoms in the O/Si/Mg zone will form
+CO molecules through reactions with carbon atoms in                              8. ACKNOWLEDGMENTS
+the He/C zone, which in the unmixed case forms amor-                 The authors gratefully acknowledge the support of the
+phous carbon dust. Presence of amorphous carbon dust               Department of Science and Technology (DST), Govern-
+is often reported from observations of SN dust contin-             ment of India. We also extend our sincere thanks to
+uum (R. Wesson et al. 2023; M. Shahbandeh et al. 2023;             Prof. Stanford Woosley and Prof. Projjwal Banerjee
+A. Sarangi et al. 2025); so we can argue against micro-            for their valuable feedback and discussions.
+
+
+                                                            REFERENCES
+Arendt, R. G., Dwek, E., Kober, G., Rho, J., & Hwang, U.           Davis, A., Jones, S., & Herwig, F. 2019, MNRAS, 484,
+  2014, The Astrophysical Journal, 786, 55,                          3921, doi: 10.1093/mnras/sty3415
+  doi: 10.1088/0004-637x/786/1/55                                  De Looze, I., Barlow, M. J., Swinyard, B. M., et al. 2017,
+Banerjee, D. P. K., Evans, A., Geballe, T. R., et al. 2018,          MNRAS, 465, 3309, doi: 10.1093/mnras/stw2837
+  ApJL, 867, L21, doi: 10.3847/2041-8213/aae94f                    Dwek, E., & Cherchneff, I. 2011, ApJ, 727, 63,
+                                                                     doi: 10.1088/0004-637X/727/2/63
+Bell, K. M., & Fortenberry, R. C. 2025, Molecules, 30,
+                                                                   Dwek, E., Sarangi, A., & Arendt, R. G. 2019, ApJL, 871,
+  doi: 10.3390/molecules30081650
+                                                                     L33, doi: 10.3847/2041-8213/aaf9a8
+Bersten, M. C., Orellana, M., Folatelli, G., et al. 2024,
+                                                                   Ertl, T., Janka, H. T., Woosley, S. E., Sukhbold, T., &
+  A&A, 681, L18, doi: 10.1051/0004-6361/202348183
+                                                                     Ugliano, M. 2016, ApJ, 818, 124,
+Cherchneff, I., & Dwek, E. 2009, The Astrophysical                   doi: 10.3847/0004-637X/818/2/124
+  Journal, 703, 642, doi: 10.1088/0004-637X/703/1/642              Fassia, A., Meikle, W. P. S., Chugai, N., et al. 2001,
+Côté, B., Jones, S., Herwig, F., & Pignatari, M. 2020, ApJ,        Monthly Notices of the Royal Astronomical Society, 325,
+  892, 57, doi: 10.3847/1538-4357/ab77ac                             907, doi: 10.1046/j.1365-8711.2001.04282.x
+10
+
+Ferrari, L., Folatelli, G., Ertini, K., Kuncarayakti, H., &   Owen, P. J., & Barlow, M. J. 2015, ApJ, 801, 141,
+  Andrews, J. E. 2024, A&A, 687, L20,                           doi: 10.1088/0004-637X/801/2/141
+  doi: 10.1051/0004-6361/202450440                            Paxton, B., Bildsten, L., Dotter, A., et al. 2011, ApJS, 192,
+Gall, C., Hjorth, J., Watson, D., et al. 2014, Nature, 511,     3, doi: 10.1088/0067-0049/192/1/3
+  326, doi: 10.1038/nature13558                               Paxton, B., Cantiello, M., Arras, P., et al. 2013, ApJS, 208,
+Gobrecht, D., Hashemi, S. R., Plane, J. M. C., et al. 2023,     4, doi: 10.1088/0067-0049/208/1/4
+  A&A, 680, A18, doi: 10.1051/0004-6361/202347546             Paxton, B., Marchant, P., Schwab, J., et al. 2015, ApJS,
+Heger, A., Fryer, C. L., Woosley, S. E., Langer, N., &          220, 15, doi: 10.1088/0067-0049/220/1/15
+  Hartmann, D. H. 2003, ApJ, 591, 288,                        Pledger, J. L., & Shara, M. M. 2023, ApJL, 953, L14,
+  doi: 10.1086/375341                                           doi: 10.3847/2041-8213/ace88b
+Hsu, B., Smith, N., Goldberg, J. A., et al. 2024, arXiv       Qin, Y.-J., Zhang, K., Bloom, J., et al. 2024, MNRAS, 534,
+  e-prints, arXiv:2408.07874,                                   271, doi: 10.1093/mnras/stae2012
+  doi: 10.48550/arXiv.2408.07874                              Ransome, C., Villar, V. A., Jacobson-Galan, W., Kilpatrick,
+Jencson, J. E., Pearson, J., Beasor, E. R., et al. 2023,        C., & Tartaglia, A. 2024, in American Astronomical
+  ApJL, 952, L30, doi: 10.3847/2041-8213/ace618                 Society Meeting Abstracts, Vol. 243, American
+Jones, S., Hirschi, R., Pignatari, M., et al. 2015, MNRAS,      Astronomical Society Meeting Abstracts, 213.13
+  447, 3115, doi: 10.1093/mnras/stu2657                       Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E.
+Kilpatrick, C. D., Foley, R. J., Jacobson-Galán, W. V.,        2002, The Astrophysical Journal, 576, 323,
+  et al. 2023, ApJL, 952, L23,                                  doi: 10.1086/341728
+  doi: 10.3847/2041-8213/ace4ca                               Rho, J., Geballe, T. R., Banerjee, D. P. K., et al. 2018,
+Kotak, R., Meikle, W. P. S., Farrah, D., et al. 2009, The       ApJL, 864, L20, doi: 10.3847/2041-8213/aad77f
+  Astrophysical Journal, 704, 306,                            Rho, J., Evans, A., Geballe, T. R., et al. 2021, ApJ, 908,
+  doi: 10.1088/0004-637X/704/1/306                              232, doi: 10.3847/1538-4357/abd850
+Laplace, E., Justham, S., Renzo, M., et al. 2021,             Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, MNRAS,
+  Astronomy & Astrophysics, 656, A58,                           533, 687, doi: 10.1093/mnras/stae1778
+  doi: 10.1051/0004-6361/202140506                            Roberti, L., Pignatari, M., Brinkman, H. E., et al. 2025,
+Liu, C., Chen, X., Er, X., et al. 2023, ApJL, 958, L37,         A&A, 698, A216, doi: 10.1051/0004-6361/202554461
+  doi: 10.3847/2041-8213/ad0da8                               Sarangi, A. 2022, arXiv e-prints, arXiv:2209.14896.
+Matsuura, M. 2017, Dust and Molecular Formation in              https://arxiv.org/abs/2209.14896
+  Supernovae (Springer), 2125,                                Sarangi, A., & Cherchneff, I. 2013, The Astrophysical
+  doi: 10.1007/978-3-319-21846-5 130                            Journal, 776, 107, doi: 10.1088/0004-637X/776/2/107
+Matsuura, M., Dwek, E., Meixner, M., et al. 2011, Science,    Sarangi, A., & Cherchneff, I. 2015, A&A, 575, A95,
+  333, 1258, doi: 10.1126/science.1205983                       doi: 10.1051/0004-6361/201424969
+Matsuura, M., Dwek, E., Barlow, M. J., et al. 2015, The       Sarangi, A., Matsuura, M., & Micelotta, E. R. 2018, SSRv,
+  Astrophysical Journal, 800, 50,                               214, 63, doi: 10.1007/s11214-018-0492-7
+  doi: 10.1088/0004-637X/800/1/50                             Sarangi, A., Zsiros, S., Szalai, T., et al. 2025, arXiv e-prints,
+Meynet, G., & Maeder, A. 2003, A&A, 404, 975,                   arXiv:2504.20574, doi: 10.48550/arXiv.2504.20574
+  doi: 10.1051/0004-6361:20030512                             Schneider, R., & Maiolino, R. 2023,
+Moriya, T. J., & Singh, A. 2024, PASJ, 76, 1050,                http://arxiv.org/abs/2310.00053
+  doi: 10.1093/pasj/psae070                                   Shahbandeh, M., Sarangi, A., Temim, T., et al. 2023,
+Neustadt, J. M. M., Kochanek, C. S., & Smith, M. R. 2024,       Monthly Notices of the Royal Astronomical Society, 523,
+  MNRAS, 527, 5366, doi: 10.1093/mnras/stad3073                 6048, doi: 10.1093/mnras/stad1681
+Niculescu-Duvaz, M., Barlow, M. J., Bevan, A.,                Shahbandeh, M., Sarangi, A., Temim, T., et al. 2023,
+  Milisavljevic, D., & DeÂ Looze, I. 2021, Monthly Notices     MNRAS, 523, 6048, doi: 10.1093/mnras/stad1681
+  of the Royal Astronomical Society, 504, 2133,               Shahbandeh, M., Fox, O. D., Temim, T., et al. 2025, ApJ,
+  doi: 10.1093/mnras/stab932                                    985, 262, doi: 10.3847/1538-4357/adce77
+Niu, Z., Sun, N.-C., Maund, J. R., et al. 2023, ApJL, 955,    Singh, A., Teja, R. S., Moriya, T. J., et al. 2024, ApJ, 975,
+  L15, doi: 10.3847/2041-8213/acf4e3                            132, doi: 10.3847/1538-4357/ad7955
+O’Connor, E., & Ott, C. D. 2011, The Astrophysical            Sluder, A., Milosavljević, M., & Montgomery, M. H. 2018,
+  Journal, 730, 70, doi: 10.1088/0004-637X/730/2/70             MNRAS, 480, 5580, doi: 10.1093/mnras/sty2060
+                                                                                                                               11
+
+Smartt, S. J. 2009, ARA&A, 47, 63,                                   van Breemen, J. M., Min, M., Chiar, J. E., et al. 2011,
+  doi: 10.1146/annurev-astro-082708-101737                             A&A, 526, A152, doi: 10.1051/0004-6361/200811142
+Soraisam, M., Matheson, T., Andrews, J., et al. 2023, The            Van Dyk, S. D., Srinivasan, S., Andrews, J. E., et al. 2024,
+  Astronomer’s Telegram, 16050, 1                                      ApJ, 968, 27, doi: 10.3847/1538-4357/ad414b
+Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., &              Weaver, T. A., Zimmerman, G. B., & Woosley, S. E. 1978,
+                                                                       ApJ, 225, 1021, doi: 10.1086/156569
+  Janka, H.-T. 2016, The Astrophysical Journal, 821, 38,
+                                                                     Wesson, R., & Bevan, A. 2021, ApJ, 923, 148,
+  doi: 10.3847/0004-637X/821/1/38
+                                                                       doi: 10.3847/1538-4357/ac2eb8
+Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., &
+                                                                     Wesson, R., Bevan, A. M., Barlow, M. J., et al. 2023,
+  Janka, H. T. 2016, ApJ, 821, 38,
+                                                                       MNRAS, 525, 4928, doi: 10.1093/mnras/stad2505
+  doi: 10.3847/0004-637X/821/1/38
+                                                                     Woosley, S. E., & Heger, A. 2007,
+Sukhbold, T., & Woosley, S. E. 2014, ApJ, 783, 10,                     doi: 10.1016/j.physrep.2007.02.009
+  doi: 10.1088/0004-637X/783/1/10                                    Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Reviews
+Sukhbold, T., Woosley, S. E., & Heger, A. 2018, ApJ, 860,              of Modern Physics, 74, 1015,
+  93, doi: 10.3847/1538-4357/aac2da                                    doi: 10.1103/RevModPhys.74.1015
+Szalai, T., Zsı́ros, S., Fox, O. D., Pejcha, O., & Müller, T.       Woosley, S. E., & Weaver, T. A. 1995a, Astrophysical
+  2019, The Astrophysical Journal Supplement Series, 241,              Journal Supplement, 101, 181, doi: 10.1086/192237
+  38, doi: 10.3847/1538-4365/ab10df                                  Woosley, S. E., & Weaver, T. A. 1995b, ApJS, 101, 181,
+Szalai, T., Zsı́ros, S., Jencson, J., et al. 2025, arXiv e-prints,     doi: 10.1086/192237
+  arXiv:2503.12950, doi: 10.48550/arXiv.2503.12950                   Xiang, D., Mo, J., Wang, L., et al. 2024, Science China
+                                                                       Physics, Mechanics, and Astronomy, 67, 219514,
+Temim, T., Dwek, E., Arendt, R. G., et al. 2017, ApJ, 836,
+                                                                       doi: 10.1007/s11433-023-2267-0
+  129, doi: 10.3847/1538-4357/836/1/129
+

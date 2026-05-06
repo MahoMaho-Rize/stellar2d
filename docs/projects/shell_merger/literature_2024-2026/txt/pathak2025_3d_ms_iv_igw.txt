@@ -1,0 +1,1649 @@
+                                                 Draft version February 16, 2026
+                                                 Typeset using LATEX twocolumn style in AASTeX631
+
+
+
+
+                                               3D hydrodynamic simulations of massive main-sequence stars - IV. Internal gravity waves matter for
+                                                                                       SLF variability.
+                                                               Praneet Pathak       ,1 Simon Blouin     ,1 Falk Herwig      ,1 and Paul R. Woodward2
+                                                                1 Department of Physics & Astronomy, University of Victoria, Victoria, BC, V8W 2Y2, Canada
+                                                                2 LCSE and Department of Astronomy, University of Minnesota, Minneapolis, MN 55455, USA
+
+
+
+                                                                                                      ABSTRACT
+arXiv:2508.03893v2 [astro-ph.SR] 12 Feb 2026
+
+
+
+
+                                                         The power spectrum of light curves from satellites like CoRoT and TESS of massive main-sequence
+                                                      stars show stochastic low-frequency (SLF) variability. To investigate the origin of this phenomenon,
+                                                      we conducted high-resolution 3D hydrodynamic PPMstar simulations of a non-rotating 25 M⊙ zero-age
+                                                      main sequence star, modeling 95% of the stellar structure with both a core and a thin outer envelope
+                                                      convection zone. The outer envelope convection zone was implemented through modification of the
+                                                      opacity model, shifting the Fe opacity bump inward and enhancing its amplitude for computational
+                                                      feasibility. The luminosity power spectrum from our primary simulation (M424) exhibits qualitative
+                                                      and quantitative characteristics similar to observed SLF variability, with a ≈ 2-dex difference between
+                                                      high- and low-frequency power. The spectrum displays distinct features attributable to internal grav-
+                                                      ity wave (IGW) eigenmodes. To isolate the contributions of different stellar regions, we performed
+                                                      numerical experiments with suppressed core convection, envelope convection and envelope-only con-
+                                                      figurations. The comparative analysis demonstrates that outer envelope convection alone produces
+                                                      significantly less low-frequency power than the full-star configuration. In our simulations the outer
+                                                      envelope convection zone excites at its inner boundary a rich IGW eigenmode spectrum in the layer
+                                                      just below. In an otherwise identical simulation where the core convection is not driven by heating,
+                                                      the SLF spectrum is remarkably similar and the integrated power is reduced by only 10%, suggesting
+                                                      that the envelope convection is the dominant contributor to SLF power spectrum. The IGW spec-
+                                                      tral characteristics depend on the complete stellar stratification, demonstrating that interior structure
+                                                      could influence observable surface variability.
+
+
+                                                      Keywords: Asteroseismology(73), Massive stars(732), Hydrodynamical simulations(767), Internal
+                                                                waves(819), Stellar interiors(1606), Stellar oscillations(1617), Zero-age main sequence
+                                                                stars(1843)
+
+                                                                1. INTRODUCTION                                  observations, such as convective core mass, radii, inter-
+                                                 Stochastic low-frequency (SLF) variability, character-          nal rotation rate, and other structural properties (Aerts
+                                               ized by excess power at lower frequencies in the power            2021; Mombarg et al. 2024). The implications extend
+                                               spectrum of observed light curves, is a ubiquitous phe-           to the constraint of internal stellar stratification pa-
+                                               nomenon detected in the luminosity power spectra of O             rameters, including convective core size and composi-
+                                               and B type stars (Blomme et al. 2011; Bowman et al.               tion, which would refine stellar evolution models and
+                                               2019a,b). This variability is observed across diverse             advance stellar physics (Aerts et al. 2010). For example,
+                                               metallicity environments, indicating a common under-              Burssens et al. (2023) used asteroseismology to deduce
+                                               lying physical mechanism (Bowman et al. 2024).                    the convective core mass and showed non-rigid radial
+                                                 Understanding this mechanism is important, as inter-            rotation in HD 192575, a 12 M⊙ main-sequence star.
+                                               nal gravity waves (IGWs) generated in the stellar inte-           Pedersen et al. (2018) showed that one could differen-
+                                               rior and propagating to the surface represent a potential         tiate between step and exponential overshooting near
+                                               source of this phenomenon. Confirmation of this hy-               the convective core boundary from gravity-mode period
+                                               pothesis may potentially facilitate inference of internal         spacings in slowly pulsating B-type stars. Pápics et al.
+                                               stellar structure parameters from external light curve            (2017) deduced internal rotational rates of five slow pul-
+                                                                                                                 sating B stars.
+2
+
+   The physical mechanism responsible for SLF variabil-      stellar radius. These simulations, performed without ra-
+ity is still under debate (for a review see Bowman 2023).    diative effects, reproduced qualitatively similar spectra
+Multiple 2D and 3D simulations of massive stars have         to observed SLF variability assuming IGWs propagate
+reproduced frequency spectra from mock luminosity ob-        to the photosphere, demonstrating that core convec-
+servations with morphology similar to SLF variability        tion can stochastically excite IGWs that produce qual-
+(e.g. Rogers et al. 2013; Rogers 2015; Aerts & Rogers        itatively SLF like spectra. However, the characteris-
+2015; Rogers & McElwaine 2017; Edelmann et al. 2019;         tic frequency obtained (νchar ≈ 6 µHz) was significantly
+Ratnasingam et al. 2019, 2020, 2023; Horst et al. 2020;      smaller than typical observational values (Bowman et al.
+Varghese et al. 2023; Vanon et al. 2023; Thompson et al.     2019a,b, 2020). Additionally, those synthetic observa-
+2024). Among the proposed mechanisms, core convec-           tions were extracted from deep within the stellar inte-
+tion has been suggested as a source of gravity waves         rior, far from the observable photosphere, and the sim-
+that propagate to the surface, where temperature fluc-       ulations did not account for thin outer envelope con-
+tuations from the superposition of these IGWs produce        vection zones that may contribute to surface variability.
+luminosity variations manifesting as SLF variability in      These limitations motivated the present study to inves-
+luminosity time series (Aerts & Rogers 2015).                tigate the combined effects of both core and thin outer
+   However, Anders et al. (2023) conducted 3D simula-        envelope convection in a more complete stellar model.
+tions of massive star convection using a two-component          In this paper, we present high-resolution PPMstar sim-
+approach: wave generation simulations that directly          ulations of a non-rotating 25 M⊙ ZAMS (Zero Age Main
+model core convection and wave excitation, combined          Sequence) star to investigate the origin of low-frequency
+with theoretical transfer functions to represent wave        excess. In Section 2, we describe our base state and the
+propagation through the stellar envelope to the surface.     modified opacity model employed in the simulations. In
+Their wave propagation simulations extended to 93% of        Section 3, we present power spectra from simulated light
+the stellar radius with mode lifetimes of ≲ 10 years. Us-    curves from different runs and analyze them compre-
+ing this methodology, they concluded that gravity waves      hensively. Finally, in Section 4, we discuss our findings
+excited by turbulent core convection do not reach the        and present conclusions outlining directions for future
+stellar surface with observable amplitudes due to radia-     research.
+tive damping (Lecoanet et al. 2019, 2021; Le Saux et al.
+2023).                                                                              2. METHODS
+   Some investigations propose that if SLF variability
+does not originate from gravity waves excited by core                            2.1. Base MESA state
+convection, it may instead result from turbulence in-          This work employs the 3D hydrodynamics PPMstar
+duced by subsurface convection due to the Fe opac-           explicit gas dynamics code, which incorporates an ideal
+ity bump near the surface (Cantiello et al. 2009, 2021;      gas plus radiation pressure equation of state with radia-
+Schultz et al. 2022, 2023). Nevertheless, Jermyn et al.      tive diffusion in the energy flux (Woodward & Colella
+(2022) found that main-sequence stars (8-20 M⊙ ) at          1984; Colella & Woodward 1984; Woodward et al. 2015;
+SMC-like metallicities lack substantial subsurface con-      Herwig et al. 2023; Mao et al. 2024). Initial conditions1
+vection zones because their Rayleigh numbers fall below      for the simulations are derived from a Zero Age Main Se-
+the critical value required for convection onset, despite    quence (ZAMS) state constructed using Modules for Ex-
+being predicted as convectively unstable by 1D stellar       periments in Stellar Astrophysics (MESA) revision 5329
+evolution models, yet these stars exhibit SLF variability    (Paxton et al. 2011). The base model comprises a non-
+comparable to stars with such convection zones (Bow-         rotating 25 M⊙ star, with initial metallicity Z = 0.02
+man et al. 2024). Stochastic light variations from wind      at the ZAMS stage. The stellar structure includes a
+instability constitute another potential mechanism for       convective core that extends beyond the Schwarzschild
+SLF variability in massive stars (Krtička & Feldmeier       boundary through a penetration zone, implemented us-
+2018, 2021). This mechanism, however, is expected to         ing a simplified version of the convective boundary pre-
+have minimal impact for late O-type and early B-type         scription described in Mao et al. (2024). The imple-
+main-sequence stars due to their optically thin and weak     mentation of this convective boundary treatment is ev-
+winds, particularly at low metallicity.                      ident in the temperature gradient (∇) profiles shown in
+   In our series of papers on massive main sequence stars,   Figure 1 (right panel), which demonstrate the smooth
+Thompson et al. (2024) conducted 3D hydrodynamic
+simulations of a 25 M⊙ mid-main-sequence star extend-          1 Please refer to the MESA profile available in the Zenodo reposi-
+ing from the stellar center to approximately 54% of the         tory 10.5281/zenodo.15679630.
+                                                                                                                                                                                     3
+
+                         25                                  106
+                                  input model                                                      0.34
+                                                               5
+                                                             10
+                                                                                                   0.32
+
+
+
+
+                                                                   |nuc − ν | (erg g−1 s−1 )
+                         20
+  enclosed mass / [M ]
+
+
+
+
+                                                             104                                   0.30
+                         15
+                                                                                                   0.28
+                                                             103
+                         10                                                                        0.26
+                                                             102                                   0.24                         rad
+                                                                                                                                ad
+                          5                                  101                                   0.22                         T
+                                                                                                   0.20                        Outer boundary
+                          0                                  100
+                                 0.02       0.04      0.06                                                      0              1000     2000                     3000        4000
+                                        t [Myr]                                                                                           R [Mm]
+Figure 1. (Left): Kippenhahn diagram of the ZAMS 25 M⊙ MESA model. Grey regions represent convective zones, white regions
+represent radiative zones, and blue contours indicate nuclear burning regions with intensities shown in the colorbar. The red
+dashed vertical line marks the initial model used for all the PPMstar simulations presented in this work. (Right): Radial profiles
+of the radiative (∇rad , solid orange line), adiabatic (∇ad , grey solid line), and actual temperature gradients (∇T , blue dashed
+line) for the ZAMS MESA model. The light orange dashed vertical line marks the outer boundary of the simulations presented
+in this work.
+transition of ∇T from the convective core through the
+penetration zone to the radiative envelope. The Kip-                                                                            PPMstar
+penhahn diagram in Figure 1 (left panel) marks the base                                                                         MESA
+state used in the simulations with the outer boundary
+Rmax positioned at 4100 Mm, encompassing a hydrogen-                                                           101
+burning convective core and intermediate radiative enve-
+                                                                                                                                           4031 Mm
+                                                                                                                                                     4100 Mm
+
+
+                                                                                                                                                                 4255 Mm
+                                                                                                  κ [cm2 /g]
+
+
+
+
+lope. We employed a modified opacity model compared                                                                      101
+to the MESA opacity profile, with details provided in the
+following section.
+
+                              2.2. Modified opacity model                                                      100       100
+  Figure 2 compares the MESA opacity profile with the
+                                                                                                                                3800      4000                 4200
+modified opacity model used in the simulations. We use
+this modified opacity profile boosted by a factor of 100
+                                                                                                                     0           1000         2000                    3000    4000
+(100× radiative diffusivity). This boost matches the en-
+                                                                                                                                              R [Mm]
+hancement applied to core heating, preserving the global
+balance between convection and radiation in our simu-
+                                                                                                 Figure 2. Comparison between the MESA opacity profile and
+lations. The opacity remains unchanged throughout the                                            the modified opacity model used in the PPMstar simulations.
+short simulated time, and we use a fixed-in-time opacity                                         The grey dashed vertical line indicates the radial location of
+profile. The opacity function κ(r) for all runs is:                                              opacity bump maxima in the MESA profile, the orange dot-
+                                                                                                 dashed line shows the radial location of the maxima in the
+                                             (r − p3 )2
+                             3                        
+                      r                                                                         modified opacity model, and the blue dotted line marks the
+  κ(r) = p0 + p1                + p2 exp −
+                   1000 Mm                      2 p24                                            outer boundary of the simulation domain.
+                                                        (1)
+with parameter values p0 = 0.33 cm2 /g, p1 =                                                     MESA opacity profile. The Fe opacity bump, which pro-
+0.00658 cm2 /g, p2 = 50.0 cm2 /g, p3 = 4030 Mm, p4 =                                             duces the thin outer envelope Fe convection zone, was
+80 Mm and r (Mm) is the radial coordinate. The MESA                                              shifted inward from 4255 Mm to 4030 Mm to place it
+1D model has a thin 45 Mm subsurface convection zone                                             within the computational domain. The spread of this
+followed by a thin 40 Mm radiative zone. Three modifi-                                           bump was increased to expand the radial extent of the
+cations were made to the opacity model as compared to
+4
+
+
+          106                                                                     10 3                                    MESA
+                                                                                                                          dump 0
+
+
+
+
+                                                               P [1019 ergcm 3]
+                                                     4100 Mm
+                                                                                  10 5 10 7
+          105
+                    ∆tCFL=0.9 MESA                                                10 7
+                    ∆tCFL=0.9 M424 dump 0                                                 10 9
+          104                                                                     10 9
+ ∆t [s]
+
+
+
+
+                    ∆tCFL=0.9 M424 dump 4800
+                    ∆trad MESA                                                                   3500    4000
+          103                                                                     10 11
+                    ∆trad M424 dump 4800                                                                              dump 400
+                    ∆trad M424 dump 0                                                                                 dump 4800
+          102                                                                     10 2
+
+
+
+
+                                                                   T [109 K]
+          101                                                                             10 3
+                                                                                  10 3
+                0   1000      2000      3000        4000
+                              R [Mm]                                                             3500    4000
+                                                                                  10 3
+Figure 3. Comparison of CFL timestep (Courant et al.
+
+
+
+
+                                                                  [103 gcm 3]
+1928) (with Courant number 0.9) with radiation diffusion
+timestep (Rider & Knoll 1999) for the MESA model, dump 0                          10 5 10 6
+and dump 4800 (≈ 3779 h) of run M424 using spatial reso-                               10 7
+lution ∆x = 4.58 Mm. The red dotted line marks the outer                          10 7 10 8
+boundary at 4100 Mm.
+                                                                                                 3500    4000
+                                                                                  10 9
+convection zone, enabling better resolution of turbulent                           150 125
+convection with more grid cells. The overall amplitude
+                                                                                     100 100
+                                                                       Brunt [ Hz]
+
+
+
+was increased by a factor of 17 to mitigate radiative dif-
+fusion timestep constraints, as discussed below.                                          75
+  We treat radiation in the diffusion limit. We adopt the
+radiative diffusion timestep ∆trad from Rider & Knoll
+                                                                                      50 3000 3500
+(1999):
+                                ∆x2                                                   00     500 1000 1500 2000 2500 3000 3500 4000
+                      ∆trad =                         (2)
+                               4 νrad                                                                     R [Mm]
+                                           3
+                   2 krad
+where νrad = 3R       ρ   and krad = 4 3a κc Tρ . Here ∆x is   Figure 4. Comparison of pressure (P), temperature (T),
+the grid spacing, R is the gas constant, ρ is the den-         density (ρ), and linear Brunt–Väisälä frequency (νBrunt )
+sity, a is the radiation constant, c is the speed of light,    stratifications between the MESA state, dump 0, dump 400
+T is the temperature, and κ is the opacity. Near the           (≈ 78 h and dump 4800 (≈ 3779 h) of run M424. All panels
+envelope, ∆trad for MESA becomes comparable to and             share the same legend as shown in the top two panels.
+even smaller than the CFL timestep limit (Courant et al.
+1928), as shown in Figure 3. We require ∆trad > ∆tCFL          fusion timestep limit in M424 remains above the CFL
+to take sufficiently large timesteps within the CFL limit      timestep limit (using Courant number 0.9). This char-
+for long duration simulations needed to perform time se-       acteristic applies to all runs as the same opacity model
+ries analysis. The MESA densities drop rapidly in the out-     is used throughout.
+ermost layers, and the timestep in those layers becomes           Figure 4 shows eight orders of magnitude difference in
+prohibitively limited by the radiation timescale because       pressure, four orders of magnitude difference in temper-
+we do explicit diffusion. Reducing the timestep to ex-         ature, and six orders of magnitude difference in density
+tend further outward is ineffective because the opacity        between the MESA profile and dump 0. Although the
+drops steeply in the outermost layers. This requires us        outer convection zone is convectively unstable, radia-
+to choose Rmax such that the radiation timestep con-           tion remains an efficient heat transfer mechanism there.
+straint is satisfied with our CFL condition. Therefore we      Therefore, we observe that ∇ follows ∇rad around the
+choose Rmax in our simulations such that we can resolve        opacity bump (Figure 1). The Brunt–Väisälä frequency
+the diffusion in the outermost layers with our modified        remains positive in the outer convection zone because ra-
+opacity model. As shown in Figure 3, the radiative dif-        diation effectively transports heat, maintaining stability
+                                                                                                                       5
+
+against buoyancy perturbations despite the convective          where α(ν) represents the Lorentzian curve in µHz, α0
+instability.                                                   is the amplitude at zero frequency (in µHz), ν and νchar
+   The differences between dump 0 and dump 400 in              are the frequency and characteristic frequency respec-
+Figure 4 demonstrate the fast initial thermal readjust-        tively (both in µHz), γ is the dimensionless logarithmic
+ment of the stellar structure in response to the modified      amplitude gradient, and Cw denotes the frequency inde-
+opacity profile. The PPMstar simulation begins with the        pendent noise (in µHz).
+ZAMS MESA stratification but immediately starts evolv-            We use the 3D briquette data at a spherical shell of
+ing toward a new thermal equilibrium consistent with           fixed radius R to construct the ℓ − ν diagrams. Here
+the enhanced and repositioned Fe opacity bump. This            ℓ is the spherical harmonic order and ν is the cyclic
+rapid thermal adjustment, occurring over approximately         frequency. The ℓ − ν diagrams are created for the cal-
+310 h (much shorter than the stellar thermal timescale),       culated variable ‘unity-subtracted relative luminosity’ L
+reflects the star’s response to the artificially modified      (same as in Thompson et al. 2024), using the briquette
+opacity structure and results in the equilibrated stratifi-    temperature data (T) as:
+cation profiles shown at dump 400. Therefore, while our
+initial base state represents 95% of the stellar radius,                                  T4
+                                                                                    L=         − 1,                  (4)
+the outermost 8% layers of the simulated star exhibit                                    ⟨T4 ⟩
+approximately ten times higher density than the MESA
+                                                               where ⟨T4 ⟩ is the spherical average of 3D briquette
+stellar model. This discrepancy results from the imple-
+                                                               temperature variable, at the radius of interest, which is
+mentation of a convection zone in the outermost layer
+                                                               used as a base to remove the global luminosity trend.
+that is both thicker and positioned deeper than in the
+                                                                  Table 1 summarizes all runs with their respective sim-
+actual star. A stellar model with the convection zone
+                                                               ulation parameters. These configurations enable sys-
+present in our equilibrated hydrodynamic setup would
+                                                               tematic investigation of the individual and combined
+likely have a larger stellar radius. The MESA ZAMS
+                                                               contributions of different stellar regions to the observed
+model has no mean molecular weight (µ) gradient ex-
+                                                               SLF variability. For the runs presented in this study, a
+cept near the outer boundary due to partial ionization
+                                                               modified opacity model is used as compared to the MESA
+of chemical species as temperature decreases toward the
+                                                               opacity profile. Compared to the MESA model, core heat-
+surface. This effect is ignored in the initial setup of all
+                                                               ing (mimicking core H burning) and thermal diffusivity
+runs, resulting in a flat µ = 0.617317 mean molecular
+                                                               are boosted by a factor of 100 to achieve numerically
+weight profile.
+                                                               tractable fluid velocities and to scale down thermal dif-
+ 2.3. Luminosity post-processing and spectral analysis         fusion timescales, respectively.
+                                                                  Several numerical constraints determine the choice of
+  PPMstar simulations save two different types of
+                                                               enhancement factor for core heating and thermal diffu-
+compressed data at equal intervals of time (dumps)
+                                                               sivity. Minimizing the Mach number in the thin outer
+which are substantially larger than the simulation time
+                                                               envelope convection zone requires making thermal dif-
+steps. These include rprof, which contains spheri-
+                                                               fusivity large enough to reduce flow velocities, yet small
+cally averaged radial profiles at full grid resolution, and
+                                                               enough to preserve convective instability necessary for
+briquette, which stores 4x compressed 3D data as de-
+                                                               convection to occur. We boost thermal diffusivity and
+scribed in Stephens et al. (2021).
+                                                               luminosity by the same factor to maintain global ther-
+  Temporal mock spectra are generated from the line-
+                                                               mal equilibrium and the stratification. Luminosity and
+of-sight hemispherically averaged light curves at a given
+                                                               radiation diffusion are boosted by the same factor to ac-
+radius as described in Thompson et al. (2024). These
+                                                               celerate the stellar evolution simulation while preserv-
+mock light curves in eight different lines-of-sight are cal-
+                                                               ing the underlying physics. This balanced enhancement
+culated in-line in the code at full grid resolution and out-
+                                                               speeds up both the thermal timescale (∝ boost factor−1 )
+put in the rprof files. These light curves are detrended
+                                                               and convective timescale (∝ boost factor−1/3 ), making
+with a 3rd -order polynomial to remove the global trend,
+                                                               the ratio of thermal to dynamic timescale smaller with
+unity subtracted relative luminosity is computed, indi-
+                                                               larger boost factors and thus computationally feasible
+vidual power spectra are calculated, and the results from
+                                                               to reach thermal and dynamic equilibrium (Mao et al.
+all eight different lines of sight are averaged.
+                                                               2024). This optimization imposes the most restrictive
+  The power spectra are fitted with a Lorentzian func-
+                                                               constraint on the thermal diffusion timestep limit, neces-
+tion (Blomme et al. 2011; Bowman et al. 2019a,b):
+                                                               sitating the coordinated adjustment of both the boost
+                              α0                               factor and grid resolution. These competing numeri-
+               α(ν) =                γ + C w ,        (3)    cal requirements lead to the 100× boost factor for core
+                               ν
+                        1+    νchar
+6
+
+                                               Table 1. Summary of simulation parameters
+
+
+       Run ID           Configuration               Grid          Core Heating             Rmin   Rmax    Cadence    Total simulation
+                                                 resolution    enhancement factor         (Mm)    (Mm)     (min)             time (h)
+       M424              Fullstar run              17923              100                    0     4100     47                  3779
+       M438            No core heating             17283               0                    0      4100     46                  3947
+       M484         Outer convection shell         17923              100                  3850    4100     44                  2603
+       M487          No outer convection           17923              100                    0     3600     41                  3702
+                  (large radiative envelope)
+       M488          No outer convection           17923                  100               0      2670      45                 2824
+                  (small radiative envelope)
+
+heating and thermal diffusivity enhancement. The com-                              The modified opacity model (Figure 2) implemented
+bination of 17923 resolution with the 100× boost factor                         in our simulations produces strong turbulent thin outer
+represents an optimal configuration that satisfies these                        envelope convection with turnover timescale of ≈ 3 h.
+constraints. Previous convergence studies by Herwig                             Figure 6 shows that we see a factor of ≈ 10 higher
+et al. (2023), Thompson et al. (2024), and Mao et al.                           core convective velocities in M424 compared to MESA
+(2024) demonstrate that this resolution is high enough                          MLT velocities. Previous work by Herwig et al. (2023)
+to achieve convergence for convective dynamics, entrain-                        shows that core convective velocities scale with luminos-
+ment rates, and envelope vorticity in 3D stellar convec-                        ity boost factor as boost factor1/3 . This means at nom-
+tion simulations.                                                               inal luminosity, the core convective velocities are 4.64
+  For each simulation, several core-convective turnover                         times smaller but still 2-3 times larger than MESA MLT
+times are allowed to elapse before beginning analysis,                          velocities. This is consistent with Jones et al. (2017)
+ensuring fully developed convection in both the core (218                       who found ≈ 2 factor higher velocities as compared to
+h turnover) and the envelope (3 h turnover).                                    MESA MLT velocity in their 3D PPMstar simulations of
+                                                                                turbulent oxygen-burning shell convection at nominal
+                          3. RESULTS                                            luminosity. Figure 6 also shows that convective veloc-
+                                                                                ities in the thin outer envelope zone are five to eight
+                        3.1. Fullstar run
+                                                                                times larger than the thin outer envelope convection in
+              2
+   Figure 5 shows the turbulent core and thin outer en-                         the MESA. Figure 7 confirms that the radial velocity Ur
+velope convection, separated by an intermediate radia-                          spatial power spectrum inside the thin outer envelope
+tive zone where wave-like features corresponding to in-                         convection zone follows the Kolmogorov’s power law of
+ternal gravity waves (IGWs) are evident. The turbulent                          ℓ−5/3 , indicating that spatial scales at which most of the
+convective core extends from the center to ≈ 1500 Mm,                           power is added to the turbulent convection are well sep-
+exhibiting large-scale dipole circulation patterns visible                      arated and larger than the spatial scales at which energy
+in the radial velocity and various small-scale turbulent                        is dissipated into heat. This figure also indicates that
+features apparent in the vorticity magnitude. Thin ring-                        the dominant power is concentrated around the spatial
+like IGW features are visible in the vorticity magnitude                        scale of ℓ ≈ 40. This spatial scale corresponds to the
+and horizontal velocity, originating near the core con-                         radial extent of the thin outer envelope convection zone.
+vective boundary in the radiative zone from ≈ 1500 Mm
+to 3733 Mm. A strong thin outer envelope convection                               The thermal diffusion timescale of the thin outer en-
+zone appears as a thick ring around the outer bound-                            velope convection zone for run M424 is 142 h. This is
+ary from ≈ 3733 Mm to 4100 Mm, displaying high rel-                             computed by integrating the ∆trad curve over the thin
+ative magnitudes in all three variables. A non-linear                           outer envelope convection zone. We assumed the radial
+color mapping was employed to highlight these multi-                            extent of the thin outer envelope convection zone from
+scale features. The convective core morphology is dis-                          3733 Mm (peak of Skew × Kurtosis, see Appendix A)
+cussed in detail in our previous papers (Herwig et al.                          to the outer boundary 4100 Mm. Thermal equilib-
+2023; Thompson et al. 2024; Mao et al. 2024).                                   rium gradually moves inward, initially fast, then slowing
+                                                                                down as thermal timescales increase with depth in the
+    2 Volume-rendered visualizations of various fluid variables for all
+                                                                                star. The thermal timescale of the inner radiative region
+     simulations presented in this paper are available at https://www.          from 1500 Mm to 2500 Mm is ≈ 106 h. We ensure that
+     ppmstar.org/.                                                              the outer layers of interest are not changing significantly
+                                                                                                                                   7
+
+
+
+
+                       (I)
+
+
+
+
+                                                                                                                         (II)
+
+
+
+
+                                (III)
+
+
+
+
+Figure 5. Volume-rendered visualization of three fluid variables for the run M424 at dump 2000 (≈ 1990 h), generated using
+a thin equatorial slice: (I) Horizontal velocity magnitude, represented by a color gradient from highest to lowest: dark brown,
+red, yellow, white, light blue, and dark blue; (II) Vorticity magnitude, depicted with a color scheme from highest to lowest: red,
+yellow, light blue, and dark blue; (III) Radial velocity, where inward-directed (negative) velocities are shown in light to dark blue
+(decreasing magnitude), and outward-directed (positive) velocities are shown in yellow, orange, and red (decreasing magnitude).
+An animation is available in the HTML version showing the temporal evolution of these quantities over 30 consecutive dumps.
+8
+
+                                                                                        Rotation and planetary Transits) and TESS (Transit-
+                                         MESA
+                                         |U| at dump 2000           10 1                ing Exoplanet Survey Satellite) light curves (Bowman
+                      101                |U| at dump 4800                               et al. 2019a, 2020). We applied the same detrending
+                                         |Ur| at dump 4800                              and Fourier transform algorithms to the observed light
+Velocity [km/s]
+
+
+
+
+                                                                          Mach number
+                                         |Ut| at dump 4800                              curves as used for our simulated mock light curves. The
+                                                                                        TESS light curves have 21.77 days duration with 2-
+                                                                    10 2
+                                                                                        minute cadence, corresponding to a frequency range of
+                      100                                                               0.5 to 4.1 × 103 µHz. The CoRoT light curves span
+                                                                                        the same duration but with variable cadence ranging
+                                                                                        from 0.5 to 20 minutes due to instrumental periodici-
+                                                                    10 3                ties caused by the satellite’s low-Earth orbit that create
+                  10 1 0          1000    2000      3000     4000                       power artifacts in the spectrum. The mock M424 light
+                                           R [Mm]                                       curve spans 2800 dumps (≈ 2193 h) with 47-minute ca-
+                                                                                        dence, yielding a frequency range of 0.12 to 177 µHz. We
+Figure 6. Comparison of MESA convective velocity profile                                therefore restrict the spectral plots in Figure 8 to the fre-
+with velocity magnitude |U | for run M424 at dumps 2000 and                             quency range relevant to M424 for comparison. The ear-
+4800, and radial |Ur | and tangential |Ut | velocity magnitudes                         lier study of Thompson et al. (2024) showed qualitative
+for M424 at dump 4800. The secondary y-axis shows the
+                                                                                        similarities with observations but exhibited quantitative
+Mach number for the M424 profiles.
+                                                                                        differences, such as νchar ≈ 6 µHz, which is an order of
+                                                                                        magnitude smaller than observations. After incorporat-
+                                                                                        ing a larger radiative envelope and a (modified) thin
+                                                                    5/3                 outer envelope convection zone in this study, the spec-
+                                                                                        trum of run M424 demonstrates both qualitative and
+                      106                                                               quantitative similarities with observations. All three
+                                                                                        panels display approximately a two-order-of-magnitude
+ Ur power/[m2/s2/ ]
+
+
+
+
+                                                                                        difference between power at 180 µHz and 1 µHz, with
+                      104                                                               νchar values of the same order of magnitude as observed
+                                                                                        spectra. The difference in Lorentzian fit parameters be-
+                      102                        3600 Mm                                tween TESS and CoRoT observations exceeds the dif-
+                                                                                        ference between the simulation and TESS observation,
+                                                 3700 Mm                                which is considered more reliable. The dynamic range
+                                                 3800 Mm
+                      100                        3900 Mm                                of spectral features spans several orders of magnitude in
+                                                                                        both TESS and M424 spectra, although spectral troughs
+                                                 4000 Mm                                are deeper in the TESS spectrum.
+                            100           101          102                                 Given that run M424 incorporates a convective core,
+                                                                                        an intermediate radiative zone, and a convective enve-
+                                                                                        lope, the question arises regarding the relative contri-
+Figure 7. Radial velocity spatial spectra of the run M424                               bution of convection and IGWs generated at both the
+at different radial coordinates near the surface averaged over                          core and envelope convective boundaries to the observed
+last 100 dumps.                                                                         spectra. Are the features, such as peaks and troughs,
+                                                                                        observed in the simulations related to eigenmodes?
+over the duration needed to create spectra (Figure 4).
+We determine the time interval required to make spectra                                                    3.2. No core heating
+and wait long enough so that the stratification remains
+stable over this analysis period. Therefore, we choose to                                  Run M438 is identical to M424 but omits constant
+analyze run M424 starting from dump 2000 (1990 h).                                      volume heating in the center that in M424 represents
+  Figure 8 compares the luminosity power spectrum of                                    the core H burning. This means that as before the en-
+run M424 near the surface (4000 Mm) with observa-                                       tire core is included but because no heating is applied
+tions of the O-star HD461503 using CoRoT (Convection,                                   the initial constant-entropy profile in the core does not
+                                                                                        change and stays isentropic throughout the simulation.
+                                                                                        This modification is evident in Figure 9, which shows
+         3 HD     46150 is a young main-sequence O dwarf (Bowman et al.                 the absence of turbulent core convection compared to
+               2019a) that is close to our ZAMS simulations.                            Figure 5. This experiment was designed to investigate
+                                                                                                                                     9
+
+                                                          [days 1]
+                              0.1                         1.0         10.0
+                                                                     CoRoT
+                        104
+
+
+                        103
+
+
+                        102
+                                char = 14.3 Hz
+                                 = 1.7, a0 + Cw = 5.3e + 03
+
+                        101
+                                                                     TESS
+                        104
+Power Density [1/ Hz]
+
+
+
+
+                        103
+
+
+                        102
+                                char = 58.2 Hz
+                                 = 3.3, a0 + Cw = 2.5e + 03
+
+                        101                                                  Figure 9. Volume rendered images similar to Figure 5 but
+                                                                     M424    for the run M438. An animation is available in the HTML
+                                                                             version showing the temporal evolution over 30 consecutive
+                        104                                                  dumps.
+
+
+                                                                             how eliminating core convection, and consequently the
+                                                                             IGWs excited at the core-convective boundary, affects
+                        103
+                                                                             the frequency spectrum, particularly the low-frequency
+                                                                             excess.
+                                                                                In Figure 11, we plot the luminosity power spec-
+                        102                                                  trum inside the thin outer envelope convection zone at
+                                char = 11.5 Hz
+                                 = 1.6, a0 + Cw = 4.0e + 03                  4000 Mm. For direct comparison between runs, we use
+                                                                             the final 1600 dumps from each simulation, as not all
+                                                                             runs have sufficient duration for longer time series (Ta-
+                        101 1                           10           100     ble 1). With a cadence of ≈ 45 minutes, this yields
+                                                          [ Hz]              frequency range from 0.2 to 185 µHz in the luminos-
+                                                                             ity power spectrum. The luminosity power spectra re-
+Figure 8. Comparison of luminosity power spectra between                     veal approximately equivalent power in the convective
+CoRoT and TESS observations of the O-star HD46150 and                        envelope when comparing M424 (with core convection)
+M424 simulation at 4000 Mm. The lime curve represents the
+                                                                             and M438 (without core convection) at 4000 Mm. Fol-
+best-fit semi-Lorentzian function, and the best-fit parameters
+are shown in the respective plots.                                           lowing Pedersen & Bildsten (2025), we quantitatively
+                                                                             compare the two simulated spectra using the integrated
+                                                                             total power as a model-independent parameter and find
+                                                                             that it is 10% less in M438 than in M424. This means
+10
+
+                                                                                                                        [day 1]
+                                                                                           10 1                        100         101
+
+
+                                                                                     104
+
+
+
+
+                                                             Power Density [1/ Hz]
+                                                                                     103
+
+
+                                                                                     102 M424, R = 4000 Mm
+                                                                                              char = 9.6 Hz
+                                                                                               = 1.6, a0 + Cw = 5.1e + 03
+
+                                                                                     101
+
+                                                                                     104
+
+
+                                                             Power Density [1/ Hz]   103
+
+
+                                                                                     102 M438, R = 4000 Mm
+                                                                                              char = 19.0 Hz
+                                                                                               = 2.0, a0 + Cw = 2.8e + 03
+
+Figure 10. Volume rendered images similar to Figure 5 but                            101
+for the run M484. An animation is available in the HTML
+version showing the temporal evolution over 30 consecutive
+dumps.                                                                               104
+                                                             Power Density [1/ Hz]
+
+
+
+
+that the convective core and the IGWs originating at the
+convective core boundary contribute only a small (10%)
+                                                                                     103
+effect to the low-frequency excess.
+   In Figure 11, several marked spectral features appear
+at identical frequencies in both M424 and M438, which
+cannot be attributed to convection due to its stochas-                               102 M484, R = 4000 Mm
+tic nature. The same features appear in the spectral
+analysis at 3500 Mm for both runs in Figure 12. The
+location at 3500 Mm is within the radiative zone be-
+low the thin outer envelope convection boundary and                                  1010
+                                                                                       1
+                                                                                          0                          101          102
+beyond the convective overshoot region (Appendix A).                                                                    [ Hz]
+Therefore at 3500 Mm, the spectrum and its features
+must be due to IGWs. Since the same features appear          Figure 11. Comparison of luminosity power spectra at
+at 4000 Mm, they must originate from evanescent IGWs         4000 Mm across different simulation runs. Each spectrum
+                                                             was generated using the final 1600 dumps (≈ 1200 h) of sim-
+in the thin outer envelope convection zone and the spec-
+                                                             ulation data. We print the name of the run, the radius at
+trum in these simulations is dominated by IGWs.              which the spectrum was made and the best-fit Lorentzian
+   The ℓ − ν diagram of M424 in Figure 13 reveals con-       parameters for respective panels with exception to last panel
+vection spectrum at 4000 Mm (left panel) along with          for M484 where we could not find a good Lorentzian fit. We
+evanescent IGW features. The same evanescent IGW             plot several vertical dotted lines in all the subplots marking
+                                                             the sharp features present in M438 and M424.
+                                                                                                                                   11
+
+                                                           [day 1]          features are present and prominent in the ℓ − ν dia-
+                               10 1                       100         101   gram of M424 at 3500 Mm, within the radiative zone
+                         104                                                below the thin outer envelope convective boundary, con-
+                                                                            firming that these features are indeed evanescent IGWs.
+                                                                            We see the same IGW features for the run without core
+                         103
+Power Density [1/ Hz]
+
+
+
+
+                                                                            heating M438 as in the full-star run M424 with simi-
+                                                                            lar spectral power levels in the same Figure 13. This
+                         102                                                implies that these evanescent IGWs are excited at the
+                                                                            thin outer envelope convection boundary. The L3D is
+                                                                            the power spectral density of 3D luminosity fluctuations
+                         101
+                                                                            around a sphere of fixed radius. Lmock is the power spec-
+                                M424, R = 3500 Mm                           tral density of line of sight averaged mock luminosity
+                         100     char = 3.8 Hz                              observations obtained by hemispherically integrated 3D
+                                  = 3.5, a0 + Cw = 3.2e + 03                luminosity along a line-of-sight. The L3D curve in these
+                                                                            ℓ − ν diagrams is a couple of orders of magnitude higher
+                        10 1                                                than the grey Lmock . This discrepancy comes from the
+                         104
+                                                                            hemispherical integration which involves non-linear can-
+                                                                            cellation of small scale modes. The difference arises be-
+                         103                                                tween hemispherically integrated mock luminosity Lmock
+Power Density [1/ Hz]
+
+
+
+
+                                                                            and the power spectrum of black-body luminosity (Ste-
+                         102                                                fan–Boltzmann law) around the sphere calculated using
+                                                                            3D data.
+                                                                               Comparing the ℓ − ν diagrams of the full-star run
+                         101                                                M424 and the run with core heating turned off M438
+                                                                            reveals the presence of multiple p-modes (above Brunt–
+                                M438, R = 3500 Mm                           Väisälä frequency) and g-modes (below Brunt–Väisälä
+                         100     char = 11.4 Hz
+                                  = 3.9, a0 + Cw = 1.3e + 02                frequency). Marked peaks in the luminosity power spec-
+                                                                            trum in Figure 11 of M424 and M438 at 4000 Mm
+                        10 1                                                are present both below and above the Brunt–Väisälä
+                         104                                                frequency, confirming features of both g-modes and p-
+                                                                            modes in the spectrum. We also see reflected features
+                         102                                                of high-frequency p-modes. The dump cadence exceeds
+Power Density [1/ Hz]
+
+
+
+
+                                                                            the simulation timesteps, causing the Fourier transform
+                                                                            algorithm to interpret repeated patterns as modes with
+                         100                                                frequencies lower than their actual values, which are un-
+                                                                            resolvable with the dump cadence. The mode features
+                        10 2                                                in the ℓ − ν diagrams in Figure 13 that follow a lin-
+                                                                            ear pattern with negative slope represent these reflected
+                                M487, R = 3500 Mm                           high-frequency p-modes, extending below the marked
+                        10 4     char = 3.8 Hz                              νBrunt .
+                                  = 6.3, a0 + Cw = 4.6e + 03
+                                                                               The zoomed ℓ − ν diagram for M424 at 3500 Mm in
+                        10 10
+                           6                                                Figure 14 enables identification of spatial scales for the
+                              0                         101          102    marked features (red vertical dot-dashed lines) in Fig-
+                                                           [ Hz]
+                                                                            ure 11 and Figure 12. The 11 µHz and 14 µHz features
+                                                                            correspond to ℓ = 1 modes, confirmed by peaks at these
+Figure 12. Same as Figure 11 but the luminosity power
+spectra made at 3500 Mm across different simulation runs.                   frequencies in the ℓ = 1 curve in Figure 14. Around
+Same vertical dotted lines are plotted as in Figure 11.                     19 µHz, we see peaks in both ℓ = 0 and ℓ = 2 curves
+                                                                            with power in ℓ = 2 significantly higher than in ℓ = 0 at
+                                                                            this frequency. However, since the contribution of these
+                                                                            modes to the mock luminosity power Lmock remains un-
+                                                                            clear, either mode could dominate the observed signal.
+                                                                            Near the 85.2 µHz feature, we see peaks in ℓ = 0 (85.5
+12
+
+                        log10 2/ Hz                                                                                                  log10 2/ Hz
+                         2.5 5.0 7.5                       M424 4000 Mm                PSD6                                           0       5                         M424 3500 Mm                PSD6
+                  150                        150                                             5                                 150                        150                                             5
+Frequency [ Hz]
+
+
+                           Frequency ( Hz)
+
+
+
+
+                                                                                                             Frequency [ Hz]
+
+
+                                                                                                                                        Frequency ( Hz)
+                                                                                             4                                                                                                            4
+
+
+
+
+                                                                                             log10 2/ / Hz
+
+
+
+
+                                                                                                                                                                                                          log10 2/ / Hz
+                  100                        100                                                                               100                        100
+                                                                                             3                                                                                                            3
+                                                                                             2                                                                                                            2
+                   50                         50                                                                                50                         50
+                                                                                             1                                                                                                            1
+                                                      Spherical Harmonic Degree ( )          0                                                                     Spherical Harmonic Degree ( )          0
+                                                                                                                                                                                                     6
+                        3D                                                               7                                           3D
+
+
+
+
+                                                                                         log10 2/
+
+
+
+
+                                                                                                                                                                                                      log10 2/
+                        3D( : 0               2)                                                                                     3D( : 0               2)
+                        3D( : 3               10)                                        6                                           3D( : 3               10)                                        4
+                        mock                                                             5                                           mock
+                                                 0   10   20    30    40    50    60   70                                                                     0   10   20    30    40    50    60   70
+
+                        log10 2/ Hz                                                                                                  log10 2/ Hz
+                         2.5 5.0 7.5                       M438 4000 Mm                PSD6                                           0       5                         M438 3500 Mm                PSD6
+                  150                        150                                             5                                 150                        150                                             5
+Frequency [ Hz]
+
+
+                           Frequency ( Hz)
+
+
+
+
+                                                                                                             Frequency [ Hz]
+
+
+                                                                                                                                        Frequency ( Hz)
+                                                                                             4                                                                                                            4
+                                                                                             log10 2/ / Hz
+
+
+
+
+                                                                                                                                                                                                          log10 2/ / Hz
+                  100                        100                                                                               100                        100
+                                                                                             3                                                                                                            3
+                                                                                             2                                                                                                            2
+                   50                         50                                                                                50                         50
+                                                                                             1                                                                                                            1
+                                                      Spherical Harmonic Degree ( )          0                                                                     Spherical Harmonic Degree ( )          0
+                                                                                                                                                                                                     6
+                        3D                                                               7                                           3D
+                                                                                         log10 2/
+
+
+
+
+                                                                                                                                                                                                      log10 2/
+                        3D( : 0               2)                                                                                     3D( : 0               2)
+                        3D( : 3               10)                                        6                                           3D( : 3               10)                                        4
+                        mock                                                             5                                           mock
+                                                 0   10   20    30    40    50    60   70                                                                     0   10   20    30    40    50    60   70
+
+                        log10 2/ Hz                                                                                                  log10 2/ Hz
+                         2.5 5.0 7.5                       M484 4000 Mm                PSD6                                           5 0 5                             M487 3500 Mm                PSD6
+                  150                        150                                             5                                 150                        150                                             5
+Frequency [ Hz]
+
+
+                           Frequency ( Hz)
+
+
+
+
+                                                                                                             Frequency [ Hz]
+
+
+                                                                                                                                        Frequency ( Hz)
+
+
+
+
+                                                                                             4                                                                                                            4
+                                                                                             log10 2/ / Hz
+
+
+
+
+                                                                                                                                                                                                          log10 2/ / Hz
+                  100                        100                                                                               100                        100
+                                                                                             3                                                                                                            3
+                                                                                             2                                                                                                            2
+                   50                         50                                                                                50                         50
+                                                                                             1                                                                                                            1
+                                                      Spherical Harmonic Degree ( )          0                                                                     Spherical Harmonic Degree ( )          0
+                        3D                                                               7                                           3D
+                                                                                                                                                                                                     4
+                                                                                         log10 2/
+
+
+
+
+                                                                                                                                                                                                      log10 2/
+
+
+
+                        3D( : 0               2)                                                                                     3D( : 0               2)
+                        3D( : 3               10)                                        6                                           3D( : 3               10)
+                        mock                                                             5                                           mock
+                                                                                                                                                                                                      2
+                                                 0   10   20    30    40    50    60   70                                                                     0   10   20    30    40    50    60   70
+
+Figure 13. Power spectral density (PSD) as a function of spherical harmonic angular degree ℓ and cyclic frequency ν (ℓ − ν
+diagram) for the variable L (unity subtracted relative luminosity). Left column shows ℓ − ν diagrams at 4000 Mm, right column
+at 3500 Mm. Top row : Run M424. Middle row : Run M438. Bottom row : Run M484 (left) and model M487 (right). All
+ℓ − ν diagrams utilize the final 1600 dumps. Horizontal dashed and dot-dashed lines mark the thin outer envelope convective
+frequency and linear Brunt–Väisälä frequency νBrunt . Plots along axes display summed power across each dimension (solid
+black, L3D ). Vertical sub-plot includes power summed over ℓ = 0 − 2 (blue) and ℓ = 3 − 10 (orange). Grey curve (Lmock ) shows
+luminosity power spectra from Figure 11 and Figure 12 for respective runs.
+                                                                                                                           13
+
+                                         log10 2/ Hz                                 =0        =2
+                                  2    0       2     4                               =1        = 16   PSD5
+
+                             80                                         80
+                                                                                                           4
+           Frequency [ Hz]
+
+
+
+
+                                                      Frequency ( Hz)
+                             60                                         60
+
+
+
+
+                                                                                                           log10 2/ / Hz
+                                                                                                           3
+
+                             40                                         40                                 2
+
+                             20                                         20                                 1
+
+                                                                                                           0
+                                                                             0   5        10   15     20
+
+                                        log10 2/ Hz                                  =0        =2
+                                      2           4                                  =1        = 16   PSD5
+
+                             80                                         80
+                                                                                                           4
+           Frequency [ Hz]
+
+
+
+
+                                                      Frequency ( Hz)
+
+
+
+
+                             60                                         60                                 log10 2/ / Hz
+                                                                                                           3
+
+                             40                                         40                                 2
+
+                             20                                         20                                 1
+
+                                                                                                           0
+                                                                             0   5        10   15     20
+
+Figure 14. Zoomed ℓ − ν diagram for the full-star run M424 at (Top) 3500 Mm and (Bottom) 4000 Mm, showing ℓ range 0–20
+and frequency range 0–95 µHz. Panel along the y-axis shows L3D and Lmock as in Figure 13. Four additional curves show L3D
+power for ℓ = 0, 1, 2, and 16. Some features marked in these ℓ − ν diagrams are discussed in the text.
+14
+
+µHz) and ℓ = 1 (85.7 µHz) p-mode features, and we can-
+not exclude that this feature could correspond to ℓ = 16
+(85.7 µHz) g-mode feature which is along the n=-1 arc.
+However, all the peaks are slightly offset above the fea-
+ture. Although the spectral power is maximum for the
+g-mode feature, we still cannot distinguish which mode’s
+contribution is dominant in Lmock .
+
+              3.3. Outer convection shell
+   The preceding runs M424 and M438 indicate that exci-
+tation from core convection has smaller effect to spectral
+power, suggesting that most low-frequency power orig-
+inates from the combined effect of IGWs excited near
+the thin outer envelope convective boundary and from
+the turbulent thin outer envelope convection zone itself.
+To quantify the relative contributions of these mecha-
+nisms, we conducted run M484, which simulates only
+the convective envelope.
+   Figure 10 shows the simulated thin convective enve-
+lope. For this run, a reflective inner boundary was posi-    Figure 15. Volume rendered images similar to Figure 5 but
+tioned at Rmin = 3850 Mm (with Rmax = 4100 Mm, as            for the run M487. An animation is available in the HTML
+in M424). For reference, the Schwarzschild boundary          version showing the temporal evolution over 30 consecutive
+of the convective envelope is located at 3813 Mm. This       dumps.
+configuration was designed to examine the spectral char-
+acteristics of pure convection without IGW interactions.     without evanescent g-mode IGW signatures, consistent
+Additional configuration details for simulation M484 are     with the experimental design. Unlike g-mode IGWs,
+provided in Appendix B.                                      which require N 2 > 0 (stable stratification), p-modes
+   In Figure 11, we see that the low-frequency excess        can propagate in regions where N 2 < 0, the condition
+power for M484 is significantly reduced compared to          in convection zones.
+M424 and M438 in the envelope region (at 4000 Mm).
+Total integrated power in M484 is 33% less as compared         3.4. No outer convection (large radiative envelope)
+to M424. This means that evanescent IGWs in the thin           Simulation M487 is like M424 but excludes the thin
+outer envelope convection zone contribute significantly      outer envelope convection zone to isolate the effect of
+to the low frequency excess along with the turbulent         core convection on the low frequency excess. Due to the
+thin outer envelope convection itself. Following the best-   radiation diffusion timestep constraints discussed in Sec-
+fit lime-colored curve to guide the eye about the trend      tion 2, it is impossible with our approach to execute a
+of the spectra of M484, the power spans roughly one-         simulation without the envelope convection zone while
+order-of-magnitude from lowest to highest frequencies,       maintaining Rmax = 4100 Mm. Consequently, for sim-
+qualitatively different from runs M424 and M438 which        ulation M487, we positioned the outer boundary Rmax
+exhibit a two-order-of-magnitude power difference sim-       radially inward at 3600 Mm (inner 83% by radius of the
+ilar to the power spectrum of observed light curves in       ZAMS MESA model). As a result, run M487 would have
+Figure 8. The shape of the M484 spectrum is flatter and      different eigenfrequencies compared to the full-star run
+the slope is less variable compared to the full-star con-    M424 because its stratification is different.
+figurations M424 and M438. These runs include a stable         As shown in the bottom panel of Figure 12, M487
+zone below the thin outer envelope convection zone that      exhibits comparable or greater low-frequency excess
+permits the existence and interaction of IGWs with the       levels relative to M424 at 4000 Mm. At frequen-
+thin outer envelope convection zone. The characteris-        cies ≤ 10µHz, the power levels of M487 and M424 at
+tic peaks in M424 and M438 spectra are absent in M484        3500 Mm are approximately equivalent, whereas at fre-
+spectra, supporting that g-mode IGWs are absent due to       quencies > 10µHz, M487 demonstrates reduced power
+the lack of a stable layer below the convection zone. The    levels compared to M424. These results indicate that
+ℓ − ν diagram of M484 in Figure 13 (Left) exhibits con-      at 3500 Mm, the lower frequency regime (≤ 10µHz) is
+vection patterns with propagating p-mode features but        predominantly influenced by IGWs originating from the
+                                                                                                                     15
+
+                                                               The ℓ − ν diagram of run M488 in Figure 17 exhibits
+                                                             similar characteristics to M487 at 2100 Mm. We see
+                                                             the suppression of higher frequency (ν ≳ 40 µHz) eigen-
+                                                             modes in the ℓ − ν diagrams of these runs. However,
+                                                             there are differences between the ℓ−ν diagrams of M487
+                                                             and M488 in Figure 17. Run M487 with the large enve-
+                                                             lope shows dominantly traveling waves appearing as di-
+                                                             agonal ridges or tracks that extend continuously across
+                                                             multiple ℓ values, whereas M488 shows distinct eigen
+                                                             modes with little evidence of traveling waves. These
+                                                             results are discussed in the following Section 4.
+
+                                                                       3.6. Wave excitation and damping
+                                                               Figure 18 shows the radial profiles of velocity magni-
+                                                             tude and vorticity for runs with radiative zones (M424,
+                                                             M438, M487, M488). The left panel shows that in runs
+                                                             with core convection waves have high amplitudes in the
+                                                             inner radiative region (R < 2500 Mm) while simulations
+                                                             with outer convection zone feature high wave amplitudes
+Figure 16. Volume rendered images similar to Figure 5 but    in the outer radiative region (R > 3000 Mm). The in-
+for the run M488. An animation is available in the HTML      termediate region around 2600 Mm shows in run M424
+version showing the temporal evolution over 30 consecutive   the combined excitation from both convection zones.
+dumps.                                                         In simulations like these, ideally numerical viscosity
+                                                             is smaller than radiative diffusion. To get insight on
+core, while the higher frequency component is primarily      this we consider vorticity magnitude, which is sensi-
+attributable to the presence of the thin outer envelope      tive to contributions from small scales. In the 25 M⊙
+convection zone. This is further supported by the ℓ − ν      main-sequence star simulations without radiation, Her-
+diagram for M487 presented in the bottom right panel         wig et al. (2023, Figure 29) vorticity magnitude in the
+of Figure 13, which shows that the maximum power is          radiative envelope increases with finer grids, across four
+concentrated at the lowest frequencies and largest spa-      grid resolutions covering a factor 3.5. This demonstrates
+tial scales (small ℓ values).                                that as the grid resolution increases smaller scales in the
+  The ℓ − ν diagram in Figure 13 (bottom right) for run      wave region are resolved and contribute to the vorticity
+M487 appears significantly different from the ℓ − ν di-      magnitude, just as in the convective core. In contrast,
+agrams presented in Mao et al. (2024) for simulations        Mao et al. (2024, Figure 15) shows identical vorticity
+without thin outer envelope convection zones. The ℓ − ν      levels in the wave region (r > 1604 Mm) across the
+diagram of the run M487 at 3500 Mm shows significantly       same four grid resolutions in simulations with radiative
+less power in the high frequency (ν ≳ 40 µHz) eigen-         diffusion. This demonstrates that in those simulations
+modes as compared to Mao et al. (2024). The low ra-          where both the luminosity and the radiative diffusion is
+dial order eigenmodes (n = −1, −2, −3) that are clearly      boosted by a factor 1000, radiative diffusion dissipates
+visible in the ℓ − ν diagrams of Mao et al. (2024) have      small scales that are larger than what can be resolved by
+much lower power levels in run M487, making them not         the lowest-resolution grid shown (7683 ,∆x = 6.5 Mm),
+visible in the ℓ − ν diagram (Figure 13). This leads us      and that radiative diffusion dominates over numerical
+to conduct another simulation.                               dissipation in those simulations. In these simulations
+                                                             the grid resolution is higher (∆x ≈ 4.0 to 4.6 Mm) but
+ 3.5. No outer convection (small radiative envelope)         the thermal diffusivity is 10 times smaller (boost factor
+  To determine whether this difference results from the      100). Still, runs M424 and M488 with a resoluion dif-
+additional 930 Mm radiative envelope in M487 which           ference of 1.5 exhibit identical vorticity levels for wave
+has larger radiative damping as compared to the runs in      motions, demonstrating that also in these 100x boost
+Mao et al. (2024), we conducted run M488. This simu-         simulations with the grids deployed here, thermal diffu-
+lation is identical to M487 but with the outer boundary      sion dominates over numerical viscosity.
+Rmax positioned at 2670 Mm, matching the configura-            The wave power spectrum in the simulations results
+tion in Mao et al. (2024), as shown in Figure 16.            from nonlinear wave excitation and de-excitation at
+16
+                         log10 2/ Hz                                                                                                    log10 2/ Hz
+                          5 0 5                               M487 2100 Mm                PSD6                                           5 0 5                               M488 2100 Mm                PSD6
+                   150                          150                                           5                                   150                          150                                           5
+ Frequency [ Hz]
+
+
+                              Frequency ( Hz)
+
+
+
+
+                                                                                                               Frequency [ Hz]
+
+
+                                                                                                                                             Frequency ( Hz)
+                                                                                              4                                                                                                              4
+
+
+
+
+                                                                                              log10 2/ / Hz
+
+
+
+
+                                                                                                                                                                                                             log10 2/ / Hz
+                   100                          100                                                                               100                          100
+                                                                                              3                                                                                                              3
+                                                                                              2                                                                                                              2
+                    50                           50                                                                                50                           50
+                                                                                              1                                                                                                              1
+                                                         Spherical Harmonic Degree ( )        0                                                                         Spherical Harmonic Degree ( )        0
+                         3D                                                                 5.0                                         3D                                                                 5.0
+
+
+
+
+                                                                                              log10 2/
+
+
+
+
+                                                                                                                                                                                                             log10 2/
+                         3D( : 0                 2)                                                                                     3D( : 0                 2)
+                         3D( : 3                 10)                                                                                    3D( : 3                 10)
+                         mock
+                                                                                            2.5                                         mock
+                                                                                                                                                                                                           2.5
+                                                    0   10   20    30    40    50    60   70                                                                       0   10   20    30    40    50    60   70
+
+                                                  Figure 17. The ℓ − ν diagram for the run M487 and M488 at 2100 Mm similar to Figure 13.
+
+
+                                                  M424 x = 4.57 Mm                                                                                               M424 x = 4.57 Mm
+                                                  M438 x = 4.74 Mm                                                                                               M438 x = 4.74 Mm
+                                                  M487 x = 4.02 Mm                                                                10 3                           M487 x = 4.02 Mm
+                    101                           M488 x = 2.98 Mm                                                                                               M488 x = 2.98 Mm
+                                                                                                              |Vorticity| [s 1]
+
+
+                                                                                                                                  10 4
+|U| [km/s]
+
+
+
+
+                    100
+
+                                                                                                                                  10 5
+                   10 1
+                                                                                                                                  10 6
+
+                          0                     500 1000 1500 2000 2500 3000 3500 4000                                                   0                     500 1000 1500 2000 2500 3000 3500 4000
+                                                              R [Mm]                                                                                                         R [Mm]
+Figure 18. Radial profile of (Left) total velocity magnitude |U | and (Right) vorticity magnitude averaged over last 400 dumps
+of respective runs.
+
+the convective boundaries combined with frequency-                                                                          reference simulation without radiative damping (Mao
+dependent radiative damping, including in run M487 at                                                                       et al. 2024, Figure 14). Figure 19 (Left) shows that
+3500 Mm (Figure 12) where the power contrast between                                                                        numerical dissipation becomes significant only at spa-
+low and high frequencies is particularly pronounced.                                                                        tial scales ℓ > 100, well above the range of ℓ ≤ 70
+Wave excitation is a nonlinear process where turbulent                                                                      examined in our ℓ − ν diagrams (Figure 13). Similar
+convection generates waves with amplitudes determined                                                                       behavior is observed in Thompson et al. (2024, Figure
+by the convective properties. The wave excitation is                                                                        18) across different resolutions and especially for run
+largest at low frequencies near the core convective fre-                                                                    M114 with grid resolution ∆x = 4.69 Mm, comparable
+quency of ≈ 1.27 µHz (computed as Ucore /2Rcore where                                                                       to our 17923 full-star run M424 with ∆x = 4.58 Mm
+Rcore is the convective core radius and Ucore is the aver-                                                                  and 17923 run M487 with ∆x = 4.02 Mm. Figure 19
+age core convective velocity, Thompson et al. 2024).                                                                        (Right) shows that wave velocities in the radiative zone
+  Previous PPMstar simulations of a 25 M⊙ mid-main-                                                                         are consistent across resolutions different by by a fac-
+sequence star without the outer convection zone demon-                                                                      tor 1.5. A wider range grid resolutions covering a factor
+strate that low-frequency waves experience less radiative                                                                   3.5 reported in Figure 8 (bottom panel) in Mao et al.
+damping than high-frequency waves as compared to a                                                                          (2024) shows that wave amplitudes do not depend on
+                                                                                                                             17
+
+resolution. The evidence from vorticity (Figure 15) has        This pattern was also observed in the 3D wedge simu-
+already been discussed earlier in this section. Further-       lations of a non-rotating thin outer envelope convection
+more, the frequencies and wavenumbers of eigenmodes            zone of a 35M⊙ main sequence star by Schultz et al.
+in our simulations are consistent with linear theory pre-      (2022). Our estimate of their convective frequency is
+dictions from GYRE (Thompson et al. 2024, Figure 13).          13 µHz4 , while their Lorentzian characteristic frequency
+And finally, PPMstar simulations of red giant branch star      νchar ≈ 110 µHz. Despite this characteristic frequency
+(Blouin et al. 2023, Figure 14) show that IGW damp-            being larger than their convective frequency, their simu-
+ing in the radiative zone agrees with linear theory (Zahn      lations also showed the majority of power spectral den-
+et al. 1997).                                                  sity at much lower frequencies, similar to our findings,
+                                                               although they did not explicitly emphasize this point.
+        4. DISCUSSION AND CONCLUSION                              This discrepancy between simple convective frequency
+                                                               estimates and observed spectral distributions indicates
+   We conducted 3D hydrodynamic simulations of a non-
+                                                               a fundamental issue with assuming circular convective
+rotating 25 M⊙ ZAMS star, encompassing approxi-
+                                                               cells. Figure 7 shows the dominant spatial scale of
+mately 95% of the stellar structure and including both
+                                                               ℓ ≈ 40, which corresponds to the radial extent of the
+core and thin outer envelope convection zones. Analy-
+                                                               thin outer envelope convection zone. Given the veloc-
+sis of the mock lightcurve power spectra reveals three
+                                                               ities shown in Figure 6, circular convective cells would
+key findings. The luminosity power spectra for the full-
+                                                               require sizes 10 times larger to accommodate the ob-
+star run (M424) near the envelope exhibit morphological
+                                                               served lower frequencies, but this is inconsistent with
+characteristics qualitatively and quantitatively similar
+                                                               the observed spatial scales. The convective cells cannot
+to the observed SLF spectra. Comparison of spectra be-
+                                                               be elongated horizontally either, as this would appear in
+tween the full-star run (M424) and the no-core-heating
+                                                               the tangential velocity spatial spectrum.
+run (M438) at 4000 Mm demonstrates small (10%) con-
+                                                                  The ℓ−ν diagram of the global luminosity fluctuations
+tribution from the convective core and IGWs excited
+                                                               L3D in Figure 13 show higher spectral power density in
+at the convective core boundary to the low-frequency
+                                                               run M438 compared to the full-star run M424. This ap-
+excess. However, this reduced contribution to observ-
+                                                               pears counterintuitive because M438 omits core volume
+able power does not imply that observable signatures
+                                                               heating. Core convection is the primary driver of inter-
+cannot probe core stellar structure. The IGW features
+                                                               nally generated gravity waves (IGWs) at the stellar core.
+present in the mock luminosity spectra depend on the
+                                                               However, the core remains isentropic in M438, causing
+entire stellar stratification, including the core structure,
+                                                               it to function as a nearly perfect reflector of IGWs. The
+which could enable inference of interior properties from
+                                                               core in M424 acts as an imperfect reflector due to tur-
+surface observations. Comparative analysis of the full-
+                                                               bulent convective motions. The net power in the global
+star run (M424) and the envelope-only run (M484) at
+                                                               luminosity fluctuations L3D of the envelope convection
+4000 Mm indicates that the low-frequency excess results
+                                                               run M484 shows higher spectral power density than the
+from combined effects of IGWs and pure thin outer en-
+                                                               full-star run M424. This enhancement results from two
+velope convection, with IGWs being the dominant con-
+                                                               nearby reflecting boundaries in M484, which produce el-
+tributor to excess power at low frequencies, as evidenced
+                                                               evated flow velocities.
+by the a0 + Cw values near ν = 0.
+                                                                  Our simulations differ from previous 3D hydrody-
+   The ℓ − ν diagrams in Figure 13 for all simula-
+                                                               namic simulation studies of massive main sequence stars
+tions within the thin outer envelope convection zone
+                                                               addressing SLF variability. Previous studies simulated
+at 4000 Mm show maximum power spectral density
+                                                               a wedge or partial stellar structure (e.g. Schultz et al.
+at frequencies below 10 µHz. This frequency distri-
+                                                               2022, 2023). We simulate the star with both core and
+bution appears in the mock luminosity power spectra
+                                                               envelope convection zones in 3D and full 4π geometry.
+in Figure 11, where dominant power occurs at frequen-
+                                                               This approach resolves modes and eigenwaves at the
+cies < 10 µHz across all simulations at 4000 Mm (left
+                                                               scale of the entire stratification and assesses their im-
+column). The thin outer envelope convection turnover
+                                                               pact on the power spectrum. We take timesteps that
+timescale is ≈ 3 h, corresponding to a convective fre-
+                                                               are limited by sound speed according to the CFL con-
+quency of 96 µHz. Given a convective frequency, one
+                                                               dition (Courant et al. 1928), thereby resolving pressure
+would expect the maximum power spectral density to
+occur around that frequency for a convection-dominated
+region, but the 3D simulations show dominant power               4 Convective frequency was not directly reported in Schultz et al.
+
+at frequencies of order unity µHz, almost an order of             (2022). We used the ratio of convective velocity and the radial
+                                                                  extent of convection zone to determine the convective frequency.
+magnitude lower than the envelope convective frequency.
+18
+
+
+
+
+                       103                                                  0.4
+|U| power/[m2/s2/ ]
+
+
+
+                       102                                                  0.3
+
+
+
+
+                                                               |U| [km/s]
+                       101                                                  0.2
+                                   M424 2100 Mm
+                       100         M424 3500 Mm
+                                   M487 2100 Mm                             0.1                             M424 x = 4.57 Mm
+                                   M487 3500 Mm                                                             M487 x = 4.02 Mm
+                      10 1         M488 2100 Mm                                                             M488 x = 2.98 Mm
+                                                                            0.0
+                             100         101      102                             0        1000           2000    3000
+                                                                                                         t [h]
+Figure 19. Left: Spatial spherical harmonic spectra of total velocity magnitude |U | for the runs with core heating at 2100 Mm
+and 3500 Mm inside the radiative zone. Right: Time series of |U | averaged over 2000 Mm to 2200 Mm for the runs with core
+heating.
+
+waves and their interactions and effects in the dynam-                locities are enhanced by a factor of approximately 4.64,
+ics, as opposed to simulations with timesteps limited by              while the core convective turnover timescale is reduced
+the flow speed, and hence orders of magnitude larger                  by the same factor compared to the MESA model.
+timesteps, like Anders et al. (2023).                                   Our simulations exclude the outer 5% of the stellar ra-
+   The ℓ − ν diagrams at 2100 Mm for the runs M487                    dius. Waves propagating toward the outer regions could
+and M488, without the thin outer envelope convection,                 experience additional damping due to radiative diffu-
+look qualitatively different from the ℓ − ν diagrams pre-             sion (Bühler 2009) and amplification due to decreasing
+sented in Mao et al. (2024). We see the suppression of                density (pseudomomentum conservation, Kumar et al.
+high frequency (ν ≳ 40 µHz) eigenmodes in the ℓ − ν di-               1999). Following Rogers & McElwaine (2017), the wave
+agrams of runs M487 and M488 at 2100 Mm (Figure 17)                   amplitude near the surface, accounting for both effects,
+compared to the ℓ − ν diagrams of the runs in Mao                     can be estimated as:
+et al. (2024), where we can clearly see power in low ra-
+                                                                                                       ρtcz
+                                                                                                    r
+dial order eigenmodes (n = −1, −2, −3) up to the max-                   νwave (ω, kh , r) = νrms−cz          exp [−τ (ω, kh , r)] (5)
+                                                                                                      ρ(r)
+imum Brunt–Väisälä frequency of the envelope. Run
+                                                                                νwave (ω, kh , r)     ρtcz
+                                                                                                    r
+M487 with the large envelope shows dominantly travel-                    =⇒                       =         exp [−τ (ω, kh , r)] (6)
+ing waves, whereas M488 shows distinct eigen modes and                             νrms−cz            ρ(r)
+little evidence of traveling waves. The probable cause is
+that in M487 with the stable layer extending to much                  where νwave (ω, kh , r) represents the wave amplitude at
+larger radii, radiative diffusion damping prevents waves              outer radial location r for a wave of frequency ω, νrms−cz
+from being effectively reflected. This would also be true             is the rms velocity within the convection zone, kh is the
+in the full-star run M424, supporting the argument that               horizontal wavenumber, ρtcz is the density at the top of
+waves excited by core convection do not reach the outer               the convection zone, ρ(r) is the density at the outer ra-
+convection zone with significant power and contribute                 dial location, and τ (ω, kh , r) is the wave damping optical
+less (10%) to the observable temporal spectrum.                       depth defined as (Kumar et al. 1999):
+   Several limitations must be acknowledged when inter-                                                 Z r
+                                                                                                               κkh3 N 3
+preting these results. Our simulations were performed                                 τ (ω, kh , r) =          4        3
+                                                                                                                          dr     (7)
+                                                                                                         rtcz ω (2πr)
+with both core luminosity and radiative diffusivity set
+to 100 times their nominal values from the MESA model.                where rtcz is the radius at the top of the convection zone,
+It has been observed that core convective velocities scale            κ is the radiative diffusivity at radial location r.
+with core luminosity boost factor as (boost factor)−1/3                 Using parameters from the ZAMS MESA model, max-
+(Porter & Woodward 2000; Jones et al. 2017; Herwig                    imum Brunt–Väisälä frequency near the surface N ≈
+et al. 2023). This means that our core convective ve-                 2π × 270 rad s−1 , frequency of the sharpest observed
+                                                                                                                           19
+
+                                                                at 4322 Mm, we calculate relative wave amplification
+                                                                and dissipation factor radial profiles using Equation 6.
+                                                                Figure 20 shows that amplitudes of IGWs with kh ≤ 5
+                101                                             are amplified whereas higher kh amplitudes are damped.
+        (r)
+     tcz
+
+
+
+
+                                                                The ℓ − ν diagrams in Figure 13 indicate that the peak
+                                                                at around 10 µHz corresponds to ℓ ≤ 5. Therefore, as-
+                                                                suming the extrapolation using Equation 6, some of the
+                1000                                            marked IGW peaks in Figure 11 could be visible near
+                10                                              the photosphere.
+                                                                  The implementation of a reflecting outer boundary at
+  exp( (kh))
+
+
+
+
+               10 1      kh = 1      kh = 6                     4100 Mm, necessitated by challenges in resolving radia-
+                         kh = 2      kh = 7                     tion diffusion in the outermost layers, could artificially
+               10 2      kh = 3      kh = 8                     modify standing IGW amplitudes. This may influence
+                         kh = 4      kh = 9                     the power spectrum near the surface, as IGW features
+                         kh = 5      kh = 10                    are evident in the spectrum. This artificial effect is in-
+               10 3                                             herent to our simulation approach. Quantifying its im-
+ (kh))
+
+
+
+
+                101                                             pact would be valuable, though the methodology for do-
+                                                                ing so remains unclear.
+                100
+ (r) × exp(
+
+
+
+
+                                                                                ACKNOWLEDGMENTS
+               10 1
+                                                                  We thank Dominic Bowman for sharing the TESS
+               10 2
+  tcz
+
+
+
+
+                                                                and CoRoT timeseries data for the star HD46150 and
+               10 4100
+                   3
+                         4150     4200    4250     4300
+                                                                meaningful discussions. We thank Daniel Lecoanet for
+                                                                valuable discussions and comments on the manuscript.
+                                   R [Mm]                       P.R.W. acknowledges support from NSF CDS&E grants
+                                                                1814181 and 2309101. The simulations for this work
+Figure 20. Radial dependence of IGW amplification and
+damping factors relative to the wave amplitude    at 4100 Mm.   were carried out on the NSF Frontera supercomputer op-
+Top panel: Wave amplification factor
+                                          p
+                                            ρtcz /ρ(r) due to   erated by the Texas Advanced Computing Center at the
+decreasing density with radius, applicable to all horizon-      University of Texas at Austin and on Compute Canada’s
+tal wavenumbers kh . Middle panel: Wave damping factor          Niagara supercomputer operated by SciNet at the Uni-
+exp[−τ (ω, kh , r)] for horizontal wavenumbers kh = 1 to 10.    versity of Toronto. We thank Ted Wetherbee whose
+Bottom panel: Combined amplification and damping fac-           scripts were used to generate volume rendered images.
+tor νwave (ω, kh , r)/νrms−cz for kh = 1 to 10. The curves
+                                                                The data analysis was carried out on the Astrohub vir-
+extend from the outer boundary of the full-star simulation
+at 4100 Mm to the outer boundary of the MESA model at
+                                                                tual research environment (https://astrohub.uvic.ca/)
+4322 Mm. Labels are shown only in the middle panel.             hosted on the Digital Research Alliance of Canada Ar-
+                                                                butus Cloud at the University of Victoria. LLMs were
+                                                                used to improve wording at the sentence level and assist
+peak in M424 luminosity power spectrum in Figure 11
+                                                                with coding.
+ω = 2π × 10 µHz, and assuming the thin outer envelope
+convection zone terminates at 4100 Mm with a radiative
+zone extending to the outer boundary in the MESA model            Software: PPMstar, MESA
+
+                                                       REFERENCES
+Aerts, C. 2021, Reviews of Modern Physics, 93, 015001,          Anders, E. H., Lecoanet, D., Cantiello, M., et al. 2023,
+   doi: 10.1103/RevModPhys.93.015001                              Nature Astronomy, 7, 1228,
+                                                                  doi: 10.1038/s41550-023-02040-7
+Aerts, C., Christensen-Dalsgaard, J., & Kurtz, D. W. 2010,
+                                                                Blomme, R., Mahy, L., Catala, C., et al. 2011, A&A, 533,
+   Asteroseismology, doi: 10.1007/978-1-4020-5803-5
+                                                                  A4, doi: 10.1051/0004-6361/201116949
+Aerts, C., & Rogers, T. M. 2015, ApJL, 806, L33,                Blouin, S., Mao, H., Herwig, F., et al. 2023, MNRAS, 522,
+   doi: 10.1088/2041-8205/806/2/L33                               1706, doi: 10.1093/mnras/stad1115
+20
+
+Bowman, D. M. 2023, Ap&SS, 368, 107,                            Lecoanet, D., Cantiello, M., Anders, E. H., et al. 2021,
+  doi: 10.1007/s10509-023-04262-7                                 MNRAS, 508, 132, doi: 10.1093/mnras/stab2524
+Bowman, D. M., Burssens, S., Simon-Diaz, S., et al. 2020,       Lecoanet, D., Cantiello, M., Quataert, E., et al. 2019,
+  VizieR Online Data Catalog: OB stars TESS phot. &               ApJL, 886, L15, doi: 10.3847/2041-8213/ab5446
+  high-resolution spectroscopy (Bowman+, 2020), VizieR          Mao, H., Woodward, P., Herwig, F., et al. 2024, ApJ, 975,
+  On-line Data Catalog: J/A+A/640/A36. Originally                271, doi: 10.3847/1538-4357/ad6c4f
+  published in: 2020A&A...640A..36B,                            Mombarg, J. S. G., Aerts, C., Van Reeth, T., & Hey, D.
+  doi: 10.26093/cds/vizier.36400036                              2024, A&A, 691, A131,
+Bowman, D. M., Van Daele, P., Michielsen, M., & Van              doi: 10.1051/0004-6361/202451651
+  Reeth, T. 2024, A&A, 692, A49,                                Pápics, P. I., Tkachenko, A., Van Reeth, T., et al. 2017,
+  doi: 10.1051/0004-6361/202451419                                A&A, 598, A74, doi: 10.1051/0004-6361/201629814
+Bowman, D. M., Aerts, C., Johnston, C., et al. 2019a,           Paxton, B., Bildsten, L., Dotter, A., et al. 2011, ApJS, 192,
+  A&A, 621, A135, doi: 10.1051/0004-6361/201833662                3, doi: 10.1088/0067-0049/192/1/3
+Bowman, D. M., Burssens, S., Pedersen, M. G., et al.            Pedersen, M. G., Aerts, C., Pápics, P. I., & Rogers, T. M.
+  2019b, Nature Astronomy, 3, 760,                                2018, A&A, 614, A128,
+  doi: 10.1038/s41550-019-0768-1                                  doi: 10.1051/0004-6361/201732317
+Bühler, O. 2009, Waves and Mean Flows, Cambridge               Pedersen, M. G., & Bildsten, L. 2025, MNRAS, 539, 2742,
+  Monographs on Mechanics (Cambridge University Press)            doi: 10.1093/mnras/staf661
+Burssens, S., Bowman, D. M., Michielsen, M., et al. 2023,       Porter, D. H., & Woodward, P. R. 2000, ApJS, 127, 159,
+  Nature Astronomy, 7, 913,                                       doi: 10.1086/313310
+  doi: 10.1038/s41550-023-01978-y                               Ratnasingam, R. P., Edelmann, P. V. F., & Rogers, T. M.
+Cantiello, M., Lecoanet, D., Jermyn, A. S., & Grassitelli, L.     2019, MNRAS, 482, 5500, doi: 10.1093/mnras/sty3086
+  2021, ApJ, 915, 112, doi: 10.3847/1538-4357/ac03b0            —. 2020, MNRAS, 497, 4231, doi: 10.1093/mnras/staa2296
+Cantiello, M., Langer, N., Brott, I., et al. 2009, A&A, 499,    Ratnasingam, R. P., Rogers, T. M., Chowdhury, S., et al.
+  279, doi: 10.1051/0004-6361/200911643                           2023, A&A, 674, A134,
+Colella, P., & Woodward, P. R. 1984, Journal of                   doi: 10.1051/0004-6361/202245727
+  Computational Physics, 54, 174,                               Rider, W. J., & Knoll, D. A. 1999, Journal of
+  doi: 10.1016/0021-9991(84)90143-8                               Computational Physics, 152, 790,
+Courant, R., Friedrichs, K., & Lewy, H. 1928,                     doi: 10.1006/jcph.1999.6266
+  Mathematische Annalen, 100, 32,                               Rogers, T. M. 2015, ApJL, 815, L30,
+  doi: 10.1007/BF01448839                                         doi: 10.1088/2041-8205/815/2/L30
+Edelmann, P. V. F., Ratnasingam, R. P., Pedersen, M. G.,        Rogers, T. M., Lin, D. N. C., McElwaine, J. N., & Lau,
+  et al. 2019, ApJ, 876, 4, doi: 10.3847/1538-4357/ab12df         H. H. B. 2013, ApJ, 772, 21,
+Herwig, F., Woodward, P. R., Mao, H., et al. 2023,                doi: 10.1088/0004-637X/772/1/21
+  MNRAS, 525, 1601, doi: 10.1093/mnras/stad2157                 Rogers, T. M., & McElwaine, J. N. 2017, ApJL, 848, L1,
+Horst, L., Edelmann, P. V. F., Andrássy, R., et al. 2020,        doi: 10.3847/2041-8213/aa8d13
+  A&A, 641, A18, doi: 10.1051/0004-6361/202037531               Schultz, W. C., Bildsten, L., & Jiang, Y.-F. 2022, ApJL,
+Jermyn, A. S., Anders, E. H., & Cantiello, M. 2022, ApJ,          924, L11, doi: 10.3847/2041-8213/ac441f
+  926, 221, doi: 10.3847/1538-4357/ac4e89                       —. 2023, ApJL, 951, L42, doi: 10.3847/2041-8213/acdf50
+Jones, S., Andrassy, R., Sandalski, S., et al. 2017, MNRAS,     Stephens, D., Herwig, F., Woodward, P., et al. 2021,
+  465, 2991, doi: 10.1093/mnras/stw2783                           MNRAS, 504, 744, doi: 10.1093/mnras/stab500
+Krtička, J., & Feldmeier, A. 2018, A&A, 617, A121,             Thompson, W., Herwig, F., Woodward, P. R., et al. 2024,
+  doi: 10.1051/0004-6361/201731614                                MNRAS, 531, 1316, doi: 10.1093/mnras/stae1162
+—. 2021, A&A, 648, A79,                                         Vanon, R., Edelmann, P. V. F., Ratnasingam, R. P.,
+ doi: 10.1051/0004-6361/202040148                                 Varghese, A., & Rogers, T. M. 2023, ApJ, 954, 171,
+Kumar, P., Talon, S., & Zahn, J.-P. 1999, ApJ, 520, 859,          doi: 10.3847/1538-4357/ace9db
+ doi: 10.1086/307464                                            Varghese, A., Ratnasingam, R. P., Vanon, R., Edelmann,
+Le Saux, A., Baraffe, I., Guillet, T., et al. 2023, MNRAS,        P. V. F., & Rogers, T. M. 2023, ApJ, 942, 53,
+  522, 2835, doi: 10.1093/mnras/stad1067                          doi: 10.3847/1538-4357/aca092
+                                                                                                      21
+
+Woodward, P., & Colella, P. 1984, Journal of   Woodward, P. R., Herwig, F., & Lin, P.-H. 2015, ApJ, 798,
+                                                 49, doi: 10.1088/0004-637X/798/1/49
+  Computational Physics, 54, 115,
+                                               Zahn, J. P., Talon, S., & Matias, J. 1997, A&A, 322, 320,
+  doi: 10.1016/0021-9991(84)90142-6              doi: 10.48550/arXiv.astro-ph/9611189
+22
+
+
+                                                          APPENDIX
+
+
+
+                                 A. OUTER ENVELOPE CONVECTIVE BOUNDARY
+   We analyze the thin outer envelope convective boundary and overshoot region for run M424 using temperature
+gradient profiles and statistical moments of the radial velocity field. The left panel of Figure A1 shows that from the
+interior toward the surface, the temperature gradient ∇ follows the radiative gradient ∇rad up to 3660 Mm. Beyond
+this point, ∇ increases toward ∇ad and exceeds the Schwarzschild boundary at 3813 Mm (where ∇rad = ∇ad ). Inside
+the thin outer envelope convection zone, ∇ > ∇ad , indicating superadiabatic conditions where convection cannot
+efficiently transport heat, and radiation contributes to energy transport.
+   Following the methodology of Herwig et al. (2023), which identifies convective boundaries through extrema in the
+product of Skew × Kurtosis, we determine from the right panel of Figure A1 that the core convective boundary for
+run M424 is located at 1460 Mm, while the thin outer envelope convection zone boundary is positioned at 3733 Mm.
+The left panel shows that going from surface towards the center, velocities decrease steeply until 3660 Mm, confirming
+this region is well within the radiative zone and beyond the overshoot region from the Schwarzschild boundary.
+
+
+                                 B. ENVELOPE CONVECTION SIMULATION: M484
+   The M484 simulation focuses exclusively on the envelope convection zone. This convection region is spatially confined,
+with inner and outer boundaries located at 3850 Mm and 4100 Mm, respectively, making it susceptible to boundary
+effects. No heating was applied at the inner boundary during the simulation initialization. The cooling rate at the
+outer boundary was set equal to the core heating rate used in comparative simulations.
+   Figure A2 (left panel) shows higher convective velocities in M484 as compared to the full-star run M424. Velocity
+magnitude differences are evident near the inner boundary because of reflective boundary conditions.
+   Despite these boundary artifacts, the spatial spectrum (Figure A2, right panel)) reveals a scale separation between
+energy injection and dissipation scales. The energy spectrum follows the Kolmogorov power law proportional to ℓ−5/3 ,
+indicating the development of a turbulent cascade within the simulated convection zone.
+
+     0.30                                             40
+                            3660
+                            3733
+                            3813
+
+
+
+
+                                                                                        125
+                                                                                                          0
+     0.25                                             30                                100              10
+                                                                      Skew × Kurtosis
+
+
+
+
+                                                                                        75               20
+                                                         |U| [km/s]
+
+
+
+
+     0.20             ad                              20                                50               30
+                                                                                                          3500   4000
+                                                                                                                        3733 Mm
+                      rad
+                                                                                        25
+     0.15                                    |U| 10
+                                             |Ur|                                        0
+                                             |Ut|
+     0.10                                                                                25
+        3400        3600       3800         4000 0                                            0   1000      2000 3000         4000
+                            R [Mm]                                                                         R [Mm]
+Figure A1. Left: Radial profiles of the actual temperature gradient (∇; light blue solid line with downward triangles),
+adiabatic temperature gradient (∇ad ; orange dashed line with upward triangles) and radiative temperature gradient (∇rad ; grey
+dot-dashed line with leftward triangles) at dump 4800 (≈ 4779 h) for run M424 near the thin outer envelope convection zone.
+The secondary y-axis displays total velocity magnitude (|U|), radial velocity magnitude (|Ur |) and tangential velocity magnitude
+(|Ut |) at dump 4800. Right: Radial profile of Skew × Kurtosis of radial velocity Ur for run M424. The vertical dashed dark
+blue line marks the extremum at 3733 Mm, with an expanded view of this region shown in the inset.
+                                                                                                                                    23
+
+                                                                                    107
+                  40                                                                              3900 Mm                    5/3
+                                                                                                  3950 Mm
+                                                                                    106           4000 Mm
+                  35
+                                                                                                  4050 Mm
+
+
+
+
+                                                               Ur power/[m2/s2/ ]
+                  30                                                                105
+|U| [km/s]
+
+
+
+
+                  25                                                                104
+                  20
+                                    M424 |U|      M484 |U|                          103
+                  15                M424 |Ur|     M484 |Ur|
+                                    M424 |Ut|     M484 |Ut|                         102
+                  10
+                   3850          3900 3950 4000 4050 4100                                  100         101             102
+                                           R [Mm]
+Figure A2. (Left): Velocity magnitude (|U|), radial velocity magnitude (|Ur|) and tangential velocity magnitude (|Ut|) profiles
+of the run M424 at dump 4800 and the run M484 at dump 2600 within the envelope convection zone. (Right): Radial velocity
+spatial spectra for simulation M484 at various radial coordinates inside the thin outer envelope convection zone, averaged over
+last 100 dumps.
+
+
+
+
+                                           (day 1)                                                           (day 1)
+                              10 1         100         101                                 10 1              100              101
+                           104                                                           104
+                                                                 Power Density [1/ Hz]
+  Power Density [1/ Hz]
+
+
+
+
+                           103
+                                                                                         103
+                           102
+
+                           101
+                                                                                         102
+                           100       M424_1792                                                      M424_1792
+                                     M424_896                                                       M424_896
+                          10 10
+                             1                                                           1010
+                                                                                           1
+                                                                                              0          101                 102
+                                0         101         102
+                                            [ Hz]                                                          [ Hz]
+Figure A3. Mock luminosity power spectra Lmock comparison similar to Figure 12 of the full-star run with resolution 17923
+presented in the study and with a coarser grid resolution of 8963 at 3500 Mm (Left) and 4000 Mm (Right).
+
+
+                                                     C. CONVERGENCE
+  The mock luminosity power spectra of the full-star run with two different grid resolutions 17923 and 8963 demonstrate
+notable convergence characteristics in Figure A3.
+24
+
+          3500                              =1                                    =5                                = 15
+          3000
+ R [Mm]
+
+
+          2500
+          2000
+          3500                              = 25                                  = 40                              = 70
+          3000
+ R [Mm]
+
+
+
+
+          2500
+          2000
+
+                 0   10       20      30      40 0     10        20       30        40 0     10       20      30      40
+                          Frequency [ Hz]                 Frequency [ Hz]                         Frequency [ Hz]
+                                                        log10 u2r [m2s 2/ / Hz]
+                 3               2                 1              0                      1              2                  3
+Figure A4. Radial velocity power û2r in different ℓ modes as a function of radius and frequency for the run M487. The white
+dashed lines indicate the same contour lines as in Figure A5.
+
+
+                                        D. COMPARISON WITH LINEAR THEORY
+  The radial velocity power û2r  decreases at high radii ( Figure A4). This effect is confined to low frequencies at
+low spherical harmonic degrees ℓ (top row) and extends to higher frequencies (bottom row) for higher ℓ values. The
+decrease of power with radius is due to radiative damping of IGWs as they propagate outward. As waves propagate
+outward in radius, the lowest frequencies experience radiative damping, evidenced by the expansion of the dark region
+in the upper left portion of each ℓ panel. The spatial extent of this damped region shows good agreement with the
+contour lines derived from linear theory predictions (Equation 6, Figure A5). The remaining small differences between
+the power distribution in the simulation and the radiative damping predictions from linear theory can be attributed
+to absence of the frequency-dependent IGW driving mechanism, i.e. the convective engine, in the prediction shown in
+Figure A5. For example, for ℓ = 1, substantial power concentrates at the lowest frequencies around 1–3 µHz, consistent
+with the core convection turnover frequency of 1.27 µHz.
+                                                                                                                         25
+
+          3500                          kh = 1                           kh = 5                               kh = 15
+          3000
+ R [Mm]
+
+
+          2500
+          2000
+          3500                          kh = 25                          kh = 40                              kh = 70
+          3000
+ R [Mm]
+
+
+
+
+          2500
+          2000
+
+                 0   10       20      30         40 0   10       20      30     40 0       10       20      30      40
+                          Frequency [ Hz]                 Frequency [ Hz]                       Frequency [ Hz]
+                                                         (rtcz)/ (r) exp( (kh))
+                      10 1                                   100                                101
+Figure A5. Combined wave amplification and damping factor νwave (ω, kh , r)/νrms−cz (cf. Equation 6) as a function of radius
+and frequency for different horizontal wavenumbers kh for the run M487. The white dashed lines indicate the contour where
+the factor equals 0.1.
+

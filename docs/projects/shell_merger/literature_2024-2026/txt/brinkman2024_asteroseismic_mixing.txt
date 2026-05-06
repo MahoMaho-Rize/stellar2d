@@ -1,0 +1,1043 @@
+                                              Astronomy & Astrophysics manuscript no. main                                                                                            ©ESO 2024
+                                              June 5, 2024
+
+
+
+
+                                                    The impact of asteroseismically calibrated internal mixing on
+                                                           nucleosynthetic wind yields of massive stars
+                                                 Hannah E. Brinkman1 , Lorenzo Roberti2, 3, 4 , Alex Kemp1 , Mathias Michielsen1 , Andrew Tkachenko1 , and Conny
+                                                                                                      Aerts1, 5, 6
+
+                                                    1
+                                                      Institute of Astronomy, KU Leuven, Celestijnenlaan 200D, 3001, Leuven, Belgium
+                                                    2
+                                                      Konkoly Observatory, Research Centre for Astronomy and Earth Sciences, HUN-REN, Konkoly Thege Miklós út 15-17, H-1121
+                                                      Budapest, Hungary
+                                                    3
+                                                      CSFK, MTA Centre of Excellence, Budapest, Konkoly Thege Miklós út 15-17, H-1121, Hungary
+                                                    4
+                                                      INAF – Osservatorio Astronomico di Roma Via Frascati 33, I-00040, Monteporzio Catone, Italy
+                                                    5
+                                                      Department of Astrophysics, IMAPP, Radboud University Nijmegen, PO Box 9010, 6500 GL Nijmegen, The Netherlands
+arXiv:2406.02404v1 [astro-ph.SR] 4 Jun 2024
+
+
+
+
+                                                    6
+                                                      Max Planck Institute for Astronomy, Königstuhl 17, 69117 Heidelberg, Germany
+
+                                                   Received February 16, 2024; Revised April 26, 2024; Accepted May 10, 2024
+
+                                                                                                                  ABSTRACT
+
+                                                   Context. Asteroseismology gives us the opportunity to look inside stars and determine their internal properties, such as the radius
+                                                   and mass of the convective core. Based on these observations, estimations can be made for the amount of the convective boundary
+                                                   mixing and envelope mixing of such stars, and the shape of the mixing profile in the envelope. However, these results are not typically
+                                                   included in stellar evolution models.
+                                                   Aims. We aim to investigate the impact of varying convective boundary mixing and envelope mixing in a range based on asteroseismic
+                                                   modelling in stellar models up to the core-collapse, both for the stellar structure and for the nucleosynthetic yields. In this first study,
+                                                   we focus on the pre-explosive evolution and evolve the models to the final phases of carbon burning. This set of models is the first to
+                                                   implement envelope mixing based on internal gravity waves for the entire evolution of the star.
+                                                   Methods. We use the MESA stellar evolution code to simulate stellar models with an initial mass of 20 M⊙ from the ZAMS up to a
+                                                   central core temperature of 109 K, which corresponds to the final phases of carbon burning. We vary the convective boundary mixing,
+                                                   implemented as "step-overshoot", with the overshoot parameter (αov ) in the range 0.05 - 0.4. We vary the amount of envelope mixing
+                                                   (log(Denv /cm2 s−1 )) in the range 0-6 with a mixing profile based on internal gravity waves. To study the nucleosynthesis taking place
+                                                   in these stars in great detail, we use a large nuclear network of 212 isotopes from 1 H to 66 Zn.
+                                                   Results. Enhanced mixing according to asteroseismology of main-sequence stars, both at the convective core boundary and in the
+                                                   envelope, has significant effects on the nucleosynthetic wind yields. This is especially the case for 36 Cl and 41 Ca, whose wind yields
+                                                   increase by ten orders of magnitude compared to those of the models without enhance envelope mixing. Our evolutionary models
+                                                   beyond the main sequence diverge in yields from models based on rotational mixing, having longer helium burning lifetimes and
+                                                   lighter helium-depleted cores.
+                                                   Conclusions. We find that the asteroseismic ranges of internal mixing calibrated from core hydrogen burning stars lead to similar
+                                                   wind yields as those resulting from the theory of rotational mixing. Adopting the seismic mixing levels beyond the main sequence, we
+                                                   find earlier transitions to radiative carbon burning compared to models based on rotational mixing because they have lower envelope
+                                                   mixing in that phase. This influences the compactness and the occurrence of shell-mergers, which may affect the supernova properties
+                                                   and explosive nucleosynthesis.
+                                                   Key words. Asteroseismology; Nuclear reactions: nucleosynthesis, abundances; Stars: interiors, evolution, massive, winds, outflows
+
+
+
+                                              1. Introduction                                                             mass loss, through stellar winds (Kudritzki & Puls 2000; Langer
+                                                                                                                          2012; Smith 2014), supernova explosions (including the explo-
+                                              Massive stars (M∗ ≥ 10 M⊙ , in this context) are one of the main            sion mechanism and the isotopes produced during the explosive
+                                              sources of nucleosynthesis in the Universe (see, e.g., Hirschi              nucleosynthesis) (Woosley et al. 2002; Nomoto et al. 2013), and
+                                              et al. 2005; Ekström et al. 2012; Pignatari et al. 2016; Ritter             binary interactions (Sana et al. 2012), which expel the isotopes
+                                              et al. 2018; Limongi & Chieffi 2018, and many others). Dur-                 into the interstellar medium. In this work, we focus on the effects
+                                              ing their lives and deaths they turn the lighter elements into              of internal mixing on the nucleosynthetic wind yields, while we
+                                              heavier ones. The nucleosynthetic yields of these stars, aside              keep the nuclear reaction rates and the mass loss rates to standard
+                                              from the initial mass and initial metallicity, depend on three              values, and we do not consider the supernova explosion. We do
+                                              main ingredients; (i) the nuclear reaction rates, which govern              this because even though the internal mixing is very important
+                                              the production/destruction of isotopes inside the star (see, e.g.,          for the wind yields, it is currently not well constrained. The inter-
+                                              Kobayashi et al. 2020), (ii) the internal mixing, which is re-              nal mixing near the convective core during the main sequence is
+                                              sponsible for moving the isotopes from where they are pro-                  important because it impacts the mass of the hydrogen-depleted
+                                              duced to other layers of the star (Pedersen et al. 2021), and (iii)         core at the end of this stage, setting the stage for the nuclear burn-
+                                              Send offprint requests to: hannah.brinkman@kuleuven.be                      ing in the more evolved stages (Johnston 2021; Pedersen 2022),
+
+                                                                                                                                                                       Article number, page 1 of 18
+                                                      A&A proofs: manuscript no. main
+
+and how much of the burning products reach the surface of the            focusing on CBM and the strength of semi-convection. The au-
+star from where they are expelled.                                       thors present the stellar structure of models during hydrogen and
+     The main mixing mechanism for massive stars is convective           helium burning, for stars with initial masses of 15, 20, and 25
+mixing. It transports both the nuclear energy produced in the            M⊙ . Kaiser et al. (2020) show that the amount of CBM consid-
+burning zones (either the stellar core or burning shells), as well       ered in their models affects the duration of the burning phases,
+as the isotopes produced in these areas. However, since convec-          the surface evolution of the stars, the size of the convective cores,
+tion is a three-dimensional process (while stellar evolution on          but also the isotopic mixture in the core. This has implications
+nuclear timescales can only be handled in 1D), it can only be            for the 12 C/16 O ratio at the end of core helium burning, which
+modelled by a parametric approach. Aside from the choice be-             impacts the explosive nucleosynthesis, and thus the supernova
+tween the Ledoux or Schwarzschild criterion for convection, it           yields.
+needs to be taken into account that the convective motions do not            In this work, we focus on models with an initial mass of 20
+stop at the boundaries of such zones. Convective boundary mix-           M⊙ , from the main sequence up to a central temperature of 1
+ing (CBM hereafter) is needed to correct for this, and with the          GK. This mass is chosen because the structure of this star on
+introduction of a treatment of CBM, free parameters are also in-         the main sequence is comparable to one of the most massive
+troduced. Commonly these parameters are either fov or αov (with          gravity-mode pulsators available in asteroseismic studies (Ped-
+a mapping factor of αov /fov ∼ 10, see, e.g., Kaiser et al. 2020, Sec.   ersen et al. 2021; Pedersen 2022). These pulsators have a con-
+3.1). fov is linked to “exponential overshoot”, where the CBM is         vective core and radiative envelope on the main sequence. The
+treated via an exponential decay of the convective diffusion coef-       determined amount of CBM and envelope mixing, as well as the
+ficient beyond the convective boundary as given in Herwig et al.         mixing profile, is similar for stars in the mass range without a
+(1997);                                                                  strong wind. A 20 M⊙ star is interesting because the star does
+                                                                         not undergo strong mass loss during the main-sequence and is
+Dov = D0 · exp(−2z/ fov · H p )                                   (1)    expected to explode in a Type-II supernova explosion (see, e.g.,
+                                                                         Woosley et al. 2002; Sukhbold et al. 2016; Limongi & Chieffi
+Here, the diffusion coefficient, Dov , is a function of the distance     2018). We study the impact of CBM and envelope mixing on the
+from the convective boundary, the free parameter fov , and the           nucleosynthetic wind yields. Also, a 20 M⊙ model is often used
+pressure scale height, H p at the convective boundary. D0 is the         in grids of massive stars from various codes, which allows for
+value of the diffusion coefficient determined from the mixing            comparison studies. We vary the CBM and the envelope mixing
+length theory (Böhm-Vitense 1958). In this prescription for the          within the range of values found for αov and log(Denv /cm2 s−1 ) by
+CBM, the thermal structure in the mixing zone is that of the en-         Pedersen et al. (2021); Pedersen (2022) (see Table 2 in the latter
+velope, such that ∇T =∇rad (Herwig 2000). αov is linked to con-          work). The models are calculated up to a central temperature of
+vective penetration, also known as “step-overshoot”, which com-          1 GK to determine the effects on the evolution of the star and on
+pletely mixes the region with a distance l above the convective          the nucleosynthetic yields.
+boundary given by;                                                           The paper is structured as follows; in Section 2 we describe
+l = αov · H p                                                     (2)    the physical input for the models and justify the choices made. In
+                                                                         Section 3 we describe the effects of changing the internal mix-
+Here the thermal structure in the mixing zone is that of the core,       ing on the stellar evolution, with particular attention to the re-
+such that ∇T =∇ad (Zahn 1991). Many different studies attempt            sulting core composition. In Section 4 we discuss the surface
+to constrain these free parameters, leading to a wide range of           abundances and the stellar yields. We finish with a discussion
+possible values, reaching from αov =0.0 (Wu et al. 2020) to 1.5          and conclusions in Section 5.
+(Guenther et al. 2014), depending on the initial mass of the star
+and whether the effects of rotational mixing were included in the        2. Method and input physics
+stellar models.
+    Asteroseismology gives us a way to look inside stars and de-         We have used the MESA (Modules for Experiments in Astro-
+termine the size and mass of their convective cores (see, e.g.,          physics) stellar evolution code version 22.11.1 (Paxton et al.
+Aerts et al. 2003; Straka et al. 2005; Briquet et al. 2007; Mon-         2011, 2013, 2015, 2018, 2019; Jermyn et al. 2023) for the simu-
+talbán et al. 2013; Moravveji et al. 2015; Deheuvels et al. 2016;        lations presented in this paper.
+Mombarg et al. 2019; Angelou et al. 2020; Viani & Basu 2020;
+Noll et al. 2021; Pedersen et al. 2021). These studies, in which         2.1. Nuclear physics input
+the stars do not rotate or rotate at a negligible velocity (at most
+∼5% of their critical rotational velocity on the main sequence),         We make use of the JINA Reaclib (Cyburt et al. 2010). In the
+revealed that on top of the enhanced CBM (αov >0), mixing in             latest revisions of MESA, the default reaction rates are set to
+the envelope needs to be included to match asteroseismic ob-             NACRE (Angulo et al. 1999), unless not available. The NACRE
+servables. Moreover, period-spacing patterns caused by internal          compilation consists of 86 reaction rates, of which 32 are also
+gravity waves detected in lightcurves fast rotators reveal that the      contained in the JINA Reaclib. The other 54 rates were replaced
+size of the convective core and the shape of the chemical gra-           by their updated rates as given in version 2.2 of the JINA Rea-
+dient, on the main sequence is different from what is calculated         clib by manually including the tables into MESA. This includes
+from most grids of stellar evolution models (Aerts 2021). This           the updated 14 N(p,γ)15 O by Imbriani et al. (2005). This rate has
+leads to the conclusion that the treatment of internal mixing in         a strong impact on the main-sequence evolution of stars under-
+stellar models needs to be adjusted to bring the models closer to        going hydrogen burning via the CNO-cycle.
+what is observed (Johnston 2021). Similar results are found by               The initial mass of the all models presented here is 20 M⊙ .
+other studies, such as Tkachenko et al. (2020), based on detached        We use an initial metallicity of Z=0.014 combined with the iso-
+binary systems on the main sequence rather than pulsating stars.         topic mixture as given by Przybilla et al. (2013). The initial hy-
+    Kaiser et al. (2020) did a theoretical study on the effect of the    drogen content is then defined as Xini =1-Yini -Zini . The initial
+relative importance of convective uncertainties in massive stars,        helium content is determined as follows; Yini =0.2465+2.1×Zini ,
+Article number, page 2 of 18
+                                        Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+where the value of 0.2465 refers to the primordial helium abun-                   Little is known about the more evolved stages of massive
+dance as determined by Aver et al. (2013). The value of 2.1                   stars from asteroseismology. Therefore, we can look at subdwarf
+is chosen such that the mass fractions of the chemical mixture                B stars, low mass core-helium burning stars, for guidance. These
+adopted from Przybilla et al. (2013) are reproduced (see also                 stars have convective helium-burning cores surrounded by a thin
+Michielsen et al. 2021). Our nuclear network contains all the rel-            envelope, making their structure similar to that of an evolved
+evant isotopes for the main burning phases (H, He, C, Ne, O, and              massive star, and they are suitable for asteroseismology. Seis-
+Si), allowing us to follow the evolution of the stars in detail up to         mic studies of these stars (see, e.g., Van Grootel et al. 2010a,b;
+core collapse. Including the ground and isomeric states of 26 Al,             Charpinet et al. 2010, 2011; Ghasemi et al. 2017; Uzundag et al.
+the total nuclear network contains the following 212 isotopes: n,             2021), reveal that during the core helium burning stage of these
+1−3
+    H, 3,4 He, 6,7 Li, 7−10 Be, 8−11 B, 11−14 C, 13−16 N, 14−19 O, 17−20 F,   stars additional CBM is necessary to explain the observations.
+19−23
+      Ne, 21−24 Na,23−27 Mg, 25 Al, 26 Alg ,26 Alm ,27,28 Al, 27−33 Si,       Few pulsating subdwarfs have been modelled, however. There-
+29−34 31−37
+      P,      S, 35−38 Cl, 35−41 Ar, 39−44 K, 39−49 Ca, 43−51 Sc, 43−54 Ti,   fore we use a typical amount of CBM with αov =0.2 for this evo-
+47−58
+      V, 47−58 Cr, 51−59 Mn, 51−66 Fe, 55−67 Co, 55−69 Ni, 59−66 Cu, and      lutionary phase and beyond for the convective cores. For hydro-
+59−66                                                                         gen shell-burning, we again make use of CBM via the “step-
+      Zn. This network includes all 204 isotopes that influence the
+final value of the electron fraction, Ye (see, e.g., Farmer et al.            overshoot” scheme with αov = 0.20 and f0 = 0.005. We did
+2016, and references therein), which affects the supernova prop-              not use CBM for any of the later burning shells aside from the
+erties (see Heger et al. 2000).                                               hydrogen-burning shell.
+
+
+2.2. Selection of the mixing parameters                                       2.2.2. Enhanced envelope mixing
+                                                                              Aside from the mixing at the convective boundaries, there is also
+We make use of the Ledoux criterion to establish the location of
+                                                                              mixing in the envelopes of a massive star. Extra mixing in the
+the convective boundaries. Convection itself is treated according
+                                                                              envelope is needed for the stellar evolution models to match the
+to the MLT++ prescription (Paxton et al. 2013). This prescrip-
+                                                                              asteroseismic observations. In Pedersen et al. (2021) four dif-
+tion introduces a free parameter, αmlt . Here we set αmlt to 2 for
+                                                                              ferent profiles for the envelope mixing are implemented for the
+all phases of the evolution.
+                                                                              asteroseismic modelling; a flat profile leading to a constant en-
+     The semi-convection parameter, α sc , is set to 0.01 for the en-
+                                                                              velope mixing, a profile based on hydrodynamic simulations of
+tire evolution. Especially for the models with a large amount of
+                                                                              internal gravity waves (Rogers & McElwaine 2017; Varghese
+CBM, the impact of α sc is limited (see, e.g., Kaiser et al. 2020).
+                                                                              et al. 2023), a profile where the mixing is due to vertical shear
+The thermohaline coefficient, αtherm , is set to 1 for hydrogen and
+                                                                              (Mathis et al. 2004), and lastly a profile where the mixing is due
+helium burning, and to 0 beyond helium burning to reduce the
+                                                                              to meridional circulation caused by rotation combined with ver-
+complexity of the models.
+                                                                              tical shear (Georgy et al. 2013). In this work we focus on the
+                                                                              profile driven by internal gravity waves because this profile has
+2.2.1. Convective boundary mixing                                             so far not been used in the global investigation of internal mixing
+                                                                              despite that it has been shown to explain asteroseismic data well.
+For the main-sequence, we make use of the CBM scheme as im-                   Also, this profile has not been investigated beyond the main se-
+plemented by Michielsen et al. (2019). This scheme allows for                 quence. The first profile used by Pedersen et al. (2021) cannot
+a combination of the two CBM schemes mentioned in the in-                     satisfactorially reproduce the seismic properties of their sample,
+troduction, “exponential” and “step-” overshoot. In the present               and the latter two profiles both are based on the effects of stel-
+work, however, we only consider the so-called “step overshoot”                lar rotation, which have already been extensively investigated in
+part of this scheme (also referred to as convective penetration),             the literature as there are many rotating models available calcu-
+since most of the B stars analysed by Pedersen (2022) favour this             lated with various codes and implementations (see, e.g., Heger
+variant for the CBM (55% versus 45% for the “exponential over-                et al. 2000; Ekström et al. 2008, 2012; Chieffi & Limongi 2013;
+shoot or diffusive exponentially decaying overshooting”). We                  Limongi & Chieffi 2018; Banerjee et al. 2019; Brinkman et al.
+vary the CBM, here parametrized by αov , based on the asteroseis-             2021; Brinkman 2022). For the implementation of the mixing
+mic estimates by Pedersen et al. (2021); Pedersen (2022). For the             profile based on internal gravity waves, we follow the implemen-
+values for the overshoot parameter, αov , we take the upper limit             tation of Michielsen et al. (2021). Here the mixing profile is de-
+for the most massive stars in the sample following the profile                termined as DIGW (r)=Denv (ρ(rCBM )/ρ(r)), where Denv is the free
+where the envelope mixing is governed by internal gravity waves               parameter and determines the strength of the mixing at the con-
+(noted by ψ2,6 in Pedersen 2022) either as the most likely candi-             nection point between the extended CBM region and the enve-
+date or the second most likely candidate, as indicated in Table 6             lope, ρ(rCBM ) being the density at the border between the CBM
+of Pedersen (2022). The models with ψ2 favour the “exponential                region and the envelope, and ρ(r) is the local density. The value
+overshoot” scheme, and for these cases we use a conversion fac-               of log(Denv /cm2 s−1 ) is varied between 0-6 in steps of 1.5, based
+tor of ∼10 from the exponential overshoot parameter, fov , to com-            on the results by Pedersen et al. (2021); Pedersen (2022). We
+pute the level of the step overshoot parameter such stars would               took the values for log(Denv /cm2 s−1 ) from the same models we
+have. This might be a slight underestimation of the conversion,               previously selected for αov .
+as Claret & Torres (2017) find a factor of αov /fov =11.36±0.22,                   To determine the location of the convective boundary in the
+Moravveji et al. (2016) find a factor of 13, and Valle et al. (2017)          models with limited CBM (αov = 0.05 and 0.1), we implemented
+a factor of 12. Based on a conversion of 10, αov is varied between            the convective premixing scheme as described in Paxton et al.
+0.05-0.4 on the main-sequence, with f0 =0.005. The parameter f0               (2019) on the main sequence. For this, we enhanced the mesh
+determines the location inside the convective core from where                 locally around the convective boundary of the hydrogen burning
+the CBM starts, which is for computational reasons. This would                core.
+also be the case for the exponential overshoot scheme (see, e.g.,                  The profile based on internal gravity waves was originally
+Kaiser et al. 2020, Sec. 3.1).                                                created for the main sequence (Michielsen et al. 2021). Here we
+                                                                                                                     Article number, page 3 of 18
+                                                     A&A proofs: manuscript no. main
+
+also apply this to the rest of the stellar evolution, and most im-     in line with the literature for rotational mixing (see, e.g., Hirschi
+portantly to helium burning. The other burning phases are rela-        et al. 2004; Ekström et al. 2012; Limongi & Chieffi 2018, and the
+tively short and the diffusive mixing is not fast enough to be of      grey lines in the right panel of Fig. 2) and for enhanced CBM
+significant impact. During helium burning, however, the star has       (see, e.g., Kaiser et al. 2020). A comparison of rotating ver-
+a convective core, which can drive internal gravity waves and          sus non-rotating models can be found in, e.g., Brinkman et al.
+thus induce mixing. In the previously mentioned works on subd-         (2021). In Fig. 2 the grey lines show the results of that work,
+warf B stars, no mention is made of enhanced envelope mixing.          with the model without rotation overlapping mostly with our
+However, based on the stellar structure, we assume here that the       model with αov =0.2 and log(Denv /cm2 s−1 )=0. On the evolution-
+convective helium burning core can drive internal gravity waves        ary track, our model with log(Denv /cm2 s−1 )=6 shows a lot of sim-
+as well, and we use the same profile as on the main sequence.          ilarities with the model rotating at 300 km/s (see right panel of
+The continued enhanced envelope mixing is an important differ-         Fig. 2). Both models have a higher luminosity at the end of the
+ence from models that consider stellar rotation, since at this point   main sequence compared to the other models, and experience
+in the evolution, the stellar rotation of the envelope has reduced     more mass loss as well. Both enhanced envelope mixing and en-
+significantly (see, e.g., Aerts et al. 2019) and its impact on the     hanced CBM lead to a larger amount of mass loss on the main
+interior mixing should therefore be diminished.                        sequence.
+                                                                            After the main sequence, the models with the only enhanced
+                                                                       CBM but without enhanced envelope mixing behave compara-
+2.3. Other input                                                       bly to models with rotational mixing, which have shorter helium
+The mass-loss scheme is a combination of three different wind          burning lifetimes compared to their non-rotating counterparts
+prescriptions. For the hot phase (Teff ≥ 11kK), we use the pre-        (see right panel of Fig. 1). All our models from this point have
+scription given by Vink et al. (2000, 2001), which has been di-        the same amount of CBM and all differences propagate from dif-
+vided by 3 to match the rates of Björklund et al. (2021). For          ferences caused by their the main sequence evolution. This has
+the cold phase (Teff ≤ 1kK) we use Nieuwenhuijzen & de Jager           an analogue with rotational mixing, which loses its efficiency as
+(1990). For the stars that reach the WR-phase (X sur f ≤0.4) we        the rotational velocity of the envelope slows down after the main
+use the rates by Nugis & Lamers (2000). All phases of the wind         sequence (Aerts et al. 2019).
+have a metallicity dependence Ṁ ∝ Z0.85 following Vink et al.              The models with enhanced envelope mixing are dissimilar
+(2000) and Vink & de Koter (2005).                                     from rotating stellar models in the literature and ours without
+    We have evolved the stars to a central temperature of 109 K,       such mixing. The envelope mixing profile based on internal grav-
+which, depending on the model, is during or after carbon burn-         ity waves requires the existence of a convective core in massive
+ing. At this point, the mass loss is finished and the wind contri-     stars, which is still present during the advanced burning stages
+bution to the nucleosynthetic yields can be calculated.                (except in a few cases where the models undergo radiative car-
+                                                                       bon burning rather than convective carbon burning, see below).
+                                                                       This in principle allows for continued mixing between the enve-
+2.4. Yield calculation                                                 lope and the core as we consider it here. The enhanced mixing
+Since our focus is on the pre-supernova nucleosynthetic yields         affects the size of the helium burning core. At the end of the
+from the winds, we calculate them as follows; we integrate over        main sequence the helium cores, hereafter referred as hydrogen-
+time the surface mass fraction multiplied by the mass loss. This       depleted cores to avoid confusion with the helium burning-core,
+gives us the total yield of the stellar model. For the stable iso-     are larger for models with increasing amounts of envelope mix-
+topes, there is a second yield to consider, the net yield, that is,    ing (see left panel of Fig. 3), which is due to an influx of fresh
+the total yield minus the initial total mass of the isotope origi-     hydrogen from the stellar envelope, not dissimilar to what is hap-
+nally present in the star. For short-lived radioactive isotopes the    pening for models that include rotational mixing.
+net yield is identical to the total yield, because the initial mass         At the onset of helium burning, the models with enhanced
+present in the stars is zero for these isotopes, and thus no dis-      envelope mixing, log(Denv /cm2 s−1 )=6.0, have a larger convec-
+tinction will be made for these yields. Hereafter, the yield will      tive core as expected based on the size of their larger hydrogen-
+always refer to the total wind yield, unless otherwise indicated.      depleted cores (see left panel of Fig. 3). However, as helium
+                                                                       burning proceeds, the convective core region grows less in mass
+                                                                       than for the models without enhanced mixing. This is due to the
+3. Stellar models: results and discussion                              continued influx of helium from the region just above the he-
+                                                                       lium burning core, which then leads to smaller helium depleted
+In this section, we discuss the results of our stellar evolution       cores at the end of helium burning (see column 8 of Table A and
+models in terms of evolutionary properties. Table A.1 contains         the right panel of Fig. 3). The models without enhanced mix-
+the key information about the evolutionary stages.                     ing need their cores to grow to reach these areas, and a larger
+                                                                       hydrogen-depleted core leads to a larger helium-depleted core
+                                                                       (see, e.g., Brinkman et al. 2021). Both the smaller mass of the
+3.1. Impact of enhanced mixing on the stellar evolution
+                                                                       helium burning core and the larger influx of helium from the re-
+On the main-sequence, both the effects of envelope mixing by           gion above the core lead to an extended helium burning lifetime
+internal gravity waves and a larger amount of CBM are com-             (see column 7 of Table A).
+parable to the effects of rotational induced mixing. The main-              Overall, the models with the maximum amount of enve-
+sequence lifetime is extended by increasing values of both αov         lope mixing, log(Denv /cm2 s−1 )=6, lose most mass over the whole
+and log(Denv /cm2 s−1 ) (see left panel of Fig. 1). Also, the main-    evolution, increasing with αov (see column 9 of Table A).
+sequence turnoff moves to a higher luminosity and effective tem-       For αov =0.2 and αov =0.4 and log(Denv /cm2 s−1 )=0-4.5, the to-
+perature, as can be seen in the right panel of Fig. 2. This effect     tal mass loss is comparable, as is the case for αov =0.05 and
+is the strongest for log(Denv /cm2 s−1 )=6, while for the other val-   log(Denv /cm2 s−1 )=0-4.5. For αov =0.1, the behaviour of the to-
+ues of log(Denv /cm2 s−1 ) the effect is minimal. These results are    tal mass loss is different as it increases with log(Denv /cm2 s−1 ),
+
+Article number, page 4 of 18
+                                              Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+
+
+
+                    10.00           tH, D=0       D=4.5                                    1.10                        tHe, D=0          D=4.5
+                                    D=1.5         D=6.0                                                                D=1.5             D=6.0
+                        9.50        D=3.0                                                  1.00                        D=3.0
+        Time(Myr)
+
+
+
+
+                                                                           Time(Myr)
+                                                                                           0.90
+                        9.00                                                               0.80
+                        8.50                                                               0.70
+                                                                                           0.60
+                        8.00
+                        1.08                                                               1.40
+
+
+
+
+                                                                           tHe, D/tHe, 0
+          tH, D/tH, 0
+
+
+
+
+                        1.05                                                               1.20
+                        1.03
+                        1.00                                                               1.00
+                               0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40                            0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40
+                                         ov on the main sequence                                            ov on the main sequence
+
+Fig. 1. The duration of core hydrogen burning (tH , left panel) and core helium burning (tHe , right panel) as a function of αov . To highlight the
+differences, the bottom panels show the ratio between models without additional envelope mixing (reference, in blue) and the other models with
+the same αov on the main sequence.
+
+
+
+
+Fig. 2. The tracks in the Hertzsprung-Russel diagram for the different values of αov and no extra envelope mixing (log(Denv /cm2 s−1 )=0) (left
+panel) and for the different values of log(Denv /cm2 s−1 ) for a fixed value of αov =0.2 (right panel). The different colours indicate the different values
+for the CBM and the envelope mixing. In the left panel, the grey line shows the non-rotating model from Brinkman et al. (2021) with αov =0.2. In
+the right panel, the rotating models with initial rotational velocities for 150 and 300 km/s are added as a comparison for the different treatment of
+envelope mixing. The blue line is the same model in both panels. Only the model with log(Denv /cm2 s−1 )=6 shows a significant difference from the
+other models with the same amount of CBM, while even a moderately different αov produces a discernible shift.
+
+
+though still within 0.9 M⊙ on a total of 14-15 M⊙ . This is due to                         cause the strong dependence of the reaction rates on the central
+a slight difference in helium burning, where the convective core                           temperature, the results can be strong. For example, as a result,
+remains larger for a higher amount of envelope mixing, leading                             the models with αov =0.05 and 0.1 have already finished carbon
+to a higher luminosity and a higher mass loss rate. This is only                           burning when they reach log(Tc /K)=9, while for αov =0.2 and 0.4
+the case for the models with αov =0.1.                                                     it is still ongoing. For log(Denv /cm2 s−1 )=6.0, the models transi-
+                                                                                           tion from convective to radiative carbon burning, which leads to
+                                                                                           a more diagonal track in the diagram. In general, this transition
+3.2. Impact of enhanced mixing on the core composition                                     occurs roughly at 22 M⊙ (Heger et al. 2000), which is also found
+                                                                                           by Hirschi et al. (2004). In case of the rotating models by the
+Fig. 4 shows the ρc Tc -diagrams for the models with differ-                               latter authors, it lowers the limit for the formation of a convec-
+ent amounts of CBM on the left including the non-rotating                                  tive carbon-burning core to below 20 M⊙ at an initial rotational
+model from Brinkman et al. (2021) and different amounts                                    velocity of 300 km/s. This is also the case for the model with
+of envelope mixing on the right including the rotating mod-                                an initial rotational velocity of 300 km/s from Brinkman et al.
+els from Brinkman et al. (2021). A larger amount of CBM                                    (2021). We find that the enhanced envelope mixing applied is in
+leads to slightly higher core temperatures at a comparable den-                            this sense comparable to the effects of rotational mixing, since
+sity, i.e., at log(ρc /g·cm−3 )=2, log(Tc /K)=7.93 for αov =0.05 and                       both increase the mixing between the top layers of the core and
+log(Tc /K)=8.00 for αov =0.4. This is a small difference, but be-
+                                                                                                                                   Article number, page 5 of 18
+                                                       A&A proofs: manuscript no. main
+
+
+
+
+Fig. 3. The mass of the stellar cores at the end of hydrogen burning (left panel) and helium burning (right panel) as a function of the overshoot
+parameter. The lower panels show the ratio between the models with no extra envelope mixing and the other models with the overshoot parameter.
+
+
+the rest of the envelope.                                                 mixing instead of asteroseismically calibrated internal mixing as
+    The change from convective carbon burning into radiative              adopted here. We start with three short-lived radioactive nuclei
+carbon burning is due to a change in the mixture of isotopes              with half-lives less than a Myr; 26 Al, 36 Cl, and 41 Ca. Then we
+in the center of the stars, especially in carbon and oxygen. The          discuss the yields of various stable isotopes; 19 F, 22 Ne, and the
+models that undergo radiative carbon burning have smaller C/O-            isotopes involved in the CNO-cycle, as well as the change in the
+ratios than their convective counterparts (see column 10 of Table         surface abundance of the stable isotopes.
+A), by almost a factor 2. This difference is due to the production
+channels of these isotopes. 12 C and 16 O are both produced during
+central helium burning, via two sequential reactions. The first           4.1. Short-lived radioactive nuclei
+reaction is the triple-α reaction which produces 12 C. The sec-
+ond is a subsequent α-capture leading to the production of 16 O.          The presence of radioactive isotopes in the early Solar System
+Once a high enough abundance of 12 C is reached, the second               is well-established as their abundances are inferred from mete-
+reaction starts to dominate the energy production. For the mod-           oritic data showing excesses in their daughter nuclei (see for a re-
+els log(Denv /cm2 s−1 )=0, the C/O-ratio decreases with the value         view Lugaro et al. 2018). Here we discuss three different of such
+for αov . This is due to the temperature dependence of the reac-          isotopes: 26 Al, a short-lived radioactive isotope with a half life
+tions, as the more massive cores at the end of the main-sequence          of 0.72 Myr (Basunia & Hurst 2016), 36 Cl and 41 Ca, with half
+have higher central temperatures. The decreasing C/O-ratio with           lives 0.301 Myr (Nica et al. 2012) and 0.0994 Myr (Nesaraja
+increasing log(Denv /cm2 s−1 ) is due to a combination of the ex-         & McCutchan 2016), respectively. These three radioactive iso-
+tended helium burning lifetime (see column 7 of Table A) and              topes represent the fingerprint of the local nucleosynthesis that
+more helium being mixed into the stellar core. A lower carbon             occurred near the time and place of the birth of our Sun. There-
+content means that less fuel is available for the carbon burning          fore, these isotopes give us clues about the environment and the
+phase (12 C+12 C), and thus the star does not form a convective           circumstances of such birth (Adams 2010; Lugaro et al. 2018).
+core in this phase.                                                       In Brinkman et al. (2021) the effects of stellar rotation on the
+    The changes in composition of the stellar core at the end of          yields of single stars were investigated. For a 20 M⊙ star with
+helium burning due to the enhanced CBM and envelope mix-                  αov =0.2, the effects of stellar rotation increase the nucleosyn-
+ing might have an indirect impact on the explodability of stars.          thetic yields. Here, we compare the changes in the stellar yields
+Chieffi et al. (2021) show that a variation the carbon burning            due to CBM and envelope mixing as calibrated by asteroseis-
+regime results in a change of the mass-radius relation (see also          mology of B stars.
+Sukhbold et al. 2016; Limongi & Chieffi 2020), and therefore the
+compactness parameter, at the time of the core collapse which             4.1.1. Aluminium-26
+can potentially impact the final fate of the star (O’Connor & Ott
+2011; Ertl et al. 2016). Another potential impact of a change in          26
+                                                                             Al is a short-lived radioactive isotope which is produced during
+the core composition is the occurrence of later stage shell merg-         core and shell-hydrogen burning, during carbon/oxygen convec-
+ers, such as between the carbon and oxygen burning shells (see,           tive shell burning, and neon burning during the supernova explo-
+e.g., Ritter et al. 2018; Andrassy et al. 2020; Roberti et al. 2024),     sion (see, e.g., Limongi & Chieffi 2006). In this work, we focus
+though this is beyond the scope of this work.                             on the 26 Al produced in hydrogen burning, which is expelled via
+                                                                          the wind. 26 Al is produced by proton captures on the stable iso-
+4. Wind yields until the end of mass loss                                 tope 25 Mg. Its main destruction channel during hydrogen burn-
+                                                                          ing is the radioactive β-decay, with a small contribution from the
+                                                                          26
+In this section we compare the nucleosynthetic wind yields of                Al(p,γ)27 Si. During helium burning, all remaining 26 Al is de-
+the various models. We compare the results with those from                stroyed via the 26 Al(n,α)23 Na and 26 Al(n,p)26 Mg. 26 Al is a spe-
+Brinkman et al. (2021), which are based on classical rotational           cial isotope since it has an isomeric state, with a half-life of the
+Article number, page 6 of 18
+                                        Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+
+
+
+Fig. 4. ρc -Tc diagram for the 20 M⊙ models with different values for αov and no extra envelope mixing (log(Denv /cm2 s−1 )=0) (left panel). The
+right panel shows the same for αov =0.2 and the different values for the envelope mixing, where D=log(Denv /cm2 s−1 ). In the left panel, the grey line
+shows the non-rotating model from Brinkman et al. (2021) with αov =0.2. In the right panel, the rotating models with initial rotational velocities for
+150 and 300 km/s are added as a comparison for the different treatment of envelope mixing. The blue line is the same model in both panels. The
+black dashed lines give a rough indication of the equations of state, i.e., radiative, ideal gas, and non-relativistic electron pressure (NR electrons).
+The grey horizontal lines indicate a central temperature of Tc =109 .
+
+
+                                                                             main sequence for the models with the higher CBM, as described
+                                                                             in Section 3, causes the difference in the yields. The difference
+                                                                             in the duration of the main sequence, 9.49 Myr for αov =0.4 ver-
+                                                                             sus 8.09 Myr for αov =0.05, is equal to about twice the half-life
+                                                                             of 26 Al. This leads to a larger amount of 26 Al to decay inside the
+                                                                             envelope of the star before it can be expelled shortly after the
+                                                                             main sequence. Thus, despite the larger mass loss of the models
+                                                                             with a higher αov , this leads to a lower yield for the models with
+                                                                             the higher CBM.
+                                                                                  An increase in envelope mixing has the expected effect on
+                                                                             the yields, where more mixing leads to higher yields, espe-
+                                                                             cially for the highest value for the envelope mixing, as more
+                                                                             processed material is dredged up into the outer envelope. For
+                                                                             log(Denv /cm2 s−1 )=6.0 the yield is one order of magnitude larger
+                                                                             than for the models without additional mixing. This effect is, to
+                                                                             a degree, similar what happens to the yields when rotation is in-
+                                                                             cluded (see, e.g., Sect. 4.1 of Brinkman et al. 2021) which also
+                                                                             leads to more mixing between the core and the envelope.
+Fig. 5. The yields for 26 Al for the different values of αov and                  In Fig. 5 we also show the yields of the 20 M⊙ models with
+log(Denv /cm2 s−1 ) (solid lines) in the upper panel. The horizontal lines   different rotational velocities (solid, dashed-dotted, and dotted
+indicate the yields of 20 M⊙ models with different rotational velocities     lines). The yields computed in Brinkman et al. (2021) are higher
+(0, 150, and 300 km/s, from Brinkman et al. 2021), the dashed, dashed-       than those of the models presented in this paper, which is due to
+dotted, and dotted lines, respectively. The lower panel shows the ratio
+                                                                             a difference in the mass-loss scheme. The models computed in
+between the yield of the reference models (log(Denv /cm2 s−1 )=0), and
+the models with the other values for log(Denv /cm2 s−1 ).                    Brinkman et al. (2021) lose more mass than those presented here.
+                                                                             With less mass lost, our yields are lower for comparable models
+                                                                             (αov =0.2 and log(Denv /cm2 s−1 )=0). Just as increased envelope
+                                                                             mixing by internal gravity waves increases the yields, Brinkman
+order of six seconds. The interaction between the ground state               et al. (2021) find that increasing the rotational velocity of the
+and the isomeric state is relatively well understood (Iliadis et al.         stars increases the yields as well, here by a factor of 3.24.
+2010), though during hydrogen burning the temperature is such                     Figure 6 shows the Kippenhahn diagrams for four of our
+that the two states can be interpreted as separate species (see for          models with the mass fraction of 26 Al on the colour-scale. At the
+recent overviews of 26 Al Diehl et al. 2021; Laird et al. 2023).             beginning of the evolution, there is no 26 Al present in the stars.
+     Fig. 5 shows the 26 Al yields of our models. Of the models              It is produced in the core, and moved to the outer layers by the
+without envelope mixing, the model with the lowest value for                 convective envelope penetrating the area vacated by the retreat-
+the CBM has the highest yield, even though the mass loss is sig-             ing hydrogen burning core (a detailed description can be found in
+nificantly smaller than for the model with the highest value, i.e.,          Brinkman et al. 2019), in the case of log(Denv /cm2 s−1 )=0. With
+1.48 M⊙ for αov = 0.05 versus 9.55 M⊙ for αov = 0.4. This is                 higher amounts of log(Denv /cm2 s−1 ), 26 Al is mixed into the en-
+due to the difference in the surface mass-fraction of 26 Al, which           velope at an earlier stage (see panel d of Figure 6.) The model
+is lower for the model with αov =0.4. The longer duration of the
+                                                                                                                         Article number, page 7 of 18
+                                                     A&A proofs: manuscript no. main
+
+with αov = 0.1 and log(Denv /cm2 s−1 ) = 0 (panel a) has the highest    The helium burning phase is shorter for the higher values for
+mass fraction of 26 Al on the surface of the star compared to the       the CBM, 1.15 Myr for αov =0.05 versus 0.66 Myr for αov =0.4,
+other models without envelope mixing (panel b and c) by a factor        which means that less 41 Ca (or 36 Cl) can reach the surface. Also,
+2.7 and and 3.7, respectively. This leads to the higher yield of this   the model with αov =0.05 loses 0.19 M⊙ after helium burning is
+model compared to the other two models with log(Denv /cm2 s−1 )         finished, while the model with αov =0.4 loses only 0.1 M⊙ . This
+=0 by a factor 1.7 and 1.5, respectively. Panel d shows the model       combination leads to a wind yield of a factor 8.0 (3.9) higher for
+with αov = 0.2 and log(Denv /cm2 s−1 ) = 6.0. The effect of the en-     αov =0.05 for 36 Cl (41 Ca).
+hanced envelope mixing is visible in the early disappearance of             An interesting feature in Fig. 8b is that 41 Ca is visibly mixed
+the thermohaline mixing region (yellow shading) in the enve-            out of the core, but only a part reaches the surface of the star.
+lope, as well as in the earlier upwards diffusion of 26 Al, well        Instead, a band with a higher abundance is formed, roughly at
+before the convective envelope develops, though there is still an       7.0 M⊙ . Even though the mixing is relatively strong, the helium
+abundance gradient. The higher amount of 26 Al in the envelope          burning timescale is not long enough to diffuse the produced
+                                                                        41
+combined with more mass loss leads to a strong increase in the             Ca towards the surface and into the convective layer. This leads
+26
+   Al yield (a factor of ∼21) compared to the model with αov =          to a build-up of 41 Ca above the convective helium-burning core,
+0.2-log(Denv /cm2 s−1 )=0.                                              but below the border of the envelope and the hydrogen-depleted
+                                                                        core.
+                                                                            Compared to the yields presented here, the 36 Cl and 41 Ca
+4.1.2. 36 Cl and 41 Ca                                                  yields from Brinkman et al. (2021) are lower, even for the mod-
+36
+   Cl and 41 Ca are short-lived radioactive isotopes which are          els that include rotational mixing. This is because the rotational
+produced during core helium burning and during the explo-               velocity of the envelope has gone down and along with it the effi-
+sive burning in a supernova (see, e.g. Pignatari et al. 2016;           ciency of the mixing in the envelope, while in the asteroseismic
+Limongi & Chieffi 2018). Both isotopes are mainly produced              models the envelope mixing is still at full strength. Therefore,
+by neutron captures on the stable isotopes 35 Cl and 40 Ca, respec-     the surface abundance is lower for the models from Brinkman
+tively. The neutrons needed for this process are produced by the        et al. (2021), leading to lower wind yields.
+22
+   Ne(α, n)25 Mg reaction (see, e.g., Arnould et al. 1997), though
+in the earliest stages 13 C(α,n)16 O has a minor contribution. For
+                                                                        4.2. Stable nuclei
+both isotopes, the main destruction channel is through further
+neutron captures, either (n, α) or (n,γ).                               4.2.1. 19 F and 22 Ne
+     Fig. 7 shows the 36 Cl (left panel) and 41 Ca (right panel) wind
+yields of the model. For the models with log(Denv /cm2 s−1 )=0-         Both 19 F and 22 Ne are stable isotopes which are present in the
+4.5, the yields are very low, all of the order of 10−19 (10−20 ) M⊙     stars from birth and their initial abundances therefore scale with
+for 36 Cl (41 Ca). This is because 36 Cl and 41 Ca are produced deep    the initial metallicity of the star. Fig. 10 shows the yields for
+                                                                        19
+inside the stellar interior and need to be brought up to the sur-          F (left panel) and 22 Ne (right panel). The initial mass of the
+face to significantly contribute to the yields. The surface enrich-     isotopes present in the stars is given by the red horizontal lines.
+ment can be achieved in two manners, (i) by stripping enough            None of the models presented here have a net positive yield for
+                                                                        19
+mass off the star via the stellar wind to expose the inner parts of        F, and only one model has a positive yield for 22 Ne.
+                                                                             19
+the star, and (ii) by diffusing the material produced in the stellar            F
+core up to the surface. For the models with log(Denv /cm2 s−1 )=0-           19
+                                                                                F is of interest because its galactic source is still uncertain.
+4.5, independent of the CBM, the mass loss until the onset of           Meynet & Arnould (2000) have shown that Wolf-Rayet stars
+helium burning is not enough to expose the innermost layers             (generally Mi ≥ 30 M⊙ at solar metallicity) can contribute
+of the star, nor is the timescale of helium burning long enough         significantly to the galactic 19 F abundance while Palacios et al.
+to get any significant diffusion of 36 Cl (41 Ca) to the stellar sur-   (2005) found that the same stars are unlikely to be the source
+face. For the models with log(Denv /cm2 s−1 )=6.0, the mass loss        of galactic 19 F, when including updated mass-loss prescriptions
+is also not strong enough to expose the inner layers. However,          and reaction rates. The discussion around 19 F was rekindled
+in this case, the helium burning timescale is long enough for           by Jönsson et al. (2014b,a, 2017) and Abia et al. (2019), who
+material to be diffused into the envelope, where the convec-            re-analysed observations of 19 F and proposed that asymptotic
+tive outer layer brings the material to the surface. This leads to      giant branch stars are the most likely source of cosmic 19 F. Other
+strongly enhanced yields, with a factor 4.18·1011 (7.35·1011 ) to       works suggest that 19 F may come from rotating massive stars
+3.08·1010 (1.10·1011 ) from αov =0.05 to αov =0.4. This is visible      at very low metallicity (see, e.g., Prantzos et al. 2018; Grisoni
+when comparing the panels of Fig. 8. It shows the Kippenhahn-           et al. 2020; Franco et al. 2021; Roberti et al. 2024). Though, due
+diagrams for the models with αov =0.2 and log(Denv /cm2 s−1 )=0         to the remaining uncertainty in both the mass-loss prescriptions
+(panel a) and log(Denv /cm2 s−1 )=6.0 (panel b). The colour-scale       and the reaction rates (see e.g. Stancliffe et al. 2005; Ugalde
+shows the 41 Ca-mass fraction inside the stars. The distribution of     et al. 2008), Wolf-Rayet stars in general cannot be excluded as
+36
+   Cl looks similar. For both the model with log(Denv /cm2 s−1 )=0      the sources of galactic 19 F (for a recent overview, see e.g. Ryde
+and log(Denv /cm2 s−1 )=6, the envelope becomes convective after        et al. 2020). On the other hand, Womack et al. (2023) concluded
+hydrogen burning, and material deeper in the star can be brought        that Wolf-Rayet stars are not an important contributor. Even
+to the surface. However, for log(Denv /cm2 s−1 )=0, this does not       though the mass of the models presented here is lower than the
+happen, while for log(Denv /cm2 s−1 )=6.0, the surface becomes          Wolf-Rayet limit, the enhanced envelope mixing might have
+enriched in 41 Ca (36 Cl). This is due to the still-present envelope    been expected to have an effect.
+                                                                             19
+mixing.                                                                         F is typically destroyed in the hydrogen burning core due
+     When comparing the wind yields for all models with                 to proton-captures, via the 19 F(p, α)16 O reaction, which is part of
+log(Denv /cm2 s−1 )=6.0, they decrease slightly with increasing         the CNO-cycles. It is produced during helium burning by a reac-
+αov . This is due to a combination of the duration of the he-           tion chain starting at 14 N; 14 N(α,γ)18 F(,e+ )18 O(p,α)15 N(α,γ)19 F,
+lium burning phase and the mass loss beyond helium burning.             as first introduced by Forestini et al. (1992). It is then rapidly
+Article number, page 8 of 18
+                                        Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+
+
+
+Fig. 6. Kippenhahn diagrams for the models with αov = 0.10, αov =0.2, and αov =0,4, all with log(Denv /cm2 s−1 ) = 0 (panels a, c, and b respectively),
+as well as αov =0.2 and log(Denv /cm2 s−1 ) = 6 (panel d). The solid black line is the stellar mass. The green hatched areas correspond to areas of
+convection, the cyan hatched areas to CBM, the red hatched areas to semi-convection, and the yellow hatched areas to thermohaline mixing. The
+blue dotted line indicates the hydrogen-depleted core. The red and green dotted lines indicate the helium- and carbon-depleted cores, respectively.
+The colour scale shows the 26 Al mass fraction as a function of the mass coordinate and time.
+
+
+
+
+Fig. 7. Same as Fig. 5, but for 36 Cl (left) and 41 Ca (right). The lower panels show the ratio between the yield of the reference models
+(log(Denv /cm2 s−1 )=0), and the models with the other values for log(Denv /cm2 s−1 ). Mind that unlike in Fig. 5, here the y-scale for the ratio is
+in log.
+
+
+
+                                                                                                                         Article number, page 9 of 18
+                                                         A&A proofs: manuscript no. main
+
+
+
+
+Fig. 8. Same as Fig. 6, but with 41 Ca on the colour scale.
+
+
+destroyed afterwards due to α-captures (Meynet & Arnould                 was already present in the star from birth and is not newly
+2000). This is well visible in Fig. 9, where the colour-scale indi-      synthesised.
+cates the mass-fraction of 19 F present in the star. At birth, there          When comparing the yields to those in Brinkman et al.
+is some 19 F present in the star, which is clearly visible in the        (2021), we find comparable results for rotational velocities of
+envelope. In the hydrogen burning core, 19 F is rapidly destroyed.       0 and 150 km/s, for the lowest envelope mixing. The model
+In the left panel (log(Denv /cm2 s−1 )=0), there is no 19 F present      with the largest rotational velocity has a lower yield by a factor
+below the outermost mass-coordinate of the hydrogen-burning              of ∼2, which is due to the destruction of 19 F, enhanced by the
+core (10 M⊙ ), while for the right panel (log(Denv /cm2 s−1 )=6),        induced rotational mixing.
+                                                                               22
+the envelope mixing keeps the mass fraction smoothed out in                       Ne
+                                                                              22
+the envelope. During helium burning, which starts at log(time                    Ne is interesting to study because it is the main neutron
+until collapse/yrs)=6.0 in Fig. 9, 19 F is produced in the stellar       sources for the slow neutron-capture process (s-process), via the
+core. In the left panel (αov =0.2 and log(Denv /cm2 s−1 )=0), all        22
+                                                                            Ne(α,n)25 Mg reaction in massive stars. The amount of 22 Ne
+the 19 F remains in the core. For the right panel (αov =0.2 and          and its distribution throughout the star will affect the amount
+log(Denv /cm2 s−1 )=6), 19 F is mixed out, as can be seen by the         of s-process isotopes produced. Because we consider a star of
+darker shading above the convective helium burning core.                 20 M⊙ , this will mainly be the weak s-process, which produces
+Towards the end of helium burning, the central abundance is              the s-process isotopes between iron and strontium, though also
+significantly less, and also in the envelope it is reduced, until        slightly beyond that, such as 107 Pd (Pignatari et al. 2010). The
+the helium burning shell becomes active around log(time until            extra mixing could potentially produce more 22 Ne, which could
+collapse/yrs)=4.0. Panel b of Fig. 9 shows clearly that, despite         lead to a boost in the s-process creating the isotopes beyond the
+the enhanced envelope mixing, the 19 F produced in the core is           first peak as shown by e.g., Pignatari et al. (2008), Frischknecht
+not reaching the surface, which has a comparable mass-fraction           et al. (2012), Choplin et al. (2018), Limongi & Chieffi (2018).
+over the entire evolution. The 19 F produced in the core is mixed        However, these studies mainly consider low metallicity stars,
+out to roughly the top of the hydrogen-depleted core (blue               while we consider solar metallicity.
+dotted line in Fig. 9). The overall effect is that these models have          In the right panel of Fig. 10, the yields for 22 Ne are shown.
+negative 19 F net yields over the whole range (see left panel of         For the models with log(Denv /cm2 s−1 )=0-4.5, they follow a
+Fig. 10), as there is more destruction in the star than 19 F leaving     similar trend as for 19 F. The 22 Ne wind yields increase strongly
+the star in the stellar winds.                                           for αov =0.05, with almost a factor 6, while for αov =0.4, the wind
+    The red line at the top of the left panel of Fig. 10 is              yields barely increase compared to the other models with the
+the initial amount of 19 F present in the star. None of the              same value for the CBM. This is due to a combination of when
+                                                                         22
+models have positive net yields. Compared to the model with                 Ne is produced the difference in the duration of the hydrogen
+log(Denv /cm2 s−1 )=0, all models with log(Denv /cm2 s−1 )=6 have        and helium burning phases between the different models, and a
+larger yields, except for αov =0.4, where the yield is lower. This       difference in the mass loss history.
+is because, despite having the largest amount of mass loss,                   Fig. 11 shows the 22 Ne-content for the models with αov =0.2
+this model also has the longest main sequence lifetime. The              and log(Denv /cm2 s−1 )=0 (left) and log(Denv /cm2 s−1 )=6 (right).
+                                                                         22
+strong interaction between the stellar core and stellar envelope            Ne is partially destroyed during hydrogen-burning in the
+leads to an increased destruction of 19 F, which lowers the yield.       core by proton-captures via 22 Ne(p,γ)23 Na, which is part of the
+Also, the shorter duration of helium burning reduces the amount          Ne-Na-cycle. Beyond hydrogen burning, 22 Ne is produced again
+of 19 F mixed into the envelope during helium burning, which             during helium burning, first in the core, and then in the helium
+together leads to a lower wind yield for this model than for             burning shell by a chain of α-captures on the 14 N left by the
+the model without enhanced envelope mixing.The difference in             CNO-cycle. Part of the 22 Ne produced here is then destroyed by
+mass lost during helium burning causes the differences in the            α-captures.
+yields aside from the enhanced destruction. Overall, the yields               The strong increase in the wind yield from
+are fairly comparable, which is mainly because the 19 F expelled         log(Denv /cm2 s−1 )=0 and log(Denv /cm2 s−1 )=6 for αov =0.05
+
+Article number, page 10 of 18
+                                        Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+
+
+
+Fig. 9. Same as Fig. 6 but with 19 F on the colour scale.
+
+
+
+
+Fig. 10. Same as Fig. 5, but for 19 F (left) and 22 Ne (right). The lower panels show the ratio between the yield of the reference models
+(log(Denv /cm2 s−1 )=0), and the models with the other values for log(Denv /cm2 s−1 ).
+
+
+is due to the large difference in the mass loss between the two         4.2.2. The stable isotopes of the CNO-cycle
+models, 5.2 M⊙ versus 9.1 M⊙ . This is similar for αov =0.1
+and αov =0.2, though the difference decreases with increasing           The isotopes of the CNO-cycle are interesting because they are
+CBM. For αov =0.4, the 22 Ne yields are all comparable, which           among the most abundant elements in the Universe. The ori-
+has to do with competing mechanisms. While the mass loss for            gin of the CNO-ratios as measured in stardust grains has been
+the model with log(Denv /cm2 s−1 )=6 is the largest with 10.17          extensively studied (see, e.g., Romano & Matteucci 2003; Ro-
+M⊙ , the combination of the longest hydrogen burning lifetime           mano et al. 2019; Kobayashi et al. 2020, and references therein).
+with the shortest helium burning lifetime leads to a comparable         However, their astrophysical sources, especially for carbon, are
+yield as αov =0.4 and log(Denv /cm2 s−1 )=0. When the hydrogen          not well understood (see, e.g., Kobayashi et al. 2020). At the
+burning lifetime increases with more envelope mixing, 22 Ne is          same time, due to their large abundance, these elements can be
+mixed from the envelope into the core, where it is destroyed.           measured in the atmospheres of stars. Especially 14 N has been
+This reduces the amount of 22 Ne in the envelope and brings the         used as a measure of the rotational mixing (see, e.g., Maeder &
+yield down. Also, due to the shorter helium burning lifetime, the       Meynet 2000). Here we consider the yields of the most abun-
+22
+   Ne produced in the stellar core has limited time to diffuse into     dant isotopes of the CNO-cycle, and briefly discuss how the sur-
+the envelope to contribute to the stellar yield. All together, this     face ratios of these isotopes change over the evolution of the
+leads to the models with αov =0.4 having comparable yields.             star. The solar ratios of the CNO-isotopes are well-known from
+    For the models of Brinkman et al. (2021), the yields decrease       meteoretic data. While the short-lived radioactive isotopes are
+with increasing rotational velocity. This is due to the enhanced        produced close in time and location to the early Solar System,
+mixing between the stellar envelope and the stellar core, just          the CNO-isotopes have a slow build-up over the galactic history.
+as described above. For the model with an initial rotational            Therefore, any potential source of the short-lived radioactive iso-
+velocity of 300 km/s the interaction is the strongest, leading to       topes must have a comparable mixture of CNO-isotopes to the
+the lowest yield.                                                       early Solar System, or such that the ratios do not change beyond
+                                                                                                              Article number, page 11 of 18
+                                                         A&A proofs: manuscript no. main
+
+
+
+
+Fig. 11. Same as Fig. 6 but with 22 Ne on the colour scale.
+
+
+their error-bars (Gounelle & Meibom 2007).                               below the convective boundary. On the Hertzsprung-gap (bot-
+     Fig. 12 shows the yields of seven isotopes, 12,13 C, 14,15 N, and   tom left panel), the semi-convective mixing in the model with
+16−18
+      O (the last two isotopes are combined in one panel). In all        log(Denv /cm2 s−1 )=0 causes the step profile while the model with
+panels, the initial amount of the isotope present in the models is       log(Denv /cm2 s−1 )=6.0 has a smooth internal distribution of 14 N.
+given by the red line. Overall, the isotopes can be split into three     At the onset of helium burning, 14 N is destroyed in the core (be-
+categories, (i) those that are produced and destroyed during he-         low ∼ 5 M⊙ ). Just outside the helium burning core there is a
+lium burning, 12 C and 18 O, (ii) those that are abundantly present      build-up of 14 N. In the envelope the levels of 14 N are increased
+at the end of hydrogen burning and are destroyed during helium           due to the hydrogen burning shell, leading to the highest surface
+burning, 13 C and 14 N, and (iii) those that are produced during he-     mass-fraction for the rotating model.
+lium burning and survive the burning stage, 15 N, 16 O, and 17 O.            The yields for 14 N and 15 N are given in the central pan-
+The first group shows a comparable behaviour to 19 F, the second         els of Fig. 12. The yields for 14 N follow the same trend as
+and third group show a comparable behaviour to 22 Ne. All iso-           22
+                                                                            Ne. All yields with αov =0.2 and 0.4 as well as the models
+topes are initially turned into 14 N as part of the CNO-cycles dur-      with log(Denv /cm2 s−1 )=6.0 give positive net yields. For the other
+ing core hydrogen burning and then reach an equilibrium value.           models the yields are close to the initial amount of 14 N present
+Nearly all net yields of the isotopes of the CNO-cycle are nega-         in the star.
+tive, except for 13 C and 14 N.                                               Carbon
+    The CNO-cycle is a catalytic cycle, meaning that as soon                 The yields for 12 C and 13 C are given in the top panels of Fig.
+as an equilibrium is reached, none of the isotopes involved are          12. During helium burning, 12 C is produced by the triple-α pro-
+overall created or destroyed. The slowest reaction of the CNO-           cess. Some of this 12 C is then turned into 16 O via subsequent α-
+cycle is the 14 N(p,γ)15 O, leading to a build-up of 14 N during         capture. Due to the combination of production and destruction,
+hydrogen burning. Fig. 13 shows how the 12 C/14 N surface ratio          the yields of 12 C show a similar behaviour as for 19 F. None of
+starts to change at the TAMS, mainly for log(Denv /cm2 s−1 )=6.0         the models presented here have a positive net yield for 12 C. For
+(purple symbols). At the onset of helium burning deeper layers           the models of Brinkman (2022), the 12 C yields decrease with in-
+of the star, where the composition is changed due to the ear-            creasing initial rotational velocity. As for the previous isotopes,
+lier burning, are exposed due to mass loss, and the ratios have          this is due to the enhanced mixing between the core and the en-
+strongly changed compared to the ZAMS. For the 14 N/16 O-ratio           velope. Like for 19 F, the models with log(Denv /cm2 s−1 )=6.0 have
+the changes are less visible at the TAMS, and mainly occur at the        increased yields compared to the model without envelope mixing
+onset of helium burning. This means that, despite the enhanced           instead of decreasing yields, though at most the yields increase
+mixing in the envelope, the surface of the star is not strongly en-      by a factor 1.9.
+riched in processed CNO material during the main sequence.                   13
+                                                                                C is completely destroyed by α-captures via the
+                                                                         13
+    Nitrogen                                                                C(α,n)16 O reaction. This produces the first neutron burst for
+    Fig. 14 shows the internal abundance profiles of 14 N at four        the production of 36 Cl and 41 Ca at the beginning of helium burn-
+moments in the stellar evolution. Our models (blue and purple            ing. The 13 C that is expelled via the stellar wind into the inter-
+lines) are compared with the non-rotating and fastest rotating           stellar medium, however, is produced during hydrogen-burning
+models from Brinkman et al. (2021) (grey lines). Halfway up              as part of the CNO-cycle. It therefore has a similar behaviour
+the main-sequence (top left panel) and at the TAMS (top right            as 14 N. 13 C(p,γ)14 N is the second-slowest reaction of the CNO-
+panel), the model with the highest rotational velocity (dotted           cycle, making 13 C the second most abundant isotope of the cy-
+line, 300 km/s) has an enhanced surface abundance of 14 N, while         cle. 13 C is produced when the initially more abundant 12 C is
+the other models do not. It shows that the enhanced envelope             converted into 13 N, which then decays into 13 C. Like for 14 N,
+                                                                         13
+mixing smooths out the nitrogen build-up on top of the hydrogen             C is mixed into the envelope, leading to a positive net yield
+burning core (area up to ∼10 M⊙ ). The non-rotating model has            for the models with a strong enough interaction between the
+slightly higher 14 N values just outside of the hydrogen-burning         core and the envelope (αov =0.2 and 0.4, and all models with
+core due the larger value of f0 , which leads to more mixing from        log(Denv /cm2 s−1 )=6.0).
+
+Article number, page 12 of 18
+                                        Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+
+
+
+Fig. 12. The yields for the main isotopes of the CNO-cycle for the different values of αov and log(Denv /cm2 s−1 ) (dots connected by lines). The
+horizontal lines indicate the yields of 20 M⊙ models (dashed, dashed-dotted, and dotted lines) with different rotational velocities (0, 150, and 300
+km/s, from Brinkman (2022)). The isotopes are 12 C, 13 C, 14 N, 15 N, 16 O, and in the last panel 17 O (solid lines) and 18 O (dash-dotted lines). In this
+panel, the grey horizontal lines are for 17 O and the black horizontal lines are for 18 O. The lower panels show the ratio between the yield of the
+reference models (log(Denv /cm2 s−1 )=0), and the models with the other values for log(Denv /cm2 s−1 ).
+
+
+     The 13 C yields from Brinkman (2022) increase for an ini-                This then reduces the yields. In comparison, the models with
+tial rotational velocity of 150 km/s, but then decrease for an ini-           log(Denv /cm2 s−1 )=6.0 behave more like those with an initial ro-
+tial rotational velocity of 300 km/s. This is because the previ-              tational velocity of 150 km/s.
+ously mentioned catalytic nature of the CNO-cycle. The more                       Oxygen
+14
+   N is removed from the core, the more 13 C is converted into                    The lower panels of Fig. 12 give the yields of 16−18 O. 16 O
+14
+   N, but the compensation is reduced due to the removal of 14 N.             behaves comparable to 22 Ne. However, the initial abundance of
+
+                                                                                                                          Article number, page 13 of 18
+                                                         A&A proofs: manuscript no. main
+
+                                                                             – From log(Denv /cm2 s−1 )=0 to log(Denv /cm2 s−1 )=4.5, the nu-
+                                                                               cleosynthetic yields do not significantly increase. This is be-
+          3.00                                                                 cause the envelope mixing is a diffusive process and the
+          2.50                                                                 timescale is too short for significant mixing up to the sur-
+          2.00
+12C/14N
+
+
+
+
+                         ov=0.05
+                                                                               face to take place. The main increase happens only for
+          1.50           ov=0.1                                                log(Denv /cm2 s−1 )=6, for which the diffusive mixing is strong
+          1.00           ov=0.2                                                enough for the isotopes to reach the upper layers of the enve-
+          0.50           ov=0.4                                                lope on the evolutionary timescales of the models. Especially
+                                                                               for 36 Cl and 41 Ca the increase is significant with ∼ 11 orders
+                        D=0                                                    of magnitude compared to the models without enhanced en-
+          0.60          D=1.5                                                  velope mixing.
+                        D=3
+14N/16O
+
+
+
+
+                                                                             – For 26 Al an increase in the convective boundary leads to
+          0.40          D=4.5                                                  lower yields because the longer main sequence lifetimes im-
+                        D=6                                                    ply an increased decay of the isotope inside the star.
+          0.20
+                                                                             – Out of the stables isotopes, only 13 C and 14 N have mainly
+                 ZAMS        MMS        TAMS       HRG     ZAHeB               positive net yields, and even for those not over the full range
+                                   Evolution phase                             of models. For most of the stable isotopes the net yields are
+                                                                               negative, as is expected for this mass.
+Fig. 13. The change of the C/N and N/O-ratios on the surface of the
+models given at seven different times in the evolution; at the zero-age     We also find that the surface abundance-ratios of our models do
+main-sequence (ZAMS), half-way the main-sequence (MMS), at the              not significantly change during the main sequence (see Fig. 13),
+terminal-age main-sequence (TAMS), on the Hertzsprung-gap (HRG),
+                                                                            except for the models with the largest amount of envelope mix-
+and at the onset of helium burning (ZAHeB). The symbols are for the
+different values for αov while the colours indicate the different amounts   ing (log(Denv /cm2 s−1 )=6). At the start of helium burning (ZA-
+of log(Denv /cm2 s−1 ) in the same way as in the previous figures.          HeB), all stars show an enhancement of 14 N on the surface,
+                                                                            which is not due to envelope mixing, but due to the stellar winds
+                                                                            exposing the processed layers of the stellar interior. Our mod-
+16                                                                          els do not favour a strong nitrogen enrichment of the surface
+   O is very high, and due to its late production during helium
+burning, all the net yields are negative. For 17 O and 18 O, none           on the main-sequence, even for log(Denv /cm2 s−1 )=6 the enrich-
+of the net yields are positive either. 17 O behaves comparable to           ment is moderate compared to the rotating model from Brinkman
+22                                                                          (2022) (dotted grey line in Fig. 14), which is in line with Aerts
+   Ne due to its production in the late stages of core helium burn-
+ing. All the net yields are negative for this isotope. 18 O is pro-         et al. (2014). In future work we will study the interplay between
+duced as part of the following reaction chain from 14 N into 22 Ne;         rotational and internal gravity wave mixing to compute surface
+14
+   N(α,γ)18 F(,e+ )18 O(α,γ)22 Ne. In the final step, by the end of he-     abundances and nucleosynthetic yields.
+lium burning, it is almost completely destroyed again. This leads               Further future work will include, but will not be limited to,
+to negative net yields over the whole range of models following             the following:
+the trend of 19 F.
+                                                                             – Consideration of different shapes of the mixing profile for the
+                                                                               envelopes, based on Ω(r) and dΩ(r)dr profiles, see Mombarg
+5. Conclusions                                                                 et al. (2022).
+In this first study of the effect of enhanced CBM and enhanced               – Consideration of time-dependent CBM and time-dependent
+envelope mixing based on a mixing profile from internal gravity                envelope mixing, see Varghese et al. (2023).
+waves, with their strengths based on asteroseismic calibrations,             – Inclusion of joint rotational and internal gravtiy wave mix-
+we reach the following conclusions:                                            ing.
+                                                                             – Extension of the current set of models to lower and higher
+ – On the main sequence, the effects on the stellar evolution are              masses to allow for comparison with observations of de-
+   comparable to other studies considering CBM (e.g., Kaiser                   tached binary systems and comparison with samples of ob-
+   et al. 2020), or the effects of rotationally induced mixing                 served stars.
+   (see, e.g., Ekström et al. 2012; Limongi & Chieffi 2018;                  – Extension of the models to cover the final phases of the stel-
+   Brinkman et al. 2021, and many others).                                     lar evolution up to core collapse, which can then be used for
+ – During helium burning, enhanced envelope mixing leads                       nucleosynthetic post-processing of the pre-supernova phase
+   to longer helium burning timescales and smaller helium-                     to determine the weak s-process yields, as well as the pos-
+   depleted cores at the end of helium burning. This suggests                  sibility to explode the models and study the impact of enve-
+   that while CBM is the dominant source of mixing on the                      lope mixing based on internal gravity waves on the super-
+   main sequence, where the envelope mixing only has a strong                  nova yields.
+   impact for log(Denv /cm2 s−1 )=6, the envelope mixing is the
+   more important mechanism during core helium burning.                     Acknowledgements. HEB thanks the MESA team for making their code pub-
+ – The combination of enhanced envelope and CBM has a                       licly available, and Ebraheem Farag and Jared Goldberg for their advice on stel-
+                                                                            lar modelling, as well as Rob Farmer for debugging the part of the code related
+   strong impact on the carbon-to-oxygen-ratio at the end of he-            to the reaction rates, and Matthias Fabry for general help with debugging. The
+   lium burning. This leads an earlier transition from convective           research leading to these results has received funding from the KU Leuven Re-
+   to radiative carbon burning than is seen in the literature. This         search Council (grant C16/18/005: PARADISE), from the Research Foundation
+   can potentially have strong effects on the final fate of mas-            Flanders (FWO) under grant agreement G089422N, as well as from the BELgian
+                                                                            federal Science Policy Office (BELSPO) through PRODEX grant PLATO. MM
+   sive stars and on the explosive nucleosynthesis, as changes              acknowledges support from the Research Foundation Flanders (FWO) by means
+   in this ratio change the mass-radius relation (compactness)              of a PhD scholarship under project No. 11F7120N.
+   and the potential occurrence of shell mergers.
+Article number, page 14 of 18
+                                            Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+
+
+
+Fig. 14. The 14 N abundance profiles at four different phases of the evolution of the models with αov =0.2 and log(Denv /cm2 s−1 )=0 (blue) and 6
+(purple). The top left panel shows the profiles halfway the main-sequence (MMS), the top right at the end of the main sequence (TAMS), the
+bottom left at the beginning of the Hertzsprung-gap (HRG), and the bottom right at the onset of helium burning (ZAHeB). The grey lines a (dashed
+for 0 km/s and dotted for 300 km/s) are from Brinkman (2022).
+
+
+References                                                                           Franco, M., Coppin, K. E. K., Geach, J. E., et al. 2021, Nature Astronomy, 5,
+                                                                                         1240
+Abia, C., Cristallo, S., Cunha, K., de Laverny, P., & Smith, V. V. 2019, A&A,        Frischknecht, U., Hirschi, R., & Thielemann, F. K. 2012, A&A, 538, L2
+   625, A40                                                                          Georgy, C., Ekström, S., Granada, A., et al. 2013, A&A, 553, A24
+Adams, F. C. 2010, ARA&A, 48, 47                                                     Ghasemi, H., Moravveji, E., Aerts, C., Safari, H., & Vučković, M. 2017, MN-
+Aerts, C. 2021, Reviews of Modern Physics, 93, 015001                                    RAS, 465, 1518
+Aerts, C., Mathis, S., & Rogers, T. M. 2019, ARA&A, 57, 35                           Gounelle, M. & Meibom, A. 2007, ApJ, 664, L123
+Aerts, C., Molenberghs, G., Kenward, M. G., & Neiner, C. 2014, ApJ, 781, 88          Grisoni, V., Romano, D., Spitoni, E., et al. 2020, MNRAS, 498, 1252
+Aerts, C., Thoul, A., Daszyńska, J., et al. 2003, Science, 300, 1926                Guenther, D. B., Demarque, P., & Gruberbauer, M. 2014, ApJ, 787, 164
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491, 972           Heger, A., Langer, N., & Woosley, S. E. 2000, ApJ, 528, 368
+Angelou, G. C., Bellinger, E. P., Hekker, S., et al. 2020, MNRAS, 493, 4987          Herwig, F. 2000, A&A, 360, 952
+Angulo, C., Arnould, M., Rayet, M., et al. 1999, Nuclear Physics A, 656, 3           Herwig, F., Bloecker, T., Schoenberner, D., & El Eid, M. 1997, A&A, 324, L81
+Arnould, M., Paulus, G., & Meynet, G. 1997, A&A, 321, 452                            Hirschi, R., Meynet, G., & Maeder, A. 2004, A&A, 425, 649
+Aver, E., Olive, K. A., Porter, R. L., & Skillman, E. D. 2013, J. Cosmology          Hirschi, R., Meynet, G., & Maeder, A. 2005, A&A, 433, 1013
+   Astropart. Phys., 2013, 017                                                       Iliadis, C., Longland, R., Champagne, A. E., & Coc, A. 2010, Nuclear Physics
+Banerjee, P., Heger, A., & Qian, Y.-Z. 2019, ApJ, 887, 187                               A, 841, 323
+Basunia, M. & Hurst, A. 2016, Nuclear Data Sheets, 134, 75                           Imbriani, G., Costantini, H., Formicola, A., et al. 2005, European Physical Jour-
+Björklund, R., Sundqvist, J. O., Puls, J., & Najarro, F. 2021, A&A, 648, A36             nal A, 25, 455
+Böhm-Vitense, E. 1958, ZAp, 46, 108                                                  Jermyn, A. S., Bauer, E. B., Schwab, J., et al. 2023, ApJS, 265, 15
+Brinkman, H. E. 2022, Phd thesis, University of Szeged, 10 Ady Tér, Szeged,          Johnston, C. 2021, A&A, 655, A29
+   Csongrad 6722, Hungary, available at https://doi.org/10.14232/phd.                Jönsson, H., Ryde, N., Harper, G. M., et al. 2014a, A&A, 564, A122
+   11277                                                                             Jönsson, H., Ryde, N., Harper, G. M., Richter, M. J., & Hinkle, K. H. 2014b,
+Brinkman, H. E., den Hartog, H., Doherty, C. L., Pignatari, M., & Lugaro, M.             ApJ, 789, L41
+   2021, ApJ, 923, 47                                                                Jönsson, H., Ryde, N., Spitoni, E., et al. 2017, ApJ, 835, 50
+Brinkman, H. E., Doherty, C. L., Pols, O. R., et al. 2019, ApJ, 884, 38              Kaiser, E. A., Hirschi, R., Arnett, W. D., et al. 2020, MNRAS, 496, 1967
+Briquet, M., Morel, T., Thoul, A., et al. 2007, MNRAS, 381, 1482                     Kobayashi, C., Karakas, A. I., & Lugaro, M. 2020, ApJ, 900, 179
+Charpinet, S., Van Grootel, V., Fontaine, G., et al. 2011, A&A, 530, A3              Kudritzki, R.-P. & Puls, J. 2000, ARA&A, 38, 613
+Charpinet, S., Van Grootel, V., Randall, S. K., et al. 2010, Highlights of Astron-   Laird, A. M., Lugaro, M., Kankainen, A., et al. 2023, Journal of Physics G Nu-
+   omy, 15, 357                                                                          clear Physics, 50, 033002
+Chieffi, A. & Limongi, M. 2013, ApJ, 764, 21                                         Langer, N. 2012, ARA&A, 50, 107
+Chieffi, A., Roberti, L., Limongi, M., et al. 2021, ApJ, 916, 79                     Limongi, M. & Chieffi, A. 2006, ApJ, 647, 483
+Choplin, A., Hirschi, R., Meynet, G., et al. 2018, A&A, 618, A133                    Limongi, M. & Chieffi, A. 2018, ApJS, 237, 13
+Claret, A. & Torres, G. 2017, ApJ, 849, 18                                           Limongi, M. & Chieffi, A. 2020, ApJ, 902, 95
+Cyburt, R. H., Amthor, A. M., Ferguson, R., et al. 2010, ApJS, 189, 240              Lugaro, M., Ott, U., & Kereszturi, Á. 2018, Progress in Particle and Nuclear
+Deheuvels, S., Brandão, I., Silva Aguirre, V., et al. 2016, A&A, 589, A93                Physics, 102, 1
+Diehl, R., Lugaro, M., Heger, A., et al. 2021, PASA, 38, e062                        Maeder, A. & Meynet, G. 2000, ARA&A, 38, 143
+Ekström, S., Georgy, C., Eggenberger, P., et al. 2012, A&A, 537, A146                Mathis, S., Palacios, A., & Zahn, J. P. 2004, A&A, 425, 243
+Ekström, S., Meynet, G., Maeder, A., & Barblan, F. 2008, A&A, 478, 467               Meynet, G. & Arnould, M. 2000, A&A, 355, 176
+Ertl, T., Janka, H. T., Woosley, S. E., Sukhbold, T., & Ugliano, M. 2016, ApJ,       Michielsen, M., Aerts, C., & Bowman, D. M. 2021, A&A, 650, A175
+   818, 124                                                                          Michielsen, M., Pedersen, M. G., Augustson, K. C., Mathis, S., & Aerts, C. 2019,
+Farmer, R., Fields, C. E., Petermann, I., et al. 2016, ApJS, 227, 22                     A&A, 628, A76
+Forestini, M., Goriely, S., Jorissen, A., & Arnould, M. 1992, A&A, 261, 157          Mombarg, J. S. G., Dotter, A., Rieutord, M., et al. 2022, ApJ, 925, 154
+
+                                                                                                                                   Article number, page 15 of 18
+                                                               A&A proofs: manuscript no. main
+
+Mombarg, J. S. G., Van Reeth, T., Pedersen, M. G., et al. 2019, MNRAS, 485,
+   3248
+Montalbán, J., Miglio, A., Noels, A., et al. 2013, ApJ, 766, 118
+Moravveji, E., Aerts, C., Pápics, P. I., Triana, S. A., & Vandoren, B. 2015, A&A,
+   580, A27
+Moravveji, E., Townsend, R. H. D., Aerts, C., & Mathis, S. 2016, ApJ, 823, 130
+Nesaraja, C. & McCutchan, E. 2016, Nuclear Data Sheets, 133, 120
+Nica, N., Cameron, J., & Singh, J. 2012, Nuclear Data Sheets, 113, 25
+Nieuwenhuijzen, H. & de Jager, C. 1990, A&A, 231, 134
+Noll, A., Deheuvels, S., & Ballot, J. 2021, A&A, 647, A187
+Nomoto, K., Kobayashi, C., & Tominaga, N. 2013, ARA&A, 51, 457
+Nugis, T. & Lamers, H. J. G. L. M. 2000, A&A, 360, 227
+O’Connor, E. & Ott, C. D. 2011, ApJ, 730, 70
+Palacios, A., Arnould, M., & Meynet, G. 2005, A&A, 443, 243
+Paxton, B., Bildsten, L., Dotter, A., et al. 2011, ApJS, 192, 3
+Paxton, B., Cantiello, M., Arras, P., et al. 2013, ApJS, 208, 4
+Paxton, B., Marchant, P., Schwab, J., et al. 2015, ApJS, 220, 15
+Paxton, B., Schwab, J., Bauer, E. B., et al. 2018, ApJS, 234, 34
+Paxton, B., Smolec, R., Schwab, J., et al. 2019, ApJS, 243, 10
+Pedersen, M. G. 2022, ApJ, 930, 94
+Pedersen, M. G., Aerts, C., Pápics, P. I., et al. 2021, Nature Astronomy, 5, 715
+Pignatari, M., Gallino, R., Heil, M., et al. 2010, ApJ, 710, 1557
+Pignatari, M., Gallino, R., Meynet, G., et al. 2008, ApJ, 687, L95
+Pignatari, M., Herwig, F., Hirschi, R., et al. 2016, ApJS, 225, 24
+Prantzos, N., Abia, C., Limongi, M., Chieffi, A., & Cristallo, S. 2018, MNRAS,
+   476, 3432
+Przybilla, N., Nieva, M. F., Irrgang, A., & Butler, K. 2013, in EAS Publica-
+   tions Series, Vol. 63, EAS Publications Series, ed. G. Alecian, Y. Lebreton,
+   O. Richard, & G. Vauclair, 13–23
+Ritter, C., Herwig, F., Jones, S., et al. 2018, MNRAS, 480, 538
+Roberti, L., Limongi, M., & Chieffi, A. 2024, ApJS, 270, 28
+Rogers, T. M. & McElwaine, J. N. 2017, ApJ, 848, L1
+Romano, D. & Matteucci, F. 2003, Memorie della Societa Astronomica Italiana
+   Supplementi, 3, 163
+Romano, D., Matteucci, F., Zhang, Z.-Y., Ivison, R. J., & Ventura, P. 2019, MN-
+   RAS, 490, 2838
+Ryde, N., Jönsson, H., Mace, G., et al. 2020, ApJ, 893, 37
+Sana, H., de Mink, S. E., de Koter, A., et al. 2012, Science, 337, 444
+Smith, N. 2014, ARA&A, 52, 487
+Stancliffe, R. J., Lugaro, M., Ugalde, C., et al. 2005, MNRAS, 360, 375
+Straka, C. W., Demarque, P., & Guenther, D. B. 2005, ApJ, 629, 1075
+Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., & Janka, H.-T. 2016, ApJ,
+   821, 38
+Tkachenko, A., Pavlovski, K., Johnston, C., et al. 2020, A&A, 637, A60
+Ugalde, C., Azuma, R. E., Couture, A., et al. 2008, Phys. Rev. C, 77, 035801
+Uzundag, M., Vučković, M., Németh, P., et al. 2021, A&A, 651, A121
+Valle, G., Dell’Omodarme, M., Prada Moroni, P. G., & Degl’Innocenti, S. 2017,
+   A&A, 600, A41
+Van Grootel, V., Charpinet, S., Fontaine, G., et al. 2010a, ApJ, 718, L97
+Van Grootel, V., Charpinet, S., Fontaine, G., Green, E. M., & Brassard, P. 2010b,
+   A&A, 524, A63
+Varghese, A., Ratnasingam, R. P., Vanon, R., Edelmann, P. V. F., & Rogers, T. M.
+   2023, ApJ, 942, 53
+Viani, L. S. & Basu, S. 2020, ApJ, 904, 22
+Vink, J. S. & de Koter, A. 2005, A&A, 442, 587
+Vink, J. S., de Koter, A., & Lamers, H. J. G. L. M. 2000, A&A, 362, 295
+Vink, J. S., de Koter, A., & Lamers, H. J. G. L. M. 2001, A&A, 369, 574
+Womack, K. A., Vincenzo, F., Gibson, B. K., et al. 2023, MNRAS, 518, 1543
+Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Reviews of Modern Physics,
+   74, 1015
+Wu, T., Li, Y., Deng, Z.-m., et al. 2020, ApJ, 899, 38
+Zahn, J. P. 1991, A&A, 252, 179
+
+
+
+
+Article number, page 16 of 18
+                                                                                                                                                                                                                                 Appendix B: Nucleosynthetic Yields
+                                                                                                                                                                                                                                                                      Appendix A: Stellar evolution information
+
+
+
+
+                                Table A.1. Selected properties of the evolution models: Mini is the initial mass in M⊙ ; αov the amount of CBM on the main sequence; D is short for log(Denv /cm2 s−1 ), the amount of envelope mixing;
+                                tH , tHe , and ttot the duration of hydrogen burning, helium burning, and the total evolution time in Myr, respectively. M∗,H , M∗,He , and M∗,C are the masses of the stars at the end of their respective
+                                burning phases in M⊙ ; Mc,He and Mc,C the masses of the hydrogen- and the helium-depleted core, respectively, at the end of the corresponding burning phases in M⊙ ; (C/O)c is the carbon-over-oxygen
+                                ratio of the core at the end of helium burning; 22 Netot gives the total mass of 22 Ne at the end of helium burning in M⊙
+
+                                , ∆M the total mass lost in M⊙ ; Tc, f is the final core temperature in K, and ρc, f is the final core density in g/cm3 .
+                                                                                                                                                    22                                            T                ρ
+                                                                                                                                                                                                                   c, f
+                                                     Mini     αov      D       tH       Mc,He     M∗,H       tHe     Mc,C      M∗,He     (C/O)c       Netot    M∗,C        ttot     ∆M      log( Kc, f )   log( g∗cm    −3 )
+
+                                                    (M⊙ )       -      -     (Myr)      (M⊙ )     (M⊙ )    (Myr)     (M⊙ )     (M⊙ )         -       (M⊙ )     (M⊙ )     (Myr)     (M⊙ )        -                -
+                                                     20       0.05     0      8.09      4.62      19.9     0.797     4.55      14.8       0.441     0.0256     14.6       9.01     5.39       8.97            5.98
+                                                     20       0.05    1.5     8.11      4.63      19.9     0.793     4.47      15.2       0.455     0.0263      15        9.03     4.96       8.97              6
+                                                     20       0.05     3      8.11      4.64      19.9      0.81     4.52      14.8       0.425     0.0257     14.6       9.04      5.4       8.98            5.96
+                                                     20       0.05    4.5     8.08      4.61      19.9     0.813     4.29      15.2       0.413     0.0249     15.1       9.02     4.94       8.98            5.97
+                                                     20       0.05     6      8.74      5.03      19.8      1.15     3.22      10.9       0.247      0.146     10.7       10.0     9.27       8.84            5.53
+                                                                                                                                                                                                                                                                                                                  Hannah E. Brinkman et al.: Nucleosynthesis and Asteroseismology
+
+
+
+
+                                                     20        0.1     0      8.25      4.97      19.9     0.741     4.58      15.9       0.479     0.0275     15.8       9.11     4.25       8.97            6.02
+                                                     20        0.1    1.5     8.25      4.97      19.9     0.737     4.69      15.4       0.469     0.0273     15.3       9.11     4.75       8.97            5.99
+                                                     20        0.1     3      8.25      4.98      19.9     0.739     4.66      15.5       0.467     0.0179     15.4       9.11     4.61       8.97            5.98
+                                                     20        0.1    4.5     8.29      4.99      19.9     0.748     4.60      15.1       0.431     0.0262     14.9       9.15     5.06       8.98            5.95
+                                                     20        0.1     6      8.99      5.41      19.7     0.997     3.93      10.6        0.23     0.0771     10.4       10.1     9.62       8.99            6.08
+                                                     20        0.2     0      8.72      5.71      19.7     0.672      5.6      12.9        0.43     0.0256     12.7       9.48     7.29         9             5.32
+                                                     20        0.2    1.5     8.72      5.71      19.7     0.673     5.59      12.9       0.431     0.0258     12.8       9.48     7.24         9             5.32
+                                                     20        0.2     3      8.72      5.71      19.7     0.672     5.57      13.0        0.43     0.0257     12.9       9.48     7.13         9             5.32
+                                                     20        0.2    4.5     8.75      5.74      19.7     0.681     5.41      13.2       0.409      0.025     13.0       9.53     6.95         9             5.33
+                                                     20        0.2     6      9.42      6.21      19.6     0.811     4.97      10.1       0.224     0.0362     9.99       10.3      10          9             5.85
+                                                     20        0.4     0      9.50      7.16      19.5     0.582     6.88      11.4       0.403     0.0235     11.2       10.2     8.75         9             5.22
+                                                     20        0.4    1.5     9.50      7.16      19.5     0.583     6.87      11.4       0.404     0.0237     11.3       10.2     8.74         9             5.23
+
+
+
+
+Article number, page 17 of 18
+                                                     20        0.4     3      9.50      7.16      19.5     0.583     6.87      11.4       0.403     0.0236     11.3       10.2     8.74         9             5.24
+                                                     20        0.4    4.5     9.54       7.2      19.5     0.587     6.76      11.3       0.384     0.0226     11.2       10.2     8.79         9             5.67
+                                                     20        0.4     6      10.1      7.79      19.3      0.66     6.64      9.83       0.232     0.0198     9.73       10.9     10.3         9             5.63
+                                Table B.1. Wind yields in M⊙ for the models for the isotopes 12 C, 13 C, 14 N, 15 N, 16 O, 17 O, 18 O, 19 F, 22 Ne, 26 Al, 36 Cl, and 41 Ca. αov is the overshoot on the main-sequence, and log(Denv /cm2 s−1 ) the
+                                strength of the envelope mixing. For the radioactive isotopes, the yields are not corrected for radioactive decay that might take place in the interstellar medium during the evolution of the star. For
+                                the stable isotopes we present the total yields, not corrected for the initial abundance.
+
+                                                                           12            13           14           15           16           17            18             19            22             26            36           41
+                                        Mini     αov      log(Denv )          C             C            N            N            O            O             O              F             Ne             Al            Cl           Ca
+                                       (M⊙ )       -          -           (M⊙ )         (M⊙ )        (M⊙ )        (M⊙ )        (M⊙ )        (M⊙ )         (M⊙ )          (M⊙ )         (M⊙ )          (M⊙ )         (M⊙ )         (M⊙ )
+                                        20       0.05        0.0        0.00618       0.000392      0.0121      5.45e-06      0.0298      1.99e-05      5.58e-05       2.18e-06       0.00058       1.39e-07      1.27e-19      7.32e-20
+                                        20       0.05        1.5        0.00561       0.000356      0.0115      4.97e-06      0.027       1.77e-05      5.06e-05       1.99e-06      0.000526       1.49e-07      1.25e-19       7.7e-20
+                                        20       0.05        3.0        0.00616       0.000391      0.0122      5.44e-06      0.0297      1.94e-05      5.57e-05       2.19e-06      0.000579       1.45e-07       1.3e-19      7.64e-20
+                                        20       0.05        4.5        0.00554       0.000352      0.0117      4.97e-06      0.0267      1.71e-05      4.99e-05       1.96e-06       0.00052       1.51e-07      1.42e-19      1.65e-19
+                                        20       0.05        6.0        0.00868       0.000996      0.116       9.64e-06      0.0544       4.4e-05      7.03e-05       2.95e-06       0.00332       2.26e-06      5.31e-08      5.38e-08
+                                        20        0.1        0.0        0.00476       0.000316      0.0104      4.09e-06      0.0226      1.33e-05      4.28e-05       1.66e-06      0.000441       1.28e-07      1.15e-19      7.56e-20
+
+
+
+
+Article number, page 18 of 18
+                                        20        0.1        1.5        0.00538       0.000355      0.0112      4.56e-06      0.0256      1.51e-05      4.84e-05       1.88e-06      0.000499        1.2e-07      1.26e-19      7.89e-20
+                                        20        0.1        3.0        0.00523       0.000332      0.011       4.64e-06      0.0248      1.43e-05      4.72e-05       1.82e-06      0.000484       1.23e-07      1.22e-19      7.84e-20
+                                        20        0.1        4.5        0.00573       0.000369      0.0121      5.01e-06      0.0272      1.58e-05      5.16e-05       1.99e-06       0.00053       1.29e-07      1.74e-19      2.72e-19
+                                        20        0.1        6.0        0.00906       0.000877      0.0816      9.19e-06      0.0489      3.33e-05      7.65e-05       3.01e-06       0.00198       2.01e-06      3.24e-08      4.07e-08
+                                        20        0.2        0.0        0.00901       0.000567      0.0149      7.76e-06      0.041       2.01e-05      8.15e-05       3.02e-06      0.000804       8.42e-08      1.78e-19      9.99e-20
+                                        20        0.2        1.5        0.00894       0.000563      0.0148      7.67e-06      0.0407      1.99e-05      8.08e-05        3e-06        0.000797       8.59e-08      1.77e-19      9.96e-20
+                                        20        0.2        3.0        0.00876       0.000551      0.0148      7.54e-06      0.0399      1.95e-05      7.92e-05       2.94e-06      0.000781       9.02e-08       1.8e-19      1.01e-19
+                                        20        0.2        4.5        0.00843       0.000531      0.0152      7.41e-06      0.0382      1.85e-05      7.61e-05       2.81e-06      0.000749       1.12e-07      1.78e-19      1.08e-19
+                                        20        0.2        6.0        0.00983        0.0008       0.0544      9.26e-06      0.0459      2.53e-05      8.47e-05       3.12e-06       0.00125       1.75e-06      1.38e-08      2.26e-08
+                                        20        0.4        0.0         0.0119       0.000729      0.0164      1.01e-05      0.0494      2.12e-05      0.000105       3.65e-06      0.000974       7.55e-08      2.14e-19      1.25e-19
+                                        20        0.4        1.5         0.0119       0.000728      0.0164      1.01e-05      0.0493      2.12e-05      0.000105       3.65e-06      0.000972       7.63e-08      2.14e-19      1.26e-19
+                                        20        0.4        3.0         0.0119       0.000727      0.0164      1.01e-05      0.0493      2.11e-05      0.000105       3.64e-06      0.000971       7.76e-08      2.15e-19      1.27e-19
+                                        20        0.4        4.5         0.0118       0.000719      0.0173      1.02e-05      0.0489       2.1e-05      0.000104       3.6e-06       0.000961       9.71e-08      2.23e-19      1.35e-19
+                                        20        0.4        6.0         0.011        0.000699      0.044       1.03e-05      0.0452      2.21e-05      9.08e-05       3.16e-06       0.00102       1.69e-06      6.59e-09      1.38e-08
+                                                                                                                                                                                                                                                      A&A proofs: manuscript no. main
+

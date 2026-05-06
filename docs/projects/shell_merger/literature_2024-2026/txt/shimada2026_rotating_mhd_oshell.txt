@@ -1,0 +1,1009 @@
+                                                 Draft version March 30, 2026
+                                                 Typeset using LATEX twocolumn style in AASTeX63
+
+
+
+
+                                                Angular momentum transport in the convection zone of a 3D MHD simulation of a rapidly rotating
+                                                                                  core-collapse progenitor
+                                                Ryota Shimada       ,1 Lucy O. McNeill       ,1, 2, 3 Vishnu Varma ,4 Keiichi Maeda          ,1 Takaaki Yokoyama        ,5 and
+                                                                                                     Bernhard Müller 6
+                                                                        1 Department of Astronomy, Kyoto University, Sakyo-ku, Kyoto, 606-8502, Japan
+arXiv:2603.26550v1 [astro-ph.SR] 27 Mar 2026
+
+
+
+
+                                                                       2 Hakubi Centre for Advanced Research, Kyoto University, Kyoto 606-8317, Japan
+                                                        3 Center for Interdisciplinary Theoretical and Mathematical Sciences (iTHEMS), RIKEN, Saitama 351-0198, Japan
+                                                                    4 Astrophysics Group, Lennard-Jones Laboratories, Keele University, Keele ST5 5BG, UK
+                                                                        5 Astronomical Observatory, Kyoto University, Sakyo-ku, Kyoto, 606-8502, Japan
+                                                              6 School of Physics and Astronomy, 10 College Walk, Monash University, Clayton, VIC 3800, Australia
+
+
+
+                                                                                                (Received; Revised; Accepted)
+
+                                                                                                     Submitted to ApJ
+
+                                                                                                        ABSTRACT
+                                                          Rotation and magnetic fields in the cores of evolved massive stars in their final phase are thought
+                                                       to play an important role in the subsequent supernova explosion and the formation of a compact
+                                                       object, especially in hyperenergetic explosions. However, the interplay between rotation, magnetic
+                                                       fields, and convection up to the final collapse is a nonlinear, multidimensional effect that is difficult
+                                                       to capture with standard one-dimensional (1D) stellar evolution models. We quantify the magnetic
+                                                       angular momentum (AM) transport in the convective oxygen burning shell in a three-dimensional (3D)
+                                                       rotating core-collapse progenitor model. We find that the radial direction of magnetic AM transport
+                                                       is directly related to the Rossby number of the convective oxygen shell. We also analyze the magnetic
+                                                       energy, which sets the amplitude of the magnetic AM flux. The magnetic energy is determined both
+                                                       by rotation and the nuclear energy generation rate analogously to low-mass stars like the Sun. Based
+                                                       on these results, we construct a 1D model of magnetic AM transport in the convection zone for the
+                                                       first time in terms of properties of a given stellar evolution model. This model successfully reproduces
+                                                       the AM transport in the 3D model when the convective dynamo is in a quasi-steady state. Notably,
+                                                       our model for radial AM transport is the first to account for inward AM flux. This may result in
+                                                       interesting differences compared to the conventional treatment of magnetic AM transport in stellar
+                                                       evolution models, which assume AM is transported outward by a purely diffusive process.
+
+                                                       Keywords: stars: massive — stars: evolution — stars: rotation — stars: magnetic fields — magneto-
+                                                                 hydrodynamics (MHD)
+
+                                                                1. INTRODUCTION                                    creasing consensus that efficient angular momentum
+                                                 Rotation and magnetic fields in the cores of massive              transport usually results in relatively slow pre-collapse
+                                               star immediately prior to core-collapse are key fac-                rotation (Heger et al. 2005; Fuller et al. 2019) in line
+                                               tors determining the nature of the explosion and the                with the observed birth spin periods of pulsars. How-
+                                               properties of the resulting compact object (Wheeler                 ever, hyperenergetic core-collapse supernovae of Type
+                                               et al. 2002; Heger et al. 2005). There is now an in-                Ic-BL (broad-lined) are difficult to account for without
+                                                                                                                   rapidly rotating stellar cores as a prerequisite for mag-
+                                                                                                                   netorotational explosions (e.g., Akiyama et al. 2003;
+                                               Corresponding author: Ryota Shimada                                 Mösta et al. 2014; Obergaulinger & Aloy 2021; Müller
+                                               shimada@kusastro.kyoto-u.ac.jp                                      2025). Evolutionary pathways for the formation of hy-
+                                                                                                                   erpnova progenitors with rapidly rotating cores have
+2                                                     Shimada et al.
+
+been proposed (Woosley & Heger 2006; Aguilera-Dena             els (e.g. Moyano et al. 2022). In other words, purely 1D
+et al. 2018), but these rely on recipes for angular mo-        hydrodynamic (HD) models overestimate core rotation
+mentum (AM) transport and field amplification within           rates by nearly two orders of magnitude (Moyano et al.
+spherically symmetric stellar evolution models. Multi-         2022). Similarly, observations of pulsating white dwarfs
+dimensional magnetohydrodynamic (MHD) simulations              indicate rotation rates far below those predicted by 1D
+of stellar interiors over evolutionary time scales could       models (den Hartogh et al. 2019).
+more accurately capture the nonlinear interaction be-
+tween the rotation, magnetic fields, and convection, but         The various discrepancies between asteroseismically
+remain computationally unfeasible. For this reason,            measured rotation rates and predictions from stellar
+the evolution of the rotation and magnetic fields to-          evolution models suggest that a key mechanism for AM
+wards core-collapse remains highly uncertain. However,         transport is missing from standard stellar evolution pre-
+3D MHD simulations of stellar interiors on short time          scriptions. One potential means to extract AM from
+scales are starting to shed light on the intricate problem     the core is via magnetic torques. For example, Fuller
+of AM transport and magnetic field amplification.              et al. (2019) suggested a modified Tayler–Spruit dy-
+                                                               namo model for radiative zones, which can reproduce
+  Recent 3D core-collapse progenitor simulations by            the core rotation rates of red giants and white dwarfs
+Varma & Müller (2023) have demonstrated that strong           under certain assumptions. However, to date, there
+magnetic fields, which are generated in convective shells      is no evolutionary model that adequately models the
+during the late stages of stellar evolution, can efficiently   convective dynamo across various stellar populations,
+transport AM from the O shell burning region surround-         or over dynamical timescales.
+ing the core to the outer layers before collapse. These
+results demonstrate the importance of magnetic AM                The solar convection zone constitutes one example
+transport in determining the structure of the progeni-         where 3D magnetoconvection simulations have been ex-
+tor stars and underscore shortcomings of current stellar       tensively performed and can also be compared with de-
+evolution models.                                              tailed observational data. In particular, 3D simulations
+                                                               of solar-like stars demonstrate how small-scale turbulent
+  Effective models for AM transport in 1D stellar evolu-       magneto-convection can influence the rotation rate, i.e.,
+tion models typically treat hydrodynamic (HD) effects          they affect AM transport by small-scale turbulent cor-
+of rotationally induced circulations, instabilities (e.g.      relations, namely Reynolds and Maxwell stresses. For
+Meynet & Maeder 2000). These models were later ex-             example, the rotationally-induced anisotropy in turbu-
+tended to incorporate magnetic torques in radiative            lence has been shown to generate Reynolds stresses that
+zones. Spruit (2002) proposed that dynamo field am-            are crucial for maintaining large-scale differential rota-
+plification based on the Tayler instability (Tayler 1973)      tion profiles in the solar convection zone (Kichatinov
+predominantly generates horizontal magnetic fields, en-        & Rudiger 1993; Miesch 2005). Recent high-resolution
+abling more efficient angular momentum transport than          3D MHD simulations further reveal that small-scale
+purely hydrodynamic processes (Spruit 2002; Fuller             magnetic field correlations, i.e., Maxwell stresses, dom-
+et al. 2019). These prescriptions have been implemented        inate radial AM transport, enabling the formation of
+into 1D stellar evolution codes (e.g., Heger et al. 2005;      the solar-like differential rotation, i.e., the equator ro-
+Eggenberger et al. 2008; Paxton et al. 2013) to model          tating faster (Hotta et al. 2022). Moreover, Augustson
+the evolution of core rotation from the main sequence          et al. (2019) demonstrated, through both semi-analytic
+through core collapse.                                         theory and 3D MHD simulations, that the ratio of mag-
+                                                               netic to kinetic energy (ME/KE) increases with the
+  Observationally, rotation rates of stellar cores are         increasing dynamical influence of rotation over inertia.
+measured with asteroseismology, providing observa-             This indicates a stronger magnetic feedback in the low
+tional constraints on 1D AM transport models (Aerts            Rossby number case of rapidly rotating convection. In
+et al. 2019). Asteroseismic observations reveal signifi-       extreme cases, ME/KE can exceed unity at low Rossby
+cant discrepancies between theoretical predictions and         numbers, so that magnetic AM transport becomes cru-
+stellar rotation rates across a diversity of stellar popula-   cial.
+tions. For example, Kepler observations of 1–2 M⊙ red
+giants reveal core rotation periods of 10–100 days (e.g.         For massive stars during advanced burning phases,
+Cantiello et al. 2014), which are much longer than the         recent 3D HD simulations (McNeill & Müller 2022)
+∼1 day periods predicted by purely hydrodynamic mod-           reveal radial and latitudinal angular-velocity gradients
+                           Angular momentum transport in the convection zone                                          3
+
+within the oxygen-burning shell. Interestingly, rota-        of AM redistribution within convective zones. In this
+tion in the convective regions is reminiscent of solar       section, we review the theoretical and numerical foun-
+differential rotation. In addition, they find that AM        dations of AM transport in stellar convection and evo-
+transported by convection is not well described by the       lution. We begin by reviewing the mechanisms of AM
+standard model by the 1D mixing length theory (MLT)          transport driven by rotating magnetoconvection, as re-
+(Böhm-Vitense 1958). Specifically, MLT fails to predict     vealed in simulations of solar-type stars (Section 2.1).
+both the magnitude and direction of convective AM            Next, in Section 2.2 we introduce the governing equa-
+transport. Nevertheless, the role of magnetic fields in      tions for radial AM transport used in 1D and 3D stellar
+AM transport within convective zones of massive stars        evolution simulations. Then in Section 2.3 we summa-
+remains largely unexplored.                                  rize the physically motivated approximations for convec-
+                                                             tive AM transport commonly used in 1D stellar evolu-
+  The aforementioned 3D MHD simulation by Varma &            tion models. Finally in Section 2.4 we review the 1D for-
+Müller (2023) demonstrates the magnetic amplification       mulation of magnetic AM transport in radiative zones.
+and AM transport by convective dynamo action in the
+cores of massive stars. Their simulation of convective        2.1. Rossby number dependence of turbulent angular
+shells in a rotating 16 M⊙ progenitor during the oxygen                       momentum transport
+and neon-burning phases show that convective dynamo            Internal AM transport has long been discussed in the
+action amplifies magnetic fields to strengths of ∼ 1011 G.   context of the solar convection zone (e.g., Busse 1970;
+These strong fields generate Maxwell stresses that are       Gilman & Foukal 1979; Kichatinov & Rudiger 1993; Mi-
+comparable to, or even exceed, the Reynolds stresses.        esch et al. 2000), where the rotation profile in the merid-
+As a result, convection is suppressed, while AM is trans-    ional plane is well constrained by helioseismic observa-
+ported efficiently outward. Consequently, the burning        tions (e.g., Howe 2009). In particular, both 3D HD
+shells rapidly evolve toward near-rigid rotation. Such       and MHD simulations have demonstrated that turbu-
+magnetic braking by the convective dynamo, which is          lent AM transport strongly depends on the convective
+absent in standard 1D stellar evolution models, suggests     Rossby number Ro (e.g., Miesch 2005), defined as
+that the 1D models may substantially overestimate core                                     vconv
+rotation rates at collapse.                                                         Ro =         ,                  (1)
+                                                                                           2ΩL
+                                                             where Ω, vconv , and L denote the rotation rate, con-
+   Although the Maxwell stress in radiative zones can in
+                                                             vective velocity, and characteristic length scale, respec-
+principle be described by 1D models, no comparable for-
+                                                             tively. A small Rossby number indicates a regime where
+mulation has yet been established for convective zones.
+                                                             the Coriolis force dominates over advection. In such
+In this work, we aim to develop a 1D model for the
+                                                             cases, the Coriolis force acting on radial flows creates
+Maxwell stress applicable to convective regions in stel-
+                                                             a positive correlation between radial and longitudinal
+lar evolution. To do this, we analyze the aforementioned
+                                                             velocities (vr and vϕ , respectively), concentrating AM
+3D MHD simulation by Varma & Müller (2023). Sec-
+                                                             to equatorial regions. This correlation ultimately trans-
+tion 2 reviews the physics of AM transport in convective
+                                                             ports AM outward via the Reynolds stress.
+zones and the 1D approximation for radial AM transport
+used in stellar evolution models. Section 3 summarizes
+                                                                In addition, recent high-resolution 3D MHD simula-
+the simulation setup and presents an analysis of physics
+                                                             tions of the solar convection zone (Hotta et al. 2022)
+which determines both the direction and the amplitudes
+                                                             suggest that AM transport by small-scale magnetic
+of the magnetic AM transport. In Section 4, we con-
+                                                             fields plays a crucial role in maintaining solar differen-
+struct the 1D magnetic AM transport model based on
+                                                             tial rotation, which is faster at the equator despite a
+our analysis and compare it with the simulation. Sec-
+                                                             large Ro. Specifically, these simulations also reveal a
+tion 5 discusses the implications and limitations of our
+                                                             close relationship between turbulent (Reynolds stress)
+model and suggest future analyzes. Section 6 summa-
+                                                             and magnetic (Maxwell stress) AM transport through
+rizes our conclusions.
+                                                             an alignment between plasma flow and magnetic fields.
+                                                             In the framework of ideal MHD, magnetic field lines
+   2. ANGULAR MOMENTUM TRANSPORT IN                          are effectively “frozen” into the moving plasma (Alfvén
+           STELLAR CONVECTION ZONES                          1943). This frozen-in condition causes the magnetic
+ To develop a physically motivated prescription for          field lines to remain tightly coupled to the plasma flow,
+magnetic AM transport applicable to stellar evolution        and the magnetic fields vector B is aligned with fluid
+models, it is essential to clarify the underlying physics    velocity vector v nearly parallel or antiparallel. As a
+4                                                            Shimada et al.
+
+result, the Reynolds and Maxwell stresses are strongly                      The second term in Eq. (3) represents AM transport
+interdependent. 3D solar convection zone simulations                      due to advection by the large-scale flow (ṽr ), i.e., con-
+therefore suggest that the Rossby number also plays a                     traction or expansion. The third term corresponds to
+key role in determining the efficiency of magnetic AM                     meridional circulation, the fourth term accounts for tur-
+transport.                                                                bulent transport (Reynolds stress), and the fifth term
+                                                                          describes magnetic transport (Maxwell stress).
+  Moreover, both observations and theoretical studies
+have shown that the efficiency of convective dynamos                      2.3. Angular momentum transport in stellar evolution
+strongly depends on the Rossby number in low-mass                                                models
+stars (See et al. 2019; Reiners et al. 2022; Augustson
+et al. 2019; Brun et al. 2022). Specifically, this Rossby                   On the actual stellar evolutionary timescale, it is com-
+number dependence predicts stronger magnetic fields at                    putationally expensive to compute the angular momen-
+lower Rossby numbers. Consequently, enhanced mag-                         tum evolution directly with 3D simulations. Therefore,
+netic fields produces significant AM flux by the Maxwell                  Eq. (3) is simplified by the models that describe only
+stress due to its interdependence with the Reynolds                       the radial transport (1D approach). In such models,
+stress.                                                                   meridional circulation, Reynolds stress, and Maxwell
+                                                                          stress cannot be solved from first principles, so that
+      2.2. Angular momentum transport equation                            some simplifying assumptions (closures) must be intro-
+                                                                          duced.
+  The evolution equation for AM can be obtained by
+taking the cross product of the position vector with the
+                                                                            As a representative example, Maeder & Zahn (1998)
+momentum equation of the MHD system. If one is in-
+                                                                          proposed the following 1D HD model for AM transport:
+terested in the radial transport of AM, it is sufficient to
+consider the radial AM flux obtained through a spherical
+                                                                             ∂ρr2 Ωz
+                                                                                                                                
+                                                                                         1 ∂                1 ∂           1
+average. This flux can be expressed as                                               + 2 (ρvr Ωz r4 ) − 2              ρr4 Ωz vQ
+                                                                               ∂t       r ∂r               r ∂r           5
+                                                    
+∂ ⟨ρvϕ r sin θ⟩                         Br Bϕ
+                                                                                                    
+                                                                               1 ∂               ∂Ωz
+                + ∇r · ρvr vϕ r sin θ −       r sin θ = 0,                   − 2       ρr4 Dconv       = 0,                          (4)
+      ∂t                                 4π                                   r ∂r                ∂r
+                                                         (2)
+                                                                          where Ωz is rotation rate. Each term in Eq. (4) ap-
+where ⟨⟩ and ∇r · denote the spherical averaging op-                      proximates the respective term in Eq. (3) excluding the
+eration and the radial component of the divergence                        final Maxwell stress term. In the third term, which
+operator, respectively.                                                   characterizes the polar to equator transport of AM, vQ
+                                                                          is the velocity of the quadrupolar meridional circula-
+  In systems where the background stratification evolves                  tion. In the fourth term, which describes the turbulent
+dynamically, the Favre decomposition (Favre 1965) pro-                    transport of AM via Reynolds stress, Dconv is the con-
+vides a useful method for isolating the physical mecha-                   vective diffusion coefficient. This is typically modeled in
+nisms of turbulent convection. This technique has also                    the framework of mixing length theory (MLT) (Böhm-
+been applied to analyses of AM transport in 3D HD sim-                    Vitense 1958).
+ulations of massive stars during oxygen (O) shell burn-
+ing (McNeill & Müller 2020, 2022; Fields 2022). Under                      In the framework of MLT, convective transport as a
+a Favre decomposition, the evolution equation for AM                      diffusive process, along with the corresponding diffusion
+in an MHD system can be written as                                        coefficient, can be expressed in terms of the convective
+                                                                          velocity (vconv ) and the pressure scale height (Hp ) as
+∂ ρ̂Ω̃z ĩzz        
+             +∇r · ⟨ρṽr (Ω̃z + Ω′′z )r2 sin2 θ⟩ + ⟨ρvr′′ Ω̃z r2 sin θ⟩   follows:
+    ∂t                                               
+                  ′′ ′′ 2   2          Br Bϕ                                                           1
+             + ⟨ρvr Ωz r sin θ⟩ −             r sin θ      = 0, (3)                          Dconv =     vconv Hp .                  (5)
+                                        4π                                                             3
+
+where Ω̃z and ĩzz are the Favre averaged rotation rate                   The convective velocity can be estimated from the de-
+and the zz-component of the gyration tensor, respec-                      gree of the convective instability of the stratification
+tively. Details of the Favre decomposition are given in                   (Kippenhahn et al. 1990). One of the common measures
+Appendix A.                                                               for the criticality of convective instability is superadia-
+                                                                          baticity (Kippenhahn et al. 1990), which we refer to as
+                            Angular momentum transport in the convection zone                                          5
+
+SA, defined as:                                               stress therefore always transports AM outward. Al-
+                                                        though the Maxwell stresses in radiative zones can be
+             ∂ ln T     ∂ ln T        φ ∂ ln µ                described by such 1D models, it is still limited to con-
+     SA ≡             −             −
+             ∂ ln p      ∂ ln p ad δ ∂ ln p                   vectively stable regions. No comparable formulation
+                               
+             Hp dS     φ ∂ ln µ                               has yet been established for convective zones. In this
+         =−          −            ,                    (6)
+             Cp dr     δ ∂ ln p                               work, we aim to develop a 1D model for the Maxwell
+                                                              stresses applicable to convective regions. To do this, we
+where φ,        δ,     and Cp are (∂ ln ρ/∂ ln µ)p,T ,        will analyze a 3D MHD simulation.
+−(∂ ln ρ/∂ ln T )p,µ , and the specific heat at constant
+pressure, respectively. S and µ denote the specific
+entropy and the mean molecular weight. A positive                                   3. RESULTS
+SA indicates that the region is convectively unstable.
+                                                                Building on the theoretical background developed in
+Note that there are equivalent criteria to Eq. (6) for
+                                                              Section 2, this section investigates the properties of mag-
+convective instability based on, e.g., the Brunt-Väisälä
+                                                              netic AM flux within the convective zones of a core-
+frequency or the entropy gradient. They are physically
+                                                              collapse progenitor. We provide an overview of the 3D
+equivalent descriptions of the same underlying process.
+                                                              MHD simulation (Section 3.1) and describe the evolu-
+In MLT, the balance between buoyant acceleration and
+                                                              tion of the rotation rate obtained in the simulation (Sec-
+inertia yields the convective velocity in terms of the
+                                                              tion 3.2). Section 3.3 defines the spatial and temporal
+superadiabaticity as:
+                                                              domains for our analysis, and Sections 3.4 and 3.5 pro-
+                  2
+                               2
+                              αMLT Hp                         vide the detailed analysis on magnetic AM transport.
+                 vconv = gδ           SA.              (7)
+                                 8
+                                                                  3.1. 3D MHD simulation of a rapidly rotating
+αMLT is the mixing-length parameter, typically of or-                        core-collapse progenitor
+der unity. g is the gravitational acceleration. While
+                                                                We take the 3D MHD simulation of convective oxy-
+the diffusion coefficient Dconv in Eq. (4) describes AM
+                                                              gen, neon, and carbon shell burning in a rapidly rotating
+transport by convection, Heger et al. (2000) generalized
+                                                              16 M⊙ helium star presented by Varma & Müller (2023).
+diffusive AM transport to cover a wider range of hy-
+                                                              The progenitor model originates from the Kepler stel-
+drodynamic instabilities. This includes diffusive AM
+                                                              lar evolution calculations of Woosley & Heger (2006).
+transport from the effects of secular shear, dynamical
+                                                              It features strong radial differential rotation in radia-
+shear, Eddington–Sweet circulation, and the Goldre-
+                                                              tive zone and has also been used in the 3D HD shell
+ich–Schubert–Fricke instability. This comprehensive ap-
+                                                              convection study of McNeill & Müller (2022). In this
+proach allowed their model to treat AM transport even
+                                                              low Rossby number regime, they obtained latitudinal
+outside the convection zone.
+                                                              differential rotation which rotates fastest at the equa-
+ 2.4. Angular momentum transport by magnetic fields           tor, which is consistent with the relationship between
+                                                              Reynolds stress and Rossby number found in the low
+   The modeling of the Maxwell stress term in Eq. (3)
+                                                              mass star context (Section 2.1).
+has so far been limited to magnetic fields generated by
+the Tayler–Spruit dynamo in convectively stable radia-
+                                                                The simulation of Varma & Müller (2023) was per-
+tive zones. Originally proposed by Spruit (2002), this
+                                                              formed using the Newtonian MHD version of the Co-
+formulation was later extended by Fuller et al. (2019) to
+                                                              CoNuT code (Müller & Varma 2020; Varma & Müller
+include the nonlinear saturation process. In Fuller et al.
+                                                              2021) in spherical polar coordinates with full 4π cover-
+(2019), the Maxwell stress is also represented as a dif-
+                                                              age in latitude and longitude. The computational do-
+fusive process, analogous to the fourth term in Eq. (4),
+                                                              main extends from an inner radius of 3,000 km, where
+and the corresponding diffusion coefficient is estimated
+                                                              the core is replaced by a point mass, to an outer radius
+as
+                                                              of 40,000 km, encompassing the O, Ne, and C-burning
+                                      2                     shells. The initial magnetic field is homogeneous and
+                        3   2      Ωz
+                DTS = αTS r Ωz            ,           (8)     aligned with the rotational axis and has a strength
+                                  Neff
+                                                              of 107 G. After approximately 10 convective turnover
+where αTS is a parameter of order unity and Neff de-          times, this is subsequently amplified to 1010 – 1011 G in
+notes the effective Brunt-Väisälä frequency. Because       O and Ne-burning shells. In this work, we concentrate
+the radiative zone in late evolutionary stages generally      on the angular-momentum evolution of the O-burning
+rotates faster in its inner regions, the resulting Maxwell    shell, which is the most spatially well-resolved region in
+6                                                     Shimada et al.
+
+our data owing to the logarithmic spacing of the radial         3.3. Definition of oxygen shell and suitable time for
+grid.                                                                                  our analysis
+                                                                  Here we provide a definition of the O shell used in
+                                                               this work. The O shell corresponds to the convectively
+                                                               unstable layer generated by O-burning. In the context
+3.2. Evolution of angular momentum in the simulation           of stellar evolution, such regions are commonly identi-
+  Fig. 1 (a) illustrates the temporal evolution of rota-       fied using the superadiabaticity via Eq. (6). Although
+tion rates Ω/2π in mHz and convective velocity in cm/s         the superadiabaticity is expected to be positive in con-
+in the MHD model of Varma & Müller (2023), together           vectively unstable layers, we find that in these 3D sim-
+with the corresponding variation in the Rossby number          ulations it attains slightly negative values even within
+(Eq. 1) within the O shell. Hereafter, we refer to the         regions regarded as the convective O shell in the progen-
+Favre-averaged rotation rate Ω̃z as Ω. The location of         itor provided by stellar evolution models. Equivalently,
+the O shell is defined later by Eq. (9) and indicated by       throughout the O shell there is a mildly positive, rather
+white lines in Fig. 2. The convective velocity vconv is cal-   than flat radial entropy gradient. Since this gradient
+culated by the root mean square value of the fluctuating       is substantially weaker than those of the surrounding
+component of the Favre decomposition v ′′ (Appendix            layers, we adopt a revised definition of the O shell to
+A).                                                            capture these regions, as follows:
+
+                                                                                   SA + SAmod > 0,                      (9)
+   Both the rotation rate and convective velocity exhibit
+a rapid decline around t ≈ 180 s (Fig. 1 a). This corre-       where SAmod denotes an offset parameter introduced to
+sponds to the end of the exponential growth phase of           ensure that the convective region is consistently iden-
+the magnetic field in the MHD simulation (See Fig. 2 in        tified by Eq. (9). For the present analysis, we adopt
+Varma & Müller 2023). After this phase, the convective        SAmod = 0.3, which yields a shell base consistent with
+velocity continues to decrease. On the other hand, the         the radius of peak O-burning energy generation. In
+rotation rate reaches a minimum value of 1.1 mHz near          Fig. 2, the location of the O shell is identified as the
+t ≈ 350 s and subsequently begins to increase gradually,       region between the two white horizontal lines (4,000 –
+shown in the inset of Fig. 1. This gradual increase cor-       4,700 km). Although the origin of the marginal convec-
+responds to a 25% rise over 100 seconds (∼5 convective         tive stability (SAmod = 0.3) of the O shell lies beyond
+turnover times). The initial decrease in rotation rate         the scope of this paper, a reduced efficiency of entropy
+from t = 100 to 200 s, driven by the growth of magnetic        mixing by convection compared to the MLT would pro-
+fields, is consistent with the 1D AM transport model           duce this marginal convective stability. The definition
+based on the Taylor-Spruit dynamo (Section 2.4). While         of the O shell via superadiabaticity provides a consis-
+the dynamo type differs, both frameworks predict spin-         tent framework for identifying the convective region in
+down due to magnetic AM transport. The later gradual           the 3D MHD simulation and forms the basis for the
+increase after t = 350 s is a new feature identified for       subsequent analyses.
+the first time in this model (see also Fig. 9 in Varma
+& Müller 2023). In addition, their MHD model shows               In Varma & Müller (2023), transient behavior—such
+persistent near-rigid rotation.                                as the sudden decrease in rotation rate arising from the
+                                                               linear growth of convection and magnetic fields due to
+   Fig. 1 (b) illustrates the temporal evolution of the        the initial condition is seen during t < 200 s in Fig. 1
+convective Rossby number of the O shell. The pres-             (a). To ensure that the convective dynamo operating in
+sure scale height Hp is adopted as the characteristic          the O shell has reached a quasi-steady state, we identify
+length scale L in the definition of the Rossby number.         the time interval that satisfies the following criterion:
+The Rossby number increases rapidly around t ≈ 180 s.
+                                                                                d ln KE d ln ME
+This rapid increase reflects the decrease of Ω by the                                  −        > 0,                   (10)
+efficient extraction of AM from the O shell due to the                             dt      dt
+magnetic fields. In contrast, the Rossby number starts         where KE and ME denote the kinetic energy density
+to decrease around t ≈ 250 s. This later decrease arises       ( 12 ρv ′′2 ) and magnetic energy density ( 8π
+                                                                                                            1
+                                                                                                              B 2 ), respec-
+primarily from the continued decline in the convective         tively. In this regime, the convective power varies on
+velocity, although the mild increase of rotation rate also     a shorter time scale than the magnetic energy. Con-
+marginally decreases the Rossby number (Fig. 1 a).             sequently, the magnetic field adjusts passively to the
+                                                               convective motions rather than being influenced by
+                              Angular momentum transport in the convection zone                                                     7
+
+
+
+
+Figure 1. (a) Temporal evolution of Favre averaged rotation rate Ω/2π (blue solid line) and convective velocity vconv (orange
+solid line) in the O shell. The vertical axes for the rotation rate and convective velocity are displayed on the left and right sides,
+respectively. An inset view on the right side highlights the evolution of the rotation rate Ω/2π during the quasi-steady phase
+after 300 s, where the system maintains a statistically steady convective dynamo. (b) Temporal evolution of the Rossby number
+Ro (blue solid line) and the correlation of Maxwell stress (orange solid line) in the O shell. The vertical axes for the Rossby
+number and the correlation of Maxwell stress are displayed on the left and right sides, respectively.
+
+transient amplification or decay. This condition iso-                 analysis, we aim to incorporate the AM flux associated
+lates a quasi-steady state in which the magnetic field                with the Maxwell stress into a framework suitable for
+responds passively to the convective dynamics (Seta                   1D stellar evolution modeling. We estimate the sign of
+& Federrath 2021). In Fig. 2, the black dashed line                   the Maxwell stress based on the correlation between its
+shows the timing after which the system satisfies this                components (e.g., Fig. 2 a), and assess its magnitude
+quasi-steady condition. In the O shell, this state is                 later in Section 3.5. These results provide a foundation
+achieved after approximately t ≈ 300 s. In this time                  for parameterizing magnetic angular momentum trans-
+range, the rotation rate decreases between 300 – 350 s                port in 1D models.
+and begins to increase thereafter (Fig. 1 a). This change
+results from the AM transport under the convective dy-                  As shown in Eq. (3), the direction of the AM flux due
+namo in quasi-steady state. This selection of time range              to the Maxwell stress is determined by the correlation
+(300 − 480 s) ensures that the derived properties of AM               between Br and Bϕ via the definition of the spherical
+transport represent quasi-steady behavior rather than                 average. To quantify the variation of this correlation
+transient effects. This interval spans approximately 12               in the simulation, we introduce the following diagnostic
+convective turnover times. In the following analysis, we              quantity:
+focus on the AM transport occurring during this phase.
+                                                                                         Cor = ⟨Br Bϕ ⟩ /B̄r B̄ϕ .               (11)
+
+                                                                      Here, a positive (negative) value indicates inward (out-
+3.4. Relating the direction of angular momentum flux                  ward) AM transport by the Maxwell stress at a given
+        by Maxwell stress with the Rossby number                      radius. To calculate Cor in the O shell shown in Fig. 1
+   From our analysis of AM evolution in Eq. (3), we                   (b), we take the radial average of Cor over the O shell
+find that once the system reaches a quasi-steady state                defined by Eq. (9). Fig. 1 (b) shows the time evolu-
+at t ≈ 300 s, the Maxwell stress becomes the dominant                 tion of this correlation (orange solid line) within the
+contributor to the AM transport, surpassing the other                 O shell. The correlation changes sign from negative to
+terms. This dominance indicates that magnetic stresses                positive around t ≈ 350 s. This indicates the transition
+largely govern the subsequent evolution of the rota-                  of magnetic AM transport from outward to inward. We
+tion rate in the simulation. Therefore, in the following              also note that the absolute value of Cor in the region of
+8                                                        Shimada et al.
+
+                                                                  Fig. 2 b, t ≳ 350 s), Cor becomes positive (red regions
+                                                                  in Fig. 2 a), showing that the direction of magnetic AM
+                                                                  transport reverses and moves inward. The black solid
+                                                                  line in Fig. 2 (b) marks the Ro = 1 boundary. Notably,
+                                                                  the spatial and time location where the transitions from
+                                                                  Ro > 1 to Ro < 1 closely coincides with the position
+                                                                  where Cor changes sign from negative to positive (black
+                                                                  solid line in Fig. 2 a).
+
+                                                                     This spatial and temporal agreement of the two tran-
+                                                                  sitions (solid black lines in Figs. 2 a and b) indicates that
+                                                                  the direction of magnetic AM transport is governed by
+                                                                  the Rossby number. When Ro > 1 (before t ≃ 340 s),
+                                                                  correlations are negative corresponding to outward AM
+                                                                  transport. This is consistent with the trend reported
+                                                                  in solar convection zone simulations (Hotta et al. 2022).
+                                                                  As the system evolves and the Rossby number decreases
+                                                                  below unity (Ro < 1, when t ≳ 350 s), the correlation
+                                                                  becomes positive. This corresponds to inward transport.
+                                                                  Such inward AM transport driven by magnetic fields has
+                                                                  not been considered in stellar evolution models.
+
+                                                                  3.5. Amplitude of angular momentum flux by Maxwell
+                                                                                            stress
+Figure 2. Time–radius diagrams of (a) the correlation be-           Having examined the dependence of the direction of
+tween Br and Bϕ (Eq. 11), and (b) the Rossby number Ro,           AM transport on the Rossby number in Section 3.4, we
+are shown using a cool-to-warm color scale (color bars are        now formulate the amplitude of the AM flux. As shown
+shown on the right). The vertical axis indicates radius, and      in Eq. (3), the AM flux due to the Maxwell stress con-
+the horizontal axis denotes time. The O shell (the region         tribution to AM transport scales with ⟨Br Bϕ ⟩, and its
+between two white lines) reaches the quasi-steady states in
+                                                                  sign is determined by the correlation between Br and
+the convective dynamo at ≈ 300 s (black dashed line). The
+black solid line in panel (a) indicates the region where the      Bϕ (Eq. 11). We rewrite the Maxwell stress component
+correlation changes its sign. The black solid line in panel (b)   in Eq. (3) in terms of Cor as follows:
+displays the region where Rossby number crosses unity.
+                                                                               1                     r ⟨Br Bϕ ⟩ B̄r B¯ϕ
+                                                                          −      ⟨Br Bϕ r sin θ⟩ ≈ −
+interest is typically about 0.1, a result which we will use                   4π                     2 B̄r B¯ϕ 4π
+                                                                                                     r
+later in Section 4. We note that a standard deviation                                            ≈ − Cor ME.              (12)
+of Cor is 0.04 when restricting the analysis to time in-                                             2
+tervals with a fixed sign of Cor in the quasi-steady state.       In this expression, we approximate B̄r B¯ϕ /4π by the
+                                                                  magnetic energy ME = B̄ 2 /8π. Thus, the amplitude of
+  To characterize a potential relationship between the            the Maxwell-stress term is set by ME. We now investi-
+correlation Cor and the Rossby number Ro, we examine              gate the Rossby number dependence of ME.
+the spatial and temporal evolution of these quantities
+in the O shell, as shown in Fig. 2. The white solid lines            Observations, analytical studies, and numerical sim-
+marks the location of the O shell boundaries, while the           ulations of low mass stars have demonstrated that the
+black dashed line indicates the time when the system              magnetic energy generated by convective dynamos de-
+reaches the quasi-steady state of the convective dynamo.          pends on the Rossby number (See et al. 2019; Reiners
+During our timescale of interest (≳ 300 s), we now inves-         et al. 2022; Augustson et al. 2019; Brun et al. 2022). In
+tigate a potential relationship between the direction of          particular, Augustson et al. (2019) derived the following
+AM flux (via Cor) and Ro. When Ro > 1 (red regions                scaling relation based on a balance between the Corio-
+in Fig. 2 b, t ≲ 350 s), Cor is negative (blue regions in         lis force, Lorentz force, and inertia. This relation has
+Fig. 2 a), indicating that the Maxwell stresses transport         been shown to reproduce results from a wide range of
+AM outward. In contrast, when Ro < 1 (blue regions in             dynamo simulations, including those of solar-type stars
+                              Angular momentum transport in the convection zone                                           9
+
+                                                                  proposed by Augustson et al. (2019). The coefficients
+                                                                  in Eq. 13 are fitted to a = 1.5 ± 0.1 and b = 0.083 ± 0.08
+                                                                  respectively. As the Rossby number decreases, the ratio
+                                                                  ME/KE increases, showing that rapid rotation enhances
+                                                                  the efficiency of magnetic energy generation. This con-
+                                                                  firms that the convective dynamo in the O shell obeys
+                                                                  the same rotational dependence observed in the low
+                                                                  mass stars. Accordingly, the magnetic energy (ME) in
+                                                                  the O shell is well described by the kinetic energy (KE)
+                                                                  and the Rossby number (Ro), establishing a quantita-
+                                                                  tive link between magnetic field strength and rotational
+                                                                  dynamics.
+
+                                                                    We now seek to formulate the KE of the O shell by the
+Figure 3. The horizontal axis shows the inverse of the            quantities given by 1D stellar evolution models. We first
+Rossby number, and the vertical axis shows the ratio between      express the convective velocity in terms of the energy
+the magnetic and kinetic energy. The color of each point in-
+                                                                  transported by convection. This expression has been
+dicates the corresponding time in the simulation that satisfies
+the quasi-steady state condition by the rainbow colorbar (t =     validated both analytically (e.g., Arnett et al. 2009) and
+300 – 480 s; Eq. 10). The black solid line represents the best    through 3D HD simulations (Müller et al. 2016), and is
+fit to the quantities taken from the 3D MHD simulation.           given by
+                                                                                              Z r
+                                                                                       3
+and the convective cores of massive main-sequence stars.                              vconv ∝     Q̇dV,                 (14)
+                                                                                               0
+The scaling law expresses the ratio of magnetic energy
+                                             2
+(ME = B̄ 2 /8π) to kinetic energy (KE = ρv ′′ /2) as:             where Q̇ denotes the nuclear energy generation rate.
+                                                                  Here, vconv is a function of radius, and the volume in-
+                  ME/KE = a Ro−1 + b,                     (13)
+                                                                  tegral on the right-hand side is taken over the spherical
+where a and b are coefficients that depend on the effi-           region enclosed within the radius at which vconv (r) is
+ciency of magnetic energy generation. In Figs. 1 and 2,           evaluated. This relation indicates that the convective
+we have characterized the temporal evolution of the               velocity is determined by the nuclear energy released
+Rossby number. By computing ME/KE, we now exam-                   beneath the convective region. Therefore, variations
+ine whether this scaling law holds in O shell of the 3D           in nuclear burning change the strength of convective
+MHD simulation. Note that the scaling law in August-              motion and, consequently, the kinetic energy within the
+son et al. (2019) is further normalized by the magnetic           shell.
+Prandtl number (Pm). In contrast, the magnetic and
+velocity fields in Varma & Müller (2023) do not include            However, ME exceeds the convective KE in our sim-
+explicit dissipation; instead, a similar artificial viscos-       ulation over the timescale of interest (Fig. 3). There-
+ity scheme is applied to both quantities hence Pm is              fore, vconv based on convective energy transport via KE
+assumed to be unity (Lesaffre & Balbus 2007). In ad-              alone is not appropriate. Instead we assume that the
+dition, the dependence on Pm cannot be systematically             nuclear energy released in the shell is divided into two
+examined in the present study. For these reasons, we              components: convective energy flux and Poynting flux.
+adopt Pm = 1 in our analysis and employ a scaling                 Here, the fraction distributed to each component is de-
+law that does not explicitly include the effect of the            termined by the ratio of kinetic to magnetic energy.
+magnetic Prandtl number (Eq. 13).                                 Based on this assumption, we predict that the convective
+                                                                  velocity can be scaled by the portion of the energy flux
+  In Fig. 3, we plot the ratio between magnetic and ki-           that goes into the convective energy flux, as follows:
+netic energies ME/KE (vertical axis) against the inverse                                     1
+                                                                                                    Z r
+                                                                                 3
+Rossby number (horizontal axis) on a log-log scale. The                        vconv ∝                  Q̇dV.          (15)
+                                                                                        1 + ME/KE 0
+color indicates the time, limited to our timescale of in-
+terest. The black solid line denotes the best-fit scaling          This expression links the convective velocity, which de-
+relation derived from our data. The best-fit power-law            termines KE, to the nuclear burning rate, and the ratio
+index of −0.97 ± 0.02, obtained using a nonlinear least-          (ME/KE). Here, as in Eq. (14), vconv is a function of
+squares fitting procedure, agrees well with the scaling           radius, and the volume integral on the right-hand side
+10                                                         Shimada et al.
+
+                                                                   the ratio ME/KE of magnetic to kinetic energy depends
+                                                                   on the Rossby number. Fig. 4 shows the dependence
+                                                                   of the convective velocity on ME/KE and the nuclear
+                                                                   energy generation rate Q̇. Combining these results, we
+                                                                   infer that ME is ultimately determined by the Rossby
+                                                                   number and Q̇. In the next Section, we formulate the
+                                                                   amplitude of AM transport by the Maxwell stress based
+                                                                   on these dependences.
+
+                                                                         4. MODEL OF ANGULAR MOMENTUM
+                                                                            TRANSPORT BY MAGNETIC FIELDS
+                                                                     4.1. Model for the Direction of Angular Momentum
+                                                                                               Flux
+                                                                     Based on the strong correlation between the Maxwell
+Figure 4. Comparison of our predicted convective energy
+                                                                   stress and the Rossby number (Fig. 2), we approximate
+flux based on the energy partition between convective and          the correlation of the Maxwell stress (Cor) as a function
+Poynting fluxes (Eq. 15) with simulation data. The convec-         of the Rossby number:
+tive velocity vconv in the O shell is shown on the vertical axis                                   
+against the right-hand side of Eq. (15) on a log-log scale.                   ⟨Br Bϕ ⟩             α     for Ro < β,
+The color of each point indicates the corresponding time in            Cor =        ¯   = f (Ro) =                     . (16)
+the simulation during the quasi-steady-state phase (t = 300                    B̄r Bϕ              −α for Ro > β
+– 480 s). The black line represents a power-law with an index
+of 1/3.                                                            α represents the amplitude of the correlation, and β
+                                                                   denotes the critical Rossby number at which the cor-
+is taken over the spherical region enclosed within the             relation reverses sign. From the simulation during the
+radius at which vconv (r) is evaluated. In Fig. 4, the con-        quasi-steady phase, Fig. 2 (a) shows that during our
+vective velocity in the O shell (vertical axis) is shown           timescale of interest, the magnitude of Cor is typically
+against the right-hand side of Eq. (15) (horizontal axis)          0.1. We therefore take α = 0.1 from the solid orange
+on a log-log scale. We compute the convective velocity             line in Fig. 1 (b). We take β = 1 from the solid black
+vconv (r) at each radius within the O shell—defined as the         lines in Fig. 2 (b).
+root-mean-square value of the fluctuating velocity com-
+ponent v ′′ obtained from the Favre decomposition—as                4.2. Model for the Amplitude of Angular Momentum
+well as the right-hand side of Eq. (15), and show their                                       Flux
+respective root-mean-square values. The black line rep-               The amplitude of the AM flux driven by the Maxwell
+resents the 1/3 power-law relation predicted by Eq. (15).          stress can be estimated from the magnetic energy, shown
+By incorporating the ratio between magnetic and kinetic            by Eq. (12). Therefore, in this section, we model the
+energies (ME/KE) into Eq. (15), the convective veloc-              magnetic energy (ME) itself. Following the results
+ity is well described by the nuclear energy generation             shown in Section 3.5 (Figs. 3 and 4), we derive ME as a
+rate. This result confirms that our scaling successfully           product of two components: the ratio between the mag-
+captures the influence of magnetic energy on convec-               netic and kinetic energies (ME/KE), and the KE which
+tion. Furthermore, this formulation naturally incorpo-             is determined by vconv . Based on the clear dependence
+rates the magnetic suppression of the convective velocity          of ME/KE on the Rossby number, and consistency with
+from hydrodynamic convection (Eq. 14). A nonlinear                 the theoretical scaling from convective dynamos in low-
+least-squares fit to the data yields a power-law index of          mass stars (Augustson et al. 2019), we model
+0.37 ± 0.01, which is slightly steeper than the 1/3 scal-
+ing. This deviation is primarily driven by data from                          ME
+                                                                                 ≡ g(Ro) = asim Ro−1 + bsim ,           (17)
+the early phases of the quasi-steady state. As shown                          KE
+in Fig. 4, the scaling progressively approaches the 1/3
+                                                                   where asim and bsim are fitting parameters obtained from
+power-law as the system evolves.
+                                                                   the simulation during the quasi-steady phase. We obtain
+   In this Section, we have shown that the amplitude of
+                                                                   asim = 1.5 ± 0.1 and bsim = 0.083 ± 0.08. Furthermore,
+the Maxwell stress can be estimated from the magnetic
+                                                                   the analysis of the energy flux (Fig. 4) indicates that
+energy (ME) in Eq. (12), while Fig. 3 demonstrates that
+                                                                   the convective velocity is determined by the fraction of
+                             Angular momentum transport in the convection zone                                          11
+
+the total energy flux that is carried by convection. This
+relation can be modeled as:
+                   "             Rr        #1/3
+                     2    KE       0
+                                     Q̇ dV
+           vconv =
+                     ρ KE + ME 4πr2
+                   "             Rr        #1/3
+                     2     1       0
+                                     Q̇ dV
+                 =                              ,    (18)
+                     ρ 1 + g(Ro) 4πr2
+
+where Q̇ represents the nuclear energy generation rate,
+and ρ is the density. Here ME/KE is replaced by g(Ro)
+using Eq. (17). The magnetic energy (ME) can finally
+be expressed as:
+               ME        ME ρ 2
+        ME =       KE ≈        v
+               KE        KE 2 conv
+                      "           Rr       #2/3              Figure 5. The temporal evolution of the angular momen-
+                     ρ 2     1     0
+                                     Q̇ dV                   tum flux due to the Maxwell stress (Eq. 3) in the 3D MHD
+             ≈ g(Ro)                            .    (19)
+                     2 ρ 1 + g(Ro) 4πr2                      simulation (blue line). Our 1D model, given by Eq. (20) is
+                                                             shown by the orange line. The orange shaded region rep-
+                                                             resents the uncertainty of the 1D model, accounting for the
+                                                             combined standard deviation of the model parameters.
+
+        4.3. Complete Model of the Maxwell Stress            The flux is measured at the middle of the O shell (4, 500 km).
+                                                             The gray dashed line indicates the time at which the convec-
+   We now present the complete formulation of the AM         tive dynamo in the O shell reaches the quasi-steady state.
+                                1
+flux by the Maxwell stress, − 4π  ⟨Br Bϕ r sin θ⟩. As dis-   After 340 s and 350 s for the 1D and 3D models, respec-
+cussed in Section 3.5, the AM flux by the Maxwell stress     tively, the angular momentum is transported inward, coin-
+can be decomposed into two components: the correla-          ciding with the timing when the rotation rate begins to spin
+tion coefficient Cor, which determines its direction, and    up (see Fig. 1 a).
+the magnetic energy (ME), which characterizes its am-
+                                                             stellar evolution calculations. Accordingly, the present
+plitude (Eq. 12).
+                                                             formulation enables computation of the AM flux by the
+                                                             Maxwell stress in the convective zone at each time step
+  The correlation Cor is modeled as a function of the
+                                                             of a stellar evolution calculation. Using the radial pro-
+Rossby number in Eq. (16), while the magnetic en-
+                                                             files of ρ, Ro, and Q̇, the corresponding radial profile
+ergy ME is modeled as a function of density ρ, Rossby
+                                                             of the Maxwell stress can be obtained. This can be
+number (Ro), and nuclear energy generation rate Q̇ in
+                                                             implemented, in principle, into 1D stellar evolution cal-
+Eq. (19). Finally inserting these models into Eq. (12),
+                                                             culations to model AM transport by magnetic fields in
+we obtain the following expression for the AM flux
+                                                             convection zones.
+driven by the Maxwell stress,
+         1                                                             4.4. Comparison with 3D simulation
+    −      ⟨Br Bϕ r sin θ⟩
+        4π
+                      "           Rr       #2/3                 In Fig. 5, the temporal evolution of the AM flux asso-
+       r             ρ 2     1     0
+                                     Q̇ dV                   ciated with the Maxwell stress (Eq. 3) computed directly
+    ≈ − f (Ro) g(Ro)                            .
+       2             2 ρ 1 + g(Ro) 4πr2                      from the 3D MHD simulation is shown by the blue line.
+                                                     (20)    The estimate using our 1D model in Eq. (20) is shown
+                                                             by the orange line, where the spherically averaged den-
+This model estimates the Maxwell stress using the            sity ρ, Rossby number Ro, and energy generation rate
+Rossby number Ro, the density ρ, and the energy gen-         Q̇ are taken from the each timestep of the 3D MHD
+eration rate Q̇. All of these quantities can be directly     simulation. The orange shaded region indicates the
+obtained from 1D stellar evolution calculations. In prac-    uncertainty of the 1D model, corresponding to the com-
+tice, the Rossby number can be derived from the lo-          bined standard deviation of the model parameters. This
+cal angular velocity and convective turnover timescale,      accounts for the standard deviation of Cor (σCor = 0.04)
+which are commonly available outputs in 1D models.           in Eq. (16), the standard deviations of the fitted coef-
+The quantities ρ and Q̇ are fundamental outputs of 1D        ficients asim and bsim in Eq. (17), and the difference
+12                                                   Shimada et al.
+
+between the assumed 1/3 exponent and the fitted value        a net spin-down over stellar evolution timescales (e.g.,
+of 0.37 in Eq. (18). The gray dashed line marks the          Suijs et al. 2008; Heger et al. 2005). Magnetic fields
+time (t = 300 s) from which the convective dynamo in         have therefore been regarded as a promising mechanism
+the O shell satisfies a quasi-steady state, as defined by    to reconcile the long-standing discrepancy between the
+Eq. (10). The primary objective of this comparison is to     observed and theoretically predicted core rotation rates
+examine whether our 1D model can reproduce the AM            (e.g., den Hartogh et al. 2019).
+transport by the Maxwell stress during the quasi-steady
+phase. Therefore, the interval after t = 300 s serves as       However, in the 3D MHD simulation of Varma &
+a key benchmark for validating the applicability of our      Müller (2023), magnetic fields do not necessarily trans-
+1D formulation.                                              port AM outward. Fig. 1 (a) shows an increase in the
+                                                             rotation rate within the O shell around t ≃ 350 s. This
+  In Fig. 5, the direction of the AM flux reverses from      spin-up of the oxygen shell at 350 s can also be seen in
+outward to inward transport in the 3D model at 350 s.        Fig. 9 of Varma & Müller (2023). We show in Fig. 2 that
+In the 1D model, the reversal occurs at 340 s. This          the Rossby number determines the correlation between
+transition coincides with the end of spin down, and the      Br and Bϕ , which then governs the magnetic AM flux
+onset of the spin-up phase. This is when the rotation        (Eq. 11). By expressing the Maxwell stress in terms of
+rate begins to increase as shown in the inset of Fig. 1      this correlation, our formulation (Eq. 20) indeed pre-
+(a). The 1D model reproduces this reversal remarkably        dicts negative (inward) AM transport into the O shell
+well. Moreover, the magnitude of the AM flux pre-            (4,500 km) after t ≃ 340 s (Fig. 5). As expected, the
+dicted by the 1D model closely matches that obtained         inner oxygen shell region begins to spin up at nearly the
+from the 3D simulation during the quasi-steady phase         same time (t ≃ 350 s; Fig. 1 a), a consequence of the
+(t > 300 s). These results demonstrate that our 1D           onset of the inward Maxwell stress AM flux predicted
+model from Eq. (20) successfully captures both the di-       by our 1D model (Fig. 5).
+rection and amplitude of the Maxwell stress associated
+with the convective dynamo in the O shell.                     Our 1D AM transport model is therefore the first to
+  Moreover, when the uncertainty of the 1D model is          account for inward AM transport by magnetic fields.
+taken into account, the AM flux in the 3D model is re-       In the context of stellar evolution, the Maxwell stress
+produced by the 1D formulation for most of the quasi-        drives inward AM transport when the Rossby number is
+steady phase (t > 300 s). We note that the dominant          below unity (Ro < 1) in convectively unstable regions.
+contribution to the uncertainty of the 1D model arises       This regime corresponds to a condition in which mag-
+from the standard deviation of Cor. Deviations between       netic spin-down is suppressed. As a result, the AM flux
+the 1D and 3D models are most noticeable around the          instead contributes to the spin-up of the stellar core dur-
+transition time near t ≃ 340 s, which can be attributed      ing this oxygen shell burning simulation. This transition
+to the simplified treatment in the 1D model: as de-          from spin-down to spin-up should not be interpreted as
+scribed in Eq. (16), the sign of Cor changes instanta-       a simple readjustment following the initial spin-down
+neously once the Rossby number drops below unity. In         phase. Instead, in our interpretation it is driven by the
+contrast, the AM flux and Cor in the 3D simulation           reduction of the nuclear energy generation rate Q̇, which
+adjust to changes in the Rossby number over approxi-         leads to a decrease in the Rossby number and thereby
+mately one convective turnover time. This short tempo-       triggers inward angular momentum transport and core
+ral offset is not expected to be significant for practical   spin-up. This change in Q̇ occurs due the suppres-
+stellar evolution calculations.                              sion of mixing in the convective shell due to the strong
+                                                             magnetic fields (Varma & Müller 2023). We therefore
+                    5. DISCUSSION                            expect this spin-up to persist as long as Q̇ does not
+  We discuss the implications and limitations of our 1D      increase due to other evolutionary effects. Establishing
+model for AM transport by Maxwell stress, given by           a broader applicability will require further simulations,
+Eq. (20). First, we consider potential applications over     e.g., testing against a complete shell burning simulation
+stellar evolution timescales.                                (Rizzuti et al. 2023) in MHD, which we leave to future
+                                                             work. Note that in the present simulation the Ne and
+  5.1. Angular momentum transport in inner regions           C shells have not yet reached a quasi-steady state and
+                                                             are therefore not suitable for a robust verification of the
+  Historically, AM transport by magnetic fields has
+                                                             prescription.
+been modeled as an outward flux, in which AM is trans-
+ferred from the inner to the outer regions. This leads to
+                           Angular momentum transport in the convection zone                                         13
+
+  Based on our 1D angular momentum (AM) trans-               also been reported in 3D MHD simulations of O shell
+port model in convective regions, one may anticipate         by Leidi et al. (2023). Developing a 1D prescription for
+that combining it with magnetic AM transport mod-            chemical mixing processes in magnetoconvection consti-
+els in radiative zones, such as that proposed by Fuller      tutes one of the directions for our future work.
+et al. (2019), could result in a less efficient spin-down
+of the stellar core than previously expected. However,                 5.2. Convective dynamo properties
+our model is sensitive to the Rossby number and to             Finally, we discuss an interesting feature identified in
+the nuclear energy generation rate, both of which vary       the 3D MHD model related to the convective dynamo.
+significantly over the course of stellar evolution. This     Although this topic lies beyond the primary scope of
+sensitivity makes a quantitative assessment of the com-      this study, we find evidence for the operation of a dy-
+bined impact on the global AM evolution challenging at       namo mechanism within the O shell. In Fig. 2 (a), a
+this stage. In order to robustly evaluate the resulting      characteristic pattern appears in which a positive cor-
+core spin evolution and its compatibility with obser-        relation Cor (in red) propagates from the upper carbon
+vational constraints, it will therefore be necessary to      shell at 8,000 km to the lower regions of the oxygen shell
+incorporate our transport prescription into full 1D stel-    at 4,000 km around t ≈ 400 s. This behavior can be in-
+lar evolution calculations.                                  terpreted as the propagation of a dynamo wave, consis-
+                                                             tent with an α-Ω-type dynamo (Parker 1955; Yoshimura
+   We can, however, speculate on the applicability to 1D     1975). The presence of anti-solar differential rotation
+stellar evolution models over several burning phases. We     at this time, accompanied by positive (negative) ki-
+first note that our 1D model contains several empirical      netic helicity in the northern (southern) hemisphere, is
+parameters that must be calibrated depending on the          consistent with the direction of propagation predicted
+stellar type and evolutionary stage considered, i.e., α, β   by Yoshimura (1975). The identification of such a dy-
+in Eq. (16), and asim , bsim in Eq. (17). The parameter      namo wave within the O shell provides strong evidence
+α, which characterizes the magnitude of the correlation      that the observed magnetic field amplification is driven
+between Br and Bϕ , depends on the properties of turbu-      by an internal convective dynamo, rather than by a
+lence and likely varies with the Reynolds number, i.e.,      Tayler–Spruit dynamo operating in the surrounding sta-
+the numerical resolution of the simulations. Here, we        bly stratified layers. We leave a detailed comparison for
+note that our 1D model from (Eq. 20) underestimates          future work.
+the Maxwell stress during the early phase prior to 200 s.
+This discrepancy can be attributed to the unusually                             6. CONCLUSION
+strong correlation between Br and Bϕ (|α| ≈ 0.5) at
+                                                               In massive stars, the rotation and magnetic field
+that time. The correlation α during this early phase is
+                                                             of the core strongly influence the subsequent core-
+likely sensitive to the initial magnetic field configura-
+                                                             collapse dynamics. This motivates a careful treatment
+tion. The coefficients asim , and bsim , which determine
+                                                             of angular-momentum (AM) evolution in stellar mod-
+the scaling of ME/KE, should ideally be constrained
+                                                             els. In practice, various recipes to treat the evolution of
+through short-term direct numerical simulations tai-
+                                                             rotation rate in stellar interiors has been incorporated
+lored to each stellar structure and evolutionary phase.
+                                                             into one-dimensional (1D) stellar evolution frameworks.
+                                                             Purely hydrodynamic (HD) models are known to overes-
+   The energy generation rate Q̇ can taken from 1D stel-
+                                                             timate core rotation by roughly two orders of magnitude
+lar evolution calculations when applying our model. It
+                                                             (e.g., red-giant cores; Moyano et al. 2022), but includ-
+is also important that these Q̇ from 1D stellar evolu-
+                                                             ing magnetic AM transport in radiative zones via the
+tion models (e.g., Paxton et al. 2013) appropriately re-
+                                                             Tayler–Spruit dynamo (Spruit 2002) can substantially
+flect the effects of 3D convection and magnetic fields. In
+                                                             narrow this gap (Fuller et al. 2019). However, magnetic
+particular, chemical mixing processes can strongly influ-
+                                                             AM transport by convective dynamo has not yet been
+ence Q̇. While Eq. (20) can in principle predict fluxes,
+                                                             formulated.
+we caution that this suppression of mixing by magnetic
+fields should be incorporated into 1D simulations before
+                                                               In recent 3D magnetohydrodynamic (MHD) simu-
+considering magnetic AM transport. While Eq. (20) can
+                                                             lations of convective burning shells in core-collapse
+in principle predict fluxes, we caution that the suppres-
+                                                             progenitors (Varma & Müller 2023), magnetic fields
+sion of chemical mixing by magnetic fields should be in-
+                                                             generated by a convective dynamo strongly impact the
+corporated into 1D stellar evolution models before con-
+                                                             rotation state of the oxygen-burning shell (O shell). The
+sidering magnetic AM transport. Such suppression has
+                                                             initial magnetic field, as small as 107 G, is amplified to
+14                                                    Shimada et al.
+
+1011 G within t ≈ 180 s. After this amplification, the ro-    convective velocity, we extended the standard scaling of
+tation rate drops by nearly an order of magnitude. This       convective velocity which considers the balance between
+indicates efficient magnetic AM transport by Maxwell          the nuclear energy generation rate and convective ve-
+stresses (Fig. 1 a). Motivated by this, our goal is to        locity. We also account for the partitioning of the total
+develop a 1D prescription that captures the magnetic          flux into convective and Poynting fluxes, yielding the
+AM transport produced by convective dynamo.                   modified scaling by Eq. (15). The convective velocity
+                                                              in our simulation is well reproduced by the prediction
+  In the present work, we took the 3D MHD simulation          formulated in Eq. (15). Combining these ingredients,
+by Varma & Müller (2023) and analyzed its behavior           we constructed a model of ME as the amplitude of the
+in the time domain where the convective dynamo is in          Maxwell stress in terms of the Rossby number, the nu-
+quasi-steady state at t ≥300 s; in the O shell. The O         clear energy generation rate, and the density in Eq. (19).
+shell is identified by a superadiabaticity based criterion.
+Within this time window, the rotation rate continues to         Finally, we combined these to obtain a complete 1D
+decline until t ≈ 350 s and then reverses to a gradual        model of AM flux by the Maxwell stress in Eq. (20). In
+spin-up.                                                      this formulation, the flux is expressed solely in terms of
+                                                              quantities accessible from 1D stellar evolution models,
+   Motivated by extensive 3D MHD studies of convec-           namely, the Rossby number, the nuclear energy genera-
+tive dynamos in solar-type stars, we focus our analysis       tion rate, and the density. We validate our 1D model by
+on the Rossby number, which is the key control pa-            comparing it with the actual Maxwell stress in the 3D
+rameter for rotating convection. In solar-like convec-        MHD simulation. Input parameters for our 1D model
+tion, rotationally-induced anisotropy produces turbu-         are taken from the 3D MHD simulation. Our model
+lent Reynolds stresses whose direction of AM transport        reproduces the sign reversal of the angular momentum
+switches with Ro (e.g., Kichatinov & Rudiger 1993;            transport from outward to inward near t ≈ 350 s. It also
+Miesch 2005). In MHD, the ideal “frozen-in” condition         matches the absolute magnitude of the flux during the
+couples the magnetic field to the flow (Alfvén 1943), so     quasi–steady phase after ≥ 300 s. Notably, the reversal
+that the fluid velocity vector and magnetic field vector      time coincides with the onset of the spin–up in the 3D
+are closely aligned. This alignment relates the Maxwell       model.
+and Reynolds stresses, implying a corresponding Rossby
+dependence for the magnetic AM transport. On this               Our results have important implications for stellar
+basis, we decompose the AM flux by the Maxwell stress         evolution. Because both the sign and efficiency of
+flux into (i) a direction set by the field correlation be-    magnetic AM transport vary with the Rossby number,
+tween Br and Bϕ (Eq. 11) and (ii) an amplitude set by         magnetic spin-down of stellar cores would be suppressed
+the magnetic energy (Eq. 12).                                 near Ro ≈ 1. Consequently, magnetic braking can be
+                                                              less effective than predicted by Rossby-number indepen-
+  We first compared the correlation Cor with the Rossby       dent prescriptions, such as standard implementations of
+number. During the Ro > 1 phase we find that Cor < 0,         the Tayler–Spruit dynamo in the radiative zone (Fuller
+indicating outward AM transport by the Maxwell stress.        et al. 2019). Implementing a Maxwell stress model de-
+After the system transitions to Ro < 1, the correlation       pendent on Rossby number is thus essential in 1D MHD
+reverses to Cor > 0, implying inward transport. This          stellar evolution codes.
+correspondence shows that the direction of the magnetic
+AM flux is controlled by the Rossby number. Based on             We also identified several limitations and caveats. The
+this result, we approximate the direction of flux by the      correlation coefficient between Br and Bϕ (which sets
+function of Rossby number via Eq. (16).                       the sign and magnitude of the Maxwell flux) is thought
+                                                              to depend on turbulent properties, i.e., Reynolds num-
+  Next, we analyzed the magnetic energy that sets the         bers and numerical resolution. Furthermore, chemical
+amplitude of the Maxwell stress. Rossby number de-            mixing processes are expected to affect Q̇ in our 1D
+pendence between magnetic and kinetic energies ME             model (Eq. 20). Since Q̇ sets the amplitude of the AM
+and KE has been pointed out by observations, analytic         flux, constructing a 1D prescription of chemical mix-
+approaches, and simulations of solar-type stars. During       ing informed by 3D magnetoconvection is an important
+the quasi-steady phase, the ratio ME/KE in our simula-        next step and one of the directions for our future work.
+tion is well described by the Rossby-dependent scaling
+(Eq. 13) suggested by Augustson et al. (2019). For the
+                            Angular momentum transport in the convection zone                                            15
+
+  In summary, by linking Rossby number regulated cor-
+relations, dynamo scaling, and convective energetics, we
+develop a 1D magnetic AM transport model that cap-
+tures key features of the 3D MHD behavior, including
+inward AM transport not represented in existing 1D pre-
+scriptions. The next critical step is to implement and
+test this prescription within stellar evolution codes (e.g.,
+MESA) to determine how convective dynamos quanti-
+tatively alter core rotation over stellar evolution time
+scales.
+
+                 DATA AVAILABILITY
+  The data underlying this article will be shared on rea-
+sonable request to the authors, subject to considerations
+of intellectual property law.
+
+
+                ACKNOWLEDGMENTS
+   RS is supported by JST SPRING grant No. JP-
+MJSP2110. LM acknowledges support from RIKEN
+iTHEMS and the Hakubi project at Kyoto Univer-
+sity. KM is supported by JSPS KAKENHI grant No.
+JP24KK0070, JP24H01810, and JP24K00682. TY is
+supported by JSPS KAKENHI grant No. JP21H04492.
+BM acknowledges support from the Australian Research
+Council through Discovery Project DP240101786. We
+acknowledge computer time allocations from Astron-
+omy Australia Limited’s ASTAC scheme and the Na-
+tional Computational Merit Allocation Scheme (NC-
+MAS). Some of this work was performed on the Gadi
+supercomputer with the assistance of resources and ser-
+vices from the National Computational Infrastructure
+(NCI), which is supported by the Australian Govern-
+ment. Some of this work was performed on the OzSTAR
+national facility at Swinburne University of Technology.
+The OzSTAR program receives funding in part from the
+Astronomy National Collaborative Research Infrastruc-
+ture Strategy (NCRIS) allocation provided by the Aus-
+tralian Government, and from the Victorian Higher Ed-
+ucation State Investment Fund (VHESIF) provided by
+the Victorian Government.
+
+
+                                                        APPENDIX
+
+
+        A. AVERAGING PROCEDURES FOR                            are taken over spherical surfaces at a fixed radius un-
+                 TURBULENT ANALYSIS                            less stated otherwise. For a generic field X(r, θ, ϕ, t) we
+  In order to isolate the turbulent (fluctuating) compo-       define the spherical (solid-angle) average as:
+nents of the flow field in the present analysis, we em-
+ploy the Favre (density-weighted) decomposition (Favre
+1965), as in previous stellar convection studies (e.g., Mc-                       Z 2π Z π
+                                                                              1
+Neill & Müller 2020, 2022). All averages in this work           ⟨X⟩(r, t) ≡                 X(r, θ, ϕ, t) sin θ dθ dϕ. (A1)
+                                                                             4π    0   0
+16                                                       Shimada et al.
+
+The Favre (mass-weighted) average of X is then given             By definition, the fluctuation X ′′ satisfies the mass-
+by:                                                              weighted orthogonality condition,
+                e t) ≡ ⟨ρX⟩(r, t) ,
+                X(r,                           (A2)
+                          ⟨ρ⟩(r, t)                                                    ⟨ρ X ′′ ⟩(r, t) = 0.               (A4)
+
+where ρ is the mass density. The turbulent (fluctuating)         The root mean square amplitude of the turbulent field
+component associated with the Favre decomposition is             can be characterized in an area-weighted form as follows:
+defined by:                                                                                        p
+                                                                           X̄(r, t) = Xrms (r, t) ≡ ⟨X ′′2 ⟩(r, t).  (A5)
+          X ′′ (r, θ, ϕ, t) ≡ X(r, θ, ϕ, t) − X(r,
+                                              e t).     (A3)
+
+                                                         REFERENCES
+Aerts, C., Mathis, S., & Rogers, T. M. 2019, Annual              Hotta, H., Kusano, K., & Shimada, R. 2022, ApJ, 933, 199,
+  Review of Astronomy and Astrophysics, 57, 35,                    doi: 10.3847/1538-4357/ac7395
+  doi: 10.1146/annurev-astro-091918-104359                       Howe, R. 2009, Living Reviews in Solar Physics, 6, 1,
+Aguilera-Dena, D. R., Langer, N., Moriya, T. J., &                 doi: 10.12942/lrsp-2009-1
+  Schootemeijer, A. 2018, ApJ, 858, 115,                         Kichatinov, L., & Rudiger, G. 1993, A&A, 276, 96
+  doi: 10.3847/1538-4357/aabfc1                                  Kippenhahn, R., Weigert, A., & Weiss, A. 1990, Stellar
+Akiyama, S., Wheeler, J. C., Meier, D. L., & Lichtenstadt,         structure and evolution, Vol. 192 (Springer)
+ I. 2003, ApJ, 584, 954, doi: 10.1086/344135                     Leidi, G., Andrassy, R., Higl, J., Edelmann, P. V. F., &
+Alfvén, H. 1943, Arkiv for matematik, astronomi och fysik,        Röpke, F. K. 2023, A&A, 679, A132,
+  29, 1                                                            doi: 10.1051/0004-6361/202347621
+Arnett, D., Meakin, C., & Young, P. A. 2009, ApJ, 690,           Lesaffre, P., & Balbus, S. A. 2007, MNRAS, 381, 319,
+  1715, doi: 10.1088/0004-637X/690/2/1715                          doi: 10.1111/j.1365-2966.2007.12270.x
+Augustson, K. C., Brun, A. S., & Toomre, J. 2019, ApJ,           Maeder, A., & Zahn, J.-P. 1998, A&A, 334, 1000
+ 876, 83, doi: 10.3847/1538-4357/ab14ea                          McNeill, L. O., & Müller, B. 2020, MNRAS, 497, 4644,
+Böhm-Vitense, E. 1958, Zeitschrift für Astrophysik, 46, 108     doi: 10.1093/mnras/staa2287
+Brun, A. S., Strugarek, A., Noraz, Q., et al. 2022, ApJ, 926,    —. 2022, MNRAS, 509, 818, doi: 10.1093/mnras/stab3076
+  21, doi: 10.3847/1538-4357/ac469b                              Meynet, G., & Maeder, A. 2000, A&A, 361, 101
+Busse, F. H. 1970, ApJ, 159, 629                                 Miesch, M. S. 2005, Living Reviews in Solar Physics, 2, 1
+Cantiello, M., Mankovich, C., Bildsten, L.,                      Miesch, M. S., Elliott, J. R., Toomre, J., et al. 2000, ApJ,
+  Christensen-Dalsgaard, J., & Paxton, B. 2014, ApJ, 788,         593, 593, doi: 10.1086/308555
+  93, doi: 10.1088/0004-637X/788/1/93                            Mösta, P., Richers, S., Ott, C. D., et al. 2014, ApJL, 785,
+den Hartogh, J. W., Eggenberger, P., & Hirschi, R. 2019,          29, doi: 10.1086/338953
+  A&A, 622, 187, doi: 10.1051/0004-6361/201834330                Moyano, F., Eggenberger, P., Meynet, G., et al. 2022,
+Eggenberger, P., Meynet, G., Maeder, A., et al. 2008,             A&A, 663, 180, doi: 10.1051/0004-6361/202243389
+  Astrophysics and Space Science, 316, 43,                       Müller, B. 2025, in New Frontiers in GRMHD Simulations,
+  doi: 10.1007/s10509-007-9511-y                                  ed. C. Bambi, Y. Mizuno, S. Shashank, & F. Yuan
+Favre, A. 1965, Journal of Applied Mechanics, 32, 241,            (Singapore: Springer Nature Singapore), 663–698,
+  doi: 10.1115/1.3625792                                          doi: 10.1007/978-981-97-8522-3 19
+Fields, C. 2022, ApJL, 924, 15,                                  Müller, B., & Varma, V. 2020, MNRAS, 498, 109,
+  doi: 10.3847/2041-8213/ac460c                                   doi: 10.1093/mnrasl/slaa137
+Fuller, J., Piro, A. L., & Jermyn, A. S. 2019, MNRAS, 485,       Müller, B., Viallet, M., Heger, A., & Janka, H.-T. 2016,
+  3661, doi: 10.1093/mnras/stz514                                 ApJ, 833, 124, doi: 10.3847/1538-4357/833/1/124
+Gilman, P. A., & Foukal, P. V. 1979, ApJ, 229, 1179              Obergaulinger, M., & Aloy, M. Á. 2021, MNRAS, 503,
+Heger, A., Langer, N., & Woosley, S. 2000, ApJ, 528, 368,         4942, doi: 10.1093/mnras/stab295
+  doi: 10.1086/308158                                            Parker, E. N. 1955, ApJ, 122, 293, doi: 10.1086/146087
+Heger, A., Woosley, S. E., & Spruit, H. C. 2005, ApJ, 626,       Paxton, B., Cantiello, M., Arras, P., et al. 2013, ApJS, 208,
+  350, doi: 10.1086/429868                                         4, doi: 10.1088/0067-0049/208/1/4
+                             Angular momentum transport in the convection zone                                            17
+
+Reiners, A., Shulyak, D., Käpylä, P., et al. 2022, A&A, 662,   Suijs, M., Langer, N., Poelarends, A.-J., et al. 2008, A&A,
+  41, doi: 10.1051/0004-6361/202243251                             481, 87, doi: 10.1051/0004-6361:200809411
+                                                                 Tayler, R. J. 1973, MNRAS, 161, 365,
+Rizzuti, F., Hirschi, R., Arnett, W., et al. 2023, MNRAS,          doi: 10.1093/mnras/161.4.365
+  523, 2317, doi: 10.1093/mnras/stad2789                         Varma, V., & Müller, B. 2021, MNRAS, 504, 636,
+                                                                   doi: 10.1093/mnras/stab883
+See, V., Matt, S. P., Folsom, C. P., et al. 2019, ApJ, 876,
+                                                                 Varma, V., & Müller, B. 2023, MNRAS, 526, 5249,
+  118, doi: 10.3847/1538-4357/ab1096                               doi: 10.1093/mnras/stad3113
+Seta, A., & Federrath, C. 2021, Physical Review Fluids, 6,       Wheeler, J. C., Meier, D. L., & Wilson, J. R. 2002, ApJ,
+                                                                   568, 807, doi: 10.1086/338953
+  103701, doi: 10.1103/PhysRevFluids.6.103701
+                                                                 Woosley, S. E., & Heger, A. 2006, ApJ, 637, 914,
+Spruit, H. C. 2002, A&A, 381, 923,                                 doi: 10.1086/498500
+  doi: 10.1051/0004-6361:20011465                                Yoshimura, H. 1975, ApJ, 201, 740
+

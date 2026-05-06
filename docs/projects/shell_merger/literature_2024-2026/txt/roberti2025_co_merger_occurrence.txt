@@ -1,0 +1,1093 @@
+                                               Astronomy & Astrophysics manuscript no. aa54461-25                                                                                    ©ESO 2025
+                                               April 29, 2025
+
+
+
+
+                                                  The Occurrence and Impact of Carbon-Oxygen Shell Mergers in
+                                                                        Massive Stars
+                                                          L. Roberti1, 2, 3, 4, 5 , M. Pignatari2, 3, 6, 5 , H. E. Brinkman7, 5 , S. K. Jeena8 , A. Sieverding9 , A. Falla10, 4 , M.
+                                                                                        Limongi4, 11, 12 , A. Chieffi13, 14, 12 , and M. Lugaro2, 3, 15, 14
+
+                                                      1
+                                                        Istituto Nazionale di Fisica Nucleare - Laboratori Nazionali del Sud, Via Santa Sofia 62, Catania, I-95123, Italy
+                                                      2
+                                                        Konkoly Observatory, Research Centre for Astronomy and Earth Sciences, HUN-REN, Konkoly Thege Miklós út 15-17, Budapest,
+                                                        H-1121, Hungary
+                                                      3
+                                                        CSFK HUN-REN, MTA Centre of Excellence, Konkoly Thege Miklós út 15-17, Budapest, H-1121, Hungary
+                                                      4
+                                                        Istituto Nazionale di Astrofisica – Osservatorio Astronomico di Roma, Via Frascati 33, Monte Porzio Catone, I-00040, Italy
+arXiv:2504.18867v1 [astro-ph.SR] 26 Apr 2025
+
+
+
+
+                                                      5
+                                                        NuGrid Collaboration, http://nugridstars.org
+                                                      6
+                                                        E. A. Milne Centre for Astrophysics, University of Hull, Cottingham Road, Kingston upon Hull, HU6 7RX, UK
+                                                      7
+                                                        Institute of Astronomy, KU Leuven, Celestijnenlaan 200D, 3001, Leuven, Belgium
+                                                      8
+                                                        Department of Physics, Indian Institute of Technology Palakkad, Kerala, India
+                                                      9
+                                                        Lawrence Livermore National Laboratory, 7000 East Ave, Livermore, CA, 94550, USA
+                                                     10
+                                                        Dipartimento di Fisica, Sapienza Università di Roma, P.le A. Moro 5, Roma, I-00185, Italy
+                                                     11
+                                                        Kavli Institute for the Physics and Mathematics of the Universe, Todai Institutes for Advanced Study, University of Tokyo,
+                                                        Kashiwa, 277-8583 (Kavli IPMU, WPI), Japan
+                                                     12
+                                                        Istituto Nazionale di Fisica Nucleare, Sezione di Perugia, via A. Pascoli s/n, Perugia, I-06125, Italy
+                                                     13
+                                                        Istituto Nazionale di Astrofisica—Istituto di Astrofisica e Planetologia Spaziali, Via Fosso del Cavaliere 100, Roma, I-00133, Italy
+                                                     14
+                                                        School of Physics and Astronomy, Monash University, VIC 3800, Australia
+                                                     15
+                                                        ELTE Eötvös Loránd University, Institute of Physics and Astronomy, Budapest 1117, Pázmány Péter sétány 1/A, Hungary
+
+
+                                                                                                                  ABSTRACT
+
+                                                    Context. In their final stages before undergoing a core-collapse supernova, massive stars may experience mergers between internal
+                                                    shells where carbon (C) and oxygen (O) are consumed as fuels for nuclear burning. This interaction, known as a C-O shell merger,
+                                                    can dramatically alter the internal structure of the star, leading to peculiar nucleosynthesis and potentially influencing the supernova
+                                                    explosion and the propagation of the subsequent supernova shock.
+                                                    Aims. Our understanding of the frequency and consequences of C-O shell mergers remains limited. This study aims to identify for
+                                                    the first time early diagnostics in the stellar structure which will lead to C-O shell mergers in more advanced stages. We also assess
+                                                    their role in shaping the chemical abundances in the most metal poor stars of the Galaxy.
+                                                    Methods. We analyze a set of 209 of stellar evolution models available in the literature, with different initial progenitor masses and
+                                                    metallicities. We then compare the nucleosynthetic yields from a subset of these models with the abundances of odd-Z elements in
+                                                    metal-poor stars.
+                                                    Results. We find that the occurrence of C-O shell mergers in stellar models can be predicted with good approximation based on the
+                                                    outcomes of the central He burning phase, specifically, from the CO core mass (MCO ) and the 12 C central mass fraction (XC12 ): 90% of
+                                                    models with a C-O merger have XC12 < 0.277 and MCO < 4.90 M⊙ , with average values MCO = 4.02 M⊙ and XC12 = 0.176. The quantities
+                                                    XC12 and MCO are indirectly affected from several stellar properties, including the initial stellar mass and metallicity. Additionally, we
+                                                    confirm that the Sc-rich and K-rich yields from models with C-O mergers would solve the long-standing underproduction of these
+                                                    elements in massive stars.
+                                                    Conclusions. Our results emphasize the crucial role of C-O shell mergers in enriching the interstellar medium, particularly in the
+                                                    production of odd-Z elements. This highlights the necessity of further investigations to refine their influence on pre-supernova stellar
+                                                    properties and their broader impact on galactic chemical evolution.
+                                                    Key words. stars: massive – stars: evolution – stars: interiors – stars: nucleosynthesis – Galaxy: abundances – supernovae: general
+
+
+
+                                               1. Introduction                                                            phases, where an element is converted into a heavier species.
+                                                                                                                          Once a given fuel is exhausted in the center of the star, the con-
+                                               Massive stars are responsible for the production of roughly half           traction resumes, the burning of that fuel shifts outwards in mass
+                                               of the solar abundances of the elements in the periodic table (see,        (shell burning), and a heavier fuel is ignited in the center (e.g.,
+                                               e.g., Prantzos et al. 2018; Kobayashi et al. 2020). During their           Woosley et al. 2002). During the spectacular end of their lives
+                                               lives, they transform their initial chemical composition, mostly           as core-collapse supernovae (CCSNe) the products of the hydro-
+                                               dominated by H and He, into heavier and heavier nuclear species            static evolution contained in these layers are partly reprocessed
+                                               by means of nuclear reactions, until a compact Fe core forms               by explosive nucleosynthesis, therefore, the CCSN ejecta con-
+                                               surrounded by layers of materials with variable chemical com-              tain the contribution from the nuclear burning that occurred both
+                                               position. Massive stars evolve by alternating contraction phases           during the pre-supernova evolution and during the explosion it-
+                                               of the core, in which the temperature rises, to central burning
+                                                                                                                                                                      Article number, page 1 of 17
+                                                 A&A proofs: manuscript no. aa54461-25
+
+self (Rauscher et al. 2002; Pignatari et al. 2016; Limongi, M. &       burning shells. In a smaller CO core, these burning shells are
+Chieffi, A. 2018; Roberti et al. 2024a; Boccioli & Roberti 2024).      closer to each other than that in a larger CO core. The 12 C abun-
+    In the last days of their lives, massive stars can experience      dance controls the amount of fuel available for core C burning
+the ingestion of carbon (C) and neon (Ne) into the oxygen (O)          and, more importantly, the number and the extent of the C burn-
+burning shell, where convection, in the form of turbulent mo-          ing shells, that contribute to sculpt the final density and entropy
+tions, vigorously mixes out the burning products and bring in          profiles at the moment of the core-collapse. In particular, a lower
+                                                                       12
+further fuel (Rauscher et al. 2002; Meakin & Arnett 2006; Rit-            C abundance left by He burning results in a lower 20 Ne abun-
+ter et al. 2018b; Andrassy et al. 2020; Rizzuti et al. 2024). This     dance 1 and, eventually, in a smaller entropy discontinuity at the
+convective-reactive event is referred to as a "C-O shell merger"       interfaces between the O, Ne, and C convective shells (Roberti
+and can result in the formation of a large mixed convective re-        et al. 2024b). In general, an entropy discontinuity acts as a bar-
+gion, where C-rich material is exposed to the high temperatures        rier sustained by nuclear burning which prevents the underlying
+typical of O burning. The resulting peculiar nucleosynthetic sig-      shell from penetrating into the overlying one. As the C (and Ne)
+nature of this merger has been shown to survive reprocessing           abundance decreases, the strength of this barrier decreases ac-
+by explosive nucleosynthesis (Rauscher et al. 2002; Chieffi &          cordingly. It follows that a small CO core together with a low
+                                                                       12
+Limongi 2017; Ritter et al. 2018a; Roberti, L. et al. 2023; Roberti       C abundance at the end of He burning would, in principle, fa-
+et al. 2024b). The variety of products from the C-O shell merger       vor the penetration of the O burning region into the C-rich layers.
+are thus ejected into the stellar surrounding, contributing to the          To systematically study this prediction on the occurrence of
+chemical enrichment of the interstellar medium. Furthermore,           C-O shell mergers in theoretical calculations, we collected 209
+this peculiar merger event may create asymmetries in the stel-         published 1D models with initial masses between 9.2 and 25 M⊙ ,
+lar structure of the supernova progenitor and cause a significant      initial metallicity between 0 and 0.05, and initial rotation veloc-
+drop in density at the interface between the Si and O layers.          ity between 0 and 800 km s−1 (Rauscher et al. 2002; Pignatari
+These effects could potentially facilitate the CCSN explosion          et al. 2016; Sieverding et al. 2018; Ritter et al. 2018b; Limongi,
+and influence the oscillation modes of gravitational waves emit-       M. & Chieffi, A. 2018; Brinkman et al. 2019, 2021; Limongi
+ted during the explosion (see, e.g., Couch & Ott 2013; Müller          et al. 2024; Jeena et al. 2024; Roberti et al. 2024a,b, see Sect.A
+et al. 2016; Boccioli et al. 2023; Torres-Forné et al. 2019; Zha       for a brief overview of the main properties of the sets of models
+et al. 2024; Laplace et al. 2025).                                     considered), and present their MCO and XC12 in Fig. 1. Out of
+    C-O shell mergers have been found in theoretical, spherically      209 models, 41 present a C-O shell merger. While this number
+symmetric (1D) stellar models, independently from the code             constitutes a representative percentage of massive star models
+used to produce the simulations, generally in massive stars with       with a C-O merger in literature, it is not necessarily representa-
+an initial mass 12 ≤ Mini (M⊙ ) ≤ 25. Their occurrence is also         tive yet of a real stellar population because it is not weighted over
+supported by the rather few multidimensional simulations of the        an initial mass function, nor over an initial rotation velocity and
+final stages of the evolution of massive stars (see, e.g., Meakin      metallicity distributions. Significantly, we find that the majority
+& Arnett 2006; Mocák et al. 2018; Andrassy et al. 2020; Yadav          of the models with a C-O merger fall in an identifiable region of
+et al. 2020). For example, Rizzuti et al. (2022, 2023) showed          the MCO -XC12 diagram, the grey area in Fig. 1. Most of the mod-
+that O and Ne convective shells in a 3D model naturally tend to        els without a C-O shell merger are not located in this area (77%,
+entrain some material from the layers at the edges of the con-         132 out of 172). Some exceptions are present, which is not sur-
+vective zone. This process facilitates the ingestion of material       prising and mostly due to the large uncertainty introduced by the
+from the adjacent burning shell and may trigger a convective-          adoption of a different physics input (e.g., reaction rates, opacity,
+reactive event (Rizzuti et al. 2024). However, direct, or even in-     mass loss prescriptions) and mixing treatments (e.g., convection
+direct, observational evidence of the existence in nature of C-O       and semi-convection parameters, definition of convective bound-
+shell mergers is still lacking. Ritter et al. (2018a) suggested that   ary mixing, rotational mixing) in every set of models, which can
+a fraction of massive stars in a stellar population is required to     affect the exact parameter space for C-O shell merger events. For
+undergo C-O mergers to reproduce the galactic abundances of            example, using the Schwarzschild criterion to define the con-
+the odd-Z elements, such as P, K, and Sc. However, this analysis       vective O shell boundary permits a deeper penetration into the
+was limited to a parametric study based on the ejecta of a single      Ne-C region, whereas the Ledoux criterion would limit the ex-
+non-rotating 15 M⊙ stellar model of solar metallicity.                 tent of the convective zone at the chemical discontinuity Clayton
+    Here we present a study which provides us with a new               (1968); Kippenhahn & Weigert (1990). As another example, the
+method to predict the occurrence of C-O shell merger in 1D             adoption of a larger 12 C(α,γ)16 O rate would result in a lower
+stellar models. Furthermore, we demonstrate that observations          XC12 , but approximately the same MCO . The quantitative impact
+of old stars from the early Universe show the effect of the C-O        of these uncertainties can only be assessed by running large grids
+mergers that occurred in the first generation of massive stars.        of models, each varying a single input parameter, all approaches
+                                                                       extremely costly both in terms of time and resources.
+2. Conditions for C-O mergers                                               Figure 1 demonstrates that the occurrence of a C-O shell
+                                                                       merger depends on the outcomes of the central He burning phase
+The advanced burning stages of a massive star are controlled by        (specifically, MCO and XC12 ), and only indirectly on initial mass
+the extension in mass of the He-exhausted core, rich in C and O        and metallicity. We find that 90% of models that undergo a C-
+(the CO core mass, or MCO ), and the 12 C mass fraction left in        O merger have XC12 < 0.277 and MCO < 4.90 M⊙ , with average
+the center of the star (XC12 ) after the central He burning phase      values MCO = 4.02 M⊙ and XC12 = 0.176. Within this parameter
+(Chieffi & Limongi 2013; Limongi, M. & Chieffi, A. 2018). The          space, we identify 79 models in total, of which 38 do not ex-
+CO core mass has the same role to the advanced burning phases          hibit a C-O merger. This indicates that the threshold values for
+as the initial mass to the main sequence of the star. Since all the    XC12 and MCO are a necessary but not sufficient condition to de-
+following burning phases take place within the CO core, its size
+(both in mass and in radius) determines the region available for       1
+                                                                             Note that 20 Ne is the main product of C burning via 12 C(12 C,α)20 Ne,
+                                                                       12
+the development and evolution of the various C, Ne, O, and Si               C(12 C,p)23 Na(p,α)20 Ne, and 16 O(α,γ)20 Ne.
+
+Article number, page 2 of 17
+                         L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+
+
+
+Fig. 1. The CO core mass (MCO ) versus the central 12 C mass fraction abundance (XC12 ) at the end of central He burning phase. The different colors
+identify the different set of models (see side legend) where RAU Rauscher et al. (2002); PGN Pignatari et al. (2016); SIE Sieverding et al. (2018);
+RIT Ritter et al. (2018b); L&C Limongi, M. & Chieffi, A. (2018); BRI Brinkman et al. (2019, 2021); LIM Limongi et al. (2024); RLC Roberti
+et al. (2024a); ROB Roberti et al. (2024b); KEP Jeena et al. (2024). Different symbols identify different initial masses (see top legend). Models
+with and without a C-O shell merger are represented by filled and empty symbols, respectively. The two gray shaded area represent the covariant
+confidence ellipses relative to the models with C-O mergers within 1 and 2 standard deviations σ, centred at MCO =4.02 and XC12 =0.176.
+
+
+termine whether the merger occurs and that, even when the CO               substantial production of intermediate odd-Z elements (such as
+core mass and central carbon abundance fall within the expected            Cl, K, and Sc). For example, in these models 34 S is the seed for p
+range, the likelihood of a merger remains around 50%, suggest-             and α captures that produce 35 Cl, 39 K, and 45 Sc via 34 S(p,γ)35 Cl,
+                                                                           34
+ing that additional mechanisms may play a role in triggering the              S(α,γ)38 Ar and 38 Ar(α,γ)42 Ca(α,p)45 Sc or 38 Ar(p,γ)39 K. The
+merger.                                                                    enhanced number of α captures may also lead to the produc-
+     While both rotating and non-rotating models are included in           tion of 44 Ti, that is considered to be mostly produced in ex-
+the figure, this is not a criterium for the merger. In fact, rota-         plosive conditions, with a significant contribution coming from
+tionally induced secular instabilities do not have enough time to          neutrino-driven explosions (see, e.g., Tur et al. 2010; Chieffi &
+affect the latest stages of evolution. Consequently, because of the        Limongi 2017; Sieverding et al. 2023; Wang & Burrows 2024).
+timescales, the rotation does not influence the mixing coefficient         The production of these nuclei is independent from the metallic-
+at the interface of the two shells and thus does not directly cause        ity, being predominantly primary, i.e., the result of the interaction
+the shell interaction, although it affects it indirectly via changing      of direct products of the O and C burning processes. Addition-
+MCO and XC12 (e.g., Chieffi & Limongi 2013), similarly to other            ally, under these conditions, the efficient activation of the proton
+stellar parameters such as the initial mass and metallicity.               captures (such as those leading to the production of 35 Cl and
+                                                                           39
+                                                                              K) can significantly impact the nuclear energy generation at
+                                                                           the base of the O burning shell. Therefore, the use of an appro-
+3. Nuclear Reactions and Nucleosynthesis in a C-O                          priately detailed nuclear network is mandatory when calculating
+   merger                                                                  the evolution of models experiencing C-O shell mergers.
+During a C-O shell merger, C-burning products are transported                   At these high temperatures, the reactions start tending to an
+to the base of the O burning shell, where they interact with the           equilibrium and therefore the inverse reactions start to be effi-
+products of O-burning at temperatures significantly higher than            cient, in particular the photodissociation processes. As a con-
+those typical of C-burning. This interaction leads to a slight re-         sequence, some secondary processes (i.e., depending on pre-
+duction in the final abundances of the C-burning products (such            existing seeds in the initial composition of the star) may oc-
+as 23 Na, 24 Mg, and 27 Al) and an enhancement of those of the O-          cur. This is the case of the production of p-nuclei (35 neutron-
+burning products (such as 28 Si, 31 P, and 32 S). Fig. 2 shows this        deficient isotopes beyond iron, like 92 Mo and 130 Ba) via the γ–
+occurrence in the case of a 15 M⊙ star at solar metallicity. The           process, and weak s-process peak elements (such as Sr, Y, and
+injection of 12 C and fresh 16 O at approximately 2.6 - 2.8 GK             Zr) from photodisintegrations of heavier isotopes, both previ-
+(typical temperature of O shell burning) leads to the activation           ously produced by the s–process in He core and C shell burn-
+of heavy ion fusion reactions (such as 12 C+12 C, 12 C+16 O, and           ing or from the unburned pristine material (Rauscher et al. 2002;
+16
+   O+16 O) together with the 20 Ne+γ reaction, that suddenly re-           Ritter et al. 2018a; Roberti, L. et al. 2023; Roberti et al. 2024b).
+lease a large number of light particles, mostly p and α. The O                  This unique nucleosynthetic signature is mostly preserved,
+burning products capture the free p and α particles, leading to a          even after the explosive nucleosynthesis, due to the extensive ra-
+                                                                                                                      Article number, page 3 of 17
+                                                      A&A proofs: manuscript no. aa54461-25
+
+
+
+
+Fig. 2. Comparison between the abundances before (dashed lines) and           Fig. 3. As Fig. 2, but for the pre-supernova (dashed lines) and post-
+after the C-O shell merger (solid lines) in the RIT 15 M⊙ model at so-        supernova (solid lines) stages, with the inclusion of 56 Ni. The super-
+lar metallicity (see Ritter et al. 2018b, for a detailed description of the   nova explosion was modelled with a semi-analytical approach, using
+model). The upper panel shows the effect of the merger on the major fu-       the Sedov blast wave (SBW) solution for the determination of the peak
+els. The lower panels show instead the effect of the merger on some key       velocity of the shock throughout the stellar structure and the remnant
+C- and O-burning products and selected odd-Z isotopes (see text). The         mass prescription from Fryer et al. (2012) (see Pignatari et al. 2016;
+vertical dotted lines represent the location of the edges of the shells be-   Ritter et al. 2018b; Roberti et al. 2024c, for a detailed description of
+fore the C-O shell merger. The light grey area is the region modified by      the explosion method). The gray bands in the plots mark each explosive
+the merger, the dark grey area represents instead the untouched deeper        burning stage in the corresponding mass coordinate (i.e., complete and
+layers of the star after the merger, i.e., the Fe core and the Si shell.      incomplete Si burning, explosive O, Ne, and C burning). The vertical
+                                                                              dotted line represent the mass-cut that divides the supernova ejecta from
+                                                                              the remnant mass. The variation of 24 Mg and 32 S in the He shell repre-
+dius of the mixed convective zone created by the merger (see                  sents the activation of the α capture chain in the explosive He burning
+Fig. 3, Roberti, L. et al. 2023; Roberti et al. 2024b, and refer-             (Pignatari et al. 2023).
+ences therein)2 .
+
+                                                                              Nomoto et al. (2013) and PUSH Curtis et al. (2019); Ebinger
+4. Stellar Archaeology                                                        et al. (2020)), which, conversely, did not appear in Fig. 1 be-
+                                                                              cause the MCO and XC12 values are not available. In most of the
+As demonstrated above, the occurrence of C-O shell mergers is
+                                                                              models with C-O shell mergers, both the [K/Mg] and [Sc/Mg]
+independent from the metallicity. Therefore we can use the ob-
+                                                                              are positive (i.e., their absolute ratios have from solar to super-
+servations of the earliest generation of low-mass stars to look for
+                                                                              solar values), while in most of the models without C-O shell
+traces of pollution from C-O merger events in primordial mas-
+                                                                              mergers, they are negative instead (i.e., their absolute ratios have
+sive stars. This is allowed because the interstellar cloud where
+                                                                              sub-solar values), especially at low metallicity, where the initial
+most of the metal poor stars that we can still observe today were
+                                                                              abundances of these elements are negligible. The only excep-
+born, are thought to have experienced pollution by one or very
+                                                                              tions are the [Sc/Mg] ratios of the PUSH models, which include
+few core-collapse supernova explosions. Therefore the observa-
+                                                                              neutrino interactions in the explosion. The impact of neutrinos
+tion of their surface abundances still reflect the pristine compo-
+                                                                              is particularly important for the α-rich freeze out and explosive
+sition of the gas enriched by the first supernovae.
+                                                                              Si burning and allows these models to reach [Sc/Mg]≳ 0 with-
+     We explore here the use of [K/Mg] and [Sc/Mg]3 as tracers
+                                                                              out a C-O shell merger. For further discussion of this dataset see
+for C-O mergers. As mentioned above, K and Sc are two odd-Z
+                                                                              Appendix B.
+elements abundantly produced in a C-O shell merger, and which
+can be observed even at extremely low metallicity Ritter et al.                   Figure 5 shows a comparison between the model predic-
+(2018a). Mg, an α element typically produced by massive stars,                tions and the observations at extremely low metallicity (with
+can also be observed at low metallicity, but is not significantly             [Fe/H]≤ −3, taken from JINAbase (Abohalima & Frebel 2018),
+affected by the C-O merger. Figure 4 presents the [K/Mg] and                  see the Appendix C). To ensure a meaningful comparison be-
+[Sc/Mg] ratios as a function of the initial metallicity for most              tween the observations and progenitor candidates from the sam-
+of the models shown in Fig. 1, i.e., those that provided CCSN                 ple presented in Fig. 4, we included only models with a C-O
+yields. We furthermore included two other sets of models (NOM                 shell merger (in which the nucleosynthesis of Mg, K, and Sc is
+                                                                              primary) and models with an initial metallicity lower than 10−5
+2
+  Note that the peak temperature of the shock scales as Tpeak ∝ R−3/4
+                                                                 ∗    ,       (corresponding to [Fe/H] ≈ −3). In other words, we did not in-
+with R∗ radial coordinate of the star.                                        clude higher metallicity models without a merger, as their ratios
+3
+  [X/Y] = log10 (X/Y)-log10 (X/Y)⊙ .                                          would be close to solar primarily due to their initial composi-
+Article number, page 4 of 17
+                         L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+                                                                             that mixing is more efficient at the edges of convection zones
+                                                                             than current 1D models predict. This suggests that C-O shell
+                                                                             mergers are a relevant feature of massive stars, and more fre-
+                                                                             quent than expected.
+                                                                                  Another significant source of uncertainty is the determina-
+                                                                             tion of the reaction rates that govern the latest stages of the evo-
+                                                                             lution, and in particular the 12 C(α,γ)16 O the 12 C+12 C, and, in
+                                                                             the case of C-O shell mergers, 12 C+16 O and light particle capture
+                                                                             reaction rates. The 12 C(α,γ)16 O rate is already rather well con-
+                                                                             strained by current extrapolations of available experimental data,
+                                                                             with an estimated uncertainty of approximately 20% (deBoer
+                                                                             et al. 2017). The 12 C+12 C reaction rate is much more uncertain
+                                                                             than the 12 C(α,γ)16 O rate and its variation can drastically change
+                                                                             the convective history of the C burning shell and thus even affect
+                                                                             the final fate of the star (see, e.g., Pignatari et al. 2013; Chieffi
+                                                                             et al. 2021). The 12 C+16 O reaction rate can significantly con-
+                                                                             tribute to the energy generation during a C-O shell merger, es-
+                                                                             pecially for a low rate of C ingestion in the O shell, and, as the
+Fig. 4. The [K/Mg] (upper panel) and [Sc/Mg] (lower panel) versus the        12
+                                                                                C+12 C reaction rate, it is still rather uncertain (Andrassy et al.
+initial metallicity. The adopted solar reference is from Asplund et al.
+                                                                             2020). Future and ongoing measures of the 12 C(α,γ)16 O and the
+(2009). The different colored labels identify each set of models (see bot-
+tom legend): RAU Rauscher et al. (2002); NOM Nomoto et al. (2013);           heavy ion fusion rates as in the case of the 12 C+12 C reaction at
+RIT Ritter et al. (2018b); L&C Limongi, M. & Chieffi, A. (2018); PUSH        LUNA (Ananna et al. 2024) and JUNA (Kajino 2023), and of
+Ebinger et al. (2020); ROB Roberti et al. (2024b); RLC Roberti et al.        the 12 C+16 O reaction at LNS-INFN (Oliva et al. 2023), will help
+(2024a); KEP Jeena et al. (2024). Different symbols identify different       to constrain the evolutionary properties of stars approaching the
+initial masses (see top legend). Models with and without a C-O shell         CCSN stage.
+merger are represented by a filled and an empty symbol, respectively.             While it is estimated that most massive stars are part of bi-
+                                                                             nary or even multiple systems, current modeling of massive star
+                                                                             binaries is challenging and relies on significant approximations
+tion rather than the effects of nucleosynthesis. The observations            (e.g., Laplace et al. 2021; Brinkman et al. 2023). Still, we can
+show that the [K/Mg] ratio is centered around the solar value,               use a simplified approach to discuss C-O shell mergers in binary
+whereas the [Sc/Mg] ratio is slightly sub-solar. In the plot, the            systems. The primary effect of binarity is a significantly larger
+grey shaded area represents the average [K/Mg] and [Sc/Mg] ra-               mass loss, which can reduce the size of the helium cores and,
+tios, including an error band. This average data point divides the           consequently, result in smaller MCO and higher XC12 compared
+models into three subclasses: models without a C-O shell merger              to single stars (e.g., Brinkman et al. 2023). As demonstrated in
+in the lower left quadrant, models with a C-O shell merger in                Sect. 2, a higher XC12 would increase the entropy barriers be-
+the upper right quadrant, and models without C-O shell mergers               tween C, Ne, and O burning shells, thereby hindering the pene-
+but incorporating neutrino physics in the explosion, in the upper            tration of the convective O shell into the C- and Ne-rich zones.
+left quadrant. The observed data falls in a junction region be-              Therefore, we can predict that binary stars may move likely out-
+tween these three populations, making it difficult to identify any           side to the right of the grey area of Fig. 1 and have less C-O shell
+single population as the definitive progenitor of these second-              mergers.
+generation stars. However, it becomes clear that a single compo-                  The GCE effects of C-O shell mergers on odd-Z elements
+nent alone cannot reproduce the observations, suggesting that a              have been indirectly confirmed by Prantzos et al. (2018), who
+nucleosynthetic contribution from C-O shell mergers is essential             utilized the yield set from Limongi, M. & Chieffi, A. (2018).
+even at extremely low metallicity. Currently, it is challenging to           In that dataset, in fact, all C-O shell mergers but one are found
+estimate the required fraction of C-O merger ejecta needed to                within rotating models (see Appendix A.3). The difference be-
+align the interstellar cloud composition with the observed val-              tween the GCE results obtained without and with the inclusion
+ues, as this may heavily depend on the selection of progenitors              of massive star rotating models reflects the effect of both ro-
+without C-O shell mergers or even on the galactic chemical evo-              tation and C-O shell merger nucleosynthesis. In particular, the
+lution (GCE). Nevertheless, this analysis emphasizes the need                GCE with rotating massive stars improved the fit to observa-
+for more extensive low-metallicity observations and provides a               tions for many elements compared to non-rotating models alone.
+framework for interpreting the chemical signatures of extremely              Although it is challenging to disentangle the individual contri-
+low-metallicity stars based on their position within the quad-               butions of rotation and C-O shell mergers to the production of
+rants.                                                                       odd-Z elements like K and Sc, the role of C-O mergers in their
+                                                                             synthesis is undoubtedly as important as the effect of rotation.
+                                                                             Notably, their GCE results for Mg, K, and Sc at extremely low
+5. Discussion                                                                metallicity align with the grey shaded area in our Fig. 5, high-
+One of the largest sources of uncertainty in stellar models is the           lighting the significant contribution of C-O mergers in matching
+treatment of convection and the definition of convective borders.            observed values.
+In this context, constraints from asteroseismology (Aerts et al.
+2003; Aerts 2021; Burssens et al. 2023; Brinkman et al. 2024)                6. Summary and Conclusions
+and indications from multidimensional simulations of burning
+shells (Rizzuti et al. 2022, 2023, 2024) are starting to provide             We studied the occurrence of C-O shell mergers in a large set of
+valuable tools to improve the future generation of 1D stellar                models published in literature, with a wide range of initial mass,
+modelling. At first glance, both seem to lead to the conclusion              metallicity and rotation velocity conditions. We found that, in
+                                                                                                                      Article number, page 5 of 17
+                                                    A&A proofs: manuscript no. aa54461-25
+
+
+
+
+Fig. 5. The [K/Mg] versus [Sc/Mg] ratios from those models selected from Fig. 4 that have either a C-O shell merger or initial metallicity
+Zini < 10−5 . The adopted solar reference is from Asplund et al. (2009). The different colored labels identify each set of models as in Fig. 4 (see
+side legend). Different symbols identify different initial masses (see top legend). Models with and without a C-O shell merger are represented
+by a filled and empty symbol, respectively. The blue star symbols are observations of low-mass stars of low metallicity taken from JINAbase
+(Abohalima & Frebel 2018) with [Fe/H]<–3. A representative error bar for the observation data is shown, as taken from Roederer et al. (2014).
+The dashed vertical and horizontal lines represent the average [K/Mg] and [Sc/Mg] ratios from the observations. The grey shaded area represents
+the representative error bar for the average data point.
+
+
+spite of all the current uncertainties, the occurrence of C-O merg-            Finally, using observational data from stellar archaeology
+ers does not depend on the initial mass, rotational velocity, nor          we have demonstrated that the impact of C-O shell mergers
+metallicity of the star, instead, it is influenced by the intrinsic        on nucleosynthesis was already visible in the early Universe.
+properties of the star at the end of the He burning phase, and that        This highlights the significant contribution of these events to the
+the representative values of MCO and XC12 for models with a C-             chemical enrichment processes of galaxies and the origin of solar
+O merger are MCO < 4.90 M⊙ and XC12 < 0.277. This provides                 matter and the need to investigate them further. C-O shell merg-
+a method to predict the occurrence of these events from the first          ers likely contributed to enrich the pre-Solar System material
+evolutionary phases with a likelihood of about 50%.                        with odd-Z isotopes, such as the radioactive 40 K, a fundamen-
+                                                                           tal heat source in the evolution of rocky planets like the Earth
+                                                                           (Turcotte & Schubert 2002; Lugaro et al. 2018).
+     We furthermore showed that the nucleosynthesis during a C-
+O shell merger is dominated by the light particle captures, lead-          Acknowledgements. We thank the support from the NKFI via K-project 138031
+ing to a large production of the odd-Z nuclear species, such as            and the Lendület Program LP2023-10 of the Hungarian Academy of Sciences.
+31                                                                         LR and MP acknowledge the support to NuGrid from JINA-CEE (NSF Grant
+   P, 39 K, 45 Sc, and of the radioactive species 44 Ti, whose Galac-      PHY-1430152) and STFC (through the University of Hull’s Consolidated Grant
+tic origin is still unclear and debated (e.g., Chieffi & Limongi           ST/R000840/1), and ongoing access to viper, the University of Hull High Per-
+2017; Ritter et al. 2018a; Maas et al. 2022; Sieverding et al.             formance Computing Facility. LR acknowledges the support from the ChETEC-
+2023, and references therein). These reactions have also a sig-            INFRA – Transnational Access Projects 22102724-ST and 23103142-ST and
+                                                                           the PRIN URKA Grant Number prin_2022rjlwhn. This work was supported
+nificant impact on the nuclear energy generation and they even             by the European Union’s Horizon 2020 research and innovation programme
+dominate over the energy generated by the heavy ion fusions,               (ChETEC-INFRA – Project no. 101008324), and the IReNA network supported
+such as 16 O+16 O and 12 C+16 O reactions.                                 by US NSF AccelNet (Grant No. OISE-1927130). ML was also supported by the
+
+Article number, page 6 of 17
+                            L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+NKFIH excellence grant TKP2021-NKTA-64. This work has been partially sup-           Pignatari, M., Göbel, K., Reifarth, R., & Travaglio, C. 2016, International Journal
+ported by the Italian grants “Premiale 2015 FIGARO” (PI: Gianluca Gemme).              of Modern Physics E, 25, 1630003
+We acknowledge support from PRIN MUR 2022 (20224MNC5A), "Life, death                Pignatari, M., Hirschi, R., Wiescher, M., et al. 2013, ApJ, 762, 31
+and after-death of massive stars", funded by European Union - Next Generation       Pignatari, M., Trueman, T. C. L., Womack, K. A., et al. 2023, MNRAS, 524,
+EU.                                                                                    6295
+                                                                                    Placco, V. M., Beers, T. C., Ivans, I. I., et al. 2015, ApJ, 812, 109
+                                                                                    Placco, V. M., Frebel, A., Beers, T. C., et al. 2014, ApJ, 781, 40
+                                                                                    Prantzos, N., Abia, C., Limongi, M., Chieffi, A., & Cristallo, S. 2018, MNRAS,
+References                                                                             476, 3432
+                                                                                    Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E. 2002, ApJ, 576, 323
+Abohalima, A. & Frebel, A. 2018, The Astrophysical Journal Supplement Series,       Ritter, C., Andrassy, R., Côté, B., et al. 2018a, MNRAS, 474, L1
+   238, 36                                                                          Ritter, C., Herwig, F., Jones, S., et al. 2018b, MNRAS, 480, 538
+Aerts, C. 2021, Reviews of Modern Physics, 93, 015001                               Rizzuti, F., Hirschi, R., Arnett, W. D., et al. 2023, MNRAS, 523, 2317
+Aerts, C., Thoul, A., Daszyńska, J., et al. 2003, Science, 300, 1926               Rizzuti, F., Hirschi, R., Georgy, C., et al. 2022, MNRAS, 515, 4013
+Ananna, C., Barbieri, L., Boeltzig, A., et al. 2024, Universe, 10, 228              Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, MNRAS, 533, 687
+Anders, E. & Grevesse, N. 1989, Geochim. Cosmochim. Acta, 53, 197                   Roberti, L., Limongi, M., & Chieffi, A. 2024a, ApJS, 272, 15
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491, 972          Roberti, L., Limongi, M., & Chieffi, A. 2024b, ApJS, 270, 28
+Asplund, M., Grevesse, N., Sauval, A. J., & Scott, P. 2009, ARA&A, 47, 481          Roberti, L., Pignatari, M., Fryer, C., & Lugaro, M. 2024c, A&A, 686, L8
+Boccioli, L. & Roberti, L. 2024, Universe, 10, 148                                  Roberti, L., Pignatari, M., Psaltis, A., et al. 2023, A&A, 677, A22
+Boccioli, L., Roberti, L., Limongi, M., Mathews, G. J., & Chieffi, A. 2023, The     Roederer, I. U., Preston, G. W., Thompson, I. B., et al. 2014, The Astronomical
+   Astrophysical Journal, 949, 17                                                      Journal, 147, 136
+Brinkman, H. E., den Hartogh, J. W., Doherty, C. L., Pignatari, M., & Lugaro,       Roederer, I. U., Sneden, C., Thompson, I. B., Preston, G. W., & Shectman, S. A.
+   M. 2021, ApJ, 923, 47                                                               2010, ApJ, 711, 573
+Brinkman, H. E., Doherty, C., Pignatari, M., Pols, O., & Lugaro, M. 2023, ApJ,      Sieverding, A., Kresse, D., & Janka, H.-T. 2023, ApJ, 957, L25
+   951, 110                                                                         Sieverding, A., Martínez-Pinedo, G., Huther, L., Langanke, K., & Heger, A.
+Brinkman, H. E., Doherty, C. L., Pols, O. R., et al. 2019, ApJ, 884, 38                2018, ApJ, 865, 143
+Brinkman, H. E., Roberti, L., Kemp, A., et al. 2024, A&A, 689, A149                 Sieverding, A., Müller, B., & Qian, Y. Z. 2020, ApJ, 904, 163
+Buchmann, L. 1996, ApJ, 468, L127                                                   Siqueira Mello, C., Hill, V., Barbuy, B., et al. 2014, A&A, 565, A93
+Burssens, S., Bowman, D. M., Michielsen, M., et al. 2023, Nature Astronomy, 7,      Skúladóttir, Á., Tolstoy, E., Salvadori, S., et al. 2015, A&A, 574, A129
+   913                                                                              Torres-Forné, A., Cerdá-Durán, P., Obergaulinger, M., Müller, B., & Font, J. A.
+Casey, A. R. & Schlaufman, K. C. 2015, ApJ, 809, 110                                   2019, Phys. Rev. Lett., 123, 051102
+Caughlan, G. R. & Fowler, W. A. 1988, Atom. Data Nucl. Data Tables, 40, 283,        Tur, C., Heger, A., & Austin, S. M. 2010, ApJ, 718, 357
+   cF88                                                                             Turcotte, D. L. & Schubert, G. 2002, Geodynamics (Cambridge university press)
+Chieffi, A. & Limongi, M. 2013, ApJ, 764, 21                                        Wang, T. & Burrows, A. 2024, ApJ, 962, 71
+Chieffi, A. & Limongi, M. 2017, ApJ, 836, 79                                        Weaver, T. A., Zimmerman, G. B., & Woosley, S. E. 1978, Astrophys. J.; (United
+Chieffi, A., Roberti, L., Limongi, M., et al. 2021, ApJ, 916, 79                       States), 225
+Clayton, D. D. 1968, Principles of stellar evolution and nucleosynthesis (The       Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Rev. Mod. Phys., 74, 1015
+   University of Chicago Press)                                                     Xu, Y., Takahashi, K., Goriely, S., et al. 2013, Nuclear Physics A, 918, 61
+Cohen, J. G., Christlieb, N., Thompson, I., et al. 2013, ApJ, 778, 56               Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger, A. 2020, ApJ, 890, 94
+Couch, S. M. & Ott, C. D. 2013, ApJ, 778, L7                                        Zha, S., Eggenberger Andersen, O., & O’Connor, E. P. 2024, Phys. Rev. D, 109,
+Curtis, S., Ebinger, K., Fröhlich, C., et al. 2019, ApJ, 870, 2                        083023
+Cyburt, R. H., Fields, B. D., & Olive, K. A. 2002, Astroparticle Physics, 17, 87
+deBoer, R. J., Görres, J., Wiescher, M., et al. 2017, Reviews of Modern Physics,
+   89, 035007
+Ebinger, K., Curtis, S., Ghosh, S., et al. 2020, ApJ, 888, 91
+Eggenberger, P., Meynet, G., Maeder, A., et al. 2008, Astrophysics and Space
+   Science, 316, 43
+Freytag, B., Ludwig, H. G., & Steffen, M. 1996, A&A, 313, 497
+Fröhlich, C., Hauser, P., Liebendörfer, M., et al. 2006a, ApJ, 637, 415
+Fröhlich, C., Hix, W. R., Martínez-Pinedo, G., et al. 2006b, New A Rev., 50, 496
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012, ApJ, 749, 91
+Grevesse, N. & Noels, A. 1993, in Origin and Evolution of the Elements, ed.
+   N. Prantzos, E. Vangioni-Flam, & M. Casse, 15–25
+Heger, A. & Woosley, S. E. 2010, The Astrophysical Journal, 724, 341
+Howes, L. M., Asplund, M., Keller, S. C., et al. 2016, MNRAS, 460, 884
+Howes, L. M., Casey, A. R., Asplund, M., et al. 2015, Nature, 527, 484
+Jeena, S. K., Banerjee, P., & Heger, A. 2024, MNRAS, 527, 4790
+Kajino, T. 2023, Nuclear Science and Techniques, 34, 42
+Kippenhahn, R. & Weigert, A. 1990, Stellar structure and evolution (Berlin:
+   Springer)
+Kobayashi, C., Leung, S.-C., & Nomoto, K. 2020, ApJ, 895, 138
+Kunz, R., Fey, M., Jaeger, M., et al. 2002, ApJ, 567, 643
+Laplace, E., Justham, S., Renzo, M., et al. 2021, A&A, 656, A58
+Laplace, E., Schneider, F. R. N., & Podsiadlowski, P. 2025, A&A, 695, A71
+Li, H.-N., Zhao, G., Christlieb, N., et al. 2015, ApJ, 798, 110
+Limongi, M., Roberti, L., Chieffi, A., & Nomoto, K. 2024, ApJS, 270, 29
+Limongi, M. & Chieffi, A. 2018, ApJS, 237, 13
+Lugaro, M., Ott, U., & Kereszturi, Á. 2018, Progress in Particle and Nuclear
+   Physics, 102, 1
+Maas, Z. G., Hawkins, K., Hinkel, N. R., et al. 2022, AJ, 164, 61
+Meakin, C. A. & Arnett, D. 2006, ApJ, 637, L53
+Mocák, M., Meakin, C., Campbell, S. W., & Arnett, W. D. 2018, MNRAS, 481,
+   2918
+Müller, B., Viallet, M., Heger, A., & Janka, H.-T. 2016, ApJ, 833, 124
+Nomoto, K., Kobayashi, C., & Tominaga, N. 2013, ARA&A, 51, 457
+Oliva, A. A., Tumino, A., Soic, N., et al. 2023, in European Physical Journal Web
+   of Conferences, Vol. 275, European Physical Journal Web of Conferences,
+   02010
+Paxton, B., Schwab, J., Bauer, E. B., et al. 2018, ApJS, 234, 34
+
+                                                                                                                                     Article number, page 7 of 17
+                                                  A&A proofs: manuscript no. aa54461-25
+
+Appendix A: Models used in Figure 1
+
+                               Table A.1. List of models presented in Fig. 1. Models with a C-O shell merger
+                               have XC12 and MCO in boldface.
+
+                 Set      Reference Code       Mini (M⊙ )                  Zini     Vini (km s−1 )        XC12 MCO (M⊙ )
+     ROB      Roberti et al. (2024b)           FRANEC              15.00          0.000e+00                  0 3.62e-01       2.96
+     ROB      Roberti et al. (2024b)           FRANEC              15.00          0.000e+00                150 1.89e-01       4.07
+     ROB      Roberti et al. (2024b)           FRANEC              15.00          0.000e+00                300 1.29e-01       4.19
+     ROB      Roberti et al. (2024b)           FRANEC              15.00          0.000e+00                450 5.88e-02       4.67
+     ROB      Roberti et al. (2024b)           FRANEC              15.00          0.000e+00                600 1.37e-01       4.48
+     ROB      Roberti et al. (2024b)           FRANEC              15.00          0.000e+00                700 1.27e-01       4.77
+     ROB      Roberti et al. (2024b)           FRANEC              15.00          0.000e+00                800 1.88e-01       4.50
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-07                 0 3.36e-01       3.08
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-07               150 1.09e-01       3.91
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-07               300 1.51e-01       3.96
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-07               450 1.27e-01       3.83
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-07               600 1.73e-01       4.31
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-07               800 1.21e-01       4.48
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-06                 0 3.22e-01       3.25
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-06               300 1.04e-01       4.32
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-06               600 1.02e-01       4.16
+     ROB      Roberti et al. (2024b)           FRANEC              15.00           3.236e-06               700 6.23e-02       4.10
+     ROB      Roberti et al. (2024b)           FRANEC              25.00          0.000e+00                  0 2.97e-01       5.92
+     ROB      Roberti et al. (2024b)           FRANEC              25.00          0.000e+00                150 1.89e-01       7.16
+     ROB      Roberti et al. (2024b)           FRANEC              25.00          0.000e+00                300 1.91e-01       7.52
+     ROB      Roberti et al. (2024b)           FRANEC              25.00          0.000e+00                450 1.78e-01       8.75
+     ROB      Roberti et al. (2024b)           FRANEC              25.00          0.000e+00                600 1.95e-01       9.25
+     ROB      Roberti et al. (2024b)           FRANEC              25.00          0.000e+00                700 7.64e-02       6.96
+     ROB      Roberti et al. (2024b)           FRANEC              25.00          0.000e+00                800 9.21e-02       6.89
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-07                 0 2.78e-01       5.97
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-07               150 1.15e-01       6.99
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-07               300 1.94e-01       9.55
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-07               600 1.36e-01       9.58
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-07               800 1.78e-01       9.82
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-06                 0 2.58e-01       7.03
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-06               300 1.84e-01       9.52
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-06               450 1.46e-01       9.69
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-06               600 1.56e-01       9.68
+     ROB      Roberti et al. (2024b)           FRANEC              25.00           3.236e-06               700 1.68e-01       9.51
+     RLC      Roberti et al. (2024a)           FRANEC              13.00           2.690e-02               300 2.82e-01       2.74
+     RLC      Roberti et al. (2024a)           FRANEC              13.00           2.690e-02               150 2.61e-01       2.63
+     RLC      Roberti et al. (2024a)           FRANEC              15.00           2.690e-02               300 2.70e-01       4.22
+     RLC      Roberti et al. (2024a)           FRANEC              15.00           2.690e-02               150 2.83e-01       3.19
+     RLC      Roberti et al. (2024a)           FRANEC              13.00           2.690e-02                 0 3.24e-01       1.77
+     RLC      Roberti et al. (2024a)           FRANEC              15.00           2.690e-02                 0 3.58e-01       2.27
+     RLC      Roberti et al. (2024a)           FRANEC              25.00           2.690e-02                 0 3.02e-01       5.13
+     RLC      Roberti et al. (2024a)           FRANEC              20.00           2.690e-02                 0 3.15e-01       3.61
+     RLC      Roberti et al. (2024a)           FRANEC              25.00           2.690e-02               300 2.76e-01       5.17
+     RLC      Roberti et al. (2024a)           FRANEC              25.00           2.690e-02               150 2.79e-01       5.53
+     RLC      Roberti et al. (2024a)           FRANEC              20.00           2.690e-02               300 2.72e-01       5.65
+     RLC      Roberti et al. (2024a)           FRANEC              20.00           2.690e-02               150 2.84e-01       4.47
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              13.00           1.345e-02                 0 3.72e-01       2.03
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              15.00           1.345e-02                 0 3.38e-01       2.78
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              20.00           1.345e-02                 0 3.19e-01       3.86
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              25.00           1.345e-02                 0 2.98e-01       6.21
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              13.00           1.345e-02               150 1.87e-01       3.64
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              15.00           1.345e-02               150 1.16e-01       4.79
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              20.00           1.345e-02               150 2.53e-01       5.79
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              25.00           1.345e-02               150 2.53e-01       6.91
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              13.00           1.345e-02               300 2.06e-01       4.04
+     L&C      Limongi, M. & Chieffi, A. (2018) FRANEC              15.00           1.345e-02               300 1.73e-01       4.59
+                                                                                                     Continued on next page
+
+Article number, page 8 of 17
+              L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+                                    Table A.1 – continued from previous page
+          Set       Reference Code      Mini (M⊙ )           Zini Vini (km s−1 )           XC12 MCO (M⊙ )
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       1.345e-02                 300 2.26e-01              6.29
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       1.345e-02                 300 2.46e-01              7.16
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-03                   0 3.37e-01              2.13
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-03                   0 2.54e-01              3.21
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-03                   0 3.14e-01              4.23
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-03                   0 2.56e-01              6.84
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-03                 150 1.82e-01              3.87
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-03                 150 1.84e-01              4.76
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-03                 150 1.88e-01              6.74
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-03                 150 1.81e-01              8.24
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-03                 300 3.79e-02              4.36
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-03                 300 7.26e-02              4.89
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-03                 300 1.64e-01              6.16
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-03                 300 1.87e-01              9.73
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-04                   0 3.35e-01              2.24
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-04                   0 3.29e-01              2.73
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-04                   0 3.05e-01              4.23
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-04                   0 2.75e-01              5.97
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-04                 150 1.87e-01              3.82
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-04                 150 1.72e-01              4.08
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-04                 150 1.72e-01              6.50
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-04                 150 1.71e-01              8.22
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-04                 300 3.07e-02              4.23
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-04                 300 4.47e-02              4.72
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-04                 300 5.92e-02              7.89
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-04                 300 1.76e-01             10.40
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-05                   0 3.38e-01              2.25
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-05                   0 2.10e-01              3.28
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-05                   0 2.94e-01              4.36
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-05                   0 2.48e-01              6.29
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-05                 150 1.53e-01              3.85
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-05                 150 1.37e-01              4.54
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-05                 150 1.59e-01              5.64
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-05                 150 1.73e-01              8.37
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         13.00       3.236e-05                 300 1.84e-01              3.82
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         15.00       3.236e-05                 300 1.90e-01              4.61
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         20.00       3.236e-05                 300 1.61e-01              6.20
+L&C   Limongi, M. & Chieffi, A. (2018) FRANEC         25.00       3.236e-05                 300 1.82e-01             10.50
+LIM   Limongi et al. (2024)              FRANEC       2 9.22      1.345e-02                   0 4.54e-01              1.08
+LIM   Limongi et al. (2024)              FRANEC       5 9.25      1.345e-02                   0 4.52e-01              1.10
+LIM   Limongi et al. (2024)              FRANEC       0 9.30      1.345e-02                   0 4.51e-01              1.11
+LIM   Limongi et al. (2024)              FRANEC       0 9.50      1.345e-02                   0 4.46e-01              1.16
+LIM   Limongi et al. (2024)              FRANEC       0 9.80      1.345e-02                   0 4.46e-01              1.20
+LIM   Limongi et al. (2024)              FRANEC       10.00       1.345e-02                   0 4.44e-01              1.24
+LIM   Limongi et al. (2024)              FRANEC       11.00       1.345e-02                   0 4.34e-01              1.48
+LIM   Limongi et al. (2024)              FRANEC       12.00       1.345e-02                   0 4.13e-01              1.82
+RIT   Ritter et al. (2018b)              MESA         12.00       1.000e-04                 300 2.60e-01              1.55
+RIT   Ritter et al. (2018b)              MESA         15.00       1.000e-04                 300 2.34e-01              2.18
+RIT   Ritter et al. (2018b)              MESA         20.00       1.000e-04                 300 2.14e-01              3.72
+RIT   Ritter et al. (2018b)              MESA         25.00       1.000e-04                 300 2.10e-01              5.50
+RIT   Ritter et al. (2018b)              MESA         12.00       1.000e-03                 300 2.62e-01              1.49
+RIT   Ritter et al. (2018b)              MESA         15.00       1.000e-03                 300 2.34e-01              2.29
+RIT   Ritter et al. (2018b)              MESA         20.00       1.000e-03                 300 2.06e-01              3.87
+RIT   Ritter et al. (2018b)              MESA         25.00       1.000e-03                 300 2.06e-01              5.56
+RIT   Ritter et al. (2018b)              MESA         12.00       6.000e-03                 300 2.86e-01              1.42
+RIT   Ritter et al. (2018b)              MESA         15.00       6.000e-03                 300 2.61e-01              2.23
+RIT   Ritter et al. (2018b)              MESA         20.00       6.000e-03                 300 2.14e-01              3.86
+RIT   Ritter et al. (2018b)              MESA         25.00       6.000e-03                 300 2.12e-01              5.72
+RIT   Ritter et al. (2018b)              MESA         12.00       1.000e-02                 300 3.16e-01              1.29
+RIT   Ritter et al. (2018b)              MESA         15.00       1.000e-02                 300 2.77e-01              2.12
+RIT   Ritter et al. (2018b)              MESA         20.00       1.000e-02                 300 2.44e-01              3.79
+                                                                                      Continued on next page
+
+                                                                                                     Article number, page 9 of 17
+                                              A&A proofs: manuscript no. aa54461-25
+
+                                           Table A.1 – continued from previous page
+                  Set       Reference Code     Mini (M⊙ )          Zini Vini (km s−1 )        XC12 MCO (M⊙ )
+     RIT      Ritter et al. (2018b)             MESA         25.00      1.000e-02              300 2.14e-01       5.33
+     RIT      Ritter et al. (2018b)             MESA         12.00      2.000e-02              300 3.45e-01       1.18
+     RIT      Ritter et al. (2018b)             MESA         15.00      2.000e-02              300 2.67e-01       2.01
+     RIT      Ritter et al. (2018b)             MESA         20.00      2.000e-02              300 2.74e-01       3.50
+     RIT      Ritter et al. (2018b)             MESA         25.00      2.000e-02              300 2.47e-01       5.29
+     BRI      Brinkman et al. (2019, 2021)      MESA         10.00      1.400e-02                0 3.78e-01       1.52
+     BRI      Brinkman et al. (2019, 2021)      MESA         15.00      1.400e-02                0 3.23e-01       3.41
+     BRI      Brinkman et al. (2019, 2021)      MESA         20.00      1.400e-02                0 2.92e-01       5.66
+     BRI      Brinkman et al. (2019, 2021)      MESA         25.00      1.400e-02                0 2.62e-01       8.13
+     BRI      Brinkman et al. (2019, 2021)      MESA         10.00      1.400e-02              150 3.32e-01       1.58
+     BRI      Brinkman et al. (2019, 2021)      MESA         15.00      1.400e-02              150 3.11e-01       3.54
+     BRI      Brinkman et al. (2019, 2021)      MESA         20.00      1.400e-02              150 2.86e-01       5.83
+     BRI      Brinkman et al. (2019, 2021)      MESA         25.00      1.400e-02              150 2.71e-01       8.06
+     BRI      Brinkman et al. (2019, 2021)      MESA         10.00      1.400e-02              300 3.12e-01       1.84
+     BRI      Brinkman et al. (2019, 2021)      MESA         15.00      1.400e-02              300 3.13e-01       4.04
+     BRI      Brinkman et al. (2019, 2021)      MESA         20.00      1.400e-02              300 2.80e-01       6.62
+     BRI      Brinkman et al. (2019, 2021)      MESA         25.00      1.400e-02              300 2.63e-01       8.63
+     SIE      Sieverding et al. (2018)          KEPLER       15.00      1.400e-02                0 2.25e-01       2.24
+     SIE      Sieverding et al. (2018)          KEPLER       20.00      1.400e-02                0 2.15e-01       3.69
+     SIE      Sieverding et al. (2018)          KEPLER       25.00      1.400e-02                0 1.89e-01       5.39
+     RAU      Rauscher et al. (2002)            KEPLER       15.00      2.000e-02                0 2.00e-01       2.80
+     RAU      Rauscher et al. (2002)            KEPLER       20.00      2.000e-02                0 2.03e-01       4.45
+     RAU      Rauscher et al. (2002)            KEPLER       25.00      2.000e-02                0 2.18e-01       6.44
+     KEP      Jeena et al. (2024)               KEPLER       12.00     0.000e+00                 0 2.99e-01       1.75
+     KEP      Jeena et al. (2024)               KEPLER       12.10     0.000e+00                 0 2.97e-01       1.76
+     KEP      Jeena et al. (2024)               KEPLER       12.20     0.000e+00                 0 2.93e-01       1.80
+     KEP      Jeena et al. (2024)               KEPLER       12.30     0.000e+00                 0 2.98e-01       1.85
+     KEP      Jeena et al. (2024)               KEPLER       12.40     0.000e+00                 0 2.96e-01       1.88
+     KEP      Jeena et al. (2024)               KEPLER       12.50     0.000e+00                 0 2.98e-01       1.95
+     KEP      Jeena et al. (2024)               KEPLER       12.60     0.000e+00                 0 2.96e-01       1.94
+     KEP      Jeena et al. (2024)               KEPLER       12.70     0.000e+00                 0 2.68e-01       1.96
+     KEP      Jeena et al. (2024)               KEPLER       12.80     0.000e+00                 0 2.60e-01       2.00
+     KEP      Jeena et al. (2024)               KEPLER       12.90     0.000e+00                 0 2.64e-01       2.02
+     KEP      Jeena et al. (2024)               KEPLER       13.00     0.000e+00                 0 2.90e-01       2.00
+     KEP      Jeena et al. (2024)               KEPLER       13.10     0.000e+00                 0 2.87e-01       2.05
+     KEP      Jeena et al. (2024)               KEPLER       13.20     0.000e+00                 0 2.87e-01       2.10
+     KEP      Jeena et al. (2024)               KEPLER       13.30     0.000e+00                 0 2.88e-01       2.13
+     KEP      Jeena et al. (2024)               KEPLER       13.40     0.000e+00                 0 2.92e-01       2.18
+     KEP      Jeena et al. (2024)               KEPLER       13.50     0.000e+00                 0 2.64e-01       2.20
+     KEP      Jeena et al. (2024)               KEPLER       13.60     0.000e+00                 0 2.82e-01       2.24
+     KEP      Jeena et al. (2024)               KEPLER       13.70     0.000e+00                 0 2.86e-01       2.28
+     KEP      Jeena et al. (2024)               KEPLER       13.80     0.000e+00                 0 2.80e-01       2.29
+     KEP      Jeena et al. (2024)               KEPLER       13.90     0.000e+00                 0 2.87e-01       2.30
+     KEP      Jeena et al. (2024)               KEPLER       14.00     0.000e+00                 0 2.85e-01       2.38
+     KEP      Jeena et al. (2024)               KEPLER       14.10     0.000e+00                 0 2.85e-01       2.39
+     KEP      Jeena et al. (2024)               KEPLER       14.20     0.000e+00                 0 2.84e-01       2.43
+     KEP      Jeena et al. (2024)               KEPLER       14.30     0.000e+00                 0 2.82e-01       2.59
+     KEP      Jeena et al. (2024)               KEPLER       14.40     0.000e+00                 0 2.84e-01       2.53
+     KEP      Jeena et al. (2024)               KEPLER       14.50     0.000e+00                 0 2.83e-01       2.55
+     KEP      Jeena et al. (2024)               KEPLER       14.60     0.000e+00                 0 2.84e-01       2.56
+     KEP      Jeena et al. (2024)               KEPLER       14.70     0.000e+00                 0 2.80e-01       2.59
+     KEP      Jeena et al. (2024)               KEPLER       14.80     0.000e+00                 0 2.78e-01       2.63
+     KEP      Jeena et al. (2024)               KEPLER       14.90     0.000e+00                 0 2.85e-01       2.70
+     KEP      Jeena et al. (2024)               KEPLER       15.00     0.000e+00                 0 2.78e-01       2.65
+     KEP      Jeena et al. (2024)               KEPLER       15.20     0.000e+00                 0 2.74e-01       2.68
+     KEP      Jeena et al. (2024)               KEPLER       15.40     0.000e+00                 0 2.83e-01       2.92
+     KEP      Jeena et al. (2024)               KEPLER       15.60     0.000e+00                 0 2.74e-01       2.85
+     KEP      Jeena et al. (2024)               KEPLER       15.80     0.000e+00                 0 2.69e-01       2.92
+     KEP      Jeena et al. (2024)               KEPLER       16.00     0.000e+00                 0 2.78e-01       2.98
+     KEP      Jeena et al. (2024)               KEPLER       16.20     0.000e+00                 0 2.65e-01       3.10
+     KEP      Jeena et al. (2024)               KEPLER       16.40     0.000e+00                 0 2.70e-01       3.30
+                                                                                         Continued on next page
+
+Article number, page 10 of 17
+               L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+                                     Table A.1 – continued from previous page
+         Set       Reference    Code     Mini (M⊙ )          Zini Vini (km s−1 )             XC12    MCO (M⊙ )
+KEP   Jeena et al. (2024)                 KEPLER       16.60     0.000e+00                      0    2.69e-01          3.40
+KEP   Jeena et al. (2024)                 KEPLER       16.80     0.000e+00                      0    2.66e-01          3.25
+KEP   Jeena et al. (2024)                 KEPLER       17.00     0.000e+00                      0    2.66e-01          3.35
+KEP   Jeena et al. (2024)                 KEPLER       17.20     0.000e+00                      0    2.58e-01          3.40
+KEP   Jeena et al. (2024)                 KEPLER       17.40     0.000e+00                      0    2.56e-01          3.43
+KEP   Jeena et al. (2024)                 KEPLER       17.60     0.000e+00                      0    2.68e-01          3.64
+KEP   Jeena et al. (2024)                 KEPLER       17.80     0.000e+00                      0    2.59e-01          3.78
+KEP   Jeena et al. (2024)                 KEPLER       18.00     0.000e+00                      0    2.43e-01          3.59
+KEP   Jeena et al. (2024)                 KEPLER       18.20     0.000e+00                      0    2.59e-01          3.78
+KEP   Jeena et al. (2024)                 KEPLER       18.40     0.000e+00                      0    2.54e-01          3.99
+KEP   Jeena et al. (2024)                 KEPLER       18.60     0.000e+00                      0    2.49e-01          3.88
+KEP   Jeena et al. (2024)                 KEPLER       18.80     0.000e+00                      0    2.55e-01          3.88
+KEP   Jeena et al. (2024)                 KEPLER       19.00     0.000e+00                      0    2.51e-01          4.04
+KEP   Jeena et al. (2024)                 KEPLER       19.20     0.000e+00                      0    2.47e-01          4.22
+KEP   Jeena et al. (2024)                 KEPLER       19.40     0.000e+00                      0    2.40e-01          4.12
+KEP   Jeena et al. (2024)                 KEPLER       19.60     0.000e+00                      0    2.45e-01          4.35
+KEP   Jeena et al. (2024)                 KEPLER       19.80     0.000e+00                      0    2.44e-01          4.37
+KEP   Jeena et al. (2024)                 KEPLER       20.00     0.000e+00                      0    2.40e-01          4.61
+KEP   Jeena et al. (2024)                 KEPLER       20.50     0.000e+00                      0    2.39e-01          4.70
+KEP   Jeena et al. (2024)                 KEPLER       21.00     0.000e+00                      0    2.37e-01          4.90
+KEP   Jeena et al. (2024)                 KEPLER       21.50     0.000e+00                      0    2.32e-01          5.04
+KEP   Jeena et al. (2024)                 KEPLER       22.00     0.000e+00                      0    2.28e-01          5.59
+KEP   Jeena et al. (2024)                 KEPLER       22.50     0.000e+00                      0    2.28e-01          5.38
+KEP   Jeena et al. (2024)                 KEPLER       23.00     0.000e+00                      0    2.25e-01          5.74
+KEP   Jeena et al. (2024)                 KEPLER       23.50     0.000e+00                      0    2.24e-01          6.11
+KEP   Jeena et al. (2024)                 KEPLER       24.00     0.000e+00                      0    2.21e-01          6.36
+KEP   Jeena et al. (2024)                 KEPLER       24.50     0.000e+00                      0    2.18e-01          6.49
+KEP   Jeena et al. (2024)                 KEPLER       25.00     0.000e+00                      0    2.14e-01          6.53
+PGN   Pignatari et al. (2016)             GENEC        15.00      2.000e-02                     0    3.54e-01          2.78
+PGN   Pignatari et al. (2016)             GENEC        20.00      2.000e-02                     0    3.05e-01          4.49
+PGN   Pignatari et al. (2016)             GENEC        25.00      2.000e-02                     0    2.69e-01          6.12
+
+
+
+
+                                                                                                     Article number, page 11 of 17
+                                                   A&A proofs: manuscript no. aa54461-25
+
+                                                                         A.2. GENEC models (PGN)
+                                                                         We include the 15, 20, and 25 M⊙ models with solar metallicity
+                                                                         (Z=0.02, Grevesse & Noels 1993) presented in Pignatari et al.
+                                                                         (2016) (PGN), computed using the GENEC stellar evolutionary
+                                                                         code Eggenberger et al. (2008). The evolution of these models
+                                                                         is calculated up to the end of central Si burning phase, while the
+                                                                         birth of the Si burning shell and the pre-collapse phase are not
+                                                                         included. For this reason, we do not know if these models may
+                                                                         experience a C-O shell merger in their final stages, while the
+                                                                         structure of these models at the end of the calculated evolution
+                                                                         suggest that a C-O shell merger is very unlikely, as the external
+                                                                         border of the O-burning shell is rather distant in mass from the
+                                                                         base of the C-burning shell. The adopted convection criterion is
+                                                                         Schwarzschild, with core overshooting included only in the cen-
+                                                                         tral H and He burning phases (with an overshooting parameter
+                                                                         αov = 0.2Hp ). The 12 C(α,γ)16 O rate is from Kunz et al. (2002).
+
+Fig. A.1. The different 12 C(α,γ)16 O reaction rates normalized to the
+Kunz et al. (2002) reaction rate in the typical He burning temperature   A.3. FRANEC models (L&C, RLC, LIM, ROB)
+range.
+                                                                         We include several sets of models calculated with the FRANEC
+                                                                         code (Chieffi & Limongi 2013; Limongi, M. & Chieffi, A. 2018).
+                                                                         The L&C (Limongi, M. & Chieffi, A. 2018) and RLC (Roberti
+                                                                         et al. 2024a) models are part of a large set of rotating massive
+     In the following, we list the prescriptions used for convection     stars, with initial masses between 13 and 120 M⊙ and spanning
+and for the 12 C(α,γ)16 O rate in the 209 models shown in Fig. 1.        5 different initial metallicities, [Fe/H] = 0.3, 0, −1, −2, −3. In
+The adopted 12 C+12 C rate is instead the same for all the models        this work, we considered only the models up to Mini ≤ 25 M⊙
+and it is the one provided by Caughlan & Fowler (1988). We               (i.e., Mini = 13, 15, 20, and 25 M⊙ ), at the three available rota-
+refer the reader to the cited papers for a more detailed description     tion velocities (0, 150, and 300 km/s), and at all the metallicities,
+of each set of models. The models with a C-O shell merger are            for a total of 60 models, 12 of which present C-O shell merg-
+listed in Table A.1.                                                     ers. In these sets, the borders of the convective zones are defined
+                                                                         according to the Ledoux criterion. In addition, 0.2Hp of over-
+                                                                         shooting is included at the outer edge of the convective core only
+                                                                         during the core H-burning phase. The 12 C(α,γ)16 O rate is taken
+A.1. The KEPLER models (RAU, SIE, KEP)                                   from Kunz et al. (2002). The LIM set (Limongi et al. 2024) in-
+                                                                         cludes models at solar metallicity in the range between 7 and 12
+We considered models calculated with the KEPLER code from                M⊙ . Since we are interested in the CCSN progenitor evolution,
+Rauscher et al. (2002) (RAU) and Sieverding et al. (2018) (SIE),         we consider only the models that evolve to the formation of a Fe
+with initial mass equal to 15, 20, and 25 M⊙ and solar metallicity       core, corresponding to models from Mini = 9.22 M⊙ . In this set,
+(Anders & Grevesse 1989, with Z = 0.02). Convective borders              the convective borders are determined according to the Ledoux
+are defined by the Ledoux criterion, as in Weaver et al. (1978).         criterion in the H-rich layers and according to the Schwarzschild
+The adopted 12 C(α,γ)16 O rate is from Buchmann (1996), mul-             criterion elsewhere. Core overshooting is included during core H
+tiplied by a factor of 1.2. In addition to RAU and SIE sets, we          burning with αov = 0.2Hp . The adopted 12 C(α,γ)16 O rate is from
+also consider the KEPLER models by Jeena et al. (2024) (KEP).            Xu et al. (2013), a re-analysis that also includes the experimental
+The KEP set includes 76 models between 12 and 30 M⊙ at                   points from Kunz et al. (2002). In typical He burning conditions
+zero metallicity, with the primordial Big Bang nucleosynthesis           it is very similar to the Kunz et al. (2002) rate (Fig. A.1). None of
+(BBN) initial composition from Cyburt et al. (2002). For consis-         these models undergo C-O shell mergers. The same prescriptions
+tency with most of the other sets having initial masses up to 25         for convection and 12 C(α,γ)16 O reaction rate are also adopted in
+M⊙ , we only consider the 66 KEP models with an initial mass             the ROB set Roberti et al. (2024b). This set includes 34 mod-
+Mini ≤ 25 M⊙ . The convection and mixing criteria are the same           els of 15 and 25 M⊙ stars at zero and extremely low metallicity
+as in Heger & Woosley (2010) and consist in Ledoux with a                ([Fe/H] ≤ −4) spanning a wide range of initial rotation velocity
+semiconvective diffusion coefficient that is roughly 10% of the          (from 0 to 800 km s−1 ). All but two of the rotating 15 M⊙ models
+radiative diffusion coefficient, plus a small amount of convective       undergo C-O shell mergers.
+overshooting included by forcing convective boundary zones to
+be semiconvective. The 12 C(α,γ)16 O rate is the same as adopted         A.4. MESA models (RIT, BRI)
+by RAU and SIE.
+                                                                         We include two sets of models calculated with the MESA code
+    We note that the 12 C(α,γ)16 O rate of Buchmann (1996) is a          Paxton et al. (2018). The RIT set Ritter et al. (2018b) includes
+factor of 2-3 higher than that of Kunz et al. (2002), adopted by         massive star models of 12, 15, 20, 25 M⊙ , at 5 different metallic-
+most of the other sets of models (see below), in the typical He-         ities: Z = 0.02, 0.01, 0.006, 0.001, 0.0001. The exponential dif-
+burning temperature range (T9 = 0.2 − 0.5, where T9 = T/109 K,           fusion model of Freytag et al. (1996) defines all the external con-
+Fig. A.1). As a consequence, the MCO versus XC12 datapoints              vective boundaries from the pre-main sequence up to the end of
+from the for KEPLER models are shifted toward lower XC12 val-            core He burning. The reaction rate database is the same as used
+ues than the other models in Fig. 1.                                     in PGN models. Five RIT models experience C-O shell mergers.
+Article number, page 12 of 17
+                      L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+The BRI set (Brinkman et al. 2019, 2021) includes non-rotating
+and rotating massive star models at solar metallicity with Mini
+between 10 and 80 M⊙ and vini = 0, 150, and 300 km s−1 , cal-
+culated up to the collapse of the Fe core. Again, we only consid-
+ered models up to 25 M⊙ (i.e., 10, 15, 20, and 25 M⊙ ). The con-
+vective boundaries are determined using the Ledoux criterion,
+with overshooting included only for the central burning stages
+(αov = 0.2Hp ) and in the H burning shell ( αov = 0.1Hp ). The
+adopted 12 C(α,γ)16 O rate is Kunz et al. (2002). None of these
+models experience C-O shell mergers.
+
+
+
+
+                                                                                                            Article number, page 13 of 17
+                                                   A&A proofs: manuscript no. aa54461-25
+
+Appendix B: Models used in Figures 4 and 5
+
+                                Table B.1. List of models presented in Fig. 5. Models with a C-O shell merger
+                                have [K/Mg] and [Sc/Mg] in boldface.
+
+                        Set         Reference Mini (M⊙ )                Zini     Vini (km s−1 ) [K/Mg] [Sc/Mg]
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-08              0      -0.93   -1.44
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-07              0      -0.71   -1.28
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-06              0      -0.85   -1.62
+            ROB       Roberti et al. (2024b)                    25.00          0.000e+00               0      -1.25   -1.82
+            ROB       Roberti et al. (2024b)                    15.00          0.000e+00             800      -0.24    0.07
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-07            600       1.63    0.65
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-07            450       1.87    1.17
+            ROB       Roberti et al. (2024b)                    15.00          0.000e+00             450       1.07    0.37
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-06            600      -0.57   -1.20
+            ROB       Roberti et al. (2024b)                    15.00          0.000e+00             600       1.73    1.00
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-06            450      -0.44   -1.08
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-07            800       1.62    1.06
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-06            700       1.20    0.39
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-07            150      -0.28   -0.71
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-07            300      -0.84   -1.37
+            ROB       Roberti et al. (2024b)                    25.00          0.000e+00             700      -0.13   -0.74
+            ROB       Roberti et al. (2024b)                    25.00          0.000e+00             300      -0.51   -1.06
+            ROB       Roberti et al. (2024b)                    25.00          0.000e+00             150      -0.61   -1.08
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-06            300       1.55    0.63
+            ROB       Roberti et al. (2024b)                    15.00          0.000e+00             300       1.87    1.23
+            ROB       Roberti et al. (2024b)                    15.00          0.000e+00             150       0.09   -0.36
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-06            300      -0.84   -1.34
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-06            700      -0.44   -1.08
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-07            150       2.01    1.41
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-07            300       1.80    0.97
+            ROB       Roberti et al. (2024b)                    15.00          0.000e+00             700       1.46    0.42
+            ROB       Roberti et al. (2024b)                    25.00          0.000e+00             450      -0.82   -1.30
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-06            600       1.53    0.70
+            ROB       Roberti et al. (2024b)                    25.00          0.000e+00             600      -0.79   -1.32
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-07            800      -0.63   -1.23
+            ROB       Roberti et al. (2024b)                    25.00          0.000e+00             800      -0.26   -0.79
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-07            600      -0.36   -0.98
+            ROB       Roberti et al. (2024b)                    25.00           3.236e-06              0      -0.50   -1.18
+            ROB       Roberti et al. (2024b)                    15.00          0.000e+00               0      -0.74   -1.38
+            ROB       Roberti et al. (2024b)                    15.00           3.236e-07              0      -0.49   -1.15
+            L&C       Limongi, M. & Chieffi, A. (2018)          13.00           1.345e-02            300       0.58    0.70
+            L&C       Limongi, M. & Chieffi, A. (2018)          15.00           1.345e-02            300       0.70    0.77
+            L&C       Limongi, M. & Chieffi, A. (2018)          15.00           3.236e-03            300       1.34    0.32
+            L&C       Limongi, M. & Chieffi, A. (2018)          13.00           3.236e-03            150       1.33    0.79
+            L&C       Limongi, M. & Chieffi, A. (2018)          13.00           3.236e-03            300       0.92    0.06
+            L&C       Limongi, M. & Chieffi, A. (2018)          13.00           3.236e-04            300       1.09    0.15
+            L&C       Limongi, M. & Chieffi, A. (2018)          15.00           3.236e-04            150       1.40    0.83
+            L&C       Limongi, M. & Chieffi, A. (2018)          15.00           3.236e-04            300       1.00   -0.03
+            L&C       Limongi, M. & Chieffi, A. (2018)          15.00           3.236e-05              0       0.47    0.00
+            L&C       Limongi, M. & Chieffi, A. (2018)          13.00           3.236e-05              0      -0.29   -0.93
+            L&C       Limongi, M. & Chieffi, A. (2018)          15.00           3.236e-05            150       0.98    0.03
+            L&C       Limongi, M. & Chieffi, A. (2018)          15.00           3.236e-05            300       1.03    0.98
+            L&C       Limongi, M. & Chieffi, A. (2018)          13.00           3.236e-05            150      -0.27   -0.74
+            L&C       Limongi, M. & Chieffi, A. (2018)          13.00           3.236e-05            300       0.51    0.10
+            L&C       Limongi, M. & Chieffi, A. (2018)          20.00           3.236e-05            150      -0.60   -1.10
+            L&C       Limongi, M. & Chieffi, A. (2018)          20.00           3.236e-05            300       0.06   -0.75
+            L&C       Limongi, M. & Chieffi, A. (2018)          25.00           3.236e-05            150      -0.81   -1.24
+            L&C       Limongi, M. & Chieffi, A. (2018)          25.00           3.236e-05            300      -0.78   -1.27
+            L&C       Limongi, M. & Chieffi, A. (2018)          20.00           3.236e-05              0      -1.07   -1.77
+            L&C       Limongi, M. & Chieffi, A. (2018)          25.00           3.236e-05              0      -1.25   -1.68
+            RIT       Ritter et al. (2018b)                     15.00           2.000e-02              0       1.08    1.11
+                                                                                            Continued on next page
+
+Article number, page 14 of 17
+       L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+                              Table B.1 – continued from previous page
+        Set         Reference Mini (M⊙ )           Zini Vini (km s−1 ) [K/Mg] [Sc/Mg]
+RIT   Ritter et al. (2018b)                  12.00      1.000e-02              0       0.98             0.47
+RIT   Ritter et al. (2018b)                  15.00      1.000e-02              0       0.33            -0.00
+RIT   Ritter et al. (2018b)                  20.00      1.000e-02              0       0.06            -0.07
+RIT   Ritter et al. (2018b)                  12.00      1.000e-03              0      -0.21            -1.03
+RAU   Rauscher et al. (2002)                 20.00      2.000e-02              0       1.51             1.04
+KEP   Jeena et al. (2024)                    12.00     0.000e+00               0      -0.86            -1.45
+KEP   Jeena et al. (2024)                    12.10     0.000e+00               0      -0.89            -1.48
+KEP   Jeena et al. (2024)                    12.20     0.000e+00               0      -0.91            -1.51
+KEP   Jeena et al. (2024)                    12.30     0.000e+00               0      -0.87            -1.50
+KEP   Jeena et al. (2024)                    12.40     0.000e+00               0      -0.86            -1.49
+KEP   Jeena et al. (2024)                    12.50     0.000e+00               0      -0.90            -1.52
+KEP   Jeena et al. (2024)                    12.60     0.000e+00               0      -0.85            -1.47
+KEP   Jeena et al. (2024)                    12.70     0.000e+00               0      -0.85            -1.25
+KEP   Jeena et al. (2024)                    12.80     0.000e+00               0      -0.81            -1.33
+KEP   Jeena et al. (2024)                    12.90     0.000e+00               0      -0.80            -1.32
+KEP   Jeena et al. (2024)                    13.00     0.000e+00               0       1.06            -0.36
+KEP   Jeena et al. (2024)                    13.10     0.000e+00               0      -0.91            -1.52
+KEP   Jeena et al. (2024)                    13.20     0.000e+00               0      -0.63            -1.26
+KEP   Jeena et al. (2024)                    13.30     0.000e+00               0      -0.84            -1.50
+KEP   Jeena et al. (2024)                    13.40     0.000e+00               0      -0.83            -1.45
+KEP   Jeena et al. (2024)                    13.50     0.000e+00               0      -0.82            -1.43
+KEP   Jeena et al. (2024)                    13.60     0.000e+00               0      -1.01            -1.64
+KEP   Jeena et al. (2024)                    13.70     0.000e+00               0      -1.06            -1.69
+KEP   Jeena et al. (2024)                    13.80     0.000e+00               0      -1.01            -1.67
+KEP   Jeena et al. (2024)                    13.90     0.000e+00               0      -1.14            -1.75
+KEP   Jeena et al. (2024)                    14.00     0.000e+00               0      -1.16            -1.77
+KEP   Jeena et al. (2024)                    14.10     0.000e+00               0      -1.10            -1.72
+KEP   Jeena et al. (2024)                    14.20     0.000e+00               0      -1.14            -1.75
+KEP   Jeena et al. (2024)                    14.30     0.000e+00               0      -1.23            -1.83
+KEP   Jeena et al. (2024)                    14.40     0.000e+00               0      -1.20            -1.78
+KEP   Jeena et al. (2024)                    14.50     0.000e+00               0      -1.27            -1.83
+KEP   Jeena et al. (2024)                    14.60     0.000e+00               0      -1.25            -1.84
+KEP   Jeena et al. (2024)                    14.70     0.000e+00               0      -1.20            -1.77
+KEP   Jeena et al. (2024)                    14.80     0.000e+00               0      -1.43            -1.90
+KEP   Jeena et al. (2024)                    14.90     0.000e+00               0      -1.28            -1.87
+KEP   Jeena et al. (2024)                    15.00     0.000e+00               0      -1.23            -1.81
+KEP   Jeena et al. (2024)                    15.20     0.000e+00               0      -1.25            -1.73
+KEP   Jeena et al. (2024)                    15.40     0.000e+00               0      -1.37            -1.97
+KEP   Jeena et al. (2024)                    15.60     0.000e+00               0      -1.32            -1.90
+KEP   Jeena et al. (2024)                    15.80     0.000e+00               0      -1.22            -1.81
+KEP   Jeena et al. (2024)                    16.00     0.000e+00               0      -1.40            -1.96
+KEP   Jeena et al. (2024)                    16.20     0.000e+00               0      -1.25            -1.84
+KEP   Jeena et al. (2024)                    16.40     0.000e+00               0      -1.41            -1.96
+KEP   Jeena et al. (2024)                    16.60     0.000e+00               0       1.18            -0.15
+KEP   Jeena et al. (2024)                    16.80     0.000e+00               0      -1.21            -1.78
+KEP   Jeena et al. (2024)                    17.00     0.000e+00               0      -1.86            -1.88
+KEP   Jeena et al. (2024)                    17.20     0.000e+00               0      -1.33            -1.76
+KEP   Jeena et al. (2024)                    17.40     0.000e+00               0      -1.25            -1.76
+KEP   Jeena et al. (2024)                    17.60     0.000e+00               0      -1.90            -2.01
+KEP   Jeena et al. (2024)                    17.80     0.000e+00               0      -1.16            -1.75
+KEP   Jeena et al. (2024)                    18.00     0.000e+00               0      -0.12            -0.96
+KEP   Jeena et al. (2024)                    18.20     0.000e+00               0      -1.33            -1.83
+KEP   Jeena et al. (2024)                    18.40     0.000e+00               0      -1.03            -1.60
+KEP   Jeena et al. (2024)                    18.60     0.000e+00               0      -1.00            -1.62
+KEP   Jeena et al. (2024)                    18.80     0.000e+00               0      -0.01            -0.92
+KEP   Jeena et al. (2024)                    19.00     0.000e+00               0      -1.01            -1.66
+KEP   Jeena et al. (2024)                    19.20     0.000e+00               0      -0.19            -1.09
+KEP   Jeena et al. (2024)                    19.40     0.000e+00               0       0.75            -0.65
+KEP   Jeena et al. (2024)                    19.60     0.000e+00               0       0.77            -0.70
+KEP   Jeena et al. (2024)                    19.80     0.000e+00               0      -0.56            -1.50
+KEP   Jeena et al. (2024)                    20.00     0.000e+00               0      -0.93            -1.55
+                                                                    Continued on next page
+
+                                                                                             Article number, page 15 of 17
+                                             A&A proofs: manuscript no. aa54461-25
+
+                                             Table B.1 – continued from previous page
+                        Set        Reference Mini (M⊙ )           Zini Vini (km s−1 ) [K/Mg] [Sc/Mg]
+            KEP       Jeena et al. (2024)                   20.50     0.000e+00             0   -0.69   -1.51
+            KEP       Jeena et al. (2024)                   21.00     0.000e+00             0    0.93   -0.47
+            KEP       Jeena et al. (2024)                   21.50     0.000e+00             0   -1.20   -1.83
+            KEP       Jeena et al. (2024)                   22.00     0.000e+00             0   -0.75   -1.52
+            KEP       Jeena et al. (2024)                   22.50     0.000e+00             0   -0.93   -1.70
+            KEP       Jeena et al. (2024)                   23.00     0.000e+00             0   -1.12   -1.80
+            KEP       Jeena et al. (2024)                   23.50     0.000e+00             0   -1.25   -2.00
+            KEP       Jeena et al. (2024)                   24.00     0.000e+00             0   -0.94   -1.79
+            KEP       Jeena et al. (2024)                   24.50     0.000e+00             0    0.50   -1.00
+            KEP       Jeena et al. (2024)                   25.00     0.000e+00             0    0.36   -1.12
+            PUSH      Ebinger et al. (2020)                 11.00      2.000e-06            0   -1.22   -0.09
+            PUSH      Ebinger et al. (2020)                 12.00      2.000e-06            0   -1.26   -0.12
+            PUSH      Ebinger et al. (2020)                 13.00      2.000e-06            0   -1.24    0.14
+            PUSH      Ebinger et al. (2020)                 14.00      2.000e-06            0   -1.18   -0.16
+            PUSH      Ebinger et al. (2020)                 15.00      2.000e-06            0   -1.49   -0.25
+            PUSH      Ebinger et al. (2020)                 16.00      2.000e-06            0   -1.41   -0.27
+            PUSH      Ebinger et al. (2020)                 17.00      2.000e-06            0   -0.70    0.60
+            PUSH      Ebinger et al. (2020)                 18.00      2.000e-06            0   -0.57    0.47
+            PUSH      Ebinger et al. (2020)                 19.00      2.000e-06            0   -0.81    0.35
+            PUSH      Ebinger et al. (2020)                 20.00      2.000e-06            0   -1.21   -0.20
+            PUSH      Ebinger et al. (2020)                 24.00      2.000e-06            0   -1.00   -0.12
+            PUSH      Ebinger et al. (2020)                 25.00      2.000e-06            0   -1.14   -0.01
+            PUSH      Ebinger et al. (2020)                 11.00     0.000e+00             0   -1.17    0.38
+            PUSH      Ebinger et al. (2020)                 12.00     0.000e+00             0   -0.95    0.51
+            PUSH      Ebinger et al. (2020)                 13.00     0.000e+00             0   -1.37    0.14
+            PUSH      Ebinger et al. (2020)                 14.00     0.000e+00             0   -1.52   -0.02
+            PUSH      Ebinger et al. (2020)                 15.00     0.000e+00             0   -0.27   -0.28
+            PUSH      Ebinger et al. (2020)                 16.00     0.000e+00             0   -1.39    0.05
+            PUSH      Ebinger et al. (2020)                 17.00     0.000e+00             0   -1.52   -0.35
+            PUSH      Ebinger et al. (2020)                 18.00     0.000e+00             0   -1.63   -0.51
+            PUSH      Ebinger et al. (2020)                 19.00     0.000e+00             0   -1.06    0.11
+            PUSH      Ebinger et al. (2020)                 20.00     0.000e+00             0   -1.36   -0.17
+            PUSH      Ebinger et al. (2020)                 21.00     0.000e+00             0   -0.76    0.54
+            PUSH      Ebinger et al. (2020)                 22.00     0.000e+00             0   -1.26    0.09
+            PUSH      Ebinger et al. (2020)                 23.00     0.000e+00             0   -0.79    0.30
+            NOM       Nomoto et al. (2013)                  11.00     0.000e+00             0   -1.76   -2.00
+            NOM       Nomoto et al. (2013)                  13.00     0.000e+00             0   -1.84   -2.43
+            NOM       Nomoto et al. (2013)                  15.00     0.000e+00             0   -1.54   -2.05
+            NOM       Nomoto et al. (2013)                  18.00     0.000e+00             0   -1.51   -2.27
+            NOM       Nomoto et al. (2013)                  20.00     0.000e+00             0   -1.09   -1.59
+            NOM       Nomoto et al. (2013)                  25.00     0.000e+00             0   -0.79   -1.11
+            NOM       Nomoto et al. (2013)                  20.00     0.000e+00             0   -1.43   -1.77
+            NOM       Nomoto et al. (2013)                  25.00     0.000e+00             0   -1.18   -1.66
+
+
+
+
+Article number, page 16 of 17
+                      L. Roberti et al.: The Occurrence and Impact of Carbon-Oxygen Shell Mergers in Massive Stars
+
+    Figure 4 shows the distribution of [K/Mg] and [Sc/Mg] from
+several sets of CCSN yields, with progenitor initial mass be-
+tween 11 and 25 M⊙ and initial metallicity between 0 and 0.05.
+As discussed in Sect. 4, some of the models shown in Fig. 1 are
+not in Fig. 4 and vice versa, because not all the sets provided
+both the MCO and XC12 at the end of He burning and the explo-
+sive yields. Among the models used in Fig. 1, those from the
+SIE, PGN, LIM, and BRI sets do not have C-O shell mergers,
+nor metallicity different than solar. Therefore, as discussed in
+the text, we did not include them in our comparison with obser-
+vations of stars of low metallicity in Fig. 5. We added instead
+the NOM yield set of zero metallicity (Nomoto et al. 2013) and
+the PUSH set (Curtis et al. 2019; Ebinger et al. 2020) of zero
+(z-series) and 10−4 Z⊙ metallicity (u-series). From the NOM set,
+we considered 6 CCSNe from progenitors with initial masses
+between 11 and 25 M⊙ and 2 hypernova models with initial
+masses equal to 20 and 25 M⊙ . From the PUSH set we con-
+sidered 12 models of the u-series, with initial masses between
+                                                                     Fig. C.1. Metallicity histogram (orange bars) and normalized cumula-
+11 and 25 M⊙ , and 13 models of the z-series, with initial masses
+                                                                     tive number of stars (pink bars) of the observational sample of 121 stars
+between 11 and 23 M⊙ . The PUSH models only includes the             taken from JINAbase.
+composition of the inner part of the explosion which reaches
+temperatures above 1.75 GK. However, about 50% of the to-
+tal Mg yield is produced outside of this regions and neither Sc      Abase does not provide an error bar for the observed values, in
+nor K are significantly produced outside this region. Thus, we       Fig. 5 we show a typical error bar from Roederer et al. (2014),
+do not expect a significant impact on the [X/Mg] values. The         the largest sample from which the data was extracted. With this
+production of the only stable isotope of Sc, 45 Sc, is a signa-      error bar, we see that the EMP sample effectively represents the
+ture of proton-rich, neutrino-processed supernova ejecta Fröh-       broader set of 121 stars.
+lich et al. (2006b,a) and recent multi-dimensional simulations
+have confirmed an enhancement of Sc compared to parameter-
+ized explosion models Sieverding et al. (2020); Wang & Bur-
+rows (2024). While this enhancement of Sc could be up to a
+factor 10 Sieverding et al. (2020), it is not accompanied by an
+enhancement in the production of K. Therefore, we expect that
+the effects of multi-dimensional dynamics and neutrinos could
+improve the agreement with the observations, the effects alone
+are unlikely to be able to explain cases with an enhancement
+in both elements, Sc and K. Nonetheless, self-consistent simu-
+lations of metal-poor progenitor stars are needed to confirm the
+impact of multi-dimensional dynamics and neutrinos on the pro-
+duction of Sc and K. The models included in the comparison
+shown in Fig. 5 are listed in Table B.1.
+
+Appendix C: Observations
+In Fig. 5 we compare the theoretical yield predictions with 37
+observations of extremely metal poor (EMP, [Fe/H]≤ −3) stars
+taken from the JINAbase database Abohalima & Frebel (2018)
+(as detailed in Table C.1). The full database contains 121 stars
+with [K/Mg] and [Sc/Mg] observations, with initial metallicity
+in the range −4.12 ≤ [Fe/H] ≤ −1.51. More specifically, the
+data extracted from JINAbase is from Roederer et al. (2010);
+Cohen et al. (2013); Roederer et al. (2014); Siqueira Mello et al.
+(2014); Placco et al. (2014, 2015); Li et al. (2015); Casey &
+Schlaufman (2015); Skúladóttir et al. (2015); Howes et al. (2015,
+2016). A large number of the observations (≃ 50%) are be-
+low [Fe/H]=–3, as indicated by the pink bars in Fig. C.1, also
+showing that the distribution peaks at [Fe/H]=–2.8. The major-
+ity of these stars likely did not experience pollution from multi-
+ple generations of CCSNe, making them suitable candidates to
+establish the composition of the ejecta of single or few CCSNe.
+The average values for the full sample are ⟨[K/Mg]⟩ = −0.006
+and ⟨[Sc/Mg]⟩ = −0.410, while the subsample used for com-
+parison with the models has slightly lower average values of
+⟨[K/Mg]⟩ = −0.047 and ⟨[Sc/Mg]⟩ = −0.523. Since the JIN-
+                                                                                                               Article number, page 17 of 17
+                                                A&A proofs: manuscript no. aa54461-25
+
+Table C.1. Observations used in Fig. 5.
+
+                                Simbad Identifier               Refa        [Fe/H]      [K/Mg]   [Sc/Mg]
+                                2MASS_J00061720 + 1057419       LI15a        -3.26       0.07      -0.65
+                                2MASS_J01090507 − 0443211       ROE14b       -3.57       0.00      -0.58
+                                2MASS_J01265856 + 0135153       LI15a        -3.57       0.13      -0.63
+                                2MASS_J03173604 − 1517227       ROE14b       -3.06       0.04      -0.47
+                                2MASS_J04121388 − 1205050       ROE14b       -3.31       0.15      -0.51
+                                2MASS_J11272694 − 2352056       ROE14b       -3.36       -0.29     -0.61
+                                2MASS_J15573010 − 2939228       CAS15        -3.02       0.11      -1.13
+                                2MASS_J19351908 − 6142243       ROE14b       -4.06       -0.50     -1.09
+                                2MASS_J20070379 − 5834575       ROE14b       -3.32       0.10      -0.42
+                                2MASS_J20212839 − 1316336       ROE14b       -4.12       0.01      -0.21
+                                2MASS_J20525098 − 3419405       ROE14b       -3.31       -0.28     -0.39
+                                2MASS_J21031185 − 6505088       ROE14b       -3.83       -0.23     -0.63
+                                2MASS_J21035211 − 2942502       ROE14b       -3.87       -1.33     -1.83
+                                2MASS_J21214583 − 3808579       ROE14b       -3.27       -0.21     -0.52
+                                2MASS_J21570791 − 0434083       ROE14b       -3.13       -0.27     -0.39
+                                2MASS_J22223599 − 0138275       ROE14b       -3.30       -0.24     -0.49
+                                2MASS_J23325017 − 3359254       ROE14b       -3.11       -0.27     -0.42
+                                2MASS_J23342669 − 2642140       SIQ14        -3.43       0.42      -0.66
+                                BD − 13_3695                    ROE14b       -3.18       -0.07     -0.14
+                                BD + 38_4955                    ROE14b       -3.12       -0.26     -0.51
+                                BPS_CS_22879 − 0012             ROE14b       -3.01       -0.26     -0.16
+                                BPS_CS_22893 − 0010             ROE14b       -3.12       -0.13     -0.32
+                                CD − 24_1782                    ROE14b       -3.05       -0.04     -0.49
+                                HD_126587                       ROE14b       -3.29       -0.15     -0.59
+                                HD_200654                       ROE14b       -3.13       -0.14     -0.38
+                                HE_0048 − 6408                  PLA14a       -3.75       0.15      -0.60
+                                HE_0139 − 2826                  PLA14a       -3.46       0.21      -0.44
+                                HE_2233 − 4724                  PLA14a       -3.65       0.26      -0.44
+                                Ross_889                        ROE14b       -3.09       -0.05     -0.13
+                                SMSS_J183719.09 − 262725.0      HOW15        -3.18       -0.06     -0.29
+                                TYC_57 − 1052 − 1               LI15a        -3.36        0.07     -0.77
+                                UCAC4_191 − 003009              COH13        -3.11       0.62       0.12
+                                UCAC4_242 − 000737              COH13        -3.18       -0.04     -0.34
+                                UCAC4_323 − 223299              COH13        -3.01       0.12      -0.65
+                                UCAC4_363 − 001823              COH13        -3.34       0.70      -0.53
+Notes. a References: COH13 Cohen et al. (2013); ROE14b Roederer et al. (2014); SIQ14 Siqueira Mello et al. (2014); PLA14a Placco et al.
+(2014); LI15a Li et al. (2015); CAS15 Casey & Schlaufman (2015); HOW15 Howes et al. (2015).
+
+
+
+
+Article number, page 18 of 17
+

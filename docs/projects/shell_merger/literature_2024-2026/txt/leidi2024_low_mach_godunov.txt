@@ -1,0 +1,4991 @@
+Astronomy & Astrophysics manuscript no. godunov_performance
+February 27, 2024
+
+©ESO 2024
+
+Performance of high-order Godunov-type methods in simulations
+of astrophysical low Mach number flows
+G. Leidi1 , R. Andrassy1 , W. Barsukow2 , J. Higl1, 3 , P. V. F. Edelmann4 , and F. K. Röpke1, 5
+
+arXiv:2402.16706v1 [astro-ph.SR] 26 Feb 2024
+
+1
+
+Heidelberger Institut für Theoretische Studien, Schloss-Wolfsbrunnenweg 35, D-69118 Heidelberg, Germany
+e-mail: giovanni.leidi@h-its.org
+2
+Bordeaux Institute of Mathematics, Bordeaux University and CNRS/UMR5251, Talence, 33405 France
+3
+High-Performance Computing Center Stuttgart, Nobelstraße 19, 70569 Stuttgart, Germany
+4
+Computer, Computational and Statistical Sciences (CCS) Division and Center for Theoretical Astrophysics (CTA), Los Alamos
+National Laboratory, Los Alamos, PO Box 1663, NM 87545, USA
+5
+Zentrum für Astronomie der Universität Heidelberg, Institut für Theoretische Astrophysik, Philosophenweg 12, D-69120 Heidelberg, Germany
+Received 8 December 2023 / Accepted 23 February 2024
+ABSTRACT
+
+High-order Godunov methods for gas dynamics have become a standard tool for simulating different classes of astrophysical flows.
+Their accuracy is mostly determined by the spatial interpolant used to reconstruct the pair of Riemann states at cell interfaces and by
+the Riemann solver that computes the interface fluxes. In most Godunov-type methods, these two steps can be treated independently,
+so that many different schemes can in principle be built from the same numerical framework. Because astrophysical simulations often test out the limits of what is feasible with the computational resources available, it is essential to find the scheme that produces
+the numerical solution with the desired accuracy at the lowest computational cost. However, establishing the best combination of
+numerical options in a Godunov-type method to be used for simulating a complex hydrodynamic problem is a nontrivial task. In
+fact, formally more accurate schemes do not always outperform simpler and more diffusive methods, especially if sharp gradients are
+present in the flow. In this work, we use our fully compressible Seven-League Hydro (SLH) code to test the accuracy of six reconstruction methods and three approximate Riemann solvers on two- and three-dimensional (2D and 3D) problems involving subsonic
+flows only. We consider Mach numbers in the range from 10−3 to 10−1 , which are characteristic of many stellar and geophysical flows.
+In particular, we consider a well-posed, 2D, Kelvin–Helmholtz instability problem and a 3D turbulent convection zone that excites
+internal gravity waves in an overlying stable layer. Although the different combinations of numerical methods converge to the same
+solution with increasing grid resolution for most of the quantities analyzed here, we find that (i) there is a spread of almost four orders
+of magnitude in computational cost per fixed accuracy between the methods tested in this study, with the most performant method
+being a combination of a “low-dissipation” Riemann solver and a sextic reconstruction scheme, (ii) the low-dissipation solver always
+outperforms conventional Riemann solvers on a fixed grid when the reconstruction scheme is kept the same, (iii) in simulations of
+turbulent flows, increasing the order of spatial reconstruction reduces the characteristic dissipation length scale achieved on a given
+grid even if the overall scheme is only second order accurate, (iv) reconstruction methods based on slope-limiting techniques tend
+to generate artificial, high-frequency acoustic waves during the evolution of the flow, (v) unlimited reconstruction methods introduce
+oscillations in the thermal stratification near the convective boundary, where the entropy gradient is steep.
+Key words. Convection – Hydrodynamics – Instabilities – Methods: numerical – Turbulence – Waves
+
+1. Introduction
+High-resolution schemes for gas dynamics (see, e.g., van Leer
+1979; Colella & Woodward 1984; Harten et al. 1987; Colella
+1990; Liu et al. 1994; Jiang & Shu 1996; Colella & Sekora
+2008; Toro 2009; Balsara 2017) are routinely used for modeling
+a broad variety of astrophysical flow phenomena. Their popularity derives from their conservation properties and robustness,
+which allow them to accurately capture both smooth and discontinuous solutions on the same computational grid without sacrificing numerical stability.
+These schemes are based on higher-order extensions of the
+original first-order accurate method of Godunov (1959) and their
+time-integration algorithm is typically carried out in three steps.
+First, a pair of Riemann states is reconstructed at each grid cell
+interface by applying high-order monotonic interpolants to a set
+of cell-averaged hydrodynamic quantities. Second, the resulting
+
+Riemann problems are solved (either exactly or approximately)
+to obtain fluxes across every cell boundary. Finally, the cell surface integral of the fluxes is evaluated, allowing the cell-volumeaveraged state quantities to be advanced in time1 .
+In most high-order Godunov schemes, the solution strategy
+of the Riemann problem is independent of the spatial interpolant
+used for reconstructing the Riemann states. Therefore, many different schemes can be built from the same numerical framework.
+The choices made in the construction of a particular scheme,
+however, do have a strong effect on its accuracy, that is the dif1
+High-resolution schemes for gas dynamics can be fully discrete,
+where the system of equations is discretized both in space and time, or
+semi-discrete, where spatial discretization is performed first while leaving the problem continuous in time. In the latter approach, state quantities are then advanced in time using any standard numerical solver for
+systems of ordinary differential equations.
+
+Article number, page 1 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+ference between the numerical (U) and the true (u) solution,
+∥U − u∥ = O(∆xm ) + O(∆tn ),
+
+(1)
+
+computed in some norm ∥ · ∥ (see, e.g., LeVeque 2002). Here, ∆x
+is the width of the grid cell and ∆t is the time step. Although the
+formal order of the spatial and temporal accuracy of a Godunovlike scheme, “m” and “n” in Eq. (1), can be derived for smooth
+flows, they do not give any information about the magnitude of
+the numerical errors generated on a given grid, which is problemdependent. The convergence rates can also be significantly lower
+than the formal order of accuracy of the scheme for problems
+that admit non-smooth solutions. Consequently, formally higherthan-second-order interpolants do not always outperform simpler linear spatial reconstruction schemes when large gradients
+or discontinuities are present in the flow (Greenough & Rider
+2003). Moreover, if the flow is stochastic or chaotic, like in the
+case of turbulence, convergence may not be achieved in the sense
+of Eq. (1), but rather the quality of the numerical results can
+only be judged in terms of global or ensemble-averaged quantities that characterize the flow and its evolution.
+Given these considerations, it is impossible to generalize the
+convergence properties of a certain combination of numerical
+methods in a Godunov-type scheme, so they have to be explored
+by running numerical tests. Such tests, to be significant, have to
+be challenging enough and close to the actual application case.
+The performance of the numerical scheme is another crucial aspect to be considered alongside its accuracy, especially in astrophysical simulations, which often test out the limits of what
+is feasible nowadays with available computational resources.
+Therefore, the question arises of what combination of different
+ingredients in a Godunov-type scheme should be used to produce
+the desired solution at a minimal computational cost.
+Several comparison studies have been presented in the literature with the aim of shedding light on the behavior of different high-resolution schemes in simulations of complex hydrodynamic phenomena, such as forced turbulence (Klingenberg
+et al. 2007; Kritsuk et al. 2011; San & Kara 2015; Radice et al.
+2015; Seo & Ryu 2023), convection (Müller 2020), jet evolution (Beckwith & Stone 2011; Musoke et al. 2020), magnetorotational instabilities in accretion disks (Flock et al. 2010),
+Richtmyer-Meshkov instabilities (Latini et al. 2007), and shear
+instabilities (McNally et al. 2012; Lecoanet et al. 2017). These
+numerical experiments focused on supersonic or mildly subsonic
+flow regimes, for which Godunov-type methods are highly optimized (see, e.g., LeVeque 2002; Toro 2009). Nonetheless, highresolution schemes have been proven to be a powerful tool also
+for modeling regimes of low Mach numbers (M B |V|/c ≲ 0.1,
+where V is the fluid velocity and c is the sound speed), especially
+in simulations of terrestrial (see, e.g., Day & Bell 2000; Klein
+2009; Dumbser et al. 2009; Motheau et al. 2018) and stellar
+(see, e.g., Meakin & Arnett 2007; Muthsam et al. 2010; Woodward et al. 2014; Goffrey et al. 2017; Müller 2020; Horst et al.
+2021; Canivete Cuissa & Teyssier 2022) flows. To our knowledge, other than idealized tests, no extensive work along the line
+of the aforementioned comparison studies has been presented
+for low-Mach-number flows yet. Only a few studies evaluated
+the impact of the order of the spatial and temporal discretization
+in the numerical scheme on the properties of highly subsonic
+turbulent flows, but they kept the Riemann solver fixed (Wongwathanarat et al. 2016; Teissier & Müller 2023).
+In this work, we use our fully compressible Seven-League
+Hydro (SLH) code to test 18 different combinations of spatial reconstruction schemes and Riemann solvers on two test problems
+Article number, page 2 of 42
+
+in which flows are highly subsonic (10−3 ≲ M ≲ 10−1 ). In particular, we consider a two-dimensional (2D) Kelvin–Helmholtz instability with smooth initial conditions and a 3D, turbulent convection zone that entrains material from an upper, stably stratified layer, where internal waves are free to propagate. The initial
+conditions of the latter test are adopted from the work of Andrassy et al. (2022). Here, we opt to reduce the strength of the
+heat source driving the convection in order to achieve lower convective speeds than those obtained by Andrassy et al. (2022).
+Also, contrary to that work, we provide performance measurements for all the methods tested in our study. In both tests, we
+conduct a resolution study to analyze the convergence of the numerical results obtained by each method.
+The paper is structured as follows: in Sect. 2, we provide
+a detailed description of the equations solved and the numerical methods included in this study. In Sect. 3, we measure the
+convergence properties of different Godunov-type schemes for
+the 2D, Kelvin–Helmholtz instability test problem (see Sect. 3.1)
+and for the 3D setup involving turbulent convection, convective
+boundary mixing, and wave excitation (see Sect. 3.2). In Sect. 4,
+we use the kinetic energy spectrum of the convective flows simulated in the latter test, which is close to a real astrophysical
+application, to provide measurements of the computational cost
+per fixed accuracy for each method. Finally, in Sect. 5, we summarize the main results and we give some guidance on which
+methods to use for specific applications.
+
+2. Methods
+2.1. Governing equations
+
+We solve the fully compressible, inviscid Euler equations with a
+source term S in the integral form
+ÅZ
+ã
+I
+Z
+1 ∂
+1
+1
+T · n dA =
+S dΩ,
+(2)
+U dΩ +
+|Ω| ∂t
+|Ω| ∂Ω
+|Ω| Ω
+Ω
+
+where
+
+
+
+ρ
+ ρu 
+
+
+ ρv 
+U=
+
+ ρw 
+ρe 
+tot
+ρX
+
+(3)
+
+is the set of conserved quantities, |Ω| is the volume of a fluid
+element Ω enclosed by a surface ∂Ω, n is the outward normal
+vector to the surface, and T = [F|G|H] is a tensor defined by the
+flux vectors
+
+
+
+
+
+
+ρw
+ρv
+ρu
+ρuv
+ρuw
+
+
+
+
+ ρu2 + p 
+
+
+
+
+
+
+ρvw
+ρuv
+ ρv2 + p 
+
+
+
+
+F=
+.
+, G = 
+, H = 
+2
+ ρvw 
+ ρw + p 
+ ρuw 
+(ρe + p)v
+(ρe + p)w
+(ρe + p)u
+tot
+tot
+tot
+ρXv
+ρXw
+ρXu
+(4)
+Here, ρ denotes the mass density, V = (u, v, w) the velocity field,
+etot = eint + 12 |V|2 the total energy per unit mass, eint the specific
+internal energy, and X the mass fraction of a passive scalar used
+as a tracer advected with the fluid. The system represented by
+Eq. (2) is closed by an equation of state (EoS), which gives the
+gas pressure as a function of the density and internal energy,
+p = p(ρ, eint ).
+
+(5)
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+In this work, we only consider a perfect gas with a given adiabatic index γ, for which
+p(ρ, eint ) = (γ − 1)ρeint .
+
+(6)
+
+For modeling the test problem introduced in Sect. 3.2, which
+involves the presence of a gravitational field, g = (g x , gy , gz ), the
+corresponding source term,
+
+
+0
+ ρg x 
+
+
+ ρgy 
+Sgrav = 
+(7)
+,
+ ρgz 
+ρ g · V 
+0
+must be included in the right-hand-side term of Eq. (2). Because
+we assume g to be time-independent, we opt to solve an equivalent form of Eq. (2), in which the gravitational potential ϕ is
+directly added to etot , eliminating the ρ g · V source term from the
+energy equation,
+
+
+ 
+0
+0
+ ρg x 
+ρg x 
+
+
+ 
+ ρgy 
+ρg 
+etot 7→ etot + ϕ, Sgrav = 
+7→  y  .
+(8)
+
+ ρgz 
+ ρgz 
+ρg · V 
+ 0 
+0
+0
+Numerical schemes that solve this form of Eq. (2) are capable of
+conserving the total energy of the system over time exactly. Such
+a property is particularly important in low-Mach-number hydrodynamics, where even small energy conservation errors can
+become comparable to the kinetic energy content of the flows
+(Müller 2020; Edelmann et al. 2021).
+2.2. Seven-League Hydro code
+
+In our study, Eq. (2) is solved numerically using the SevenLeague Hydro code (SLH, Miczek 2013; Edelmann 2014),
+which was originally developed to model the broad variety of
+hydrodynamic processes that characterize the deep interiors of
+stars, such as shear instabilities (Edelmann et al. 2017), excitation of internal waves (Horst et al. 2020), convective boundary
+mixing (Horst et al. 2021; Andrassy et al. 2022, 2023), and turbulent dynamos (Leidi et al. 2022, 2023). SLH makes use of the
+finite-volume discretization on an arbitrarily curvilinear, but logically rectangular, Eulerian grid to retain the conservation properties of the fluid-dynamics equations. Numerical solutions to
+Eq. (2) are computed by means of Godunov-type methods based
+on the definition of Riemann problems at cell interfaces. The
+code is parallelized using the Message Passing Interface (MPI)
+and it has been proven to scale up to several hundred thousand
+processes (Edelmann & Röpke 2016).
+SLH allows the user to choose among many different numerical options at compile time, which makes this code perfectly
+suited to run the comparison study introduced in Sect. 1. In particular, in addition to the well-known Rusanov (Rusanov 1962),
+Roe (Roe 1981), and Harten-Lax-van Leer-Contact (HLLC, Toro
+et al. 1994) approximate Riemann solvers, SLH adopts special
+low-Mach-number methods (Liou 2006; Miczek et al. 2015; Minoshima & Miyoshi 2021) to reduce the excessive numerical
+dissipation introduced by shock-capturing schemes at low Mach
+numbers (see Sect. 2.4). A wide spectrum of spatial reconstruction methods can be used to generate a pair or Riemann states
+
+at each grid cell interface, ranging from (first-order accurate)
+constant reconstruction to very high order methods, some of
+which are described in Sect. 2.3. In problems involving the presence of a gravitational field, the deviation well-balancing method
+(Berberich et al. 2021; Edelmann et al. 2021) is used to preserve
+hydrostatic solutions and to reduce the strength of spurious flows
+generated by grid discretization errors in strongly stratified media.
+In SLH, the cell-volume-averaged source term and the cellsurface-averaged fluxes are approximated using the midpoint
+method, making the code at best second-order accurate in space.
+On a 3D, evenly spaced Cartesian grid, the final expressions for
+these integrals read
+Z
+1
+S dxdydz = Si, j,k + O(∆x2 ),
+(9)
+∆V Ωi, j,k
+Z
+1
+F dydz = F i+1/2, j,k + O(∆x2 ),
+(10)
+∆A ∆Ai+1/2, j,k
+Z
+1
+G dxdz = Gi, j+1/2,k + O(∆x2 ),
+(11)
+∆A ∆Ai, j+1/2,k
+Z
+1
+H dxdy = H i, j,k+1/2 + O(∆x2 ),
+(12)
+∆A ∆Ai, j,k+1/2
+where Si, j,k is the point value of the source term S at the center of
+the cell represented by the set of indices (i, j, k) and vector quantities such as F i+1/2, j,k refer to the face-centered value of the flux
+at the boundary between two adjacent cells, in this case (i, j, k)
+and (i + 1, j, k). The volume of the cell and the surface of a cell
+face are ∆V = ∆x3 and ∆A = ∆x2 , respectively. The discretized
+source term and fluxes in Eqs. (9)–(12) are used to build a semidiscrete version of Eq. (2) which leaves the problem continuous
+in time, following the method of lines (see, e.g., LeVeque 2002),
+∂Ui, j,k
+1 Ä
+=−
+F i+1/2, j,k − F i−1/2, j,k
+∂t
+∆x
++Gi, j+1/2,k − Gi, j−1/2,k
+ä
++H i, j,k+1/2 − H i, j,k−1/2
++Si, j,k .
+
+(13)
+
+The time update on the cell-volume-averaged conserved variables, Ui, j,k , is then carried out in a dimensionally unsplit fashion
+using explicit or implicit time stepping. Here, we only consider
+a limited set of all of the numerical methods available in SLH to
+avoid constructing a too large parameter space. In the following
+sections, we provide a detailed description of the algorithms that
+we use for running the tests presented in Sect. 3.1 and 3.2.
+2.3. Spatial reconstruction methods
+
+We use six reconstruction methods as summarized in Table 1.
+We do not attempt to be exhaustive in the choice of our methods,
+which is why, for example, essentially non-oscillatory (ENO)
+and weighted ENO (WENO) schemes (see, e.g., Liu et al. 1994;
+Jiang & Shu 1996; Shu 2009) are left out from our comparison
+study2 . We also exclude multidimensional reconstruction methods. However, the methods we do include cover a wide range in
+2
+The influence of the parameter that occurs in the smoothness indicators of the compact third order WENO scheme of Kolb (2014) on
+the generation of sound waves by turbulent flows is discussed in Appendix C.
+
+Article number, page 3 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+complexity and formal order of accuracy and several of them are
+often used in stellar hydrodynamics.
+The simplest are unlimited linear (LIN) and parabolic (PAR)
+methods, which have proved to be well-behaved in implicit simulations of slow flows using our SLH code (e.g. Horst et al. 2020,
+2021; Andrassy et al. 2023). Their main disadvantage – the generation of artificial oscillations around steep gradients – can be
+eliminated using slope limiters. Out of a wide spectrum of limiters available, we have decided to include the popular van Leer
+limiter (van Leer 1974) in combination with linear reconstruction (LIN+VL). This limiter has the total-variation-diminishing
+(TVD) property and eliminates the oscillations completely.3 As
+examples of higher-order methods with limiters, we include two
+versions of the widely used piecewise-parabolic method (PPM):
+Colella & Woodward (1984, CW84 hereinafter) and Colella &
+Sekora (2008, CS08 hereinafter), for which we introduce the
+acronyms PPM84 and PPM08, respectively. We also construct a
+hybrid method, which we name piecewise sextic hybrid (PSH). It
+combines unlimited sextic reconstruction for dynamic variables
+(ρ, V, p) with the PPM08 method for passive scalars. We provide lower-order alternatives to the PSH method in Appendix A,
+although we do not test them in this study.
+In the remainder of this section, we provide detailed descriptions of all the six reconstruction methods in unified notation.
+We do this to (i) maximise the reproducibility of our work, (ii)
+simplify the methods’ more general original forms (e.g. for nonuniform grids), (iii) make clear what choices we make if several
+options are available, and (iv) to point out a few typographic
+mistakes in the original works.
+We refer to the variable being reconstructed as a in Sections 2.3.1–2.3.6. Although reconstruction can be performed in
+physical coordinates, we chose to do it in logical coordinates
+defined by the cell index i, which leads to much simpler expressions. This choice does not influence our results in any way since
+we use uniform Cartesian grids. In some cases, we introduce the
+continuous linear logical coordinate ζ such that the coordinate of
+the centre of cell i is ζi = i and the left and right cell interfaces
+are located at ζi−1/2 = i − 21 and ζi+1/2 = i + 12 , respectively. The
+reconstruction is usually discontinuous at the interfaces. We use
+the notation ai+1/2,L and ai+1/2,R to denote the reconstructed states
+on the left and right side of the interface at ζi+1/2 , respectively.
+Reconstruction is performed along each spatial axis separately,
+i.e. the reconstruction procedure is always one-dimensional. To
+highlight the difference between cell averages and point values,
+we use the notation ai for the average value of a within cell i.
+In this work, we always reconstruct the set of cell-volumeaveraged primitive variables q, where q = (ρ, V, p, X), because
+it helps reducing oscillations near discontinuities as compared
+to reconstructing cell-volume-averaged conserved quantities U.
+In SLH, transformations between q and U are performed using
+2nd -order approximations,
+Ä ä
+q = ξ U + O(∆x2 ),
+Ä ä
+U = ξ−1 q + O(∆x2 ),
+
+(14)
+
+3
+This formally holds for linear advection in one spatial dimension.
+In practice, we do not observe oscillations even when the LIN+VL
+method is applied to a multi-dimensional system of conservation laws,
+see Sect. 3.1.
+
+Article number, page 4 of 42
+
+where ξ is a nonlinear, invertible transformation,
+
+
+U1
+U2 /U1
+
+
+
+
+U3 /U1
+
+
+
+
+U4 /U1
+ξ(U) = 
+,
+Å
+ã
+
+Ä
+ä 
+(γ − 1) U − 1 U 2 + U 2 + U 2 
+
+
+5
+2
+3
+4
+2U1
+
+(15)
+
+U6 /U1
+
+and Ui is the i-th component of U.
+2.3.1. The LIN method
+
+The unlimited linear reconstruction method is based on a linear
+approximation to the underlying function a(ζ). Its slope δi (in
+cell-index coordinates) is estimated using the central difference
+(the Fromm method)
+δi =
+
+ai+1 − ai−1
+= ∆x ∂ x a| xi + O(∆x3 ),
+2
+
+(16)
+
+using which we obtain the reconstructed states
+δi
++ O(∆x2 ),
+2
+δi
+ai+1/2,L = ai + + O(∆x2 ).
+2
+
+ai−1/2,R = ai −
+
+(17)
+(18)
+
+The LIN method is exact wherever a(ζ) is locally linear,
+2nd -order accurate for general but smooth functions a(ζ), and it
+requires two ghost cells at domain boundaries.4
+2.3.2. The LIN+VL method
+
+The van-Leer-limited linear reconstruction method is particularly easy to describe in terms of the 2nd -order-accurate,
+interface-centred slopes
+δi−1/2 = ai − ai−1 ,
+δi+1/2 = ai+1 − ai .
+
+(19)
+(20)
+
+The final slope δi,lim is then obtained by applying the limiter
+of van Leer (1974),
+® 2δi−1/2 δi+1/2
+if δi−1/2 δi+1/2 > 0,
+δi,lim = δi−1/2 +δi+1/2
+(21)
+0
+otherwise,
+which gives the reconstructed states
+δi,lim
++ O(∆x2 ),
+2
+δi,lim
+ai+1/2,L = ai +
++ O(∆x2 ).
+2
+
+ai−1/2,R = ai −
+
+(22)
+(23)
+
+The limiter makes the slope less steep where a(ζ) is strongly
+curved and flat at local extrema. With a smooth and monotonic
+function a(ζ), the effect of the limiter weakens upon grid refinement and the left and right states converge to those provided
+by the LIN method. This makes the LIN+VL method formally
+2nd -order accurate away from any extrema. Two ghost cells are
+required at domain boundaries.
+4
+
+Although the method only uses the cells i − 1, i, and i + 1, reconstruction must also be performed in the first ghost cell to fully define
+the Riemann problem at the domain boundary.
+
+G. Leidi et al.: Performance of high-order Godunov methods
+Table 1. Overview of spatial reconstruction methods used in this work.
+
+ID
+
+Theoretical
+order
+
+Practical
+order
+
+Number of
+ghost cells
+
+Description
+
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+2
+2
+3
+4
+6
+7
+
+2.0
+2.0
+3.0
+2.3, 1.6
+6.0
+7.0
+
+2
+2
+2
+3
+4
+4
+
+piecewise linear, no limiter
+piecewise linear, van Leer limiter
+piecewise parabolic, no limiter
+PPM method of Colella & Woodward (1984)
+PPM method of Colella & Sekora (2008)
+hybrid piecewise sextic with no limiter for dynamic
+variables and PPM08 for passive scalars
+
+Notes. ID: identifier; Theoretical order: formal order of accuracy for smooth and monotonic solutions in 1D; Practical order: asymptotic order
+obtained in the 1D experiments reported in Appendix B (smooth but non-monotonic solutions). In the case of PPM84, the higher order of accuracy
+corresponds to linear advection and the lower one to the propagation of a sound wave using the LHLLC flux function, see Appendix B for details.
+
+2.3.3. The PAR method
+
+The unlimited parabolic method assumes that a(ζ) can within
+cell i be described using the parabola
+a(ζ) =
+
+2
+X
+n=0
+
+cn (ζ − ζi )n .
+
+(24)
+
+The three coefficients cn are uniquely determined by the requirement that the averages of a(ζ) in cells i − 1, i, and i + 1 equal
+ai−1 , ai , and ai+1 , respectively. The reconstructed states are then
+obtained by evaluating Eq. (24) at ζi−1/2 and ζi+1/2 , respectively.
+The resulting expressions are
+1
+(2ai−1 + 5ai − ai+1 ) + O(∆x3 ),
+6
+1
+ai+1/2,L = (−ai−1 + 5ai + 2ai+1 ) + O(∆x3 ).
+6
+
+ai−1/2,R =
+
+(25)
+(26)
+
+The PAR method is exact wherever a(ζ) is locally parabolic,
+3rd -order accurate for general but smooth functions a(ζ), and it
+requires two ghost cells at domain boundaries.
+
+The interpolated value ai+1/2 is initially assigned to both
+ai+1/2,L and ai+1/2,R , i.e. there is no discontinuity at the interface. However, CW84 approximate the distribution of variable
+a in cell i by the parabola uniquely defined by ai−1/2,R , ai+1/2,L ,
+and the cell average ai . This parabola may in some cases take on
+values outside of the interval defined by ai−1/2,R and ai+1/2,L , i.e.
+overshoots may appear within the cell. To prevent this, a second
+limiting step is introduced. We express it in terms of the differences
+a−i = ai−1/2,R − ai ,
+
+(29)
+
+a+i = ai+1/2,L − ai .
+
+(30)
+
+The limiter is then defined by the variable replacements
+a−i 7→ 0, a+i 7→ 0
+a−i 7→ −2a+i
+a+i 7→ −2a−i
+
+if
+if
+if
+
+a−i a+i ≥ 0,
+
+|a−i | > 2|a+i |,
+
+(31)
+
+|a+i | > 2|a−i |.
+
+The reconstructed states ai−1/2,R and ai+1/2,L are recovered using Eqs. (29) and (30). Equation (31) is equivalent to Eq. 1.10
+of CW84. This second limiter introduces discontinuities at cell
+interfaces in regions where the gradient of a(ζ) changes rapidly
+2.3.4. The PPM84 method
+and it flattens the assumed parabola at local extrema.
+Unlike CW84, we do not use the parabolic model of a(ζ)
+The piecewise parabolic reconstruction of CW84 is a two-step
+process. The first is based on the 4th -order-accurate interpolation inside the cell in any way. We only need the states at the two
+sides of each interface to construct Riemann problems and time
+formula
+integration is done using a Runge-Kutta scheme (see Sect. 2.5 for
+1
+1
+ai+1/2 = (ai + ai+1 ) − (δi+1 − δi ) = a| xi+1/2 + O(∆x4 ).
+(27) details). However, the second limiter (Eq. (31)), which is based
+2
+6
+on the parabolic model, is still needed to remove oscillations and
+This expression is the equivalent of Eq. 1.6 of CW84 in the spe- to introduce dissipation where necessary.
+Although the interpolation formula that PPM84 starts with
+cial case of a uniform grid. CW84 then replace δi by the limited
+th
+is
+4
+-order accurate, the slope flattening introduced at all exvalue
+trema reduces the practically attainable order of accuracy sub®
+
+sgn(δi ) min |δi |, 2|δi−1/2 |, 2|δi+1/2 | if δi−1/2 δi+1/2 > 0 stantially for non-monotonic solutions even if they are smooth.
+δi,lim =
+Our 1D experiment in Sect. B.1 gives the order of 2.3 whereas
+0
+otherwise,
+(28) Colella & Sekora (2008) reach the order of 2.6 in a similar advection experiment with a Gaussian-shaped profile and PPM84
+which is the monotonised central limiter of van Leer (1977). In reconstruction. The PPM84 method requires three ghost cells at
+our implementation, we do not set δi,lim = 0 if δi−1/2 δi+1/2 ≤ 0 domain boundaries.
+(i.e. at local extrema). We have tested that, thanks to the presence
+of another limiter in PPM84 (see below), this modification has 2.3.5. The PPM08 method
+essentially no influence on the results. However, it makes the
+code faster because it removes three conditional expressions per The piecewise parabolic method of CS08 is based on ideas simreconstruction step (we need δi−1,lim , δi,lim , and δi+1,lim to obtain ilar to those of CW84 in constructing the PPM84 scheme and
+PPM08 also contains two limiters. However, the limiters are
+ai−1/2 and ai+1/2 ).
+Article number, page 5 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+modified such that PPM08 models smooth extrema instead of
+flattening them.
+In PPM08, the first estimate of ai+1/2 is obtained using the
+6th -order-accurate interpolation formula (c.f. Eq. 17 of CS08)
+
+are combined to judge the solution’s smoothness (CS08 have one
+wrong index in their equivalent of our Eq. (43), c.f. their Eq. 21).
+We then set
+
+37
+2
+1
+(ai + ai+1 ) −
+(ai−1 + ai+2 ) +
+(ai−2 + ai+3 )
+ai+1/2 =
+60
+15
+60
+
+î
+∗ ó
+∗
+D2 a i,lim = sgn D2 a i min
+
+= a| xi+1/2 + O(∆x6 ).
+
+(32)
+
+If ai+1/2 does not satisfy the condition (c.f. Eq. 13 of CS08)
+min(ai , ai+1 ) ≤ ai+1/2 ≤ max(ai , ai+1 )
+
+(34)
+
+a limiter is applied. It is based on three 2nd -order-accurate second
+derivatives,
+
+
+D2 a i+1/2 = 3 ai − 2ai+1/2 + ai+1 = ∂2x a| xi+1/2 ∆x2 + O(∆x4 ),
+(35)
+
+2
+2
+4
+2
+(36)
+Da i
+= ai−1 − 2ai + ai+1 = ∂ x a| xi ∆x + O(∆x ),
+
+2
+2
+2
+4
+D a i+1 = ai − 2ai+1 + ai+2 = ∂ x a| xi+1 ∆x + O(∆x ).
+(37)
+
+In Eq. (35), the more common finite difference formula with
+a prefactor 4 would arise if the involved quantities were of
+the same kind, i.e. all three point values, or all three averages.
+These derivatives are combined to obtain a limited derivative
+D2 a i+1/2,lim such that
+Å
+ó
+î
+
+
+
+D2 a i+1/2 ,
+D2 a i+1/2,lim = sgn D2 a i+1/2 min
+C
+
+
+D2 a i , C
+
+
+D2 a i+1
+
+ã
+
+if all three derivatives have the same sign and
+
+D2 a i+1/2,lim = 0
+
+(38)
+
+(39)
+
+otherwise. We use C = 1.25 in Eq. (38). The limited derivative
+is then used to modify the value of ai+1/2 ,
+1
+1 2 
+(ai + ai+1 ) −
+D a i+1/2,lim .
+(40)
+2
+6
+Equation 19 of CS08 is equivalent to our Eq. (40) except for the
+factor in front of the second term, which is 13 in CS08. This is
+likely a typographical error because the factor of 16 is needed to
+obtain the original, unlimited value of ai+1/2 when the solution is
+so smooth that the limiter does not change the second derivative
+significantly.
+Just like in the PPM84 method, the interpolated value ai+1/2
+is initially assigned to both ai+1/2,L and ai+1/2,R , i.e. there is no
+discontinuity at the interface. The second limiting step depends
+on whether cell i is in the vicinity of a local extremum or not. If
+(c.f. Eq. 20 of CS08)
+ai+1/2 7→
+
+(ai − ai−1/2,R )(ai+1/2,L − ai ) ≤ 0 or
+(ai − ai−1 )(ai+1 − ai ) ≤ 0,
+
+(41)
+
+cell i is close to a local extremum, which should be preserved if
+smooth enough. The second derivatives
+∗
+D2 a i = 6(ai−1/2,R − 2ai + ai+1/2,L ),
+(42)
+
+2
+D a i−1 = ai−2 − 2ai−1 + ai ,
+(43)
+
+2
+D a i = ai−1 − 2ai + ai+1 ,
+(44)
+
+2
+(45)
+D a i+1 = ai − 2ai+1 + ai+2 .
+
+Article number, page 6 of 42
+
+C
+
+(33)
+
+2
+
+D a i−1 , C
+
+
+Å
+
+∗
+D2 a i ,
+2
+
+D a i ,C
+
+
+2
+
+
+D a i+1
+
+ã
+
+(46)
+
+if all four second derivatives have the same sign and
+∗
+D2 a i,lim = 0
+
+(47)
+
+otherwise. Finally, the reconstructed states are updated,
+∗
+D2 a i,lim
+ai−1/2,R 7→ ai + (ai−1/2,R − ai )
+∗ ,
+D2 a i
+∗
+D2 a i,lim
+ai+1/2,L 7→ ai + (ai+1/2,L − ai )
+∗ .
+D2 a i
+
+(48)
+(49)
+
+∗
+If D2 a i < ε = 10−12 we do not modify the reconstructed
+states in this step. Equations (48) and (49) are equivalent to
+Eq. 23 of CS08.
+If the condition in Eq. (41) is not satisfied, i.e. cell i is not
+in the vicinity of a local extremum, we use Eqs. (29)-(31) instead of Eqs. (48) and (49) to limit the reconstructed states. CS08
+propose to use a slightly less restrictive limiter away from extrema (their Eq. 26), but that limiter produces oscillations with
+our time-discretization scheme and we do not use it.
+Just as we do in the case of PPM84, we only use the reconstructed states and not the assumed parabolic model of a(ζ)
+within the cell, see Sect. 2.3.4 for details. The PPM08 method is
+6th -order accurate for smooth functions a(ζ) even if they are not
+monotonic. Our 1D experiment in Sect. B.1 confirms this. The
+PPM08 method requires four ghost cells at domain boundaries.
+2.3.6. The PSH method
+
+Whereas all of the previous reconstruction methods are applied
+to all variables in the same way, the PSH method is hybrid: it
+is an unlimited piecewise-sextic method for all dynamic variables combined with PPM08 for passive scalars. This allows us
+to eliminate certain issues that occur with methods containing
+limiters when applied to slow flows (see Sect. 3.1 for details)
+while essentially eliminating oscillations in the passive scalars,
+which could represent mass fractions. The piecewise sextic reconstruction assumes that within cell i a(ζ) can be described by
+the sextic polynomial
+
+a(ζ) =
+
+6
+X
+n=0
+
+cn (ζ − ζi )n .
+
+(50)
+
+The seven coefficients cn are uniquely determined by the requirement that the averages of a(ζ) in cells i − 3 + n equal ai−3+n for
+n = 0, 1, . . . , 6. The reconstructed states are then obtained by
+evaluating Eq. (50) at ζi−1/2 and ζi+1/2 , respectively. The result-
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+ing expressions are
+Å
+1
+ai−1/2,R =
+4ai−3 − 38ai−2 + 214ai−1 + 319ai
+420
+ã
+− 101ai+1 + 25ai+2 − 3ai+3 + O(∆x7 ),
+Å
+1
+ai+1/2,L =
+− 3ai−3 + 25ai−2 − 101ai−1 + 319ai
+420
+ã
++ 214ai+1 − 38ai+2 + 4ai+3 + O(∆x7 ),
+
+t
+
+SL
+
+UL∗
+
+(51)
+UL
+
+(52)
+
+The method is exact wherever a(ζ) is locally a sextic polynomial,
+7th -order accurate for general but smooth functions a(ζ), and it
+requires four ghost cells at domain boundaries.
+2.4. Approximate Riemann solvers
+
+The reconstructed pair of primitive state quantities, qi+1/2,L,R , defines a Riemann problem at the cell interface i + 1/2, which SLH
+solves by means of 1D approximate Riemann solvers to obtain
+the face-centered value of the fluxes F i+1/2 . We run the tests
+presented in Sect. 3 using two widely popular flux functions,
+namely the RUSANOV and HLLC solvers. Because in this work
+we only focus on simulations of subsonic flows, for comparison
+we also build a low-dissipation version of HLLC following the
+approach of Minoshima & Miyoshi (2021), who modified the
+Harten-Lax-van Leer-Discontinuities (HLLD, Miyoshi & Kusano 2005) scheme for magnetohydrodynamics to diminish the
+magnitude of the numerical dissipation for low-Mach-number
+flows. The authors called this low-dissipation flux “LHLLD”, so,
+for consistency, we will refer to the low-dissipation HLLC solver
+as “LHLLC” throughout the text5 . In the rest of this section, we
+summarize the main aspects of each of these solvers and provide the implementation details whenever several choices can be
+made for specifying the value of a certain quantity that is needed
+to evaluate the numerical flux.
+
+SR
+
+S∗
+UR∗
+
+UR
+x
+
+Fig. 1. Space-time diagram showing the wave structure of the HLLC
+solver for a Riemann problem of gas dynamics. S L,R are the two outer
+sonic waves (solid lines), while S ∗ is the speed of the linearly degenerate
+contact and shear waves (dashed line) that separate the two intermediate
+∗
+.
+“star” states, UL,R
+
+the scheme to achieve numerical stability by smearing out any
+discontinuity that may arise in the vector of state quantities U.
+The RUSANOV solver is one of the simplest schemes that
+can be used to approximate the fluxes at grid cell interfaces,
+which makes it very efficient in terms of Floating Point Operations per Second. However, it does not take into account the
+complex structure of the solution arising from the Riemann problem of gas dynamics (see, e.g., Toro 2009), so the states between
+the two outer waves in the Riemann fan are averaged out. For
+this reason, this flux function is particularly diffusive for transporting contact and shear waves, which lack the self-steepening
+property of sound waves.
+2.4.2. HLLC
+
+2.4.1. RUSANOV
+
+Different from RUSANOV, the HLLC solver restores the linearly
+degenerate contact and shear waves back to the structure of the
+solution of the Riemann problem (see Fig. 1). In this method,
+the numerical flux is chosen according to the sign of the wave
+speeds in the Riemann fan,
+
+The RUSANOV flux is computed by adding an upwind, numerical diffusive term proportional to the maximum wave speed at
+the cell interface, S max , to every component of the central flux.
+The final expression for the numerical flux reads6
+
+
+F if 0 ≤ S L ,
+
+ L∗
+FL if S L < 0 ≤ S ∗ ,
+F (UL , UR ) =
+∗
+∗
+
+ FR if S < 0 ≤ S R ,
+FR if S R < 0.
+
+F (UL , UR ) =
+
+1
+1
+[F(UL ) + F(UR )] − S max (UR − UL ),
+2
+2
+
+(53)
+
+where UL,R are the left and right sets of conserved quantities,
+respectively. In SLH, S max is estimated as
+Ä
+ä
+S max = max |uL | + cL , |uR | + cR ,
+(54)
+where c = (γp/ρ)1/2 is the sound speed. The diffusive term in
+Eq. (53) scales with the Mach number of the flow M and allows
+5
+
+Although SLH was already equipped with several low-Mach solvers,
+like AUSM+ -up (Liou 2006) and Miczek-Roe (Miczek et al. 2015), we
+decide not to use them in this study because they all suffer from a more
+restrictive stability criterion on the time step than LHLLC when used
+in combination with explicit time steppers, whilst all of these fluxes
+provide very similar results in terms of accuracy.
+6
+For sake of clarity, here we assume that the fluxes are computed in
+the x direction and dropped the indices, but analogous expressions can
+be obtained for the y and z directions.
+
+(55)
+
+While the computation of the physical fluxes FL = F(UL ) and
+FR = F(UR ) is trivial, the fluxes in the intermediate regions,
+F∗L and F∗R , are obtained by solving the Rankine–Hugoniot jump
+conditions across the two outer sonic waves,
+S L UL∗ − F∗L = S L UL − FL ,
+S R UR∗ − F∗R = S R UR − FR .
+
+(56)
+(57)
+
+Here, UL∗ and UR∗ represent the state quantities in the star regions.
+In order to solve Eqs. (56)–(57), proper estimates of the wave
+speeds S L and S R must be provided beforehand. SLH computes
+these wave speeds as
+S L = min(uL , uR ) − max(cL , cR ),
+S R = max(uL , uR ) + max(cL , cR ).
+
+(58)
+(59)
+
+After some assumptions and algebraic manipulations (see Toro
+2009), these estimates allow Eqs. (56)–(57) to be solved for the
+Article number, page 7 of 42
+
+A&A proofs: manuscript no. godunov_performance
+∗
+star states UL,R
+,
+
+2.4.3. LHLLC
+
+(ρ)∗L,R = α̃L,R ,
+(ρu)∗L,R = α̃L,R S ∗ ,
+(ρv)∗L,R = α̃L,R vL,R ,
+(ρw)∗L,R = α̃L,R wL,R ,
+(ρetot )∗L,R = α̃L,R
+
+(60)
+(61)
+(62)
+(63)
+
+(ρetot )L,R
+ρL,R
+
+ï
++ α̃L,R (S ∗ − uL,R ) S ∗ +
+(ρX)∗L,R = α̃L,R XL,R ,
+
+ò
+pL,R
+,
+ρL,R (S L,R − uL,R )
+
+(64)
+(65)
+
+with
+Å
+α̃L,R = ρL,R
+
+ã
+S L,R − uL,R
+,
+S L,R − S ∗
+
+(66)
+
+and S ∗ being the speed of the intermediate wave,
+pR − pL + ρL uL (S L − uL ) − ρR uR (S R − uR )
+S∗ =
+.
+(67)
+ρL (S L − uL ) − ρR (S R − uR )
+The gas pressure is preserved across the middle wave and takes
+the value
+1î
+p∗ = pL + pR + ρL (S L − uL )(S ∗ − uL )
+2
+ó
++ ρR (S R − uR )(S ∗ − uR ) .
+(68)
+
+These expressions are then inserted back into Eqs. (56)–(57) to
+compute F∗L and F∗R . Finally, the interface flux is chosen according to Eq. (55).
+In our study, we use a variant of the original HLLC solver
+of Toro et al. (1994), which allows the low-Mach correction presented in the next section to be implemented trivially into the
+solver. In particular, we directly evaluate the physical fluxes in
+the selected state of the Riemann fan,
+
+F
+if 0 ≤ S L ,
+
+ L ∗
+F(UL ) if S L < 0 ≤ S ∗ ,
+F (UL , UR ) =
+(69)
+∗
+∗
+
+ F(UR ) if S < 0 ≤ S R ,
+FR
+if S R < 0,
+and we compute p∗ using a linearized Riemann solver for the
+equations of gas dynamics (see, e.g., Toro 1991),
+1
+1
+p∗ = (pL + pR ) − ρ̃c̃(uR − uL ),
+(70)
+2
+2
+where c̃ = (cL + cR )/2 and ρ̃ = (ρL + ρR )/2. The system in
+Eq. (69) is consistent with the physical fluxes in the sense that
+F (U, U) = F(U)
+
+(71)
+
+S ∗ UR∗ − F∗R = S ∗ UL∗ − F∗L .
+
+(72)
+
+and it satisfies the Rankine–Hugoniot jump conditions across the
+contact wave S ∗ as the original solver,
+Diagnostic tests of the Kelvin–Helmholtz instability problem,
+described in Sect. 3.1, show that the numerical solutions computed with our modified version and the original solver of Toro
+et al. (1994) are virtually indistinguishable for subsonic flows.
+We stress, however, that the fluxes in Eq. (69) do not satisfy
+the jump conditions across the sonic waves S L and S R (see
+Eqs. (56) and (57)). Therefore, there is no guarantee that the
+resulting scheme preserves positivity of density and internal energy when the flow is nearly transonic, in which case effects of
+compressibility and nonlinearities can become dominant. Such a
+flow regime, however, is not considered in this study.
+
+Article number, page 8 of 42
+
+As discussed in Sect. 2.4.2, HLLC restores the intermediate, linearly degenerate waves, so it is generally more accurate than
+two-wave solvers like RUSANOV or HLL (Harten et al. 1983)
+in simulations involving the presence of material interfaces or
+the propagation of entropy waves. However, the effects of the
+numerical dissipation introduced by HLLC on the evolution of
+the flow become progressively more dominant as M → 0, thus
+producing unnecessarily large diffusive errors in highly subsonic
+velocity regimes (see, e.g., Fleischmann et al. 2020). In our variant of HLLC, this behavior is caused by the upwind term in the
+expression for p∗ (see Eq. (70)),
+1
+D(p∗ ) = − ρ̃c̃(uR − uL ).
+2
+
+(73)
+
+This term scales with M, which is inconsistent with the scaling of pressure fluctuations dynamically generated by subsonic
+flows. In fact, in the asymptotic limit M → 0, the solution to
+the compressible Euler equations approaches the incompressible
+regime (Guillard & Viozat 1999), in which the gas pressure is homogeneous in space except for fluctuations proportional to M2 .
+At low Mach numbers, the numerical term in Eq. (73) can eventually become larger than the physical pressure fluctuation at the
+cell interface, thus leading to an highly inaccurate pressure flux
+estimation.
+In order to correct for the flawed scaling of the numerical
+dissipation introduced by HLLC-like methods, we here follow
+the approach described in Minoshima & Miyoshi (2021), who
+proposed to multiply the diffusive term in Eq. (73) by a factor
+ϕ proportional to the local Mach number of the flow7 . Such a
+correction was originally applied to the magnetohydrodynamic
+solver HLLD, but it can easily be used in HLLC by setting all
+magnetic field components to zero, resulting in
+(74)
+
+ϕ = χ(2 − χ),
+with
+|VL | |VR |
+χ = min 1, max
+,
+cL cR
+ß
+
+Å
+
+ã™
+.
+
+(75)
+
+The final expression for p∗ then reads
+p∗ =
+
+1
+1
+(pL + pR ) − ϕ ρ̃c̃(uR − uL ).
+2
+2
+
+(76)
+
+The resulting upwind term in this “low-dissipation” version of
+the HLLC flux (LHLLC) scales with M2 when the flow is subsonic, so the ratio of the numerical diffusive term to the amplitude of pressure fluctuations is independent of M.
+We note that the same fix cannot equally be applied to the
+RUSANOV flux without sacrificing numerical stability. In particular, a diffusive coefficient proportional to M2 would result
+in too little dissipation for sound waves. This is not the case for
+LHLLC, in which the complex upwinding performed in Eq. (69)
+guarantees that the scheme remains stable for the propagation of
+sound waves (see also Appendix B.1).
+7
+
+Other low-Mach corrections for the HLLC Riemann solver can be
+found, e.g., in Thornber et al. (2008); Rieper (2011); Xie et al. (2019);
+Chen et al. (2020); Fleischmann et al. (2020).
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+2.5. Time discretization
+
+Because the acoustic Courant-Friedrichs-Lewy (CFL, Courant
+et al. 1928) criterion on the time step becomes excessively
+strict in regimes of very low Mach numbers, implicit time discretization techniques are typically better suited for simulating
+the evolution of such slow flows (see, e.g., Viallet et al. 2011;
+Miczek et al. 2015; Dumbser et al. 2019). However, we recognize that most hydrodynamic codes nowadays do not have timeimplicit integration capabilities, whose implementation requires
+a considerable effort from code developers. Thus, to make our
+study easily reproducible, we decide to target in our test setups,
+see Sect. 3.1 and 3.2, flows with Mach numbers in the range
+10−3 ≲ M ≲ 10−1 , where simple time-explicit marching schemes
+are still competitive with implicit ones. In this work, explicit
+time integration is performed in a semi-discrete fashion, in which
+the cell-surface integral of the fluxes and the cell-volume integral of the source terms in Eq. (2) are first separately discretized
+in space whilst the system is left continuous in time according
+to the method of lines (see Sect. 2.2). The resulting system of
+ordinary differential equations (see Eq. (13)), is then solved numerically to advance the cell-volume-averaged state quantities in
+time. To solve Eq. (13), we use the third-order accurate, strong
+stability preserving (SSP) RK3 method of Shu & Osher (1988),
+(n)
+in which the update on Ui, j,k from time tn to time tn+1 = tn + ∆t
+is performed in three stages,
+Ä (n) ä
+(1)
+(n)
+Ui, j,k = Ui, j,k − R Ui, j,k ∆t,
+(77)
+Ä
+ä
+(2)
+(1)
+3 (n)
+1 (1)
+1
+Ui, j,k = Ui, j,k + Ui, j,k − R Ui, j,k ∆t,
+(78)
+4
+4
+4
+Ä
+ä
+(n+1)
+(2)
+1 (n)
+2 (2)
+2
+Ui, j,k = Ui, j,k + Ui, j,k − R Ui, j,k ∆t.
+(79)
+3
+3
+3
+In particular, we compute the spatial residuals at stage s,
+Ä (s) ä 1 Ä
+(s)
+R Ui, j,k =
+F (s)
+i+1/2, j,k − F i−1/2, j,k
+∆x
+(s)
++G(s)
+i, j+1/2,k − Gi, j−1/2,k
+ä
+(s)
++H (s)
+i, j,k+1/2 − H i, j,k−1/2
+−S(s)
+i, j,k ,
+
+(80)
+
+using the numerical techniques described in Sects. 2.3 and 2.4.
+Finally, in order to achieve numerical stability, we limit the time
+step according to
+Å
+ã
+∆x
+CFL
+min
+,
+(81)
+∆t =
+Ndim i, j,k |V|i, j,k + ci, j,k
+where Ndim is the number of spatial dimensions. In all the tests
+presented in Sect. 3, we always adopt CFL = 0.8. We prefer to
+use a third-order accurate time stepper over less computationally
+expensive (but more inaccurate) methods, such as the “Midpoint
+rule” or SSP-RK2 (Shu & Osher 1988), so that the spatial instead of the temporal discretization would contribute most to the
+building up of global truncation errors.
+
+3. Convergence properties of different
+Godunov-type methods
+In this section, we check if the methods included in our study
+(described in Sect. 2) converge to the same numerical solution
+for several physical quantities of interest. In particular, we test a
+
+Kelvin–Helmholtz instability and a more complex setup characterized by the presence of turbulent convective flows, turbulent
+entrainment, and wave excitation. The results of the latter set of
+simulations allow us to estimate the computational cost per fixed
+accuracy for any given scheme, which we show in Sect. 4.
+3.1. Kelvin–Helmholtz instability
+
+We first test all of our 18 combinations of numerical schemes
+as described in Sects. 2.3 and 2.4 on a 2D Kelvin–Helmholtz
+problem with the initial condition
+ρ = γ,
+
+(82)
+
+
+
+u = M0 1 − 2η(y) ,
+M0
+v=
+sin(2πx),
+10
+p = 1,
+X = η(y),
+
+(83)
+(84)
+(85)
+(86)
+
+where γ = 1.4 and
+
+
+1
+7
+9
+1 + sin 16π(y + 0.25) , for y > − 32
+and y < − 32
+,
+
+2
+
+1,
+7
+7
+for y ≥ − 32 and y ≤ 32 ,
+
+
+η(y) = 1 
+7
+9
+
+1
+−
+sin
+16π(y
+−
+0.25)
+,
+for y > 32
+and y < 32
+,
+
+2
+0,
+otherwise.
+(87)
+The smooth function η(y) provides a resolvable transition between layers moving in opposite horizontal directions. The initial speed of sound is unity, so M0 is a tunable initial Mach number of the shear flow. We discuss solutions with M0 = 10−1 ,
+10−2 , and 10−3 . In Eq. (84), a smooth initial perturbation with an
+amplitude of M0 /10 is included as a velocity component perpendicular to the shear flow. The computational domain, assumed to
+be periodic in both x and y, spans 0 ≤ x ≤ 2, −0.5 ≤ y ≤ 0.5.
+The fact that the transition function η(y) between the shearing layers is smooth8 allows us to compute numerically converged solutions even in the absence of physical viscosity as
+long as the simulations are stopped before the flow field becomes chaotic (see also Robertson et al. 2010; McNally et al.
+2012; Lecoanet et al. 2017; Berlok & Pfrommer 2019). Each of
+the two transitions spans only 1/16 of the domain height and is
+poorly resolved on the coarser grids used in our tests. Therefore,
+we improve the accuracy of the initial cell averages that involve
+η(y) by averaging η(y) over 100 points uniformly distributed in
+the y-range covered by each cell. We measure numerical errors
+with respect to a reference solution computed using PSH reconstruction and the LHLLC flux function on a 8192 × 4096 grid.
+The solution for M0 = 10−2 is shown in Fig. 2 at four points
+in time9 . As the instability grows in amplitude, the sinusoidal
+initial perturbation is rolled up into a series of vortices. Parts of
+the initial shear layers are stretched and become trapped in the
+centres of the vortices. Other parts of the shear layers become
+substantially narrower. We quantify this phenomenon by computing the minimum scale height min(HX ) ≡ 1/ max (|∇X|) of
+the passive scalar X. Figure 3 shows that this quantity drops by
+as much as a factor of 28 between t = 0 and t = 0.8M−1
+0 . At the
+8
+η(y) and its first derivative are continuous but the second derivative
+is not.
+9
+We give the time in units of M−1
+0 such that the same numerical value
+corresponds to the same evolutionary stage of the instability at all three
+initial Mach numbers we use.
+
+Article number, page 9 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+t = 0.2 M0−1
+
+t = 0.4 M0−1
+
+t = 0.8 M0−1
+
+t = 1.6 M0−1
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1.0
+
+X
+Fig. 2. Reference solution to the Kelvin–Helmholtz problem with initial
+Mach number M0 = 10−2 . The solution was computed using PSH reconstruction and the LHLLC flux function on an 8192 × 4096 grid. The
+mass fraction X of the passive scalar is shown at four points in time:
+late in the linear growth of the instability (t = 0.2 M0−1 ), at an early
+stage of non-linear evolution (t = 0.4 M0−1 ), at a stage when the primary vortices have fully formed (t = 0.8 M0−1 ; the final time for all of
+our other Kelvin–Helmholtz simulations), and at a late stage when fine
+threads have formed inside the primary vortices (t = 1.6 M0−1 ). We use
+the same colour scale as in Figs. 4, D.2, and D.1, although 0 ≤ X ≤ 1 in
+the reference solution.
+t = 0.0 M0−1
+
+min(HX ) [cells]
+
+102
+
+t = 0.2 M0−1
+t = 0.4 M0−1
+t = 0.6 M0−1
+
+t = 0.8 M0−1
+min(HX ) ∝ N x
+
+101
+
+100
+
+64
+
+128
+
+256
+
+512
+
+1024
+
+2048
+
+4096
+
+8192
+
+Nx
+Fig. 3. Resolution dependence of the minimum scale height min(HX ) of
+the passive scalar in the Kelvin–Helmholtz problem expressed in units
+of the computational cell width and shown at five points in time. Grid
+resolution is given by the number N x of computational cells along the
+x axis. The initial Mach number is M0 = 10−2 and we use PSH reconstruction and the LHLLC flux function in this series of simulations.
+Once the steepest gradients in X become resolved the minimum scale
+height starts to follow the linear scaling relations shown.
+
+latter point in time, the minimum scale height is only 5.75 computational cells on the 8192 × 4096 reference grid. Extremely
+thin and difficult-to-resolve filaments appear at even later times
+(see Fig. 2). Therefore, we compare the solutions at t = 0.8M−1
+0 ,
+making the problem non-linear and challenging enough but not
+computationally prohibitive. The maximum Mach number in the
+flow field is 1.8M0 at this point in time.
+Figure 4 compares the distributions of the passive scalar in
+simulations with M0 = 10−2 computed on a 128 × 64 grid. The
+steepest gradients are strongly under-resolved on this grid (see
+Fig. 3), which increases the amplitude and visibility of smallArticle number, page 10 of 42
+
+scale artefacts produced by different methods. All of the six
+reconstruction functions lead to extremely diffusive solutions
+with the RUSANOV flux, although high-order methods with
+limiters (PPM84, PPM08, PSH) still preserve steep gradients at
+some places. Numerical diffusion is strongly suppressed with the
+HLLC flux function owing to the explicit treatment of the contact wave in HLLC. The three highest-order methods (PPM84,
+PPM08, PSH) reproduce the structure of the primary vortices
+(c.f. Fig. 2) much more closely than the lower-order methods
+(LIN, LIN+VL, PAR). However, the two PPM methods develop
+secondary instabilities around the primary vortices. This effect,
+not present in the reference solution, occurs also with the LHLLC flux function (see also McNally et al. 2012). The secondary
+instabilities become the dominant source of numerical errors. We
+find that these instabilities tend to grow when excessive velocity
+shear is generated at the grid scale and there is not enough numerical dissipation to suppress their growth. Therefore, the excitation of artificial, short wavelength Kelvin–Helmholtz instabilities is favored on coarser grids, which generate larger shear
+at the grid scale across the poorly resolved slip line, and by less
+dissipative Riemann solvers. For the same reason, simulations
+run with the HLLC solver are more prone to developing secondary instabilities at higher rather than lower Mach numbers, as
+HLLC introduces less numerical diffusion into the system when
+modeling faster flows (see, e.g., the panels for PPM84+HLLC
+in Fig. 4 and Fig. D.1). As the grid is refined, the shear layers are progressively better resolved thus reducing grid scale
+shear and suppressing the growth of the secondary instabilities.
+Not surprisingly, the smooth interiors of the primary vortices
+are best represented with the highest-order method PSH (c.f.
+Fig. 2). Figures D.1 and D.2, respectively, show that the differences between the three flux functions become smaller with
+M0 = 10−1 and much larger with M0 = 10−3 . This is expected
+because the amount of numerical dissipation (relative to the flow
+of interest) introduced by the RUSANOV and HLLC flux functions increases with decreasing Mach number of the flow, see
+Sect. 2.4. With M0 = 10−3 , only the PSH method reproduces
+the basic structure of the primary vortices when combined with
+the HLLC flux. Comparing Fig. 4 with Fig. D.2, we see that the
+LHLLC flux produces results independent of the initial Mach
+number M0 because all of the flows are considerably subsonic.
+All of the methods we test converge to the same flow pattern
+with M0 = 10−2 , see Fig. D.7 for solutions computed on the
+4096 × 2048 grid10 .
+The magnitude of the largest overshoot (or undershoot) in
+the passive scalar is shown in the insets in Figs. 4, D.1, and D.2.
+Thanks to their use of limiters, the LIN+VL, PPM84, PPM08,
+and PSH methods largely eliminate the overshoots, making the
+methods useful for the advection of mass fractions. We observe
+only some accumulation of round-off-level overshoots (up to
+≈ 10−14 ) with LIN+VL, independently of the initial Mach number or grid resolution. The PPM84, PPM08, and PSH methods
+produce small but finite overshoots. At t = 0.8M−1
+0 , the magnitude of the largest overshoots is ≈ 10−4 with PPM84, ≈ 10−2
+with PPM08, and ≈ 10−6 with PSH across all grids and all initial Mach numbers. However, they only occur in a few cells or
+groups of cells scattered across the computational grid, so the
+total mass affected by this effect is negligibly small. Moreover,
+the amplitude of such overshoots, drops to the round-off level in
+many of our simulations as the resolution is increased. Unlim10
+
+Similar plots for all initial Mach numbers and all computational
+grids are available on Zenodo (https://zenodo.org/doi/10.5281/
+zenodo.10280900).
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+ited methods produce substantially larger overshoots, reaching
+8% and 17% for LIN and PAR, respectively. They are the result
+of the dispersion errors characteristic of linear schemes of 2nd
+or higher order, so they are nearly always present around sharp
+structures and affect a much larger amount of mass than the sporadic and isolated overshoots produced by PPM84, PPM08, and
+PSH. The benefits of the hybrid approach in PSH thus become
+obvious – secondary instabilities are suppressed (as compared
+with PPM84 and PPM08) thanks to the absence of limiters for
+dynamic variables while mass fractions, for which limiters are
+used, are well behaved.
+We quantify numerical convergence of all of our methods by
+measuring L1 errors with respect to the reference solution in the
+density ρ, kinetic energy Ek,y associated with motions perpendicular to the initial shear flow, and mass fraction X of the passive
+scalar. We define the relative L1 error for any quantity q as
+1
+L1 = ref
+σ
+
+P N x P Ny
+i=1
+
+j=1
+
+qi, j − qref
+i, j
+
+N x Ny
+
+,
+
+(88)
+
+where qref is the reference solution and the sums run over the
+whole computational grid of N x × Ny cells. The error is normalised using the standard deviation σref of qref . This choice is
+motivated by the fact that density fluctuations are much smaller
+than the mean density in our setup. The reference solution is always re-binned from its original, 8192×4096 grid, by repeatedly
+averaging groups of 2×2 neighbouring cells until the desired grid
+resolution is achieved.
+The L1 errors for the set of simulations with the initial Mach
+number M0 = 10−2 are shown in Fig. 5. We first focus on the
+kinetic energy Ek,y and mass fraction X. The solutions computed
+using the LHLLC flux approach 2nd -order convergence, as expected. Only the PPM84 reconstruction method gives a slight
+decrease in the convergence rate in Ek,y on the finest of our
+grids. The same effect is observed in the sets of simulations with
+M0 = 10−1 (Fig. D.3) and M0 = 10−3 (Fig. D.4). The convergence rate of PPM08 also decreases on very fine grids in the
+latter case. Apart from this, the convergence curves are nearly independent of the initial Mach number with the LHLLC flux (c.f.
+Figs. 5, D.3, and D.4), confirming its low-Mach property. The
+highest-order reconstruction methods usually (but not always)
+produce the smallest errors on a given and sufficiently fine grid.
+The errors differ by up to one order of magnitude, although the
+overall 2D scheme is 2nd -order accurate in all of the cases.
+The magnitude of numerical errors strongly increases when
+we decrease initial Mach number with the non-low-Mach flux
+functions RUSANOV and HLLC. As described above, the spatial structure of errors produced by linear methods differs from
+that produced by methods with limiters. Figures 5, D.3, and D.4
+show that the linear methods LIN, PAR, and for dynamic variables also PSH approach 2nd -order convergence on sufficiently
+fine grids even if the magnitude of the errors is much larger than
+what we obtain with the LHLLC flux function.
+The two PPM methods converge poorly in ρ at low Mach
+numbers (Figs. 5 and D.4). Because the initial density is constant everywhere, all of the density fluctuations are the integrated
+effects of the divergence (or convergence) of the velocity field
+in the continuity equation. The magnitude of the velocity divergence in simulations computed on the 512 × 256 grid is shown
+in Figs. 6, D.5, and D.6. The solutions computed using the LIN,
+PAR, and PSH methods clearly show the structure of the primary vortices with some oscillations in the shear layers and a
+background of relatively weak, large-scale sound waves. On the
+
+other hand, the solutions computed using the PPM84 and PPM08
+methods show a large amount of small-scale “numerical noise”.
+After inspecting the time dependence of these artificial structures11 , we conclude that some of these structures travel with the
+flow while others have the character of small-scale sound waves.
+We believe that both originate from cumulative effects of the limiters switching their local state many times over the time span of
+the simulation12 . The switching can result in rapid changes in the
+magnitude of the discontinuities at cell faces and, consequently,
+in the amount of dissipation applied in the Riemann solver (i.e.
+the numerical flux function). This effect is weakest with the lowdissipation flux function LHLLC but it is still clearly present
+on the 4096 × 2048 grid, see Fig. D.8. The structures disappear
+when we disable the limiters in PPM84 and PPM08 (not shown
+in the figures). We do not observe the fast-propagating, smallscale sound waves with LIN+VL but the method does produce
+thin structures in the velocity divergence around the primary vortices, which follow the flow.
+Overall, the PSH method produces by far the smallest errors
+with the RUSANOV and HLLC flux functions and initial Mach
+numbers M0 ≤ 10−2 (Figs. 5 and D.4). The only exception is
+the poor convergence (or even divergence) in the passive tracer
+X observed with the PSH+RUSANOV combination in simulations with M0 ≤ 10−2 performed on very fine grids. This effect
+is also likely related to the limiters switching their local state
+many times over the time span of the simulation but we did not
+investigate it further.
+3.2. 3D simulations of convection, turbulent entrainment, and
+wave excitation
+
+In this section, we consider a test problem in which a variety
+of complex hydrodynamic phenomena can be captured on the
+same computational grid. These include convective transport of
+energy, turbulent mixing at a convective boundary, and the propagation of internal waves in a stably stratified layer, all of which
+are often encountered in simulations of geophysical and stellar
+hydrodynamics. The initial conditions for this test are adopted
+from the work of Andrassy et al. (2022) and they represent a
+hydrostatic solution of Eq. (2). In particular, the thermodynamic
+conditions in this setup are similar to those found in an oxygenburning shell of a massive star. We map the hydrostatic stratification (see Fig. 7) on an evenly spaced, 3D, Cartesian grid defined
+by (x, y, z) ∈ [−1, 1] × [1, 3] × [−1, 1]. The gravitational acceleration points downward in the y-direction,
+gy = g0 fg (y)y−5/4 ,
+
+(89)
+
+where g0 = −1.414870 and
+î
+Ä
+äó©
+ ¶
+1
+1
+1
+
+, for 1 ≤ y < 1 + 16
+,
+ 2 1 + sin 16π y − 32
+1
+1
+fg (y) = 1,¶
+for 1 + 16 ≤ y ≤ 3 − 16
+
+ 1 1 + sinî16πÄy − 1 äó©, for 3 − 1 < y ≤ 3.
+2
+32
+16
+
+(90)
+
+As in Andrassy et al. (2022), we work with rescaled quantities
+such that the speed of sound and the density at the base of the
+11
+
+See an animation available on Zenodo (https://zenodo.org/
+doi/10.5281/zenodo.10280900).
+12
+The animations show high values of the velocity divergence developing early on where the second derivative of the transition function
+η(y) (Eq. (87)) is discontinuous. This higher-order discontinuity may
+influence the behaviour of limiters.
+Article number, page 11 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+box are taken as units of velocity and density, and the thickness
+of the convective oxygen shell as unit of length. A detailed list
+of units with the associated values can be found in Table 1 of
+Andrassy et al. (2022).
+The initially hydrostatic stratification is described by a
+piecewise-polytropic relation in the form
+
+1
+,
+γ,
+for 1 ≤ y < 2 − 16
+∂ ln p  0
+1
+1
+= γ0 + η(y)(γ1 − γ0 ), for 2 − 16 ≤ y ≤ 2 + 16
+, (91)
+∂ ln ρ 
+1
+γ1 ,
+for 2 + 16 < y ≤ 3,
+where γ0 = 5/3, γ1 = 1.3, and η(y) is a smooth function,
+
+1
+for 1 ≤ y < 2 − 16
+,
+0,
+1
+1
+1
+η(y) = 2 [1 + sin(8πy)], for 2 − 16 ≤ y ≤ 2 + 16
+,
+
+1
+1,
+for 2 + 16 < y ≤ 3.
+
+(92)
+
+The adiabatic index is γ = γ0 . In this work, we assume periodic boundary conditions in the horizontal x- and z-direction,
+whereas reflecting, stress-free boundaries are used in the vertical y-direction. This problem is set up such that turbulent convective flows develop in the lower half of the domain, which is
+initially adiabatic, while internal gravity waves are free to propagate in the upper, stably stratified layer. To keep track of the
+position of the upper convective boundary, at t = 0 we fill the stable layer with a passive scalar whose abundance smoothly turns
+to 0 across the upper boundary of the adiabatic region according
+to X = η(y).
+In order to drive the convection, we include a timeindependent heat source that continuously injects energy into the
+system close to the base of the box. The rate of energy released
+per unit volume,
+
+q̇ sin(8πy) sin(4π∆x) , for 1 ≤ y < 1 + 1 ,
+0
+8
+q̇(y) =
+(93)
+(4π∆x)
+0,
+for 1 + 1 ≤ y ≤ 3,
+8
+
+is added to the right-hand side of Eq. (2) as
+ 
+0
+0
+ 
+0
+S 7→ S +   .
+0
+q̇
+0
+
+(94)
+
+In the work of Andrassy et al. (2022), the amplitude of the heat
+source was q̇0 = 3.795720 × 10−4 , which gave rise to convective
+flows with a root-mean-square Mach number Mrms ≈ 0.04. To
+make the problem more challenging, here we decrease q̇ by a
+factor of ten, so q̇0 = 3.795720 × 10−5 . The lower heating rate,
+according to the well-established M ∝ q̇1/3
+0 relation (see, e.g.,
+Woodward et al. 2014; Käpylä 2021; Horst et al. 2021), should
+drive convection at Mrms ≈ 0.02.
+In this setup, internal gravity waves (IGWs) are excited by
+the interaction of the convective flows with the bottom boundary
+of the stably stratified layer. The wavelength of IGWs in the direction of gravity becomes shorter when the waves are excited
+at progressively lower temporal frequencies (Sutherland 2010).
+At the heating rate we consider, the most prominent IGWs that
+originate at the convective boundary are only barely spatially resolved on the coarsest of our grids with 1283 cells. Therefore,
+we decide not to decrease q̇0 even further for these simulations
+because it would give rise to convective flows with lower characteristic frequencies and lead to the generation of unresolved
+Article number, page 12 of 42
+
+IGWs in the stable layer. Due to the fully compressible nature
+of SLH, we also expect short-wavelength sound waves to be generated, although at much lower amplitudes than those of IGWs
+at the typical Mach numbers encountered in this test problem
+(Lighthill 1952).
+As done for the test described in Sect. 3.1, here we run simulations for each of the 18 considered combinations of Riemann
+solvers and spatial reconstruction schemes. To judge the numerical convergence of our results, each combination of methods is
+run on grids with 1283 and 2563 cells. Additionally, we run a single simulation on a 5123 grid using the LHLLC Riemann solver
+and the PAR reconstruction scheme, which we consider the reference solution for this test problem. However, because of the
+chaotic nature of the turbulent flows that arise in the convective
+layer, convergence is not expected in the exact flow morphology,
+so we do not compute L1 errors as done in Sect. 3.1. Instead,
+we analyze the convergence of the numerical results in terms of
+ensemble-averaged quantities that are representative of the dynamical properties of the system, such as kinetic energy spectra
+computed in the convective and stable layers.
+To break the initial symmetry, we add a perturbation to the
+hydrostatic density stratification in the form
+∆ρ = 1.1×10−5
+
+q̇(y)
+[sin(3πx)+cos(πx)][sin(3πz)−cos(πz)]. (95)
+q̇0
+
+The subsequent evolution of the system and the development of
+convection is shown in Fig. 8. The density perturbation, alongside the action of the heat source, generate packets of fluid
+with higher entropy content than the adiabatic surroundings. The
+packets of hot and low-density material buoyantly rise in the adiabatic stratification until they reach y ≈ 2. At this height, the temperature stratification turns subadiabatic and the buoyant force
+acting on the rising plumes changes sign, forcing them to overturn. IGWs excited at the bottom boundary of the subadiabatic
+region propagate upward in the stratification (with characteristic
+Mach numbers in the range from 0.005 to 0.01) and are subsequently reflected at the top boundary of the domain. Shear instabilities break the large-scale buoyant structures that arise in
+the adiabatic layer and initiate the cascade of kinetic energy toward smaller scales. Turbulent convection fully develops after
+approximately one convective turnover time scale, τconv = 133
+time units, which we define according to
+τconv =
+
+2Lconv
+.
+⟨|V|rms ⟩
+
+(96)
+
+In Eq. (96), the root-mean-square convective speed is averaged
+over several convective turnover time scales and Lconv = 1 is
+taken as representative of the vertical extent of the convection
+zone. In our reference simulation, the root-mean-square Mach
+number in the convection zone is13 Mrms = 0.019±0.001, which
+is in agreement with the value predicted by the Mrms ∝ q̇1/3
+0 scaling relation. All simulations are run until tmax = 32τconv to have
+a proper coverage of the dynamical evolution of the system and
+to compute meaningful time averages needed for the following
+analysis.
+3.2.1. Flow morphology and spatial kinetic energy spectra
+
+In Fig. 9, we show snapshots of the Mach number taken at
+the vertical plane z = 0, obtained at the final time t = 32τconv
+13
+
+The error bar represents one standard deviation computed over the
+last 20 convective turnovers.
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+with all the methods tested here. Although all panels show results computed using the same grid resolution (2563 ), there is a
+vast difference between the methods in terms of effects induced
+by numerical dissipation. With the RUSANOV flux, convection
+mainly happens in the form of large-scale plumes and IGWs are
+barely excited in the stable layer except when high-order methods such as PSH or PPM08 are used to reconstruct the Riemann
+states. Smaller-scale structures typical of turbulent flows become
+progressively more visible in the convection zone with higherorder reconstruction methods and less dissipative solvers. Internal waves with progressively shorter wavelengths also tend to be
+more visible in the stable layer with less dissipative methods.
+The effects of the numerical dissipation on the properties of
+the flow are better quantified in Fig. 10 and 11, where we show
+the power spectra of kinetic energy extracted from a horizontal plane in the middle of the convection zone (y = 1.5) and stable layer
+» (y = 2.5) as functions of the horizontal wavenumber,
+kh = k2x + kz2 . We compute k x and kz as
+ö
+ù
+(
+m,
+for 0 ≤ m ≤ Nx2−1 ,
+ö
+ù
+kx =
+(97)
+N x −1
+−N x + m,
+< m < Nx ,
+2
+ù
+ö
+(
+n,
+for 0 ≤ n ≤ Nz2−1 ,
+ö N −1 ù
+kz =
+(98)
+z
+−Nz + n,
+< n < Nz ,
+2
+where ⌊.⌋ represents the floor function and N x and Nz are the
+numbers of cells in the x− and z−direction, respectively. The
+spectra are averaged over the time interval t ∈ (10τconv , 32τconv ).
+In the convection zone, all of the curves approximately agree
+with the Kolmogorov scaling law (kh−5/3 ) on some intermediate
+scales. We notice that the kinetic energy spectra shown in Fig. 10
+present a pile-up of kinetic energy at the bottom of the inertial range. This phenomenon, also known as “bottleneck effect”,
+is often observed both in hydrodynamic simulations (see, e.g.,
+Dobler et al. 2003) and experimental studies (see, e.g., Küchler
+et al. 2019) of turbulent flows. The extent of the inertial range
+of the turbulent kinetic energy spectrum greatly differs from
+method to method. With a fixed spatial reconstruction scheme,
+the kinetic energy spectrum obtained with LHLLC enters the viscous sub-range (where the kinetic energy of the turbulent eddies
+is dissipated into internal energy of the gas) at higher wavenumbers as compared to both HLLC and RUSANOV. Reconstruction schemes based on slope limiters are characterized by shallower spectra in the viscous sub-range than those generated by
+unlimited schemes. In the stable layer (see Fig. 11), RUSANOV
+and HLLC generate much weaker IGWs than the reference run
+even on large scales, except when used in combination with PSH.
+Both in the convective and stable layers, all spectra converge to
+the reference solution if the order of the spatial reconstruction
+method or the grid resolution are increased.
+3.2.2. Turbulent entrainment at the convective boundary
+
+The overturning of the convective flows at the upper convective
+boundary gives rise to a variety of hydrodynamic processes (including shear instabilities, convective overshoot, and breaking of
+surface waves) that lead to the entrainment of material from the
+upper, stably stratified layer into the convection zone. The conglomeration of these processes is known in the literature as “convective boundary mixing” (see, e.g., Meakin & Arnett 2007; Andrassy et al. 2020; Horst et al. 2021; Anders & Pedersen 2023)
+and it increases the size of convective regions over time. As part
+of our comparison study, we quantify the impact of the choice
+
+of a specific combination of methods in Godunov-type schemes
+on the evolution of the convective boundary. At any given point
+in time, we assume that the vertical coordinate of the boundary
+between the convective and stable layer, ycb , is the position at
+which the horizontal average of the passive scalar X takes the
+value
+X̃ =
+
+1
+(Xmin + Xmax ),
+2
+
+(99)
+
+where Xmin and Xmax are the minimum and maximum values of
+X, respectively. Such a choice for ycb is justified by the fact that
+the initial abundance of the passive scalar, X, smoothly transitions from 0 to 1 at y ≈ 2, which is the boundary of the initially
+adiabatic layer where convection sets in first. The time evolution of ycb is shown in Fig. 12 for all of our combinations of
+methods. We note that PPM-based methods used in combination with RUSANOV do not show signs of numerical converge
+to the reference solution. Also, the other reconstruction schemes
+used with RUSANOV seem to accelerate the mixing at the convective boundary with respect to the reference run, especially
+on the 1283 grid. In reality, this is an artifact of the method
+used to estimate the position of the convective boundary ycb .
+In fact, because RUSANOV does not resolve shear or contact
+waves (see Sect. 2.4), the initial gradient in X at the convective boundary is further smoothed out by the effects of numerical dissipation. When convection fully develops, it mixes the
+passive scalar that has diffused inside the convection zone and
+homogenizes its abundance, thus shifting the formal position of
+X = X̃ outward. This effect is further enhanced with the most
+diffusive reconstruction methods tested here. Therefore, with the
+RUSANOV solver, entrainment of material from the stable to
+the convective layer is mostly determined by numerical diffusion
+rather than turbulent mixing and the distribution of the passive
+tracer is not representative of ycb . On the other hand, all of the
+other methods tested here quickly achieve numerical converge
+to the reference solution with increasing grid resolution, the order of the reconstruction scheme, or by using progressively less
+dissipative Riemann solvers. Among the data sets obtained with
+the six reconstruction schemes, the maximum relative deviation
+of ycb from the reference solution at the final time is 20% and
+15% with HLLC on the 1283 and 2563 grids, respectively, while
+with LHLLC it decreases from 12% to 5% with increasing grid
+resolution.
+3.2.3. Shape of the convective boundary
+
+The properties of the upper convective boundary are also studied
+by means of horizontal averages in the Brunt-Väisälä frequency,
+which determines both the spectrum of convectively driven
+IGWs (see, e.g., Sutherland 2010) and the rate of mass entrainment from the stable layer according to the bulk-Richardsonnumber mixing model (see, e.g., Meakin & Arnett 2007; Andrassy et al. 2020; Rizzuti et al. 2023). Here, the Brunt-Väisälä
+frequency is computed as
+NBV =
+
+ï
+
+−
+
+ò1/2
+gy
+(∇ad − ∇)
+,
+Hp
+
+(100)
+
+where
+∇=
+
+d ln T
+,
+d ln p
+
+(101)
+Article number, page 13 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+T = p/ρ is the temperature of the gas14 , H p = − (d ln p/dy)−1
+is the local pressure scale height, and ∇ad = 0.4 is the adiabatic temperature gradient. We average the profiles of NBV over
+t ∈ (30τconv , 32τconv ) so that the change in the position of the convective boundary is smaller than its width. At the same time, the
+chosen averaging time interval is long enough to partly suppress
+the statistical fluctuations induced by the turbulent nature of the
+convective flows. The results are shown in Fig. 13. As convection sets in and entrains material from the upper, stably stratified
+layer, it steepens the vertical entropy gradient ds/dy across the
+2
+convective boundary. Therefore, due to the NBV
+∝ ds/dy proportionality (see, e.g., Maeder 2009), the vertical profile of the
+Brunt-Väisälä frequency develops a spike in the region close to
+t=0
+the convective boundary and it quickly approaches NBV,
+in the
+rest of the stable layer. The fact that, in this setup, NBV is characterized by large vertical gradients near the convective boundary
+(at least with HLLC and LHLLC), makes this quantity particularly suited to measure the amplitude of numerical undershoots
+or overshoots generated by the methods included in our study. In
+the regions right above the position of the spike in NBV , limited
+reconstruction methods (i.e., LIN + VL, PPM08, and PPM08)
+t=0
+do not generate undershoots below the curve NBV,
+except for
+dynamical fluctuations smaller than 2% induced by the flows
+in the stable layer. On the other hand, reconstruction schemes
+that do not use limiters for dynamic variables (i.e., LIN, PAR,
+and PSH) produce undershoots whose amplitude is considerably
+larger than that of the dynamical fluctuations. The values of the
+t=0
+largest undershoots relative to NBV,
+are shown in the insets of
+Fig. 13. Overall, the amplitude of the undershoots increases with
+the order of the unlimited reconstruction method, and it ranges
+from ≈ 7% with LIN to almost 40% with PSH. The profiles
+of NBV obtained on the 1283 grid, not shown here (but available on Zenodo15 ), reveal that the amplitude of the undershoots
+slightly increases from the 1283 to the 2563 grid for LIN and
+PAR, although the undershoot region becomes narrower on progressively finer grids. We note that, despite the large-amplitude
+undershoots generated by some of our unlimited reconstruction
+methods, such numerical errors do not have any significant impact on the growth of the convection zone, as shown in Fig. 12.
+Nonetheless, they could still affect the frequency spectrum of
+IGWs in the stable layer, although the spatial spectra from the
+stable layer (see Fig. 11) do show any such effect and converge
+to the reference solution. If numerical undershoots are largely
+to be avoided whilst generating a steep convective boundary,
+PPM84 + LHLLC or PPM08 + LHLLC could be the methods of
+choice.
+3.3. Frequency power spectra
+
+Finally, in Fig. 14, we show the frequency power spectrum of
+the vertical velocity component, v, obtained in the middle of
+the stable layer for all of our 18 Godunov-type schemes. In
+particular, the frequency power spectra shown in Fig. 14 are
+Fourier projections of an array16 containing the value of v at
+(x, y, z) = (−0.2, 2.5, −0.2) at each time step. There is a clear
+distinction between the frequency range corresponding to the
+regime of IGWs (ω < NBV ), where all spectra are almost flat,
+and the high-frequency range (ω > NBV , where only sound
+
+waves are non-evanescent) in which the spectra are characterized by a steep decrease in power (although non monotonic) toward higher frequencies. The forest of lines visible at frequencies in the range from 1 to 50 correspond to the resonant pressure
+modes of the cavity as predicted by the linear wave theory in the
+Cowling approximation (Aerts 2021, see also Fig. 15). In the frequency regime of IGWs, the power spectrum seems to converge
+to the reference solution when increasing the grid resolution or
+when using less dissipative Riemann solvers. A more quantitative analysis of the IGW spectrum would require substantially
+longer simulations, which would benefit from more time averaging as well as reach higher frequency resolution.
+On the other hand, the high-frequency domain is well resolved even in simulations run on the 1283 grid, and differences between the spectra are clearly visible. Overall, there is
+a large spread in power (by almost 20 orders of magnitude at the
+Nyquist frequency) among the different methods tested in our
+study, which does not decrease with grid resolution. Therefore,
+numerical convergence is not achieved at high frequencies. We
+note that the spectra with the highest power density in the highfrequency range are always those obtained with limited reconstruction methods, in particular PPM84 and PPM08, while unlimited reconstruction methods tend to generate much “quiter”
+spectra and that are closer to the reference solution. In the simulations of the Kelvin–Helmholtz instability shown in in Sect. 3.1,
+we find that a power excess in high-frequency, short-wavelength
+sound waves is generated by the complex limiting procedure performed in PPM84 and PPM08 to reconstruct the Riemann states
+at cell interfaces. In this setup, a similar phenomenon is likely
+responsible for generating an acoustic power excess close to the
+Nyquist frequency, where the spread between the spectra is maximum. The power excess, however, is still large down to frequencies similar to the that of the fundamental oscillation mode of
+the cavity ω0 = 1.1. Also, PPM-based methods used in combination with HLLC excite much stronger resonant lines than
+those generated with LHLLC, and their peak power density is
+almost as high as the flat part of the spectrum associated with
+IGWs. When used with PPM84, both RUSANOV and LHLLC
+produce a broad feature in the frequency spectrum whose peak is
+at ωpeak ≈ 50 and 100 on the 1283 and 2563 grids, respectively.
+If these were sound waves, their wavelength λ would be
+λ=
+
+2π
+csound (y = 2.5) ≈ 2.7∆x,
+ωpeak
+
+(102)
+
+which is close to the Nyquist frequency in space. Therefore, such
+a feature in the spectrum may be caused by odd-even cell decoupling traveling at the local speed of sound. Additional peaks
+are observed at even higher frequencies than the frequency of
+the least resolvable sound wave on the grid (with a wavelength
+of two cells), so these are most likely numerical artifacts. Tests
+performed with lower CFL factors of 0.4 and 0.2 show that the
+amplitude of these peaks is slightly reduced when using shorter
+time steps in the simulation, but the level of the continuum in the
+power spectrum remains essentially unaltered. In light of these
+results, we advise against using PPM-based methods in simulations of sound generation by low-Mach-number turbulence.
+
+14
+
+Here, we assume that the gas constant is unity.
+https://zenodo.org/doi/10.5281/zenodo.10280900
+16
+The array of the values of v obtained at each time step is multiplied
+by the Hanning window function to reduce the amplitude of the discontinuities in the signal at the boundaries of the time domain.
+15
+
+Article number, page 14 of 42
+
+4. Performance metrics
+After proving that all of the methods tested in our study converge
+to the correct solution for most of the physical quantities of inter-
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+est17 , we can now search for the most efficient way to generate
+a numerical solution at the desired accuracy. In principle, one
+could use the L1 errors computed from the simulations of the
+Kelvin–Helmholtz instability (see Sect. 3.1) to find the resolution of the grid on which the scheme achieves a given level of
+accuracy. Then, the computational cost of the simulation run on
+such a grid can be estimated if the wall-clock time spent by the
+program to perform a single cell update is known. Here, we prefer to use the results from the test problem involving turbulent
+convective flows and wave excitation (see Sect. 3.2), which is
+more challenging than the Kelvin–Helmholtz instability test and
+much closer to a real application of stellar hydrodynamics. However, due to the chaotic nature of the turbulent flows that develop
+in the convection zone, convergence in the L1 error norm cannot
+be achieved. Therefore, rather than measuring the computational
+cost per fixed accuracy in the sense of L1 errors, we opt to measure the computational cost of a simulation run with a specific
+combination of numerical methods that achieves a given level of
+effective resolution of the turbulent flows, Neff . We estimate the
+effective resolution obtained on a given grid with N x3 cells as
+Neff (N x ) =
+
+2Lconv
+,
+λvis (N x )
+
+(103)
+
+where λvis (N x ) is a characteristic dissipation length scale in the
+turbulent kinetic energy spectrum. In high-resolution schemes,
+the amount of kinematic viscosity introduced into the system is
+not fixed, but rather its value depends on the local dynamical
+properties of the flow and it is often found to be a steep function
+of the spatial wavenumber (see, e.g., Porter & Woodward 1994).
+Therefore, λvis (N x ) cannot be defined uniquely. Here, we choose
+λvis (N x ) ≈
+
+2Lconv
+kh,10 (N x )
+
+(104)
+
+as a representative value for the dissipation length scale, with
+kh,10 (N x ) being the spatial wavenumber at which the kinetic
+power spectrum rescaled by the Kolmogorov law drops by one
+dex from its maximum. In this approximation, the effective resolution is simply given by
+Neff (N x ) = kh,10 (N x ).
+
+(105)
+
+To perform a more precise measurement of Neff (N x ), both the
+array of wavenumbers and of the kinetic energy spectrum are
+linearly interpolated on a finer grid. The values of the effective
+resolution (rescaled by the grid resolution N x ) obtained in the
+simulations included in our study are collected in Table 2. There
+is a clear trend toward higher effective resolution when using
+progressively higher-order reconstruction methods or less dissipative Riemann solvers.
+By combining the values of Neff (N x ) and the average wallclock time δt(N x ) spent by the program to perform a single cell
+update, shown in Table 3, it is possible to estimate the computational effort required by each combination of numerical options
+to achieve the effective resolution of PPM08 + LHLLC18 as
+Å
+ã−4
+Neff (N x )
+δt(N x )
+. (106)
+Θ(N x ) =
+δt(N x )PPM08+LHLLC Neff,PPM08+LHLLC (N x )
+
+Equation (106) is rescaled such that the cost of the simulation run
+with PPM08 + LHLLC on any given grid is unity. All values of
+Θ(N x = 128) and Θ(N x = 256) are shown in Table 4. The spread
+of almost four orders of magnitude in the relative computational
+cost among the different methods is due to the steep dependence
+of Θ(N x ) on Neff (N x ), which varies by as much as a factor of
+10 (see Table 2). On the other hand, Θ(N x ) only scales linearly
+with δt(N x ), which in our simulations varies at most by a factor
+of ≈ 3 (with LIN + RUSANOV and PPM84 + LHLLC achieving the lowest and highest wall-clock time per cell-update, respectively). The most expensive combination of methods among
+those tested in our study (in terms of computational cost per
+fixed resolving power) is LIN + VL + RUSANOV, ∼1000 times
+as expensive as PPM08 + LHLLC. The strong numerical dissipation generated by RUSANOV leads to very poor performance
+of the finite-volume scheme even when used in combination with
+PPM-based reconstruction methods. Only with the unlimited
+PSH method such a flux function is capable of achieving acceptable performance (Θ(N x ) ≈ 4). When the reconstruction scheme
+is kept the same, using progressively less dissipative Riemann
+solvers decreases the cost of reaching the same effective resolution. At the typical Mach numbers encountered in the convection
+zone (M ≈ 0.02), the combination of HLLC and second-order
+reconstruction schemes or PAR is considerably more expensive
+than PPM08 + LHLLC (Θ(N x ) in the range from 10 to 30). The
+performance of the scheme increases when HLLC is used with
+PPM-based reconstruction schemes (Θ(N x ) in the range from 2
+to 6) and it is even higher than that of PPM08 + LHLLC when
+coupled to PSH. PSH + LHLLC is the most performant method
+on both grids according to the chosen metric. Overall, the computational cost of the finite-volume scheme is considerably reduced when using the low-dissipation solver (by a factor from 2
+to 10 with respect to a scheme using HLLC and the same spatial
+reconstruction method). The relative performance of the scheme
+only varies slightly when LHLLC is used in combination with
+reconstruction methods less accurate than PSH, with the worst
+performance being achieved by LIN + VL (Θ(N x ) ≈ 3).
+We note that, for most methods, the value of Θ(N x ) sensibly
+increases (by as much as a factor of ≈ 2) from the 1283 to the
+2563 grid. Such differences are due to the small but systematic
+decrease of the rescaled effective resolution Neff (N x )/N x with increasing the grid resolution (this behavior is also confirmed by
+the reference solution computed on the 5123 grid, see Table 2).
+Although the differences observed in Neff (N x )/N x among the two
+grids are at most 20%, they are significantly amplified after applying the steep scaling relation between Θ(N x ) and Neff (N x ).
+However, this effect is negligible if compared to the large spread
+obtained in the values of Θ(N x ) on a given grid. Furthermore, we
+stress that our measure of Θ(N x ) is based on a crude approximation of effective resolution of the turbulent flows, so the values
+provided in Table 4 should only be taken as estimates of the relative performance of different Godunov-type methods in simulations of turbulent convection. The measurements of the absolute
+performance provided in Table 3, which are needed to estimate
+Θ(N x ), may also depend on the parallelization strategy and the
+number of cores used to run the simulations, especially for the
+methods that require many ghost cells (e.g., PPM08 and PSH)
+and are therefore characterized by higher communication costs.
+
+17
+
+A prominent example of a nonconvergent numerical solution is the
+frequency power spectrum of sound waves in the test problem of turbulent convection and mass entrainment shown in Sect. 3.2.
+18
+In the following expression, we make use of the fact that the complexity of a 3D, Godunov algorithm, such as that implemented in SLH,
+scales with N x4 , with N x being the number of grid cells per dimension.
+
+5. Summary and conclusions
+High-resolution, finite-volume schemes are popular methods
+for simulating the behaviour of astrophysical fluids. There is
+a wide range of spatial-reconstruction schemes, numerical flux
+Article number, page 15 of 42
+
+A&A proofs: manuscript no. godunov_performance
+Table 2. Effective resolution Neff (N x ) as defined in in Sect. 3.2 for
+all of the 18 Godunov-type methods tested in our study on grids with
+N x = 128 and N x = 256 cells per dimension. Here, all numbers are given
+as a percentage of the grid resolution N x for an easier comparison between different grids. In this metric, the rescaled effective resolution of
+the reference run (PAR + LHLLC + 5123 ) is 24.43.
+
+128
+
+3
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+6.21
+5.24
+7.04
+10.62
+14.21
+20.47
+
+14.45
+13.53
+16.68
+24.15
+28.42
+37.24
+
+24.68
+21.97
+29.05
+31.47
+33.85
+49.22
+
+2563
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+5.47
+4.38
+6.35
+10.10
+13.55
+19.90
+
+12.61
+11.08
+14.28
+21.23
+27.00
+35.08
+
+23.30
+19.75
+26.16
+29.06
+32.02
+47.00
+
+Table 3. Mean wall-clock time spent by the program to advance the solution by one time step with RK3 in a single cell of the computational
+grid, in units of µs. The numbers provided in the tables are averages
+of five measurements, each of which is obtained by evolving the setup
+described in Sect. 3.2 for 100 steps. Relative errors in the averages (in
+the sense of 1σ) are smaller than 2% in all cases. Every simulation run
+for this analysis is MPI parallelized using grids with 323 cells per task.
+Computations are performed on 2.3 GHz Intel Xeon, Skylake-based
+processors.
+
+1283
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+1.47
+1.57
+1.47
+4.12
+3.57
+2.01
+
+1.68
+1.80
+1.74
+4.30
+3.75
+2.36
+
+1.70
+1.89
+1.78
+4.31
+3.83
+2.41
+
+2563
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+1.60
+1.73
+1.60
+4.23
+3.79
+2.24
+
+1.73
+1.87
+1.81
+4.40
+4.03
+2.47
+
+1.77
+1.88
+1.86
+4.47
+4.00
+2.52
+
+functions and time-integration methods that can be combined
+into a numerically stable and robust, finite-volume scheme. Focusing on subsonic flows, we have analysed the accuracy and
+computational cost of all possible combinations of six spatialreconstruction schemes and three numerical flux functions, i.e.
+18 methods in total. The numerical solution was marched in time
+with a semi-discrete scheme based on a third-order Runge–Kutta
+method. This choice was motivated by our focus on the spatial
+accuracy of the schemes and the related need to suppress timestepping errors.
+We consider two main test problems. The first is a Kelvin–
+Helmholtz instability problem, in which the initial shear flows
+have Mach numbers of 10−1 , 10−2 , and 10−3 . We use a smooth
+Article number, page 16 of 42
+
+Table 4. Relative computational cost of each Godunov-type method
+considered in this study to achieve the same effective resolution as the
+PPM08 + LHLLC combination (Θ, see Eq. (106)) in the simulations
+described in Sect. 3.2. Here all numbers are rounded to two significant
+figures.
+
+1283
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+340
+710
+210
+110
+30.0
+3.90
+
+13.0
+18.0
+7.70
+4.30
+2.00
+0.42
+
+1.60
+2.80
+0.86
+1.50
+1.00
+0.14
+
+2563
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+470
+1200
+260
+110
+30.0
+3.80
+
+18.0
+33.0
+11.0
+5.70
+2.00
+0.43
+
+1.60
+3.30
+1.00
+1.60
+1.00
+0.14
+
+initial condition to make it possible to obtain numerically convergeable solutions to the inviscid Euler equations at a fixed
+point in time in the non-linear phase of the instability. We characterise the accuracy of the solutions by (i) performing a qualitative assessment of the spatial structure of the solutions and (ii) by
+measuring L1 errors with respect to a reference solution obtained
+on a fine grid of 8192 × 4096 cells.
+The low-Mach flux function LHLLC is found to be much
+less dissipative and much more accurate than the HLLC and RUSANOV flux functions at the two lowest Mach numbers considered. Even though the overall 2D numerical scheme is 2nd -order
+accurate, the errors produced by different spatial reconstruction
+schemes span as much as an order of magnitude. Unlimited
+reconstruction schemes of increasing order, up to 7th , provide
+progressively more accurate results when the solution is sufficiently well resolved. However, these schemes are of limited
+use for the advection of mass fractions due to the oscillations
+and overshoots they produce around discontinuities. This issue is
+largely eliminated by the use of limiters in the schemes LIN+VL,
+PPM84, and PPM08. However, we find that the switching behaviour of the limiters introduces spurious structures and smallscale sound waves to the solutions, which severely reduce the
+accuracy of the methods when applied to slow flows. Our hybrid
+method PSH, which combines unlimited, 7th -order reconstruction for dynamic variables with PPM08 for mass fractions, is
+found to provide the most accurate solutions in nearly all of our
+simulations of the Kelvin–Helmholtz instability.
+Our second test problem, chosen to be as close as possible
+to practical applications in the dynamics of stellar interiors, involves stratified turbulent convection generating waves in and
+entraining mass from an overlying stably stratified layer. The
+typical Mach number of the convection is ≈ 0.02. The turbulent nature of the convective flow makes the solutions chaotic
+but space- and time-averaged quantities can still be meaningfully
+compared between different simulations. We run the simulations
+on grids of 1283 and 2563 cells with one additional simulation
+on a 5123 grid serving as a reference solution.
+Qualitatively speaking, the solutions match the trends seen in
+the simulations of the Kelvin–Helmholtz instability, i.e. combinations of the least dissipative flux functions with the highest-
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+order reconstruction schemes provide the highest resolving
+power in both the convective and stable layers. Spatial spectra of
+kinetic energy computed in the convective and stable layers converge toward the reference solution with any of the 18 methods
+but the least dissipative combinations (especially PSH+LHLLC)
+are much closer to the reference solution than the most dissipative ones (especially LIN+VL+RUSANOV). The spatial spectrum in both layers obtained with PSH+LHLLC on a 2563 grid
+is essentially the same as that with PAR+LHLLC on a 5123 grid.
+The growth rate of the convective layer converges upon grid
+refinement with all 6 reconstruction schemes and both the HLLC
+and LHLLC flux function but the convergence is significantly
+faster with the low-Mach flux function LHLLC. The RUSANOV
+flux function produces extremely viscous flows and large deviations from the reference solution in terms of the position of the
+upper convective boundary.
+We show that schemes that do not use limiting for dynamic
+variables (LIN, PAR, PSH), unlike those that do (LIN+VL,
+PPM84, PPM08), produce overshoots in the Brunt-Väisälä frequency at the relatively sharp convective boundary. The magnitude of the overshoots increases with increasing order of accuracy of the method, as expected. Neither the growth rate of the
+convective layer, nor the temporal and spatial spectra of internal
+gravity waves are affected by this phenomenon in our simulations but we recommend careful testing when such high-order
+methods are applied to other setups or used to derive quantities
+not investigated here.
+Temporal spectra of the vertical component of velocity in
+the stable layer show that all six reconstruction schemes produce
+qualitatively similar, flat and featureless spectra in the regime of
+internal gravity waves. On the other hand, the spectra of pressure (i.e. high frequency) waves are sensitive to the choice of
+the reconstruction scheme even with the low-Mach flux function
+LHLLC. The spectra also reinforce our conclusions based on
+the Kelvin–Helmholtz problem that methods that apply limiters
+to dynamic variables generate much more acoustic “noise” than
+methods that do not. This includes the popular methods PPM84
+and PPM08. Although we do not know what the acoustic spectrum in our problem should look like, we show that the frequencies of vertical resonant modes agree with 1D linear wave theory.
+Finally, we use the steep drop-off of the spatial kinetic energy spectra in the convective layer close to the grid scale to define a measure of effective resolution. Rescaling the wall-clock
+time of our 1283 and 2563 simulations, we estimate the computational cost of matching the same effective resolution using
+our 18 methods. The cost is found to span almost four orders of
+magnitude. The largest cost reduction comes from choosing the
+least dissipative flux function, which is LHLLC in our study. We
+show that the reconstruction schemes PSH, PAR, and PPM08, in
+order of increasing cost, are the cheapest at the same effective
+resolution.
+Our study demonstrates that it is generally advisable to use
+low-dissipation Riemann solvers in Godunov-type finite-volume
+schemes for simulating low-Mach-number flows. The low-Mach
+fix ϕ in Eq. (76) can easily be implemented in any HLLC-type
+scheme without affecting the absolute performance of the code,
+and it reduces the amount of computation required to achieve
+the same accuracy as HLLC by a factor ranging from 2 to
+10 at typical Mach numbers of ≈ 0.01. At Mach numbers of
+≈ 10−4 or ≈ 10−3 , like those encountered in the convective cores
+of main sequence stars, the usage of a low-Mach solver decreases the computational cost per fixed accuracy with respect
+to a conventional Riemann solver by even larger factors (Leidi
+et al. 2022). Although low-dissipation Riemann solvers such as
+
+LHLLC bring clear advantages in simulations of subsonic flows
+when used in Eulerian codes, their robustness and accuracy properties in quasi-Lagrangian, moving-mesh schemes still has to
+be verified. We note that such schemes hold promise for a particularly significant improvement because mesh motions aim at
+reducing advection errors by minimizing the velocities relative
+to the cell interfaces. This naturally leads to low-Mach-number
+flows in the comoving frame, which are better modeled by lowMach-number Riemann solvers. We are currently testing an implementation of the LHLLC/D solvers of Minoshima & Miyoshi
+(2021) in the moving-mesh MHD code AREPO (Springel 2010),
+which we will report in a forthcoming study.
+On the other hand, the choice of the spatial reconstruction
+scheme depends on the physical application of interest. Overall,
+second-order reconstruction methods lead to the generation of
+considerably more inaccurate results than higher-order schemes
+when the Mach number of the flow is low. If numerical overshoots have to be suppressed whilst retaining high resolving
+power, PPM84 and PPM08 should be the methods of choice.
+However, higher-order unlimited reconstruction methods should
+be preferred over PPM-based methods in simulations of sound
+wave generation by subsonic turbulence because they generate
+much less numerical “noise” in the acoustic spectrum. Less oscillatory alternatives to the hybrid PSH method, such as the 3th order piecewise parabolic hybrid (PPH) or the 5th -order piecewise quartic hybrid (PQH) methods described in Appendix A,
+could offer the best compromise between the complete removal
+of numerical overshoots and reduction of acoustic noise.
+Finally, we note that there are complex astrophysical environments where both high- and low-Mach-number flows can coexist. This scenario often occurs, for instance, in accretion disks
+(see, e.g., Klessen & Hennebelle 2010), star forming regions
+(see, e.g., Wang et al. 2024), or outer layers of stars (see, e.g.,
+Wedemeyer et al. 2017). To model such diverse flow regimes, the
+simple use of unlimited higher-order reconstructions and lowdissipation solvers may give rise to numerical instabilities, especially in the proximity of shock fronts. To cure this problem, an
+alternative approach based on the local dynamical properties of
+the flow is needed (see, e.g., Mignone et al. 2011; Fleischmann
+et al. 2020). One possibility is to add a selection criterion to
+the function that computes the flux at a cell interface such that
+the LHLLC solver is used if the Mach number of the flow is
+lower than a conservative threshold (e.g., M ≲ 0.6), whereas a
+proper shock-capturing method (e.g., HLL or HLLC) is chosen
+for modeling faster flows. A similar argument can be made for
+the choice of the spatial reconstruction scheme. To avoid introducing large oscillations in the state quantities near large, nonlinear discontinuities, schemes that are more dissipative and possibly close to being TVD (such as LIN+VL, PPM84, PPM08, or
+WENO) should be preferred over high order unlimited methods.
+Acknowledgements. The work of GL and FKR is supported by the German
+Research Foundation (DFG) through the grant RO 3676/3-1. We acknowledge support by the Klaus Tschira Foundation. This work is funded by the
+Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) under Germany’s Excellence Strategy EXC 2181/1 - 390900948 (the Heidelberg
+STRUCTURES Excellence Cluster). The authors gratefully acknowledge the
+Gauss Centre for Supercomputing e.V. (www.gauss-centre.eu) for funding this
+project by providing computing time on the GCS Supercomputer SuperMUCNG at Leibniz Supercomputing Centre (www.lrz.de). PVFE was supported by
+the U.S. Department of Energy through the Los Alamos National Laboratory
+(LANL). LANL is operated by Triad National Security, LLC, for the National
+Nuclear Security Administration of the U.S. Department of Energy (Contract
+No. 89233218CNA000001). This work has been assigned a document release
+number LA-UR-23-33257.
+
+Article number, page 17 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+References
+Aerts, C. 2021, Rev. Mod. Phys., 93, 015001
+Anders, E. H. & Pedersen, M. G. 2023, Galaxies, 11
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491, 972
+Andrassy, R., Higl, J., Mao, H., et al. 2022, A&A, 659, A193
+Andrassy, R., Leidi, G., Higl, J., et al. 2023, arXiv e-prints, arXiv:2307.04068
+Balsara, D. S. 2017, Living Reviews in Computational Astrophysics, 3, 2
+Beckwith, K. & Stone, J. M. 2011, The Astrophysical Journal Supplement Series,
+193, 6
+Berberich, J. P., Chandrashekar, P., & Klingenberg, C. 2021, Computers & Fluids, 219, 104858
+Berlok, T. & Pfrommer, C. 2019, MNRAS, 485, 908
+Canivete Cuissa, J. R. & Teyssier, R. 2022, A&A, 664, A24
+Chen, S., Lin, B., Li, Y., & Yan, C. 2020, SIAM Journal on Scientific Computing,
+42, B921
+Colella, P. 1990, Journal of Computational Physics, 87, 171
+Colella, P. & Sekora, M. D. 2008, Journal of Computational Physics, 227, 7069
+Colella, P. & Woodward, P. R. 1984, Journal of Computational Physics, 54, 174
+Courant, R., Friedrichs, K., & Lewy, H. 1928, Mathematische Annalen, 100, 32
+Day, M. S. & Bell, J. B. 2000, Combustion Theory and Modelling, 4, 535
+Dobler, W., Haugen, N. E., Yousef, T. A., & Brandenburg, A. 2003, Phys. Rev. E,
+68, 026304
+Dumbser, M., Balsara, D. S., Tavelli, M., & Fambri, F. 2019, International Journal for Numerical Methods in Fluids, 89, 16
+Dumbser, M., Castro, M., Parés, C., & Toro, E. F. 2009, Computers & Fluids,
+38, 1731
+Edelmann, P. V. F. 2014, Dissertation, Technische Universität München
+Edelmann, P. V. F., Horst, L., Berberich, J. P., et al. 2021, A&A, 652, A53
+Edelmann, P. V. F. & Röpke, F. K. 2016, in JUQUEEN Extreme Scaling Workshop 2016, ed. D. Brömmel, W. Frings, & B. J. N. Wylie, JSC Internal Report
+No. FZJ-JSC-IB-2016-01, 63–67
+Edelmann, P. V. F., Röpke, F. K., Hirschi, R., Georgy, C., & Jones, S. 2017,
+A&A, 604, A25
+Fleischmann, N., Adami, S., & Adams, N. A. 2020, Journal of Computational
+Physics, 423, 109762
+Flock, M., Dzyurkevich, N., Klahr, H., & Mignone, A. 2010, A&A, 516, A26
+Godunov, S. K. 1959, Matematicheskii Sbornik, 89, 271
+Goffrey, T., Pratt, J., Viallet, M., et al. 2017, A&A, 600, A7
+Greenough, J. A. & Rider, W. J. 2003, Journal of Computational Physics, 196
+Guillard, H. & Viozat, C. 1999, Computers & Fluids, 28, 63
+Harten, A., Engquist, B., Osher, S., & Chakravarthy, S. R. 1987, Journal of Computational Physics, 71, 231
+Harten, A., Lax, P. D., & Leer, B. V. 1983, SIAM Review, 25, 35
+Horst, L., Edelmann, P. V. F., Andrássy, R., et al. 2020, A&A, 641, A18
+Horst, L., Hirschi, R., Edelmann, P. V. F., Andrassy, R., & Roepke, F. K. 2021,
+A&A, 653, A55
+Jiang, G.-S. & Shu, C.-W. 1996, Journal of Computational Physics, 126, 202
+Käpylä, P. J. 2021, A&A, 651, A66
+Klein, R. 2009, Theoretical and Computational Fluid Dynamics, 23, 161
+Klessen, R. S. & Hennebelle, P. 2010, A&A, 520, A17
+Klingenberg, C., Schmidt, W., & Waagan, K. 2007, Journal of Computational
+Physics, 227, 12
+Kolb, O. 2014, SIAM Journal on Numerical Analysis, 52, 2335
+Kritsuk, A. G., Åke Nordlund, Collins, D., et al. 2011, The Astrophysical Journal, 737, 13
+Küchler, C., Bewley, G., & Bodenschatz, E. 2019, Journal of Statistical Physics,
+175, 617
+Latini, M., Schilling, O., & Don, W. S. 2007, Journal of Computational Physics,
+221, 805
+Lecoanet, D., McCourt, M., Quataert, E., et al. 2017, MNRAS, 455, 4274
+Leidi, G., Andrassy, R., Higl, J., Edelmann, P. V. F., & Röpke, F. K. 2023, A&A,
+679, A132
+Leidi, G., Birke, C., Andrassy, R., et al. 2022, A&A, 668, A143
+LeVeque, R. J. 2002, Finite Volume Methods for Hyperbolic Problems, Cambridge Texts in Applied Mathematics (Cambridge University Press)
+Lighthill, M. J. 1952, Proceedings of the Royal Society of London Series A, 211,
+564
+Liou, M.-S. 2006, Journal of Computational Physics, 214, 137
+Liu, X.-D., Osher, S., & Chan, T. 1994, Journal of Computational Physics, 115,
+200
+Maeder, A. 2009, Physics, Formation and Evolution of Rotating Stars
+McNally, C. P., Lyra, W., & Passy, J.-C. 2012, ApJS, 201, 18
+Meakin, C. A. & Arnett, D. 2007, ApJ, 667, 448
+Miczek, F. 2013, Dissertation, Technische Universität München
+Miczek, F., Röpke, F. K., & Edelmann, P. V. F. 2015, A&A, 576, A50
+Mignone, A., Zanni, C., Tzeferacos, P., et al. 2011, The Astrophysical Journal
+Supplement Series, 198, 7
+Minoshima, T. & Miyoshi, T. 2021, Journal of Computational Physics, 446,
+110639
+
+Article number, page 18 of 42
+
+Miyoshi, T. & Kusano, K. 2005, Journal of Computational Physics, 208, 315
+Motheau, E., Duarte, M., Almgren, A., & Bell, J. B. 2018, Journal of Computational Physics, 372, 1027
+Müller, B. 2020, Living Reviews in Computational Astrophysics, 6, 3
+Musoke, G., Young, A. J., & Birkinshaw, M. 2020, Monthly Notices of the Royal
+Astronomical Society, 498, 3870
+Muthsam, H. J., Kupka, F., Löw-Baselli, B., et al. 2010, New A, 15, 460
+Porter, D. H. & Woodward, P. R. 1994, ApJS, 93, 309
+Radice, D., Couch, S. M., & Ott, C. D. 2015, Computational Astrophysics and
+Cosmology, 2, 7
+Rieper, F. 2011, Journal of Computational Physics, 230, 5263
+Rizzuti, F., Hirschi, R., Arnett, W. D., et al. 2023, Monthly Notices of the Royal
+Astronomical Society, 523, 2317
+Robertson, B. E., Kravtsov, A. V., Gnedin, N. Y., Abel, T., & Rudd, D. H. 2010,
+MNRAS, 401, 2463
+Roe, P. L. 1981, Journal of Computational Physics, 43, 357
+Rusanov, V. 1962, USSR Computational Mathematics and Mathematical
+Physics, 1, 304
+San, O. & Kara, K. 2015, Computers & Fluids, 117, 24
+Seo, J. & Ryu, D. 2023, The Astrophysical Journal, 953, 39
+Shu, C.-W. 2009, SIAM Review, 51, 82
+Shu, C.-W. & Osher, S. 1988, Journal of Computational Physics, 77, 439
+Springel, V. 2010, MNRAS, 401, 791
+Sutherland, B. R. 2010, Internal Gravity Waves (Cambridge University Press)
+Teissier, J.-M. & Müller, W.-C. 2023, arXiv e-prints, arXiv:2306.09856
+Thornber, B., Mosedale, A., Drikakis, D., Youngs, D., & Williams, R. 2008,
+Journal of Computational Physics, 227, 4873
+Toro, E. F. 1991, Proceedings of the Royal Society of London Series A, 434, 683
+Toro, E. F. 2009, Riemann Solvers and Numerical Methods for Fluid Dynamics:
+A Practical Introduction (Berlin Heidelberg: Springer)
+Toro, E. F., Spruce, M., & Speares, W. 1994, Shock Waves, 4, 25
+van Leer, B. 1974, Journal of Computational Physics, 14, 361
+van Leer, B. 1977, Journal of Computational Physics, 23, 276
+van Leer, B. 1979, Journal of Computational Physics, 32, 101
+Viallet, M., Baraffe, I., & Walder, R. 2011, A&A, 531, A86
+Wang, C., Wang, K., Xu, F.-W., et al. 2024, A&A, 681, A51
+Wedemeyer, S., Kučinskas, A., Klevas, J., & Ludwig, H.-G. 2017, A&A, 606,
+A26
+Wongwathanarat, A., Grimm-Strele, H., & Müller, E. 2016, A&A, 595, A41
+Woodward, P. R., Herwig, F., & Lin, P.-H. 2014, The Astrophysical Journal, 798,
+49
+Xie, W., Zhang, R., Lai, J., & Li, H. 2019, International Journal for Numerical
+Methods in Fluids, 89, 430
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+1.12e-01
+
+6.94e-02
+
+8.16e-02
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+0.00e+00
+
+0.00e+00
+
+PAR
+
+0.25
+0.00 y
+-0.25
+1.20e-01
+
+1.58e-01
+
+1.68e-01
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+1.83e-15
+
+0.00e+00
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+2.63e-08
+
+7.08e-07
+
+PSH
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+3.16e-08
+
+0.5
+
+1.0
+
+1.5
+
+7.27e-11
+
+0.5
+
+x
+0.0
+
+1.0
+
+1.5
+
+0.5
+
+x
+0.2
+
+0.4
+
+1.0
+
+1.5
+
+x
+0.6
+
+0.8
+
+1.0
+
+X
+Fig. 4. Distributions of the mass fraction X of the passive scalar in simulations of the Kelvin–Helmholtz instability with the initial Mach number
+M0 = 10−2 on a 128 × 64 grid. The results are shown at t = 0.8 M0−1 . Rows and columns show different reconstruction schemes and numerical
+flux functions, respectively. The colour scale intentionally shows values X < 0 and X > 1 to highlight the overshoots that some of the schemes
+produce. The absolute value of the largest overshoot outside of this range is given in each panel.
+
+Article number, page 19 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+RUSANOV
+
+relative L1 error in ρ
+
+100
+10
+
+HLLC
+
+LHLLC
+N x−2
+N x−1
+
+−1
+
+10−2
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+10−3
+10−4
+
+relative L1 error in Ek,y
+
+10−5
+100
+10−1
+10−2
+10−3
+10−4
+10−5
+
+relative L1 error in X
+
+100
+10−1
+10−2
+10−3
+10−4
+10−5
+
+128
+
+512
+
+Nx
+
+2048
+
+8192
+
+128
+
+512
+
+Nx
+
+2048
+
+8192
+
+128
+
+512
+
+2048
+
+8192
+
+Nx
+
+Fig. 5. Relative L1 errors for different variables (rows), flux functions (columns), and reconstruction methods (legend) as functions of grid resolution in the simulations of the Kelvin–Helmholtz instability with the initial Mach number M0 = 10−2 . The dashed and dotted lines, which are at the
+same locations in all of the panels, show the 1st - and 2nd -order scalings to guide the eye.
+
+Article number, page 20 of 42
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+
+PAR
+
+0.25
+0.00 y
+-0.25
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+
+PSH
+
+0.25
+0.00 y
+-0.25
+0.5
+
+1.0
+
+1.5
+
+0.5
+
+1.0
+
+x
+10−4
+
+1.5
+
+0.5
+
+x
+10−3
+
+10−2
+
+1.0
+
+1.5
+
+x
+10−1
+
+100
+
+M0−1 |∇ · V|
+Fig. 6. Magnitude of velocity divergence in simulations of the Kelvin–Helmholtz instability with the initial Mach number M0 = 10−2 on a
+512 × 256 grid. The results are shown at t = 0.8 M0−1 . Rows and columns show different reconstruction schemes and numerical flux functions,
+respectively. The small-scale structure produced by the LIN+VL, PPM84, and PPM08 schemes, which does not occur with the LIN, PAR, and
+PSH schemes, is caused by the use of limiters.
+
+Article number, page 21 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+|gy |
+X
+q̇
+
+ρ
+p
+p/ργ
+
+1.2
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+3.0
+
+y
+Fig. 7. Hydrostatic stratification of density, gas pressure, pseudo-entropy (p/ργ ), and gravity at t = 0 in the problem of turbulent convection and
+wave excitation at a convective boundary, based on the initial conditions provided in Andrassy et al. (2022). The distribution of the mass fractional
+abundance of a passive tracer (X) and the heat source (q̇) are also shown, here represented by a dash-dotted pink and dashed black line, respectively.
+In this setup, the gravitational acceleration smoothly turns to zero at the bottom and top boundaries of the spatial domain to make the problem
+consistent with the usage of reflecting, stress free boundary conditions, which for the gas pressure imply ∂p/∂y = 0.
+
+Article number, page 22 of 42
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+3.0
+
+t/τconv = 0.2
+
+t/τconv = 0.6
+
+t/τconv = 0.7
+
+t/τconv = 0.9
+
+t/τconv = 1.2
+
+t/τconv = 2.0
+
+y
+
+2.5
+2.0
+1.5
+1.0
+3.0
+
+y
+
+2.5
+2.0
+1.5
+1.0
+
+−0.004
+
+−0.5
+
+0.0
+
+0.5
+
+x
+
+−0.003
+
+−0.002
+
+−0.5
+
+−0.001
+
+0.0
+
+0.5
+
+−0.5
+
+x
+
+0.000
+
+A/A|t=0 − 1
+
+0.001
+
+0.002
+
+0.0
+
+0.5
+
+x
+
+0.003
+
+0.004
+
+Fig. 8. Pseudo-entropy (A = p/ργ ) fluctuations with respect to the hydrostatic, background state computed at different times during the development of the convection, as indicated by the insets, in the problem of turbulent convection and wave excitation. Data are visualized in the z = 0
+plane. This simulation was run using the PAR method and LHLLC on a 5123 grid and we consider it our reference solution. Convective plumes
+start exciting IGWs at the upper convective boundary by t ≈ τconv (see center bottom panel).
+
+Article number, page 23 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+2.5
+2.0 y
+1.5
+
+LIN + VL
+
+2.5
+2.0 y
+1.5
+
+PAR
+
+2.5
+2.0 y
+1.5
+
+PPM84
+
+2.5
+2.0 y
+1.5
+
+PPM08
+
+2.5
+2.0 y
+1.5
+
+PSH
+
+2.5
+2.0 y
+1.5
+0.0
+
+−0.5
+
+0.000
+
+0.5
+
+x
+
+0.005
+
+0.010
+
+−0.5
+
+0.0
+
+0.5
+
+−0.5
+
+x
+
+0.015
+
+0.020
+
+M
+
+0.025
+
+0.0
+
+0.5
+
+x
+
+0.030
+
+0.035
+
+Fig. 9. Snapshots obtained at the final simulation time (t = 32τconv ) showing the distribution of the Mach number at z = 0 in the simulations of
+turbulent convection and wave propagation in a 3D box. The grid resolution is 2563 . Each panel is cut between y = 1.3 and y = 2.7 for a better
+visualization of the flows in the proximity of the upper convective boundary.
+Article number, page 24 of 42
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+(ÊK /Ê0 ) × kh5/3
+
+LIN
+
+PPM84
+
+100
+10−1
+
+RUSANOV
+HLLC
+LHLLC
+REF
+
+10−2
+
+1283
+2563
+
+(ÊK /Ê0 ) × kh5/3
+
+10−3
+
+LIN + VL
+
+PPM08
+
+PAR
+
+PSH
+
+100
+10−1
+10−2
+
+(ÊK /Ê0 ) × kh5/3
+
+10−3
+
+100
+10−1
+10−2
+10−3
+
+100
+
+101
+
+kh
+
+102
+
+100
+
+101
+
+kh
+
+102
+
+Fig. 10. Kinetic energy spectra computed on the horizontal plane y = 1.5 of the convective layer for all of our 18 combinations of Riemann solvers
+and spatial reconstruction schemes in the problem of turbulent convection and wave excitation. The spectra have been averaged over the time
+interval t ∈ (10τconv , 32τconv ) and rescaled by the Kolmogorov law (kh−5/3 ) and by the value Ê0 of the spectral energy density of the reference run at
+kh = 15.
+
+Article number, page 25 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+LIN
+
+PPM84
+1283
+2563
+
+ÊK
+
+10−8
+RUSANOV
+HLLC
+LHLLC
+REF
+
+10−12
+10−16
+
+LIN + VL
+
+PPM08
+
+PAR
+
+PSH
+
+ÊK
+
+10−8
+10−12
+10−16
+
+ÊK
+
+10−8
+10−12
+10−16
+
+100
+
+101
+
+kh
+
+102
+
+100
+
+101
+
+kh
+
+102
+
+Fig. 11. Kinetic energy spectra computed on the horizontal plane y = 2.5 of the stable layer for all of our 18 combinations of Riemann solvers and
+spatial reconstruction schemes in the problem of turbulent convection and wave excitation. The spectra have been averaged over the time interval
+t ∈ (10τconv , 32τconv ). The black solid line represents the reference run (REF), which is computed using the LHLLC Riemann solver and the PAR
+reconstruction scheme on a 5123 grid.
+
+Article number, page 26 of 42
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+ycb (1283 )
+
+2.15
+
+2.10
+
+2.05
+
+2.00
+
+ycb (2563 )
+
+2.15
+
+2.10
+
+LIN
+LIN + VL
+PAR
+PPM84
+PPM08
+PSH
+REF
+
+2.05
+
+2.00
+0
+
+10
+
+20
+
+t/τconv
+
+30
+
+0
+
+10
+
+20
+
+t/τconv
+
+30
+
+0
+
+10
+
+20
+
+t/τconv
+
+30
+
+Fig. 12. Time evolution of the position of the upper convective boundary (ycb ) in the problem of turbulent convection and entrainment described
+in Sect. 3.2 The top and bottom rows show results from 1283 and 2563 simulations, respectively. The black solid line represents the reference run
+(REF).
+
+Article number, page 27 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+LIN
+1.00
+
+RUSANOV
+HLLC, 7.3%
+LHLLC, 6.8%
+REF
+t=0
+
+0.75
+
+NBV
+
+PPM84
+
+0.50
+
+RUSANOV
+HLLC, 0.9%
+LHLLC, 0.8%
+
+0.25
+0.00
+
+LIN + VL
+1.00
+
+RUSANOV
+HLLC, 0.3%
+LHLLC, 0.2%
+
+0.75
+
+NBV
+
+PPM08
+RUSANOV
+HLLC, 0.9%
+LHLLC, 1.7%
+
+0.50
+0.25
+0.00
+
+PAR
+1.00
+
+RUSANOV
+HLLC, 16.0%
+LHLLC, 13.0%
+
+0.75
+
+NBV
+
+PSH
+RUSANOV
+HLLC, 33.0%
+LHLLC, 39.0%
+
+0.50
+0.25
+0.00
+1.9
+
+2.0
+
+2.1
+
+2.2
+
+y
+
+2.3
+
+2.4
+
+1.9
+
+2.0
+
+2.1
+
+2.2
+
+2.3
+
+2.4
+
+y
+
+Fig. 13. Vertical profiles of the Brunt-Väisälä frequency (NBV ) averaged over the time interval t ∈ (30τconv , 32τconv ) in the problem of turbulent
+convection and wave excitation. Each panel shows the results of simulations run using the same reconstruction scheme but different Riemann
+solvers. Here, we only show results from the 2563 grid to avoid cluttering the figures. The reference run (REF) is represented by a black dashed
+line. The black dash-dotted line is the profile of the Brunt-Väisälä frequency at t = 0, and the vertical black dotted lines represent the position
+of the convective boundary at the beginning and the end of the chosen averaging time interval in the reference run, y = 2.168 and y = 2.174,
+respectively. The percentages shown in the insets for simulations run with the HLLC and LHLLC solvers represent the amplitude of the largest
+undershoot in NBV relative to NBV,t=0 , in the spatial range y ∈ (2.15, 2.40). The amplitude of the largest undershoot in the reference run is 12%.
+
+Article number, page 28 of 42
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+1283
+
+10−3
+
+RUSANOV
+
+10−9
+
+d|v̂|2 /dω
+
+2563
+
+10−15
+10−21
+10−27
+10−33
+10−39
+10−3
+
+HLLC
+
+d|v̂|2 /dω
+
+10−9
+10−15
+10−21
+10−27
+10−33
+10−39
+10−3
+
+LHLLC
+
+d|v̂|2 /dω
+
+10−9
+10−15
+10−21
+
+LIN
+LIN + VL
+PAR
+PPM84
+PPM08
+
+10−27
+10−33
+10−39
+
+101
+
+10−1
+
+ω
+
+103
+
+PSH
+REF
+ωconv
+NBV
+ω0
+
+101
+
+10−1
+
+103
+
+ω
+
+Fig. 14. Frequency power spectrum of the vertical velocity component v extracted in the middle of the stable layer at (x, y, z) = (−0.2, 2.5, −0.2)
+over the time series t ∈ (10τconv , 32τconv ) in the problem of turbulent convection and wave excitation. The left and right panels show results
+obtained on the 1283 and the 2563 grid, respectively. Each row of panels shows the results of simulations run using 6 reconstruction schemes with
+the same Riemann solver. The reference solution (indicated with REF) is the black curve. The convective turnover frequency (ωconv = 2π/τconv ),
+the Brunt-Väisälä frequency at (x, y, z) = (−0.2, 2.5, −0.2) (NBV ), and the frequency of the fundamental oscillation mode of the cavity (ω0 = 1.1)
+are represented by the black dashed-dotted, dashed, and dotted lines, respectively.
+
+Article number, page 29 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+d|v̂|2 /dω
+
+10−6
+10−8
+10−10
+10−12
+10−14
+
+0
+
+5
+
+10
+
+15
+
+20
+
+25
+
+ω
+Fig. 15. Frequency power spectrum of v as in Fig. 14 but showing only the results of PPM08 + HLLC on the 2563 grid. The vertical black dotted
+lines represent the resonant modes of the cavity which we derived from the theory of linear oscillations in Cowling approximation (see, e.g., Aerts
+2021). The pink line at ω = 1.1 is the frequency of the fundamental oscillation mode of the cavity.
+
+Article number, page 30 of 42
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+Appendix A: The PPH and PQH methods
+
+B.1. Linear advection
+
+The idea of applying limiters to passive scalars (or mass fractions) only, which lead us to formulating the PSH method
+(Sect. 2.3.6), can be applied at any order of accuracy. In this
+section, we provide two methods that can be seen as lower-order
+alternatives to PSH. Their potential advantages include a lower
+amplitude of overshoots in dynamic quantities and the need for
+fewer ghost cells.
+We start with the unlimited parabolic method PAR
+(Sect. 2.3.3) and apply a two-step limiter to passive scalars. The
+first step is defined by the variable replacements
+
+The initial conditions in this experiment correspond to a rightgoing contact wave:
+
+ai−1/2,L/R 7→ median(ai−1 , ai−1/2,L/R , ai ).
+
+(A.1)
+
+These replacements are followed by the application of the
+PPM84 limiter defined by Eq. (31). We call the resulting method
+piecewise parabolic hybrid (PPH). The PPH method is exact
+wherever a(ζ) is locally parabolic, 3rd -order accurate for general but smooth functions a(ζ), and it requires two ghost cells at
+domain boundaries.
+A more accurate method, which we call piecewise quartic
+hybrid (PQH), can be obtained by assuming that within cell i
+a(ζ) can be described by the quartic polynomial
+a(ζ) =
+
+4
+X
+n=0
+
+n
+
+cn (ζ − ζi ) .
+
+(A.2)
+
+The five coefficients cn are uniquely determined by the requirement that the averages of a(ζ) in cells i − 2 + n equal ai−2+n for
+n = 0, 1, . . . , 4. The reconstructed states are then obtained by
+evaluating Eq. (A.2) at ζi−1/2 and ζi+1/2 , respectively. The resulting expressions are
+
+ai−1/2,R =
+
+ai+1/2,L =
+
+1
+60
+
+Å
+
+ã
+− 3ai−2 + 27ai−1 + 47ai − 13ai+1 + 2ai+2 ,
+
+Å
+ã
+1
+2ai−2 − 13ai−1 + 47ai + 27ai+1 − 3ai+2 .
+60
+
+(A.3)
+(A.4)
+
+The limiter we apply to passive scalars in the PQH method is the
+same as that in the PPH method, see above. The PQH method
+is exact wherever a(ζ) is locally a quartic polynomial, 5th -order
+accurate for general but smooth functions a(ζ), and it requires
+three ghost cells at domain boundaries.
+We have only performed a small number of tests with these
+two methods. Specifically, we ran simulations of the KelvinHelmholtz problem (Sect. 3.1) with the initial Mach number of
+M0 = 10−3 and the HLLC flux function on grids of 64 × 32 and
+128 × 64 cells. There were no overshoots in the passive tracer in
+the results of these tests.
+
+Appendix B: 1D test cases
+We use two simple 1D experiments – linear advection and the
+propagation of a linear sound wave – to compare the accuracy
+that the six reconstruction schemes can reach if not constrained
+by the 2nd -order accuracy limit imposed by our multidimensional
+scheme.
+
+ρ(x) = γ [1 + 0.01 sin (2πx)] ,
+u(x) = 0.1,
+p(x) = 1.
+
+(B.1)
+(B.2)
+(B.3)
+
+We consider the interval 0 ≤ x ≤ 1 with periodic boundary conditions and the equation of state of an ideal gas with the ratio
+of specific heats γ = 1.4. The average speed of sound is unity
+and it varies by 0.5% due to the density variation. The solution
+is sought at t = 10, when the sinusoid has been advected by
+one period and the analytic solution becomes identical to the initial condition. This makes the quantification of numerical errors
+trivial.
+We use the same code for this experiment as we do for all
+the other experiments reported in this work. Since some of the
+schemes tested exceed 2nd order of accuracy, cell averages cannot be approximated by sampling the initial condition at cell centres. We initialise the discrete density profile using the formula
+ï
+ò
+sin (π∆x)
+ρi = γ 1 + 0.01
+sin (2πxi ) ,
+(B.4)
+π∆x
+where ∆x is the constant grid spacing and xi the location of i-th
+cell’s centre. This formula is easily obtained by analytically averaging Eq. (B.1) in the interval xi − ∆x/2 ≤ x ≤ xi + ∆x/2.
+We suppress time-stepping errors by using the RK3 scheme with
+CFL = 0.01. Because the Mach number of the flow is 0.1, this
+means that the wave is advected by only 10−3 ∆x during every
+3rd -order-accurate time step. We use the LHLLC flux function
+for this experiment.
+The L1 errors we obtain on grids with different numbers of
+cells N x are shown in Fig. B.1. We test the LIN, LIN+VL, PAR,
+and PPM84 schemes on grids with 8 to 512 cells. We are forced
+to stop at grids of 64 cells for the most accurate schemes PPM08
+and PSH, because the errors rapidly become dominated by the finite precision of floating-point arithmetic. The asymptotic orders
+of accuracy based on L1 errors measured on the three finest grids
+available are reported in Table 1. Both LIN and LIN+VL reach
+the expected 2nd order of accuracy. The absolute errors produced
+by LIN+VL are somewhat larger as compared with LIN because
+of the presence of the van Leer limiter. The PPM84 scheme is
+formally 4th -order accurate but that only holds for monotonic solutions. PPM84 contains a limiter that flattens the slope at local
+extrema and that reduces the scheme’s asymptotic order to 2.3
+in this test case. We have experimentally turned off both limiters
+present in PPM84, which increased the asymptotic order of accuracy to 4.0, as expected. The PAR, PPM08, and PSH methods
+reach the asymptotic orders of 3.0, 6.0, and 7.0, also matching
+theoretical expectations.
+B.2. Sound wave
+
+The initial conditions in this experiment correspond to a rightgoing sound wave:
+
+
+ρ(x) = ρ0 1 + γ−1 Ψ(x) ,
+(B.5)
+u(x) = γ−1 c0 Ψ(x),
+p(x) = p0 [1 + Ψ(x)] ,
+
+(B.6)
+(B.7)
+
+where
+Ψ(x) = Ψ0 sin (2πx) .
+
+(B.8)
+Article number, page 31 of 42
+
+A&A proofs: manuscript no. godunov_performance
+100
+
+100
+N x−2
+N x−3
+
+10−4
+10
+
+−6
+
+LIN
+LIN+VL
+PAR
+
+10−8
+8
+
+16
+
+PPM84
+PPM08
+PSH
+
+32
+
+64
+
+128
+
+256
+
+512
+
+N x−2
+N x−3
+
+10−2
+
+relative L1 error
+
+relative L1 error
+
+10−2
+
+N x−6
+N x−7
+
+10−4
+10−6
+LIN
+LIN+VL
+PAR
+
+10−8
+10−10
+
+8
+
+16
+
+PPM84
+PPM08
+PSH
+
+32
+
+Nx
+
+(B.9)
+
+The simulations are stopped at t = 1, when the sound wave
+has propagated by a single wavelength around the periodic domain 0 ≤ x ≤ 1. Neglecting non-linear effects, which are of order
+Ψ20 = 10−20 , the evolved solution is expected to be identical to
+the initial condition. Timestepping errors are suppressed by using the RK3 scheme with CFL = 0.001, i.e. the wave moves by
+only 10−3 ∆x per time step. We use the LHLLC flux function for
+this experiment.
+We show L1 errors in the velocity u on grids with 8 to 512
+cells in Fig. B.2. The simulation series with the most accurate
+PPM08 and PSH schemes are stopped at grids of 64 cells, because the absolute errors rapidly approach 10−20 , i.e. the magnitude of the residual non-linear effects. The asymptotic orders
+of accuracy, as defined by the L1 errors measured on the three
+finest grids available, are 2.0, 3.0, 6.0, and 7.0 for the LIN, PAR,
+PPM08, and PSH methods, respectively, matching theoretical
+expectations. The LIN+VL and PPM84 methods only reach the
+order of 1.6, which seems to be caused by the combination of
+the low-Mach flux function LHLLC with the limiters contained
+in these two methods. We have checked that both methods reach
+the order of 2.0 with the RUSANOV and HLLC flux functions
+(PPM84 flattens the slope at local extrema, which reduces its
+order, see also Sect. B.1).
+The L1 errors discussed so far do not distinguish between
+amplitude and phase errors. We quantify amplitude errors by
+computing the relative loss of the total kinetic energy from t = 0
+19
+
+We do not average the Ψ2 term, which would appear in the product
+ρu, because the term is only ≈ 10−20 with Ψ0 = 10−10 . This term must be
+kept small or other non-linear effects would also cease to be negligible
+in the range of relative L1 errors we explore.
+Article number, page 32 of 42
+
+128
+
+256
+
+512
+
+Fig. B.2. Relative L1 errors in velocity u obtained by propagating a sinusoidal sound wave by one period on 1D grids with N x cells using
+different reconstruction schemes. A few scaling relations are shown to
+guide the eye.
+
+100
+N x−3
+N x−7
+
+10−2
+
+1 − Ek (t = 1)/Ek (t = 0)
+
+We use ρ0 = γ, p0 = 1 and the equation of state of an ideal gas
+with the ratio of specific heats γ = 1.4, so that the unperturbed
+speed of sound is c0 = 1. We set the amplitude Ψ0 = 10−10
+to suppress non-linear effects. This allows us to avoid accuracy
+constraints imposed by our 2nd -order-accurate transformations
+between primitive and conserved variables. Round-off errors are
+suppressed by using 128-bit floating point numbers. In a way
+analogous to Eq. (B.4), we initialise the discrete wave such that
+the cell average of Ψ(x) in cell i is19
+sin (π∆x)
+Ψ(xi ).
+π∆x
+
+64
+
+Nx
+
+Fig. B.1. Relative L1 errors obtained by advecting a sinusoid by one
+period on 1D grids with N x cells using different reconstruction schemes.
+A few scaling relations are shown to guide the eye.
+
+Ψi =
+
+N x−6
+N x−7
+
+10−4
+10−6
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+10−8
+
+10−10
+10−12
+10−14
+
+8
+
+16
+
+32
+
+64
+
+128
+
+256
+
+512
+
+Nx
+Fig. B.3. Relative decrease in kinetic energy after propagating a sinusoidal sound wave by one period on 1D grids with N x cells using different reconstruction schemes. Two scaling relations are shown to guide
+the eye.
+
+to t = 1, see Fig. B.3. Some kinetic energy is lost in all of the
+simulations, which is a sign of stability. The amount of energy
+dissipated decreases with the 3rd power of the grid spacing for
+LIN, LIN+VL, PAR, and PPM84. It is not immediately clear
+why this is the case given that the methods have different orders
+of accuracy, but we did not investigate this further. In case of
+PSH, the dissipation rate decreases with the 7th power of the grid
+spacing, matching the method’s order of accuracy. PPM08 is a
+special case – the method preserves extrema and sinusoids resolved by 16 or more cells per wavelength turn out to be smooth
+enough not to trigger any of the method’s limiters. PPM08 reduces to a simple interpolation function in this special case, eliminating jumps at all cell interfaces, see Sect. 2.3.5. This, in turn,
+eliminates all explicit dissipative terms in the flux function. The
+dissipation rate drops by many orders of magnitude and timestepping errors start to dominate.
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+Appendix C: Sound wave generation with a
+compact third order WENO scheme
+The results presented in Sects. 3.1 and 3.2 reveal that nonlinear,
+switching reconstruction schemes (such as LIN+VL, PPM84,
+and PPM08) generate excess acoustic power which is not present
+in simulations run with unlimited (linear) reconstruction methods. The question naturally arises whether nonlinear but nonswitching schemes (e.g., WENO) also generate artificial sound
+waves in simulations of low-Mach-number flows. In this Appendix we try to answer this question using the compact third
+order (CTO) WENO scheme of Kolb (2014). This scheme reconstructs the quantity a within the cell i using a weighted sum
+of three polynomials, aL,R,C (ζ). The ultimate expression for the
+underlying function a(ζ) reads
+a(ζ) = wL aL (ζ) + wC aC (ζ) + wR aR (ζ).
+
+(C.1)
+
+The weighting coefficients are computed as
+wm = P
+
+αm
+k∈{L,C,R} αk
+
+,
+
+(C.2)
+
+where
+αm =
+
+cm
+,
+(ϵWENO + ISm ) p
+
+(C.3)
+
+m ∈ {L, C, R}, cL = cR = 0.25, cC = 0.5, and ISm are the smoothness indicators of the scheme20 ,
+ISL = (ai − ai−1 )2 ,
+2
+
+ISR = (ai+1 − ai ) ,
+13
+1
+ISC =
+(ai+1 − 2ai + ai−1 )2 + (ai+1 − ai−1 )2 .
+2
+4
+12cC
+
+(C.4)
+(C.5)
+(C.6)
+
+In Eq. (C.3), we set p = 2. The functions a(ζ)L,R are one-sided
+linear reconstructions
+aL (ζ) = ai + (ai − ai−1 )(ζ − ζi ),
+aR (ζ) = ai + (ai+1 − ai )(ζ − ζi ),
+
+(C.7)
+(C.8)
+
+whereas aC (ζ) is defined such that
+aopt (ζ) = cL aL (ζ) + cC aC (ζ) + cR aR (ζ)
+
+(C.9)
+
+is the unique parabola that conserves the cell volume averages
+ai−1 , ai , and ai+1 over cells i − 1, i, and i + 1, respectively. This
+constraint implies
+aopt (ζ) = ai +
+
+∂a
+1 ∂2 a
+(ζ − ζi ) +
+(ζ − ζi )2 ,
+∂ζ ζi
+2 ∂ζ 2 ζi
+
+(C.10)
+
+with
+ai
+∂a
+∂ζ ζi
+
+1
+(ai+1 − 2ai + ai−1 ),
+24
+ai+1 − ai−1
+=
+,
+2
+= ai −
+
+∂2 a
+= ai+1 − 2ai + ai−1 .
+∂ζ 2 ζi
+
+(C.11)
+
+Eq. (C.1). This feature allows CTO-WENO to achieve thirdorder spatial accuracy in smooth parts of the flow while at the
+same time it remains robust near discontinuities. The parameter
+ϵWENO that appears in the denominator of αm avoids division by
+zero in the case a smoothness indicator ISm = 0. Thus, the oscillatory behavior of a(ζ) is also determined by the value of this
+parameter. In fact, when ϵWENO ≫ ISL,R,C , the weighting coefficients become almost equal and the scheme is unlimited even
+near discontinuities, making it similar to our PAR method. On
+the other hand, if ϵWENO ≪ ISm , the weighting coefficients are
+only determined by ISL,R,C and the scheme becomes close to being TVD near discontinuities or in poorly resolved parts of the
+flow.
+Although CTO-WENO, unlike LIN+VL or the PPM methods, does not involve any conditional statements, the weighting
+coefficients that occur in a(ζ) can still abruptly change from time
+step to time step if a barely resolved wave or feature in the flow
+crosses that particular cell. Such a rapid change in the form of
+the polynomial a(ζ) can generate high-frequency perturbations
+in the state quantities on the grid scale and affect the propagation of sound waves. Therefore, we expect a version of CTOWENO that uses small values of ϵWENO to generate artificial
+acoustic noise, whereas large values of ϵWENO should generate
+results closer to our unlimited reconstruction methods.
+To test this hypothesis, we run a series of simulations
+of the setup involving turbulent convective flows and excitation of internal waves described in Sect. 3.2. We fix
+the grid resolution to 1283 cells and the Riemann solver is
+LHLLC. We run one simulation for each value of ϵWENO ∈
+(10−12 , 10−10 , 10−8 , 10−6 , 10−4 , 102 ), so that several intermediate cases between the two extreme behaviors of the scheme
+(close to being TVD and fully oscillatory) are considered. We
+extract the frequency spectrum of the vertical velocity component from the middle of the stable layer as done for the analysis in Sect. 3.3. The results are shown in Fig. C. As expected,
+the power stored in sound waves is considerably increased when
+very small values of ϵWENO are used. For ϵWENO = 10−12 , the
+power spectrum obtained using CTO-WENO resembles that produced by LIN+VL. Decreasing the value of ϵWENO progressively
+reduces (in a monotonic way) the energy of the sound waves and
+eventually the continuum of the power spectrum converges for
+ϵWENO ≳ 10−4 . In the study performed by Kolb (2014), the value
+of ϵWENO that achieves the optimal order of accuracy lies within
+the range21 ∆x3 ≲ ϵWENO ≲ ∆x2 , which, for this setup, corresponds to 10−6 ≲ ϵWENO ≲ 10−4 . However, we note that, in this
+test, the values of the primitive variables reconstructed at the grid
+cell interfaces span several orders of magnitude. Therefore, using a unique value of ϵWENO could potentially result in different
+oscillatory properties of the scheme depending on which variable is being reconstructed. One way to avoid this problem is
+to rescale the reconstructed quantity a such that its mean value
+across the stencil is close to unity. However, we decide not to
+investigate this effect on the generation of artificial sound waves
+further.
+
+(C.12)
+(C.13)
+
+Appendix D: Additional plots for the
+Kelvin–Helmholtz problem
+
+The smoothness indicators ISL,R,C are such that the smoothest
+among the polynomials a(ζ)L,R,C has the largest weight in
+20
+
+For a formal derivation of these indicators, see Sect. 2.1 of Kolb
+(2014).
+
+21
+
+Here we assume that the reconstructed variable a is dimensionless.
+Article number, page 33 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+10−4
+10−9
+
+d|v̂|2 /dω
+
+10−14
+10−19
+10−24
+10−29
+10−34
+10−39
+
+WENO = 10−4
+WENO = 102
+ωconv
+NBV
+ω0
+
+PPM84
+LIN + VL
+WENO = 10−12
+WENO = 10−10
+WENO = 10−8
+WENO = 10−6
+
+10−2
+
+10−1
+
+100
+
+101
+
+102
+
+103
+
+ω
+Fig. C.1. Frequency power spectrum of the vertical velocity component v extracted in the middle of the stable layer at (x, y, z) = (−0.2, 2.5, −0.2)
+over the time series t ∈ (10τconv , 32τconv ) in the problem of turbulent convection and wave excitation described in Sect. 3.2. These results are
+obtained on a grid with 1283 cells, using the LHLLC Riemann solver and the CTO-WENO scheme of Kolb (2014) for different values of the
+parameter ϵWENO occurring in the smoothness indicators of the scheme (see Sect. C), ranging from 10−12 to 102 . As a reference, power spectra
+obtained with the numerical options LHLLC + PPM84 and LHLLC + LIN + VL are also shown. The convective turnover frequency (ωconv =
+2π/τconv ), the Brunt-Väisälä frequency at the location of the point probe (NBV ), and the frequency of the fundamental oscillation mode of the
+cavity (ω0 = 1.1) are represented by the black dashed-dotted, dashed, and dotted lines, respectively.
+
+Article number, page 34 of 42
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+7.71e-02
+
+7.24e-02
+
+7.96e-02
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+0.00e+00
+
+0.00e+00
+
+PAR
+
+0.25
+0.00 y
+-0.25
+8.15e-02
+
+1.19e-01
+
+1.60e-01
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+0.00e+00
+
+0.00e+00
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+1.60e-10
+
+2.54e-08
+
+PSH
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+2.53e-10
+
+0.5
+
+1.0
+
+1.5
+
+0.00e+00
+
+0.5
+
+x
+0.0
+
+1.0
+
+1.5
+
+0.5
+
+x
+0.2
+
+0.4
+
+1.0
+
+1.5
+
+x
+0.6
+
+0.8
+
+1.0
+
+X
+Fig. D.1. As Fig. 4 but with the initial Mach number M0 = 10−1 .
+
+Article number, page 35 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+9.70e-02
+
+8.22e-02
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+0.00e+00
+
+0.00e+00
+
+PAR
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+1.79e-01
+
+1.63e-01
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+0.00e+00
+
+1.52e-12
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+5.82e-03
+
+1.53e-08
+
+PSH
+
+0.25
+0.00 y
+-0.25
+0.00e+00
+
+2.66e-09
+
+0.5
+
+1.0
+
+1.5
+
+0.00e+00
+
+0.5
+
+x
+0.0
+
+1.0
+
+0.2
+
+0.4
+
+0.5
+
+Fig. D.2. As Fig. 4 but with the initial Mach number M0 = 10−3 .
+
+1.0
+
+1.5
+
+x
+0.6
+
+X
+
+Article number, page 36 of 42
+
+1.5
+
+x
+0.8
+
+1.0
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+RUSANOV
+
+relative L1 error in ρ
+
+100
+10
+
+HLLC
+
+LHLLC
+N x−2
+N x−1
+
+−1
+
+10−2
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+10−3
+10−4
+
+relative L1 error in Ek,y
+
+10−5
+100
+10−1
+10−2
+10−3
+10−4
+10−5
+
+relative L1 error in X
+
+100
+10−1
+10−2
+10−3
+10−4
+10−5
+
+128
+
+512
+
+2048
+
+8192
+
+128
+
+Nx
+
+512
+
+Nx
+
+2048
+
+8192
+
+128
+
+512
+
+2048
+
+8192
+
+Nx
+
+Fig. D.3. As Fig. 5 but with the initial Mach number M0 = 10−1 .
+
+Article number, page 37 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+RUSANOV
+
+relative L1 error in ρ
+
+100
+10
+
+HLLC
+
+LHLLC
+N x−2
+N x−1
+
+−1
+
+10−2
+LIN
+LIN+VL
+PAR
+PPM84
+PPM08
+PSH
+
+10−3
+10−4
+
+relative L1 error in Ek,y
+
+10−5
+100
+10−1
+10−2
+10−3
+10−4
+10−5
+
+relative L1 error in X
+
+100
+10−1
+10−2
+10−3
+10−4
+10−5
+
+128
+
+512
+
+2048
+
+8192
+
+128
+
+Nx
+Fig. D.4. As Fig. 5 but with the initial Mach number M0 = 10−3 .
+
+Article number, page 38 of 42
+
+512
+
+Nx
+
+2048
+
+8192
+
+128
+
+512
+
+Nx
+
+2048
+
+8192
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+
+PAR
+
+0.25
+0.00 y
+-0.25
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+
+PSH
+
+0.25
+0.00 y
+-0.25
+0.5
+
+1.0
+
+1.5
+
+0.5
+
+1.0
+
+x
+10−4
+
+1.5
+
+0.5
+
+x
+10−3
+
+10−2
+
+1.0
+
+1.5
+
+x
+10−1
+
+100
+
+M0−1 |∇ · V|
+Fig. D.5. As Fig. 6 but with the initial Mach number M0 = 10−1 .
+
+Article number, page 39 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+
+PAR
+
+0.25
+0.00 y
+-0.25
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+
+PSH
+
+0.25
+0.00 y
+-0.25
+0.5
+
+1.0
+
+1.5
+
+0.5
+
+1.0
+
+x
+10−4
+
+10−3
+
+10−2
+
+M0−1 |∇ · V|
+Fig. D.6. As Fig. 6 but with the initial Mach number M0 = 10−3 .
+
+Article number, page 40 of 42
+
+1.5
+
+0.5
+
+x
+
+1.0
+
+1.5
+
+x
+10−1
+
+100
+
+G. Leidi et al.: Performance of high-order Godunov methods
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+5.46e-02
+
+7.30e-02
+
+7.40e-02
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+4.44e-16
+
+3.55e-15
+
+3.77e-15
+
+PAR
+
+0.25
+0.00 y
+-0.25
+5.18e-02
+
+2.74e-02
+
+2.86e-02
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+4.44e-16
+
+3.77e-15
+
+3.77e-15
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+2.22e-16
+
+3.77e-15
+
+3.77e-15
+
+PSH
+
+0.25
+0.00 y
+-0.25
+4.44e-16
+
+3.77e-15
+
+0.5
+
+1.0
+
+1.5
+
+3.77e-15
+
+0.5
+
+x
+0.0
+
+1.0
+
+1.5
+
+0.5
+
+x
+0.2
+
+0.4
+
+1.0
+
+1.5
+
+x
+0.6
+
+0.8
+
+1.0
+
+X
+Fig. D.7. As Fig. 4 but showing simulations computed on the 4096 × 2048 grid.
+
+Article number, page 41 of 42
+
+A&A proofs: manuscript no. godunov_performance
+
+RUSANOV
+
+HLLC
+
+LHLLC
+
+LIN
+
+0.25
+0.00 y
+-0.25
+
+LIN+VL
+
+0.25
+0.00 y
+-0.25
+
+PAR
+
+0.25
+0.00 y
+-0.25
+
+PPM84
+
+0.25
+0.00 y
+-0.25
+
+PPM08
+
+0.25
+0.00 y
+-0.25
+
+PSH
+
+0.25
+0.00 y
+-0.25
+0.5
+
+1.0
+
+1.5
+
+0.5
+
+1.0
+
+x
+10−4
+
+1.5
+
+10−3
+
+10−2
+
+M0−1 |∇ · V|
+Fig. D.8. As Fig. 6 but showing simulations computed on the 4096 × 2048 grid.
+
+Article number, page 42 of 42
+
+0.5
+
+x
+
+1.0
+
+1.5
+
+x
+10−1
+
+100
+
+

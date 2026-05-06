@@ -1,0 +1,1239 @@
+                                               Astronomy & Astrophysics manuscript no. oxygen-shell-MHD                                                                              ©ESO 2023
+                                               October 2, 2023
+
+
+
+
+                                                         Turbulent dynamo action and its effects on the mixing at the
+                                                          convective boundary of an idealized oxygen-burning shell
+                                                                          G. Leidi1 , R. Andrassy1 , J. Higl1, 2 , P. V. F. Edelmann3 , and F. K. Röpke1, 4
+
+                                                     1
+                                                       Heidelberger Institut für Theoretische Studien, Schloss-Wolfsbrunnenweg 35, D-69118 Heidelberg, Germany
+                                                       e-mail: giovanni.leidi@h-its.org
+                                                     2
+                                                       High-Performance Computing Center Stuttgart, Nobelstraße 19, 70569 Stuttgart, Germany
+                                                     3
+                                                       Computer, Computational and Statistical Sciences (CCS) Division and Center for Theoretical Astrophysics (CTA), Los Alamos
+                                                       National Laboratory, Los Alamos, NM 87545, USA
+                                                     4
+                                                       Zentrum für Astronomie der Universität Heidelberg, Institut für Theoretische Astrophysik, Philosophenweg 12, D-69120 Heidel-
+                                                       berg, Germany
+arXiv:2309.17225v1 [astro-ph.SR] 29 Sep 2023
+
+
+
+
+                                                     Received 01 August 2023; accepted 27 September 2023
+
+                                                                                                                  ABSTRACT
+
+                                                     Convection is one of the most important mixing processes in stellar interiors. Hydrodynamic mass entrainment can bring fresh fuel
+                                                     from neighboring stable layers into a convection zone, modifying the structure and evolution of the star. Because flows in stellar
+                                                     convection zones are highly turbulent, multidimensional hydrodynamic simulations are fundamental to accurately capture the physics
+                                                     of mixing processes. Under some conditions, strong magnetic fields can be sustained by the action of a turbulent dynamo, adding
+                                                     another layer of complexity and possibly altering the dynamics in the convection zone and at its boundaries. In this study, we used
+                                                     our fully compressible Seven-League Hydro code to run detailed and highly resolved three-dimensional magnetohydrodynamic sim-
+                                                     ulations of turbulent convection, dynamo amplification, and convective boundary mixing in a simplified setup whose stratification is
+                                                     similar to that of an oxygen-burning shell in a star with an initial mass of 25 M⊙ . We find that the random stretching of magnetic field
+                                                     lines by fluid motions in the inertial range of the turbulent spectrum (i.e., a small-scale dynamo) naturally amplifies the seed field by
+                                                     several orders of magnitude in a few convective turnover timescales. During the subsequent saturated regime, the magnetic-to-kinetic
+                                                     energy ratio inside the convective shell reaches values as high as 0.33, and the average magnetic field strength is ∼1010 G. Such strong
+                                                     fields efficiently suppress shear instabilities, which feed the turbulent cascade of kinetic energy, on a wide range of spatial scales.
+                                                     The resulting convective flows are characterized by thread-like structures that extend over a large fraction of the convective shell. The
+                                                     reduced flow speeds and the presence of magnetic fields with strengths up to 60% of the equipartition value at the upper convective
+                                                     boundary diminish the rate of mass entrainment from the stable layer by ≈ 20% as compared to the purely hydrodynamic case.
+                                                     Key words. Stars: interiors – Convection – Dynamo – Magnetohydrodynamics (MHD) – Turbulence
+
+
+
+                                               1. Introduction                                                             Usually, their value is tuned so that 1D models can reproduce the
+                                                                                                                           global properties of our Sun (see, e.g., Richard et al. 1996), but
+                                               Convection plays a key role in the evolution of stars. In the deep,         the universality of this approach has been heavily questioned in
+                                               optically thick layers, convective flows can efficiently transport          the literature (Trampedach et al. 2014; Magic et al. 2015; Joyce
+                                               energy and angular momentum outward, so they determine both                 & Chaboyer 2018; Sonoi et al. 2019). Moreover, local theories of
+                                               the thermal structure and the rotational profile of stars (see, e.g.,       convection such as the MLT assume that convective mixing stops
+                                               Maeder 2009; Kippenhahn et al. 2013). Furthermore, because                  at the position of the formal convective boundary. More realisti-
+                                               the characteristic spatial scales of convection are much larger             cally, convective plumes approach the convective boundary with
+                                               than the mean free path in the stellar plasma, stellar convection           nonzero velocities and give rise to hydrodynamic processes that
+                                               zones are highly turbulent environments, with Reynolds num-                 can entrain some excess mass and entropy from the neighboring
+                                               bers that can be as high as 1014 (Jermyn et al. 2022). Turbulent            stable layer into the convection zone. Evidence of extra mixing
+                                               flows quickly mix chemical elements over the relatively short               occurring at stellar convective boundaries has been provided by a
+                                               convective turnover timescale, thus profoundly affecting the nu-            number of observations, including eclipsing binaries (Valle et al.
+                                               clear energy generation in burning layers of stars and their evo-           2016; Claret & Torres 2016), old open clusters (Aparicio et al.
+                                               lution.                                                                     1990), or asteroseismology (Bossini et al. 2015; Aerts 2021).
+                                                   Despite the huge imprint of convection on stars, most one-              The entrainment of fresh fuel into a burning layer can prolong
+                                               dimensional (1D) stellar evolution codes still rely on simpli-              its lifetime, enlarge convective cores in upper main sequence
+                                               fied parametrizations of the convective energy transport, such as           stars, and determine the structure of supernova progenitors in
+                                               the popular mixing-length theory (MLT; Prandtl 1925; Böhm-                  more massive stars (Müller 2020, and references therein). In stel-
+                                               Vitense 1958). On the one hand, these parameterized theories                lar evolution codes, mixing at convective boundaries is crudely
+                                               allow 1D models to simulate the evolution of stars over ther-               modeled by means of additional parametrizations, usually in the
+                                               mal and nuclear timescales, which is still unfeasible in multi-D.           form of diffusive over-mixing or convective penetration (Anders
+                                               On the other hand, the parameters that enter these prescriptions            & Pedersen 2023, and references therein). The uncertainties aris-
+                                               cannot be derived from first principles and need to be calibrated.
+                                                                                                                                                                      Article number, page 1 of 15
+                                              A&A proofs: manuscript no. oxygen-shell-MHD
+
+ing from the usage of such simplistic models limit the predic-         fully compressible, MHD, Seven-League Hydro (SLH) code.
+tive power of stellar evolution calculations and have far-reaching     In particular, we used an idealized setup whose stratification is
+consequences for supernova explosions, the formation of stellar        close to that of an oxygen-burning shell in a massive star (An-
+populations, and galactic chemical evolution. Although several         drassy et al. 2022). In this study, we did not intend to perform
+nonlocal theories of convection have been presented in the lit-        realistic simulations of such an evolutionary stage, but rather ad-
+erature (see, e.g., Xiong 1978; Kuhfuss 1986; Canuto 1997; Li          dress the following questions: Can an SSD generate dynamically
+& Yang 2007; Garaud et al. 2010; Canuto 2011), they have not           relevant magnetic fields on the typical timescales set by convec-
+been extensively used in 1D stellar calculations so far.               tive motions in the oxygen shell? What is the topology of such
+    To overcome the limitations of stellar-evolution models, sev-      fields? What is the feedback of MHD processes on the convec-
+eral research groups have started focusing their efforts in the        tive flows and on the mixing at the convective boundary?
+past two decades on multi-D hydrodynamic modeling of tur-                   The paper is structured as follows: in Sect. 2, we give a brief
+bulent convection and mixing at convective boundaries in dif-          description of the numerical methods used to run the simulations
+ferent classes of stellar objects, including core-convective main      needed for this study. The details of the initial stratification are
+sequence stars (Gilet et al. 2013; Horst et al. 2020; Higl et al.      provided in Sect. 3. In Sect. 4, we present the numerical results,
+2021; Baraffe et al. 2023; Herwig et al. 2023; Andrassy et al.         including the evolution of the small-scale turbulent dynamo and
+2023), envelope-convective stars (Pratt et al. 2016; Hotta 2017;       its effects on the boundary mixing. Finally, in Sect. 5, we draw
+Käpylä 2019; Blouin et al. 2023), and more massive stars during        conclusions and summarize the main results.
+late burning stages (Meakin & Arnett 2007; Jones et al. 2017;
+Cristini et al. 2017; Andrassy et al. 2020; Rizzuti et al. 2023). In
+this approach, nonlinear hydrodynamic processes are captured           2. Methods
+self-consistently, which allows parameterized theories of con-
+vection and convective boundary mixing to be tested and cali-          2.1. Equations solved
+brated for different stellar masses and evolutionary stages.
+    One more layer of complexity to the problem of stellar con-        We described the physical problem by means of the fully com-
+vection is, however, represented by the possible presence of           pressible equations of ideal MHD with time-independent gravity,
+magnetic fields, which have been observed both in low- and
+high-mass stars (Brun & Browning 2017; Keszthelyi 2023, and                                                ∂ρ
+                                                                                                              + ∇ · (ρV) = 0,                  (1)
+references therein). The coupling between turbulent fluid mo-                                              ∂t
+tions and magnetic fields can give rise to small-scale dynamos          ∂(ρV)
+(SSDs, Meneguzzi et al. 1981; Brandenburg & Subramanian                          + ∇ · [ρV ⊗ V + (p + pB )I − B ⊗ B] = ρ g,                    (2)
+                                                                          ∂t
+2005; Schekochihin et al. 2007), which amplify magnetic fields         ∂(ρetot )
+on scales smaller than the forcing scale of turbulence. As ob-                   + ∇ · [(ρetot + p + pB )V − B(B · V)] = 0,                    (3)
+                                                                         ∂t
+served in numerous simulations of solar convection (Vögler &
+                                                                                           ∂B
+Schüssler 2007; Pietarila Graham et al. 2010; Rempel 2014;                                      + ∇ · (V ⊗ B − B ⊗ V) = 0,                     (4)
+Thaler & Spruit 2015; Hotta et al. 2016; Hotta 2017), SSDs can                              ∂t
+drastically change the morphology of the convective flows, re-                                      ∂(ρψ)
+                                                                                                           + ∇ · (ρψV) = 0,                    (5)
+duce their speed, and alter the dynamics of the overshoot region                                      ∂t
+at the bottom of the solar convection zone as compared to the
+purely hydrodynamic case.                                              where ρ denotes the density, V = (V x , Vy , Vz ) the velocity vec-
+    Other than the Sun, effects of magnetohydrodynamic (MHD)           tor, B = (Bx , By , Bz ) the magnetic field1 , pB = |B|2 /2 the magnetic
+processes on the properties of convective flows have also been         pressure, g = (g x , gy , gz ) the gravitational acceleration, etot = eint +
+investigated in cool (Browning 2008; Käpylä 2021; Bhatia et al.        |V|2 /2 + |B|2 /(2ρ) + ϕ the total energy per unit mass, eint the in-
+2022) and upper-main-sequence stars (Brun et al. 2005; Feath-          ternal energy per unit mass, ϕ the gravitational potential, ψ the
+erstone et al. 2009; Augustson et al. 2016), but very few MHD          mass fraction of a passive tracer, and I the unit tensor. The sys-
+simulations of late burning stages of massive stars have been          tem in Eqs. (1)–(5) is closed by an Equation of State (EoS) for
+run to date (Varma & Müller 2021; Canivete Cuissa & Teyssier           the gas pressure p,
+2022; Varma & Müller 2023). In contrast to the main sequence
+phase, these late evolutionary stages are characterized by vig-        p = p(ρ, eint ).                                                        (6)
+orous convective shells that can entrain a substantial amount of
+mass on relatively short timescales, possibly giving rise to shell     In our simulations, we assumed an ideal gas law,
+mergers (Ritter et al. 2018; Mocák et al. 2018; Yadav et al. 2020;
+Andrassy et al. 2020). If an efficient SSD action takes place in-
+side these shells, it could reduce the mass entrainment rate at        p(ρ, eint ) = (γ − 1)ρeint ,                                            (7)
+the convective boundaries and possibly delay or even inhibit the
+occurrence of the merger events. Numerical simulations of the          where γ = 5/3 is the adiabatic index.
+dynamical amplification of magnetic fields in these layers then            We stress that the absence of the viscous and resistive dis-
+become essential for determining the stratification of the super-      sipation terms in Eqs. (2)–(4) does not mean that the simulated
+nova progenitor and the fate of the star. Acquiring more insight       flows are inviscid and nonresistive. In fact, the numerical meth-
+into dynamo mechanisms in late burning shells of massive stars         ods that we used to solve the equations of ideal MHD (see
+is also particularly important because magnetic fields can act         Sect. 2.2) must add a certain amount of numerical dissipation
+as seeds to magneto-rotationally powered supernovae (Müller &          into the system in order to achieve numerical stability.
+Varma 2020).
+                                                                       1
+    In this paper, we investigated the effects of a small-scale tur-     We √ use the Lorentz-Heaviside units throughout the paper
+bulent dynamo acting in a late stellar convective shell using our      (B = b/ 4π).
+
+Article number, page 2 of 15
+                              G. Leidi et al.: Simulations of turbulent dynamo action in a stellar convective shell
+
+2.2. Numerical methods                                                    dynamic conditions of this test setup resemble those found dur-
+                                                                          ing oxygen shell burning in a star with an initial mass of 25 M⊙
+We solved Eqs. (1)–(5) with the SLH code, which is suited                 (Jones et al. 2017). However, Andrassy et al. (2022) adopted
+for simulating low-Mach-number (magneto-)convection and ex-               a few simplifications to make the study easily reproducible by
+citation of internal gravity waves (IGWs) in the deep interi-             other research groups. In particular, the geometry of the shell
+ors of stars (Miczek et al. 2015; Edelmann et al. 2017; Horst             was plane-parallel, the EoS was that of an ideal gas, neutrino
+et al. 2020, 2021; Edelmann et al. 2021; Andrassy et al. 2022;            cooling was not included, and detailed nuclear burning was re-
+Leidi et al. 2022; Andrassy et al. 2023). SLH makes use of a              placed by a time-independent heat source term, whose ampli-
+second-order finite-volume discretization and upwinding tech-             tude was set such that convective motions were driven with root-
+niques that require an approximate solution to the Riemann prob-          mean-square velocities characteristic of late evolutionary stages
+lem at each cell interface. Here, the pair of Riemann states was          in massive stars (Mrms ≈ 0.04).
+reconstructed using the Piecewise-Parabolic-Method (PPM) of                   We mapped the initial hydrostatic stratification (see Fig. 1)
+Colella & Woodward (1984). Upwind, hyperbolic fluxes were                 on a 3D Cartesian grid with spatial domain (x, y, z) ∈
+computed at cell interfaces with the low-dissipation version of           [−Lref , Lref ] × [Lref , 3Lref ] × [−Lref , Lref ], where Lref = 4 ×
+the HLLD solver (LHLLD) of Minoshima & Miyoshi (2021).                    108 cm. We used periodic boundaries in the horizontal x− and
+LHLLD modifies the stabilizing pressure-diffusion term in the             z−direction. At the top and bottom boundaries of the domain, in-
+original HLLD solver of Miyoshi & Kusano (2005) to ensure                 stead, we adopted impermeable, stress-free boundary conditions
+that the magnitude of numerical dissipation (relative to the phys-        for the velocity field,
+ical central flux) is independent of the Mach number of the flow,
+M = |V|/c, where c = (γp/ρ)1/2 is the sound speed. This cor-              ∂V x ∂Vz
+rection dramatically reduces the excessive amount of numerical                =    = Vy = 0,                                                  (8)
+                                                                           ∂y   ∂y
+diffusion introduced by shock-capturing methods in simulations
+of subsonic flows (Miczek et al. 2015; Leidi et al. 2022).                we forced the magnetic field to be purely horizontal,
+    To suppress the development of spurious flows due to grid
+discretization errors in strongly stratified setups, we used a well-      ∂Bx ∂Bz
+                                                                              =    = By = 0,                                                  (9)
+balancing technique (the Deviation method, Berberich et al.                ∂y   ∂y
+2021; Edelmann et al. 2021). In this method, the vector of con-
+served quantities, U = (ρ, ρV, ρetot , B, ρψ), is split into a            and for the scalar quantities we assumed
+time-independent hydrostatic component, Ũ, and a fully non-
+                                                                          ∂ρ ∂p ∂ψ
+linear perturbation, δU. Eqs. (1)–(5) are then solved by enforc-             =    =    = 0.                                                  (10)
+ing ∂Ũ/∂t = 0, which is achieved in practice by subtracting the          ∂y   ∂y   ∂y
+hydrostatic fluxes and source terms from the spatial residuals.
+                                                                               The gravitational acceleration, assumed to be time-
+Such a measure is necessary because conventional finite volume
+                                                                          independent, points downward in the y-direction and goes to zero
+methods discretize hyperbolic fluxes and gravitational source
+                                                                          at the vertical boundaries according to Eq. (1) of Andrassy et al.
+terms at different locations on the computational grid, so hydro-
+                                                                          (2022). In that work, such a choice for the gravitational accelera-
+static solutions cannot be maintained for long times. If ignored,
+                                                                          tion was made to allow the hydrostatic density and pressure pro-
+these discretization errors can dramatically affect the evolution
+                                                                          files to become constant at the domain boundaries, making the
+of buoyancy-driven flows and produce grossly inaccurate numer-
+                                                                          problem consistent with the conditions in Eq. (10). Although un-
+ical solutions (Edelmann et al. 2021).
+                                                                          realistic, turning off the gravity at the boundaries does not appre-
+    To keep the strength of magnetic monopoles under control,
+                                                                          ciably alter the stratification of the oxygen shell, which is mostly
+we used a staggered constrained transport (CT) method (Evans
+                                                                          affected by the aforementioned simplifications, as can be seen
+& Hawley 1988). Different from the finite volume discretiza-
+                                                                          in Fig. 1 of Andrassy et al. (2022). For consistency with their
+tion, here the surface-averaged magnetic field components are
+                                                                          model, we decided not to modify the profile of the gravitational
+evolved at cell interfaces by performing the line integral of the
+                                                                          acceleration here.
+electromotive force along the cell edges. Thanks to this opera-
+                                                                               The stratification is isentropic up to approximately y = 2Lref ,
+tion, the update on the cell-volume average of ∇ · B vanishes to
+                                                                          and it smoothly turns subadiabatic in the upper half of the do-
+machine precision. In SLH, the upwind electromotive force at the
+                                                                          main. Overall, the grid covers 4.35 pressure scale heights in the
+cell edges is computed according to the CT-Contact scheme of
+                                                                          vertical direction. To be able to track the time evolution of the
+Gardiner & Stone (2005).
+                                                                          mass entrained into the convection zone, we filled the convec-
+    Finally, both cell-centered and staggered quantities were
+                                                                          tively stable layer with a passive tracer at t = 0 s, whose abun-
+evolved in time with a semi-discrete scheme based on the
+                                                                          dance progressively drops to zero across the convective bound-
+method of lines. The resulting system of ordinary differential
+                                                                          ary. Further details regarding the initial stratification and the heat
+equations was solved using the explicit strong stability preserv-
+                                                                          source can be found in Andrassy et al. (2022).
+ing (SSP) RK2 method of Shu & Osher (1988). Further details
+                                                                               To start the dynamo action, we planted an initially horizontal
+regarding the implementation of the fully unsplit MHD solver in
+                                                                          magnetic field into the grid, Bx = 105 G. The strength of the seed
+SLH can be found in Leidi et al. (2022).
+                                                                          field was chosen such that the Lorentz force exerted on the fluid
+                                                                          at early times was weak enough to not affect the development of
+3. Setup                                                                  convection.
+                                                                               We judged the numerical convergence of the results obtained
+We used the setup first described in Andrassy et al. (2022), who          in this work by running simulations on grids with 1283 , 2563 ,
+performed a comparison of five different hydrodynamic codes               and 5123 cells. To compute meaningful time-averaged quanti-
+(SLH, PPMSTAR, MUSIC, FLASH, and PROMPI) on a problem in-                 ties and avoid introducing temporal correlations caused by the
+volving turbulent convection, convective boundary mixing, and             turbulent nature of the convective flows, all test cases were run
+the excitation of IGWs in an overlying stable layer. The thermo-          until tmax = 25τconv , where τconv = 63.36 s is the mean convective
+                                                                                                                      Article number, page 3 of 15
+                                                   A&A proofs: manuscript no. oxygen-shell-MHD
+
+                                                                               process mostly occurs on intermediate or small spatial scales. It
+                                                                               could be an SSD, where the magnetic field is randomly stretched
+        1.6                                                                    at scales smaller than the forcing scale of turbulence. How-
+                                        ρ/ρref           |gy |/gref
+                                                                               ever, two other processes could contribute to the amplification
+        1.4                             p/pref           ψ                     of small-scale magnetic fields in this setup: turbulent induction,
+                                        p/ργ             q̇/q̇ref
+                                                                               which is the stretching of large-scale magnetic fields by a turbu-
+        1.2                                                                    lent, small-scale velocity component (Schekochihin et al. 2007),
+                                                                               and turbulent cascade of magnetic energy toward smaller scales
+        1.0                                                                    (Pietarila Graham et al. 2010). In fact, the large-scale fields that
+                                                                               are needed to excite the latter two processes, not only are char-
+        0.8                                                                    acteristic of large-scale dynamos (Brandenburg 2009; Charbon-
+                                                                               neau 2013), but they can also be supported by the large-scale
+        0.6                                                                    velocity structures typical of turbulent convection (Käpylä et al.
+                                                                               2018). Moreover, the imposed boundary conditions (see Sect. 3)
+        0.4                                                                    allow the integrated horizontal magnetic flux, and consequently
+                                                                               the mean horizontal magnetic field, to be preserved in time inside
+        0.2                                                                    the spatial domain. Therefore, the mean horizontal field takes
+                                                                               the value of the chosen seed field, Bx = 105 G, and represents
+        0.0                                                                    a persistent large scale magnetic field component that could, in
+              1.0         1.5        2.0          2.5           3.0            principle, contribute to the amplification of magnetic energy via
+                                   y [Lref ]                                   turbulent induction.
+                                                                                   To get a better understanding of the underlying mechanisms
+                                                                               that amplify the magnetic energy in these simulations, we com-
+Fig. 1. Profiles of density, pressure, pseudo-entropy (p/ργ ), gravity,        puted transfer functions T XYZ (k) in the Fourier space between
+mass fraction of a passive tracer (ψ), and heat source term (q̇) as a func-    the kinetic (K) and magnetic (B) energy reservoirs inside the
+tion of the vertical coordinate y at t = 0 s. Here, ρref = 1.82×106 g cm−3 ,   convective layer, following the approach of Pietarila Graham
+pref = 4.64 × 1023 dyne cm−2 , gref = 6.37 × 108 cm s−2 , q̇ref = 1.76 ×       et al. (2010). In particular, T XYZ (k) represents the energy re-
+1020 erg cm−3 s−1 , and Lref = 4 × 108 cm.                                     ceived (or lost in case of T XYZ (k) < 0) per unit time and per unit
+                                                                               wavenumber at scale k of energy type Y from all scales of en-
+                                                                               ergy type X via process Z. The transfer of magnetic energy to the
+turnover timescale in the purely hydrodynamic case, defined ac-                k-th component of kinetic energy is determined by the net work
+cording to Eq. (16) of Andrassy et al. (2022). By t = tmax , the               done on the fluid by the magnetic tension force,
+growing convective layer is still sufficiently far away from the
+upper boundary of the spatial domain that the imposed boundary                            1
+conditions do not appreciably alter the dynamics of the mixing                 T BKT (k) = V̂(k) · [ B
+                                                                                                     ÷ · ∇B]∗ (k)
+                                                                                          2
+region. Thus, we decided not to extend the simulations beyond                                          ï ÿ ò∗
+tmax . Finally, in order to capture possible differences between the                      1 ”            1
+                                                                                         + (ρV)(k) ·       B · ∇B (k) + c.c.,                    (12)
+MHD and the purely hydrodynamic case, we ran an additional                                2              ρ
+set of simulations without magnetic fields.
+                                                                               and the magnetic pressure force,
+4. Results                                                                                  1        ’ ∗
+                                                                               T BKP (k) = − V̂(k) · ∇|B|2 (k)
+4.1. Onset of convection and kinematic stage of the dynamo                                  4
+                                                                                                      ï ÷ ò∗
+                                                                                            1 ”         1
+To break the initial symmetry, we added a small-amplitude per-                             − (ρV)(k) · ∇|B|2 (k) + c.c.,                         (13)
+turbation to the hydrostatic density stratification according to                            4           ρ
+Eq. (6) of Andrassy et al. (2022). The energy injected by the
+                                                                               where ∗ is the complex conjugate, c.c. is the complex conjugate
+heat source at the base of the box leads to the development of
+                                                                               of the whole expression on the right-hand side, and ˆ represents
+buoyant parcels of hot fluid that rise in the adiabatic layer (see
+                                                                               the Fourier projection3 . Magnetic energy on scale k is produced
+Fig. 2). As soon as these flows cross the boundary of the subadi-
+                                                                               or removed via stretching of the magnetic field lines,
+abatic layer, the buoyant acceleration changes sign (so it points
+downward in the y-direction) and forces the rising plumes to turn
+around. The large-scale buoyant fluid elements that are driven by              T KBS (k) = B̂(k) · [ B
+                                                                                                     ÷ · ∇V]∗ (k) + c.c.,                        (14)
+the energy source quickly develop shear instabilities that cascade
+                                                                               and through compression and advection of the magnetic field,
+down to smaller scales, and turbulent convection fully develops
+by t ≈ τconv .
+    As shown in Fig. 3, the mean magnetic energy density inside                T KBCA (k) = − B̂(k) · [ B∇
+                                                                                                        ÷  · V]∗ (k)
+the convective shell2 ,                                                                      − B̂(k) · [V
+                                                                                                        ÷ · ∇B]∗ (k) + c.c.                      (15)
+        1
+ẼB =     ⟨|B|2 ⟩conv ,                                                (11)    Because here we solved the fully compressible MHD equations,
+        2                                                                      T KBCA (k) includes both the transport of energy within the mag-
+increases exponentially in time. The growth rate of the instabil-              netic energy reservoir and the generation of magnetic energy
+ity is higher on finer grids, which indicates that the amplification            3
+                                                                                  A thorough derivation of the transfer functions computed here can be
+2
+    ⟨·⟩ is the volume-weighted spatial average operator.                       found in Appendix A.1. of Pietarila Graham et al. (2010).
+
+Article number, page 4 of 15
+                                         G. Leidi et al.: Simulations of turbulent dynamo action in a stellar convective shell
+
+
+
+                        3.0                                                                                                                             0.020
+                              t/τconv = 0.44                            t/τconv = 0.56                           t/τconv = 0.69
+                        2.5                                                                                                                             0.015
+            y [Lref ]
+
+
+
+
+                        2.0                                                                                                                             0.010
+
+                        1.5
+                                                                                                                                                        0.005
+
+
+
+
+                                                                                                                                                                 (A − A|t=0 )/A|t=0
+                        1.0
+                                                                                                                                                        0.000
+                        3.0
+                              t/τconv = 0.81                            t/τconv = 1.19                           t/τconv = 1.81
+                                                                                                                                                        −0.005
+                        2.5
+            y [Lref ]
+
+
+
+
+                        2.0                                                                                                                             −0.010
+
+
+                        1.5                                                                                                                             −0.015
+
+
+                        1.0                                                                                                                             −0.020
+                           −1.0   −0.5      0.0          0.5   1.0 −1.0     −0.5       0.0      0.5      1.0 −1.0    −0.5     0.0       0.5      1.0
+                                         x [Lref ]                                 x [Lref ]                                x [Lref ]
+
+
+
+Fig. 2. Development of convection in the MHD simulation of the idealized oxygen shell run on a 5123 grid. The panels show fluctuations in
+pseudo-entropy (A = p/ργ ) in the z = 0 plane at different times, as indicated by the insets. The entropy generated by the heat source at the base
+of the box (see Fig. 1) is mixed throughout the initially adiabatic layer by turbulent convection. This process slowly increases the entropy content
+of the convection zone in time. The broad stripe of negative entropy fluctuation visible in the upper half of the domain at early times is due the
+thermal expansion of the convective layer. The turbulent flows also excite IGWs at the upper convective boundary (lower center panel) which then
+propagate in the subadiabatic layer.
+
+
+through fluid compression. These two processes, however, can-                                lines contributes most of the magnetic energy generation at
+not be decoupled (Rempel 2014), which can be seen by expand-                                 spatial wavenumbers close to kh = 50. In these simulations, the
+ing the advective flux of magnetic energy as                                                 typical velocities in the convection zone are considerably sub-
+                                                                                             sonic (Mrms ≈ 0.04), so fluid compression due to the ram pres-
+   Å
+      |B|2
+           ã              ï    ¤     B
+                                           ò∗                                                sure of the convective flows (pram ∼ M2 ) has a negligible con-
+−∇· V       (k) = − B̂(k)· (V · ∇)B + ∇ · V (k)+c.c. (16)                                    tribution to the generation of magnetic energy (see T KBC (kh ) =
+       2                             2
+                                                                                             − B̂(kh ) · [ B∇
+                                                                                                           ÷  · V]∗ (kh ) + c.c. in Fig. 4). Therefore, T KBCA (kh )
+To simplify the calculations, instead of computing 3D Fourier                                measures mostly the advective transport of magnetic energy to
+projections in Eqs. (12)-(15), we averaged transfer functions                                scale kh from all scales of the magnetic field, similar to the case
+T XYZ (kh , y j ) obtained at each horizontal plane y j inside the con-                      of incompressible MHD,
+vection zone,
+                                                                                             T KBCA (kh ) ≈ − B̂(kh ) · [V
+                                                                                                                         ÷ · ∇B]∗ (kh ) + c.c.                          (20)
+T XYZ (kh ) = ⟨T XYZ (kh , y j )⟩y j ∈(Lref ,2Lref ) .                             (17)
+                                                                                             We observe that the magnetic cascade mainly removes magnetic
+                                                                                             energy from large scales, where T KBCA < 0, and redistributes
+                                                               »
+Here, kh is the horizontal wavenumber kh =                         k2x + kz2 , where
+                                                                                             it at scales with kh > 75, where T KBCA > 0. This process domi-
+                                                                                             nates the generation of magnetic energy over stretching only at
+                    0 ≤ m ≤ Nx2−1 ,
+     (                          ö       ù
+       m,
+kx =                                                                               (18)      kh > 130, which corresponds to a spatial scale of 3.9 times the
+                      N x −1
+                    ö        ù
+       −N x + m,        2      < m < Nx ,                                                    width of the grid cells, ∆x. Work done by fluid motions against
+     (                         ö N −1 ù                                                      the magnetic tension force (−T BKT ) most efficiently transforms
+       n,          0 ≤ n ≤ z2 ,                                                              kinetic energy at kh ≈ 30 into magnetic energy. Work done by
+kz =               ö N −1 ù                                                        (19)
+       −Nz + n,       z
+                       2      < n < Nz ,                                                     the magnetic pressure force on the fluid is negligible everywhere
+                                                                                             except on very large scales. These results allow us to find the
+⌊.⌋ is the floor function, and N x and Nz are the number of cells in                         range of wavenumbers where the magnetic field is most effi-
+the x− and z−direction, respectively.                                                        ciently stretched by fluid motions. As pointed out by Pietarila
+     Figure 4 shows results from the transfer analysis performed                             Graham et al. (2010), the spatial wavenumber at which magnetic
+on the grid with 5123 cells. Stretching of the magnetic field                                field is generated (q), the one at which it is stretched (k), and the
+                                                                                                                                          Article number, page 5 of 15
+                                                            A&A proofs: manuscript no. oxygen-shell-MHD
+
+                                                                                       between the MHD and the hydrodynamic simulations. This is
+                                                                                       the kinematic stage of the dynamo, which lasts for several con-
+                                                                                       vective turnover timescales, depending on the resolution of the
+                  1019                                                                 grid.
+
+                                                                                       4.2. Nonlinear phase of the dynamo
+                  1017
+                                                                                       The amplification of the magnetic field due to the action of the
+ẼB [erg cm−3 ]
+
+
+
+
+                                                                                       small-scale turbulent dynamo proceeds until the Lorentz force
+                  1015                                                                 becomes strong enough to start having a feedback effect on
+                                                                                       the flow. Such a change in the evolution of the dynamo hap-
+                                                                                       pens when the magnetic energy approaches equipartition with
+                  1013                                                                 the kinetic energy content of the eddies on the small scales of
+                                                                                       turbulence. Strong, small-scale magnetic fields inhibit the de-
+                                                                                       velopment of shear instabilities that feed the turbulent cascade
+                  1011                                                1283             and drive the dynamo amplification. The stretching of the mag-
+                                                                      2563             netic field lines happens now on larger scales, where turbulence
+                                                                      5123             has not been quenched. Work done against the magnetic tension
+                                                                                       force by the turbulent convective flows sustains the magnetic
+                         0.0   2.5   5.0    7.5      10.0      12.5      15.0          field against numerical (resistive) dissipation, and the dynamo
+                                           t/τconv                                     reaches saturation. By t/τconv ≈ 15, all of the MHD simulations
+                                                                                       presented here have entered this phase. This stage of the dynamo,
+                                                                                       however, does not represent a statistical steady state solution of
+Fig. 3. Time evolution of the mean magnetic energy density inside the                  the simulated setup. In fact, the continuous injection of entropy
+convection zone for the indicated grid resolutions.                                    into the system by the heat source and the mixing processes that
+                                                                                       take place at the convective boundary (see Sect. 4.3) both con-
+                                                                                       tribute to the entrainment of material from the overlying stable
+one at which the flow works against magnetic tension (p) form a                        layer. Therefore, the size, mass, and entropy content of the con-
+triadic relation,                                                                      vective layer keep increasing over time.
+k = q − p.                                                                      (21)       The magnetic-to-kinetic energy ratio, shown in Fig. 6,
+                                                                                       reaches saturation with a mean value of ≈ 0.22 on the finest grid,
+By considering the most extreme cases in which q and p have the                        with sporadic, intermittent episodes in which it reaches values
+same or the opposite orientation, we estimate that the magnetic                        as high as 0.33. During the nonlinear phase of the dynamo, the
+field lines are most efficiently stretched at 20 ≲ kh ≲ 80. As we                      mean kinetic energy density inside the convective shell in the
+show in Sect. 4.2, this interval lies at the bottom of the inertial                    MHD simulations,
+range of the turbulent kinetic energy spectrum. Thus, the am-
+plification of magnetic energy is mostly caused by the action of                               1
+a small-scale turbulent dynamo, with a minor contribution from                         ẼK =     ⟨ρ|V|2 ⟩conv ,                                        (22)
+                                                                                               2
+the turbulent cascade close to the grid scale.
+     Further evidence of small-scale turbulent dynamo action can                       is on average 25% lower than that in the hydrodynamic case on
+be provided by checking the scaling of the growth rate of the                          the 5123 grid (see Fig. 7). We obtained this result by first com-
+magnetic energy, γ = ∂lnẼB /∂t, with the grid resolution. Because                     puting the time average {·} of ẼK over t ∈ (15τconv , 25τconv ), and
+in this work we used the Implicit Large Eddy Simulation (ILES)                         then by calculating
+method, the magnetic Prandtl number (Prm = ν/η) is likely to be
+close to or larger than unity (Vögler & Schüssler 2007; Rempel                         ϵ = {ẼK,MHD }/{ẼK,HYDRO } − 1.                                (23)
+2014). In this regime of Prandtl numbers, an SSD can only be
+started if the fluid Reynolds number, Re = Vrms Lref /ν, is larger                     However, the large temporal fluctuations that characterize ẼK
+than a critical threshold. The growth rate of the magnetic energy                      made it necessary to provide an error estimate on ϵ in order to
+in an unstable SSD should then scale as Re1/2 (Kazantsev 1968;                         prove the statistical significance of this result. The error on ϵ
+Schekochihin et al. 2004). Although the effective value of the                         is a combination of the statistical uncertainties on {ẼK,HYDRO }
+kinematic viscosity (ν) and resistivity (η) coefficients are deter-                    and {ẼK,MHD }, which we computed as follows. First we obtained
+mined by the underlying numerical methods used to solve the                            the standard deviation σK of ẼK over the selected time series
+MHD equations, in the ILES approach the fluid Reynolds num-                            for both the hydrodynamic and MHD setups. Second, we esti-
+ber should depend on the spatial resolution as ∆x−4/3 (Cristini                        mated the statistical uncertainty on the mean quantity {ẼK } by
+et al. 2017), which leads to γ ∝ Re1/2 ∝ ∆x−2/3 . Our study in-                        taking into account possible temporal correlations introduced by
+dicates that the growth rate γ follows the predicted theoretical                       the turbulent nature of the convective flows. According to Fig.
+scaling (see Fig. 5). These results can only be confirmed by us-                       4 of Andrassy et al. (2022), the autocorrelation function of the
+ing an explicit kinematic viscosity coefficient so that Re can be                      convective velocity drops to zero after a time shift ∆t ≈ τconv ,
+measured directly, which, however, is beyond the scope of this                         which suggests that there is approximately one independent re-
+work.                                                                                  alization of the convective flows per convective turnover. Thus,
+     At early times, the magnetic energy is still subdominant with                     the uncertainty associated to {ẼK }, σ̃K , was approximated as
+respect to the kinetic energy content of the flow. Therefore, the
+Lorentz force does not affect the evolution of the convection, and                           σK
+we do not observe any systematic difference in the velocity field                      σ̃K = √ ,                                                       (24)
+                                                                                              Nto
+Article number, page 6 of 15
+                                                           G. Leidi et al.: Simulations of turbulent dynamo action in a stellar convective shell
+
+
+
+
+                                                          T KBS
+                                        100
+                                                          T KBCA
+                                                          T KBC
+              rescaled transfer rates
+
+
+
+
+                                        10−1
+
+
+
+                                        10−2
+
+
+
+                                        10−3
+
+                                                                                                                              −T BKT
+                                                                                                                              T BKP
+                                        10−4
+                                               100                       101                      102             100                  101                   102
+                                                                               kh                                                              kh
+
+
+
+Fig. 4. Transfer functions extracted from the convection zone on the 5123 grid and averaged over the kinematic stage of the dynamo. The panel on
+the left shows the transfer rates from the kinetic (K) to the magnetic (B) energy reservoir, whereas the panel on the right shows magnetic-to-kinetic
+energy transfer rates. The time averaging was performed such that, at each time t, all the transfer curves were rescaled by the maximum value of
+T KBS (kh ). The resulting curves were then averaged over the time interval t ∈ (1.5τconv , 3τconv ). Dashed lines represent negative transfer rates, while
+solid lines are used for positive rates.
+
+
+where Nto = 10 is the number of convective turnovers (see also                                                Table 1. Mean kinetic energy density (in units of erg cm−3 ) inside the
+Table 1). Finally, we computed the variance of ϵ,                                                             convection zone, averaged over t ∈ (15τconv , 25τconv ) for the indicated
+                                                                                                              grid resolutions in the hydrodynamic and MHD cases.
+                                                 ã2                                    ã2
+                                 ∂ϵ                                            ∂ϵ
+        Å                                                            Å
+σ2ϵ =                                                 σ̃2K,HYDRO +                          σ̃2K,MHD . (25)             N        ẼK /1020 (HYDRO)       ẼK /1020 (MHD)
+            ∂{ẼK,HYDRO }                                                ∂{ẼK,MHD }
+                                                                                                                        128      1.25 ± 0.03             0.97 ± 0.03
+We find σϵ ≈ 3%, making a mean relative deviation of 25% sta-                                                           256      1.26 ± 0.02             1.00 ± 0.03
+tistically significant (i.e., different from zero) by more than 8σϵ .                                                   512      1.22 ± 0.03             0.91 ± 0.03
+     In the ILES approach, increasing the grid resolution reduces
+the amount of numerical resistivity introduced into the system,                                               Notes. The √errors represent one standard deviation over the time series
+making the turbulent dynamo progressively more efficient. Con-                                                divided by Nto , where Nto = 10 is the estimated number of independent
+sequently, the mean magnetic energy density in our simulations                                                data points (one per convective turnover).
+increases by a factor of two from the 1283 to the 5123 grid, where
+the typical strength of the magnetic field is ≈ 5 × 109 G (see Ta-
+ble 2). On the other hand, ẼK does not seem to show a significant                                                The suppression of small-scale shear instabilities in the con-
+resolution dependence when averaged over the saturated phase                                                  vective flows caused by the generated strong magnetic fields can
+of the dynamo, t ∈ (15τconv , 25τconv ), as can be noted from the                                             be noted in Fig. 8, where we compare snapshots of the Mach
+values provided in Table 1. Averaging over a wider time win-                                                  number taken from an MHD and a purely hydrodynamic sim-
+dow could potentially reveal a statistically significant trend in                                             ulation in the nonlinear phase of the dynamo. In contrast to
+{ẼK } with increasing spatial resolution. However, this is not pos-                                          the hydrodynamic case, where turbulence is essentially isotropic
+sible with our current setup, in which the convective boundary                                                on spatial scales smaller than Lref , the velocity field in the
+approaches the upper domain boundary at late times, potentially                                               MHD simulation is characterized by the presence of anisotropic,
+altering the dynamics of the mixing region and producing unre-                                                thread-like structures that extend over a large part of the convec-
+liable results (see also Sect. 3). We also note that a fixed time-                                            tive shell.
+averaging window, in principle, samples different evolutionary                                                    A comparison of horizontally averaged velocity profiles (see
+times of the dynamo depending on grid resolution. In fact, the                                                Fig. 9) shows that horizontal velocities in the MHD case are re-
+oxygen shell does not have a statistical steady state solution, and                                           duced by as much as 30% in the convective layer, as compared
+the time at which the dynamo enters its nonlinear regime is res-                                              to the simulations without magnetic fields. Vertical velocities,
+olution dependent. However, as visible in Fig. 7, neither ẼK nor                                             instead, are diminished on average only by 10%. As visible in
+ẼB show clear, long-term trends in the saturated phase of the dy-                                            Fig. 10, the partial suppression of the horizontal mixing in the
+namo. This result suggests that the secular evolution of the mean                                             MHD runs increases the magnitude of the root-mean-square en-
+stratification can be neglected for this analysis since it does not                                           tropy fluctuation inside the convection zone with respect to the
+seem to affect basic properties of the flows and of the dynamo.                                               hydrodynamic simulations. A larger contrast in the thermal con-
+                                                                                                                                                         Article number, page 7 of 15
+                                                            A&A proofs: manuscript no. oxygen-shell-MHD
+
+
+
+                                                                                                         0.40
+                                                             ∝ (∆x/Lref )−2/3                                                1283
+                           10−1
+                                                                                                         0.35                2563
+                                                                                                                             5123
+                                                                                                         0.30
+                        6 × 10−2
+γ = ∂lnẼB /∂t [s−1 ]
+
+
+
+
+                                                                                                         0.25
+
+
+
+
+                                                                                       ẼB /ẼK
+                                                                                                         0.20
+                        4 × 10−2
+                                                                                                         0.15
+                        3 × 10−2
+                                                                                                         0.10
+
+                        2 × 10−2                                                                         0.05
+
+                                                                                                         0.00
+                                                       −2
+                                                    10                                                             0             5       10             15    20         25
+                                                ∆x/Lref                                                                                       t/τconv
+
+
+Fig. 5. Growth rate of the mean magnetic energy inside the convec-                     Fig. 6. Time evolution of the mean magnetic-to-kinetic energy ratio in-
+tion zone (averaged over the kinematic phase of the dynamo) as a                       side the convective shell.
+function of the grid spacing, ∆x. For this analysis, we also simulated
+the kinematic phase of the dynamo on grids with 3843 and 6403 cells
+(∆x/Lref = 5.2 × 10−3 , and ∆x/Lref = 3.1 × 10−3 , respectively). Error bars
+represent three standard deviations, computed over the time series. The                                            ×1020
+expected theoretical scaling for SSD amplification (γ ∝ Re1/2 ∝ ∆x−2/3 )                                                             HYDRO, 1283             MHD, 1283
+is represented by the black dashed line.                                                                                             HYDRO, 2563             MHD, 2563
+                                                                                                             2.0
+                                                                                                                                     HYDRO, 5123             MHD, 5123
+Table 2. Mean magnetic field strength inside the convection zone, aver-
+aged over t ∈ (15τconv , 25τconv ) for the indicated grid resolutions.
+                                              √                                                              1.5
+                                                                                         ẼB,K [erg cm−3 ]
+
+
+
+
+                                   N     ⟨|b|/ 4π⟩conv [109 G]
+                                   128   3.49 ± 0.06
+                                   256   4.24 ± 0.06                                                         1.0             ẼK
+                                   512   5.06 ± 0.08
+
+Notes. The √errors represent one standard deviation over the time series                                     0.5
+divided by Nto , where Nto = 10 is the estimated number of independent
+data points (one per convective turnover).
+                                                                                                                           ẼB
+                                                                                                             0.0
+tent between up- and downflows in turn increases the efficiency
+of the convective energy transport. For this reason, despite the                                                   0             5       10             15    20         25
+mild suppression of vertical velocities in the convection zone                                                                                t/τconv
+caused by the action of the dynamo, we do not observe any sig-
+nificant difference in the vertical enthalpy fluxes,
+                                                                                       Fig. 7. Time evolution of the mean kinetic energy density inside the con-
+FH = ⟨(eint + p)Vy ⟩ x,z ,                                                      (26)   vection zone, ẼK , for the purely hydrodynamic (vermilion) and MHD
+                                                                                       (light blue) simulations. The time evolution of the mean magnetic en-
+between the MHD and the hydrodynamic setups (see Fig. 11).                             ergy density in the MHD simulations, ẼB , is also shown.
+Only in the overshoot layer, where FH < 0, the MHD simulations
+are characterized by a smaller unsigned enthalpy flux than their
+hydrodynamic counterpart. This result may be due to the com-                           The scale at which the power spectrum deviates from the Kol-
+bined effects of reduced flow speeds and entropy fluctuations at                       mogorov law due to the action of numerical dissipation becomes
+the upper convective boundary in the MHD case, as visible in                           smaller as the resolution is progressively increased, as expected
+Fig. 9 and Fig. 10, respectively.                                                      in the ILES approach. The kinetic energy spectra in the MHD
+    In Fig. 12, we show the kinetic and magnetic energy spec-                          simulations, instead, deviate from the hydrodynamic curves al-
+tra computed in the y = 1.5Lref plane, averaged over the satu-                         ready at wavenumbers of kh ≈ 10, where the dynamo is most ef-
+rated phase of the dynamo. The kinetic energy spectra result-                          ficient at converting kinetic energy into magnetic energy (i.e.,
+ing from the hydrodynamic simulations converge to the Kol-                             it achieves maximum |T BKT |/ÊK ). The observed drop of kinetic
+mogorov scaling (kh−5/3 , Kolmogorov 1941) in the inertial range.                      energy in the MHD case corresponds to an increase of mag-
+Article number, page 8 of 15
+                                         G. Leidi et al.: Simulations of turbulent dynamo action in a stellar convective shell
+
+
+                                              HYDRO                                                     MHD
+                   3.00                                                                                                                      0.08
+                          z=0                                                      z=0
+                   2.75
+
+                   2.50                                                                                                                      0.07
+
+                   2.25
+       y [Lref ]
+
+
+
+
+                   2.00                                                                                                                      0.06
+
+                   1.75
+
+                   1.50
+                                                                                                                                             0.05
+                   1.25
+
+
+
+
+                                                                                                                                                    M = |V|/c
+                   1.00
+                                                                                                                                             0.04
+                   1.00
+                          y = 1.5Lref                                              y = 1.5Lref
+                   0.75
+                                                                                                                                             0.03
+                   0.50
+
+                   0.25
+   z [Lref ]
+
+
+
+
+                   0.00                                                                                                                      0.02
+
+               −0.25
+
+               −0.50                                                                                                                         0.01
+
+               −0.75
+
+               −1.00                                                                                                                         0.00
+                    −1.0          −0.5           0.0          0.5          1.0 −1.0          −0.5         0.0          0.5          1.0
+                                               x [Lref ]                                                x [Lref ]
+
+
+
+Fig. 8. Snapshots of the Mach number on the 5123 grid at t/τconv = 22. The panels on the left show results from the purely hydrodynamic simulation,
+while the panels on the right show the MHD simulation. The upper row shows vertical cuts taken in the z = 0 plane, while the lower row shows a
+horizontal cut through the y = 1.5Lref plane. The white-dotted line indicates the initial position of the convective boundary.
+
+
+netic power in the inertial range, and the sum of the two en-                         size of the convection zone. The presence of a large-scale field
+ergy contributions approximately resembles the kinetic energy                         component can be observed in Fig. 13, where we show vertical
+spectrum in the hydrodynamic simulations. The wavenumber at                           and horizontal cuts in By for all our three grids. A small-scale
+which the magnetic-to-kinetic energy ratio becomes greater than                       component with mixed polarity also becomes more noticeable
+unity decreases on finer grids4 . On the grid with 5123 cells, the                    on progressively finer grids with reduced numerical dissipation.
+break-even point is at kh = 10, which corresponds to approxi-                              Both the horizontal and the vertical component of the mag-
+mately half of the pressure scale height at y = 1.5Lref . Unlike                      netic field become stronger as the grid is refined (see Fig. 14).
+the case of forced, isotropic MHD turbulence (Haugen et al.                           The magnetic field smoothly turns horizontal across the upper
+2004; Schekochihin et al. 2004; Iskakov et al. 2007; Branden-                         convective boundary, where the convective flows overturn due
+burg 2011), our simulations of stratified convection also show                        to the negative buoyant acceleration. At the bottom of the shell,
+a substantial amount (up to 30%) of magnetic power stored at                          the magnetic field is forced to be horizontal in order to retain its
+wavenumbers kh < 10. This field component is generated by co-                         solenoidal property given the imposed boundary conditions. We
+herent structures in the form of large-scale up- and downflows                        note that the reflecting boundary forces the convective flows to
+that stretch the magnetic field lines over a large fraction of the                    abruptly change direction over a few computational cells, which
+                                                                                      artificially enhances the stretching and the compression of the
+ 4
+   Energy spectra extracted from different planes in the convective shell             magnetic field lines. This process, however, only affects the gen-
+show qualitatively similar results.                                                   eration of magnetic energy in a narrow region close to the bottom
+                                                                                                                                 Article number, page 9 of 15
+                                                                      A&A proofs: manuscript no. oxygen-shell-MHD
+
+
+
+
+                                    2.00
+                                                  HYDRO, 1283            MHD, 1283                                          HYDRO, 1283
+                                    1.75          HYDRO, 2563            MHD, 2563                                          HYDRO, 2563
+                                                  HYDRO, 5123            MHD, 5123                                          HYDRO, 5123
+   h|Vy |i x,z , hVh i x,z [107 cm s−1 ]
+
+
+
+
+                                    1.50                                                                   10−2             MHD, 1283
+                                                                                                                            MHD, 2563
+                                    1.25                                                                                    MHD, 5123
+
+
+
+
+                                                                                               h(δA/A)2 i x,z
+                                    1.00
+                                                                        hVh i x,z
+                                    0.75
+
+
+
+
+                                                                                              p
+                                    0.50
+
+                                    0.25
+                                                        h|Vy |i x,z
+
+                                    0.00                                                                   10−3
+
+                                           1.0   1.5      2.0          2.5          3.0                             1.0        1.5        2.0     2.5         3.0
+                                                        y [Lref ]                                                                     y [Lref ]
+
+
+Fig. 9. Vertical profiles of the horizontal (Vh =     V x2 + Vz2 ) and verti-               Fig. 10. Vertical profiles of the root-mean-square relative pseudo-
+                                                   p
+cal (Vy ) velocity components averaged over t ∈ (15τconv , 25τconv ). Here,                 entropy fluctuation in the MHD (light blue) and purely hydrodynamic
+light blue is used to indicate the quantities extracted from the MHD                        simulations (vermilion), averaged over t ∈ (15τconv , 25τconv ). The upper
+simulations, whereas vermilion is used for the hydrodynamic simula-                         convective boundary is, on average, at the position of the peaks visible
+tions. An estimate of the statistical uncertainty associated to the aver-                   at y = (2.3 − 2.4)Lref .
+aged profiles can be inferred by looking at the typical dispersion among
+the hydrodynamic simulations, which represent a set of three indepen-
+dent (and numerically converged) realizations of the oxygen shell.
+                                                                                                                    ×1027
+                                                                                                                7
+                                                                                                                                HYDRO, 1283         MHD, 1283
+boundary of the convective shell. In simulations of SSD action in                                               6               HYDRO, 2563         MHD, 2563
+the solar convection zone, including part of the underlying sta-                                                                HYDRO, 5123         MHD, 5123
+ble layer was shown to have little effect on the generation of the                                              5
+magnetic field as compared to simulations with closed bound-
+                                                                                                       s ]
+                                                                                                       −1
+
+
+
+
+ary conditions (Hotta 2017). This author found that the imposed
+steep, positive entropy gradient across the solar overshoot re-                                                 4
+                                                                                                       −2
+                                                                                                       FH [erg cm
+
+
+
+
+gion prevented convective plumes from penetrating into the sta-
+ble layer deeper than a small fraction of the pressure scale height,                                            3
+at least on the characteristic timescales set by convection. Thus,
+in those simulations, the bottom boundary of the solar convective                                               2
+region acted like a reflecting wall for the turbulent flows and the
+magnetic fields. Oxygen-burning shells of massive stars are also                                                1
+characterized by steep, stabilizing entropy gradients at their bot-
+tom boundary (Meakin & Arnett 2007; Jones et al. 2017; Varma
+& Müller 2021). In the model of Jones et al. (2017) (which this                                                 0
+setup is based on), the square of the Brunt-Väisälä frequency at                                                    1.0        1.5        2.0     2.5         3.0
+the silicon-oxygen boundary was several times larger than that                                                                        y [Lref ]
+at the upper boundary of the oxygen shell (see Fig. 4 of Jones
+et al. 2017). Because this quantity is directly related to the buoy-
+ancy jump, entrainment of material from the underlying stable                               Fig. 11. Vertical profiles of the vertical enthalpy flux (FH ) averaged over
+layer into the convection zone can easily be neglected over the                             t ∈ (15τconv , 25τconv ). Here, light blue is used to indicate the quantities
+timescales simulated here. All these considerations give us con-                            extracted from the MHD simulations, whereas vermilion is used for the
+fidence that the chosen boundary conditions are well suited for                             hydrodynamic simulations.
+the simulations presented in this study.
+     The strength of the magnetic field is not uniform across the                           mean-square √magnetic field rescaled by its local equipartition
+convective shell. As previously discussed, the magnetic energy                              value (Beq = ρVrms ) shows much less dependence on y as com-
+approaches equipartition with the kinetic energy content of the                             pared with the results shown in Fig. 15. The height-dependence
+turbulent eddies in the inertial range. Because the mean flow                               of the dynamo action can also be seen in Fig. 16, where we show
+speed does not vary considerably across the convective shell, the                           horizontal averages of the Lorentz work,
+spatial dependence of the magnetic field strength is mostly set by
+the density stratification. Indeed, the vertical profile of the root-                       WL = ⟨V · (∇ × B) × B ⟩ x,z .                               (27)
+                                                                                                                    
+
+Article number, page 10 of 15
+                                           G. Leidi et al.: Simulations of turbulent dynamo action in a stellar convective shell
+
+                                                                                           We note that the dynamo does not operate in the subadiabatic
+                                                                                       layer, although a seed field is present there as well. The turbulent
+                                                                                       structures created by the nonlinear breaking of IGWs (visible in
+                                            ∝ kh−5/3                                   Fig. 8), which is one of the mechanisms that can excite an SSD
+                       1019                                     1283
+                                                                                       in stable stratifications (Skoutnev et al. 2021), are not efficient
+                                                                                       enough to build a significant magnetic field in these simulations.
+   ÊK,B [erg cm−3 ]
+
+
+
+
+                                                                                       The magnetic field in the stable layer reaches saturation with
+                       1017                                                            average strengths of only two to ten times that of the initial seed
+                                                                                       field.
+                                    ÊK , HYDRO
+                       1015
+                                    ÊK , MHD                                          4.3. Impact of magnetic fields on the growth of the
+                                    ÊB                                                     convective shell
+                                                                                       The turbulent convective flows generated in this setup give rise to
+                                            ∝ kh−5/3                3                  a rich variety of hydrodynamic processes at the upper convective
+                       1019                                     256
+                                                                                       boundary, including shear instabilities, breaking of surface grav-
+   ÊK,B [erg cm−3 ]
+
+
+
+
+                                                                                       ity waves, and convective overshooting. These processes con-
+                                                                                       tribute to the entrainment of high-entropy material from the over-
+                       1017                                                            lying stable layer into the convection zone, which causes the con-
+                                                                                       vective shell to grow in time (see also Fig. 8). We computed the
+                                                                                       mass entrained per unit surface area inside the convection zone
+                       1015                                                            by using horizontal averages of the density and the passive tracer
+                                                                                       ψ as in Andrassy et al. (2022),
+                                                                                                 Z ycb (t)
+                                                                                       Me (t) =            ρ̄(y, t)ψ̄(y, t)dy.                       (29)
+                                            ∝ kh−5/3                                              Lref
+                       1019                                     5123
+                                                                                       At each time, we assumed that the vertical coordinate of the up-
+                                                                                       per convective boundary, ycb , was the position of the steepest
+   ÊK,B [erg cm−3 ]
+
+
+
+
+                                                                                       gradient in ψ̄. In Fig. 17 we show the time evolution of the en-
+                       1017                                                            trained mass for all the simulations run in this study. In the hy-
+                                                                                       drodynamic case, numerical convergence is reached already on
+                                                                                       the lowest-resolved grid (with 1283 cells) within a maximum rel-
+                       1015                                                            ative statistical uncertainty of 5%, which is consistent with the
+                                                                                       results obtained by Andrassy et al. (2022). Instead, the mass en-
+                                                                                       trained in the MHD runs slightly decreases with increasing the
+                                                                                       grid resolution. A significant deviation between the MHD and
+                              100             101                  102                 the hydrodynamic simulations is visible only after 15τconv , when
+                                                    kh                                 the dynamo has fully entered its nonlinear phase. By the time
+                                                                                       the simulations have finished, the best resolved MHD setup has
+                                                                                       entrained 12% less mass than the hydrodynamic runs, and the
+Fig. 12. Magnetic (light blue) and kinetic (black-dotted for the hydro-                mass entrainment rate Ṁe has been reduced by ≈ 20%.
+dynamic simulations, and vermilion for the MHD simulations) energy                         Because MHD effects do not dramatically reduce the mass
+spectra computed in the y = 1.5Lref plane and averaged over the time in-               entrainment rate at the upper convective boundary, finding the
+terval t ∈ (15τconv , 25τconv ). Each panel shows the curves extracted from
+a different grid. The black-dashed lines indicate the Kolmogorov scal-
+                                                                                       mechanisms responsible for the observed discrepancy in Me be-
+ing law, kh−5/3 .
+                                                                                       tween the MHD and the hydrodynamic results is challenging.
+                                                                                       One possible explanation is that convective flows in the MHD
+                                                                                       simulations have some of their kinetic energy converted into
+As a reference, we also show the buoyancy work,                                        magnetic energy by the action of the SSD (see the discussion
+                                                                                       in Sect. 4.2), which reduces the amount of energy available to
+Wb = ⟨Vy gy δρ⟩ x,z ,                                                          (28)    overcome the buoyancy of the entrained high-entropy material
+                                                                                       as compared to the hydrodynamic case (Spruit 2015). Further-
+where δρ is the density fluctuation. Buoyancy generates kinetic                        more, strong horizontal magnetic fields (see Fig. 14) could con-
+energy in the whole convective shell except in the overshoot                           siderably reduce the growth rate of the shear instabilities that
+layer, where it is responsible for the deceleration of the con-                        take place at the convective boundary, which are in part responsi-
+vective flows. On all grids, the magnitude of the Lorentz work                         ble for the mixing. Magnetic fields aligned with the shear flows,
+is maximum at the bottom of the convective shell and progres-                          in fact, have a stabilizing effect against the growth of Kelvin–
+sively drops to zero toward the upper convective boundary. WL                          Helmholtz√ instabilities, especially if the Alfvénic Mach number
+is negative throughout the whole convective layer, meaning that,                       MAlf = ρ|V|/|B| is close to unity (Chandrasekhar 1961; Frank
+on average, kinetic energy is everywhere converted into mag-                           et al. 1996). As shown in Fig. 15, the mean magnetic field at
+netic energy. Moreover, profiles of the Lorentz work approach                          the upper convective boundary reaches values as high as 60% of
+convergence on the finest grids. This result confirms that most of                     the equipartition field (MAlf ≳ 1.5), so short-wavelength Kelvin–
+the conversion of kinetic energy into magnetic energy happens                          Helmholtz instabilities are likely to be partly suppressed.
+on relatively large spatial scales, which are well resolved even                           As pointed out by a number of authors (Meakin & Arnett
+with moderate grid resolutions.                                                        2007; Andrassy et al. 2020; Horst et al. 2020; Andrassy et al.
+                                                                                                                                   Article number, page 11 of 15
+                                              A&A proofs: manuscript no. oxygen-shell-MHD
+
+2023), some degree of mixing at stellar convective boundaries           ulations, this can only be achieved by reducing the horizontal
+can be induced by nonadiabatic effects. In this setup, the mean         mixing of entropy between the up- and the downflows. Indeed,
+entropy inside the convection zone increases by the action of the       we observe that root-mean-square entropy fluctuations are sys-
+heat source, and eventually overcomes the entropy level of a nar-       tematically enhanced in the MHD simulations, which in turn
+row subadiabatic layer right above the upper convective bound-          increases the thermal contrast between the convective plumes.
+ary. This layer becomes negatively buoyant, so it sinks and gets        Consequently, we do not observe a significant impact of mag-
+mixed into the convection zone. This process enlarges the size          netic fields on the vertical enthalpy fluxes.
+of the convective shell over time as long as the source of entropy           Power spectra computed in the bulk of the convective shell
+generation is active. In the work of Andrassy et al. (2022), it         reveal that 30% of the total magnetic energy is stored at spa-
+was estimated that by the end of the simulations, ≈ 60% of Ṁe          tial wavenumbers kh < 10. Such a large-scale field component is
+in this setup was due to the heating. This process is expected to       generated by large-scale convective cells, which can efficiently
+operate regardless of the properties of the convective flows, so        stretch the magnetic field lines on length scales comparable to
+MHD processes would only be able to affect the remaining 40%            the size of the convection zone. The kinetic energy spectra in the
+of the entrainment rate. In the absence of heating-induced mix-         MHD simulations deviate from the Kolmogorov law (kh−5/3 ) in
+ing, magnetic fields would then suppress as much as 50% of the          the inertial range, where the efficiency of the dynamo is maxi-
+mass entrainment.                                                       mum. On the finest grid, the magnetic energy becomes greater
+                                                                        than the kinetic energy at a spatial wavenumber of kh ≈ 10, cor-
+5. Summary and discussion                                               responding to half of a pressure scale height in the convection
+                                                                        zone.
+We have run 3D simulations of turbulent convection, dynamo                   The mass entrained into the convection zone in the MHD
+amplification and convective boundary mixing in an idealized            case is smaller by 12% than that in the hydrodynamic setup.
+oxygen-burning shell of a 25 M⊙ star. In particular, we have            The partial suppression of the mixing at the convective boundary
+searched for possible MHD effects on the boundary mixing and            correlates with the average strength of the magnetic field in the
+the properties of the convective flows by performing a compari-         convection zone. It is possible that the reduction of the kinetic
+son between an MHD and a purely hydrodynamic setup. The nu-             energy of the convective flows caused by the action of the small-
+merical results have been carefully analyzed by means of a con-         scale turbulent dynamo and the presence of magnetic fields with
+vergence study, in which the grid resolution was progressively          strengths up to 60% of the equipartition value at the convective
+increased from 1283 to 5123 cells.                                      boundary contribute to the partial suppression of the mixing. By
+     Random stretching of the magnetic field lines due to the tur-      the end of the simulations, the mass entrainment rate is reduced
+bulent motions in the convective shell excites small-scale dy-          by 20% with respect to the hydrodynamic simulations.
+namo (SSD) action on all of the considered grids. The dynamo                 In our simulations, SSDs seem to have only a mild effect
+instability amplifies the seed field by ≈ 4 orders of magnitude         on the growth of the convective oxygen shell. This is consis-
+in a few convective turnover timescales. The kinematic phase            tent with the findings of Varma & Müller (2021), who ran global
+of the dynamo ends when the magnetic field becomes strong               MHD simulations of an oxygen shell in an 18 M⊙ star. Overall,
+enough to affect the evolution of the flows on the small scales         these authors did not observe any significant impact of the small-
+of turbulence. During the saturated stage, the work done by fluid       scale turbulent dynamo on the properties of the convective flows
+motions against magnetic tension forces sustains the magnetic           as compared to a non-MHD simulation. Those results, however,
+field against numerical resistive dissipation. The saturated mean       may have been affected by low effective Reynolds numbers,
+magnetic-to-kinetic energy ratio reaches values in the 20 − 30%         which are typical for global simulations of turbulent convec-
+range. The magnetic field strength in the oxygen shell moder-           tion at moderate grid resolutions. Our “box-in-a-star” approach,
+ately increases with the grid resolution, and it has characteristic     used in combination with special numerical solvers optimized
+values of ∼ 1010 G in the 5123 simulation. Such strong fields           for tackling stratified, subsonic magnetoconvection, allows us
+partly suppress the small-scale isotropic features in the veloc-        to achieve much higher effective resolution than that obtained
+ity field typical of turbulent convection in hydrodynamic simula-       by Varma & Müller (2021). We find that the small-scale turbu-
+tions. The resulting flows present anisotropic, thread-like struc-      lent dynamo reduces the kinetic energy content of the convective
+tures that extend over a large fraction of the convective shell. The    shell by 25% on average and significantly changes the topology
+magnetic fields generated during the oxygen burning stage can           of the velocity field with respect to the purely hydrodynamic
+be further amplified if parts of the oxygen shell end up collapsing     problem. These results are particularly important in the context
+onto a neutron star. By assuming a simple flux-freezing model,          of the “perturbation-aided” explosion mechanism, whose effi-
+we estimate that the magnetic field strength at the surface of the      ciency is set by both the magnitude of the convective velocities
+neutron star would be on the order of 1015 − 1016 G, which is in        and the typical spatial scales of convection in the burning shells
+agreement with values inferred from observations of magnetars           of the supernova progenitor (Müller et al. 2017; Couch et al.
+(Kouveliotou et al. 1998; Woods & Thompson 2006; Olausen &              2020).
+Kaspi 2014).                                                                 One point of concern is related to the usage of the Implicit-
+     Vertical and horizontal fluid velocities in the bulk of the con-   Large-Eddy-Simulation (ILES) approach in this study, which
+vective layer in the MHD simulations are reduced, as compared           gives rise to effective magnetic Prandtl numbers Prm = ν/η
+to the hydrodynamic runs, on average by 10% and 20%, respec-            close to or even larger than unity. Such large values of Prm
+tively. The fact that the dynamo does not have the same impact          are an overestimation of the actual conditions found in oxygen-
+on the different fluid velocity components could be related to the      burning shells. Based on the analytic expressions of the viscous
+transport of thermal energy inside the convection zone. In fact,        and resistive coefficients provided in Augustson et al. (2019),
+in order for convection to transport the excess heat deposited by       we estimate that realistic magnetic Prandtl numbers in the oxy-
+the energy source outward with partly suppressed vertical ve-           gen shell considered here range from Prm = 0.001 to Prm = 0.1.
+locities, the thermal content of the buoyant flows must be en-          It is well known that certain properties of the small-scale tur-
+hanced. Because the heat source is unchanged in the MHD sim-            bulent dynamo are sensitive to the value of Prm . In particular,
+Article number, page 12 of 15
+                                            G. Leidi et al.: Simulations of turbulent dynamo action in a stellar convective shell
+
+
+                                     1283                                        2563                                            5123
+                3.0
+                      z=0                                         z=0                                            z=0                                             2.0
+
+                2.5
+                                                                                                                                                                 1.5
+    y [Lref ]
+
+
+
+
+                2.0
+                                                                                                                                                                 1.0
+
+                1.5
+                                                                                                                                                                 0.5
+
+
+
+
+                                                                                                                                                                        By [1010 G]
+                1.0
+                                                                                                                                                                 0.0
+                1.0
+                      y = 1.5Lref                                 y = 1.5Lref                                    y = 1.5Lref
+                                                                                                                                                                 −0.5
+                0.5
+z [Lref ]
+
+
+
+
+                                                                                                                                                                 −1.0
+                0.0
+
+                                                                                                                                                                 −1.5
+            −0.5
+
+                                                                                                                                                                 −2.0
+            −1.0
+                −1.0      −0.5        0.0       0.5      1.0 −1.0     −0.5        0.0         0.5       1.0 −1.0       −0.5       0.0       0.5       1.0
+                                    x [Lref ]                                   x [Lref ]                                      x [Lref ]
+
+
+
+  Fig. 13. Distribution of By on the z = 0 plane (upper row) and the y = 1.5Lref plane (lower row) at t/τconv = 22 for the indicated grid resolutions.
+
+
+  the strength of the saturated magnetic field is often found to be                         Augustson, K. C., Brun, A. S., & Toomre, J. 2016, ApJ, 829, 92
+  an increasing function of Prm (Schekochihin et al. 2004; Bran-                            Augustson, K. C., Brun, A. S., & Toomre, J. 2019, The Astrophysical Journal,
+                                                                                               876, 83
+  denburg 2011; Käpylä et al. 2018). Unfortunately, no general                              Baraffe, I., Clarke, J., Morison, A., et al. 2023, Monthly Notices of the Royal
+  consensus has been reached so far as to the behavior of SSDs                                 Astronomical Society, 519, 5333
+  at low Prm , which is likely setup dependent. More MHD simula-                            Berberich, J. P., Chandrashekar, P., & Klingenberg, C. 2021, Computers & Flu-
+  tions of the oxygen-burning phase with realistic Prandtl numbers                             ids, 219, 104858
+  are therefore required in order to properly establish the impact                          Bhatia, T. S., Cameron, R. H., Solanki, S. K., et al. 2022, A&A, 663, A166
+                                                                                            Blouin, S., Mao, H., Herwig, F., et al. 2023, Monthly Notices of the Royal As-
+  of magnetic fields on the dynamics of the convective shell. Fi-                              tronomical Society, 522, 1706
+  nally, we did not include a nuclear-burning network in our sim-                           Böhm-Vitense, E. 1958, ZAp, 46, 108
+  plified setup, so further investigation on possible indirect effects                      Bossini, D., Miglio, A., Salaris, M., et al. 2015, Monthly Notices of the Royal
+  of magnetic fields on the nuclear energy generation and nucle-                               Astronomical Society, 453, 2290
+                                                                                            Brandenburg, A. 2009, Advances in Theory and Simulations of Large-Scale Dy-
+  osynthesis is certainly needed.                                                              namos, ed. M. J. Thompson, A. Balogh, J. L. Culhane, Å. Nordlund, S. K.
+  Acknowledgements. GL, RA, JH, and FKR acknowledge support by the Klaus                       Solanki, & J.-P. Zahn (New York, NY: Springer New York), 87–104
+  Tschira Foundation. PVFE was supported by the U.S. Department of Energy                   Brandenburg, A. 2011, The Astrophysical Journal, 741, 92
+  through the Los Alamos National Laboratory (LANL). LANL is operated by                    Brandenburg, A. & Subramanian, K. 2005, Phys. Rep., 417, 1
+  Triad National Security, LLC, for the National Nuclear Security Administration            Browning, M. K. 2008, ApJ, 676, 1262
+  of the U.S. Department of Energy (Contract No. 89233218CNA000001). This                   Brun, A. & Browning, M. 2017, Living Reviews in Solar Physics, 14, 4
+  work has been assigned a document release number LA-23-27290. The authors                 Brun, A. S., Browning, M. K., & Toomre, J. 2005, ApJ, 629, 461
+  would like to thank Hirschi R., Rizzuti F., and Varma V. (Keele University) for           Canivete Cuissa, J. R. & Teyssier, R. 2022, A&A, 664, A24
+  fruitful discussions and hosting a visit to Keele University.                             Canuto, V. M. 1997, Astrophys. J., 482, 827
+                                                                                            Canuto, V. M. 2011, Astron. Astrophys., 528, A78
+                                                                                            Chandrasekhar, S. 1961, Hydrodynamic and hydromagnetic stability
+                                                                                            Charbonneau, P. 2013, Solar and Stellar Dynamos, Solar and Stellar Dynamos:
+                                                                                               Saas-Fee Advanced Course 39 Swiss Society for Astrophysics and Astron-
+  References                                                                                   omy, Saas-Fee Advanced Courses, Volume 39. ISBN 978-3-642-32092-7.
+  Aerts, C. 2021, Rev. Mod. Phys., 93, 015001                                                  Springer-Verlag Berlin Heidelberg, 2013
+  Anders, E. H. & Pedersen, M. G. 2023, Galaxies, 11                                        Claret, A. & Torres, G. 2016, A&A, 592, A15
+  Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491, 972                Colella, P. & Woodward, P. R. 1984, Journal of Computational Physics, 54, 174
+  Andrassy, R., Higl, J., Mao, H., et al. 2022, A&A, 659, A193                              Couch, S. M., Warren, M. L., & O’Connor, E. P. 2020, The Astrophysical Jour-
+  Andrassy, R., Leidi, G., Higl, J., et al. 2023, arXiv e-prints, arXiv:2307.04068             nal, 890, 127
+  Aparicio, A., Bertelli, G., Chiosi, C., & Garcia-Pelayo, J. M. 1990, A&A, 240,            Cristini, A., Meakin, C., Hirschi, R., et al. 2017, Monthly Notices of the Royal
+    262                                                                                        Astronomical Society, 471, 279
+
+                                                                                                                                           Article number, page 13 of 15
+                                                                              A&A proofs: manuscript no. oxygen-shell-MHD
+
+
+
+                                                                                                                                                         ×1019
+                                                                                       1283                                                        1.2                                                  1283
+                                                                                       2563                                                                                                             2563
+                                 1.0
+                                                                                       5123                                                                                                             5123
+                                                                                                                                                   1.0
+     h|By |i x,z , hBh i x,z [1010 G]
+
+
+
+
+                                                                                                                           power [erg cm−3 s−1 ]
+                                 0.8
+                                                                                                                                                   0.8
+
+                                 0.6
+                                                                                                                                                   0.6
+                                                                                                                                                                        Wb
+                                 0.4                              hBh i x,z                                                                        0.4
+
+
+                                 0.2                                                                                                               0.2
+                                              h|By |i x,z                                                                                                        −WL
+                                 0.0                                                                                                               0.0
+
+                                        1.0             1.5     2.0            2.5       3.0                                                             1.0           1.5            2.0        2.5         3.0
+                                                              y [Lref ]                                                                                                             y [Lref ]
+
+
+Fig. 14. Vertical profiles of the horizontal (Bh =    B2x + B2z ) and                               Fig. 16. Vertical profiles of the buoyancy (light blue) and Lorentz work
+                                                    p
+vertical (By ) magnetic field, averaged over the time interval t ∈                                  (vermilion) averaged over t ∈ (15τconv , 25τconv ) for the indicated grid
+(15τconv , 25τconv ).                                                                               resolutions.
+
+
+
+
+                                 0.6                                                   1283
+                                                                                       2563                                         0.6
+                                                                                       5123
+                                 0.5                                                                                                0.5
+                                                                                                      Me /M(t = 0, y > 2Lref )
+
+
+
+
+                                 0.4                                                                                                0.4
+      Brms /Beq
+
+
+
+
+                                 0.3                                                                                                0.3
+
+                                 0.2                                                                                                0.2
+
+                                 0.1                                                                                                                                 HYDRO, 1283                 MHD, 1283
+                                                                                                                                    0.1
+                                                                                                                                                                     HYDRO, 2563                 MHD, 2563
+                                                                                                                                                                     HYDRO, 5123                 MHD, 5123
+                                 0.0                                                                                                0.0
+                                        1.0             1.5     2.0            2.5       3.0                                                        0            5           10             15    20         25
+                                                              y [Lref ]                                                                                                           t/τconv
+
+
+Fig. 15. Vertical profiles of the root-mean-square magnetic field di-                               Fig. 17. Time evolution of the mass entrained from the stable layer into
+vided by the equipartition field, averaged over the time interval t ∈                               the convection zone, rescaled by the total mass contained in the stable
+(15τconv , 25τconv ).                                                                               layer at t = 0 s. Light blue is used for the MHD simulations, whereas
+                                                                                                    vermilion is used for the purely hydrodynamic runs.
+
+Edelmann, P. V. F., Horst, L., Berberich, J. P., et al. 2021, A&A, 652, A53
+Edelmann, P. V. F., Röpke, F. K., Hirschi, R., Georgy, C., & Jones, S. 2017,                        Haugen, N. E. L., Brandenburg, A., & Dobler, W. 2004, Phys. Rev. E, 70, 016308
+   A&A, 604, A25                                                                                    Herwig, F., Woodward, P. R., Mao, H., et al. 2023, MN-
+Evans, C. R. & Hawley, J. F. 1988, ApJ, 332, 659                                                       RAS[arXiv:2303.05495]
+                                                                                                    Higl, J., Müller, E., & Weiss, A. 2021, A&A, 646, A133
+Featherstone, N. A., Browning, M. K., Brun, A. S., & Toomre, J. 2009, ApJ, 705,                     Horst, L., Edelmann, P. V. F., Andrássy, R., et al. 2020, A&A, 641, A18
+   1000                                                                                             Horst, L., Hirschi, R., Edelmann, P. V. F., Andrassy, R., & Roepke, F. K. 2021,
+Frank, A., Jones, T. W., Ryu, D., & Gaalaas, J. B. 1996, ApJ, 460, 777                                 A&A, 653, A55
+Garaud, P., Ogilvie, G. I., Miller, N., & Stellmach, S. 2010, Monthly Notices of                    Hotta, H. 2017, ApJ, 843, 52
+   the Royal Astronomical Society, 407, 2451                                                        Hotta, H., Rempel, M., & Yokoyama, T. 2016, Science, 351, 1427
+Gardiner, T. A. & Stone, J. M. 2005, Journal of Computational Physics, 205, 509                     Iskakov, A. B., Schekochihin, A. A., Cowley, S. C., McWilliams, J. C., & Proc-
+Gilet, C., Almgren, A. S., Bell, J. B., et al. 2013, ApJ, 773, 137                                     tor, M. R. E. 2007, Phys. Rev. Lett., 98, 208501
+
+Article number, page 14 of 15
+                                    G. Leidi et al.: Simulations of turbulent dynamo action in a stellar convective shell
+
+Jermyn, A. S., Anders, E. H., Lecoanet, D., & Cantiello, M. 2022, ApJS, 262, 19
+Jones, S., Andrassy, R., Sandalski, S., et al. 2017, Monthly Notices of the Royal
+   Astronomical Society, 465, 2991
+Joyce, M. & Chaboyer, B. 2018, The Astrophysical Journal, 856, 10
+Käpylä, P. J. 2019, A&A, 631, A122
+Käpylä, P. J. 2021, A&A, 651, A66
+Käpylä, P. J., Käpylä, M. J., & Brandenburg, A. 2018, Astronomische
+   Nachrichten, 339, 127
+Kazantsev, A. P. 1968, Soviet Journal of Experimental and Theoretical Physics,
+   26, 1031
+Keszthelyi, Z. 2023, Galaxies, 11
+Kippenhahn, R., Weigert, A., & Weiss, A. 2013, Stellar Structure and Evolution
+Kolmogorov, A. 1941, Akademiia Nauk SSSR Doklady, 30, 301
+Kouveliotou, C., Dieters, S., Strohmayer, T., et al. 1998, Nature, 393, 235
+Kuhfuss, R. 1986, A&A, 160, 116
+Leidi, G., Birke, C., Andrassy, R., et al. 2022, A&A, 668, A143
+Li, Y. & Yang, J. Y. 2007, Monthly Notices of the Royal Astronomical Society,
+   375, 388
+Maeder, A. 2009, Physics, Formation and Evolution of Rotating Stars
+Magic, Z., Weiss, A., & Asplund, M. 2015, A&A, 573, A89
+Meakin, C. A. & Arnett, D. 2007, ApJ, 667, 448
+Meneguzzi, M., Frisch, U., & Pouquet, A. 1981, Phys. Rev. Lett., 47, 1060
+Miczek, F., Röpke, F. K., & Edelmann, P. V. F. 2015, A&A, 576, A50
+Minoshima, T. & Miyoshi, T. 2021, Journal of Computational Physics, 446,
+   110639
+Miyoshi, T. & Kusano, K. 2005, Journal of Computational Physics, 208, 315
+Mocák, M., Meakin, C., Campbell, S. W., & Arnett, W. D. 2018, Monthly No-
+   tices of the Royal Astronomical Society, 481, 2918
+Müller, B., Melson, T., Heger, A., & Janka, H.-T. 2017, MNRAS, 472, 491
+Müller, B. 2020, Living Reviews in Computational Astrophysics, 6, 3
+Müller, B. & Varma, V. 2020, Monthly Notices of the Royal Astronomical Soci-
+   ety: Letters, 498, L109
+Olausen, S. A. & Kaspi, V. M. 2014, ApJS, 212, 6
+Pietarila Graham, J., Cameron, R., & Schüssler, M. 2010, ApJ, 714, 1606
+Prandtl, L. 1925, Zeitschrift Angewandte Mathematik und Mechanik, 5, 136
+Pratt, J., Baraffe, I., Goffrey, T., et al. 2016, A&A, 593, A121
+Rempel, M. 2014, ApJ, 789, 132
+Richard, O., Vauclair, S., Charbonnel, C., & Dziembowski, W. A. 1996, A&A,
+   312, 1000
+Ritter, C., Andrassy, R., Côté, B., et al. 2018, MNRAS, 474, L1
+Rizzuti, F., Hirschi, R., Arnett, W. D., et al. 2023, Monthly Notices of the Royal
+   Astronomical Society, 523, 2317
+Schekochihin, A. A., Cowley, S. C., Taylor, S. F., Maron, J. L., & McWilliams,
+   J. C. 2004, ApJ, 612, 276
+Schekochihin, A. A., Iskakov, A. B., Cowley, S. C., et al. 2007, New Journal of
+   Physics, 9, 300
+Shu, C.-W. & Osher, S. 1988, Journal of Computational Physics, 77, 439
+Skoutnev, V., Squire, J., & Bhattacharjee, A. 2021, ApJ, 906, 61
+Sonoi, T., Ludwig, H. G., Dupret, M. A., et al. 2019, A&A, 621, A84
+Spruit, H. C. 2015, A&A, 582, L2
+Thaler, I. & Spruit, H. C. 2015, A&A, 578, A54
+Trampedach, R., Stein, R. F., Christensen-Dalsgaard, J., Nordlund, Å., & As-
+   plund, M. 2014, MNRAS, 442, 805
+Valle, G., Dell’Omodarme, M., Prada Moroni, P. G., & Degl’Innocenti, S. 2016,
+   A&A, 587, A16
+Varma, V. & Müller, B. 2021, Monthly Notices of the Royal Astronomical Soci-
+   ety, 504, 636
+Varma, V. & Müller, B. 2023, arXiv e-prints, arXiv:2307.04833
+Vögler, A. & Schüssler, M. 2007, A&A, 465, L43
+Woods, P. M. & Thompson, C. 2006, in Compact stellar X-ray sources, Vol. 39,
+   547–586
+Xiong, D.-r. 1978, Chinese Astronomy, 2, 118
+Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger, A. 2020, The Astro-
+   physical Journal, 890, 94
+
+
+
+
+                                                                                                                            Article number, page 15 of 15
+

@@ -1,0 +1,564 @@
+                                               Publications of the Astronomical Society of Japan, 0000, 00, 1–6
+                                               doi: 10.1093/pasj/xxx000
+                                               Advance access publication date:
+
+
+
+
+                                               The Supernova Remnant G284.3−1.8 and Its Relation to the
+                                               Gamma-ray Binary 1FGL J1018.6−5856
+                                               Natsuki T ERANO,1 ,∗ Takaaki TANAKA,1 ,∗ Hiromasa S UZUKI,2 Rei E NOKIYA,3,4 Hiroyuki U CHIDA,5 Kai
+                                               M ATSUNAGA,5 Takuto N ARITA,5 Yasuo F UKUI,6 and Toshiki S ATO7
+                                               1
+                                                 Department of Physics, Konan University, 8-9-1 Okamoto, Higashinada, Kobe, Hyogo 658-8501, Japan
+                                               2
+arXiv:2601.14801v2 [astro-ph.HE] 22 Jan 2026
+
+
+
+
+                                                 Faculty of Engineering, University of Miyazaki, 1-1 Gakuen Kibanadai Nishi, Miyazaki, Miyazaki 889-2192, Japan
+                                               3
+                                                 National Astronomical Observatory of Japan, 2-21-1 Osawa, Mitaka, Tokyo 181-8588, Japan
+                                               4
+                                                 Faculty of Science and Engineering, Kyushu Sangyo University, 2-3-1 Matsukadai, Fukuoka 813-8503, Japan
+                                               5
+                                                 Department of Physics, Graduate School of Science, Kyoto University, Kitashirakawa Oiwake-cho, Sakyo-ku, Kyoto 606-8502,
+                                                 Japan
+                                               6
+                                                 Department of Physics, Nagoya University, Furo-cho, Chikusa-ku, Nagoya 464-8601, Japan
+                                               7
+                                                 Department of Physics, School of Science and Technology, Meiji University, 1-1-1 Higashi Mita, Tama-ku, Kawasaki, Kanagawa
+                                                 214-8571, Japan
+                                               ∗ E-mail: m2321004@a.konan-u.ac.jp, ttanaka@konan-u.ac.jp
+
+
+
+
+                                               Abstract
+                                               G284.3−1.8 is a supernova remnant with a radio shell and thermal X-ray emission. Located near its center is the gamma-ray binary 1FGL
+                                               J1018.6−5856, although the physical association between the two systems is not clear yet. Our X-ray spectroscopy with Suzaku reveals that
+                                               G284.3−1.8 and 1FGL J1018.6−5856 have compatible absorption column densities of NH = 6–7 × 1021 cm−2 , indicating that the two systems
+                                               have similar distances. The actual distance is determined as 3 kpc using 12 CO (J = 1–0) data obtained with NANTEN. The X-ray spectrum of
+                                               G284.3−1.8 shows a strong K-shell emission line of Mg, conﬁrming that the earlier claim that the SNR is one of the few Mg-rich SNRs. Comparing
+                                               recent stellar models taking into account the “shell merger” processes, we ﬁnd that the obtained Mg-to-Ne mass ratio of MMg /MNe = 0.73+0.07
+                                                                                                                                                                                        −0.03
+                                               and Si-to-Mg mass ratio of MSi /MMg = 0.44 ± 0.03 suggest a supernova explosion that would have left a neutron star. The characteristics
+                                               of 1FGL J1018.6−5856, on the other hand, are better explained with a model in which its compact object is neutron star. The present results,
+                                               therefore, would suggest a possible scenario where G284.3−1.8 and 1FGL J1018.6−5856 are both remnants of a common supernova explosion
+                                               although further observational tests are necessary.
+                                               Keywords: ISM: supernova remnants — ISM: clouds — stars: evolution — nuclear reactions, nucleosynthesis, abundances
+
+
+                                               1 Introduction                                                              The SNR G284.3−1.8 is another candidate Mg-rich SNR as re-
+                                                                                                                        ported by Williams et al. (2015), who analyzed limited regions
+                                               At the end of their lives, stars more than ten times more mas-           of the SNR with XMM-Newton. G284.3−1.8 has been observed
+                                               sive than the sun completes nuclear fusion reactions and undergoes       at a wide range of wavelengths, including optical (e.g., van den
+                                               gravitational core collapse, causing supernovae (SNe). The prop-         Bergh et al. 1973), radio (e.g., Milne et al. 1989) and X-ray (e.g.,
+                                               erties of the progenitors are key ingredients in understanding the       Williams et al. 2015). Its age is estimated to be ∼ 104 yr (Ruiz
+                                               explosion mechanisms and the nature of compact objects left after        & May, 1986). Interestingly, at the center of G284.3−1.8 lies the
+                                               the SNe. X-ray ejecta emission can provide us with the informa-          gamma-ray binary 1FGL J1018.6−5856 although the connection
+                                               tion on abundances of elements synthesized in the progenitors and        between the two systems is not clear yet. 1FGL J1018.6−5856
+                                               during the SNe, and thus help us put constraints, for example, on        was discovered in the Fermi LAT data as a GeV gamma-ray source
+                                               the progenitor masses (e.g., Katsuda et al. 2018).                       with ﬂux and spectral variation with a 16.6-day period, which
+                                                  According to recent X-ray studies of Mg-rich supernova rem-           is attributed to orbital modulation (Fermi-LAT Collaboration et
+                                               nants (SNRs) such as N49B (Sato et al. 2025) and G359.0−0.9              al. 2012). Variable radio, X-ray (Fermi-LAT Collaboration et
+                                               (Matsunaga et al. 2024), X-ray spectroscopy can work as a unique         al. 2012), and TeV gamma-ray (H.E.S.S. Collaboration et al.
+                                               tool also to probe the activity inside the progenitor systems dur-       2012; H.E.S.S. Collaboration et al. 2015) counterparts were later
+                                               ing pre-SN phases. Sato et al. (2025) and Matsunaga et al. (2024)        found by follow-up observations.
+                                               found high Mg-to-Ne ratios in the SNRs, and claimed such pe-                We report here X-ray and radio 12 CO line observations of the
+                                               culiar elemental abundances can nicely be explained if the “shell        SNR G284.3−1.8, aiming to clarify its physical connection with
+                                               merger” processes (Yadav et al. 2020; Andrassy et al. 2020) oc-          the gamma-ray binary 1FGL J1018.6−5856. We discuss the con-
+                                               curred inside the progenitors. Shell mergers are a process, in which     nection based on distances estimated for the two systems, and
+                                               the Ne- or O-burning is merged with the outer shell before the core      based also on the progenitor mass, hence the compact remnant,
+                                               collapse. The process substantially alter the elemental abundances       of the SN of G284.3−1.8. All the statistical errors are quoted at
+                                               synthesized in the star as well as its density structure.                1σ conﬁdence intervals.
+
+                                               Received: 2025 July 9, Accepted: 2026 January 20
+                                               © 0000. Astronomical Society of Japan.
+2                                                                      Publications of the Astronomical Society of Japan (0000), Vol. 00, No. 0
+
+
+2 Observations & Data Reduction
+We analyzed X-ray data of G284.3−1.8 obtained with Suzaku.
+Table 1 summarizes the Suzaku observation log. In what fol-
+lows, we analyzed data from the X-ray Imaging Spectrometer
+(XIS; Koyama et al. 2007). The data reduction was performed us-
+ing HEASoft version 6.32.1 with the calibration database released
+in October 2018. The XIS consists of four cameras with X-ray
+charge-coupled devices (CCDs) named XIS0, 1, 2, and 3. The
+CCDs of XIS0, 2 and 3 are front-illuminated (FI) devices whereas
+that of XIS1 is a back-illuminated (BI) CCD. We here analyze data
+from the FI CCDs. XIS2 and part of XIS0 suddenly showed an
+anomaly on November 2006 and June 2009, respectively, and thus
+we used (part of) XIS0 and XIS3 data. The non-X-ray background
+was constructed from the night Earth data using xisnxbgen (Tawa          Fig. 1. Suzaku XIS3 image of G284.3−1.8 in the 0–12 keV energy
+et al. 2008). Following the recipe provided by the XIS team, the         band (color scale) from obsID 407069010,overlaid with the Molonglo
+cumulative ﬂickering pixel maps were applied to the observation          Observatory Synthesis Telescope (MOST) radio contours at 843 MHz
+data. The redistribution matrix ﬁle (RMF) and ancillary response         (cyan). The color bar shows X-ray surface brightness in the logarithmi-
+ﬁle (ARF) were generated with xisrmfgen and xissimarfgen, re-            cal scale. The source region is shown by a solid box. The 55 Fe calibra-
+spectively (Ishisaki et al. 2007).                                       tion source (green dashed circles) and the emission region of the gamma-
+                                                                         ray binary 1FGL J1018.6−5856 and another point-like source (magenta
+   We also analyzed 12 CO (J = 1–0) data from the NANTEN tele-           dashed circles) were excluded from the region. Alt text: X-ray image of the
+scope. The datasets were taken from the NANTEN Galactic Plane            region toward the SNR G284.3−1.8 obtained with Suzaku XIS.
+Survey (NGPS; Mizuno & Fukui, 2004). The NGPS observations
+were carried out with ∼ 1.1 million data points in total, covering
+l = 200◦ –60◦ width in Galactic longitude and |b| < 20◦ width in
+Galactic latitude. The beam size, grid spacing, velocity resolution,
+and typical rms noise ﬂuctuations are 2.6′ , 4′ , 0.65 km s−1 , and
+∼ 0.4 K, respectively.
+                                                                         the emission from the cold matter. The parameters for the FE and
+Table 1. Suzaku Observation Log
+                                                                         GRXE were ﬁxed to those by Uchiyama et al. (2013) except for
+                                                                         the absorption column density for the GRXE, and the normaliza-
+     Obs. ID       Date           Start Time   Exposure [ks]             tions of the FE and GRXE with ﬁxing the ratios of low- and high-
+    407069010   2012/06/20         22:19:00         73                   temperature components ﬁxed to those by Uchiyama et al. (2013).
+    407070010   2012/06/24         23:43:04         17                   The CXB was modeled as a power law with a photon index of 1.4
+    407071010   2012/06/15         00:35:33         21                   and a 2–10 keV intensity of 6.38 × 108 erg cm−2 s−1 sr−1 by re-
+    407096010   2012/06/27         17:05:53         60                   ferring to Kushino et al. (2002). The absorption column density
+    504053010   2009/07/07         07:32:25         40                   for the CXB was set to twice that for the GRXE. We employed the
+                                                                         NEI model for the emission from G284.3−1.8. We allowed the
+                                                                         abundances of Ne, Mg, Si (= S), and Fe (= Ni) to vary. The other
+                                                                         abundances cannot be constrained by the ﬁt and thus are ﬁxed to
+                                                                         the solar values. We used Tuebingen–Boulder interstellar medium
+3 Results                                                                absorption model (TBabs; Wilms et al. 2000 for all the emission
+3.1 X-ray spectrum                                                       components described above. We referred to the abundance table
+Figure 1 is the XIS image of the region. The point-like source           by Wilms et al. (2000) for the solar abundances.
+located at the center of the ﬁeld-of-view is the gamma-ray binary
+1FGL J1018.6−5856. Another point-like source is detected to the             The best-ﬁt model is plotted with the spectrum in ﬁgure 2, and
+west of 1FGL J1018.6−5856. The emission from G284.3−1.8 is               the best-ﬁt parameters are summarized in table 2. Only a lower
+almost uniform and seems to be spread over the ﬁeld-of-view. We          limit of τ > 1.6 × 1012 cm−3 s was obtained for the ionization
+thus extracted spectra from the region excluding the two point-like      age, indicating that the SNR plasma is in CIE. The most charac-
+sources as well as the 55 Fe calibration sources. We co-added XIS0       teristic feature of the present results is the signiﬁcantly larger Mg
+and XIS3 spectra, and then combined all the spectra obtained from        abundance relative to Ne, conﬁrming that G284.3−1.8 is a Mg-
+the observations listed in table 1. We use XSPEC (version 12.13.1)       rich SNR as already pointed out by Williams et al. (2015). Our
+for spectral analysis described below.                                   best-ﬁt parameters are somewhat different from what was obtained
+   Since the emission from G284.3−1.8 seems to occupy the                by Williams et al. (2015), who analyzed spectra of small emission
+whole ﬁeld-of-view, we cannot extract background spectrum                features in the SNR. To directly compare our analysis result to that
+inside the ﬁeld-of-view.        We thus model the X-ray back-            of Williams et al. (2015), we extracted spectra from a region sim-
+ground at the same time as the emission from G284.3−1.8.                 ilar to the “west” region used by Williams et al. (2015). In ﬁtting
+Following Uchiyama et al. (2013), we ﬁtted the X-ray back-               the spectra, we treated the X-ray background in the same manner
+ground with a model consisting of the Foreground Emission (FE),          as the above analysis, where we simultaneously ﬁtted the GRXE
+the Galactic Ridge X-ray Emission (GRXE), and the Cosmic X-              component with the model by Uchiyama et al. (2013). We found
+ray Background (CXB). The FE is modeled as two-temperature               that the mass ratios MMg /MNe and MSi /MMg , which are mainly
+plasma emission in the Collisional Ionization Equilibrium (CIE).         used in the below discussion, are consistent with each other. This
+The GRXE is composed of a two-temperature CIE component and              demonstrates the robustness of the conclusion of the present work.
+Publications of the Astronomical Society of Japan (0000), Vol. 00, No. 0                                                                                                                                          3
+
+
+
+
+                                                                             Galactic Latitude [degree]
+                                                                                                          -1.4
+
+                                                                                                          -1.6
+
+                                                                                                          -1.8
+
+                                                                                                          -2.0
+
+                                                                                                          -2.2        -23.0 to -21.0 km/s           -21.0 to -19.0 km/s             -19.0 to -17.0 km/s
+
+
+
+
+                                                                             Galactic Latitude [degree]
+                                                                                                          -1.4
+
+                                                                                                          -1.6
+
+                                                                                                          -1.8
+
+                                                                                                          -2.0
+
+                                                                                                          -2.2        -17.0 to -15.0 km/s           -15.0 to -13.0 km/s             -13.0 to -11.0 km/s
+
+
+
+
+                                                                             Galactic Latitude [degree]
+                                                                                                          -1.4
+
+                                                                                                          -1.6
+
+Fig. 2. NXB-subtracted Suzaku FI (XIS0+3) X-ray spectrum of                                               -1.8
+G284.3−1.8 in the 0.7-10 keV band. The best-ﬁt plasma model (red), and                                    -2.0
+the background model (FE ; cyan, GRXE ; magenta, CXB ; blue). Alt text:
+X-ray spectrum of the SNR G284.3−1.8 in obtained with Suzaku XIS and                                      -2.2        -11.0 to -9.0 km/s              -9.0 to -7.0 km/s               -7.0 to -5.0 km/s
+                                                                                                            284.8 284.6 284.4 284.2 284.0 283.8   284.6 284.4 284.2 284.0 283.8   284.6 284.4 284.2 284.0 283.8
+the best-ﬁt model.                                                                                               Galactic Longitude [degree] Galactic Longitude [degree] Galactic Longitude [degree]
+                                                                                                                                   Contours : 1.0, 2.2, 3.4, 4.6, 5.8, 7.0, 8.2, 9.4 (Kkm/s)
+
+
+                                                                           Fig. 3. Velocity channel map of 12 CO (J =1–0) emission obtained with
+Table 2. Best-Fit Parameters
+                                                                           NANTEN (magenta contours) overlaid on 843 MHz continuum emission
+                                                                           obtained with MOST (color). The black circle indicates the rough location
+ component        parameter                     value                      of the G284.3−1.8. Alt text: Velocity channel map of the 12 CO (J =1–0)
+ TBabs            NH_GRXE [1022 cm−2 ]          3.54+0.25
+                                                    −0.19                  line emission produced from the NANTEN data. The overlaid contours are
+ vapec            norm1 [10−2 ]                 0.21 ± 0.01                843 MHz continuum image with MOST.
+ apec             norm1 [10−2 ]                 1.47+0.12
+                                                    −0.05
+ TBabs            NH_G284 [1022 cm−2 ]          0.67 ± 0.03
+ vnei             kT [keV]                      0.317+0.006
+                                                      −0.004
+                  ZNe [solar]                   0.93+0.26                  column density obtained is NH = (6.4 ± 0.2) × 1021 cm−2 , which
+                                                    −0.09
+                  ZMg [solar]                   2.82+0.93                  agrees with that of G284.3−1.8 within the 1σ errors (see table 2
+                                                    −0.42
+                  ZSi = ZS [solar]              1.94+0.25                  for NH of G284.3−1.8). We thus conclude that the two systems
+                                                    −0.18
+                                                                           are located at comparable distances.
+                  ZFe = ZNi [solar]             0.21+0.06
+                                                    −0.02
+                  Zother [solar]                1 (ﬁx)                        Having determined that the distances are comparable, we esti-
+                  ne t [cm−3 s]                 > 1.6 × 1012               mate the actual distance to G284.3−1.8 based on the NANTEN
+                                                                           12
+                  norm1 [10−2 ]                 1.53+0.28                     CO (J = 1–0) data. To constrain the distance to G284.3−1.8,
+                                                    −0.35
+                 −14 R                                                     we compared the radial velocity of the associated molecular cloud
+  1 Deﬁned as 10         ne nH dV , where D is the distance to the
+              4πD 2                                                        with those of the spiral arm structures of the Milky Way. By re-
+    source, dV is the volume element, and ne and nH are the elec-
+    tron and hydrogen densities, respectively. The unit is cm−5 .          ferring to the schematic diagram of the Galactic spiral arms by
+                                                                           Reid et al. (2019), we found that the line-of-sight velocity obtained
+                                                                           in §3.2 (−22 to −3 km s−1 ) matches the near-side of the Carina
+3.2 Molecular clouds toward G284.3−1.8                                     arm. The distance is then estimated to be ∼ 3 kpc. Our estimate is
+We searched the NANTEN 12 CO (J = 1–0) data for signature of               compatible with that of Ruiz & May, (1986), who analyzed 12 CO
+a molecular cloud associated with G284.3−1.8. Figure 3 presents            (J = 1–0) data obtained with the 1.2 m Columbia Millimeter-Wave
+velocity channel map of 12 CO (J = 1–0) emission. We found a               Telescope, but closer than that of Shan et al. (2019) based on opti-
+12
+   CO (J = 1–0) emission that spatially coincides well with the            cal extinction measurements.
+shell of G284.3−1.8 in the velocity range from −22 km s−1 to                  Figure 4 illustrates the spatial and velocity structure of the
+−3 km s−1 (see ﬁgure 4).                                                   molecular cloud associated with G284.3−1.8. A CO cavity struc-
+                                                                           ture (see ﬁgures 4b and 4c) suggests that the gas has been evac-
+                                                                           uated by the supernova shock, indicating a strong interaction be-
+                                                                           tween the cloud and the SNR (e.g., Koo & Heiles 1991). The
+4 Discussion
+                                                                           column density to the SNR is estimated to be NH = 0.4–1.8 ×
+4.1 Estimation of distance                                                 1021 cm−2 (see ﬁgure 4a).
+The SNR G284.3−1.8 lies in the same line of sight as the gamma-               To further investigate the interstellar medium associated with
+ray binary 1FGL J1018.6−5856, suggesting a possibility that they           G284.3−1.8, we analyzed H I data from the HI4PI survey (HI4PI
+are both remnants of a common supernova explosion. If the two              Collaboration et al. 2016). Figure 6 shows the H I distribution ob-
+systems indeed have the same origin, they should be located at the         tained by HI4PI. We found H I gas along the SNR shell at sim-
+same distance and thus should have compatible X-ray absorption             ilar radial velocities to those of the CO clouds (−35 km s−1 to
+column densities (NH ). In order to compare NH of the two sys-             5 km s−1 ), indicating the presence of atomic gas associated with
+tems, we extracted the spectrum of 1FGL J1018.6−5856 from the              the SNR. The estimated H I column density in this velocity range
+region indicated in ﬁgure 1. Figure 5 presents the spectrum plot-          is NH = 5–6 × 1021 cm−2 . Then, the total (atomic and molecu-
+ted with the best-ﬁt absorbed power law model. The absorption              lar) column density is NH = 6–7 × 1021 cm−2 , which is consistent
+4                                                                                                                                 Publications of the Astronomical Society of Japan (0000), Vol. 00, No. 0
+
+
+                                        (a) -22.0 to -3.0 km/s                    (b) 284.00 to 284.47 degree
+                                 -1.4
+    Galactic Latitude [degree]
+
+
+
+
+                                 -1.6
+
+
+                                 -1.8
+
+
+                                 -2.0
+
+
+                                 -2.2
+                                                         5 pc HPBW         grid
+                                                                                               -20           -10        0
+                                        (c) -2.00 to -1.40 degree                                     Vlsr [km/s]
+                                   0
+                                                                                           LB: 1021 cm-2
+                                                                                  (a)
+                                                                                         0.0         1.0    2.0
+              Vlsr [km/s]
+
+
+
+
+                                 -10                                                             VB: K
+                                                                                  (b)
+                                                                                         0.0         0.5     1.0
+                                                                                                 LV: K
+                                 -20
+                                                                                  (c)                                               Fig. 5. NXB-subtracted Suzaku XIS (XIS0+3) X-ray spectrum of
+                                                                                         0.0         0.5    1.0
+                                                                                                                                    1FGL J1018.6−5856 in the 0.7-10 keV band. Alt text: X-ray spectrum of
+                                                                                     Contours (a) : 2e20, 4e20, 6e20, 8e20,         the gamma-ray binary 1FGL J1018.6−5856 obtained with Suzaku XIS.
+                                                                                          10e20, 12e20, 14e20, 16e20 [cm-2]
+                                 -30
+                                                                                     Contours (b) : 0.1, 0.2, 0.3, 0.4, 0.5,
+                                   284.8    284.6 284.4 284.2 284.0          283.8
+                                             Galactic Longitude [degree]                                      0.6, 0.7, 0.8 [K]
+                                                                                     Contours (c) : 0.1, 0.2, 0.3, 0.4, 0.5,
+                                                                                                              0.6, 0.7, 0.8 [K]                                                                                  1021 cm-2
+Fig. 4. (a) Integrated intensity distribution of the associated cloud in 12 CO                                                                                                                          2.5      3.7    4.9    6.1
+(J = 1–0) overlaid with black contours outlining 12 CO (J = 1–0) emission                                                                                               -0.5
+in the galactic coordinates. The black circle indicates the position of the
+G284.3−1.8. (b) Velocity-galactic latitude diagram of the associated cloud.
+(c) Galactic longitude-velocity diagram of the associated cloud. Only the
+                                                                                                                                                                        -1.0
+color bar in (a) has a column density of molecular hydrogen. The unit of the
+color bar in (a) has been converted to the molecular hydrogen column den-
+                                                                                                                                           Galactic Latitude [degree]
+
+
+
+
+sity using the conversion factor derived by Okamoto et al. (2017). Alt text:
+Integrated intensity distribution of the 12 CO (J = 1–0) emission associated                                                                                            -1.5
+with the SNR G284.3−1.8 in the Galactic coordinate (a), velocity-Galactic
+latitude diagram (b), and Galactic longitude-velocity diagram (c).
+                                                                                                                                                                        -2.0
+
+
+
+with the X-ray absorption column density.                                                                                                                               -2.5
+
+   In ﬁgure 7, we show typical H I and CO proﬁles in G284.3−1.8
+and its surrounding region. We found clear H I absorption features
+                                                                                                                                                                        -3.0
+within the remnant, while the surrounding regions show weaker
+                                                                                                                                                                               Vlsr: -35 to 5 km/s
+absorption dips. Higher angular resolution H I observations would
+be beneﬁcial to conﬁrm this connection in greater details.                                                                                                                     285.5    285.0    284.5     284.0      283.5   283.0
+                                                                                                                                                                                          Galactic Longitude [degree]
+   In the study based on Gaia DR2 by Marcote et al. (2018),
+1FGL J1018.6−5856 was estimated to be located at a distance of                                                                      Fig. 6. Column density distribution of H I emission obtained with HI4PI in
+6.4+1.7
+    −0.7 kpc, which does not agree with our estimate of ∼ 3 kpc.
+                                                                                                                                    a velocity range from Vlsr = −35 to 5 km s−1 . The black contours show
+However, in Gaia DR3, the distance to the binary is determined to                                                                   the 843 MHz continuum map from MOST. The black circle indicates the
+                                                                                                                                    rough location of G284.3−1.8. The regions used to derive the averaged
+be 4.37 ± 0.42 kpc following the method described in Carretero-
+                                                                                                                                    H I spectra shown in ﬁgure 7 are indicated by the blue squares. Alt text:
+Castrillo et al. (2023) (Ribó, private communication). This would                                                                   Spatial distribution of column density of H I emission.
+ease the tension between our conclusion and the Gaia distance to
+1FGL J1018.6−5856 although we need conﬁrmation of the DR3
+result in future works.
+                                                                                                                                    Ne- or O-burning shells merge with outer layers (e.g., Yadav et
+                                                                                                                                    al. 2020). Ne-burning shell intrusions promote processes such
+4.2 Progenitor of G284.3−1.8                                                                                                        as 20 Ne(α, γ)24 Mg, making MMg /MNe higher. O-burning shell
+In §3.1, we obtained elemental abundances of the ejecta of the                                                                      mergers, on the other hand, result also in higher MSi /MNe by en-
+SNR G284.3−1.8. Based on the results, we can now constrain                                                                          hancing processes such as 20 Ne(α, γ)24 Mg(α, γ)28 Si.
+the progenitor mass and thus the nature of the compact rem-                                                                            In ﬁgure 8, we compare the observed mass ratios, MMg /MNe
+nant left behind, paying particular attention to the high Mg abun-                                                                  and MSi /MMg , with those of the theoretical models by Sukhbold
+dance. The Mg-to-Ne mass ratio of G284.3−1.8 amounts to                                                                             et al. (2018), which are also used by Matsunaga et al. (2024).
+MMg /MNe = 0.73+0.07
+                   −0.03 , which is signiﬁcantly higher than the so-                                                                The explodability of each model is determined based on the cri-
+lar value, MMg /MNe ∼ 0.35. As discussed on N49B by Sato et                                                                         terion by Ertl et al. (2016), following Sato et al. (2025). This
+al. (2025) and on G359.0−0.9 by Matsunaga et al. (2024), a plau-                                                                    ﬁgure clearly indicates that G284.3−1.8 belongs to the popula-
+sible explanation of Mg-rich ejecta is the so-called shell merger                                                                   tion with higher MMg /MNe ratios. The population is divided into
+process in the progenitor right before the core collapse, where                                                                     two groups depending on MSi /MMg ratios. Based on the rela-
+Publications of the Astronomical Society of Japan (0000), Vol. 00, No. 0                                                                                                                                                        5
+
+
+            3
+                    12CO(1-0)
+                    HI × 0.02
+                                                                3                                                   3
+                                                                                                                                                              MSi /MMg , imply a violent shell burning activity inside the pro-
+            2                                                   2                                                   2
+                                                                                                                                                              genitor, such as “shell merger”, that would facilitate the explosion
+  Tmb [K]
+
+
+
+
+                                                      Tmb [K]
+
+
+
+
+                                                                                                          Tmb [K]
+            1                                                   1                                                   1
+                                                                                                                                                              of a massive star. The characteristics of 1FGL J1018.6−5856, on
+            0                                                   0                                                   0
+                                                                                                                                                              the other hand, would better be explained if its compact object
+            -1 (l, b) = (284.792, -1.208)                       -1 (l, b) = (284.292, -1.208)                       -1 (l, b) = (283.792, -1.208)
+             -50 -40 -30 -20 -10 0          10   20              -50 -40 -30 -20 -10 0          10   20              -50 -40 -30 -20 -10 0          10   20   is a neutron star. Two major models have mainly been consid-
+                            Vlsr [km/s]                                         Vlsr [km/s]                                         Vlsr [km/s]
+
+            3                                                   3                                                   3                                         ered as acceleration/radiation mechanisms for gamma-ray binaries
+            2                                                   2                                                   2                                         (Mirabel 2006). One model, the so-called pulsar wind scenario,
+  Tmb [K]
+
+
+
+
+                                                      Tmb [K]
+
+
+
+
+                                                                                                          Tmb [K]
+            1                                                   1                                                   1                                         considers a young rotation-powered pulsar as the compact object
+            0                                                   0                                                   0
+                                                                                                                                                              in the binary system. In this model, particles (presumably elec-
+            -1 (l, b) = (284.792, -1.708)                       -1 (l, b) = (284.292, -1.708)                       -1 (l, b) = (283.792, -1.708)             trons and positrons) are accelerated at the shock formed by colli-
+             -50 -40 -30 -20 -10 0          10   20              -50 -40 -30 -20 -10 0          10   20              -50 -40 -30 -20 -10 0          10   20
+                            Vlsr [km/s]                                         Vlsr [km/s]                                         Vlsr [km/s]               sion of the relativistic wind from the pulsar and stellar wind from
+            3                                                   3                                                   3
+                                                                                                                                                              the companion star. The second model is the so-called micro-
+            2                                                   2                                                   2
+                                                                                                                                                              quasar scenario since it assumes a jet from the compact object,
+  Tmb [K]
+
+
+
+
+                                                      Tmb [K]
+
+
+
+
+                                                                                                          Tmb [K]
+            1                                                   1                                                   1
+                                                                                                                                                              either a black hole or a neutron star, as the acceleration/radiation
+            0                                                   0                                                   0
+                                                                                                                                                              site. As was discussed for a similar gamma-ray binary system,
+            -1 (l, b) = (284.792, -2.208)                       -1 (l, b) = (284.292, -2.208)                       -1 (l, b) = (283.792, -2.208)
+             -50 -40 -30 -20 -10 0          10   20              -50 -40 -30 -20 -10 0          10   20              -50 -40 -30 -20 -10 0          10   20   LS 5039, by Kishishita et al. (2009), the relatively stable X-ray
+                            Vlsr [km/s]                                         Vlsr [km/s]                                         Vlsr [km/s]
+                                                                                                                                                              orbital modulation (An et al. 2015) would better be reproduced
+Fig. 7. 12 CO(J =1–0) and H I spectral proﬁles within and surrounding eight                                                                                   with the ﬁrst model, in which the compact object is a neutron
+regions of the remnant indicated in ﬁgure 6. Alt text: 12 CO(J =1–0) and H I                                                                                  star. Both G284.3−1.8 and 1FGL J1018.6−5856, therefore, seem
+spectra extracted from the nine regions indicated in ﬁgure 6.                                                                                                 to contain neutron stars, suggesting a possibility of an interest-
+                                                                                                                                                              ing scenario where G284.3−1.8 and the compact object of 1FGL
+                                                                                                                                                              J1018.6−5856 are remnants of a common supernova explosion.
+tively lower MSi /MMg of 0.44 ± 0.03, G284.3−1.8 is classiﬁed
+into the group with higher MMg /MNe and lower MSi /MMg , in-                                                                                                     The common-origin scenario for G284.3−1.8 and
+dicating that the progenitor experienced Ne-burning shell intru-                                                                                              1FGL J1018.6−5856 still needs observational tests before
+sion before the supernova explosion. There should be some un-                                                                                                 one can conﬁrm it. As discussed above, even with the DR3
+certainties about the He core mass estimate indicated in ﬁgure 8                                                                                              result, we still have a tension between the Gaia distance to
+since differences in stellar evolution codes and stellar parame-                                                                                              1FGL J1018.6−5856 and our estimated distance to G284.3−1.8
+ters (e.g., metallicity, overshoot, rotation, binary, nuclear reaction                                                                                        based on the NANTEN 12 CO (J = 1–0) data. Another test is
+rates, etc.) could signiﬁcantly affect the estimate. In any case, the                                                                                         regarding the compact object in 1FGL J1018.6−5856. Our X-ray
+Ne-burning shell intrusion likely to have occurred in the progeni-                                                                                            spectroscopy of G284.3−1.8 implies that the compact remnant of
+tor of G284.3−1.8 would have facilitate the explosion, according                                                                                              the supernova explosion is a neutron star. On the other hand, the
+to the result by Sato et al. (2025), who discussed the explodability                                                                                          nature of the compact object in 1FGL J1018.6−5856 is still under
+of massive stars, including those that experienced the Ne-burning                                                                                             debate. The orbital parameters of the 1FGL J1018.6−5856 system
+shell intrusion, based on the criterion by Ertl et al. (2016). Such an                                                                                        obtained through radial velocity measurements of the optical
+explosion should have left a neutron star as the compact remnant                                                                                              companion still allows the mass range of the compact object for a
+(Heger et al. 2003).                                                                                                                                          black hole (e.g., van Soelen et al. 2022). If detected, pulsations
+   The above discussion relies on the single-star models by                                                                                                   from 1FGL J1018.6−5856 would give a decisive answer that the
+Sukhbold et al. (2018). The progenitor of G284.3−1.8, however,                                                                                                compact object is a neutron star.
+could have been a binary star as we explore such a possibility in
+what follows. According to the study by Laplace et al. (2021), their
+binary-stripped star models can experience shell mergers when
+their He core mass is lower than ∼ 5M⊙ . Laplace et al. (2021)
+also found that, compared to single stars with the same He-core
+                                                                                                                                                              5 Conclusion
+mass, binary-stripped stars tend to have smaller compactness pa-
+rameters (O’Connor & Ott 2011), indicating that binary-stripped                                                                                               We analyzed Suzaku XIS data of the SNR G284.3−1.8, at the
+stars have higher explodability. Even in the binary-star case, the                                                                                            center of which is the gamma-ray binary 1FGL J1018.6−5856.
+peculiar elemental abundances observed in G284.3−1.8 suggest                                                                                                  According to our spectroscopy, the two systems have compati-
+that the progenitor had a relatively small He-core mass and left a                                                                                            ble X-ray absorption column densities of 6–7 × 1021 cm−2 , in-
+neutron star after the supernova explosion.                                                                                                                   dicating that they are at comparable distances. Analyzing 12 CO
+   Another thing to note is the effect of explosive nucleosynthe-                                                                                             (J = 1–0) data obtained with the NANTEN telescope, we also
+sis, which can, in principle, change the mass ratios discussed here                                                                                           found a molecular cloud associated with G284.3−1.8, whose dis-
+in ﬁgure 8. The small amount of Si in the observation would im-                                                                                               tance was estimated to be 3 kpc. The Suzaku XIS spectrum of
+ply that the effects of explosive nucleosynthesis are small. Sato                                                                                             G284.3−1.8 indicates that the SNR is a Mg-rich supernova rem-
+et al. (2025) and Matsunaga et al. (2024) performed 1D super-                                                                                                 nant, with a Mg/Ne mass ratio of 0.73+0.07
+                                                                                                                                                                                                      −0.03 . We have shown that
+nova simulations to estimate the impact of the effect. According                                                                                              the supernova explosion would have left behind a neutron star by
+to their results, explosive nucleosynthesis slightly (by ∼ 10%) de-                                                                                           comparing the observed elemental abundances and stellar models.
+creases MMg /MNe and increases MSi /MMg by a factor of ∼ 2–4                                                                                                  On the other hand, the characteristics of 1FGL J1018.6−5856 are
+in the case of stars with Ne-burning shell intrusion. Even if we                                                                                              better explained if its compact object is a neutron star. Therefore,
+take into account the effect, therefore, our conclusion should not                                                                                            our result suggests a possible scenario where G284.3−1.8 and
+be changed.                                                                                                                                                   1FGL J1018.6−5856 are both remnants of a common supernova
+   We have found that the observed mass ratios, MMg /MNe and                                                                                                  explosion although some observational tests are still necessary.
+6                                                                                           Publications of the Astronomical Society of Japan (0000), Vol. 00, No. 0
+
+
+                                                                                                 our Galaxy. Astron. Soc. Pac., San Francisco, p. 59
+                                                                                              O’Connor, E. & Ott, C. D. 2011, ApJ, 730, 2, 70
+                                                                   10                         Okamoto, R., Yamamoto, H., Tachihara, K., et al. 2017, ApJ, 838, 132
+                          10
+                                                                                              Park, S., Hughes, J. P., Slane, P. O., et al. 2003, ApJL, 592, 41
+                                                                   9
+                                                                                              Reid M. J. et al., 2019, ApJ, 885, 131
+                                                                                              Ruiz, M. T., & May, J. 1986, ApJ, 309, 667
+                                                                                              Russeil, D., Zavagno, A., Amram, P., et al. 2023, A&A, 680, A81
+                                                                   8
+                                                                                              Sato, T., Matsunaga, K., Sawada, R., et al. 2025, ApJ, 984, 2, 185
+
+
+
+
+                                                                        He core Mass [M ]
+                                                                                              Shan, S.-S., Zhu, H., Tian, W.-W., et al. 2019, Research in Astronomy and
+     Si/Mg [mass ratio]
+
+
+
+
+                                                                   7
+                                                                                                 Astrophysics, 19, 092
+                           1
+                                                                                              Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., & Janka, H. T. 2016,
+                                                                   6                             ApJ, 821, 38
+                                                                                              Sukhbold, T., Woosley, S. E., & Heger, A. 2018, ApJ, 860, 93
+                                                                   5
+                                                                                              Tanaka, T., Odaka, H., Enoto, T., & Nakashima, S. 2014, 244,
+                                                                                                 https://ui.adsabs.harvard.edu/abs/2014efxu.conf..244T
+                                                                                              Tawa, N., et al., 2008, PASJ, 60, S11
+                                                                   4
+                                                                                              Uchiyama, H., Nobukawa, M., Tsuru, T., et al. 2013, PASJ, 65, 19
+                          0.1                                                                 van den Bergh, S., Marscher, A. P., and Terzian, Y. 1973, ApJ, 26,19
+                            0.1                        1
+                                                                   3                          van Soelen, B., Mc Keague, S., Malyshev, D., et al. 2022, MNRAS, 515, 1,
+                                  Mg/Ne [mass ratio]                                             1078
+                                                                                              Williams, B. J., Rangelov, B., Kargaltsev, O., & Pavlov, G. G. 2015, ApJL,
+Fig. 8. Mass ratios MMg /MNe and MSi /MMg in the O-rich layers of stellar                        808, L19
+models with 12–27 M⊙ taken from Sukhbold et al. (2018), and distinction                       Wilms, J., Allen, A., & McCray, R. 2000, ApJ, 542, 914
+between exploding and non-exploding models based on Ertl et al. (2016)                        Yadav, N., Müller, B., Janka, H. T., Melson, T.& Heger, A. 2020, ApJ, 890,
+(See Sato et al. 2025 for details). The colored and gray circles represent                       94
+explosion and implosion cases, respectively, with the gray dashed lines in-
+dicating the solar values. The color bar in correspond to He core mass.
+The red point indicate the ratios obtained from the present spectral analy-
+sis of G284.3−1.8. Alt text: Relation between MMg /MNe and MSi /MMg
+of stellar models by Sukhbold et al. (2018) together with the ratios obtained
+for G284.3−1.8.
+
+
+
+
+References
+An, H., Bellm, E., Bhalerao, V., et al. 2015, ApJ, 806, 166
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491,
+    972
+Carretero-Castrillo M., Ribó M., Paredes J., 2023, A&A, 679, A109
+Dubus, G. 2006, A&A, 456, 801
+Ertl, T., Janka, H.-T., Woosley, S. E., Sukhbold, T., & Ugliano, M. 2016,
+    ApJ, 818, 124
+Fermi-LAT Collaboration, Ackermann, M., Ajello, M., et al. 2012, Science,
+    335, 189
+Heger, A., Fryer, C. L., Woosley, S. E., et al. 2003, ApJ, 591, 288
+H.E.S.S. Collaboration, Abramowski, A., Acero, F., et al. 2012, A&A, 541,
+    A5
+H.E.S.S. Collaboration, Abramowski, A., Aharonian, F., et al. 2015, A&A,
+    577, A131
+HI4PI Collaboration, Ben Bekhti, N., Flöer, L., et al. (2016) “HI4PI: a full-
+    sky H I survey based on EBHIS and GASS,” A&A, 594, A116
+Ishisaki, Y., Maeda, Y., Fujimoto, R., et al. 2007, PASJ, 59, 113
+Katsuda, S., Takiwaki, T., Tominaga, N., et al. 2018, ApJ, 863, 127
+Kishishita, T., Tanaka, T., Uchiyama, Y., et al. 2009, ApJL, 697, L1
+Koo B.-C., Heiles C., 1991, ApJ, 382, 204
+Koyama, K., Tsunemi, H., Dotani, T., et al. 2007, PASJ, 59, 23
+Kushino, A., Ishisaki, Y., Morita, U., et al. 2002, PASJ, 54, 327
+Laplace, E., Justham, S., Renzo, M., et al. 2021, A&A, 656, A58
+Maíz Apellániz, J., Pantaleoni Gonźalez, M., & Barbá, R. H. 2021, A&A,
+    649, A13
+Marcote, B., Ribó, M., Paredes, J. M., et al. 2018, A&A, 619, A26
+Matsunaga, K., Uchida, H., Enokiya, R., Sato, T., et al. 2024,
+    arXiv:2405.20736
+Milne, D. K., Caswell, J. L., Kesteven, M. J., Haynes, R. F., & Roger, R. S.
+    1989, PASA, 8, 187
+Mirabel, I. F. 2006, Science, 312, 1759
+Mizuno A., Fukui Y., 2004, in Clemens D., Shah R., Brainerd T.eds, ASP
+    Conf. Ser. Vol. 317, Milky Way Surveys: The Structure and Evolution of
+

@@ -1,0 +1,916 @@
+                                               MNRAS 000, 1–?? (2024)                                                    Preprint 3 June 2024            Compiled using MNRAS LATEX style file v3.0
+
+
+
+
+                                               3D simulations of convective shell Neon-burning in a massive star
+                                               Georgy, C.1★ , Rizzuti, F.2 , Hirschi, R.2,3 , Varma, V.2 , Arnett, W. D.4 , Meakin C.5 , Mocak M.6 , Murphy A. StJ.7 ,
+                                               Rauscher, T.8,9
+                                               1 Département d’astronomie, Université de Genève, Chemin Pegasi 51, CH-1290 Versoix, Switzerland
+                                               2 Astrophysics Group, Lennard-Jones Laboratories, Keele University, Keele ST5 5BG, UK
+                                               3 Kavli IPMU (WPI), University of Tokyo, 5-1-5 Kashiwanoha, Kashiwa 277-8583, Japan
+                                               4 Steward Observatory, University of Arizona, 933 N. Cherry Avenue, Tucson AZ 85721, USA
+                                               5 Pasadena Consulting Group, 1075 N Mar Vista Ave, Pasadena, CA 91104 USA
+arXiv:2405.21033v1 [astro-ph.SR] 31 May 2024
+
+
+
+
+                                               6 NESS KE s.r.o, Továrenská 8, 04001 Košice, Slovakia
+                                               7 School of Physics and Astronomy, University of Edinburgh, Edinburgh EH9 3FD, UK
+                                               8 Department of Physics, University of Basel, 4056 Basel, Switzerland
+                                               9 Centre for Astrophysics Research, University of Hertfordshire, Hatfield AL10 9AB, United Kingdom
+
+
+
+
+                                               Accepted XXX. Received YYY; in original form ZZZ
+
+
+
+                                               ABSTRACT
+                                               The treatment of convection remains a major weakness in the modelling of stellar evolution with one-dimensional (1D) codes.
+                                               The ever increasing computing power makes now possible to simulate in 3D part of a star for a fraction of its life, allowing us
+                                               to study the full complexity of convective zones with hydrodynamics codes. Here, we performed state-of-the-art hydrodynamics
+                                               simulations of turbulence in a neon-burning convective zone, during the late stage of the life of a massive star. We produced a
+                                               set of simulations varying the resolution of the computing domain (from 1283 to 10243 cells) and the efficiency of the nuclear
+                                               reactions (by boosting the energy generation rate from nominal to a factor of 1000). We analysed our results by the mean of
+                                               Fourier transform of the velocity field, and mean-field decomposition of the various transport equations. Our results are in line
+                                               with previous studies, showing that the behaviour of the bulk of the convective zone is already well captured at a relatively low
+                                               resolution (2563 ), while the details of the convective boundaries require higher resolutions. The different boosting factors used
+                                               show how various quantities (velocity, buoyancy, abundances, abundance variances) depend on the energy generation rate. We
+                                               found that for low boosting factors, convective zones are well mixed, validating the approach usually used in 1D stellar evolution
+                                               codes. However, when nuclear burning and turbulent transport occur on the same timescale, a more sophisticated treatment
+                                               would be needed. This is typically the case when shell mergers occur.
+                                               Key words: convection – hydrodynamics – nucleosynthesis – turbulence – stars: interiors – stars: evolution
+
+
+
+                                               1 INTRODUCTION                                                                 of convective regions and the mixing that occurs near the boundaries
+                                                                                                                              (convective boundary mixing, CBM).
+                                               To study the physics and evolution of stars, the most efficient and
+                                               complete software tools available are one-dimensional (1D) stellar                For decades, 1D models have implemented the so-called “mixing
+                                               evolution models (Heger et al. 2000; Paxton et al. 2011; Ekström               length theory” (MLT, Böhm-Vitense 1958), a purely one-dimensional
+                                               et al. 2012). Not only can these models be employed to study the               and local treatment of convection that, while simple and easy to im-
+                                               physics of stars, but they also represent a key aspect for interpreting        plement, fails to appreciate the multi-dimensionality of the problem.
+                                               stellar observations. Without an up-to-date and reliable grid of 1D            This reflects in the well-known problem of having to add ad-hoc
+                                               stellar models, it would not be possible to obtain important informa-          mixing beyond the convective boundary, often referred to as “over-
+                                               tion e.g. from asteroseismic measurements (e.g Aerts et al. 2003), or          shoot”. Over the years, many prescriptions have been suggested and
+                                               for isochrone fitting and age determination (e.g. Jørgensen & Lin-             improved to account for an extension of the convective region (e.g.
+                                               degren 2005; Bossini et al. 2019). Despite the great progress made             Zahn 1991; Canuto & Mazzitelli 1991; Freytag et al. 1996; Her-
+                                               in the recent years to improve stellar evolutionary models, several            wig 2000; Gabriel et al. 2014), but their validation and calibration
+                                               uncertainties still affect the outcome of the models, undermining the          has been difficult due to the impossibility of directly measuring the
+                                               accuracy of the predictions. These uncertainties arise from the multi-         size of convective regions in observed stars. Indirect information
+                                               physical and multi-dimensional processes that occur in stars, often            can be deduced from asteroseismology (Pedersen et al. 2021), the
+                                               included only through simplified prescriptions. Among the most con-            Hertzsprung-Russell diagram (Castro et al. 2014), and eclipsing bi-
+                                               cerning uncertainties in stellar modelling are determining the extent          naries (Claret & Torres 2016), but these methods are still heavily
+                                                                                                                              based on 1D models for interpreting the observations.
+                                                                                                                                 In the last two decades, multi-dimensional hydrodynamic simula-
+                                               ★ E-mail: cyril.georgy@unige.ch                                                tions of stellar interiors have been used to constrain and parametrize
+
+                                               © 2024 The Authors
+2      Georgy et al.
+CBM (e.g. Freytag et al. 1996; Meakin & Arnett 2007). This ap-              2 INITIAL CONDITIONS AND OVERVIEW OF 3D
+proach is sometimes called ‘321D-guided’, referring to the fact that          HYDRODYNAMIC SIMULATIONS
+1D models are improved with the results obtained from multi-D mod-
+els. In fact, multi-D simulations are started from initial conditions       In this paper, we simulate a neon burning shell of a 15 𝑀⊙ star.
+assumed from the 1D models they are trying to validate, therefore           The initial conditions for our 3D models are mapped from a 1D
+they are subjected to the uncertainties of the 1D models. In addition,      GENEC stellar evolution model run at solar metallicity (𝑍 = 0.014)
+3D models are not able to reproduce the long time-scales typical            and with the physical ingredients described in Ekström et al. (2012).
+of the stellar evolution, due to the excessive computing resources          The Schwarzschild criterion is used, and penetrative overshoot is
+required, therefore their results need to be generalized into more          included for core hydrogen and core helium burning phases only,
+extensive prescriptions.                                                    with an overshooting distance ℓover = 0.1 𝐻 𝑃 . From carbon burning
+                                                                            onward, an 𝛼-chain network is used (see Hirschi et al. 2004, for de-
+                                                                            tails). This input stellar model has been described in more detail in
+   Running multi-D hydrodynamic simulations of stars is very chal-          Rizzuti et al. (2022). The evolution of the structure of the model is
+lenging due to the great amount of computing resources required.            presented in Fig.1 (left) with a close-up of the neon-burning shell
+Consequently, an important limiting factor in the simulations is the        used as initial conditions for the 3D simulations presented in Fig. 1
+Mach number, or the convective velocity of the fluid. The late burning      (right). Compared to other convective episodes, neon-burning con-
+phases of massive stars are normally characterised by large convec-         vective zones are relatively small and short-lived with typical spatial
+tive velocities, which make it easier and cheaper to perform hy-            extents of the order of 108−9 cm and temporal extents of weeks to
+drodynamic simulations of these environments using time-explicit            months. These timescales are still too computationally expensive to
+methods. They normally include oxygen- and silicon-burning phases           be simulated completely in 3D (though see Rizzuti et al. 2023), so in
+(Meakin & Arnett 2007; Arnett et al. 2009; Viallet et al. 2013; Couch       this study we opt instead to simulate a statistically significant number
+et al. 2015; Müller et al. 2016; Jones et al. 2017; Yoshida et al. 2019),   of convective turnovers.
+and occasionally also neon-burning (Rizzuti et al. 2022, 2023). Re-             Using the initial conditions described above, we produced a series
+cently, these convective phases have also been explored with rotation       of 3D hydrodynamic simulations using the PROMPI code (Meakin &
+(Yoshida et al. 2021; McNeill & Müller 2022; Fields 2022), magnetic         Arnett 2007; Cristini et al. 2017). We used a plane-parallel geometry
+fields (Varma & Müller 2021; Leidi et al. 2023) and both rotation           and our computing domain is a cube of side equal to 0.65 × 108 cm
+and magnetic fields (Varma & Müller 2023). Earlier phases, such as          encompassing the convective shell, which occupies half of the do-
+the main-sequence burning, helium- and carbon-burning, are charac-          main, as well as stable (radiative) layers both below and above (see
+terised by slow convective velocities, which require large boosting in      e. g. Fig. 2). The gravity is fixed according to the initial stellar model,
+luminosity to make the hydrodynamic computation affordable (Gilet           and nuclear burning is followed with a minimal nuclear network of
+et al. 2013; Woodward et al. 2015; Cristini et al. 2017; Horst et al.       4 species (16 O, 20 Ne, 24 Mg, and 28 Si), 𝛼-particles being considered
+2021; Herwig et al. 2023; Andrassy et al. 2024) or in two dimen-            to be at equilibrium (Arnett 1974). As already done in our previous
+sions (Baraffe et al. 2023). However, it is still not clear whether such    works (Cristini et al. 2017; Rizzuti et al. 2022, 2023), for a subset
+boosting also introduces additional effects to the physics of the star.     of our simulations, we multiplied the reaction rates and the neutrino
+                                                                            generation rate by a so-called “boosting” factor taking the following
+                                                                            values: 1 (nominal case), 10, 100, and 1000. This energy generation
+   In this work, we present a large grid of hydrodynamic simulations        boosting provides two main advantages. First, the increased energy
+reproducing a neon-burning shell in a 15 M ⊙ star; this grid explores       generation speeds up the nuclear burning and convection (convective
+a wide range of resolution and luminosity. Some of these simulations        velocities scale with the cubic root of the energy generation rate, see
+have been used in Rizzuti et al. (2022) to study entrainment. Here, we      below). Higher convective velocities means that sufficient statistics
+perform a detailed analysis of the dynamics and nucleosynthesis and         (i. e. a reasonable number of convective turnovers) can be obtained
+their interplay. The presence of a nominal-luminosity run allows us         with a smaller computing budget, as time steps are limited by the
+to validate the results normally obtained through luminosity extrap-        sound speed in PROMPI (time explicit integration). Second, and most
+olation; having simulations with different boosting factors allows us       important, having several simulations with different energy genera-
+to study how different quantities scale with the luminosity. We also        tion rates enables us to study the dependence of the results on the
+perform a detailed mean-field decomposition of some key equations,          strength of turbulence. It is worth noting that this study includes a
+to study the statistical properties of the fluid. Finally, an explicit      nominal case, i.e. exactly the same nuclear energy generation and
+network of isotopes has been included for realistically reproducing         neutrino losses as in the 1D input model. This enables a direct com-
+nuclear burning, allowing us to study the evolution of the abundances       parison to the 1D input model without the need for extrapolation.
+and their variance. The results we present here contribute to the gen-          We summarise the models presented in this study and their most
+eral understanding of stellar evolution through our detailed analysis       important properties in Table 1. One can estimate an effective
+and critical comparison to the initial conditions.                          Reynolds number for our simulations as Re ∼ (𝑛/2) 4/3 , where 𝑛
+                                                                            is the resolution, considering that the radial extent of the convective
+                                                                            zone is half of the domain and thus covers 𝑛/2 cells (see Arnett et al.
+   We organize the paper as follows: In Section 2, we present the           2019). This is a reasonable assumption, which is confirmed by the
+initial conditions and a general overview of the hydrodynamic simu-         cross-sections of Figs. 2 and 6 during the quasi-steady state. In this
+lations. In Section 3, we present the results concerning the dynamics       way, we obtain effective Reynolds numbers of 256, 645, 1625 and
+and nucleosynthesis of the convective flow and we present the de-           4096 for the resolutions 𝑛 = 128, 256, 512 and 1024, respectively.
+tailed mean-field analysis performed with the Reynolds-averaging            For large Reynolds numbers, we can assume the regime of turbulent
+framework. In Section 4, we analyse the time evolution and transport        cascade (Biermann 1932; Kolmogorov 1941), where kinetic energy
+of the chemical composition. Finally, we discuss our results and draw       cascade is driven from the large scales. If we use Re ≥ 1000 as the
+conclusions in Section 5.                                                   condition for the turbulent regime, we see that the highest resolutions
+
+MNRAS 000, 1–?? (2024)
+                                                     3D simulations of convective shell Neon-burning in a massive star                                            3
+
+
+
+
+Figure 1. Left: Structure evolution (aka Kippenhahn) diagram of the 1D GENEC 15 𝑀⊙ stellar model used as input for this study. The top solid black line shows
+the time evolution of the total mass. The other solid black lines are radial contours (values of log10 (𝑟 ) in cm are indicated on the curves). The Mach number
+of the flow inside convective zones (shaded areas) is colour-coded. The extent of the computational domain covered by the 3D simulations corresponds to the
+red vertical bar (indicated by the red arrow). Right: Zoom-in on the neon shell convective region simulated in this study. agestart-hydro corresponds to the time at
+which the 3D simulations start. Black solid lines are isomass contours (𝑀𝑟 = 0.9, 1.0, 1.1, 1.2 𝑀⊙ ). These isomass contours show that the shell studied does
+not undergo any significant contraction or expansion during the Ne-burning phase. The 3D simulations presented in this paper cover a physical time of an hour
+or less, thus not even covering the width of the red vertical line in this figure. These diagrams are taken from Rizzuti et al. (2022).
+
+
+Table 1. Summary of the models presented in this study, listed under names indicating their boosting factor and resolution. The properties are: resolution 𝑁xyz ,
+boosting factor of the nuclear energy generation rate 𝜖 , physical time simulated 𝜏sim (s), global rms convective velocity 𝑣rms (cm s −1 ), convective turnover time
+𝜏c (s), time spent in quasi-steady state 𝜏q (s), number of convective turnovers simulated in quasi-steady state phase 𝑛𝑐 , computational cost in CPU core-hours.
+
+                                              𝑁xyz       𝜖       𝜏sim         𝑣rms            Ma       𝜏c      𝜏q      𝑛𝑐       cost
+                                                                 [s]      [106 cm s −1 ]    [10 −3 ]   [s]     [s]            [106 hr]
+
+                             Ex10_128         1283      10       1500          1.58          4.53       45    1250     27       0.04
+                             Ex10_256         2563      10       1832          1.70          4.44       44    1600     36       0.36
+                             Ex1 𝑎            5123       1       3037          0.70          1.93      100     700      7       11.4
+                             Ex10             5123      10       1004          1.49          3.96       46     700     15       4.66
+                             Ex100            5123      100      291           3.72          9.95       23     150      6       1.15
+                             Ex1000           5123     1000      73 𝑏          8.00          23.2       13      10      1       0.28
+                             Ex10_1024       10243      10       310 𝑐         1.49          3.94       47     310      6       48.2
+                             𝑎 Models with resolution 5123 are indicated by their boosting factor only, since
+
+                             they are the most studied in this work.
+                             𝑏 Time of the entire simulation, although the upper domain is reached at about
+
+                             30 s, as it can be seen in Fig. 3.
+                             𝑐 Model Ex10_1024 was restarted from the Ex10 simulation at 500 s.
+
+
+
+5123 (and 10243 ) reach the numerically turbulent regime. We thus                     ulations at different resolutions with the same boosting factor have
+focus our analysis on simulations at the 5123 resolution throughout                   approximately the same 𝑣 rms , 𝜏𝑐 , and Ma.
+the paper and shorten their code name to include only their boosting
+factor for convenience (Ex1, Ex10, Ex100, Ex1000). This being said,
+we analyse simulations with different resolutions to test the depen-
+                                                                                      3 GENERAL PROPERTIES OF THE CONVECTIVE FLOW
+dence of the results on the grid size in Section 3. Finally, we confirm
+from Table 1 that increasing the boosting factor by a factor of 10                    In this section, we present our analysis of the convective flow with
+increases the convective velocity roughly by a factor of 101/3 ≃ 2.15                 a particular emphasis on the velocity field and the turbulent kinetic
+(𝑣 rms ∼ 𝜖 1/3 , Arnett et al. 2018, where 𝜖 is the energy generation                 energy.
+rate). This in turn decreases the turnover, 𝜏𝑐 , as expected. The gen-
+eral thermodynamics properties of the simulated region of the star
+remain mostly unchanged by changing the boosting factor, thus the                     3.1 Flow velocity and specific kinetic energy
+sound speed also remains the same. The Mach number scales there-
+                                                                                      Figure 2 shows vertical cross sections of model Ex1 taken at key
+fore with 𝑣 rms , and is small in any case : about 2 · 10 −3 for the Ex1
+                                                                                      phases of the simulation, with the velocity magnitude represented in
+case to bout 20 · 10 −3 for the Ex1000 case. We also confirm that sim-
+                                                                                      colour scale. These cross sections allow us to see the time evolution
+                                                                                      of the velocity field in this simulation, which is representative of all
+
+                                                                                                                                         MNRAS 000, 1–?? (2024)
+4      Georgy et al.
+
+
+
+
+                                                                                  Figure 3. Time evolution of the specific kinetic energy integrated over the
+                                                                                  computational domain, for the four models Ex1, Ex10, Ex100, Ex1000. The
+                                                                                  trends cover the entire simulated time range. After an initial transient, whose
+                                                                                  duration depends on the boosting, the simulations enter a quasi-steady state
+                                                                                  (starting time indicated by the vertical dashed lines), which lasts until the
+                                                                                  upper boundary of the domain is reached (Ex100, Ex1000) or the simulation is
+                                                                                  otherwise terminated (Ex1, Ex10). As expected, models with larger boosting
+                                                                                  factors reach higher kinetic energies.
+
+Figure 2. Vertical cross sections of the velocity magnitude (values in colour
+scale) for the Ex1 model, taken at 1000, 1700, 2400 and 3001 (last timestep)                                   8                                                vstart
+seconds through the simulation. The progression shows an increase in the                                                                                        vend
+velocity magnitude of fluid elements. It is possible to see in the upper panels                                7
+                                                                                                                                                                vr
+the formation of the convective cell, and in the lower ones its growth into the                                                                                 vhor
+                                                                                                               6
+                                                                                  RMS velocity (105 cm s−1 )
+
+
+
+
+upper stable region as expected from turbulent entrainment. Gravity waves                                                                                       vMLT
+are also visible in the stable region.
+                                                                                                               5
+
+                                                                                                               4
+our models. At the beginning of the simulation (𝑡 = 1000 and 1700 s),
+the nuclear burning at the bottom of the neon shell drives turbulent                                           3
+motions (initially plumes and later on eddies) which gradually fill
+the region that was convective in the 1D input stellar model. After an                                         2
+initial transient (the duration of which strongly depends on the boost-                                        1
+ing factor), convection is fully developed and the simulation enters
+a quasi-steady state (at around 2400 s for the Ex1 model). As time                                             0
+proceeds, the convective region grows and entrains material from the                                               3.4   3.5   3.6       3.7       3.8   3.9   4.0
+stable regions, as can be seen at the top boundary by comparing the                                                                  radius (108 cm)
+cross sections at 𝑡 = 2400 and 3001 s
+   Another way to follow the time evolution of the velocity in our
+simulations is via the specific total kinetic energy (𝑣 2𝑥 + 𝑣 2𝑦 + 𝑣 2𝑧 )/2      Figure 4. Radial profiles of different velocity components. In black, the
+(see Fig. 3). The initial and sudden rise in kinetic energy charac-               mixing-length-theory velocity vMLT of the 1D stellar model used as initial
+terises the initial transient. Its length depends on the boosting factor,         conditions for all simulations. In red, the root-mean-square velocity vstart
+being considerably longer for the non-boosted model (Ex1). After                  at the beginning of the quasi-steady state in Ex1 simulation, averaged over
+                                                                                  one convective turnover. In blue, different components of the convective
+the transient, the simulations enter a quasi-steady state, where the
+                                                                                  velocity at the end of Ex1 simulation, averaged over one convective turnover:
+average kinetic energy remains constant or slowly increases. This                 root-mean-square vend (solid), radial vr (dotted) and horizontal vhor (dashed)
+phase is also characterised by periodic pulses in kinetic energy of               velocity components.
+approximately the same timescale as the convective turnover time.
+These pulses are related to the time delay between the formation and
+rise of large-scale eddies in the convective zone and their dissipation           zone while the horizontal component peaks at the boundaries. This
+(Meakin & Arnett 2007; Arnett & Meakin 2011; Viallet et al. 2013;                 reflects the convective motions and the u-turning of fluid elements at
+Arnett et al. 2015).                                                              the boundaries. The non-negligible velocities outside the convective
+   The roughly constant or slow rise of convective velocities is con-             zone are produced by gravity waves. Furthermore, using our nominal
+firmed by comparing the radial profiles of the root-mean-square ve-               case simulation (Ex1), we can compare convective velocities directly
+locity between the start (red solid line in Fig. 4 for Ex1 model) and the         between 3D and 1D models. We see that convective velocities in our
+end of the quasi-steady state phase (blue solid line). In addition to a           3D simulations are about twice as large as the velocity predicted by
+mild increase in magnitude, the outward shifting of the upper bound-              mixing-length-theory in the 1D GENEC model (around 3.6 × 105
+ary of the convective zone expected from entrainment is visible. This             cm s −1 , black solid line) consistent with the results of Jones et al.
+figure also confirms findings from previous 3D simulations (see e.g.              (2017).
+Cristini et al. 2017; Jones et al. 2017; Mocák et al. 2018). The radial              The boosting of the nuclear energy generation rate has a strong
+velocity component (dotted line) peaks in the centre of the convective            impact on the evolution of our simulations. This is clearly visible in
+
+MNRAS 000, 1–?? (2024)
+                                                     3D simulations of convective shell Neon-burning in a massive star                                          5
+
+
+
+
+Figure 5. Same as Fig. 2, but for the four models Ex1, Ex10, Ex100, Ex1000       Figure 6. Same as Fig. 2, but for the four different resolutions
+taken at 3001, 400, 60, 16 seconds, respectively. Timesteps were chosen          1283 , 2563 , 5123 , 10243 with boosting factor 10 (see Table 1), taken at 800
+so that the upper convective boundary is located at 3.89 × 108 cm in all         seconds from the beginning of each simulation. Since a higher resolution is
+simulations, for comparison. It is clear that one major effect of boosting the   linked to a smaller dissipation range, it is expected that the simulations predict
+nuclear energy generation rate is an increase in the velocity magnitude of       eddies on a smaller scale when the resolution is increased.
+fluid elements, therefore in kinetic energy, as confirmed by Fig. 3.
+
+
+Fig. 5, where we compare the velocity fields between our four 5123
+simulations with different boosting factors (see Table 1). Since the
+time scale of the evolution of the models is affected by the boosting,
+as can be seen in Fig. 3, we choose here to compare the different
+simulations when their upper convective boundary has reached a
+radial location of approximately 3.89 × 108 cm, which is the max-
+imum extension of the convective zone in the non-boosted model.
+This corresponds to a time of 3001, 400, 60 and 16 seconds for
+the Ex1, Ex10, Ex100 and Ex1000 models, respectively (during the
+quasi-steady state phase of these simulations). Looking at the highest
+velocity in the snapshot shown in Fig. 5 (coloured in red), we can see
+that larger boosting factors produced a higher kinetic energy of the
+fluid, which is confirmed in Fig. 3.
+   In order to test whether there is a dependence of the flow velocity on        Figure 7. Same as Fig. 3, but for the four models with different resolutions
+resolution, we present in Fig. 6 the velocity fields of four simulations         1283 , 2563 , 5123 , 10243 and same boosting factor 10. The simulations share
+                                                                                 a very similar evolution. The vertical dashed line is the beginning of the
+with the same boosting factor and initial conditions, but different
+                                                                                 quasi-steady state.
+resolution. It is clear from the figure that the small scale features of
+convection depend on the mesh size we choose for our simulations.
+In particular, according to the ILES (implicit large eddy simulation)
+                                                                                 rable for all simulations with same boosting factor and thus do not
+paradigm, the grid scale sets the limits for the numerical dissipation
+                                                                                 depend on resolution.
+of kinetic energy, which mimics the effects of viscosity. For this
+                                                                                   High resolution is nevertheless needed to better resolve convective
+reason, if we increase the resolution of our models the dissipation
+                                                                                 boundaries as discussed in Sect. 3.3.
+scale decreases, allowing the simulations to produce eddies on a
+smaller scale, which are closer to the real case scenario, as visible in
+Fig. 6 and discussed further in Sect. 3.2.
+                                                                                 3.2 Turbulent kinetic energy spectra
+   At large scale, however, the structures look similar at different res-
+olutions so we do not expect the bulk properties of the convective re-           A different approach to study the kinetic energy of the simulations is
+gion to depend on resolution. This is confirmed in Fig. 7 showing the            to compute the turbulent kinetic energy spectra. In order to do so, we
+time evolution of the specific total kinetic energy for the four simula-         performed 2D fast Fourier transforms of different velocity compo-
+tions with different resolution and same boosting factor (Ex10_128,              nents on horizontal planes at constant height, within the convective
+Ex10_256, Ex10, Ex10_1024, see Table 1). As expected, the simu-                  zone. We also normalised the spectra by dividing them by 𝑘 −5/3 ,
+lations have a very similar evolution, in agreement with the fact that           which is the power law scaling for the inertial range (Kolmogorov
+global properties (like 𝑣 rms and 𝜏𝑐 estimated in Table 1) are compa-            1941). In this way, the regions where the spectra have a horizontal
+
+                                                                                                                                      MNRAS 000, 1–?? (2024)
+6      Georgy et al.
+slope correspond to the inertial range (see e.g. Cristini et al. 2017,      turbulence and to determine the dominant processes at play. It also
+and references therein).                                                    provides insightful quantitative information. The basics of this anal-
+   We show in Fig. 8 a comparison between the spectra of the radial         ysis rely on a time- and space-averaging of all the quantities. The
+velocity squared, for different resolutions (left panel) and different      time averaging is done on a time-window 𝑇 which is long enough to
+boosting factors (right panel). The spectra are averaged through the        be statistically meaningful, but short enough so that the main prop-
+entire quasi-steady state phase of each simulation (see Fig. 3). As         erties of the fluid do not change significantly. Usually, we perform
+expected, increasing the resolution has the effect of extending the         this averaging over a time corresponding to two convective turnover
+inertial range plateau toward higher 𝑘, because dissipation occurs at       timescales. The spatial averaging is performed over a given volume
+smaller scales 𝑟 in ILES. The vertical dashed lines indicate the grid       𝑉 (in our simulation, it is usually the “volume”, or rather surface of
+size for each resolution. We can see that the dissipation range is a        a horizontal slice of cells). One can therefore define the “Reynolds
+5−10 times larger than the grid size. On the other hand, if we increase     average” of a quantity 𝑞 as:
+the boosting factor while keeping the resolution fixed, we witness a                         ∫ 𝑡+ 𝑇 ∫
+rise in the velocity magnitude without changes in the length of the                      1        2
+                                                                             ¯ 𝑡) =
+                                                                            𝑞(𝑥,                         𝑞(𝑡 ′ , 𝑥, 𝑦, 𝑧)d𝑆d𝑡 ′ ,              (1)
+plateau, as visible in the right-hand panel of Fig. 8.                                 𝑇Δ𝑆 𝑡 − 𝑇2 Δ𝑆
+   The spectra presented in Fig. 8 are taken in the bulk of the convec-
+                                                                            d𝑆 being an infinitesimal surface centered on the point (𝑥, 𝑦, 𝑧). The
+tive region and during the quasi-steady state phase. It is interesting
+                                                                            quantity 𝑞 can then be decomposed as:
+to find out if the spectra vary with location and time. In Fig. 9, we
+study the time evolution of the velocity spectra for the Ex10 model         𝑞 = 𝑞¯ + 𝑞 ′ .                                                          (2)
+from the beginning of the simulation to the quasi-steady state, with
+                                                                            Another useful type of averaging is a density-weighted average, also
+time-averaging windows of 50 seconds, which is approximately the
+                                                                            called “Favre average”:
+convective turnover time for this model (see Table 1). The spectra are
+taken near the bottom of the convective zone (at a radius of 3.58×108              𝜌𝑞
+                                                                            𝑞e =      .                                                             (3)
+cm), and we present results for the radial velocity (left-hand side),              𝜌
+the horizontal velocity (central panel) and the total root-mean-square
+                                                                            Again, we can decompose any quantity 𝑞 as:
+velocity (right-hand side). As can be seen from the plots, at the be-
+ginning of the simulation (during the initial transient), the spectra       𝑞 = 𝑞e + 𝑞 ′′ .                                                         (4)
+have a peak at high 𝑘, i.e. at small scales. This happens because
+                                                                            Note that most of the time, 𝑞 ′ ≠ 𝑞 ′′ .
+convection is at a very early stage, and eddies on the smallest scales
+                                                                               With these notations, we can perform averages of the Euler equa-
+are dominant. As time passes, the velocity magnitude increases and
+                                                                            tions governing the fluid we are simulating. Without providing details
+the peaks are shifted toward smaller 𝑘 as the turbulent flow fills the
+                                                                            (which can be found in1 Viallet et al. 2013; Mocák et al. 2014; Arnett
+entire region that was convective in the 1D input stellar model. After
+                                                                            et al. 2015; Mocák et al. 2018), this leads to the following results for
+the initial transient (lasting about 300 s), the spectra do not vary sig-
+                                                                            the kinetic energy equation:
+nificantly and they assume the more familiar shape of Fig. 8, which
+is characteristic of homogeneous and isotropic turbulence.                  𝜌D
+                                                                             e𝑡 e             ′′ 𝜖 − ∇ 𝑓 + 𝑊 + 𝑊 .
+                                                                                𝜖 k = −∇ 𝑥 𝜌 𝑢
+                                                                                              𝑥 k     𝑥 P   𝑃   B                                   (5)
+   In a similar way, we compare in Fig. 10 the spectra of the velocity
+and its components at different radial locations inside the convective      𝜌D e 𝑡 is an operator similar to the Lagrangian derivative in the RA-
+                                                                            ILES framework: 𝜌 D  e 𝑡 𝑞e = 𝜕𝑡 (𝜌e𝑞 ) + ∇ 𝑥 (𝜌e
+                                                                                                                            𝑢 𝑥 𝑞e), with ∇ 𝑥 the 𝑥 com-
+zone, from 3.58 to 3.88 × 108 cm, during the quasi-steady state phase
+(500-550 seconds, Ex10). The spectra at different heights are very          ponent of the divergence operator2 . 𝑓P = 𝑃 ′ 𝑢 ′𝑥 is the acoustic flux
+similar, which means that convection remains turbulent and generally        (i.e. the flux of pressure variations). 𝑊P = 𝑃 ′ 𝜕𝑥 𝑢 ′𝑥 represents the
+isotropic throughout the convective zone. The main exception is the         turbulent pressure dilatation, and 𝑊B = −𝜌𝑢 ′′         𝑥e𝑔 is the buoyancy
+radial velocity at the lowest 𝑘 values (largest scales) near convec-        work.
+tive boundaries. Indeed, both the uppermost and lowermost spectra              In this section, we go into the details of the RA-ILES decom-
+have a lower radial velocity magnitude around 𝑘 = 10 compared               position of the turbulent kinetic energy (TKE) by discussing the
+to the bulk of the convective region. This is easily explained if we        importance and behaviour of each term in equation (5) for different
+consider that the convective boundaries are limiting the velocity in        resolutions (1283 to 10243 for the Ex10 boosting factor, see Fig. 11)
+the radial direction, while the horizontal components of velocity are       and boosting factors (nominal luminosity to 103 times nominal lu-
+not affected by this restriction. Instead, they are stronger near the       minosity at a resolution of 5123 , see Fig. 12):
+convective boundaries and present a peak around 𝑘 = 11 which is                Time Evolution - 𝜌 𝐷   f𝑡 𝜖e𝑘 represents the Lagrangian time deriva-
+less important for central regions.                                         tives of the kinetic energy. A negligible time derivative within the
+                                                                            chosen time average implies that the convection is in a statistically
+                                                                            steady state. This can seen to be true in all resolutions (Fig. 11)
+3.3 Mean field (RA-ILES) analysis of the turbulent kinetic                  and most boosting factors. The only exception is the Ex1000 model
+    energy                                                                  shown in Fig. 12. In this case, the high boosting factor leads to a
+                                                                            rapid growth of the convective region, causing it to interact with the
+                                                                            domain boundary before a steady state can be achieved. As such,
+                                                                            we will not analyse the Reynolds averaged quantities of this model
+  In order to gain a better understanding of the key processes taking       further.
+place in our simulations, we performed a mean field analysis, called
+RA-ILES (Reynolds-Averaged analysis of Implicit Large Eddy Sim-             1 For a general introduction to the RA-ILES method, see Chassaing et al.
+ulations) hereinafter (see Meakin & Arnett 2007; Viallet et al. 2013;       (2002).
+Cristini et al. 2017; Arnett et al. 2018). This allows us to disentan-      2 In this work, 𝑦 and 𝑧 are both horizontal directions, while 𝑥 is directed
+
+gle the contributions and interplay between nuclear reactions and           outwards (opposite to the gravity field).
+
+MNRAS 000, 1–?? (2024)
+                                                      3D simulations of convective shell Neon-burning in a massive star                                              7
+
+
+
+
+Figure 8. Two-dimensional Fourier transforms of the radial velocity multiplied by 𝑘 5/3 , for the four different resolutions 1283 , 2563 , 5123 , 10243 with a boosting
+factor 10 (left-hand panel), and for the four different boosting factors of the 5123 resolution √︃
+                                                                                                models (right-hand panel), taken during the quasi-steady state phase,
+at the centre of the convective zone. The horizontal axes show both the Fourier space 𝑘 =        𝑘 𝑦2 + 𝑘 𝑧2 (bottom axis) and the real space 𝑟 (top axis). The vertical
+dashed lines show in the left-hand plot the grid size for each resolution, and in the right-hand plot they show 32, 16, 8 times the grid size for the 5123 models.
+
+
+
+
+Figure 9. Same as Fig. 8, but for the Fourier transforms of the radial velocity (left-hand panel), horizontal velocity (central panel) and total root-mean-square
+(rms) velocity (right-hand panel), taken at different times through the Ex10 simulation, with an averaging window of 50 seconds. It can be clearly seen the
+progression toward the quasi-steady state.
+
+
+  Transport Terms - The transport of kinetic energy throughout                        the work due to turbulent pressure fluctuations, W 𝑃 and the buoyancy
+                                                          ′′ 𝜖 ′′ ), and
+the convective region is defined by the TKE flux, ∇ 𝑥 (𝜌 𝑢                           work due to density fluctuations, W 𝐵 . As in previous work by Viallet
+                                                          𝑥 𝑘
+the acoustic flux, ∇ 𝑥 𝑓 𝑃 , where 𝑓 𝑃 = 𝑃 ′ 𝑢 ′𝑥 . We see that the acoustic          et al. (2013) and Cristini et al. (2017), W 𝑃 appears to be negligible in
+flux often opposes the TKE flux within the convection zone, except                    shell convection in deep interiors. W 𝐵 > 0 is generally seen in the
+at the convective boundaries, where the acoustic flux spikes where                    convective zone as expected, since it is the main driving term. Re-
+it launches gravity waves. The general behaviour observed in the                      gions near the convective boundary have W 𝐵 < 0, meaning that the
+Ex10 case in Fig. 11 can also be seen when the boosting factor                        flow decelerates in these regions. These regions are usually referred
+varies (Fig. 12). The general pattern is preserved, but its amplitude                 to as “overshooting” regions in 1D stellar modelling but we prefer
+is increased for increasing boosting factors, since the higher velocity               the more general term of “convective boundary mixing” regions. We
+of the fluid makes the transport more efficient (note the change in the               notice a minor systematic decrease in the integrated buoyancy work
+scale on the y axis by a factor of 1000 from the top to the bottom                    as resolution is increased. We suspect this effect is caused by the
+panel).                                                                               lower resolution models having a larger convective boundary mixing
+                                                                                      extent. This leads to a higher rate of entrainment of new material to
+  Source Terms - Turbulence in the convective region is driven by
+
+                                                                                                                                           MNRAS 000, 1–?? (2024)
+8      Georgy et al.
+
+
+
+
+Figure 10. Same as Fig. 9, but for the Fourier transforms taken during the quasi-steady state phase (500 seconds, Ex10) at different radial locations inside the
+convective zone.
+
+
+burn into the convective Ne shell, which in turn, slightly increases               great details. These nuclides are linked by a small tailored nuclear
+the rate of energy generation and hence the buoyancy work done.                    reaction network including the following reactions: 20 Ne(𝛾, 𝛼) 16 O,
+The difference, however, is quite minor even over the relatively long              16 O(𝛼, 𝛾) 20 Ne, 20 Ne(𝛼, 𝛾) 24 Mg, 24 Mg(𝛼, 𝛾) 28 Si (𝛼 particles are
+timescales that we simulate. Looking at the different boosting factors             considered to be at nuclear equilibrium, which is a reasonable as-
+(Fig. 12), we see that W 𝐵 scales linearly with them: the work done by             sumption for the neon shell studied here).
+buoyancy force is about 1000 times higher in the Ex1000 simulation                    We can see the effects of the above-mentioned neon-burning re-
+compared to the nominal case Ex1. This is due to the fact that nuclear             actions in the vertical cross-section snapshots presented in Fig. 13,
+processes drive convection by heating up the plasma at the bottom                  where we show in colour scale the mass fraction of these four species
+of the shell.                                                                      after 1500 seconds from the start of the Ex1 model (note that the sim-
+   Dissipation - Due to the finite size of our grid, our code is not able          ulation has not reached the quasi-steady-state by that time and that
+to perfectly reproduce the behaviour of the fluid at spatial sizes which           the turbulent region has not reached the upper boundary from the ini-
+are smaller than the grid size and our simulations do not include ex-              tial 1D model). In particular, the reference colour (white) indicates
+plicit viscosity (ILES). The numerical dissipation (taking place at the            the average mass fraction inside the neon shell at the beginning of
+grid scale) is nevertheless tracked by the N𝜖𝑘 term, which is the dif-             the simulation. The colour represents the same range of deviations
+ference between the left-hand side and right-hand side terms of Eq. 5.             from the initial composition in the convective region in all panels.
+Similar to the results found in Cristini et al. (2017) for a convective            The results fully reflect what is expected for neon burning: neon is
+carbon burning shell, we find that the work due to buoyancy, W 𝐵 ,                 consumed inside the convective region, while oxygen, magnesium
+is closely balanced by numerical dissipation N𝜖𝑘 as expected from                  and silicon are produced via the reactions listed above. These abun-
+Kolmogorov’s turbulence theory as numerical dissipation in ILES                    dance plots also show that the species are not always completely
+replaces the dissipation due to physical viscosity. One key feature                homogeneously mixed and that they can be used as tracers of the tur-
+that depends on resolution is the numerical dissipation peak at the                bulent motion of the fluid. Particularly interesting is the 20 Ne case:
+lower boundary. This confirms that high resolution is needed to fully              the bottom part of the convective region shows an under-abundance
+resolve the lower boundary of convective region. Another feature that              with respect to the initial one. This is a sign of the nuclear burning
+affects low resolution simulation is the leap-frog instability that cre-           taking place at the bottom boundary. On the contrary, the top part
+ates zig-zags in the W 𝐵 and thus also the N𝜖𝑘 profiles. This analysis             of the convective region shows an overabundance of neon. This is
+shows that a resolution of 256 or higher is best to resolve the key                due to entrainement, which brings neon from the stable region above
+processes taking place in the bulk of convective regions and not-too-              the convective zone (where abundance is higher) into the convective
+steep boundaries like the top boundaries in this study. A resolution               zone, where it is slowly mixed. Note that the strong overabundance in
+of 1024 or higher is needed to perfectly resolve sharp boundaries like             Ne between 3.5 and 3.6 · 108 cm comes from the initial 1D structure
+the lower ones but measurements of entrainment do not necessarily                  (see Fig. 14, dashed line), which has not been erased by turbulent
+require the lower boundary to be perfectly resolved (Rizzuti et al.                mixing at the time when the snapshot is taken here, but it is erased
+2022, 2023).                                                                       soon afterwards.
+
+
+                                                                                   4.1 Evolution of the chemical composition
+4 INTERPLAY BETWEEN TURBULENCE AND NUCLEAR
+                                                                                   An overview of the time evolution of the chemical composition in our
+  PROCESSES
+                                                                                   simulations is presented in Fig. 14, which shows the radial profiles
+Our simulations follow explicitly the evolution of the four key nu-                of the four chemical elements followed in our simulations (i.e. the
+clides for neon burning: 16 O, 20 Ne, 24 Mg, 28 Si, which enables us               horizontal average of the abundance) at the start of the simulation
+to study the interplay between turbulence and nuclear processes in                 (dashed lines, the same in each case), and at the end (solid lines),
+
+MNRAS 000, 1–?? (2024)
+                                                    3D simulations of convective shell Neon-burning in a massive star                                        9
+
+
+
+
+Figure 11. Left column: Mean kinetic energy equation terms as a function of radius for various resolutions. From top to bottom: 1283 , 2563 , 5123 ,10243 . The
+time averaging is made over 2 turnover timescales centered on 𝑡 = 650 s for each resolution. The meaning of each curve is described in the caption in the first
+row. The grey area shows the convective region, and the red area the region where we applied a damping. Right column: Radial integration of each terms of the
+mean kinetic equation for the same resolutions as in the left column.
+                                                                                                                                    MNRAS 000, 1–?? (2024)
+10       Georgy et al.
+
+
+
+
+Figure 12. Same as Fig. 11, but for various boosting factors instead of various resolutions. From top to bottom: nominal nuclear energy generation rate, energy
+generation rate boosted by a factor of 10, of 100, and of 1000. The time averaging is made over 2 turnover timescales centered on a time where the convective
+zone has about the same radial extent for each case (see text). The resolution of the simulations shown here is 5123 .
+
+
+
+
+MNRAS 000, 1–?? (2024)
+                                                     3D simulations of convective shell Neon-burning in a massive star                                     11
+                                                                                    16 O,20 Ne,24 Mg and 28 Si. These fluxes represent the rate at which
+                                                                                    each species is transported. Negative values indicate that the fluxes
+                                                                                    are oriented inward. We see that large quantities of neon is being
+                                                                                    entrained from the upper boundary, and transported towards the in-
+                                                                                    ner parts of the convective burning zone, where the neon is burnt.
+                                                                                    The other species, on the other hand, are being transported outward
+                                                                                    (to the right of the convective zone). The behaviour at the inner
+                                                                                    boundary is more complex, due to the interplay between entrainment
+                                                                                    through the boundary, and the burning occurring slightly above. 16 O
+                                                                                    and 24 Mg are more abundant inside the convective zone than outside
+                                                                                    (see Fig. 14). There is thus a slightly negative flux near the bottom
+                                                                                    boundary for these elements, showing that they are partly transported
+                                                                                    outside the convective region. On the other hand, both elements are
+                                                                                    produced through the burning of 20 Ne. Convective motions transport
+                                                                                    the freshly produced elements through the convective zone, as indi-
+                                                                                    cated by the positive flux inside the bulk of the convective region. The
+                                                                                    case of 28 Si is different still: there is more of it below the convective
+                                                                                    zone than inside. It is thus transported through the bottom boundary
+                                                                                    by entrainment into the convective region, hence the positive flux at
+                                                                                    the boundary. Furthermore, this element is also synthesised by neon
+                                                                                    burning (by a double 𝛼-capture), and redistributed inside the whole
+Figure 13. Vertical cross sections of the mass fraction (values in colour scale)    convective region from bottom to top, hence the positive flux for 28 Si
+of the different isotopic nuclei 16 O, 20 Ne, 24 Mg, 28 Si, taken at 1500 seconds   everywhere.
+in the Ex1 model. Reference value of the colourbars (white) is the average             The RA-ILES composition transport equation profiles for neon are
+mass fraction of each nuclides in the convective zone at the beginning of the
+                                                                                    shown in Fig. 16. Each term of eq. 6 is shown by a different curve in
+simulation. For this reason, the overabundance of 16 O, 24 Mg, 28 Si (toward the
+                                                                                    the plot and is described below:
+red) and the underabundance of 20 Ne (toward the blue) inside the convective
+zone reflect the nuclear reactions which are burning neon to produce oxygen            Time Evolution - 𝜌¯ 𝐷     e𝑖 and 𝜕𝑡 ( 𝜌¯ 𝑋
+                                                                                                              f𝑡 𝑋              e𝑖 ) represents the Lagrangian
+and magnesium, and burning magnesium to produce silicon.                            and Eulerian time derivatives of the composition. While the convec-
+                                                                                    tive region is in a steady state, we see that significant mixing occurs at
+                                                                                    the convective boundaries, particularly at the upper boundary, which
+for the four boosting factors. The convective region corresponds                    changes the size of the convection zone over time.
+to the plateaus in the middle of the computational domain. A few
+general observations can already be made from this figure. The effects                 Transport Terms - The mean composition flux term is given by
+of entrainment are clearly visible, particularly at the top boundary:               ∇ 𝑥 ( 𝜌f   e𝑖 ), which we see is non-negligible at the upper convective
+                                                                                          ¯𝑢 𝑥 𝑋
+the boundary of the convective zone has moved outwards, and the                     boundary, implying that there is a change in the composition profile
+steep initial profiles have been smoothed by convective boundary                    due to the overall growth of the convective zone. This is due to a
+mixing. Interestingly, in the current set of simulations, entrainment               mean flux of Ne into the convective zone from the upper boundary,
+                                                                                    as seen in Fig. 15. The divergence of the turbulent flux, ∇ 𝑥 (𝜌 𝑋 ′′ ′′
+is more efficient at bringing 20 Ne inside the convective zone than                                                                                    𝑖 𝑢 𝑥 ),
+                                                                                                                                                     
+nuclear burning at destroying it, leading to a slight increase in 20 Ne             shows how material mixed into the convective zone is transported by
+abundance (except for the Ex1000 case). Qualitatively, the Ex1 and                  turbulent velocity variations. This term is positive where the abun-
+Ex10 cases are very similar, except that, as expected, entrainment is               dance is decreased by the element flux, and negative where there
+more efficient with the higher boosting factor. This is exacerbated                 is an accumulation of a chemical element due to transport. We see
+for the Ex100 and Ex1000 cases where the convective boundary has                    in Fig. 16 that the turbulent fluxes accumulate the neon abundance
+moved up to the top of the computing domain over the course of the                  near the top boundary. The time rate of change of neon balances this
+simulation.                                                                         term. At the bottom boundary, the destruction of neon by the nuclear
+                                                                                    burning is compensated by neon being transported here.
+                                                                                      Nuclear burning - The rate at which compositions change due to
+4.2 RA-ILES analysis of the composition transport equation
+                                                                                                        𝑋¤ 𝑖 , shows how the rate of neon burning increases
+                                                                                    nuclear burning, 𝜌¯ e
+As was done for the turbulent kinetic energy in the previous sec-                   with depth, and hence density and temperature. As it also depends
+tion, our RA-ILES can also be applied to the chemical composition                   on the abundance of the fuel, this term peaks at the bottom of the
+transport equation, resulting in the following equation:                            convective zone.
+                          nuc                                                          Numerical residual - N𝑋𝑖 - This term highlights the loss of infor-
+𝜌D
+ e𝑡 𝑋                𝑋¤ 𝑖 .
+    e𝑖 = −∇ 𝑥 𝑓𝑖 + 𝜌 e                                                       (6)
+                                                                                    mation of our code at the grid level. It is small throughout most of
+𝑋𝑖 is the mass fraction of the chemical element 𝑖, 𝑓𝑖 = 𝜌 𝑋         ′′ ′′           our simulated domain, but we see that it is important near the edge
+                                                                    𝑖 𝑢𝑥
+                                                                   
+is the turbulent flux of the element 𝑖, and 𝑋¤ 𝑖 is the rate of cre-                of the convective zone, where strong turbulence develops. Increasing
+ation/annihilation of the element 𝑖 due to nuclear reactions. The                   the resolution of the simulation makes this term smaller (Arnett et al.
+right-hand side of this equation includes the two sources of the mod-               2018, and Fig. 11).
+ification of the mass fraction at a given location inside the computing               Integrated over the whole computational domain (right panel), we
+domain: turbulent motion transport and nuclear processes.                           see that the global change of the 20 Ne abundance is, as expected,
+   Before discussing the composition transport equation, it is useful               mostly due to the nuclear reactions, which are responsible for the
+to understand the turbulent composition flux, 𝑓𝑖 , plotted in Fig. 15, for          decrease in the abundance of this chemical element.
+
+                                                                                                                                    MNRAS 000, 1–?? (2024)
+12       Georgy et al.
+
+
+
+
+Figure 14. Profiles of the abundances of the four chemical elements followed in our set of simulations at the beginning (dashed lines) and at the end (solid lines)
+of the simulated time, and for Ex1 (top-left), Ex10 (top-right), Ex100 (bottom-left), and Ex1000 run (bottom-right).
+
+
+4.3 RA-ILES analysis of the composition variance                                       We discuss below the terms of Eq. (7), which are presented in
+                                                                                    Fig. 18:
+The variance, 𝜎, of the composition traces the variation of the abun-
+dance of an element with respect to its average value at a given radius                Time Evolution - 𝜌¯ 𝐷   𝜎𝑖 (solid black line) and 𝜕𝑡 ( 𝜌e
+                                                                                                            f𝑡 e                              ¯ 𝜎𝑖 ) (dashed
+inside the computational domain. In our RA-ILES framework, it is                    black line) represents the Lagrangian and Eulerian time derivatives
+defined as 𝜎𝑋 = 𝑋  ′′ 𝑋 ′′ . In Fig. 17 we show the relative standard              of the composition variance. The two curves are almost identical
+                                       √
+                                        𝑋 𝜎                                         throughout the domain, and are close to 0 everywhere, except near
+deviation of the composition, i.e.        . In the bulk of the convec-
+                                      𝑋                                             the top convective boundary. At this location, entrainment of 20 Ne
+tive region, the deviation remains small (around 1%), justifying the                inside the convective region is a source of composition variance.
+general 1D modelling approach used in stellar evolution. We note
+two locations however where this deviation becomes larger for all                      Transport Terms - ∇ 𝑥 ( 𝑓𝑖 𝜎 ), is the turbulent composition vari-
+the chemical elements: both boundaries of the convective zone. The                  ance flux, and is responsible for the redistribution of the composition
+convective boundaries are not flat or regular, but distorted and turbu-             variance inside the domain. As shown in Fig. 18 (see the blue curve),
+lent, making important variations with respect to the average of the                the variance produced near the top convective boundary is trans-
+abundance of a given element. This behaviour is much more impor-                    ported in both directions, outwards inside the stable radiative layer
+tant at the top boundary, where the relative deviation can reach about              and inside the convective region. It progressively builds the variance
+30% for silicon.                                                                    peak visible in Fig. 17.
+   We can investigate the origins of the variance using the RA-ILES                    Turbulent Production - 2 𝑓𝑖 𝜕𝑥 ( f 𝑋𝑖 ). This term is shown in ma-
+chemical variance equation:                                                         genta in Fig. 18, and is the dominant term affecting the creation
+                                                                                    of composition variance. As this term is effective only in regions
+𝜌D                           e𝑖 + 2𝑋 ′′ 𝜌 𝑋¤ nuc .
+ e 𝑡 𝜎𝑖 = −∇ 𝑥 𝑓 𝜎 − 2 𝑓𝑖 𝜕𝑥 𝑋                                            (7)       where a composition gradient and a turbulent composition flux exist
+                𝑖                   𝑖       𝑖
+            ′′ ′′                                                   𝜎
+                                                                                    at the same time, it is mostly present near the top convective bound-
+𝜎𝑖 = 𝑋    𝑖 𝑋𝑖 is the composition variance of the element 𝑖, 𝑓𝑖 =                  ary (and to a much smaller extent near the bottom one). Looking at
+    ′′   ′′   ′′
+𝜌𝑋𝑖 𝑋𝑖 𝑢 𝑥 is the turbulent flux of the composition variance. 2 𝑓𝑖 𝜕𝑥 𝑋
+                                                                      e𝑖            the integrated values (right panel), one clearly sees that composition
+is a source term linked to the flux of the chemical element 𝑖, and                  variance inside the domain is mostly built by this interaction between
+2𝑋𝑖′′ 𝜌 𝑋¤ 𝑖nuc is a source term linked to nuclear reactions.                       the composition flux and the composition gradient.
+
+MNRAS 000, 1–?? (2024)
+                                                 3D simulations of convective shell Neon-burning in a massive star                                   13
+                                                                                 (i) The convective turnover time scale 𝜏conv , which is defined
+                                                                               as the typical time needed for a fluid elements to cross twice the
+                                                                               convective zone (a “convective loop”). We thus have
+                                                                                         2𝑑conv
+                                                                               𝜏conv =          ,                                                    (8)
+                                                                                          𝑣 rms
+                                                                               where 𝑑conv is the radial extend of the convective zone and 𝑣 rms is
+                                                                               the average root-mean-square velocity inside the convective zone.
+                                                                                  (ii) The local nuclear burning time scale 𝜏nuc , which is the typical
+                                                                               time scale for nuclear burning to take place at a given location inside
+                                                                               the star:
+                                                                                         𝑋𝑖
+                                                                               𝜏nuc,𝑖 =      ,                                                      (9)
+                                                                                         𝑋¤𝑖
+                                                                               where as above 𝑋𝑖 is the mass fraction of a given chemical element
+                                                                               and 𝑋¤ 𝑖 is the rate of creation/annihilation of the element 𝑖 due to
+                                                                               nuclear reactions.
+                                                                                  (iii) The local transport time scale 𝜏trans , which is the characteris-
+                                                                               tic time for transport to remove/bring a chemical element at a given
+                                                                               place:
+                                                                                            𝜌¯ f
+                                                                                               𝑋𝑖
+                                                                               𝜏trans,𝑖 =         ,                                                 (10)
+                                                                                            𝜕𝑥 𝑓𝑖
+                                                                               where 𝑓𝑖 is the flux of the chemical species.
+                                                                                 Based on these characteristic time scales, one can define the so-
+Figure 15. Turbulent composition fluxes for the nuclides explicitly followed   called Damköhler number as the ratio between turbulent transport
+in our work. These fluxes are taken from the 5123 resolution simulation with   and nuclear time scales for a given chemical element:
+a boosting factor of 10. The time averaging is done as in Fig. 11, and the
+coloured areas have the same meaning. The flux for each element is defined            𝜏trans,𝑖
+            ′′ ′′
+                                                                               Da𝑖 =           ,                                              (11)
+as 𝑓𝑖 = 𝜌 𝑋
+          
+           𝑖 𝑢 𝑥 (cf. Mocák et al. 2018).
+                                                                                      𝜏nucl,𝑖
+                                                                               with the timescales defined above. The Damköhler number discrimi-
+                                                                               nates between two different regimes inside the convective zone: when
+   Nuclear Burning - The rate at which composition variance
+                                                                               Da is smaller than one, transport timescale is smaller than the nuclear
+changes due to nuclear burning is traced by 2𝑋𝑖′′ 𝜌 𝑋¤ 𝑖 . In our case,        burning timescale. Chemical species are thus well mixed inside the
+it only occurs at a quite low level near the bottom boundary of the            convective region and inhomogeneities (illustrated by the variance)
+convective zone (see the green curve in the zoom-in on this region),           remain small inside the convective zone (except near the boundaries,
+where nuclear burning takes place. This term is negative, indicating           as explained above). This is how the convective zones look like in
+that nuclear burning decreases the composition variance.                       1D stellar evolution. However, it is possible in some cases that the
+   Numerical residual - N𝜎𝑖 represents the residual in our simula-             Damköhler number becomes close or even larger than one. In this
+tion, i. e. the sum of all the other terms (with the same sign as shown        case, nuclear burning is faster than the transport, and the mixing
+in the legend of Fig. 18). As the resolution of our simulation is finite       inside the convective zone is less efficient. This is the “convective-
+and is therefore limited in spatial resolution, it does not reproduce          reactive regime” discussed in Herwig et al. (2011) (see also Mocák
+the exact behaviour of the flow at very small scales, where turbu-             et al. 2018).
+lence is dissipated. The residual thus represents the dissipation at              The characteristic time scales and the Damköhler number are
+the grid level in our simulations. Despite its numerical origin, the           shown in Fig. 19 for 20 Ne for our Ex10 simulation. The fastest of the
+behaviour of this dissipation term is appropriate: we added on the left        time scales is the convective time scale (solid black line), which is
+panel of Fig. 18 a theoretical modelling of this dissipation (thin solid       slightly less than 100 s. The transport timescale (magenta dot-dashed
+red line), which fits well the residual obtained in our simulations.           line) is roughly constant over a significant fraction of the convective
+We adopted the same model as in Mocák et al. (2018), which as-                 zone (about 104 s), with a peak at the location where the gradient
+sumes that the dissipation time-scale is the same as the Kolmogorov            of flux vanishes (see Fig. 15), and has a smaller value near the top
+damping time-scale.                                                            boundary (less than 103 s). Finally, the nuclear burning timescale
+   Here also, the radial integration over the whole domain of the pre-         (blue dashed line) is shortest where nuclear burning is strongest, at
+vious terms provide insight into the main mechanisms leading to the            the bottom of the convective zone (about 104 s, and increases out-
+change of the variance (here the 20 Ne one). We see that the turbulent         wards, to reach 106 s near the top boundary). The Damköhler number
+transport is building the chemical variance inside the domain, while           (green dotted line, scale on the right) is thus significantly smaller than
+the dissipation at the grid level compensate for this net production.          one everywhere inside the convective region. This means that the
+                                                                               mixing of 20 Ne is faster than nuclear burning, and that the chemical
+                                                                               composition of the convective region (at least concerning 20 Ne, but
+4.4 Characteristic time scales
+                                                                               it is true also for the other chemical species followed in this work)
+Another way to study the interplay and relative importance of tur-             is well homogenised. The same is true for the nominal luminosity
+bulence and nuclear processes is by using characteristic timescales.           case, which means that 1D stellar models are sufficient to reproduce
+The following characteristic time scales are relevant in this context:         standard neon burning (the same is true for the Ex10 and Ex100).
+
+                                                                                                                               MNRAS 000, 1–?? (2024)
+14       Georgy et al.
+
+
+
+
+Figure 16. left panel: RA-ILES decomposition of the mean 20 Ne abundance equation. The meaning of each curve is specified in the legend. The coloured regions
+have the same meaning as in Fig. 11, and the time average is performed over the same time window. The results come from the 5123 resolution simulation, with
+a boosting factor of 10. Right panel: Radial integration of each term shown on the left side of the figure.
+
+
+   The Ex1000 simulation, on the other hand, behaves very differ-                5 DISCUSSION AND CONCLUSIONS
+ently. This extreme case is illustrated in Fig. 20 for 20 Ne (right panel).
+Variances (left panel) are about 10 times larger than in the Ex10 case           This paper focuses on the 3D hydrodynamics study of a neon-burning
+shown in Fig. 17 in the whole convective region. In the inner part               shell during the advanced stages of the life of a massive star. We per-
+of the convective zone, nuclear and transport timescales are about               formed a large set of simulations with the PROMPI code at different
+the same, with Damköhler number equal or larger than one. Looking                resolutions (from 1283 to 10243 cells), and with different boosting
+at Fig. 14, we see that the composition profiles at the end of the               factors for the nuclear energy generation rate (from nominal to 1000
+simulation (solid lines) for the Ex1000 case are not perfectly flat,             times boosted energy generation rate). The simulations were followed
+but show a gradient in the inner part of the convective zone, as ex-             for a long enough time to ensure the flow has significant statistical
+pected from the high Da number. In such cases, nuclear burning and               properties (generally more than 5 turnover timescales).
+convective mixing can still be treated correctly in 1D models if for                Our simulation at a nominal luminosity allows us to draw conclu-
+example these two processes are solved in a coupled manner as done               sions about the flow without any extrapolations. In the initial phases,
+e. g. in the MESA code (Paxton et al. 2011). Non-negligible vari-                we find that the convective velocities found in 3D are ≈ 2 times larger
+ances, however, cannot be reproduced in 1D models and such cases                 than those expected from MLT approximations. Due to CBM at the
+need 3D simulations to simulate all the details. While the Ex1000                convective boundaries, over the course of the simulation (about 7
+simulation is not representative of neon burning inside massive stars,           convective turnovers), the convective shell grows noticeably, and the
+there are several cases where we expect Da∼ 1. In addition to the                extra fuel entrained leads to an increase in the convective velocity.
+two cases mentioned above (Herwig et al. 2011; Mocák et al. 2018),                  A comparison of different resolutions shows that even at the lowest
+other “convective-reactive” environments are expected in various H-              resolution (1283 ), the large-scale convective flows are reasonably re-
+He shell interaction events (Hirschi 2007; Clarkson & Herwig 2021)               solved. They attain comparable values of kinetic energy and similar
+and shell merger situations already found in 1D models (Rauscher                 turbulent cascade in the velocity spectra at large wavelengths to their
+et al. 2002; Tur et al. 2007; Ritter et al. 2018; Côté et al. 2020), and         high-resolution counterparts. Using our RA-ILES analysis frame-
+in the 3D pre-supernova simulation of Yadav et al. (2020).                       work, we also performed a thorough comparison of the mean-field
+                                                                                 equations at the different available resolutions. As expected from pre-
+                                                                                 vious works (Viallet et al. 2013; Cristini et al. 2017), an analysis of
+                                                                                 the mean turbulent kinetic energy equation confirms that the statisti-
+                                                                                 cal properties of the flow are already well captured by the simulation
+                                                                                 at a relatively low resolution. Higher resolutions, however, are nec-
+
+MNRAS 000, 1–?? (2024)
+                                                 3D simulations of convective shell Neon-burning in a massive star                                 15
+                                                                              luminosity) case can be extrapolated from simulations with a higher
+                                                                              boosting factor (typically 10x or 100x), which are cheaper to perform
+                                                                              in terms of computing resources. The turbulent spectra in each case
+                                                                              all show similar shapes, but with different energies, as expected. In-
+                                                                              side the convective zone, we find a very efficient mixing, making the
+                                                                              chemical composition in the bulk of the convective region extremely
+                                                                              homogeneous for reasonable boosting factors.
+                                                                                 For the highest boosting factor we used (Ex1000 simulation),
+                                                                              the nuclear burning becomes comparable to the transport timescale
+                                                                              (𝐷𝑎 ≈ 1) in a significant fraction of the convection zone. This is
+                                                                              qualitatively different to all previous boosting cases, where nuclear
+                                                                              burning is only faster than the transport timescale in a very thin region
+                                                                              at the base of the convective shell. In the Ex1000 case, the mixing
+                                                                              is not efficient enough to homogenise the convective zone, and a
+                                                                              chemical gradient becomes visible in the simulations. This leads to
+                                                                              the composition variance showing significant deviations (> 10%)
+                                                                              throughout the convection zone, breaking down the approximations
+                                                                              that are normally used for 1D stellar evolution calculations. While
+                                                                              in our study, this 𝐷𝑎 ≈ 1 event occurs due to artificial luminosity
+                                                                              boosting, they are expected to occur naturally in dynamical processes
+                                                                              in stars, such as ingestion events (Herwig et al. 2011; Mocák et al.
+                                                                              2018), and possibly during shell mergers.
+                                                                                 Our results show that a correct treatment of convection in 1D
+                                                                              stellar evolution codes is required to accurately follow the convective
+Figure 17. Standard deviation of a chemical element abundance, normalised     boundary mixing and reproduce the behaviour appearing in our 3D
+by its abundance. The coloured regions have the same meaning as in Fig. 11,   simulations. The assumption that the mixing is very efficient and
+and the time average is performed over the same time window. The results
+                                                                              almost instantaneous in convective regions appears to be valid, except
+come from the 5123 resolution simulation, with a boosting factor of 10.
+                                                                              in cases where the nuclear burning is very fast (Da∼ 1). Finally,
+                                                                              we want to stress that the results presented here are valid for deep
+                                                                              convection during advanced stages of stellar evolution, and we need
+essary to resolve the convective boundaries and the corresponding             to remain cautious when using them in other phases of the evolution,
+mixing across them.                                                           particularly for convection during the early stage (main sequence),
+   We analyse the mean field composition variance equation, which             or in stellar envelopes, where radiative effects play a key role.
+allows us to determine the degree of deviation of the 3D simulations
+from 1D averages. We find that the deviation is small (around 1%)
+in most of the convection zone. At the convective boundary, matter
+is entrained from the stable region inside the convective region. The
+boundaries are less homogeneous than the rest of the convective zone,
+and the variance (in terms of mass fraction) can become as high as
+about 30% (for silicon). Our mean-field analyses clearly show a net
+                                                                              ACKNOWLEDGEMENTS
+production of variance near the boundaries. This result justifies the
+general 1D stellar modelling approach for convection but reiterates           RH acknowledges support from the World Premier International
+the need for stellar modellers to use a CBM prescription at convective        Research Centre Initiative (WPI Initiative), MEXT, Japan and the
+boundaries.                                                                   IReNA AccelNet Network of Networks (National Science Foun-
+   The various boosting factors we used allowed us to determine how           dation, Grant No. OISE-1927130). CG has received funding from
+different quantities (flow velocity, buoyancy, abundance variance)            the European Research Council (ERC) under the European Union’s
+scale with the luminosity of the model. This is similar to the work           Horizon 2020 research and innovation program (Grant No. 833925).
+done by Cristini et al. (2019) and Rizzuti et al. (2022, 2023) for a          WDA acknowledges support from the Theoretical Astrophysics Pro-
+carbon- and neon-burning shells respectively, however, for the first          gram (TAP) at the University of Arizona and Steward Observatory.
+time, we span a large range of boosting comparing the nominal lu-             CG, RH, and CM acknowledge ISSI, Bern, for its support in organis-
+minosity runs to those boosted by 1000. As it is not computationally          ing collaboration. This article is based upon work from the ChETEC
+feasible to run very low Mach number flows without boosting the lu-           COST Action (CA16117) and the European Union’s Horizon 2020
+minosity (e.g. Cristini et al. 2017; Horst et al. 2021), this comparison      research and innovation programme (ChETEC-INFRA, Grant No.
+is important as a first step to determine the feasibility and correctness     101008324). The authors acknowledge PRACE for awarding ac-
+of very high boosting.                                                        cess to the resource MareNostrum 4 at Barcelona Supercomputing
+   In general, increasing the boosting gave results which are in line         Center, Spain, and the STFC DiRAC HPC Facility at Durham Uni-
+with our previous findings (Cristini et al. 2019; Rizzuti et al. 2022,        versity, UK (Grants ST/P002293/1, ST/R002371/1, ST/R000832/1,
+2023). In particular, the convective velocities, rate of CBM and the          ST/K00042X/1, ST/H008519/1, ST/ K00087X/1, ST/K003267/1).
+corresponding growth of the convective shell all scale with the boost-        The University of Edinburgh is a charitable body, registered in Scot-
+ing applied. The present results (as well as those published in Rizzuti       land, with Registration No. SC005336. For the purpose of open
+et al. (2022) using the same simulations as the ones presented in             access, the author has applied a Creative Commons Attribution (CC
+this paper) show that these quantities for the non-boosted (nominal           BY) licence to any Author Accepted Manuscript version arising.
+
+                                                                                                                             MNRAS 000, 1–?? (2024)
+16       Georgy et al.
+
+
+
+
+Figure 18. left panel: RA-ILES decomposition of the mean 20 Ne abundance variance equation. The meaning of each curve is specified in the legend. The
+coloured regions have the same meaning as in Fig. 11, and the time average is performed over the same time window. The results come from the 5123 resolution
+simulation, with a boosting factor of 10. The thin red line shows a modelling of the residuals, done as in Mocák et al. (2018). Right panel: Radial integration of
+each term shown on the left side of the figure.
+
+
+                                                                                    DATA AVAILABILITY
+                                                                                    The data underlying this article will be shared on reasonable request
+                                                                                    to the corresponding author.
+
+
+
+
+                                                                                    REFERENCES
+                                                                                    Aerts C., Thoul A., Daszyńska J., Scuflaire R., Waelkens C., Dupret M. A.,
+                                                                                        Niemczura E., Noels A., 2003, Science, 300, 1926
+                                                                                    Andrassy R., Leidi G., Higl J., Edelmann P. V. F., Schneider F. R. N., Röpke
+                                                                                        F. K., 2024, A&A, 683, A97
+                                                                                    Arnett W. D., 1974, ApJ, 193, 169
+                                                                                    Arnett W. D., Meakin C., 2011, ApJ, 733, 78
+                                                                                    Arnett D., Meakin C., Young P. A., 2009, ApJ, 690, 1715
+                                                                                    Arnett W. D., Meakin C., Viallet M., Campbell S. W., Lattanzio J. C., Mocák
+                                                                                        M., 2015, ApJ, 809, 30
+                                                                                    Arnett W. D., et al., 2018, arXiv e-prints, p. arXiv:1810.04659
+                                                                                    Arnett W. D., et al., 2019, ApJ, 882, 18
+                                                                                    Baraffe I., et al., 2023, MNRAS, 519, 5333
+                                                                                    Biermann L., 1932, Z. Astrophys., 5, 117
+                                                                                    Böhm-Vitense E., 1958, Z. Astrophys., 46, 108
+                                                                                    Bossini D., et al., 2019, A&A, 623, A108
+                                                                                    Canuto V. M., Mazzitelli I., 1991, ApJ, 370, 295
+Figure 19. Characteristic times for the 20 Ne. The convective turnover              Castro N., Fossati L., Langer N., Simón-Díaz S., Schneider F. R. N., Izzard
+timescale is shown by the solid black line. The nuclear timescale is shown              R. G., 2014, A&A, 570, L13
+in dashed blue. The transport timescale is shown in dot-dashed purple. The          Chassaing P., Antonia R. A., Anselmet F., Joly L., Sarkar S., 2002, Variable
+Damkhöler number is shown in dotted green (value to be read on the right                Density Fluid Turbulence. Fluid Mechanics and Its Applications Vol. 69,
+axis). The coloured regions have the same meaning as in Fig. 11, and the time           Kluwer Academic Publishers
+average is performed over the same time window. The results come from the           Claret A., Torres G., 2016, A&A, 592, A15
+5123 resolution simulation, with a boosting factor of 10.                           Clarkson O., Herwig F., 2021, MNRAS, 500, 2685
+                                                                                    Côté B., Jones S., Herwig F., Pignatari M., 2020, ApJ, 892, 57
+
+MNRAS 000, 1–?? (2024)
+                                                   3D simulations of convective shell Neon-burning in a massive star                                        17
+
+
+
+
+Figure 20. Left panel: relative variance for the 4 elements followed in this study, in the case of the Ex1000 simulation. Right panel: Characteristic timescales
+and Damköhler number for the 20 Ne, in the case of the Ex1000 simulation. For both panel, the quantities are averaged between 4 and 29 s.
+
+
+Couch S. M., Chatzopoulos E., Arnett W. D., Timmes F. X., 2015, ApJ, 808,          Rizzuti F., Hirschi R., Georgy C., Arnett W. D., Meakin C., Murphy A. S.,
+    L21                                                                                2022, MNRAS, 515, 4013
+Cristini A., Meakin C., Hirschi R., Arnett D., Georgy C., Viallet M., Walk-        Rizzuti F., Hirschi R., Arnett W. D., Georgy C., Meakin C., Murphy A. S.,
+    ington I., 2017, MNRAS, 471, 279                                                   Rauscher T., Varma V., 2023, MNRAS, 523, 2317
+Cristini A., Hirschi R., Meakin C., Arnett D., Georgy C., Walkington I., 2019,     Tur C., Heger A., Austin S. M., 2007, ApJ, 671, 821
+    MNRAS, 484, 4645                                                               Varma V., Müller B., 2021, MNRAS, 504, 636
+Ekström S., et al., 2012, A&A, 537, A146                                           Varma V., Müller B., 2023, MNRAS, 526, 5249
+Fields C. E., 2022, ApJ, 924, L15                                                  Viallet M., Meakin C., Arnett D., Mocák M., 2013, ApJ, 769, 1
+Freytag B., Ludwig H. G., Steffen M., 1996, A&A, 313, 497                          Woodward P. R., Herwig F., Lin P.-H., 2015, ApJ, 798, 49
+Gabriel M., Noels A., Montalbán J., Miglio A., 2014, A&A, 569, A63                 Yadav N., Müller B., Janka H. T., Melson T., Heger A., 2020, ApJ, 890, 94
+Gilet C., Almgren A. S., Bell J. B., Nonaka A., Woosley S. E., Zingale M.,         Yoshida T., Takiwaki T., Kotake K., Takahashi K., Nakamura K., Umeda H.,
+    2013, ApJ, 773, 137                                                                2019, ApJ, 881, 16
+Heger A., Langer N., Woosley S. E., 2000, ApJ, 528, 368                            Yoshida T., Takiwaki T., Aguilera-Dena D. R., Kotake K., Takahashi K.,
+Herwig F., 2000, A&A, 360, 952                                                         Nakamura K., Umeda H., Langer N., 2021, MNRAS, 506, L20
+Herwig F., Pignatari M., Woodward P. R., Porter D. H., Rockefeller G., Fryer       Zahn J.-P., 1991, A&A, 252, 179
+    C. L., Bennett M., Hirschi R., 2011, ApJ, 727, 89
+Herwig F., et al., 2023, MNRAS, 525, 1601
+Hirschi R., 2007, A&A, 461, 571
+Hirschi R., Meynet G., Maeder A., 2004, A&A, 425, 649
+Horst L., Hirschi R., Edelmann P. V. F., Andrássy R., Röpke F. K., 2021,
+    A&A, 653, A55
+Jones S., Andrassy R., Sandalski S., Davis A., Woodward P., Herwig F., 2017,
+    MNRAS, 465, 2991
+Jørgensen B. R., Lindegren L., 2005, A&A, 436, 127
+Kolmogorov A., 1941, Akademiia Nauk SSSR Doklady, 30, 301
+Leidi G., Andrassy R., Higl J., Edelmann P. V. F., Röpke F. K., 2023, A&A,
+    679, A132
+McNeill L. O., Müller B., 2022, MNRAS, 509, 818
+Meakin C. A., Arnett D., 2007, ApJ, 667, 448
+Mocák M., Meakin C., Viallet M., Arnett D., 2014, preprint
+Mocák M., Meakin C., Campbell S. W., Arnett W. D., 2018, MNRAS, 481,
+    2918
+Müller B., Viallet M., Heger A., Janka H.-T., 2016, ApJ, 833, 124
+Paxton B., Bildsten L., Dotter A., Herwig F., Lesaffre P., Timmes F., 2011,
+    ApJS, 192, 3
+Pedersen M. G., et al., 2021, Nature Astronomy, 5, 715
+Rauscher T., Heger A., Hoffman R. D., Woosley S. E., 2002, ApJ, 576, 323
+Ritter C., Andrassy R., Côté B., Herwig F., Woodward P. R., Pignatari M.,
+    Jones S., 2018, MNRAS, 474, L1
+
+                                                                                                                                    MNRAS 000, 1–?? (2024)
+

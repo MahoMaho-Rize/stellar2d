@@ -1,0 +1,1501 @@
+                                               Astronomy & Astrophysics manuscript no. aa58335-25                                                                                   ©ESO 2026
+                                               March 24, 2026
+
+
+
+
+                                                                            Formation of black holes from He stars
+                                               Gang Long1, 2, 3 , Bo Wang1, 2, 3 , Philipp Podsiadlowski4, 5 , Dongdong Liu1, 2, 3 , Yunlang Guo6 , Shuai Zha1, 2, 3 , Hanfeng
+                                                                                               Song7 , and Zhanwen Han1, 2, 3
+
+                                                     1
+                                                       Yunnan Observatories, Chinese Academy of Sciences, Kunming 650216, China
+                                                       e-mail: wangbo@ynao.ac.cn
+                                                     2
+                                                       University of Chinese Academy of Sciences, Beijing 100049, China
+                                                     3
+                                                       International Centre of Supernovae (ICESUN), Yunnan Key Laboratory, Kunming 650216, China
+                                                     4
+                                                       London Centre for Stellar Astrophysics, Vauxhall, London, United Kingdom
+arXiv:2603.22019v1 [astro-ph.SR] 23 Mar 2026
+
+
+
+
+                                                     5
+                                                       University of Oxford, St Edmund Hall, Oxford, OX14 AR, United Kingdom
+                                                     6
+                                                       School of Astronomy and Space Science, Nanjing University, Nanjing 210023, China
+                                                     7
+                                                       College of Physics, Guizhou University, Guiyang 550025, China
+
+                                                    March 24, 2026
+
+                                                                                                                 ABSTRACT
+
+                                                    Massive He stars are potential candidates of type Ib/c supernova (SN) progenitors. Understanding their final fates remains a key
+                                                    issue in astrophysics. In this work, we investigate the evolution of He stars with initial masses from 5 M⊙ to 65 M⊙ , focusing on the
+                                                    presupernova (pre-SN) core structures to assess their explodability. Our simulations indicate that the final core structure is determined
+                                                    by the CO core mass and the central 12 C mass fraction at the end of core He burning, affecting the properties of central C-burning and
+                                                    the locations of convective shells. The location of the last convective C-burning shell sets the mass of the C-free core, constraining
+                                                    the iron core mass and compactness. We found that the final compactness and iron core mass exhibit non-monotonic behavior with
+                                                    initial mass, suggesting that the boundary between neutron star and black hole formation is not a simple mass threshold. This is due
+                                                    to core C/Ne burning becoming neutrino dominated. This process drives stronger core contraction, ultimately increasing the iron core
+                                                    mass and the final compactness. In contrast, earlier core Ne/O/Si ignition and shell mergers inhibit core contraction, reducing both the
+                                                    iron core mass and final compactness. We also discuss the effects of metallicity and overshooting on the pre-SN core structure. These
+                                                    factors potentially affect the explodability of progenitors.
+                                                    Key words. Stars: black holes – Stars: Wolf-Rayet – Stars: evolution – Stars: massive– Stars: interiors
+
+
+
+                                               1. Introduction                                                            et al. 2016; Ertl et al. 2016; Couch et al. 2020; Burrows & Var-
+                                                                                                                          tanyan 2021; Schneider et al. 2021; Takahashi et al. 2023; Zha
+                                               Most massive stars reside in close binaries and interact with              et al. 2023; Laplace et al. 2025). In this work, we focus on the
+                                               companion stars during their lifetimes, and these interactions             pre-SN core structure to predict the explodability of progenitors,
+                                               have a significant impact on both their evolution and core struc-          i.e., whether a star successfully explodes. A common method
+                                               tures (Sana et al. 2012; Langer 2012; Moe & Di Stefano 2017;               uses the compactness parameter ξ2.5 to characterize the core
+                                               Laplace et al. 2021; Marchant & Bodensteiner 2024; Chen et al.             structure and assess the explodability (O’Connor & Ott 2011).
+                                               2024). Binary interactions are expected to strip the hydrogen-             Higher values indicate a more compact core, suggesting that it is
+                                               rich envelopes to varying degrees, leaving behind a stripped-              more likely to undergo a failed explosion and result in a (black
+                                               envelope star, such as a Wolf-Rayet star or a He star (Podsi-              hole) BH remnant (O’Connor & Ott 2011; Ugliano et al. 2012;
+                                               adlowski et al. 1992; Pols & Dewi 2002; Langer 2012; Yoon                  Sukhbold & Woosley 2014; Chieffi & Limongi 2020; Schneider
+                                               et al. 2010; Song et al. 2016; Laplace et al. 2020; Klencki et al.         et al. 2021; Temaj et al. 2024; Laplace et al. 2025). Another ex-
+                                               2022). These stars are potential candidates for progenitors of             plodability criterion is based on the parameters M4 and µ4 , where
+                                               type Ib/Ic supernovae (SNe) (Crowther 2007; McClelland & El-               M4 typically corresponds to the Si/O shell interface and µ4 char-
+                                               dridge 2016; Yoon 2017). Thus, He stars are widely used as                 acterizes the density of the oxygen shell (Ertl et al. 2016, 2020;
+                                               proxy models to study the evolution of stripped-envelope stars             Sukhbold et al. 2016; Müller et al. 2016; Wang et al. 2022b;
+                                               (e.g., Brown et al. 2001; Pols & Dewi 2002; Yoon et al. 2012;              Boccioli et al. 2023; Heger et al. 2024).
+                                               Yoon 2017; Woosley 2019; Ertl et al. 2020; Dessart et al. 2020;                 All of these explodability criteria have indicated that the ex-
+                                               Aguilera-Dena et al. 2022, 2023; Wang et al. 2026). However,               plodability of stars exhibits non-monotonic behavior with initial
+                                               it remains uncertain which He stars successfully explode and               mass, characterized by islands of explodability (e.g., O’Connor
+                                               which ones fail. Understanding their final fates remains a key             & Ott 2011; Ertl et al. 2016, 2020; Sukhbold et al. 2016, 2018;
+                                               issue in gravitational-wave astronomy.                                     Chieffi & Limongi 2020; Patton & Sukhbold 2020; Schneider
+                                                   The final fates of massive stars depend on their presupernova          et al. 2021; Laplace et al. 2025; Maltsev et al. 2025). Several
+                                               (pre-SN) core structure, which is associated with the properties           studies have investigated the physical mechanisms behind this
+                                               of the subsequent neutrino-driven core-collapse SN (CCSN) ex-              behavior. For instance, the non-monotonic behavior of the final
+                                               plosion (e.g., O’Connor & Ott 2011; Fryer et al. 2012; Ugliano             ξ2.5 parameter with initial mass is influenced by the interaction
+                                               et al. 2012; Foglizzo et al. 2015; Müller et al. 2016; Sukhbold            between multiple C- and O-burning shells (Sukhbold & Woosley
+                                                                                                                                                                     Article number, page 1 of 16
+                                                 A&A proofs: manuscript no. aa58335-25
+
+2014; Chieffi & Limongi 2020). Patton & Sukhbold (2020) and            WC/WO stars with a surface He mass fraction YS ≤ 0.9,
+Schneider et al. (2021) demonstrated that variations in the fi-
+                                                                                          !0.85           !0.25
+nal compactness are correlated with the carbon-oxygen (CO)                           L            Zinit                            M⊙
+core mass and the residual 12 C mass fraction at the end of core       ṀWC = fWR                                 YS 0.44 10−9.2      .   (1)
+                                                                                     L⊙            Z⊙                              yr
+He burning. When neutrino energy loss exceeds the energy re-
+leased by core C/Ne burning, stars experience a transition of core     For WNE stars with YS > 0.98,
+C/Ne burning from the convective to radiative regime, which is
+correlated with an increase in final compactness (Sukhbold &                              !1.18           !0.6
+                                                                                     L            Zinit                       M⊙
+Woosley 2014; Sukhbold & Adams 2020; Chieffi & Limongi                 ṀWN = fWR                                × 10−11.32      .        (2)
+2020; Schneider et al. 2021; Laplace et al. 2025). However, this                     L⊙            Z⊙                         yr
+non-monotonic behavior and the final fates of massive stars are
+highly sensitive to various uncertainties in their evolution, such     For 0.9 < YS < 0.98, the mass loss rate we used is as follows,
+as mass loss rates, metallicity, overshooting, and nuclear reac-
+tion rates, among others (e.g., Smith 2014; Sukhbold & Woosley         Ṁ = (1 − f ) ṀWN + f ṀWC                                        (3)
+2014; Renzo et al. 2017; Chieffi et al. 2021; Aguilera-Dena et al.
+2023; Temaj et al. 2024).                                              with f = (1 − Zinit − Y) / (1 − Zinit − 0.9). We adopted the stan-
+    In this work, we investigate the evolution of He stars and         dard scaling factor fWR = 1.0 and solar metallicity Z⊙ = 0.02.
+predict their final fates based on the pre-SN core structures. The
+paper is organized as follows. In Section 2, we describe the meth-     2.2. Explodability criterion
+ods and physical assumptions in our numerical simulations. Sec-
+tion 3 presents the evolution and calculated results, followed by      The compactness parameter is often used as a criterion to char-
+the discussion in Section 4 and the conclusions in Section 5.          acterize the core structure and assess the explodability of pro-
+                                                                       genitors. It is defined by O’Connor & Ott (2011) as
+
+
+                                                                                 M/M⊙
+2. Methods and assumptions                                             ξM ≡                ,                                              (4)
+                                                                              R(M)/1000 km
+We investigated the evolution of He stars using the MESA code
+(r10398; Paxton et al. 2011, 2013, 2015, 2018, 2019) from the          where M is typically evaluated at a mass coordinate of M =
+zero-age helium main sequence (ZaHeMS) to the onset of core            2.5 M⊙ , and R(M) is the corresponding radius. For progenitors
+collapse, which is defined as the point where the infall velocity      with ξ2.5 ≲ 0.45, they are more likely to explode successfully,
+at the iron core boundary reaches 1000 km s−1 . We constructed         resulting in neutron stars (NSs), whereas at higher compactness
+a grid of He star models following Aguilera-Dena et al. (2022),        values, they are more likely to collapse into BHs (O’Connor &
+with initial masses from 5 M⊙ to 65 M⊙ , using mass increments         Ott 2011). While Ugliano et al. (2012) suggested that BHs may
+of ∆M = 1 M⊙ for 5 to 30 M⊙ and ∆M = 5 M⊙ for 30 to                    originate from progenitors with ξ2.5 ≳ 0.35, those with ξ2.5 ≲
+65 M⊙ . The models were computed with an initial metallicity           0.15 are more likely to produce NSs.
+of Z = 0.02 and the approx21_cr60_plus_co56.net nuclear                    However, the compactness parameter does not seem to be
+reaction network, adopting the 12 C(α, γ)16 O reaction rate from       a reliable predictor of explodability, as both high- and low-
+Angulo et al. (1999). The 12 C(α, γ)16 O reaction is one of the        compactness models can explode (e.g., Ertl et al. 2016; Müller
+most important reactions in the evolution of massive stars, yet        et al. 2016; Burrows & Vartanyan 2021; Wang et al. 2022b; Zha
+its rate is still highly uncertain (e.g., Sukhbold & Woosley 2014;     et al. 2023; Takahashi et al. 2023; Burrows et al. 2020, 2023). In
+deBoer et al. 2017). Long et al. (2026) suggest that different rates   order to estimate the fate after core collapse, we used the semi-
+for this reaction significantly affect the pre-SN core structure and   analytic SN code of Müller et al. (2016) to obtain the proper-
+explodability of He stars.                                             ties of successful neutrino-driven CCSN explosion, such as the
+     Convection was treated using the mixing length theory with        explosion energy and the compact remnant mass. We adopted
+a mixing length parameter αMLT = 2.0 (Böhm-Vitense 1958).              a maximum gravitational NS mass of 2 M⊙ , assuming a direct
+We applied the Ledoux criterion for convective boundaries and          collapse into a BH for models with remnant masses exceeding
+included semi-convective mixing with an efficiency parameter           this value (see also Müller et al. 2016; Schneider et al. 2021,
+αSEM = 1.0. During core He burning, we also included expo-             2024; Temaj et al. 2024). For comparison, we also used the two-
+nential overshooting with a parameter fov = 0.01 (e.g., Her-           parameter criterion to judge the explodability, which was pro-
+wig 2000; Marchant et al. 2019; Renzo et al. 2020). Addi-              posed by Ertl et al. (2016). Their criterion is based on M4 , the
+tionally, we computed the models using the spatial and tem-            mass coordinate at which the specific entropy per nucleon equals
+poral resolution of MESA with mesh_delta_coeff = 0.6 and               four (typically corresponding to the Si/O interface), and µ4 , the
+varcontrol_target = 10−5 .                                             density gradient at that mass coordinate,
+
+                                                                                dm/M⊙
+                                                                       µ4 ≡                  .                                            (5)
+2.1. Stellar wind mass loss                                                   dr/1000 km s=4
+
+To calculate the mass loss rate of He stars, we followed the pre-      The µ4 and M4 µ4 are loosely correlated with the accretion rate
+scription of Yoon (2017), who systematically studied the mass          and the accretion luminosity after the infall of the Si/O shell
+loss rates for all subtypes of Wolf-Rayet (WR) stars (WNE, WC,         interface (Müller et al. 2016; Ertl et al. 2016, 2020). We used
+and WO). These prescriptions are based on the work of Tramper          the relation µ4 = 0.294µ4 M4 + 0.0468 from the updated cali-
+et al. (2016) for WC and WO stars and Hainich et al. (2014) for        bration model S19.8 to distinguish between explosion and non-
+WNE stars. The mass loss rates were calculated as follows. For         explosion models (see Ertl et al. 2020 for details).
+Article number, page 2 of 16
+                                          Gang Long et al: Formation of Black Holes from He Stars
+
+3. Results                                                               cant amount of energy, causing the outer layers to expand (see
+                                                                         Fig. 1c), which in turn reduces ξ2.5 . The compactness parameter
+We investigated the evolution of the compactness parameter ξ2.5          ξ2.5 ultimately reaches a value of 0.571. The final mass of the
+as a function of time until core collapse for a representative           C-free core is 3.28 M⊙ , which sets an upper limit on the growth
+model. The pre-collapse structural properties of all models were         of the Si-rich core and thus constrains the final iron core mass to
+subsequently characterized, from which their final fates were            1.85 M⊙ (e.g., Brown et al. 2001; Schneider et al. 2021; Laplace
+predicted. Finally, we explored the impact of metallicity and            et al. 2025). As Fryer et al. (2002) suggested, the edge of the
+overshooting on the pre-SN core structure. Tables A.1–1 list the         C-burning shell marks the boundary of the C-free core, and we
+initial model configurations used in this work along with a sum-         defined the He-free and C-free core boundaries as the mass co-
+mary of the properties at the onset of core collapse.                    ordinates where XHe < 10−5 and XC < 10−5 , respectively (see
+                                                                         also Schneider et al. 2021).
+3.1. A representative example                                                Fig. 2 presents the core structure of the progenitor at the on-
+                                                                         set of core collapse. Fig. 2a shows the infall velocity profile and
+Fig. 1 shows the evolution of the ξ2.5 parameter (panel a) and the       the mass fraction profiles of 56 Fe, 28 Si, and 16 O as a function of
+stellar structure (panels b-d) of a 15 M⊙ He star with Z = 0.02          mass coordinate for the representative model at the onset of core
+and fov = 0.01 from the ZaHeMS to the onset of core collapse.            collapse. These abundance curves depict the iron core bound-
+In this figure, key evolutionary phases are marked based on spe-         ary and the Si/O shell interface. As illustrated in Fig. 2b, the
+cific thresholds: Central C ignition corresponds to T c ≥ 8 × 108        central density profile exhibits no significant discontinuity at the
+K, while the depletion of fuel (4 He, 12 C, 20 Ne, 16 O, and 28 Si) is   Si/O shell interface (see the dash-dotted blue line in Fig. 2b) at
+defined as the point when the central mass fraction drops below          the onset of core collapse, suggesting a low likelihood of a suc-
+10−4 . The evolution of ξ2.5 with stellar age is governed by the         cessful explosion (Wang et al. 2022b; Boccioli et al. 2023). For
+complex interplay between the various convective shells (i.e., C,        M4 = 2.32 and µ4 = 0.16 (see Fig. 2b), the criterion of Ertl
+Ne, and O shells) and the effects of electron degeneracy pres-           et al. (2016) predicts no explosion. Similarly, the semianalytic
+sure (Sukhbold & Woosley 2014; Renzo et al. 2017; Chieffi &              approach of Müller et al. (2016) also predicts that the star fails
+Limongi 2020). As shown in Fig. 1a, during core He burning,              to explode, resulting in a gravitational remnant mass of 8.79 M⊙ .
+ξ2.5 gradually increases because the convective He-burning core
+contracts overall. This contraction is displayed in Fig. 1c by the
+                                                                         3.2. Pre-collapse structural characteristics of He stars
+specific gravothermal energy, defined as ϵgrav ≡ −T ds/dt, where
+T is the temperature and ds/dt is the time derivative of specific        To characterize the pre-SN core structure and assess the explod-
+entropy; red regions indicate contraction, while blue regions in-        ability of stars, we focus on five key quantities at the onset of
+dicate expansion. At the end of core He burning, the values of           core collapse, including the compactness parameter ξ2.5 , cen-
+MCO and XC are 7.51 M⊙ and 0.254, respectively (see Table                tral specific entropy sc , iron core mass MFe , C-free core mass
+A.1). Following core He depletion, ξ2.5 continues to increase un-        MC−free , and the binding energy above the iron core Ebind . Fig. 3
+til central C depletion, as central C-burning proceeds radiatively       shows these quantities as functions of initial mass, revealing
+(Fig. 1b). This radiative process is driven by the reduction in          consistent non-monotonic trends. These trends reflect the core’s
+XC , which lowers the nuclear energy generation rate below the           structural properties, as demonstrated in previous studies (e.g.,
+neutrino energy loss rate. After central C depletion, the signifi-       O’Connor & Ott 2011; Ertl et al. 2016; Schneider et al. 2021,
+cant decrease in the energy production rate induces contraction          2024; Takahashi et al. 2023; Temaj et al. 2024; Laplace et al.
+of both the core and the shells, which persists until the temper-        2025). Specifically, the final central entropy and the final iron
+ature is high enough to ignite shell C burning. The C-burning            core mass both follow trends similar to the final compactness
+front also moves outward in mass from the center (see Fig. 1b).          parameter as a function of the initial mass. The relationship be-
+Notably, the burning front corresponds to the mass coordinate of         tween the final central entropy (Fig. 3b) and the final iron core
+the peak energy generation rate (indicated by the red regions in         mass (Fig. 3c) can be interpreted in terms of the effective Chan-
+Fig. 1b), which also represents the base of the convective burn-         drasekhar mass MCh (Timmes et al. 1996; Woosley et al. 2002;
+ing zone. The location of the burning front reflects the degree of       Sukhbold & Woosley 2014; Schneider et al. 2024; Laplace et al.
+core contraction that occurred beneath it (Laplace et al. 2025).         2025). The effective Chandrasekhar mass, MCh , is given by Suwa
+During the first convective C-burning shell (between core C de-          et al. (2018):
+pletion and Ne ignition), the ξ2.5 value remains nearly constant
+                                                                                               se,c 2 
+                                                                                                   ! 
+(see Fig. 1a). This is because the C-burning front resides near,
+                                                                         MCh ≈ MCh,0 1 +               ,
+                                                                                        
+but below, MCh,0 , with electron degeneracy pressure effectively                                                                         (6)
+                                                                                              πYe,c 
+                                                                                          
+resisting further core contraction (see Fig. 1d). To illustrate the
+degree of degeneracy, Fig. 1d presents the electron degeneracy                                  Y 2
+parameter, η ≡ µ/kB T , where µ is the chemical potential, kB            where MCh,0 = 1.09 0.42  e,c
+                                                                                                       , Ye,c is the central value of the elec-
+is Boltzmann constant, and T is temperature, distinguishing be-          tron fraction Ye , and se,c is the central value of the electronic
+tween regimes of non-degeneracy (η ≪ −1), partial degeneracy             entropy per baryon se , which is approximately one-third of the
+(η ≈ 0), and strong degeneracy (η ≫ 1).                                  average central specific entropy sc (Baron & Cooperstein 1990;
+     Following the onset of core Ne burning, the growth rate of          Timmes et al. 1996). When the iron core reaches the Chan-
+ξ2.5 increases substantially. Notably, the evolution of ξ2.5 exhibits    drasekhar mass MCh , core collapse is triggered. However, MCh is
+distinct oscillations after the end of core O burning (see the open      sensitive to variations in sc and Ye,c (see Eq. 6), with the latter re-
+circle in Fig. 1a). These oscillations are driven by variations in       maining nearly constant across different progenitors (Sukhbold
+the Si- and O-burning shells (Renzo et al. 2017). For example,           & Woosley 2014). Thus, MFe is closely correlated with sc at the
+as shown in Fig. 1b, the first O-burning convective shell (ignited       time of core collapse.
+at log(tf − t) ≈ −2 yr) is located within the mass coordinate                Furthermore, the final iron core is in an adiabatic state, with
+used to evaluate the compactness. This shell releases a signifi-         its entropy (Fig. 3b) following the polynomial relation sc ∝
+                                                                                                                   Article number, page 3 of 16
+                                                      A&A proofs: manuscript no. aa58335-25
+
+
+
+
+                      MHe
+                       i = 15 M , Z = 0.02, fov = 0.01
+                                                                   (a)                                                                                     20
+
+
+
+
+                                                                                                                                                                          ]
+                                                                                                                                                                   |) ergg 1 s 1
+                0.5         He depletion                                                                                                                   15
+                            C ignition                                                                                                                     10
+                0.4         C depletion
+
+
+
+
+                                                                                                                                                                          [
+                            Ne depletion                                                                                                                   5
+                0.3         O depletion                                                                                                                    0
+
+
+
+
+                                                                                                                                                                   )log10(| nuc
+          2.5
+
+
+
+
+                            Si depletion
+                                                                                                                                                             5
+                0.2
+                                                                                                                                                             10
+                                                                                                                                                             15
+
+
+
+
+                                                                                                                                                                   sign( nuc
+                0.1
+                                                                                                                                                             20
+                0.0                                                                                                                                          25
+                      5.0     2.5     0.0       2.5      5.0      7.5
+                                      log(tf t)[yr]
+                                                                   20                                                                                      8
+                                                                                                                                                           6
+
+
+
+
+                                                                                                                                                                [degenracyparameter]
+                                                                   15
+                                                                                       ]
+
+
+
+
+                                                                                                                                                           4
+                                                                         sign( g)log10 | g| ergg 1 s 1
+
+
+                                                                   10
+                                                                   5                                                                                       2
+                                                                                                                                                           0
+                                                                                       )[
+
+
+
+
+                                                                   0
+                                                                                                                                                               2
+                                                                                         (
+
+
+
+
+                                                                     5
+                                                                     10                                                                                        4
+                                                                     15                                                                                        6
+                                                                     20                                                                                        8
+                                                                     25                                                                                        10
+
+
+
+Fig. 1. Evolutionary track of a 15 M⊙ He star with solar metallicity (Z = 0.02) and overshooting parameter fov = 0.01. Panel (a): Temporal
+evolution of the compactness parameter ξ2.5 until seconds before core collapse. Key evolutionary phases are marked as follows: pentagram (central
+He depletion), square (central C ignition), triangle (central C depletion), cross (central Ne depletion), open circle (central O depletion), and left-
+pointing triangle (central Si depletion). Panel (b): Kippenhahn diagram from core He-burning to the onset of core collapse. The color bar shows
+the nuclear energy generation rate (ϵnuc , red) and neutrino loss rate (ϵν , blue). The green, purple, and red-hatched regions represent the convective,
+overshooting, and semiconvective mixing regions, respectively. The gray solid indicate the classical Chandrasekhar mass, MCh,0 , as defined in
+Eq. 6. The dashed black, dotted red, and dash-dotted magenta lines denote the iron, He-free (MHe-free ), and C-free (MC-free ) cores, respectively.
+Vertical dotted lines mark specific depletion and ignition events. Panel (c): Same as panel (b), but the color represents the specific gravothermal
+energy, ϵgrav ≡ −T ds/dt (red: contraction , blue: expansion). Panel (d): Same as panel (b), but the color represents the electron degeneracy
+parameter, η ≡ µ/kB T , where µ is the chemical potential, kB is the Boltzmann constant, and T is temperature. η ≪ −1: non-degenerate; η ≈ 0:
+partial degeneracy; η ≫ 1: strong degeneracy.
+
+
+ln K ∝ 2 ln M + ln R (Schneider et al. 2021). This correlation fur-                                      According to deBoer et al. (2017), the molar abundance Y(12 C)
+ther elucidates the connection between sc and the mass-radius re-                                        depends on the molar abundance of 4 He, the central density
+lation of the core, as reflected in the relationship between sc and                                      ρc , and the corresponding reaction rates λ3α and λ12 C(α,γ)16 O , as
+ξ2.5 (Fig. 3a). Additionally, we find that within the initial mass                                       shown in the rate equation
+range of 5−30 M⊙ , both Ebind and MC−free follow non-monotonic
+trends, similar to those of ξ2.5 , sc , and MFe . The iron core mass                                        
+                                                                                                         dY 12 C
+is constrained by the C-free core within this range (Brown et al.                                                      1 3 4  2                   
+                                                                                                                   =      Y He ·ρc ·λ3α −Y 12 C ·Y 4 He ·ρc ·λ12 C(α,γ)16 O .
+2001; Schneider et al. 2021; Laplace et al. 2025). Beyond this                                              dt         3!
+range, both Ebind and MC−free increase approximately linearly.                                                                                                          (7)
+
+    Fig. 4 displays the central density, ρc , CO core mass, MCO ,                                        This equation indicates that carbon production is favored at high
+and central 12 C mass fraction, XC , at the end of core He burning                                       densities. Therefore, higher-mass He stars exhibit lower central
+                                                                                                         12
+for all models. Obviously, higher-mass He stars exhibit lower                                               C mass fractions (see Fig. 4b). At the end of core He burn-
+central densities, despite having a higher CO core mass (Fig. 4a).                                       ing, XC and MCO set the initial conditions for the subsequent
+Article number, page 4 of 16
+                                                                           Gang Long et al: Formation of Black Holes from He Stars
+
+                                                                                                      100                                                                                           MCO16.39
+                                                                                                                                                                                                         [M ]18.88
+                                                                                              (a)                                                        2.44    5.25   7.51   9.41   11.64   13.98                       21.39      23.96   26.54    29.14      31.77
+                         0.0                                        56Fe               28Si
+                                                                                                                                                0.8 (a)
+                                                                                                                                                0.6
+                         0.2
+
+
+
+
+                                                                                                                                   2.5
+                                                                                                                                                0.4
+                                                                                                                                                0.2
+ v[103 km s 1]
+
+
+
+
+                                                                                                             Mass Fraction
+                         0.4                                                                                                                                                                  Explosion(ErtlandMuller)    Explosion(Ertl)    Implosion(ErtlandMuller)
+                                                                                               16O                                              0.0
+                                     v                                                                10 1
+                         0.6                                                                                                                               (b)
+                                                                                                                                                1.2
+                                     Mass fraction
+
+
+
+
+                                                                                                                                 sc[NAkB]
+                         0.8
+                                                                                                                                                1.0
+
+                         1.0                                                                                                                    0.8
+                                                                                                      10 2
+                               0.0           0.5     1.0            1.5          2.0            2.5                                             2.0 (c)
+                         10                                                                           10
+                                                                                              (b)
+
+
+
+
+                                                                                                                                 MFe[M ]
+                                                                                                                                                1.8
+                          9
+                                                                                                      8                                         1.6
+                          8
+                                                                                                                                               52.5
+      log( c /[gcm 3])
+
+
+
+
+                                                                                                                                                           (d)
+
+
+                                                                                                                             log( Ebind/erg)
+                                                                                                      6
+                                                                                                          sc[NAkB]
+                          7                                                                                                                    52.0
+                                     sc
+                          6                                                                                                                    51.5
+                                         c                                                            4
+                                                                                                                                               51.0
+                          5
+
+                                                                                                      2                                              6 (e)
+                                                                                                                                       MC free[M ]
+
+
+
+                          4
+                               0.0           0.5     1.0            1.5          2.0            2.5                                                  4
+                                                           Mr[M ]
+                                                                                                                                                     2
+Fig. 2. Same model as Fig. 1. The figure shows the core structure of the                                                                                  5      10     15     20     25       30         35         40    45         50     55        60         65
+progenitor at the onset of core collapse. Panel (a): Radial infall velocity                                                                                                                           MHe
+                                                                                                                                                                                                       i [M ]
+(black dotted line, left axis) and mass fraction profiles of 56 Fe, 28 Si, and
+16                                                                                                                            Fig. 3. Key parameters at the onset of core collapse. Panel (a): Final
+   O (dashed lines, right axis) versus the mass coordinate Mr . Panel (b):
+Radial profiles of the central density (dashed line) and specific entropy                                                     compactness parameter ξ2.5 . Panel (b): Central specific entropy sc . Panel
+(dotted line) as functions of the mass coordinate Mr , where the iron core                                                    (c): Iron core mass MFe . Panel (d): Binding energy above the iron core
+mass is 1.85 M⊙ . The dash-dotted blue line marks the mass coordinate                                                         Ebind . Panel (e): C-free core mass MC-free , all plotted as functions of the
+where the central specific entropy sc = 4 kB , corresponding to the Si/O                                                      initial helium star mass MHei
+                                                                                                                                                            . The top axis shows the CO core masses of
+shell interface at Mr = 2.32 M⊙ .                                                                                             He stars at the end of core He burning. The light gray shading indicates
+                                                                                                                              radiative core C burning, while the darker gray shading represents radia-
+                                                                                                                              tive core Ne burning in the panel (a). The red dotted line at ξ2.5 = 0.35
+                                                                                                                              separates models likely to explode (below the line) from those likely
+                                                                                                                              to implode (above the line). Black crosses indicate models predicted to
+                                                                                                                              explode according to both the explodability criteria of Ertl et al. (2016)
+                                                                                                                              and Müller et al. (2016). White crosses mark models predicted to ex-
+                                                                                                                              plode by the Ertl et al. (2016) criterion but not the Müller et al. (2016)
+                                                                                                                              criterion. Black circles indicate models predicted to fail to explode and
+burning stages, which have important consequences for the fi-                                                                 collapse into BHs according to both criteria. The black dashed vertical
+                                                                                                                              line marks the MHe  i
+                                                                                                                                                      = 21 M⊙ model (MCO = 9.86 M⊙ ), serving as a
+nal core structure (e.g., Sukhbold & Woosley 2014; Chieffi &
+                                                                                                                              proxy for the ∼ 10 M⊙ threshold for the upper limit of successful explo-
+Limongi 2020; Sukhbold & Adams 2020; Patton & Sukhbold                                                                        sions suggested by Patton & Sukhbold (2020).
+2020; Schneider et al. 2021; Laplace et al. 2025). Specifically,
+when the energy generation rate ϵnuc ∼ XC2 ρT 23 (where ρ and T
+are density and temperature near the center) exceeds the neutrino                                                             3.2.1. Increase in final compactness: Core C-burning
+cooling rate ϵν ∼ T 12 ρ−1 , the burning mode becomes convec-                                                                        transition stage
+tive (Sukhbold & Adams 2020). As shown in Fig. 4b, when the
+value of XC drops below approximately 0.266, core C burning                                                                   For the models with MHe  i
+                                                                                                                                                          = 12 − 15 M⊙ , the final compactness
+phase transitions from convective to radiative. Similarly, when                                                               ξ2.5 increases with mass (Fig. 3a), peaking at ξ2.5 = 0.571 for
+XC falls below 0.202, core Ne burning phase also shifts to radia-                                                             MHei
+                                                                                                                                    = 15 M⊙ . This trend is driven by the decrease in central den-
+tive. These transitions correspond to the gray and dark shaded                                                                sity and carbon abundances with increasing initial mass (Fig. 4),
+regions in Fig. 3a. To understand these non-monotonic trends,                                                                 which triggers the transition from convective to radiative core
+we investigated the key mechanisms that shape the final com-                                                                  C burning. Fig. 5 shows the Kippenhahn diagrams that compare
+pactness and core structure, which are analyzed in detail below.                                                              the evolution of the 12 M⊙ , 13 M⊙ , and 15 M⊙ models.
+As shown in Fig. 5, the Kippenhahn diagrams illustrate the evo-                                                                    The 12 M⊙ model exhibits a tiny convective C-burning
+lution from core C burning to the onset of core collapse.                                                                     core, while the 13 M⊙ and 15 M⊙ models exhibit radiative C-
+                                                                                                                                                                                                                     Article number, page 5 of 16
+                                                    A&A proofs: manuscript no. aa58335-25
+
+
+                                                                                                                 MCO [M ]
+                                                                                           5.2       9.4        14.0   18.9    24.0     29.1
+                   3.7        MCO                                                  0.35
+                                                                    30
+                   3.6
+                               c                             (a)                                                                          (b)
+                                                                    25             0.30
+ log( c) [gcm 3]
+
+
+
+
+                   3.5                                              20
+
+
+
+
+                                                                        MCO [M ]
+                                                                                   0.25
+
+
+
+
+                                                                          XC
+                   3.4                                              15
+                                                                                   0.20
+                   3.3                                              10                      XC = 0.266
+                                                                                            XC = 0.202
+                   3.2                                              5              0.15     radiative core C-burning
+                                                                                            radiative core Ne-burning
+                         10         20   30   40   50       60                             10        20          30     40     50       60
+                                         MHe
+                                          i [M ]                                                                 MHe
+                                                                                                                  i [M ]
+
+
+Fig. 4. Core properties at the end of core He burning as a function of initial mass. Panel (a): Central density ρc and CO core mass MCO at the
+                                                                          i
+end of core He burning, shown as a function of the initial He star mass MHe . Panel (b): Corresponding central 12 C mass fraction XC at the end of
+                                                                                i
+core He burning, with the top axis indicating the CO core mass MCO for each MHe   . Light and dark gray shaded regions denote models undergoing
+radiative core C and Ne burning, respectively. The dotted and dashed lines represent the threshold 12 C mass fractions separating convective and
+radiative burning regimes.
+
+
+burning cores. This transition indicates that core C burning be-           by earlier core Ne and O ignition as well as shell mergers. As
+comes neutrino-dominated, triggers stronger core contraction,              shown in Fig. 5, central C-burning in these models proceeds
+and drives the outward progression of the C-burning front. Af-             radiatively and is dominated by neutrino losses. After core C
+ter the convective or radiative C-burning core exhausts its fuel,          depletion (see the first dashed line in Fig. 5), the first convec-
+the subsequent core contraction triggers the formation of the              tive C-burning shell forms, and the C-burning front gradually
+first convective C-burning shell. The C-burning front reaches the          shifts outward in mass coordinate. For example, the front ex-
+base of this shell at mass coordinates of 0.82 M⊙ , 1.03 M⊙ , and          tends to approximately 1.37 M⊙ in the 15 M⊙ model, compared
+1.37 M⊙ for the 12 M⊙ , 13 M⊙ , and 15 M⊙ models, respectively.            to 1.81 M⊙ in the 18 M⊙ model. The C-burning front approaches
+As these C-burning fronts move further out in mass, it indicates           or exceeds MCh,0 during the first convective C-burning shell. This
+stronger core contraction (Laplace et al. 2025). For example, the          triggers a rapid contraction of the partially degenerate core, ac-
+MHei
+       = 15 M⊙ model shows a more extended region of electron              celerating the earlier ignition of Ne burning before the first cov-
+degeneracy compared to the other two models during the first               ective C-burning shell is fully depleted (Laplace et al. 2025).
+convective C-burning shell (see Fig. D.1). Since the C-burning             The earlier ignition of core Ne and O enhances core luminosity,
+front in these models remains below MCh,0 (see the gray solid              suppress core contraction, and slows the progression of the C-
+lines in Fig. 5), electron degeneracy pressure counteracts core            burning front. After core O depletion (see the third dashed line
+contraction, thereby delaying the ignition of Ne- and O- burning           in Fig. 5), further core contraction ignites the second C-burning
+(Sukhbold & Woosley 2014; Laplace et al. 2025). In the 15 M⊙               convective shell, shifting the location of the C-burning front to
+model, core Ne- and O-burning ignite sequentially after the first          3.28 M⊙ , 3.27 M⊙ , 2.87 M⊙ , and 2.80 M⊙ for the 15 M⊙ , 16 M⊙ ,
+C-burning shell depletes its fuel, further delaying the outward            17 M⊙ , and 18 M⊙ models, respectively.
+progression of the C-burning front until O-burning ends. Sub-                  After core Si burning (see the last dashed line in Fig. 5), the
+sequent core contraction triggers a second convective C-burning            mass coordinate of the C-burning front in the 15 M⊙ model re-
+shell. The C-burning front moves out to a mass coordinate of               mains constant at 3.28 M⊙ . However, for models with MHe      i
+                                                                                                                                             =
+3.28 M⊙ and remains there until the end of evolution, ultimately           16 − 18 M⊙ , its mass coordinate declines to varying degrees.
+producing a large C-free core of 3.28 M⊙ (indicated by the dash-           This behavior is attributed to a substantial increase in both the
+dotted magenta line in Fig. 5). This results in a 1.88 M⊙ iron core        nuclear energy generation and the entropy within the Ne/O-
+and a compactness value of 0.57.                                           burning shells. When the entropy of these shells exceeds that
+     In the 12 M⊙ and 13 M⊙ models, the second convective C-               of the C-burning shell above, a shell merger is triggered. Fol-
+burning shell is triggered immediately after core C depletion (see         lowing the merger, the burning front moves to a lower mass co-
+the first dashed line in the top row of Fig. 5) and remains at the         ordinate and forms a larger convective shell, causing the over-
+same mass coordinate until collapse, which yields smaller C-               lying layers to expand (Sukhbold & Woosley 2014; Sukhbold
+free cores of 1.86 M⊙ and 2.20 M⊙ , respectively. This suppresses          et al. 2018; Collins et al. 2018; Davis et al. 2019; Laplace et al.
+Si-rich core growth, leading to smaller iron cores and reduced             2025). In the 16 M⊙ and 17 M⊙ models, a merger of the Ne shell
+compactness.                                                               with the C shell above occurs after core Si ignition. The burn-
+                                                                           ing front then moves inward to mass coordinates of 2.84 M⊙ (at
+3.2.2. Decrease in final compactness: Convective shell                     log(tf − t) ≈ −3.4 yr) and 2.72 M⊙ (at log(tf − t) ≈ −3.57 yr),
+       merger stage                                                        respectively, which are consistent with the masses of their C-
+                                                                           free cores. In the 18 M⊙ model, in addition to experiencing the
+For the models with MHei
+                          = 15 − 18 M⊙ , the final compactness             merger of the Ne and C shells, the O shell also merges with the
+gradually decreases (see Fig. 3a). This trend is primarily driven          Ne and C shells above. This process causes the mass coordinate
+Article number, page 6 of 16
+                                              Gang Long et al: Formation of Black Holes from He Stars
+
+
+
+
+                                                                                                                                       20
+
+
+
+
+                                                                                                                                                ]
+                                                                                                                                          |) ergg 1 s 1
+                                                                                                                                       15
+                                                                                                                                       10
+
+
+
+
+                                                                                                                                                [
+                                                                                                                                       5
+                                                                                                                                       0
+
+
+
+
+                                                                                                                                          )log10(| nuc
+                                                                                                                                         5
+                                                                                                                                         10
+                                                                                                                                         15
+
+
+
+
+                                                                                                                                          sign( nuc
+                                                                                                                                         20
+                                                                                                                                         25
+                                                        5
+                                                            MHe
+                                                             i = 17 M
+                                                                                                                                       20
+
+
+
+
+                                                                                                                                                ]
+                                                                                                                                          |) ergg 1 s 1
+                                                        4                                                                              15
+                                                                                                                                       10
+
+
+
+
+                                                                                                                                                [
+                                                        3                                                                              5
+                                                                                                                                       0
+
+
+
+
+                                                                                                                                          )log10(| nuc
+                                                        2                                                                                5
+                                                                                                                                         10
+                                                        1                                                                                15
+
+
+
+
+                                                                                                                                          sign( nuc
+                                                                                                                                         20
+                                                        0    2          0     2       4        6                                         25
+                                                                                                                                       20
+
+
+
+
+                                                                                                                                                ]
+                                                                                                                                          |) ergg 1 s 1
+                                                                                                                                       15
+                                                                                                                                       10
+
+
+
+
+                                                                                                                                                [
+                                                                                                                                       5
+                                                                                                                                       0
+
+
+
+
+                                                                                                                                          )log10(| nuc
+                                                                                                                                         5
+                                                                                                                                         10
+                                                                                                                                         15
+
+
+
+
+                                                                                                                                          sign( nuc
+                                                                                                                                         20
+                                                                                                                                         25
+                                                                                                                                       20
+
+
+
+
+                                                                                                                                                ]
+                                                                                                                                          |) ergg 1 s 1
+                                                                                                                                       15
+                                                                                                                                       10
+
+
+
+
+                                                                                                                                                [
+                                                                                                                                       5
+                                                                                                                                       0
+
+
+
+
+                                                                                                                                          )log10(| nuc
+                                                                                                                                         5
+                                                                                                                                         10
+                                                                                                                                         15
+
+
+
+
+                                                                                                                                          sign( nuc
+                                                                                                                                         20
+                                                                                                                                         25
+
+
+
+
+Fig. 5. Same as Fig. 1b, but for models with MHe    i
+                                                       = 12, 13, 15, 16, 17, 18, 23, 26, 29, 30, 35, and 40 M⊙ , covering the evolution from core C-burning
+to the onset of core collapse. The gray dashed line indicates, MCh , as defined by Eq. 6. The dotted vertical lines indicate, from left to right, the
+times of depletion of 12 C, 20 Ne, 16 O, and 28 Si in the core.
+
+
+of the burning front to decrease to 1.83 M⊙ , corresponding to the                 As neutrino losses increase and the core contracts further, ra-
+mass of a C-free core (see the magenta dashed line in Fig. 5),                 diative Ne burning cannot effectively suppress the progression of
+which leads to a smaller iron core and a corresponding reduction               the C-burning front. Furthermore, the increase in entropy from
+in ξ2.5 .                                                                      the Ne-burning shell is insufficient to trigger a merger with the
+                                                                               C-burning shell above. Thus, the C-burning front continues to
+                                                                               move outward in mass coordinates until it ignites a convective
+3.2.3. Reincrease in final compactness: Core Ne-burning                        C-burning shell, maintaining this state until the onset of core
+       transition stage                                                        collapse. In the 23 M⊙ , 26 M⊙ , and 29 M⊙ models, the C-burning
+                                                                               front reaches 2.29 M⊙ , 2.57 M⊙ , and 2.83 M⊙ , respectively. Since
+                                                                               the mass coordinate of the C-burning front in the 26 M⊙ and
+For the models with MHe   i
+                              = 23 − 30 M⊙ , the final compact-                29 M⊙ models exceeds the mass coordinate used for the com-
+ness gradually increases again, reaching a second peak of 0.60 at              pactness parameter, this leads to a gradual increase in their final
+MHei
+      = 30 M⊙ , which corresponds to MCO ≈ 13.98 M⊙ (see also                  compactness. Additionally, the C-free core nearly reaches the
+Fig. 3a). With increasing initial mass, both the residual C mass               C-burning front in the 23 M⊙ and 26 M⊙ models, while in the
+fraction after central He burning
+                                 depletion
+                                           and the Ne mass frac-              29 M⊙ model, it reaches 2.70 M⊙ , slightly below the correspond-
+tion generated via the 12 C 12 C, α 20 Ne reaction decrease. This              ing C-burning front. These differences in the location of the C-
+drives a transition in the nature of core Ne burning, as well as               burning front and the C-free core ultimately lead to a systematic
+in the number and size of Ne-burning shells (e.g., from multiple               increase in both the iron core mass and final compactness (e.g.,
+small zones to a few tiny ones, eventually transitioning to a fully            in the 23 M⊙ , 26 M⊙ , and 29 M⊙ models, the iron core masses are
+radiative core Ne burning, see in the 23 M⊙ , 26 M⊙ , and 29 M⊙                1.62 M⊙ , 1.77 M⊙ , and 1.83 M⊙ , with corresponding final com-
+models in Fig. 5).                                                             pactness values of 0.220, 0.477, and 0.580, respectively).
+
+                                                                                                                            Article number, page 7 of 16
+                                                 A&A proofs: manuscript no. aa58335-25
+
+3.2.4. Subsequent decrease in final compactness: Core O-               iron-core mass, carbon-free core, and central entropy. As noted
+       and Si-burning dominance stage                                  by Schneider et al. (2021), all these key quantities exhibit non-
+                                                                       monotonic behavior with MCO , which determines the pattern
+For the models with MHe   i
+                             = 30 − 40 M⊙ , the final compactness      of NS and BH formation. Specifically, Schneider et al. (2021)
+decreases gradually once again (see also Fig. 3a). In these mod-       found that Case A and B stripped stars have higher XC than sin-
+els, both C and Ne burn radiatively in the center (see Fig. 5).        gle and Case C stripped stars at the same MCO . This difference
+Notably, the location of their last C-burning convective shell sig-    alters the transition from convective to radiative core C/Ne burn-
+nificantly exceeds the mass coordinate used for the compactness        ing, leading to a systematic shift of the island of explodability
+parameter, thereby reducing the constraints on the final iron core     in MCO (e.g., the first compactness peak shifts from ∼ 7 M⊙ for
+mass and compactness. Consequently, the core O and Si burning,         single and Case C stripped stars to ∼ 8 M⊙ for Case A and B
+along with their convective shells, become progressively more          stripped stars). Our models exhibit a peak at MCO ≈ 7.51 M⊙ ,
+important for the subsequent evolution.                                which is higher than the value for single and Case C stripped
+     In the 30 M⊙ model, the mass coordinate at the base of the        stars. Thus, despite variations in the location of the islands of
+first convective O-burning shell is close to MCh,0 (see Fig. 5).       explodability across different systems, the underlying physical
+However, in the 35 M⊙ and 40 M⊙ models, it exceeds both MCh,0          mechanism driving the non-monotonic behavior remains robust
+and MCh , which accelerates core contraction and triggers early        across different studies.
+Si burning. As shown in Fig. 5, core Si ignition occurs before              The predicted mass distributions of compact objects plays a
+the depletion of the first convective O-burning shell in the 35 M⊙     critical role in subsequent binary evolution. When the primary
+and 40 M⊙ models. Additionally, in the 40 M⊙ model, a larger           star collapses into either a white dwarf (WD), NS, or BH as the
+convective shell forms and persists until the end of evolution.        first compact object, the subsequent evolution of the secondary
+This delays the progression of the O-burning front in mass coor-       star and its interaction with the first compact object can produce
+dinate (e.g., the O-burning front reaches 2.22 M⊙ , 2.30 M⊙ , and      various types of compact binary systems. In particular, when
+1.82 M⊙ in the 30 M⊙ , 35 M⊙ , and 40 M⊙ models, respectively).        He stars with MHe  i
+                                                                                              ≲ 3.2 M⊙ form WDs or NSs via electron-
+Consequently, this results in the formation of iron cores with         capture SNe (Woosley 2019). The subsequent evolution of these
+smaller masses and reduced compactness.                                systems, influenced by the properties of the companion and bi-
+                                                                       nary interactions, can result in double WDs, NS-WD binaries, or
+3.3. Final fates and compact-remnant masses                            double NSs systems (e.g., Tauris et al. 2013, 2015, 2017; Wang
+                                                                       & Liu 2020; Wang et al. 2022a; Guo et al. 2024). In our mod-
+We used the semianalytic approach of Müller et al. (2016) and          els, He stars with initial masses of 5–14 M⊙ and 18–23 M⊙ are
+the criterion of Ertl et al. (2016) to estimate the final fate af-     expected to successfully explode and leave NS remnants as the
+ter core collapse. As shown in Fig. 3a, using these methods, He        first compact objects, while those with masses of 15 to 17 M⊙
+                              i
+stars with initial masses MHe     ≤ 14 M⊙ (MCO ≤ 7.27 M⊙ ) are         and ≥ 24 M⊙ fail to explode and directly collapse to form BHs.
+predicted to explode, except for the model with MHe     i
+                                                          = 10 M⊙      If the natal kick velocity is insufficient to disrupt the system, the
+(MCO = 5.25 M⊙ ), which is predicted to explode according to the       resulting binary configuration comprises a compact object and
+criterion of Ertl et al. (2016), but not according to Müller et al.    an OBe-type star. These surviving systems ultimately evolve into
+(2016). At higher masses, the MHe    i
+                                        = 18 M⊙ star is predicted      observable high-mass X-ray binaries (e.g., Remillard & McClin-
+to explode according to Ertl et al. (2016) but collapse following      tock 2006; Kretschmar et al. 2019), which are considered strong
+Müller et al. (2016). Both methods consistently predict that stars     candidates for BH-BH or BH-NS progenitor systems (Belczyn-
+         i                                                             ski et al. 2013; Neijssel et al. 2021).
+with MHe    ≥ 24 M⊙ (MCO ≥ 11.19 M⊙ ) will fail to explode and
+instead directly collapse to form BHs. Although the compactness
+parameter alone is insufficient to determine whether a star will
+undergo a successful neutrino-driven SN explosion (e.g., Wang          4. Discussion
+et al. 2022b; Burrows et al. 2023), our analysis suggests that         4.1. Comparison with previous studies
+for models with ξ2.5 > 0.35, both the semianalytic approach of
+Müller et al. (2016) and the criterion of Ertl et al. (2016) predict   In this work, we adopted He stars as the starting point to study
+that the star will fail to explode and is more likely to collapse      the evolution of stripped-envelope stars. These models provide
+into a BH remnant. This is illustrated in Fig. 3a, where the red       a physically motivated proxy for the progenitors of Type Ib/c
+dashed line at ξ2.5 = 0.35 separates models that may explode           SNe, which are expected to form through either strong stellar
+(below the line) from those that are more likely to collapse into      winds or binary interactions (e.g., Pols & Dewi 2002; Crowther
+a BH (above the line).                                                 2007; Yoon 2017; Woosley 2019; Laplace et al. 2021; Marchant
+    Fig. 6 shows the core-collapse outcomes for all models us-         & Bodensteiner 2024). Compared to evolving models from the
+ing semianalytic approach of Müller et al. (2016), presenting the      zero-age main sequence (ZAMS), this approach reduces the un-
+                                                              i
+mass distributions of compact remnants as functions of MHe      and    certainties associated with mass loss during the red supergiant
+MCO . The remnant mass distribution exhibits a non-monotonic           phase and binary interactions (e.g., Smith 2014; Renzo et al.
+                     i
+trend with both MHe      and MCO , similar to the behavior of the      2017; Marchant & Bodensteiner 2024). Furthermore, in contrast
+compactness parameter. This mapping is consistent with Patton          to bare CO core models (e.g., Patton & Sukhbold 2020) which
+et al. (2022), who predicted alternating regions of successful ex-     lack the He-shell burning phase and the steep pressure gradi-
+plosion and implosion based on the pre-SN core structure, rather       ent at the boundary of the CO core, He star models allow for a
+than a continuous distribution. For instance, Patton et al. (2022)     self-consistent treatment of these features. As noted by Patton &
+identified a prominent peak in the BH mass function around             Sukhbold (2020), bare CO cores tend to be denser in the center
+∼ 10 M⊙ followed by a frequency drop above ∼ 11.5 M⊙ . Physi-          and cooler in the outer parts compared to equivalent cores within
+cally, this mapping corresponds to the correlation we observed in      He stars. Such structural differences can shift the transition from
+Fig. 3 between BH formation and models with high final com-            convective to radiative C burning, thereby altering the islands of
+pactness, which are characterized by elevated binding energy,          explodability (e.g., Sukhbold & Woosley 2014). However, us-
+Article number, page 8 of 16
+                                                     Gang Long et al: Formation of Black Holes from He Stars
+
+
+
+                   30                                                                                        30
+                                                                            (a)                                                                                    (b)
+  MBH, grav [M ]
+
+
+
+
+                                                                                            MBH, grav [M ]
+                   20                                                                                        20
+                   10                                                                                        10
+
+                   2.0                                                                                       2.0
+                   1.8                                                                                       1.8
+MNS, grav [M ]
+
+
+
+
+                                                                                          MNS, grav [M ]
+                   1.6                                                                                       1.6
+                   1.4                                                                                       1.4
+                         10   20       30         40       50          60                                                  5    10      15     20       25       30
+                                           MHe
+                                            i [M ]                                                                                      MCO [M ]
+                                                                                               i
+Fig. 6. Gravitational masses of NSs, MNS,grav , and BHs, MBH,grav , as a function of both the MHe in panel (a) and the MCO in panel (b) for models
+with initial masses ranging from 5 − 65 M⊙ . The gravitational masses are calculated using the semianalytic approach of Müller et al. (2016).
+
+Table 1. Dependence of pre-SN properties on physical parameters.
+
+
+         i
+       MHe     Z    fov            MCO       XC      MC-free    ξ2.5        µ4    M4       sc                       MFe     Mf log(−Ebind ) h Eexp i    Fate Mrm,grav
+                                                                                                                                             1051 erg
+                                                                                                                                   
+       [M⊙ ]                       [M⊙ ]             [M⊙ ]                               [NA kB ]                  [M⊙ ]   [M⊙ ]   erg                        [M⊙ ]
+       15.0 0.0088 0.01            9.25     0.247     1.92      0.145   0.05      1.67    0.87                     1.56    11.5   51.49       0.24      NS    1.46
+       15.0  0.02 0.01             7.51     0.254     3.28      0.571   0.16      2.32    1.14                     1.85    8.79   51.70        ···      BH    8.79
+       15.0  0.03 0.01             6.45     0.259     2.07      0.163   0.07      1.77    0.92                     1.54    7.82   51.58       0.56      NS    1.54
+       15.0  0.04 0.01             5.81     0.262     2.16      0.189   0.08      1.82    0.95                     1.60    7.14   51.56       0.77      NS    1.58
+       15.0  0.02   0.0            7.70     0.253     3.35      0.597   0.17      2.37    1.13                     1.89    8.96   51.72        ···      BH    8.96
+       15.0  0.02 0.016            7.43     0.255     3.07      0.535   0.15      2.29    1.12                     1.85    8.70   51.67        ···      BH    8.70
+       15.0  0.02 0.027            7.34     0.256     2.67      0.444   0.13      2.14    1.08                     1.79    8.57   51.61        ···      BH    8.57
+
+Notes: Same as Table A.1, but for the representative model MHe     i
+                                                                       = 15 M⊙ , with variations in the physical parameters. We
+used different metallicities, Z = 0.0088, 0.02, 0.03, 0.04, and explored a range of convective overshooting parameters, fov =
+0.0, 0.01, 0.016, 0.027. The case with Z = 0.02 and fov = 0.01 serves as the fiducial model.
+
+
+ing He stars as a proxy for stripped-envelope stars neglects the                         ues adopted for the mass-loss rate factor fWR ; we used fWR = 1,
+residual hydrogen envelope typically retained after binary inter-                        while their models used fWR = 1.58.
+actions (e.g., Laplace et al. 2021; Aguilera-Dena et al. 2022).                              In addition, Ertl et al. (2020) investigated the collapse of
+Even a trace amount of hydrogen can alter post-interaction evo-                          solar-metallicity He star models of Woosley (2019), using a
+lution, most notably by triggering significant radial expansion                          neutrino-driven hydrodynamics SN code. These models adopted
+(e.g., Gilkis et al. 2019; Laplace et al. 2020; Dessart et al. 2020).                    different mass-loss rates, fWR = 1.0 and fWR = 1.5. They found
+                                                                                         that for He star models with fWR = 1.0, those with final pre-SN
+    Several works studied the evolution of He stars as a proxy                           masses between approximately 10 and 12 M⊙ exhibit relatively
+for stripped-envelope stars, primarily focusing on the nature of                         low compactness values. Similarly low compactness is also ex-
+their explosion (e.g., Woosley 2019; Ertl et al. 2020; Dessart                           hibited in our models for final pre-SN masses within this range
+et al. 2020; Aguilera-Dena et al. 2022, 2023). In this work, we                          (see Fig. 3). Furthermore, Ertl et al. (2020) suggested that for He
+explored the pre-SN core structures of He stars by focusing on                           stars with final pre-SN masses between 6.5 and 12 M⊙ , the evo-
+several quantities, including final compactness, iron core mass,                         lutionary outcome is a mixture of BHs and NSs, consistent with
+central entropy, C-free core mass, and binding energy and their                          our results (see Fig. 3). In this work, we did not consider BHs
+correlation with explodability. Although no clear compactness                            formed by fallback, resulting in no formation of low-mass BHs
+threshold distinguishes between successful and unsuccessful ex-                          (see Fig. 6).
+plosions (e.g., Burrows et al. 2020; Takahashi et al. 2023), we                              Previous studies demonstrated that the explodability of He
+found that He stars with a final compactness of ξ2.5 > 0.35 are                          stars exhibits non-monotonic behavior with initial mass (e.g.,
+more likely to form BHs (see Fig. 3). This result is consistent                          Ertl et al. 2020; Aguilera-Dena et al. 2023). However, these stud-
+with that of Aguilera-Dena et al. (2023). Moreover, Aguilera-                            ies primarily explored He star explodability criteria and the im-
+Dena et al. (2023) suggested that most He stars with initial                             pact of mass loss and metallicity on pre-SN core structure, which
+masses ∼ 35 − 40 M⊙ will produce successful explosions. How-                             determine SN explosion properties such as remnant masses, nu-
+ever, we found that most He stars with initial masses below 24                           cleosynthesis (e.g., 56 Ni yields), and light curves. In this work,
+M⊙ were expected to undergo successful explosions. These dif-                            we focused on the key physical mechanisms underlying the non-
+ferences in the predicted outcomes arise from the different val-                         monotonic behavior. We found that the final core structure and
+                                                                                                                                              Article number, page 9 of 16
+                                                 A&A proofs: manuscript no. aa58335-25
+
+explodability are mainly determined by MCO and XC . These              of core C burning and triggering multiple convective C-burning
+quantities served as the initial conditions for the subsequent         shell episodes.
+burning stages, influencing the properties of central C/Ne burn-            Specifically, in the Z = 0.0088 model, core C burning be-
+ing and the locations of convective shells. In particular, the lo-     gins radiatively. After core C depletion, a convective C-burning
+cation of the last convective C-burning shell set the mass of the      shell forms. The C-burning front stabilizes at 1.92 M⊙ , which
+C-free core, which limits the iron core mass and the final com-        is lower than the mass coordinate used for compactness eval-
+pactness.                                                              uation, remaining at this position until core collapse. This re-
+    Notably, Patton & Sukhbold (2020) inferred that models with        sults in a smaller C-free core and an expanded envelope, which
+MCO > 10 M⊙ will be very difficult to explode, based on the sim-       limits the growth of the iron core and reduces its compactness
+ulations of Sukhbold et al. (2016) and Ertl et al. (2020). How-        (see Table 1). In the Z = 0.02 model (see the top-right panel
+ever, our models show that successful explosions can still oc-         of Fig. B.1), core C burning still beginning radiative, and two
+cur at slightly higher MCO values (see the black dashed vertical       convective C-burning shell episodes are subsequently produced.
+line in Fig. 3a). Specifically, models with MHe i
+                                                   = 22 and 23 M⊙      The location of the last convective C-burning shell exceeds the
+(MCO = 10.30 and 10.74 M⊙ , respectively) both yield success-          mass coordinate used to evaluate compactness. As discussed in
+ful explosions. This result is consistent with the recent study by     detail in Section 3.2, the final compactness and iron core mass
+Maltsev et al. (2025), who also predicted a window of explod-          are relatively high, corresponding to a peak in compactness. In
+ability for binary-stripped stars at solar metallicity, extending up   the Z = 0.03 mdoel (see the lower-left panel of Fig. B.1), central
+to MCO = 13.2 − 15.4 M⊙ . Significantly, the criterion of Malt-        C-burning proceeds radiatively and is followed by two succes-
+sev et al. (2025) predicts a higher probability of explosion com-      sive convective burning shell episodes. In contrast, the Z = 0.04
+pared to that of the Patton & Sukhbold (2020) and Ertl et al.          model exhibits convective C-burning core (the lower-right panel
+(2020). This discrepancy likely arises from the treatments of in-      of Fig. B.1), followed by three convective C-burning shell. The
+put physics, including convective overshooting, the 12 C(α, γ)16 O     radiative core C burning in the Z = 0.03 model drives stronger
+reaction rate, mass-loss rate and metallicity (e.g., Sukhbold &        core contraction, prompting earlier Ne ignition in the core and
+Woosley 2014; Sukhbold et al. 2018; Woosley 2019; Chieffi &            shifting the C-burning front inward to a lower mass coordinate
+Limongi 2020; Aguilera-Dena et al. 2023; Temaj et al. 2024;            (∼ 2.10 M⊙ ) compared to the Z = 0.04 model (∼ 2.20 M⊙ ). In
+Maltsev et al. 2025; Long et al. 2026).                                both the Z = 0.03 and Z = 0.04 models, the location of the
+    We also found that these quantities (i.e., final compactness,      last convective C-burning shell is lower than the mass coordi-
+iron core mass, central entropy, C-free core mass, and binding         nate used to evaluate compactness. This leads to a smaller iron
+energy) all exhibit a similar non-monotonic trend with initial         core mass and reduced compactness (see Table 1). These results
+mass (see Fig. 3), which is consistent with previous studies on        demonstrate that, although MCO and XC show distinct sensitivi-
+ZAMS stars (e.g., Schneider et al. 2021, 2023, 2024; Temaj et al.      ties to metallicity, their variations shape the pre-SN core struc-
+2024; Laplace et al. 2025). Note that the first compactness peak       ture and explodability. Similarly, Maltsev et al. (2025) also found
+found in this work, at MCO ≈ 7.51 M⊙ , is higher than the corre-       that the islands of explodability exhibit a dependence on metal-
+sponding peak in non-stripped stars (e.g., Schneider et al. 2023).     licity, shifting systematically toward higher MCO as metallicity
+This systematic change of the compactness peak toward higher           increases.
+CO core masses, also observed in stripped-envelope stars (e.g.,
+see Fig. 2 in Schneider et al. 2023) and other He star models
+                                                                       4.3. The impact of convective overshooting on pre-SN core
+(e.g., Woosley 2019; Aguilera-Dena et al. 2023; Ertl et al. 2020).
+                                                                            structure
+This is because these models have a higher central C mass frac-
+tion at the end of core He burning than non-stripped stars with        Convective overshooting transports fresh fuel to the burning re-
+the same CO core mass.                                                 gions while also moving nuclear reaction products outward. This
+                                                                       process not only prolongs the lifetime of each burning phase but
+4.2. The impact of metallicity on pre-SN core structure                also alters the CO core mass and the mass fraction of 12 C at the
+                                                                       end of He burning, ultimately influencing the final pre-SN core
+Stellar wind is an important process in massive star evolution,        structure (e.g., Langer 2012; Sukhbold & Woosley 2014; Kaiser
+significantly affecting stellar structure and the final fate of a      et al. 2020; Temaj et al. 2024). However, significant uncertainties
+star (Langer 2012; Meynet et al. 2015; Renzo et al. 2017).             still exist regarding convection overshooting in He stars. For ex-
+The mass loss rates of WR stars are strongly metallicity depen-        ample, Chanlaridis et al. (2022) and Schneider et al. (2023) em-
+dent (Crowther 2007; Hainich et al. 2014; Tramper et al. 2016;         phasized that variations in overshooting significantly influence
+Sander & Vink 2020). Higher metallicity enhances radiation-            the final core structure.
+driven winds by increasing the opacity of the envelope, result-             To explore the impact of convective overshooting on the
+ing in stronger winds and elevated mass-loss rates (Maeder &           pre-SN core structure, we considered four values of fov =
+Meynet 2000; Heger et al. 2003; Langer 2012; Smith 2014; Groh          0.0, 0.01, 0.016, and 0.027 (Herwig 2000; Kaiser et al. 2020;
+et al. 2019). To explore the impact of metallicity on core struc-      Renzo et al. 2020; Higgins et al. 2021; Li & Li 2023). Fig. C.1
+ture, we present the evolution of a 15 M⊙ He star with differ-         shows Kippenhahn diagrams for a MHe     i
+                                                                                                                   = 15 M⊙ model with
+ent metallicities using Kippenhahn diagrams (see Fig. B.1). In         these convective overshooting values. In addition, Fig. 7 shows
+these models, during core He burning, those with higher metal-         the stellar wind mass loss rate as a function of evolutionary age
+licity exhibit core characteristics similar to those of lower-mass     is displayed for the same models with varying overshooting val-
+stars, namely, higher central density and lower central temper-        ues. We found that He stars with larger overshooting paradoxi-
+ature. Additionally, as metallicity increases, enhanced stellar        cally form smaller MCO at central He exhaustion (see Table 1).
+wind mass loss significantly reduces the mass of the convective        This phenomenon arises from two competing effects: (1) over-
+He-burning core, thereby decreasing the mass of the CO core.           shooting mixes fresh He from the envelope into the core, pro-
+According to Eq. 7, these changes result in a slight increase in       longing the lifetime of core He burning. As shown in Fig. 7,
+XC at the end of core He burning (see Table 1), altering the nature    models with larger overshooting, such as fov = 0.027, have sig-
+Article number, page 10 of 16
+                                                                   Gang Long et al: Formation of Black Holes from He Stars
+
+                                                                                               nature of core C burning (i.e., convective or radiative) but also
+                                                                                               by the location and strength of the subsequent burning shells.
+                    4.6                                                                        Specifically, when the convective shell is located within the mass
+                                                                                               coordinate at which we evaluate the compactness, it significantly
+                                                                                               reduces the compactness. Notably, the location of the last con-
+                    4.8
+log Mwind [M /yr]
+
+
+
+
+                                                                                               vective C-burning shell is the dominant factor in determining the
+                                                                                               final compactness.
+                                                                                                   (3) We found that the final compactness increases with the
+                    5.0
+                                                                                               transition of core C burning from the convective to the radiative
+                                                                                               regime (MHe i
+                                                                                                              = 12–15 M⊙ in Fig. 3). This transition indicates
+                                                                                               that neutrino energy loss exceeds the energy released by core C
+                    5.2
+                                                                                               burning, leading to stronger core contraction and further outward
+                            MHe
+                             i = 15 M , Z = 0.02, fov = 0.0
+                                                                                               progression of the C-burning front, which yields a larger iron
+                            MHe
+                             i = 15 M , Z = 0.02, fov = 0.01
+                            MHe
+                             i = 15 M , Z = 0.02, fov = 0.016                                  core mass and a higher final compactness. When core Ne burning
+                    5.4
+                            MHe
+                             i = 15 M , Z = 0.02, fov = 0.027                                  becomes neutrino-dominated, the same mechanism causes the
+                     5.40       5.45        5.50           5.55      5.60     5.65      5.70   final compactness to gradually increase again (MHe i
+                                                                                                                                                      = 23–30 M⊙
+                                                      log t [yr]                               in Fig. 3).
+                                                                                                   (4) After the compactness peaks, the final compactness de-
+Fig. 7. Rate of stellar wind mass loss as a function of evolutionary age                       creases with increasing initial mass (MHe i
+                                                                                                                                            = 15–18 M⊙ and 30–
+for MHei
+          = 15 M⊙ models at Z = 0.02 with varying overshooting pa-                             40 M⊙ in Fig. 3). We found that earlier core Ne/O ignition and
+rameters. The red solid line is for fov = 0.01, the blue solid line is for                     shell mergers are key mechanisms driving this decrease. Specif-
+ fov = 0.027, the dash-dotted line is for fov = 0.02, and the dotted line                      ically, when the location of the C-burning front (during the first
+is for fov = 0.0 (no overshooting). The pentagram indicates central He
+depletion.
+                                                                                               convective C-burning shell) exceeds the effective Chandrasekhar
+                                                                                               mass, it triggers the earlier ignition of Ne and O, which slows
+                                                                                               core contraction. Moreover, when the entropy of the Ne/O-
+nificantly longer central He-burning lifetimes compared to those                               burning shells exceeds that of the layers above, a shell merger
+with lower or no overshooting; and (2) overshooting also en-                                   occurs, expanding the overlying layers and shifting the burning
+hances the transport of core He burning products to the surface.                               front to lower mass coordinates. These processes ultimately re-
+Consequently, in models with larger overshooting, the surface                                  sult in a smaller iron core and a lower final compactness.
+helium abundance YS drops more rapidly below the WC/WO                                             (5) We found that metallicity and convective overshooting
+transition threshold (YS < 0.9; see Section 2.1 ). The earlier tran-                           affect the central 12 C mass fraction and CO core mass to differ-
+sition from WNE to WC/WO winds (see Fig. 7, where the blue                                     ent extents, leading to differences in the subsequent core struc-
+solid line corresponds to the fov = 0.027 model that undergoes                                 ture. Specifically, higher metallicity significantly decreases the
+the earliest transition) triggers a sharp increase in the mass-loss                            CO core mass and slightly increases the central 12 C mass frac-
+rate ( ṀWC ∝ YS 0.44 ), which suppresses the growth of the CO                                 tion. However, the final compactness does not follow a mono-
+core. Thus, enhanced overshooting reduces the CO core mass                                     tonic trend with metallicity, while the explodability is highly
+and increases the mass fraction of 12 C in He stars. As shown                                  sensitive to metallicity variations. On the other hand, a larger
+in Table 1, when the overshooting parameter is increased from                                  convective overshooting also slightly increases the central 12 C
+ fov = 0.0 to 0.027, the CO core mass decreases progressively                                  mass fraction but only slightly decreases the CO core mass. This
+from 7.70 to 7.34 M⊙ , while XC increases from 0.253 to 0.256.                                 leads to a monotonic decline in final compactness with increas-
+These small changes lead to a slight decrease in the location of                               ing overshooting, but the explodability is not sensitive to changes
+the first convective C-burning shell (see Fig. C.1), thereby caus-                             in overshooting. The influence of these uncertainties on the ex-
+ing a reduction in both iron core mass and compactness, although                               plodability of progenitors varies significantly.
+the changes are not significant (see Table 1).                                                 Acknowledgements. This study is supported by the National Natural Sci-
+                                                                                               ence Foundation of China (Nos 12225304, 12288102, 12090040, 12090043,
+                                                                                               12403035, 12173010, 12573034, 12273105), the National Key R&D Pro-
+5. Conclusions                                                                                 gram of China (No. 2021YFA1600404), the Yunnan Revitalization Talent
+                                                                                               Support Program (Yunling Scholar Project and Innovation Team Project),
+In this work, we investigated the evolution of He stars with ini-                              the Youth Innovation Promotion Association CAS (No. 2021058), the Yun-
+tial masses from 5 to 65 M⊙ at solar metallicity, focusing on                                  nan Fundamental Research Project (Nos. 202501AS070005, 202401AV070006,
+their pre-SN core structures to predict their final fates. We also                             202501AS070078), ,the International Centre of Supernovae (ICESUN), Yunnan
+explored the effects of metallicity and convective boundary mix-                               Key Laboratory (No. 202505AV340004), the Postdoctoral Fellowship Program
+                                                                                               of CPSF (No. GZB20240307), the China Postdoctoral Science Foundation (Nos.
+ing on the pre-SN core structure. Our main conclusions are as                                  2024M751375, 2024T170393), and the Jiangsu Funding Programme for Excel-
+follows:                                                                                       lent Postdoctoral Talent (No. 2024ZB705).
+     (1) Several quantities exhibit similar non-monotonic behav-
+iors with initial mass, such as the final compactness, iron core
+mass, central entropy, C-free core mass, and binding energy, re-
+flecting their strong correlations. Based on the neutrino-driven                               References
+SN model of Müller et al. (2016) and the explodability criterion                               Aguilera-Dena, D. R., Langer, N., Antoniadis, J., et al. 2022, A&A, 661, A60
+of Ertl et al. (2016), we found that He stars with higher final                                Aguilera-Dena, D. R., Müller, B., Antoniadis, J., et al. 2023, A&A, 671, A134
+compactness are more likely to form BHs. The final compact-                                    Angulo, C., Arnould, M., Rayet, M., et al. 1999, Nucl. Phys. A, 656, 3
+ness peaks at initial masses of 15 M⊙ and 30 M⊙ , corresponding                                Baron, E. & Cooperstein, J. 1990, ApJ, 353, 597
+                                                                                               Belczynski, K., Bulik, T., Mandel, I., et al. 2013, ApJ, 764, 96
+to CO core masses of 7.51 M⊙ and 13.98 M⊙ , respectively.                                      Boccioli, L., Roberti, L., Limongi, M., Mathews, G. J., & Chieffi, A. 2023, ApJ,
+     (2) By following the evolution of compactness with stellar                                  949, 17
+age, we found that this parameter is governed not only by the                                  Böhm-Vitense, E. 1958, ZAp, 46, 108
+
+                                                                                                                                             Article number, page 11 of 16
+                                                           A&A proofs: manuscript no. aa58335-25
+
+Brown, G. E., Heger, A., Langer, N., et al. 2001, New A, 6, 457                     Sukhbold, T. & Woosley, S. E. 2014, ApJ, 783, 10
+Burrows, A., Radice, D., Vartanyan, D., et al. 2020, MNRAS, 491, 2715               Sukhbold, T., Woosley, S. E., & Heger, A. 2018, ApJ, 860, 93
+Burrows, A. & Vartanyan, D. 2021, Nature, 589, 29                                   Suwa, Y., Yoshida, T., Shibata, M., Umeda, H., & Takahashi, K. 2018, MNRAS,
+Burrows, A., Vartanyan, D., & Wang, T. 2023, ApJ, 957, 68                              481, 3305
+Chanlaridis, S., Antoniadis, J., Aguilera-Dena, D. R., et al. 2022, A&A, 668,       Takahashi, K., Takiwaki, T., & Yoshida, T. 2023, ApJ, 945, 19
+   A106                                                                             Tauris, T. M., Kramer, M., Freire, P. C. C., et al. 2017, ApJ, 846, 170
+Chen, X., Liu, Z., & Han, Z. 2024, Progress in Particle and Nuclear Physics, 134,   Tauris, T. M., Langer, N., & Podsiadlowski, P. 2015, MNRAS, 451, 2123
+   104083                                                                           Tauris, T. M., Sanyal, D., Yoon, S. C., & Langer, N. 2013, A&A, 558, A39
+Chieffi, A. & Limongi, M. 2020, ApJ, 890, 43                                        Temaj, D., Schneider, F. R. N., Laplace, E., Wei, D., & Podsiadlowski, P. 2024,
+Chieffi, A., Roberti, L., Limongi, M., et al. 2021, ApJ, 916, 79                       A&A, 682, A123
+Collins, C., Müller, B., & Heger, A. 2018, MNRAS, 473, 1695                         Timmes, F. X., Woosley, S. E., & Weaver, T. A. 1996, ApJ, 457, 834
+Couch, S. M., Warren, M. L., & O’Connor, E. P. 2020, ApJ, 890, 127                  Tramper, F., Sana, H., & de Koter, A. 2016, ApJ, 833, 133
+Crowther, P. A. 2007, ARA&A, 45, 177                                                Ugliano, M., Janka, H.-T., Marek, A., & Arcones, A. 2012, ApJ, 757, 69
+Davis, A., Jones, S., & Herwig, F. 2019, MNRAS, 484, 3921                           Wang, B. & Liu, D. 2020, Research in Astronomy and Astrophysics, 20, 135
+deBoer, R. J., Görres, J., Wiescher, M., et al. 2017, Reviews of Modern Physics,    Wang, B., Liu, D., & Chen, H. 2022a, MNRAS, 510, 6011
+   89, 035007                                                                       Wang, B., Liu, D., Guo, Y., & Han, Z. 2026, Research in Astronomy and Astro-
+Dessart, L., Yoon, S.-C., Aguilera-Dena, D. R., & Langer, N. 2020, A&A, 642,           physics, 26, 032001
+   A106                                                                             Wang, T., Vartanyan, D., Burrows, A., & Coleman, M. S. B. 2022b, MNRAS,
+Ertl, T., Janka, H. T., Woosley, S. E., Sukhbold, T., & Ugliano, M. 2016, ApJ,         517, 543
+   818, 124                                                                         Woosley, S. E. 2019, ApJ, 878, 49
+Ertl, T., Woosley, S. E., Sukhbold, T., & Janka, H. T. 2020, ApJ, 890, 51           Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Reviews of Modern Physics,
+Foglizzo, T., Kazeroni, R., Guilet, J., et al. 2015, PASA, 32, e009                    74, 1015
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012, ApJ, 749, 91
+                                                                                    Yoon, S.-C. 2017, MNRAS, 470, 3970
+Fryer, C. L., Heger, A., Langer, N., & Wellstein, S. 2002, ApJ, 578, 335
+                                                                                    Yoon, S. C., Gräfener, G., Vink, J. S., Kozyreva, A., & Izzard, R. G. 2012, A&A,
+Gilkis, A., Vink, J. S., Eldridge, J. J., & Tout, C. A. 2019, MNRAS, 486, 4451
+                                                                                       544, L11
+Groh, J. H., Ekström, S., Georgy, C., et al. 2019, A&A, 627, A24
+Guo, Y.-L., Wang, B., Chen, W.-C., et al. 2024, MNRAS, 530, 4461                    Yoon, S. C., Woosley, S. E., & Langer, N. 2010, ApJ, 725, 940
+Hainich, R., Rühling, U., Todt, H., et al. 2014, A&A, 565, A27                      Zha, S., Müller, B., Weir, A., & Heger, A. 2023, ApJ, 952, 155
+Heger, A., Fryer, C. L., Woosley, S. E., Langer, N., & Hartmann, D. H. 2003,
+   ApJ, 591, 288
+Heger, A., Müller, B., & Mandel, I. 2024, in The Encyclopedia of Cosmology:
+   Set 2: Frontiers in Cosmology Volume 3 Black Holes (World Scientific), 61–
+   111
+Herwig, F. 2000, A&A, 360, 952
+Higgins, E. R., Sander, A. A. C., Vink, J. S., & Hirschi, R. 2021, MNRAS, 505,
+   4874
+Kaiser, E. A., Hirschi, R., Arnett, W. D., et al. 2020, MNRAS, 496, 1967
+Klencki, J., Istrate, A., Nelemans, G., & Pols, O. 2022, A&A, 662, A56
+Kretschmar, P., Fürst, F., Sidoli, L., et al. 2019, New A Rev., 86, 101546
+Langer, N. 2012, ARA&A, 50, 107
+Laplace, E., Götberg, Y., de Mink, S. E., Justham, S., & Farmer, R. 2020, A&A,
+   637, A6
+Laplace, E., Justham, S., Renzo, M., et al. 2021, A&A, 656, A58
+Laplace, E., Schneider, F. R. N., & Podsiadlowski, P. 2025, A&A, 695, A71
+Li, Z. & Li, Y. 2023, ApJS, 268, 51
+Long, G., Wang, Y., Liu, D., Wang, J., & Wang, B. 2026, Research in Astronomy
+   and Astrophysics, 26, 015020
+Maeder, A. & Meynet, G. 2000, ARA&A, 38, 143
+Maltsev, K., Schneider, F. R. N., Mandel, I., et al. 2025, A&A, 700, A20
+Marchant, P. & Bodensteiner, J. 2024, ARA&A, 62, 21
+Marchant, P., Renzo, M., Farmer, R., et al. 2019, ApJ, 882, 36
+McClelland, L. A. S. & Eldridge, J. J. 2016, MNRAS, 459, 1505
+Meynet, G., Chomienne, V., Ekström, S., et al. 2015, A&A, 575, A60
+Moe, M. & Di Stefano, R. 2017, ApJS, 230, 15
+Müller, B., Heger, A., Liptai, D., & Cameron, J. B. 2016, MNRAS, 460, 742
+Neijssel, C. J., Vinciguerra, S., Vigna-Gómez, A., et al. 2021, ApJ, 908, 118
+O’Connor, E. & Ott, C. D. 2011, ApJ, 730, 70
+Patton, R. A. & Sukhbold, T. 2020, MNRAS, 499, 2803
+Patton, R. A., Sukhbold, T., & Eldridge, J. J. 2022, MNRAS, 511, 903
+Paxton, B., Bildsten, L., Dotter, A., et al. 2011, ApJS, 192, 3
+Paxton, B., Cantiello, M., Arras, P., et al. 2013, ApJS, 208, 4
+Paxton, B., Marchant, P., Schwab, J., et al. 2015, ApJS, 220, 15
+Paxton, B., Schwab, J., Bauer, E. B., et al. 2018, ApJS, 234, 34
+Paxton, B., Smolec, R., Schwab, J., et al. 2019, ApJS, 243, 10
+Podsiadlowski, P., Joss, P. C., & Hsu, J. J. L. 1992, ApJ, 391, 246
+Pols, O. R. & Dewi, J. D. M. 2002, PASA, 19, 233
+Remillard, R. A. & McClintock, J. E. 2006, ARA&A, 44, 49
+Renzo, M., Farmer, R., Justham, S., et al. 2020, A&A, 640, A56
+Renzo, M., Ott, C. D., Shore, S. N., & de Mink, S. E. 2017, A&A, 603, A118
+Sana, H., de Mink, S. E., de Koter, A., et al. 2012, Science, 337, 444
+Sander, A. A. C. & Vink, J. S. 2020, MNRAS, 499, 873
+Schneider, F. R. N., Podsiadlowski, P., & Laplace, E. 2023, ApJ, 950, L9
+Schneider, F. R. N., Podsiadlowski, P., & Laplace, E. 2024, A&A, 686, A45
+Schneider, F. R. N., Podsiadlowski, P., & Müller, B. 2021, A&A, 645, A5
+Smith, N. 2014, ARA&A, 52, 487
+Song, H. F., Meynet, G., Maeder, A., Ekström, S., & Eggenberger, P. 2016, A&A,
+   585, A120
+Sukhbold, T. & Adams, S. 2020, MNRAS, 492, 2578
+Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., & Janka, H. T. 2016, ApJ,
+   821, 38
+
+Article number, page 12 of 16
+                                           Gang Long et al: Formation of Black Holes from He Stars
+
+Appendix A: Detailed model properties
+
+Table A.1. Initial configurations and pre-SN properties of our default models.
+
+
+    i
+  MHe      MCO        XC      MC-free     ξ2.5     µ4      M4       sc         Mf     MFe    log(−Ebind )   h Eexp i    Fate   Mrm,grav
+                                                                                                             1051 erg
+                                                                                                 
+  [M⊙ ]    [M⊙ ]              [M⊙ ]                               [NA kB ]   [M⊙ ]   [M⊙ ]       erg                            [M⊙ ]
+  5.0       2.44    0.355      1.71      0.063    0.03    1.61     0.84       4.00   1.51       50.95         0.52      NS      1.41
+  6.0       3.01    0.338      1.87      0.131    0.06    1.70     0.88       4.66   1.52       51.14         0.75      NS      1.69
+  7.0       3.58    0.324      1.82      0.116    0.04    1.67     0.87       5.30   1.53       51.12         0.44      NS      1.46
+  8.0       4.14    0.311      1.56      0.177    0.08    1.58     0.85       5.90   1.49       51.28         0.82      NS      1.40
+  9.0       4.70    0.300      1.86      0.198    0.06    1.79     0.93       6.48   1.61       51.32         0.51      NS      1.55
+  10.0      5.25    0.290      2.54      0.330    0.10    2.00     1.02       7.05   1.65       51.49          ···      BH      7.05
+  11.0      5.81    0.281      2.23      0.233    0.08    1.80     0.95       7.59   1.62       51.43         0.86      NS      1.57
+  12.0      6.35    0.273      1.52      0.117    0.07    1.52     0.82       7.84   1.48       51.29         0.60      NS      1.39
+  13.0      6.88    0.266      2.20      0.244    0.09    1.92     0.99       8.06   1.66       51.44         1.01      NS      1.67
+  14.0      7.27    0.259      2.66      0.352    0.11    2.01     1.03       8.41   1.73       51.54         1.80      NS      1.81
+  15.0      7.51    0.254      3.28      0.571    0.16    2.32     1.14       8.79   1.85       51.70          ···      BH      8.79
+  16.0      7.82    0.249      2.84      0.541    0.16    2.30     1.09       9.20   1.77       51.69          ···      BH      9.20
+  17.0      8.18    0.244      2.72      0.459    0.14    2.17     1.08       9.63   1.74       51.70          ···      BH      9.63
+  18.0      8.57    0.240      1.83      0.198    0.06    1.79     0.93      10.05   1.60       51.55          ···      BH     10.05
+  19.0      8.98    0.236      2.01      0.202    0.07    1.69     0.90      10.47   1.56       51.57         0.16      NS      1.47
+  20.0      9.41    0.231      1.98      0.167    0.06    1.72     0.90      10.90   1.57       51.52         0.35      NS      1.51
+  21.0      9.86    0.227      2.08      0.188    0.07    1.81     0.93      11.33   1.57       51.58         0.44      NS      1.57
+  22.0     10.30    0.223      2.19      0.235    0.09    1.92     0.97      11.76   1.64       51.62         0.61      NS      1.68
+  23.0     10.74    0.220      2.29      0.220    0.08    1.81     0.96      12.20   1.62       51.63         0.55      NS      1.58
+  24.0     11.19    0.216      2.31      0.354    0.12    2.08     1.03      12.65   1.70       51.72          ···      BH     12.65
+  25.0     11.64    0.212      2.40      0.439    0.13    2.20     1.05      13.11   1.74       51.75          ···      BH     13.11
+  26.0     12.10    0.209      2.57      0.477    0.13    2.28     1.06      13.56   1.77       51.78          ···      BH     13.56
+  27.0     12.56    0.206      2.54      0.527    0.14    2.33     1.08      14.03   1.79       51.82          ···      BH     14.03
+  28.0     13.02    0.202      2.61      0.548    0.15    2.35     1.10      14.49   1.77       51.85          ···      BH     14.49
+  29.0     13.50    0.199      2.70      0.580    0.20    2.32     1.10      14.96   1.83       51.88          ···      BH     14.96
+  30.0     13.98    0.196      2.79      0.609    0.22    2.31     1.10      15.44   1.86       51.90          ···      BH     15.44
+  35.0     16.39    0.182      3.37      0.607    0.29    2.05     1.13      17.85   1.86       52.05          ···      BH     17.85
+  40.0     18.88    0.170      3.87      0.365    0.12    1.82     0.99      20.33   1.69       52.06          ···      BH     20.33
+  45.0     21.39    0.159      4.46      0.420    0.12    2.05     1.07      22.85   1.83       52.16          ···      BH     22.85
+  50.0     23.96    0.150      5.01      0.469    0.13    2.12     1.12      25.43   1.87       52.26          ···      BH     25.43
+  55.0     26.54    0.141      5.70      0.595    0.15    2.32     1.19      28.03   1.95       52.35          ···      BH     28.03
+  60.0     29.14    0.134      6.17      0.777    0.19    2.49     1.29      30.65   2.07       52.45          ···      BH     30.65
+  65.0     31.77    0.127      6.63      0.808    0.22    2.64     1.31      33.30   2.09       52.46          ···      BH     33.30
+
+Notes: The table summarizes key pre-SN properties for each He star model with the same initial parameters, including MESA’s
+default 12 C(α, γ)16 O rate from the NACRE compilation (Angulo et al. 1999), an initial metallicity of Z = 0.02, and a convective
+overshooting parameter of fov = 0.01. Column (1): Initial He star mass, MHe       i
+                                                                                    , (the 65 M⊙ model experiences a weak PPISN);
+Column (2): CO core mass, MCO , defined as the maximum mass coordinate where the central 4 He mass fraction, XHe , drops below
+10−1 at the end of core He-burning, following Tauris et al. (2015); Column (3): Central 12 C mass fraction, XC , at the end of core
+He burning, defined as XHe < 10−4 ; Column (4): Carbon-free core mass, MC−free , defined as the maximum mass coordinate where
+the central 12 C mass fraction, XC , is less than 10−5 ; Column (5): Compactness, ξ2.5 , (defined by Eq. 4); Column (6): Radial mass
+derivative, µ4 , (as defined in Eq. 5); Column (7): Mass coordinate, M4 , at a specific entropy of s = 4; Column (8): Central specific
+entropy, sc , at the onset of iron-core collapse; Column (9): Final pre-SN mass, Mf ; Column (10): Iron core mass, MFe ; Column
+(11): Gravitational binding energy, −Ebind , of the material above the iron core (see also Temaj et al. 2024); Column (12): Explosion
+energy Eexp ; Column (13): Predicted final fate of the star; Column (14): Gravitational compact remnant mass, Mrm, grav . Both the
+predicted final fate, Eexp , and Mrm, grav are derived from the semi-analytic model developed by Müller et al. (2016).
+
+
+
+
+                                                                                                               Article number, page 13 of 16
+                                                   A&A proofs: manuscript no. aa58335-25
+
+Appendix B: The impact of metallicity on pre-SN core structure
+
+
+
+
+                                                               20                                                          20
+
+
+
+
+                                                                         ]
+
+
+
+
+                                                                                                                                     ]
+                                                                   |) ergg 1 s 1
+
+
+
+
+                                                                                                                               |) ergg 1 s 1
+                                                               15                                                          15
+                                                               10                                                          10
+
+
+
+
+                                                                         [
+
+
+
+
+                                                                                                                                     [
+                                                               5                                                           5
+                                                               0                                                           0
+
+
+
+
+                                                                   )log10(| nuc
+
+
+
+
+                                                                                                                               )log10(| nuc
+                                                                 5                                                           5
+                                                                 10                                                          10
+                                                                 15                                                          15
+
+
+                                                                   sign( nuc
+
+
+
+
+                                                                                                                               sign( nuc
+                                                                 20                                                          20
+                                                                 25                                                          25
+
+
+                                                               20                                                          20
+                                                                         ]
+
+
+
+
+                                                                                                                                     ]
+                                                                   |) ergg 1 s 1
+
+
+
+
+                                                                                                                               |) ergg 1 s 1
+                                                               15                                                          15
+                                                               10                                                          10
+                                                                         [
+
+
+
+
+                                                                                                                                     [
+                                                               5                                                           5
+                                                               0                                                           0
+                                                                   )log10(| nuc
+
+
+
+
+                                                                                                                               )log10(| nuc
+                                                                 5                                                           5
+                                                                 10                                                          10
+                                                                 15                                                          15
+                                                                   sign( nuc
+
+
+
+
+                                                                                                                               sign( nuc
+                                                                 20                                                          20
+                                                                 25                                                          25
+
+
+
+                                      i
+Fig. B.1. Same as Fig. 1, but for a MHe  = 15 M⊙ model with varying metallicities: upper-left panel (Z = 0.0088), upper-right panel (Z = 0.02),
+lower-left panel (Z = 0.03), and lower-right panel (Z = 0.04).
+
+
+
+
+Article number, page 14 of 16
+                                            Gang Long et al: Formation of Black Holes from He Stars
+
+Appendix C: The impact of convective overshooting on pre-SN core structure
+
+
+
+
+                                                                 20                                                            20
+
+
+
+
+                                                                           ]
+
+
+
+
+                                                                                                                                         ]
+                                                                     |) ergg 1 s 1
+
+
+
+
+                                                                                                                                   |) ergg 1 s 1
+                                                                 15                                                            15
+                                                                 10                                                            10
+
+
+
+
+                                                                           [
+
+
+
+
+                                                                                                                                         [
+                                                                 5                                                             5
+                                                                 0                                                             0
+
+
+
+
+                                                                     )log10(| nuc
+
+
+
+
+                                                                                                                                   )log10(| nuc
+                                                                   5                                                             5
+                                                                   10                                                            10
+                                                                   15                                                            15
+
+
+                                                                     sign( nuc
+
+
+
+
+                                                                                                                                   sign( nuc
+                                                                   20                                                            20
+                                                                   25                                                            25
+
+
+                                                                 20                                                            20
+                                                                           ]
+
+
+
+
+                                                                                                                                         ]
+                                                                     |) ergg 1 s 1
+
+
+
+
+                                                                                                                                   |) ergg 1 s 1
+                                                                 15                                                            15
+                                                                 10                                                            10
+                                                                           [
+
+
+
+
+                                                                                                                                         [
+                                                                 5                                                             5
+                                                                 0                                                             0
+                                                                     )log10(| nuc
+
+
+
+
+                                                                                                                                   )log10(| nuc
+                                                                   5                                                             5
+                                                                   10                                                            10
+                                                                   15                                                            15
+                                                                     sign( nuc
+
+
+
+
+                                                                                                                                   sign( nuc
+                                                                   20                                                            20
+                                                                   25                                                            25
+
+
+
+Fig. C.1. Same as Fig. 1, but for a MHei
+                                          = 15 M⊙ models with varying overshooting: upper-left panel ( fov = 0.0), upper-right panel ( fov = 0.01),
+lower-left panel ( fov = 0.016) and lower-right panel ( fov = 0.027).
+
+
+
+
+                                                                                                                    Article number, page 15 of 16
+                                                    A&A proofs: manuscript no. aa58335-25
+
+Appendix D: Electron degeneracy parameter
+
+
+
+
+                                                                                                                                   8
+
+
+
+
+                                                                                                                                        [degenracyparameter]
+                                                                                                                                   6
+                                                                                                                                   4
+                                                                                                                                   2
+                                                                                                                                   0
+                                                                                                                                       2
+                                                                                                                                       4
+                                                                                                                                       6
+                                                                                                                                       8
+                                                                                                                                       10
+                                                                                                                                   8
+
+
+
+
+                                                                                                                                        [degenracyparameter]
+                                                                                                                                   6
+                                                                                                                                   4
+                                                                                                                                   2
+                                                                                                                                   0
+                                                                                                                                       2
+                                                                                                                                       4
+                                                                                                                                       6
+                                                                                                                                       8
+                                                                                                                                       10
+                                                                                                                                   8
+
+
+
+
+                                                                                                                                        [degenracyparameter]
+                                                                                                                                   6
+                                                                                                                                   4
+                                                                                                                                   2
+                                                                                                                                   0
+                                                                                                                                       2
+                                                                                                                                       4
+                                                                                                                                       6
+                                                                                                                                       8
+                                                                                                                                       10
+                                                                                                                                   8
+
+
+
+
+                                                                                                                                        [degenracyparameter]
+                                                                                                                                   6
+                                                                                                                                   4
+                                                                                                                                   2
+                                                                                                                                   0
+                                                                                                                                       2
+                                                                                                                                       4
+                                                                                                                                       6
+                                                                                                                                       8
+                                                                                                                                       10
+
+
+
+
+Fig. D.1. Same as Fig. 5, but the color bar represents the dimensionless electron degeneracy parameter, as described in panel (d) of Fig. 1.
+
+
+
+
+Article number, page 16 of 16
+

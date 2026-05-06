@@ -1,0 +1,550 @@
+                                                 Draft version November 19, 2025
+                                                 Typeset using LATEX twocolumn style in AASTeX7
+
+
+
+
+                                                The Origin of the Mg-rich Supernova Remnant J0550–6823 and the Frequency of Similar Events in
+                                                                                  the Large Magellanic Cloud
+                                                        Yui Kuboike     ,1 Toshiki Sato ,1 Hiromasa Suzuki ,2 Kai Matsunaga                   ,3 Hiroyuki Uchida   ,3
+                                                                                  John P. Hughes ,4 and Paul P. Plucinsky 5
+                                                                                          1 Meiji University, Department of Physics
+                                                                                        2 University of Miyazaki,Faculty of Engineering
+                                                                                          3 Kyoto University, Department of Physics
+arXiv:2511.14126v1 [astro-ph.HE] 18 Nov 2025
+
+
+
+
+                                                                                  4 Rutgers University, Department of Physics and Astronomy
+                                                                                     5 Center for Astrophysics — Harvard & Smithsonian
+
+
+
+                                                                                                        ABSTRACT
+                                                          Shell burning and internal mixing in massive stars play an important role in setting the initial
+                                                       conditions for core-collapse supernova explosions. In the late stages of stellar evolution, intense shell
+                                                       burning can cause distinct convective regions to merge, fundamentally restructuring the stellar interior.
+                                                       Although such phenomena are difficult to observe directly, the observation of “Mg-rich” supernova
+                                                       remnants (SNRs) has recently emerged as a potential signature of these events. In this study, we
+                                                       reanalyze X-ray observations of J0550–6823, a SNR in the Large Magellanic Cloud (LMC) and a
+                                                       new candidate Mg-rich SNR. Our spectral analysis confirms a low Ne/Mg mass ratio of ≈1, and
+                                                       its classification as Mg-rich. By comparing the observational results with pre-supernova models, we
+                                                       suggest that the progenitor of J0550-6823 likely had an extended convective shell that reduces the
+                                                       Ne/Mg ratio prior to its explosion. Furthermore, we observe that ∼2–3 Mg-rich SNRs exist in the
+                                                       LMC, suggesting that ≲10–40% of massive stars in the LMC may have had an extended convective
+                                                       shell, similar to what we observed in J0550-6823. This fraction would be important for understanding
+                                                       the final stages of the evolution of massive stars and galactic chemical evolution.
+
+
+                                                       Keywords: Massive stars (732) — Stellar Structures(1631) — Supernove(1688) — Core Collapse su-
+                                                                 pernovae(304)
+
+                                                                 1. INTRODUCTION                                   the Si mass fraction (Figures 1(b) and (c)). Shell merg-
+                                                 Shell burning processes in the final days before core             ers can markedly alter the progenitor’s structure and
+                                               collapse play a crucial role in shaping the internal struc-         composition at the moment of explosion. Not limited
+                                               ture of massive stars (e.g., S. E. Woosley et al. 2002;             to shell mergers, similar extended convective shells in
+                                               T. Sukhbold & S. E. Woosley 2014), which is thought                 the final stages have also been suggested in scenarios
+                                               to significantly affect the initial conditions of the super-        such as “Ne-shell intrusion” (T. Sato et al. 2025a). In
+                                               nova explosion (e.g., B. Müller et al. 2016; Y. Suwa et al.        the Ne-shell intrusion case, the Ne-burning shell merges
+                                               2016; T. Ertl et al. 2016) and the chemical composition             into the outer layer. At this moment, the outer shell is
+                                               of supernovae (SNe) and their remnants (L. Dessart &                not a burning shell. Notably, three-dimensional hydro-
+                                               D. J. Hillier 2020; L. Dessart et al. 2021; K. Matsunaga            dynamic simulations suggest that such vigorous convec-
+                                               et al. 2024; T. Sato et al. 2025a,b). Among the late-stage          tive shells may promote successful supernova explosions
+                                               evolution, the so-called “shell merger”, in which an inner          by modifying the core compactness (T. Sato et al. 2025a;
+                                               O-burning shell dynamically mixes with an overlying C-              E. Laplace et al. 2025) and seeding perturbations in the
+                                               burning shell, has recently garnered significant attention          stellar interior (S. M. Couch & C. D. Ott 2013; R. Bollig
+                                               (e.g., W. D. Arnett & C. Meakin 2011; N. Yadav et al.               et al. 2021). Despite their theoretical implications, di-
+                                               2020; E. Laplace et al. 2021; F. Rizzuti et al. 2024).              rect observational evidence for such active shell burning
+                                                 As illustrated in Figure 1 (a), Si synthesized in the             process remains scarce.
+                                               O-burning shell can be transported outward into the                   Recently, “Mg-rich” Supernova Remnants (SNRs)
+                                               C/Ne-burning shell, leading to a substantial increase in            have been proposed as potential remnants of progenitors
+2
+
+
+
+
+Figure 1. (a) The internal structure of a star, which experiences an active shell burning process. (b) Mass fraction profile of
+the 15.05 M⊙ model. The Si mass fraction that reaches 0.05 is shown by the dashed line. (c) Same as (b), but for the 15.06
+M⊙ model. The models are taken from T. Sukhbold et al. (2018).
+
+that experienced shell mergers (T. Sato et al. 2025a; K.           However, the remnant’s faint X-ray emission makes its
+Matsunaga et al. 2024). In most SNRs, the Mg abun-                 spectrum highly sensitive to background-subtraction un-
+dance is substantially lower than that of Ne; for example,         certainties, complicating robust abundance determina-
+the solar Mg/Ne mass ratio is 0.37–0.56 (E. Anders &               tions. Consequently, the designation of J0550–6823 as
+N. Grevesse 1989; M. Asplund et al. 2009). By contrast,            an Mg-rich SNR remains tentative. Moreover, no di-
+Mg-rich SNRs exhibit Mg/Ne ratios near unity or higher             rect comparison with pre-supernova models has yet been
+(e.g., S. Park et al. 2003; S. Park & J. Bhalerao 2017),           undertaken, and the potential connection to late-stage
+classifying them as Mg-rich (or Ne-poor). This enhance-            stellar processes is still unresolved.
+ment is naturally explained if active late-stage shell pro-           In this study, we use an improved background mod-
+cesses efficiently burn the ingested Ne, thereby increas-          eling tool to robustly confirm the elemental abundances
+ing the Mg/Ne ratio (K. Matsunaga et al. 2024; T. Sato             of J0550–6823 and investigate the possibility of a pre-
+et al. 2025a). The Large Magellanic Cloud (LMC) rem-               supernova shell-merger event for this remnant. We also
+nant N49B was the first identified Mg-rich SNR in the              estimate the Mg-rich fraction of supernovae in the LMC
+Magellanic Clouds (S. Park et al. 2003), and recent work           that may have undergone active shell burning process
+has linked its ejecta composition to a shell-merger or             such as shell mergers and discuss the implications for
+similar event (T. Sato et al. 2025a). Accordingly, sys-            galactic chemical evolution. C. Ritter et al. (2018)
+tematic observations of Mg-rich SNRs offer a promising             demonstrated that shell mergers can dramatically en-
+avenue to probe extended shell convection activity and             hance the production of odd-Z elements such as K, Sc,
+the late-stage evolution of massive stars.                         and Cl, which are otherwise underproduced in stan-
+   J0550–6823 is a relatively old SNR in the LMC, pre-             dard stellar evolution. If about 50% of massive stars
+viously investigated by F. D. Seward & S. D. Points                experience a shell merger, this process could resolve
+(2023). Its outer shell exhibits an elliptical morphol-            the long-standing discrepancy between observed odd-Z
+ogy with angular dimensions of 4.′ 9 × 6.′ 1, ranking it           abundances and theoretical predictions (C. Kobayashi
+among the largest known remnants in the LMC (total                 et al. 2006, 2020; N. Prantzos et al. 2018). Consequently,
+size ∼ 71 × 88 pc). X-ray spectra reveal strong emission           quantitatively determining the fraction of LMC SNRs
+lines from O, Ne, Mg, and Fe, and modeling of these lines          that have undergone shell mergers is essential for under-
+indicates a Type II explosion from a progenitor star ex-           standing the chemical enrichment history of the LMC’s
+ceeding 20 M⊙ (F. D. Seward & S. D. Points 2023). In               interstellar medium.
+particular, its Mg-rich composition stands out as one of
+its important characteristics. Thus, this remnant could            2. OBSERVATION AND SPECTRUM FITTING OF
+be the second candidate as an Mg-rich SNR in the LMC                                        J0550–6823
+and is important for understanding the frequency of stel-
+                                                                     Chandra ACIS has observed the LMC SNR J0550–
+lar activity such as Ne-shell intrusion or shell merger.
+                                                                   6823 on 2003 October 2 with a total exposure of 67.48
+                                                                                                                           3
+
+
+
+
+                                                                  Figure 3. X-ray spectrum extracted from the rectangle re-
+Figure 2. Chandra X-ray image of J0550–6823. The red              gion in Fig. 2 to model the sky background. The orange line
+ellipse shows the outer shell, which was used as the extraction   represents the plasma model for the foreground emission.
+region for spectral analysis. The rectangle region is used for    The blue line represents the background spectrum generated
+modeling sky background.                                          by mkacispback. The red line represents the final result of
+                                                                  the background model with photon absorption model, fore-
+                                                                  ground emission model (phabs × apec), and the acispback
+ks. This paper employs a list of Chandra datasets, ob-
+                                                                  model.
+tained by the Chandra X-ray Observatory, contained
+in DOI:10.25574/cdc.472. We here reprocessed the
+                                                                     We modeled the sky background emission which
+event file of this observation using CIAO version 4.16
+                                                                  was considered foreground emission using the spectrum
+and CalDB 4.11.2. Figure 2 shows the Chandra X-ray
+                                                                  taken from the rectangle region in Figure 2. The back-
+image of J0550–6823 using 0.5–10 keV. We extracted the
+                                                                  ground spectrum was fitted with an absorbed plasma
+X-ray spectrum from the ellipse red region in the figure.
+                                                                  emission model (phabs×apec in Xspec) as shown in Fig-
+As explained in Section 1, it is difficult to visualize the
+                                                                  ure 3, while the particle-induced background was simul-
+entire J0550–6823 region due to its weak X-ray emission
+                                                                  taneously modeled. We found that a low-temperature
+from the remnant, making its boundaries ambiguous.
+                                                                  plasma model with collisional ionization equilibrium
+  In bright SNR observations, subtracting the back-
+                                                                  (kTe = 0.22 keV) reproduces the spectrum well. We
+ground spectrum from a nearby blank region is suffi-
+                                                                  assumed that this emission is uniformly present within
+cient for spectral analysis. However, in the case of faint
+                                                                  the field of view of this observation and incorporated it
+and diffuse sources like J0550–6823, the contribution of
+                                                                  as the sky background model in the subsequent analysis.
+the background emission becomes significant compared
+                                                                     After modeling the sky and particle-induced back-
+to the source signal, leading to a lower signal-to-noise
+                                                                  ground, we use these for the spectral analysis of J0550–
+ratio. As a result, the derived spectral properties can
+                                                                  6823. The normalization of the sky background model
+be sensitive to the choice of the background extrac-
+                                                                  was scaled by the ratio of the background to source ex-
+tion region. In particular, the particle-induced back-
+                                                                  traction areas and applied to the source region of J0550–
+ground is dominant in this observation (see Figures 3
+                                                                  6823. This allowed us to incorporate the background
+and 4), and its contribution also varies within the CCD
+                                                                  properties into the spectral analysis of the source. We
+chip. To address this issue, we utilize the Chandra ACIS
+                                                                  fitted the X-ray spectrum with an absorbed foreground
+tool "mkacispback", which models the particle-induced
+                                                                  emission and non-equilibrium ionization plasma model
+background based on detector coordinates and time,
+                                                                  (phabs × (apec + vnei) in Xspec), as shown in Figure 4.
+achieving residuals within ≤ 10% (H. Suzuki et al. 2021;
+                                                                     The best-fit parameters are summarized in Ta-
+H. Suzuki 2021). By accounting for both spatial and
+                                                                  ble 1. As a result, we confirmed a Mg-rich compo-
+temporal variations of the background, this tool enables
+                                                                  sition in the remnant, where the Mg abundance is
+more accurate modeling of the background spectrum.
+                                                                  (Mg/H)/(Mg/H)⊙ ≳ 1 even in different fitting condi-
+Thus, we constructed a spectral model for the particle-
+                                                                  tions. In particular, when compared with Ne, which is
+induced background within the source region (the ellipse
+                                                                  produced in the same region as Mg, the results indicate
+region in Figure 2) using this tool in our study.
+                                                                  that the Mg abundance is more than twice the solar ra-
+4
+
+                                  Table 1. The best-fit parameters of the spectral fittings.
+                    −3
+            τ [s · cm ]                       (a) 5.00 × 1010   (b) 1.00 × 1011   (c) 5.00 × 1011   (d) 1.00 × 1012
+            ke T [keV]                          0.51 ± 0.01       0.41 ± 0.01       0.32 ± 0.01       0.30 ± 0.01
+            (O/H)/(O/H)⊙                        0.37 ± 0.01       0.25 ± 0.01        0.45+0.05
+                                                                                         −0.07         0.63+0.36
+                                                                                                           −0.06
+            (Ne/H)/(Ne/H)⊙                      0.58 ± 0.02       0.42 ± 0.02        0.51+0.02
+                                                                                         −0.06         0.63+0.23
+                                                                                                           −0.05
+            (Mg/H)/(Mg/H)⊙                       1.12+0.07
+                                                     −0.12        0.92 ± 0.06        1.18+0.36
+                                                                                         −0.09         1.58+0.83
+                                                                                                           −0.27
+            (Si/H)/(Si/H)⊙                      0.64 ± 0.19        0.63+0.19
+                                                                       −0.18         1.21+0.32
+                                                                                         −0.30         1.77+0.55
+                                                                                                           −0.45
+            (Fe/H)/(Fe/H)⊙                       0.15+0.01
+                                                     −0.02        0.10 ± 0.01        0.11+0.03
+                                                                                         −0.01         0.14+0.07
+                                                                                                           −0.03
+            Redshift [10−3 ]                     1.90+0.02
+                                                     −0.20         1.85+0.03
+                                                                       −0.22         8.13+0.25
+                                                                                         −0.33         8.26+0.24
+                                                                                                           −0.37
+                      −18 R
+            norm [ 10
+                    4πD 2
+                            ne nH dV cm−5 ]      3.10+0.27
+                                                     −0.14         6.16+0.08
+                                                                       −0.10         9.20+0.11
+                                                                                         −0.10         8.68+1.17
+                                                                                                           −2.41
+             2
+            χ /d.o.f                            464.42/384        462.68/384        449.55/384        444.71/384
+            Mass ratios∗
+            MNe /MMg                             1.40+0.11
+                                                     −0.16       1.22 ± 0.10        1.15+0.36
+                                                                                        −0.17          1.07+0.69
+                                                                                                           −0.19
+            MSi /MMg                             0.62+0.19
+                                                     −0.20        0.73+0.23
+                                                                      −0.22         1.10+0.41
+                                                                                        −0.29          1.21+0.73
+                                                                                                           −0.37
+         ∗ The solar values of E. Anders & N. Grevesse (1989) were used to estimate Si/Mg and Ne/Mg mass ratios.
+
+tio. Here, to fit the spectrum, the elemental abundances               In young supernova remnants, both shocked interstel-
+were fixed at 0.3 times the solar values, representative            lar medium (ISM) components and ejecta components
+of the LMC metallicity (F. D. Seward & S. D. Points                 heated by the reverse shock are present. However, in
+2023), for all elements except for He (set to 1.0 solar), S         older remnants like the one studied here, both plasma
+(tied to the abundance of Si), and those explicitly listed          components are likely to have cooled and mixed, mak-
+in Table 1, which were allowed to vary freely. Follow-              ing them difficult to distinguish through spectral fitting.
+ing F. D. Seward & S. D. Points (2023), the absorbing               Nevertheless, since multi-temperature structures can af-
+column density was fixed at NH = 0.16 × 1022 cm−2 for               fect the determination of abundance ratios, we investi-
+all spectral fits. Even if we assume a redshift equivalent          gated their impact. We tested the addition of a low-
+to the velocity of the LMC (R. P. van der Marel et al.              temperature (0.2 keV) ISM component by adding an
+2002), the conclusion remains unchanged. Uncertain-                 apec model and found that the Ne/Mg ratio increased
+ties for each parameter are quoted at the 1σ confidence             by 18%, while the Si/Mg ratio decreased by 28%. This
+level and account for possible variations in the other free         change arises from a shift in the plasma temperature of
+parameters. Due to the limited photon statistics, it is             the ejecta component, as a higher temperature increases
+difficult to determine the ionization state from spectral           the emissivity of the Si Heα line. Therefore, such multi-
+fitting; however, when treating the ionization timescale            temperature effects may represent a source of systematic
+τ [s · cm−3 ] as a free parameter, we obtained values ex-           uncertainty in our analysis. On the other hand, the high
+ceeding 1 × 1013 cm−3 s. In the analysis, the ionization            Mg abundance is robust even when accounting for this
+timescale was varied in four steps across the model grid            effect.
+to investigate its influence on the results. We here as-
+sume that the timescale of 1×1012 [s·cm−3 ] is consistent                                 3. DISCUSSION
+with being ionization equilibrium (R. K. Smith & J. P.
+Hughes 2010), and the result of this ionization timescale             Our analysis of Chandra ACIS data for J0550–6823
+shows the lowest χ2 value. Thus, we use it as the best-fit          confirms that this remnant exhibits a Ne/Mg mass ra-
+result. The Si abundance slightly varies depending on               tio of ≈1, suggesting an Mg-rich (Ne-poor) composition
+the difference in the ionization timescale. On the other            (Table 1). This ratio is significantly different from those
+hand, a low ionization age of ≲ 1011 cm s−1 would not be            observed in typical core-collapse SNRs and from the av-
+reasonable for this old core-collapse SNR (H. Yamaguchi             erage composition found in the LMC of ≈3. These char-
+et al. 2014, ; see also section 3.1). The Si line at ∼1.8           acteristics suggest that the progenitor of J0550–6823
+keV is composed of the emissions from the remnant and               may have experienced a late-stage active shell burn-
+background. Without the model emission from highly                  ing event shortly before explosion (K. Matsunaga et al.
+ionized Si, we see residuals around the Si line structure.          2024; T. Sato et al. 2025a). In the following discussion,
+This allows us to estimate the Si abundance of the rem-             we examine this interpretation from two perspectives:
+nant, although higher statistics or spectral resolutions            (1) by comparing the observed abundance ratios with
+are needed to robustly separate these two.                          predictions from one-dimensional pre-supernova models
+                                                                    to evaluate the plausibility of a late-stage active shell
+                                                                                                                      5
+
+                                                                Shell-merger models occupy the lower-right region of
+                                                             the diagram, indicating Si- and Mg-rich compositions.
+                                                             In this diagram, the observed values of J0550–6823 are
+                                                             located at the left end of the distribution of the shell-
+                                                             merger model (see green data), which is not a perfect
+                                                             match. F. D. Seward & S. D. Points (2023) estimated
+                                                             the mass of the ejecta components by subtracting the
+                                                             ISM contributions (see Table 5 in their paper). They
+                                                             found that while the Si/Mg ratio in the ejecta remained
+                                                             unchanged even after the correction, the Ne/Mg ra-
+                                                             tio decreased, implying that the remnant was originally
+                                                             more Mg-rich. The fact that the Si/Mg mass ratio does
+                                                             not change even after the correction may suggest that
+                                                             there is little mixing of the O-burning products. There-
+Figure 4.      X-ray spectrum of the Mg-rich ejecta of       fore, the expansion of the Ne shell inside the progenitor
+J0550–6823 and the best-fit model with τ = 1.0×1012 s cm−3
+                                                             star (i.e., Ne-shell intrusion) may provide a better expla-
+(top panel). The red line represents the best-fit plasma
+model, which includes the effect of photon absorption
+                                                             nation for the observations. At the very least, the con-
+(phabs × vnei). The black line represents the background     firmed Mg-rich composition is likely indicative of some
+spectrum generated by "mkacispback". The black dashed        form of stellar activity.
+line represents the sky background model. The blue line         The observation point is also positioned near the or-
+represents the sum of all model components. The bottom       ange data points that are not expected to explode. Ac-
+panel represents the residuals of the fit.                   cording to T. Sato et al. (2025a), these are models of
+                                                             stars with initial masses in the ∼21–22 M⊙ mass range,
+burning origin, and (2) by considering the broader im-       in which the Ne-burning shell has merged with the over-
+plications for the stellar population of the LMC, where      lying convection zone. This model is a similar event
+we estimate the fraction of massive stars that may un-       to the Ne-shell intrusion seen in low-mass progenitors.
+dergo similar evolutionary processes.                        However, in the Ertl criterion (T. Ertl et al. 2016), these
+                                                             models are predicted to have difficulty exploding due
+            3.1. The origin of J0550–6823                    to their high core compactness (e.g., T. Sukhbold & S.
+                                                             Adams 2020). The Ertl criterion is sometimes inconsis-
+   To investigate the origin of J0550–6823’s Mg-rich com-
+                                                             tent with numerical simulations (T. Wang et al. 2022),
+position, we compare its observed Ne/Mg and Si/Mg
+                                                             so these progenitors also retain the potential to explode.
+mass ratios to a set of one-dimensional pre–supernova
+                                                             Whether or not these stars explode, active shell burning
+models in Figure 5 (T. Sukhbold et al. 2018). Here, we
+                                                             processes that promote Ne burning, such as shell merg-
+introduce a simple diagnostic we call the “Si radius”,
+                                                             ers, are necessary to reproduce the Mg-rich composition
+Mr (Si = 0.05): the maximum enclosed mass coordi-
+                                                             in this remnant.
+nate at which the Si mass fraction exceeds 0.05 (Fig-
+                                                                The observed elements may have been diluted by mix-
+ure 1a). In models that undergo a shell merger, Si syn-
+                                                             ing with interstellar medium during the long time after
+thesized in the inner O-burning shell is mixed outward,
+                                                             the explosion. F. D. Seward & S. D. Points (2023) sug-
+yielding a larger Mr (Si = 0.05) (Figure 1). Therefore,
+                                                             gested that the age of this supernova remnant is ≈100
+stars that have experienced a shell merger are brighter
+                                                             kyr using the same analysis based on a study by R. A.
+(whiter) in color. The majority of the O-rich ejecta
+                                                             Chevalier (1974). We also estimated the age using the
+should have been synthesized during hydrostatic nucle-
+                                                             analytic solution by D. F. Cioffi et al. (1988), which
+osynthesis in stellar evolution, and its elemental com-
+                                                             describes the evolution of a remnant in the radiative
+position is not so sensitive to explosive nucleosynthesis
+                                                             phase, and obtained an age of ≈160 kyr. Here, we used
+(e.g., S. E. Woosley & T. A. Weaver 1995; F.-K. Thiele-
+                                                             parameter values equivalent to those used in previous
+mann et al. 1996). Also, our previous research has dis-
+                                                             studies: a remnant radius of 40 pc, an ambient density
+cussed that the influence of explosive nucleosynthesis is
+                                                             of 0.4 cm−3 , and an explosion energy of 1×1051 erg.
+sufficiently small (T. Sato et al. 2025a). Thus, we just
+                                                             Thus, this remnant can be well explained as one that
+calculated these mass ratios in the O-rich layer of pre-
+                                                             has swept up the ISM over a long period of time and is
+supernova models with a high oxygen mass fraction >
+                                                             now in the radiative phase. In addition, the total mass
+0.4, assuming that the effects of explosive nucleosynthe-
+                                                             of X-ray emitting gas is estimated to be ∼200–400 M⊙
+sis can be ignored.
+6
+
+
+
+
+Figure 5. Si/Mg-Ne/Mg mass ratios of pre-supernova models and those of J0550–6823 (green plot). The green diamond marker
+shows the result with τ = 1.00 × 1012 [s · cm−3 ] that we use as the best-fit result (See Table 1). The colored data points are
+derived from 1D pre-supernova models, with different markers used to represent each progenitor mass range (T. Sukhbold et al.
+2018). The radius of the Si-rich layer in the progenitor, Mr (Si=0.05), is shown in color. Using BH-NS separation curve for the
+w18.0 calibration that do not explode are identified and shown as colored dots (T. Ertl et al. 2016). The SNRs of the LMC for
+which previous studies have shown the composition of Si , Ne, and Mg abundances are also plotted on the figure; N63A is from
+mean abundance of J. S. Warren et al. (2003), B0453-685 is from vpshock model of F. Haberl et al. (2012), SN1987A is from
+vpshock W00 of K. Heng et al. (2008), N49 is from H. Uchida et al. (2015), and N23 and N49B obtained values from P. Maggi
+et al. (2016). The LMC average mass ratio is shown in blue marker (A. Schenck et al. 2016).
+
+(F. D. Seward & S. D. Points 2023), which is signifi-              abundance more precisely in the future. Our spectral
+cantly larger than the mass of a normal massive star.              analysis shows that the fitting with the highest τ has the
+Therefore, if the ejecta heated by the reverse shock and           lowest χ2 value (Table 1), and this result is consistent
+the material gathered by the front shock are mixed dur-            with the general trend that many core-collapse SNRs
+ing this long timescale, the composition ratio should be           show a large ionization age of > 1011 cm−3 s from an
+close to the average composition of the LMC. On the                early age (< 1,000 years) (H. Yamaguchi et al. 2014), so
+other hand, the observed Ne/Mg ratio is significantly              the high τ would be reasonable for the remnant. Thus,
+lower than the LMC value (Figure 5), supporting that               we conclude that the ionization timescale near the ion-
+it reflects the ejecta composition. Otherwise, the vicin-          ization equilibrium is realistic in the case of J0550–6823.
+ity of the remnant must have a biased composition.
+   To further constrain the properties of the progenitor                3.2. The rate of Mg-rich events in the LMC
+star, we need to determine the ionization state and Si              Quantifying how often massive stars undergo shell
+                                                                   mergers is essential for assessing their impact on super-
+                                                                                                                    7
+
+nova explosion conditions and the production of odd-Z       prevalence of shell mergers and their role in galactic
+elements. The discovery of J0550–6823 as a second con-      chemical evolution.
+firmed Mg-rich SNR in the LMC after N49B provides the         The current comparison with theoretical models is
+first empirical foundation for such estimates. In partic-   based on the massive star evolution calculations assum-
+ular, because the LMC has a lower metallicity than the      ing the solar composition by T. Sukhbold et al. (2018).
+Milky Way, the emission from the ejecta can be observed     In the low-metallicity environment of the LMC, stellar
+for a longer time than in SNRs within the Milky Way,        evolution can change and may lead to a different picture.
+making the SNRs in the LMC more suitable for the sys-       On the other hand, activities such as shell mergers are
+tematic studies. Of the 59 confirmed remnants in the        thought to depend on the central carbon mass fraction
+LMC, 31 are classified as core-collapse events (P. Maggi    (XC ) and the CO core mass (L. Roberti et al. 2025; E.
+et al. 2016), but only seven have published Ne, Mg and      Laplace et al. 2025), and effects such as binary inter-
+Si abundance measurements suitable for identifying a        actions and the 12 C(α, γ)16 O reaction rate may have a
+shell-merger signature (Figure 5).                          stronger impact than metallicity itself. In the future,
+   Within this subset, N49B and J0550–6823 exhibit low      more detailed theoretical modeling will be necessary to
+Ne/Mg ratios, supporting their classification as Mg-rich    explain the fraction of the Mg-rich SNRs in the LMC.
+SNRs and suggesting that they may be remnants of pro-
+genitors that underwent shell merger events. A third ob-             4. SUMMARY AND CONCLUSION
+ject, B0453–685, also shows a comparatively low Ne/Mg
+                                                               We have reanalyzed deep Chandra observations of the
+ratio, even though it has not yet been formally classi-
+                                                            LMC remnant J0550–6823 and confirmed that its ejecta
+fied as Mg-rich. This suggests it may represent an ad-
+                                                            exhibit an anomalously low Ne/Mg mass ratio of ≈1,
+ditional, as-yet unconfirmed merger candidate. Count-
+                                                            far below the LMC average of ≈3. By fitting the X-ray
+ing only N49B and J0550 yields an Mg-rich fraction of
+                                                            spectrum, we confirmed this Mg-rich (Ne-poor) compo-
+∼28% (2/7), which rises to ∼43% (3/7) if B0453–685 is
+                                                            sition across a physically plausible range of ionization
+included as a provisional candidate. Extrapolating to
+                                                            timescales. Comparing the observed Ne/Mg and Si/Mg
+all 31 core-collapse remnants gives a conservative lower
+                                                            ratios to a suite of one-dimensional pre–supernova mod-
+limit of ∼6% (2/31), or ∼10% (3/31) including B0453–
+                                                            els (T. Sukhbold et al. 2018), we find that only progen-
+685.
+                                                            itors which have experienced vigorous late-stage shell
+   It remains difficult to determine whether these fea-
+                                                            burning, such as a shell merger or Ne-shell intrusion,
+tures arise specifically from shell mergers or from other
+                                                            can reproduce the observed abundance pattern.
+processes such as Ne-shell intrusion. Even among Mg-
+                                                               Taken together with the previously known Mg-rich
+rich SNRs, not all may result from shell mergers. For
+                                                            remnant N49B, our census puts at least 6% (and perhaps
+example, if the merger is complete, Mg is produced by
+                                                            up to ∼40%) of core-collapse supernovae in the LMC
+Ne burning but also destroyed by O burning (L. Roberti
+                                                            among Mg-rich SNRs and it is possible that they have
+et al. 2025). In this case, even if a shell merger oc-
+                                                            experienced shell mergers or similar events. Such events
+curred, there may be remnants in which Mg-rich ejecta
+                                                            not only reshape the stellar structure and can facili-
+are not observed. Therefore, the occurrence rate of
+                                                            tate explosion by modifying the core compactness and
+Mg-rich SNRs does not necessarily reflect the true fre-
+                                                            seeding perturbations, but also boost the production of
+quency of shell mergers. If all of these remnants are
+                                                            odd-Z elements (K, Sc, Cl, P) that are otherwise under-
+indeed related to shell mergers, then although the in-
+                                                            produced in standard yields. If a comparable fraction
+ferred fraction is still below the ∼50% rate required to
+                                                            of massive stars in other environments undergoes shell
+reproduce the Galactic odd-Z trends suggested by C.
+                                                            mergers, this mechanism may help resolve longstanding
+Ritter et al. (2018), these findings clearly demonstrate
+                                                            discrepancies in galactic chemical evolution models, par-
+that shell mergers constitute a non-negligible channel
+                                                            ticularly the underabundance of K and Sc in the models
+for odd-Z element synthesis.
+                                                            (e.g., C. Kobayashi et al. 2006, 2020; N. Prantzos et al.
+   Figure 5 illustrates how confirmed mergers
+                                                            2018).
+(N49B, J0550–6823) occupy a distinct region of
+                                                               In the future, more sensitive X-ray spectroscopy (e.g.,
+the Ne/Mg–Si/Mg plane, whereas typical remnants
+                                                            with XRISM and Athena M. Tashiro et al. 2025; K. Nan-
+such as N63A lie in the standard locus. As upcoming
+                                                            dra et al. 2013) will help to measure the ionization age
+X-ray missions and deeper spectral analyses expand the
+                                                            and Si abundance more precisely. In addition, system-
+sample of well-measured SNRs, these fraction estimates
+                                                            atic surveys of Ne/Mg ratios in older, faint SNRs can
+can be refined, yielding stronger constraints on the
+                                                            better quantify the true shell-merger fraction. On the
+                                                            theoretical front, three-dimensional hydrodynamic sim-
+8
+
+ulations of marginal O–C shell interactions will illumi-                        ACKNOWLEDGMENTS
+nate the conditions under which mixing becomes nonlin-          We are grateful to Takaaki Tanaka and Natsuki Terano
+ear, and multi-dimensional progenitor models will refine        for valuable discussion. This work was supported by
+predictions for odd-Z and p-process yields (e.g., C. Rit-       the Japan Society for the Promotion of Science (JSPS)
+ter et al. 2018). Together, these efforts promise to trans-     KAKENHI grant No. JP23K13128. J.P.H., the George
+form Mg-rich SNRs into a new observational window on            A. and Margaret M. Downsbrough Professor of Astro-
+the final convective life of massive stars.                     physics, acknowledges the Downsbrough heirs and the
+                                                                estate of George Atha Downsbrough for their support.
+                                                                His Chandra research on supernova remnants was addi-
+                                                                tionally supported by SAO award number G01-22058X.
+                                                                We thank the anonymous referee for their careful review
+                                                                and constructive comments, which improved the clarity
+                                                                and quality of this manuscript.
+
+
+
+
+                                                         REFERENCES
+Anders, E., & Grevesse, N. 1989, GeoCoA, 53, 197,               Laplace, E., Schneider, F. R. N., & Podsiadlowski, P. 2025,
+ doi: 10.1016/0016-7037(89)90286-X                                A&A, 695, A71, doi: 10.1051/0004-6361/202451077
+Arnett, W. D., & Meakin, C. 2011, ApJ, 733, 78,                 Maggi, P., Haberl, F., Kavanagh, P. J., et al. 2016, A&A,
+  doi: 10.1088/0004-637X/733/2/78                                 585, A162, doi: 10.1051/0004-6361/201526932
+Asplund, M., Grevesse, N., Sauval, A. J., & Scott, P. 2009,     Matsunaga, K., Uchida, H., Enokiya, R., et al. 2024, ApJ,
+  ARA&A, 47, 481,                                                 970, 4, doi: 10.3847/1538-4357/ad5284
+  doi: 10.1146/annurev.astro.46.060407.145222                   Müller, B., Heger, A., Liptai, D., & Cameron, J. B. 2016,
+Bollig, R., Yadav, N., Kresse, D., et al. 2021, ApJ, 915, 28,     MNRAS, 460, 742, doi: 10.1093/mnras/stw1083
+  doi: 10.3847/1538-4357/abf82e                                 Nandra, K., Barret, D., Barcons, X., et al. 2013, arXiv
+Chevalier, R. A. 1974, ApJ, 188, 501, doi: 10.1086/152740         e-prints, arXiv:1306.2307, doi: 10.48550/arXiv.1306.2307
+Cioffi, D. F., McKee, C. F., & Bertschinger, E. 1988, ApJ,      Park, S., & Bhalerao, J. 2017, ApJ, 834, 189,
+                                                                  doi: 10.3847/1538-4357/834/2/189
+  334, 252, doi: 10.1086/166834
+                                                                Park, S., Hughes, J. P., Slane, P. O., et al. 2003, ApJL, 592,
+Couch, S. M., & Ott, C. D. 2013, ApJL, 778, L7,
+                                                                  L41, doi: 10.1086/377507
+  doi: 10.1088/2041-8205/778/1/L7
+                                                                Prantzos, N., Abia, C., Limongi, M., Chieffi, A., &
+Dessart, L., & Hillier, D. J. 2020, A&A, 642, A33,
+                                                                  Cristallo, S. 2018, MNRAS, 476, 3432,
+  doi: 10.1051/0004-6361/202038148
+                                                                  doi: 10.1093/mnras/sty316
+Dessart, L., Hillier, D. J., Sukhbold, T., Woosley, S. E., &
+                                                                Ritter, C., Andrassy, R., Côté, B., et al. 2018, MNRAS,
+  Janka, H. T. 2021, A&A, 652, A64,
+                                                                  474, L1, doi: 10.1093/mnrasl/slx126
+  doi: 10.1051/0004-6361/202140839
+                                                                Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, MNRAS,
+Ertl, T., Janka, H. T., Woosley, S. E., Sukhbold, T., &
+                                                                  533, 687, doi: 10.1093/mnras/stae1778
+  Ugliano, M. 2016, ApJ, 818, 124,
+                                                                Roberti, L., Pignatari, M., Brinkman, H. E., et al. 2025,
+  doi: 10.3847/0004-637X/818/2/124
+                                                                  A&A, 698, A216, doi: 10.1051/0004-6361/202554461
+Haberl, F., Filipović, M. D., Bozzetto, L. M., et al. 2012,    Sato, T., Matsunaga, K., Sawada, R., et al. 2025a, ApJ,
+  A&A, 543, A154, doi: 10.1051/0004-6361/201218971                984, 185, doi: 10.3847/1538-4357/adc68d
+Heng, K., Haberl, F., Aschenbach, B., & Hasinger, G. 2008,      Sato, T., Matsunaga, K., Uchida, H., et al. 2025b, ApJ,
+  ApJ, 676, 361, doi: 10.1086/526517                              990, 103, doi: 10.3847/1538-4357/aded14
+Kobayashi, C., Karakas, A. I., & Lugaro, M. 2020, ApJ,          Schenck, A., Park, S., & Post, S. 2016, AJ, 151, 161,
+ 900, 179, doi: 10.3847/1538-4357/abae65                          doi: 10.3847/0004-6256/151/6/161
+Kobayashi, C., Umeda, H., Nomoto, K., Tominaga, N., &           Seward, F. D., & Points, S. D. 2023, ApJ, 950, 74,
+ Ohkubo, T. 2006, ApJ, 653, 1145, doi: 10.1086/508914             doi: 10.3847/1538-4357/acc656
+Laplace, E., Justham, S., Renzo, M., et al. 2021, A&A, 656,     Smith, R. K., & Hughes, J. P. 2010, ApJ, 718, 583,
+  A58, doi: 10.1051/0004-6361/202140506                           doi: 10.1088/0004-637X/718/1/583
+                                                                                                                      9
+
+Sukhbold, T., & Adams, S. 2020, MNRAS, 492, 2578,           Uchida, H., Koyama, K., & Yamaguchi, H. 2015, ApJ, 808,
+  doi: 10.1093/mnras/staa059                                  77, doi: 10.1088/0004-637X/808/1/77
+Sukhbold, T., & Woosley, S. E. 2014, ApJ, 783, 10,          van der Marel, R. P., Alves, D. R., Hardy, E., & Suntzeff,
+  doi: 10.1088/0004-637X/783/1/10                             N. B. 2002, AJ, 124, 2639, doi: 10.1086/343775
+                                                            Wang, T., Vartanyan, D., Burrows, A., & Coleman, M.
+Sukhbold, T., Woosley, S. E., & Heger, A. 2018, ApJ, 860,
+                                                              S. B. 2022, MNRAS, 517, 543,
+  93, doi: 10.3847/1538-4357/aac2da
+                                                              doi: 10.1093/mnras/stac2691
+Suwa, Y., Yamada, S., Takiwaki, T., & Kotake, K. 2016,
+                                                            Warren, J. S., Hughes, J. P., & Slane, P. O. 2003, ApJ, 583,
+  ApJ, 816, 43, doi: 10.3847/0004-637X/816/1/43
+                                                              260, doi: 10.1086/345078
+Suzuki, H. 2021, Zenodo, doi: 10.5281/zenodo.17210106       Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Rev.
+Suzuki, H., Plucinsky, P. P., Gaetz, T. J., & Bamba, A.       Mod. Phys., 74, 1015, doi: 10.1103/RevModPhys.74.1015
+  2021, A&A, 655, A116,                                     Woosley, S. E., & Weaver, T. A. 1995, ApJS, 101, 181,
+  doi: 10.1051/0004-6361/202141458                            doi: 10.1086/192237
+Tashiro, M., Kelley, R., Watanabe, S., et al. 2025, PASJ,   Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+  doi: 10.1093/pasj/psaf023                                   A. 2020, ApJ, 890, 94, doi: 10.3847/1538-4357/ab66bb
+Thielemann, F.-K., Nomoto, K., & Hashimoto, M.-A. 1996,     Yamaguchi, H., Badenes, C., Petre, R., et al. 2014, ApJL,
+                                                              785, L27, doi: 10.1088/2041-8205/785/2/L27
+  ApJ, 460, 408, doi: 10.1086/176980
+

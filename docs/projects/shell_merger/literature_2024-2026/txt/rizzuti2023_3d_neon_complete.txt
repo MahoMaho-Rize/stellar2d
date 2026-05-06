@@ -1,0 +1,1101 @@
+                                               MNRAS 000, 1–12 (2023)                                                Preprint 24 May 2023                Compiled using MNRAS LATEX style file v3.0
+
+
+
+
+                                               3D stellar evolution: hydrodynamic simulations of a complete burning
+                                               phase in a massive star
+                                               F. Rizzuti1★ , R. Hirschi1,2 , W. D. Arnett3 , C. Georgy4 , C. Meakin5 , A. StJ. Murphy6 , T. Rauscher7,8
+                                               and V. Varma1
+                                               1 Astrophysics Group, Lennard-Jones Laboratories, Keele University, Keele ST5 5BG, UK
+                                               2 Kavli IPMU (WPI), University of Tokyo, 5-1-5 Kashiwanoha, Kashiwa 277-8583, Japan
+                                               3 Steward Observatory, University of Arizona, 933 N. Cherry Avenue, Tucson AZ 85721, USA
+arXiv:2305.13912v1 [astro-ph.SR] 23 May 2023
+
+
+
+
+                                               4 Geneva Observatory, Geneva University, CH-1290 Sauverny, Switzerland
+                                               5 Pasadena Consulting Group, 1075 N Mar Vista Ave, Pasadena, CA 91104 USA
+                                               6 School of Physics and Astronomy, University of Edinburgh, Edinburgh EH9 3FD, UK
+                                               7 Department of Physics, University of Basel, Switzerland
+                                               8 Centre for Astrophysics Research, University of Hertfordshire, UK
+
+
+
+
+                                               Accepted 2023 May 22. Received 2023 May 17; in original form 2023 March 25
+
+
+
+                                               ABSTRACT
+                                               Our knowledge of stellar evolution is driven by one-dimensional (1D) simulations. 1D models, however, are severely limited
+                                               by uncertainties on the exact behaviour of many multi-dimensional phenomena occurring inside stars, affecting their structure
+                                               and evolution. Recent advances in computing resources have allowed small sections of a star to be reproduced with multi-D
+                                               hydrodynamic models, with an unprecedented degree of detail and realism. In this work, we present a set of 3D simulations of a
+                                               convective neon-burning shell in a 20 M⊙ star run for the first time continuously from its early development through to complete
+                                               fuel exhaustion, using unaltered input conditions from a 321D-guided 1D stellar model. These simulations help answer some
+                                               open questions in stellar physics. In particular, they show that convective regions do not grow indefinitely due to entrainment
+                                               of fresh material, but fuel consumption prevails over entrainment, so when fuel is exhausted convection also starts decaying.
+                                               Our results show convergence between the multi-D simulations and the new 321D-guided 1D model, concerning the amount of
+                                               convective boundary mixing to include in stellar models. The size of the convective zones in a star strongly affects its structure
+                                               and evolution, thus revising their modelling in 1D will have important implications for the life and fate of stars. This will thus
+                                               affect theoretical predictions related to nucleosynthesis, supernova explosions and compact remnants.
+                                               Key words: convection - hydrodynamics - nuclear reactions, nucleosynthesis, abundances - stars: evolution –stars: interiors –
+                                               stars: massive
+
+
+
+                                               1 INTRODUCTION                                                               2016; Burrows & Vartanyan 2021). Unfortunately, these simulations
+                                                                                                                            are computationally very expensive, requiring millions of core-hours
+                                               To have good understanding and reliable predictions of the evolution
+                                                                                                                            to simulate hours of stellar evolution, so reproducing the evolutionary
+                                               and properties of stars, researchers have developed stellar evolution
+                                                                                                                            timescales has so far been inaccessible. Hydrodynamic simulations
+                                               models that can follow the life cycle of an entire star from birth
+                                                                                                                            of stellar interiors mostly focus on reproducing turbulent convection
+                                               to death (e.g. Heger & Woosley 2002; Paxton et al. 2011; Ekström
+                                                                                                                            and mixing between layers (known as “convective boundary mixing”,
+                                               et al. 2012). However, there are many physical processes to take into
+                                                                                                                            CBM), resulting in the growth over time of convective zones due to
+                                               account that can affect the evolution and fate of a star. To make the
+                                                                                                                            entrainment of material from the stable regions into the convective
+                                               computation possible and affordable, stellar models rely on simpli-
+                                                                                                                            ones. This is particularly impactful for the late phases of massive
+                                               fications and assumptions, one of the most important of which is
+                                                                                                                            stars, where convective speeds are high and entrainment is vigorous,
+                                               spherical symmetry. An equally important though less easily envis-
+                                                                                                                            affecting the structure of the star and the end of its life. The very last
+                                               ages simplification is the treatment of convection in stars with mixing
+                                                                                                                            phases before the onset of iron core-collapse are often studied with
+                                               length theory (Böhm-Vitense 1958).
+                                                                                                                            multi-D hydrodynamic supernova simulations (Couch et al. 2015),
+                                               To improve and refine these prescriptions, sections of a star may be
+                                                                                                                            which recently started to take into account also the effects of rotation
+                                               studied in more detail employing multi-dimensional hydrodynamic
+                                                                                                                            (Yoshida et al. 2021; McNeill & Müller 2022) and magnetic fields
+                                               models, that can realistically reproduce complex physical processes
+                                                                                                                            (Varma & Müller 2021) on the convective motions.
+                                               without using any of the prescriptions of the 1D case (e.g. José &
+                                                                                                                            CBM is important also for the convective cores of main-sequence
+                                               Hernanz 1998; Asplund et al. 2009; Lentz et al. 2015; Janka et al.
+                                                                                                                            stars, with implications for the stellar lifetime and type of remnant
+                                                                                                                            (Kaiser et al. 2020), but here the convective velocities are much
+                                               ★ E-mail: f.rizzuti@keele.ac.uk                                              smaller and it is difficult for hydrodynamic models to simulate sig-
+
+                                               © 2023 The Authors
+ 2       Rizzuti et al.
+
+
+                                                                                                                        9                                          1012
+       20.0                                                1.8                                                                                     1.80
+                                                                                                                                                          M
+
+                                                           1.6
+       17.5                                                                                                             8
+                                                           1.4
+                                                                            Ne                                                                                     1011
+       15.0                                                1.2                                                                                     1.60 M
+                                                                                                                        7
+       12.5                                                1.0
+
+
+
+
+                                                                                                      radius (108 cm)
+                                                                 1.00      1.05           1.10                                                     1.40 M
+Mr/M
+
+
+
+
+       10.0                                                                                                             6                                          1010
+                                               Convective envelope
+        7.5                            He                                                                               5
+                                                                                                                                                   1.20 M
+
+
+        5.0                                                                                                                                        1.00 M          109
+
+                                               C                   Shell mergers                                        4                          0.80 M
+        2.5   H       He
+                                           C           O                                                                                           0.60 M
+        0.0                            C           O       Si
+                  6        4       2           0   ↑ 2              4      6         8           10
+                                                                                                                        3
+                                                                                                                            0         200000       400000
+                                                                                                                                                                   108
+
+
+                                            log10 (t * /yrs)                                                                    Age - ageref [s]
+
+
+ Figure 1. Left: Structure evolution diagram of the 20 M ⊙ 1D MESA input stellar model as a function of the time left until the predicted collapse of the star (in
+ years, log scale). In blue the convective zones, in green the CBM zones. The red arrow indicates the neon-burning shell the 3D simulations were started from.
+ Top right corner is a zoom-in on the neon-burning shell. Right: Zoom-in on the model used as initial conditions for the 3D simulations. The horizontal axis is
+ the time in seconds relative to the start of the 3D simulations. The vertical axis is the radius in units of 108 cm. In colour scale, the squared convective velocity.
+ Isomass contours are shown as black lines. The lines show that the shell undergoes significant expansion during the Ne-burning phase. The vertical red bar
+ indicates the start time and radial extent of the hydrodynamic simulations.
+
+
+ nificant time ranges without boosting the rate of energy release to                     correctly predicting the later evolution of the star, in particular the
+ accelerate the simulations (Meakin & Arnett 2007; see also the study                    pre-SN structure and the type of remnant.
+ in Baraffe et al. 2023), as is also often done for later phases (Cristini               We organize the paper as follows: in Section 2, we present the ini-
+ et al. 2017; Horst et al. 2021).                                                        tial conditions and general setup of the hydrodynamic simulations.
+ To validate results, it is crucial to investigate stellar convection in                 In Section 3, we analyse the results from the sets of simulations.
+ hydrodynamic simulations that do not modify the energy release.                         Finally, we discuss results and draw conclusions in Section 4.
+ Previous studies of 3D stellar simulations do alter the initial condi-
+ tions introducing some energy boosting, with some exceptions such
+ as the very late oxygen and silicon convective shells run for short
+ timescales (Couch & Ott 2015; Müller et al. 2017; Yoshida et al.                        2 METHODS
+ 2019). However Rizzuti et al. (2022), with their analysis of CBM
+ in a nominal-luminosity neon shell, revealed the presence of strong                     2.1 Initial conditions from a 1D stellar model
+ entrainment in the convective zone, confirming it is not an effect of                   To run a stellar hydrodynamic simulation, initial conditions need to
+ the boosting in luminosity but a natural result of the convectively                     be assumed from a 1D stellar evolution model that simulates the
+ unstable structure predicted by the 1D stellar models. This shows                       entire lifetime of the star, so that the realism of the simulated envi-
+ the importance of correctly implementing entrainment also in 1D                         ronment can be ensured. For this purpose, we used the MESA stellar
+ models, to ensure consistency and agreement between results. We                         evolution code (Paxton et al. 2011, 2013, 2018, 2019) to model the
+ call this approach “321D-guided”, referring to 1D stellar models that                   evolution of a 20 M ⊙ star of solar metallicity (𝑍 = 0.014 using
+ have been improved using the results of 3D hydrodynamic simula-                         the relative abundances of Asplund et al. 2009) from the pre-main-
+ tions.                                                                                  sequence until core-collapse. Mass loss rates were taken from the
+ It is worth noting though that the nominal-luminosity simulation of                     “Dutch” options. This includes several prescriptions: for O-stars the
+ Rizzuti et al. (2022) has been run only up to 3000 seconds, which                       mass loss rates from Vink et al. (2000, 2001) are used; if the star
+ while long enough for studying CBM with good statistics, is too                         enters the Wolf-Rayet stage, i.e. when the surface hydrogen mass
+ short to give any information on the evolution of the burning shell                     fraction drops below 0.4, the mass loss rate switches to the scheme
+ towards fuel exhaustion. Until now, multi-D studies have not inves-                     from Nugis & Lamers (2000); if 𝑇eff < 104 K, the empirical mass
+ tigated the interplay between entrainment and fuel exhaustion at the                    loss rate from de Jager et al. (1988) is used. The mixing-length-theory
+ end of a burning phase, leaving many questions about the fate of                        (MLT, Böhm-Vitense 1958) of convection describes the treatment of
+ convection unanswered. Specifically, does convection stop when the                      convection in our model (using the “Henyey” and “MLT++” options),
+ fuel is exhausted, or does the mixing of fresh fuel from entrained                      where we applied an efficiency of 𝛼MLT = 1.67 (Arnett et al. 2018).
+ material extend the convective growth indefinitely? This issue, on                      The Schwarzschild criterion defines the convective boundaries in our
+ which 1D models cannot give any information, has a pivotal role for                     model and as such we did not need to implement semi-convective
+
+ MNRAS 000, 1–12 (2023)
+                                                                                                                              3D stellar evolution                3
+
+Table 1. Properties of the 3D hydrodynamic simulations presented in this study: model name; resolution 𝑁𝑟 𝜃 𝜙 ; boosting factor of the driving luminosity 𝜖 ;
+starting 𝑡start and ending 𝑡end time of the simulation; time spent in the entrainment regime 𝜏entr ; convective turnover time 𝜏conv ; number of convective turnovers
+simulated in the entrainment regime 𝑛conv ; root-mean-square convective velocity 𝑣rms ; sonic Mach number Ma; number of CPU core-hours required to run the
+simulation.
+
+             name             𝑁𝑟 𝜃 𝜙         𝜖     𝑡start (s)   𝑡end (s)   𝜏entr (s)    𝜏conv (s)   𝑛conv   𝑣rms (cm s −1 )   Ma (10 −2 )    Mcore-h
+
+             r256e1        256 × 1282        1        0         60000      15000          155        96      3.29 × 106          0.83           2.08
+             r256e5        256 × 1282        5        0         29000       1500           59        25      6.55 × 106          1.76           0.89
+             r256e10       256 × 1282        10       0         19000        800           50        16      8.06 × 106          2.15           0.60
+             r256e50       256 × 1282        50       0         30000        150           30         5      1.31 × 107          3.48           0.96
+             r512e1        512 × 2562        1      16000       19000       3000          136        22      3.83 × 106          0.99           1.66
+             r512e5        512 × 2562        5        0          2000       1500           59        25      6.65 × 106          1.80           0.80
+             r512e10       512 × 2562        10       0          1000        800           49        16      8.28 × 106          2.23           0.50
+             r512e50       512 × 2562        50       0           490        150           30         5      1.34 × 107          3.61           0.20
+             r1024e1      1024 × 5122        1      10000       10400        400          127         3      3.26 × 106          0.84           2.88
+             r2048e1      2048 × 10242       1      10010       10030         20          113         0      3.85 × 106          0.99           2.02
+
+
+
+mixing. For convective boundary mixing, we included the exponen-                       temperature as seeds for convective instabilities. The grid we used is
+tial decaying diffusive model (Freytag et al. 1996; Herwig 2000)                       in spherical coordinates with a radial extension from 3.6 to 8.5 × 108
+with 𝑓ov = 0.05 for the top of convective cores and shells, and with                   cm and angular size of about 26◦ in both angular dimensions. Since
+ 𝑓ov = 0.01 for the bottom of convective shells (with 𝑓0 = 𝑓 for                       the radial size of the grid is roughly twice the size of the other dimen-
+both cases). We furthermore used the decline of the diffusion coeffi-                  sions, we used a resolution with double the cells in radius. Making
+cient near the boundary (Jones et al. 2017). The value of 𝑓ov = 0.05                   use of the spherical coordinates, gravity is recomputed at each time
+for the top boundaries is larger than the majority of published large                  step by integrating the mass inside each shell as function of the radius.
+grids of stellar models (e.g. using 𝛼ov = 0.1 in Ekström et al. 2012,                  This allows for contraction or expansion of the layers. A resolution
+𝛼ov = 0.335 in Brott, I. et al. 2011). The value of 0.05 is motivated                  of 256 × 1282 grid points in 𝑟, 𝜃 and 𝜙, respectively, was initially
+by the study of Scott et al. (2021), where values for 𝑓ov up to at least               used to explore the evolutionary timescale of the simulations, then
+0.05 for 20 M ⊙ and above (see caption of their Fig. 9 and references                  for this study we analysed a more detailed set of simulations with
+therein for the relation between 𝛼ov , 𝑓ov and entrainment) best repro-                resolution 512 × 2562 , and finally results have been validated with
+duce the observed width of the main sequence in the spectroscopic                      our most detailed simulations of 1024 × 5122 and 2048 × 10242 .
+HRD (Castro et al. 2014). For the bottom boundary, a CBM value                         Convection has been fuelled with nuclear energy. Nuclear burning
+of 1/5 the value of the top boundary is based on 3D hydrodynamic                       and nucleosynthesis are not always explicitly tracked in hydrody-
+simulations (Cristini et al. 2017, 2019; Rizzuti et al. 2022) finding                  namic simulations, because of the high computing cost: instead,
+that CBM is slower at the bottom boundary due to it being stiffer                      fixed heating profiles are often used to drive convection. Rizzuti
+and therefore harder to penetrate. Scott et al. (2021) also show that                  et al. (2022) included a simple energy generation routine of 5 iso-
+the amount of CBM should increase with initial mass since more                         topes (4 He, 16 O, 20 Ne, 24 Mg, 28 Si) to reproduce neon burning. We
+massive stars are much more luminous (𝐿 ∼ 𝑀 3 between 1 and 20                         have now extended this network to include 12 isotopes: n, p, 4 He,
+M ⊙ ) and thus our chosen value of 0.05 for 20 M ⊙ is consistent with                  12 C, 16 O, 20 Ne, 23 Na, 24 Mg, 28 Si, 31 P, 32 S, 56 Ni. We employed the
+the range of values inferred from asteroseismology for less massive                    most recent nuclear rates from the JINA REACLIB database (Cyburt
+stars ( 𝑓ov = 0.02 − 0.04, Bowman 2020). As we describe below,                         et al. 2010). While this extension does not have important effects on
+the inclusion and the extent of CBM, guided by both 3D hydrody-                        the energy release, which was already accurate with the 5-isotopes
+namic simulations and observations (main-sequence width in HRD                         burning routine, it allows us to study the nucleosynthesis and trans-
+and asteroseismology) is a key aspect for the novelty of the results.                  port of other species, paving the way towards an extended multi-D
+                                                                                       nucleosynthesis in stellar models.
+                                                                                       Finally, following the same approach as Rizzuti et al. (2022), in this
+2.2 The 3D hydrodynamic model setup                                                    study we included simulations with and without modified energy
+The 1D simulation has been run from the pre-main-sequence phase                        generation. In the nominal-luminosity simulations, the luminosity
+until core collapse (see the structure evolution diagram in Fig. 1,                    remains the same as in the 1D model. In this way, we make sure
+left). The hydrodynamic simulations have been started with initial                     to validate our results ruling out the possibility that the boosting in
+conditions taken from the first neon-burning shell that develops in                    luminosity introduces additional differences from the nominal case.
+the 1D simulation (see Fig. 1, right). We employ here the stellar                      When a boosting in luminosity was included, the nuclear rates for
+hydrodynamical code PROMPI (Meakin & Arnett 2007), successfully                        neon burning 20 Ne(𝛾, 𝛼) 16 O and 20 Ne(𝛼, 𝛾) 24 Mg have been multi-
+used over the years to simulate and study convection and CBM in ad-                    plied by a boosting factor. Since these are the reactions that dominate
+vanced phases of massive stars (e.g. Arnett et al. 2009; Cristini et al.               the energy release, it does not make any difference that the other
+2017, 2019; Mocák et al. 2018; Rizzuti et al. 2022). PROMPI has                        reactions have not been boosted. The boosting factors used here are
+been also recently compared to other stellar hydrodynamical codes                      1 (nominal-luminosity), 5, 10 and 50.
+in Andrassy et al. (2022), who showed PROMPI to be fully consistent
+with the other codes.
+The radial variables density, pressure, temperature, entropy, mass
+and chemical composition have been remapped on a tri-dimensional
+grid adding relatively small perturbations (∼10 −7 ) to density and
+
+                                                                                                                                        MNRAS 000, 1–12 (2023)
+4        Rizzuti et al.
+                                                                   20
+                                                                        Ne mass fraction , time = 10030 s
+
+
+                                                                                                                                               0.149
+
+
+
+                           6.5
+
+
+                                                                                                                                               0.148
+
+                                    6.0
+                       R (108 cm)
+
+
+
+
+                                          5.5                                                                                                  0.147
+
+
+
+
+                                                5.0
+
+                                                                                                                                               0.146
+
+
+                                                      4.5
+
+
+
+                                                                                                                                               0.145
+                                                            4.0                       0◦
+                                                                  +10◦                                  -10◦
+                                                                                   Θ (deg)
+
+Figure 2. Cross section of the neon mass fraction (values in colour scale) from the r2048e1 simulation. The frame shows entrainment of some neon-rich
+material from the upper stable region into the convective zone. Videos of the evolution of the r1024e1 simulation are available online as Supplementary
+material, showing fluid speed and mass fractions in colour scale.
+
+
+2.3 Entrainment law computation                                                                the convective zone, that ℓ has been set equal to 1/12 of the local
+                                                                                               pressure scale height to enclose the peak in 𝑁 2 , and that all quantities
+PROMPI has a long history of modelling entrainment in stellar en-
+                                                                                               have been averaged for the entire time the simulations spent in the
+vironments, having investigated a massive-star O-shell (Meakin &
+                                                                                               entrainment regime.
+Arnett 2007), C-shell (Cristini et al. 2019), and Ne-shell (Rizzuti
+et al. 2022). We can express the entrainment rate for a convective
+boundary, i.e. entrainment velocity 𝑣 e divided by convective velocity
+𝑣 rms , according to Meakin & Arnett (2007):                                                   3 RESULTS
+        𝑣e          −𝑛                                                                         In this article, we present a set of 3D hydrodynamic simulations run
+𝐸=           = 𝐴 𝑅𝑖 B                                              (1)
+       𝑣 rms                                                                                   continuously from the beginning to the end of a neon-shell burn-
+as a function of the “bulk Richardson number” 𝑅𝑖 B , that we can                               ing phase. The level of realism of these new simulations is guaran-
+see as a measure of boundary resistance against convective fluid                               teed by the updated 1D model for initial conditions, that includes
+penetration, and defined as:                                                                   a stronger CBM than usually implemented, the complex burning
+                                                                                               routine including 12 isotopes for energy generation, the presence of
+                                       b +ℓ/2
+                                      𝑟∫
+         ℓ · Δ𝑏                                                                                unaltered nominal-luminosity runs, spherical geometry, and some
+𝑅𝑖 𝐵 =             ;   Δ𝑏 =                       𝑁 2 𝑑𝑟                               (2)     high-resolution runs.
+          𝑣 2rms                                                                               In Table 1, we summarize the most important properties of the hy-
+                                    𝑟b −ℓ/2
+                                                                                               drodynamic simulations we have run for this study, each of them
+with Δ𝑏 the buoyancy jump across the convective boundary, 𝑁 the                                used for some part of the analysis, contributing to the final results
+Brunt–Väisälä frequency, ℓ the length scale of turbulent motions, and                          we present here. The code name for each simulation summarises its
+𝑟 b the convective boundary location.                                                          radial resolution (r) and the boosting factor (e).
+For the computation of the quantities just defined, we refer to Cristini
+et al. (2019) and Rizzuti et al. (2022) since we used here their same
+approach and definitions. It is worth mentioning here that 𝑟 b has                             3.1 Analysis of the fluid dynamics
+been obtained using the neon abundance gradient, that 𝑣 e is the
+                                                                   1/2                       To provide a visual representation of our simulations, we show in
+time derivative of 𝑟 b , that 𝑣 rms is equal to 𝑣 𝑟2 + 𝑣 2𝜃 + 𝑣 2𝜙       inside                Fig. 2 a cross section of the neon mass fraction from our high-
+
+MNRAS 000, 1–12 (2023)
+                                                                                                                                                                              3D stellar evolution            5
+
+
+                                                                        entropy (3D)
+                     17.75                                              entropy (1D) 2.55                                                       0.3
+
+
+
+
+                                                                                                                         = d lnT / d lnP
+                                                                        A (3D)
+                     17.73                                              A (1D)
+                                                                                     2.50                                                       0.2
+                     17.70
+
+
+
+
+                                                                                            entropy (108 erg K 1)
+mean atomic mass A
+
+
+
+
+                     17.68
+
+
+
+
+                                                                                                                         temperature gradient
+                                                                                     2.45
+                     17.65                                                                                                                      0.1
+                                                                                     2.40
+                     17.62
+                                                                                                                                                          (3D)
+                                                                                     2.35                                                       0.0       (1D)
+                     17.60
+                                                                                                                                                         ad (3D)
+                     17.57                                                                                                                               ad (1D)
+                                                                                     2.30
+                         5.2   5.3   5.4   5.5      5.6     5.7   5.8      5.9    6.0                                                             5.2   5.3        5.4   5.5      5.6     5.7   5.8   5.9   6.0
+                                              radius (108 cm)                                                                                                               radius (108 cm)
+
+
+
+Figure 3. Radial profiles of the mean atomic mass 𝐴¯ (black) and entropy (blue)                                          Figure 4. Same as Fig. 3, but radial profiles of the actual temperature
+for the 1D input model (dashed lines) and at the end of a 3D r512e1 test simu-                                           gradient (red) and the adiabatic temperature gradient (yellow), defined
+lation (angularly-averaged quantities plotted as solid lines) run for 5 convective                                       as ∇ = d ln 𝑇/d ln 𝑃, for the 1D input model (dashed lines) and the 3D
+turnovers. The dots on the 3D curves indicate the location of the simulation cells.                                      r512e1 test simulation (angularly-averaged quantities plotted as solid
+                                                                                                                         lines).
+
+
+resolution nominal-luminosity r2048e1 simulation. In addition to                                                    Another way of studying the evolution of the different simulations is
+showing the fine detail that hydrodynamic simulations can reveal                                                    to analyse how the kinetic energy of the fluid builds up and changes
+with modern computing resources, this image helps us understand                                                     with time. In Fig. 5 we show the time evolution of the specific turbu-
+the importance of CBM for stellar evolution. Indeed, it is possible to                                                                                 1 2                                          
+                                                                                                                    lent kinetic energy, defined as        𝑣 𝑟 − 𝑣 𝑟 2 + 𝑣 2𝜃 − 𝑣 𝜃 2 + 𝑣 2𝜙 − 𝑣 𝜙 2
+see the mixing of neon-rich and neon-poor material inside the con-                                                                                     2
+                                                                                                                    where the single quantities have been averaged in 𝑟, 𝜃 and 𝜙 inside
+vective zone, as well as the entrainment of neon-rich material from
+                                                                                                                    the convective zone. The figure shows the most complete set of sim-
+the upper stable region, due to shear mixing at the interface of the
+                                                                                                                    ulations we have run, which consists of r256e1, r256e5, r256e10,
+two layers. The entrainment of fresh fuel extends the nuclear burning
+                                                                                                                    r256e50. These simulations have the same resolution but different
+timescale and therefore the convective shell lifetime, showing the
+                                                                                                                    luminosity boosting, and this explains the different evolution of the
+importance of including CBM in all stellar models.
+                                                                                                                    tracks in the figure. After an initial transient, during which convection
+The effects of the mixing on the convective boundaries can also be
+                                                                                                                    develops in the 3D grid and the kinetic energy builds up, all simula-
+seen in Fig. 3, where we show the difference in the radial profiles of
+                                                                                                                    tions evolve in a similar way, with a more or less gradual increase in
+mean atomic mass and entropy between the 1D initial conditions and
+                                                                                                                    kinetic energy during the nuclear burning phase, and a slow decrease
+a 3D r512e1 test simulation. This 3D r512e1 test simulation was
+                                                                                                                    after neon is consumed and nuclear burning does not sustain the ki-
+run for 5 convective turnovers to highlight similarities and differences
+                                                                                                                    netic energy any longer. The differences in magnitude and timescale
+between the 1D and 3D profiles near the start of the simulations (the
+                                                                                                                    can be all traced back to the boosting in luminosity, which strongly
+r512e1 simulation listed in Table 1 and discussed in the rest of the
+                                                                                                                    affects both the amount of kinetic energy produced during the sim-
+paper was restarted from the r256e1 simulation after 16,000 seconds
+                                                                                                                    ulation, and how rapidly neon is consumed, therefore the timescale
+to make the most of our computing budget). We added in Fig. 3 the
+                                                                                                                    for nuclear burning. The peak in kinetic energy is approximately at
+grid points on the 3D simulation profiles, to indicate the resolution
+                                                                                                                    20000, 2200, 960 and 180 seconds for r256e1, r256e5, r256e10
+of the simulation across the convective boundary. The reason why
+                                                                                                                    and r256e50 respectively.
+the values for atomic mass and entropy in the convective plateaus at
+                                                                                                                    It is also interesting to notice that towards the end all simulations
+𝑟 < 5.4×108 cm do not match perfectly (∼ 10 −4 absolute difference)
+                                                                                                                    seem to converge to the same constant value of turbulent kinetic
+is the remapping and the small mixing that takes place during the
+                                                                                                                    energy, regardless of the luminosity boosting. This comes from the
+initial transient. Importantly, what we can see from this plot is that,
+                                                                                                                    fact that after neon is exhausted the reactions 20 Ne(𝛾, 𝛼) 16 O and
+as the boundary moves outwards due to CBM, both chemical compo-                                                     20 Ne(𝛼, 𝛾) 24 Mg stop occurring, so the only nuclear reaction that can
+sition and entropy are consequently mixed. This point is underlined
+                                                                                                                    proceed is the secondary 24 Mg(𝛼, 𝛾) 28 Si, which was not boosted and
+also by Fig. 4, which shows the temperature gradients for the same
+                                                                                                                    has the same rate for all simulations. This is confirmed by a slight de-
+models. Since both 1D and 3D stellar models deviate from the adi-
+                                                                                                                    crease in magnesium and increase in silicon abundances during this
+abatic temperature gradient outside the convective region (although
+                                                                                                                    late phase. However, this reaction is not energetic enough, therefore
+the 1D curve is affected by numerical noise), it is clear that CBM
+                                                                                                                    turbulence decays and the shell growth halts.
+in the 3D simulation contributes to altering the temperature gradient
+                                                                                                                    The time evolution of the turbulent kinetic energy is also shown in
+in the “overshooting” region, which becomes adiabatic due to the
+                                                                                                                    Fig. 6 for the same set of simulations, but as a colour map with
+fast entropy mixing. These plots show that in the 1D MESA code the
+                                                                                                                    angularly-averaged values in colour scale. First, it is interesting to
+composition mixing is accurately modelled, since the shape of 𝐴¯ is
+                                                                                                                    note the strong effect that the luminosity boosting has on the evolu-
+similar to the 3D, but the entropy profile is not compatible, so it will
+                                                                                                                    tionary timescale. Apart from this, the shell is evolving in the same
+be necessary in the future to also add the mixing of entropy in the
+                                                                                                                    way in all simulations, with the first period being dominated by nu-
+1D models.
+
+                                                                                                                                                                                         MNRAS 000, 1–12 (2023)
+6                                               Rizzuti et al.
+
+                                               1014
+specific turbulent kinetic energy (erg g-1 )
+
+
+
+
+                                               1013
+
+
+
+
+                                               1012
+
+
+
+
+                                               1011                                                                                            r256e1
+                                                                                                                                               r256e5
+                                                                                                                                               r256e10
+                                                                                                                                               r256e50
+                                               1010
+                                                      101        102            103                                 104                                  105
+                                                                             time (s)
+
+
+                                                                  1 2                                  
+Figure 5. Time evolution of the specific turbulent kinetic energy   𝑣𝑟 − 𝑣𝑟 2 + 𝑣 2𝜃 − 𝑣 𝜃 2 + 𝑣 𝜙
+                                                                                                 2 − 𝑣 2 for the four simulations with different luminosity
+                                                                                                      𝜙
+                                                                  2
+boosting r256e1, r256e5, r256e10, r256e50.
+
+
+clear burning and entrainment, and demonstrating a linear growth                pendence of nuclear reaction rates and the 𝛼-particle mass fraction.
+of the shell. An additional weak burning front is visible around                Furthermore, the temperature of a gas is dependent on its volume,
+𝑟 ∼ 8 × 108 cm, produced by the impact of gravity waves on a carbon             according to the equation of state. It is possible to show with a simple
+shell above the neon one, but its energy is so small compared to the            calculation that the volume difference between the final states of our
+neon burning shell (three orders of magnitude lower), that it has no            convective zone in 1D versus 3D can explain the shorter timescale
+impact on convection and entrainment. Once fuel is exhausted in the             of the 3D simulation. If we assume for simplicity that the two states
+neon-burning shell (neon abundance is 6% at the peak of kinetic                 are separated by an adiabatic expansion (it is reasonable to assume
+energy) convection slowly diminishes, as evident from the drop in               no heat exchange with the surroundings), then:
+kinetic energy, and therefore entrainment also stops, halting the shell                                             ! 𝛾−1
+                                                                                                         3 − 𝑟3
+                                                                                          𝑉1D 𝛾−1
+                                                                                             
+growth. This result has important implications for stellar evolution.           𝑇3D                     𝑅1D     1D
+                                                                                     =              =                                                (3)
+In contrast to previously suppositions (e.g. Cristini et al. 2019; Horst        𝑇1D       𝑉3D           𝑅3 − 𝑟 3
+                                                                                                           3D     3D
+et al. 2021; Rizzuti et al. 2022), CBM does not lead to the con-
+vective engulfment of the entire star, but our simulations show that            where 𝑟 and 𝑅 are the inner and outer radii of the shells, respectively.
+the shell naturally stops growing when its fuel is exhausted. Indeed,           Comparing the 1D and 3D states at the end of the nominal-luminosity
+making use of network calculations with a one-zone model to ex-                 neon burning (taken when the neon abundance in the bulk of the
+clude convective mixing, we estimated the nuclear burning timescale             convective zone 𝑋Ne ∼ 0.015), we have (in units of 108 cm):
+(𝑋Ne / 𝑋¤ Ne ) to be around 4000 seconds in this environment, which is          𝑅1D = 7.34,      𝑟 1D = 4.63,    𝑅3D = 6.93,     𝑟 3D = 4.44
+much shorter than the timescale for mass entrainment (𝑀e / 𝑀¤ e ), here
+around 30000 seconds, therefore entrainment cannot sustain convec-              and 𝛾 = 1.55, which gives 𝑇3D /𝑇1D = 1.11. At the same point in
+tion on its own. This finding puts a limit on the size of convective            the actual simulations, we find 𝑇3D = 1.88 GK and 𝑇1D = 1.78 GK
+zones, which can have a strong effect on the final structure of massive         at the temperature peak (located near the bottom of the convective
+stars.                                                                          shell) corresponding to a ratio of 1.06. Thus, we can conclude that
+There are other important points that can be drawn from Fig. 6.                 the limited expansion in 3D due to the closed boundary conditions
+Comparing the nominal-luminosity run (first panel) to the corre-                can account for the higher temperature found in the 3D simulations
+sponding evolution in the 1D model (Fig. 1, right), it is evident               compared to the 1D stellar model.
+that the convective shell in the 3D model evolves approximately ∼5              Since the nuclear energy generation rate depends on a power of the
+times faster than in its 1D equivalent. To understand this difference,          temperature 𝜖¤ ∼ 𝑇 𝛼 , the difference in nuclear burning timescale
+in Fig. 6 we overlay isomass contours in white that can be used to              𝜏 ∼ 1/𝜖¤ between 1D and 3D can be approximated as:
+track expansion. The contours show some expansion in the bulk of
+                                                                                          𝑇1D 𝛼
+                                                                                             
+                                                                                 𝜏3D
+the convective zone, but no expansion is allowed closer to the upper                  ∼                                                         (4)
+and lower domains, because mass flow is not allowed through those                𝜏1D      𝑇3D
+closed boundaries. If compared again to Fig. 1 (right), it is clear             Using 𝛼 = 50 from Woosley et al. (2002) results in a 3D timescale
+that an expansion is present in the 1D layers that are not limited by           15 times shorter than for the 1D, which is much faster than what
+domain boundaries, but which are free to contract or expand. It is              we see in our simulations. Realistically, the energy generation rate is
+this difference in convective zone size between 1D and 3D that ex-              also dependent on the neon abundance, which decreases with time,
+plains the difference in burning timescales. Indeed, the neon-burning           therefore 𝛼 < 50 is expected, although the value changes in time.
+energy release is strongly dependent on the temperature, sensitive to           While both the 1D and 3D simulations are complex, this simple
+a power of ∼ 𝑇 50 (Woosley et al. 2002) due to the temperature de-              estimate of the effect on the temperature of the different expansion
+
+MNRAS 000, 1–12 (2023)
+                                                                                                                                                  3D stellar evolution                                    7
+
+                                                                          1.80 M                                                                        1.80 M
+                  8
+                                                                          1.70 M                                                                        1.70 M
+                  7                                                       1.60 M                                                                        1.60 M
+radius (108 cm)
+
+
+
+
+                                                                                                                                                                               2.0 × 1013
+                                                                          1.50 M                                                                        1.50 M
+                  6                                                       1.40 M                                                                        1.40 M
+                                                                          1.30 M                                                                        1.30 M
+
+
+
+
+                                                                                                                                                                                            specific turbulent kinetic energy (erg g-1)
+                                                                          1.20 M                                                                        1.20 M
+                  5
+                                                                          1.10 M                                                                        1.10 M                 1.5 × 1013
+                                                                          1.00 M                                                                        1.00 M
+                  4                                                       0.90 M                                                                        0.90 M
+                                                                          0.80 M                                                                        0.80 M
+                      0   10000   20000       30000        40000    50000          0         1000       2000           3000           4000       5000
+                                             time (s)                                                                time (s)                                                  1.0 × 1013
+                                                                          1.80 M                                                                        1.80 M
+                  8
+                                                                          1.70 M                                                                        1.70 M
+                  7                                                       1.60 M                                                                        1.60 M                 5.0 × 1012
+radius (108 cm)
+
+
+
+
+                                                                          1.50 M                                                                        1.50 M
+                  6                                                       1.40 M                                                                        1.40 M
+                                                                          1.30 M                                                                        1.30 M
+                  5                                                       1.20 M                                                                        1.20 M
+                                                                                                                                                                               0.0 × 100
+                                                                          1.10 M                                                                        1.10 M
+                                                                          1.00 M                                                                        1.00 M
+                  4                                                       0.90 M                                                                        0.90 M
+                                                                          0.80 M                                                                        0.80 M
+                      0     500       1000              1500       2000            0           100             200              300            400
+                                             time (s)                                                                time (s)
+
+
+
+Figure 6. Time evolution of the angularly-averaged specific turbulent kinetic energy (in colour scale) for four simulations with different luminosity boosting
+factors: from top left to bottom right, r256e1, r256e5, r256e10, r256e50. Overlaid in white, the isomass contours.
+
+
+shows that this can explain the difference in the timescales of neon                            angle covered. One way of doing that would be to repeat the pattern
+burning between the 3D and 1D simulations.                                                      periodically to fill a full spherical surface, as done in Horst et al.
+                                                                                                (2021), but this would introduce artifacts coming from the spherical
+                                                                                                mapping and the risk of underestimating the low-order modes. For
+3.2 Spectral analysis and turbulence theory                                                     these reasons, we prefer here to compute the spectrum using a 2D
+The well-established “Kolmogorov theory” (Kolmogorov 1941)                                      Fourier analysis, following a similar approach to e.g. Cristini et al.
+states that, for a quasi-steady isotropic regime of convection, the                             (2019), Andrassy et al. (2022). Selecting a radius, 𝑟 = 5 × 108 cm,
+rate of energy dissipation is independent of the scale and of the type                          in the middle of the convective region, a 2D Fourier transform of the
+of dissipative process, and the kinetic energy is expected to behave                            velocity magnitude as a function of the angular coordinates 𝜃, 𝜙 was
+according to:                                                                                   computed:
+𝐸 K ∼ 𝑣 2rms ∼ 𝑘 −5/3
+                                                                                                                                                                                                                              !
+                                                                                       (5)                                                                                    𝑘 𝜃 𝑛𝜃 𝑘 𝜙𝑛𝜙
+                                                                                                                                      𝑁∑︁    𝜙 −1
+                                                                                                                                       𝜃 −1 𝑁∑︁                       −𝑖2 𝜋         +
+                                                                                                                          1                                                    𝑁𝜃     𝑁𝜙
+where 𝑘 is the wave number associated with the fluid scale. The fluid                           𝑣ˆ rms (𝑘 𝜃 , 𝑘 𝜙 ) =                                 𝑣 rms (𝜃, 𝜙)𝑒
+                                                                                                                        𝑁𝜃 𝑁𝜙
+is expected to follow this scaling throughout the so-called “inertial                                                                 𝑛 𝜃 =0 𝑛 𝜙 =0
+range”, while it deviates from it at the smallest (dissipation) scales                                                                                                                      (6)
+due to dissipative effects, and at the largest (integral) scales because it
+stops being isotropic. These premises allowed hydrodynamic codes                                where 𝑁 𝜃 , 𝑁 𝜙 are the numerical resolution, 𝑛 𝜃 , 𝑛 𝜙 the cell numbers,
+to employ the implicit large eddy simulation (ILES) scheme, that                                and 𝑘 𝜃 , 𝑘 𝜙 the wave numbers, that span the range:
+                                                                                                      (
+replaces the explicit physical viscosity with implicit numerical vis-                                   𝑖,         if 0 ≤ 𝑖 < 𝑁 𝜃 /2
+cosity due to the finite grid resolution. An important advantage of                             𝑘𝜃 =
+                                                                                                        𝑖 − 𝑁 𝜃 , if 𝑁 𝜃 /2 ≤ 𝑖 < 𝑁 𝜃
+ILES is that it overcomes the necessity of resolving the flow at the                                  (                                                               (7)
+viscosity scale, which would be impossible for stellar simulations.                                      𝑗,         if 0 ≤ 𝑗 < 𝑁 𝜙 /2
+It is thus possible to determine the quality of our simulations in                              𝑘𝜙 =
+                                                                                                         𝑗 − 𝑁 𝜙 , if 𝑁 𝜙 /2 ≤ 𝑗 < 𝑁 𝜙
+the inertial range by comparing the power spectrum of the turbu-
+lent velocity in the simulations to the scaling expected from Kol-                                                                                       1
+                                                                                                Finally, we plot in Figs. 7 and 8 the power spectrum | 𝑣ˆ rms | 2 , that
+mogorov theory. Since we are employing spherical geometry, the                                                                                           2
+                                                                                                can be interpreted √︃
+                                                                                                                   as the specific kinetic energy, as a function of the
+default method would be to compute the spherical harmonic decom-
+position of 𝑣 rms . However, our simulations cover only a small section                         wave number 𝑘 = 𝑘 2𝑥 + 𝑘 2𝑦 . Since 𝑘 𝜃 ∈ [−𝑁 𝜃 /2, 𝑁 𝜃 /2] and like-
+of a spherical surface (0.2 steradians, or 2% of the total spherical sur-                       wise for 𝑘 𝜙 , and the norm 𝑘 draws a circle in the (𝑘 𝜃 , 𝑘 𝜙 ) space, we
+face), therefore it is not trivial to do the decomposition, which would                         limit the plot to 𝑘 ∈ [0, 𝑚𝑖𝑛{𝑁 𝜃 /2, 𝑁 𝜙 /2}] to avoid the circle going
+also be unable to show the lowest-order modes due to the limited solid                          beyond the domain and losing a fraction of the signal, resulting in a
+
+                                                                                                                                                                 MNRAS 000, 1–12 (2023)
+8               Rizzuti et al.
+                                   real space x (cm)                                                                              real space x (cm)
+                             108           107                   106                                                    108                                   107
+              1010                                                 r256e1                                                                                                 r256e1
+                                                                                                 1011
+                                                                   r512e1                                                                                                 r256e5
+              109
+                                                                   r1024e1                       1010                                                                     r256e10
+              108                                                  r2048e1                                                                                                r256e50
+                                                                                                 109
+              107
+2 v̂rms (k)
+
+
+
+
+                                                                                   2 v̂rms (k)
+              106                                                                                108
+1 2
+
+
+
+
+                                                                                   1 2
+              105                                                                                107
+              104
+                                                                                                 106
+                   3
+              10
+                                                                                                 105
+              102
+
+                       100         101                   102                                            100                                   101
+                                    wave number, k                                                                                    wave number, k
+
+
+
+Figure 7. Spectra of the specific kinetic energy as function of both the wave      Figure 8. Same as Fig 7, but for simulations with same resolution and different
+number 𝑘 and the real space 𝑥, taken on a surface at fixed radius, for the         boosting factors: r256e1, r256e5, r256e10, r256e50. All spectra were
+simulations with different resolution r256e1, r512e1, r1024e1, r2048e1.            averaged over one convective turnover. The two vertical lines identify the
+The spectra were averaged over 200 s, except for r2048e1 that was averaged         inertial range, as in Fig 7.
+over 10 s. The dashed black line is the Kolmogorov scaling 𝑘 −5/3 ; the vertical
+dotted line at 𝑘 ∼ 2 is the size of the convective region; the vertical dotted
+lines at 𝑘 ∼ 8 - 70 correspond to the size of 15 cells for each simulation.        Table 2. Properties of the 3D hydrodynamic simulations used to study entrain-
+                                                                                   ment in this work: model name; root-mean-square convective velocity 𝑣rms
+                                                                                                                       up
+                                                                                   (cm s −1 ); upper entrainment rate 𝑣e /𝑣rms ; lower entrainment rate 𝑣elow /𝑣rms ;
+                                                                                                                        up
+drop of the power spectrum. Spectra have been averaged over at least               upper bulk Richardson number 𝑅𝑖B ; lower bulk Richardson number 𝑅𝑖Blow .
+one convective turnover for all simulations, except r2048e1 that has
+been run for a very short timescale given its very high resolution, so                  name                     𝑣rms
+                                                                                                                                 up
+                                                                                                                               𝑣e /𝑣rms         𝑣elow /𝑣rms
+                                                                                                                                                                      up
+                                                                                                                                                                    𝑅𝑖B      𝑅𝑖Blow
+it has been averaged for the last 10 s.
+Figure 7 shows the spectra for simulations with boosting factor equal                   r512e1                3.83 × 106      1.01 × 10 −3     5.38 × 10 −5         51.3     224
+to 1 (nominal luminosity) but different resolutions. In all simulations,                r512e5                6.65 × 106      5.03 × 10 −3     3.69 × 10 −4         13.8     64.7
+the bulk of the spectrum follows the expected Kolmogorov scaling,                       r512e10               8.28 × 106      8.25 × 10 −3     6.54 × 10 −4         8.91     42.5
+which is a good confirmation of the presence of a large inertial range                  r512e50               1.34 × 107      2.72 × 10 −2     1.84 × 10 −3         2.63     15.3
+in our simulations. Also, as expected, the spectrum starts deviating
+from the 𝑘 −5/3 scaling both at the largest scales (around the vertical
+                                                                                   that the new simulations we are presenting in this work have been
+𝑘 ∼ 2 line) and at the smallest scales, because of the numerical dis-
+                                                                                   started from initial conditions taken from a 1D model using strong
+sipation near the grid scale. For this reason, as resolution increases
+                                                                                   CBM at all convective boundaries, including the late-phase shells.
+in Fig. 7 the inertial range extends towards larger wave numbers,
+                                                                                   This last point is particularly important in order to understand how
+because dissipation takes place on smaller and smaller spatial scales.
+                                                                                   entrainment differs between 1D and 3D stellar models, since many
+The point where the spectrum slope starts deviating strongly from
+                                                                                   studies underline strong discrepancies between the two (Staritsin
+the 𝑘 −5/3 scaling corresponds approximately to 15 cells for all sim-
+                                                                                   2013; Higl et al. 2021; Horst et al. 2021; Scott et al. 2021; Rizzuti
+ulations, as we indicate in the plot with vertical dotted lines around
+                                                                                   et al. 2022). In particular, entrainment in 3D is always found to be
+𝑘 ∼ 8 - 70.
+                                                                                   much stronger than in 1D models, which often include little or no
+In Fig. 8 we present instead the spectra for a set of simulations with
+                                                                                   CBM at all. Starting from a 1D model with strong CBM, we can
+same resolution but different boosting factors. As expected, the spe-
+                                                                                   determine if the corresponding entrainment in 3D is larger as usual,
+cific kinetic energy of the spectra increases with the boosting factor,
+                                                                                   or if a convergence between 1D and multi-D stellar models can be
+but the extent of the inertial range does not change, since the resolu-
+                                                                                   achieved.
+tion is the same. This is a confirmation of the fact that introducing
+                                                                                   In Fig. 9, we present the entrainment rates estimated from the data
+a boosting factor does not affect the general properties of the tur-
+                                                                                   presented in this work (blue), alongside one of the previous PROMPI
+bulent flow (apart from the magnitude of the kinetic energy). These
+                                                                                   simulations of a neon shell from Rizzuti et al. (2022) (red), and the
+findings are perfectly in line with previous simulations (e.g. Cristini
+                                                                                   1D study of a convective hydrogen core in a 15 M ⊙ star from Scott
+et al. 2019), and especially with results from the code comparison
+                                                                                   et al. (2021) (black). To study entrainment, we used the data coming
+study of Andrassy et al. (2022).
+                                                                                   from the r512e1, r512e5, r512e10, r512e50 simulations, which
+                                                                                   have been run for many convective turnovers with a high resolu-
+                                                                                   tion. For each simulation we computed the entrainment rate and bulk
+3.3 Entrainment analysis and parametrization
+                                                                                   Richardson number for both the upper and lower convective bound-
+As mentioned above, entrainment of fresh fuel into the convective                  aries, averaged through the entire entrainment phase; we list results
+zone is one of the most important effects on stellar convection, pro-              in Table 2. As expected, a larger boosting factor in the simulations
+foundly affecting the stellar structure and its evolution. We remind               results in higher convective and entrainment velocities, and smaller
+
+MNRAS 000, 1–12 (2023)
+                                                                                                                                3D stellar evolution                             9
+                                                                                                  100
+                                                                                                                                C shell, logA = 1.30 ± 0.06, n = 0.74 ± 0.04
+                                                                                                                                Ne GENEC , logA = 0.53 ± 0.47, n = 0.96 ± 0.19
+                                                                                                                                Ne MESA , logA = 0.92 ± 0.12, n = 1.38 ± 0.08
+          10 2                                                                                   10 1                           O shell, logA = + 0.16 ± 0.34, n = 1.08 ± 0.18
+
+
+
+          10 4                                                                                   10 2
+ve/vrms
+
+
+
+
+                                                                                       ve/vrms
+          10 6                                                                                   10 3
+
+
+          10 8                                                                                   10 4
+                       Ne shell GENEC , A = 0.29 ± 0.38, n = 0.96 ± 0.19
+                       Ne shell MESA , A = 0.12 ± 0.03, n = 1.38 ± 0.08
+                       H core Scott + 21, A = 0.0002, n = 1.00
+                 100            101            102            103          104   105             10 5
+                                                                                                              101                    102                        103
+                                                          RiB                                                                     RiB
+
+Figure 9. Entrainment rate versus bulk Richardson number. Data from stellar            Figure 10. Same as Fig. 9, but comparison between PROMPI simulations:
+simulations and respective linear regressions: “MESA” Ne-shell from this study         “MESA” Ne-shell from this study (red, solid), “GENEC” Ne-shell from Rizzuti
+(blue), “GENEC” Ne-shell from Rizzuti et al. (2022) (red), and H-core from 1D          et al. (2022) (blue, dotted), C-shell from Cristini et al. (2019) (green, dashed),
+Scott et al. (2021) (black). Triangles are lower convective boundaries, circles        O-shell from Meakin & Arnett (2007) (in yellow, dot-dashed). In the legend,
+are upper boundaries. The dashed vertical line indicates the bulk Richardson           parameter estimates for the entrainment law 𝑣e /𝑣rms = 𝐴 𝑅𝑖B−𝑛 .
+number in the convective H-core. Error bars are standard deviations. In the
+legend, parameter estimates for the entrainment law 𝑣e /𝑣rms = 𝐴 𝑅𝑖B−𝑛 .
+                                                                                       much longer than before, covering the entire shell evolution until
+                                                                                       fuel exhaustion. What we can conclude from this is that a hydrody-
+𝑅𝑖 B due to the larger penetrability. In addition, the upper boundary                  namic simulation started from a 1D model already including CBM
+has always larger entrainemnt rate and smaller 𝑅𝑖 B than the lower                     produces significantly less entrainment than simulations from a 1D
+one. Error bars in the figure are standard deviations of the values at                 model with no CBM. This is a clear sign of convergence in the old
+each time-step in our simulations, and since both their computation                    problem of comparing CBM between 1D and 3D models. Moreover,
+and the fitting has been done in real space, in some cases the log                     it is a significant confirmation of the potential of this novel approach
+scale of the plot shows the bars going towards zero.                                   towards developing 3D stellar evolutionary simulations.
+It is evident from Fig. 9 that the value of 𝑅𝑖B for convection in late
+phases (data points) is several orders of magnitude smaller than dur-
+                                                                                       3.4 Nucleosynthesis and evolution of the chemical composition
+ing the main sequence (vertical line): the lack of entrainment data
+and the consequent need for extrapolation is the main reason for the                   The simulations we present here have been produced employing a
+current disagreement on CBM between different stellar phases. From                     nuclear burning routine with an explicit list of isotopes to generate
+the comparison of the different trends in Fig. 9, several interesting                  energy and drive convection. Making use of this routine, it is possible
+conclusions may be drawn. The entrainment rates measured from our                      to study the time evolution of the chemical abundances and their dis-
+simulations are lower then all the previous multi-D studies done with                  tribution in the different layers of the simulations. We show in Fig. 11
+PROMPI, as we show in Fig. 10 where we compare entrainement in all                     the initial (dashed lines) and final (solid lines) mass fraction profiles
+PROMPI simulations so far. Although our new rates are not as small                     from simulation r256e1 for the most important isotopes involved in
+as the ones predicted from studying the H-core in 1D (black line in                    neon burning. At the beginning of the simulation the convective zone,
+Fig. 9), the larger steepness and lower dispersion of the new results                  identified by the central plateaus in the abundance profiles, is limited
+imply much less entrainment than the previous studies, especially at                   to the region between 4.5 and 5.8 × 108 cm, while towards the end it
+larger 𝑅𝑖B , reaching a surprisingly good agreement with predictions                   has almost doubled in size, as we have already seen from Fig. 6. 20 Ne
+for the convective core in 1D models (dashed vertical line). This                      has been almost completely consumed in the convective zone via the
+finding is an important step towards convergence of results between                    reactions 20 Ne(𝛾, 𝛼) 16 O and 20 Ne(𝛼, 𝛾) 24 Mg, while 16 O and 28 Si
+1D and 3D stellar models.                                                              have been produced as a result, as well as some 24 Mg that has been
+To better understand the reasons for this convergence, it is impor-                    partially burnt to produce silicon according to 24 Mg(𝛼, 𝛾) 28 Si.
+tant to underline the differences between the previous and the new                     Another way of tracking the neon consumption is to look at the
+simulations. The two sets of hydrodynamic simulations we show in                       time evolution of the neon abundance inside the convective zone, as
+Fig. 9 are both of a Ne-burning shell, with a similar burning network                  we show in Fig. 12. The plot shows the four simulations r256e1,
+and energy release, but with initial conditions taken from two differ-                 r256e5, r256e10, r256e50 with different boosting factors. During
+ent 1D models: one (Rizzuti et al. 2022, red) from a GENEC model                       the initial transient phase (up to ∼100 s), some fluctuations in the
+with no CBM for this phase, and the other (this study, blue) from a                    neon abundance come from the initial propagation of plumes and
+MESA model with strong CBM. The stellar mass is also different (15                     eddies through the convection region, linked with the entrainment of
+M ⊙ for Rizzuti et al. 2022 and 20 M ⊙ for this study), but previous                   some neon-rich material, and we can see that this trend is the same for
+PROMPI simulations show that stellar mass does not seem to affect                      all simulations except r256e50, where some neon is already being
+the entrainment law parameters (Cristini et al. 2019; Rizzuti et al.                   burnt due to the high energy boosting. After this phase, simulations
+2022). Furthermore, the present set of simulations has been run for                    consume neon on a different timescale but all with a very similar
+
+                                                                                                                                             MNRAS 000, 1–12 (2023)
+10                          Rizzuti et al.
+
+                                                                                                                       1.0
+                     0.7
+                                                                                                                       0.5
+
+
+
+
+                                                                                                                         s )
+                     0.6
+
+
+
+
+                                                                                                                       −2 −1
+                                                                                                                       0.0
+                     0.5
+
+
+
+
+                                                                                                         i vr (10 g cm
+mass fraction
+
+
+
+
+                                   16
+                                        O                                                                         −0.5
+                                   20
+                     0.4                Ne
+
+
+
+
+                                                                                                                 9
+                                   24
+                                        Mg                                                                        −1.0
+
+
+
+
+                                                                                                         00 00
+                     0.3           28
+                                        Si
+
+
+
+
+                                                                                                 fi = ρ Xg
+                                                                                                                  −1.5                                                  f16 O
+                     0.2                                                                                                                                                f20 Ne
+                                                                                                                  −2.0                                                  f24 Mg
+                     0.1
+                                                                                                                                                                        f28 Si
+                                                                                                                  −2.5
+                     0.0                                                                                                                                                ftot
+                                   4              5           6          7         8                              −3.0
+                                                       radius (108 cm)                                                         4.5   5.0       5.5        6.0     6.5
+                                                                                                                                           radius (108 cm)
+
+
+Figure 11. Angularly-averaged mass fractions of 16 O, 20 Ne, 24 Mg, 28 Si as
+function of the stellar radius. Dashed: the abundances at the beginning of the               Figure 13. Turbulent flux profiles of 16 O, 20 Ne, 24 Mg, 28 Si as function of the
+r256e1 simulation. Solid: after ∼8 hours, close to the end of the convective                 stellar radius, from the r1024e1 simulation, averaged over the entrainment
+                                                                                             regime (3 convective turnovers), and defined as 𝑓i = 𝜌 𝑋    ′′ 𝑣 ′′ . The thin black
+phase.
+                                                                                                                                                       
+                                                                                                                                                         i r
+                                                                                             line is the sum of the flux profiles for all the 12 elements in the network.
+
+
+                                                                                             with dΩ = sin 𝜃d𝜃d𝜙 the solid angle element, 𝑇 the time window,
+                     10−1                                                                    ΔΩ the solid angle of the shell. The Favre average (density-weighted
+                                                                                             average) is defined as 𝑞e = 𝜌𝑞/𝜌, therefore the field decomposition
+                                                                                             has been done as 𝑞 = 𝑞 + 𝑞 ′ and 𝑞 = 𝑞e + 𝑞 ′′ respectively, with 𝑞, 𝑞e
+                                                                                             the means and 𝑞 ′ , 𝑞 ′′ the fluctuations of the quantity 𝑞 (see Mocák
+neon mass fraction
+
+
+
+
+                                                                                             et al. 2014, 2018).
+                     10−2
+                                                                                             Figure 13 shows the radial profiles of the mean turbulent flux in
+                                                                                             the r1024e1 simulation for 16 O, 20 Ne, 24 Mg, 28 Si, defined as
+                                                                                              𝑓i = 𝜌 𝑋 ′′ 𝑣 ′′ for a species 𝑖. Positive and negative values in the
+                                                                                                        i r
+                                                                                             flux represent upward and downward flows respectively. It is evident
+                     10−3              r256e1
+                                       r256e5                                                that the flux is dominated by downward transport of 20 Ne, towards
+                                       r256e10                                               the bottom of the convective zone where the nuclear burning is tak-
+                                       r256e50                                               ing place. On the other hand, 16 O, 24 Mg and 28 Si, the ashes of the
+                                                                                             burning, are all transported upwards in a similar way, through the
+                             101                 102          103            104       105
+                                                           time (s)                          entire convective zone. Additionally, a small non-zero flux is present
+                                                                                             immediately below the convective zone, slightly positive for silicon
+                                                                                             and negative for oxygen and magnesium. This is due to the mixing
+Figure 12. Time evolution of the 20 Ne mass fraction in the bulk of the con-                 that takes place at the lower convective boundary, and the fact that
+vective zone, for the four different simulations r256e1, r256e5, r256e10,                    silicon is more abundant below the boundary so it is brought inside
+r256e50, each with a different boosting factor.                                              the convective zone, while oxygen and magnesium are produced and
+                                                                                             more abundant above the boundary so they are transported down-
+                                                                                             wards. Finally, the thin black line in Fig. 13 represents the sum of the
+trend: this is an additional confirmation of the fact that the boosting
+                                                                                             flux profiles for all the 12 elements included in our nuclear network:
+in luminosity affects mainly the simulation timescale.
+                                                                                             it is always equal to zero, confirming that the sum of the mass frac-
+The chemical abundances can be also studied with a mean-field
+                                                                                             tions is conserved in our simulations.
+statistical analysis. We use here the Reynolds-Averaged Navier-
+                                                                                             Finally, we show in Fig. 14 the standard deviation profiles of the mass
+Stokes (RANS) framework developed for hydrodynamic simulations                                                                                           ′′ 𝑋 ′′ ) 1/2 for
+in spherical geometry by Mocák et al. (2014), making use of the                              fraction for 16 O, 20 Ne, 24 Mg, 28 Si, defined as 𝜎i = ( 𝑋
+                                                                                                                                                        i i
+dedicated open-source code ransX1 . We refer to Mocák et al. (2014,                          a species 𝑖, and in Fig. 15 the standard deviation normalised by the
+2018) for definitions and implementation. The RANS framework                                 Reynolds-averaged mass fraction of the isotopes 𝜎i /𝑋 i , presenting
+includes two types of averaging, a time averaging and an angular                             deviations as fractions of the mean values2 . The standard deviation
+averaging. We will indicate here the Reynolds average (time and                              represents the dispersion of the chemical composition as a func-
+angular average) of a quantity 𝑞 on a spherical shell at radius 𝑟 as:                        tion of the radius, therefore it can be seen as a way of measuring
+               ∫ 𝑇∫                                                                          the departure from a perfect spherical symmetry, providing impor-
+           1                                                                                 tant information for the comparison between 1D and multi-D stellar
+𝑞(𝑟) =                   𝑞(𝑟, 𝜃, 𝜙, 𝑡) d𝑡 dΩ                        (8)
+         𝑇ΔΩ 0       ΔΩ
+                                                                                             2 Note that in previous PROMPI studies, such as Mocák et al. (2018), the
+1          https://github.com/mmicromegas/ransX                                              variable 𝜎i is used to indicate the variance, rather than the standard deviation.
+
+MNRAS 000, 1–12 (2023)
+                                                                                                                                               3D stellar evolution            11
+
+                       10−1                                                   σ16 O                                                               σ16 O /X16 O
+                                                                              σ20 Ne                                                              σ20 Ne /X20 Ne
+                           00 00 1/2
+                           i Xi )
+
+
+
+
+                                                                              σ24 Mg
+
+
+
+
+                                                                                        normalised standard deviation
+                                                                                                                        10   −1                   σ24 Mg /X24 Mg
+ standard deviation σi = (Xg
+
+
+
+
+                                                                              σ28 Si                                                              σ28 Si /X28 Si
+                       10−2
+
+
+                                                                                                                        10−2
+                       10−3
+
+
+
+                                                                                                                        10−3
+                       10−4
+
+
+                                       4.5   5.0       5.5        6.0   6.5                                                       4.5   5.0       5.5        6.0        6.5
+                                                   radius (108 cm)                                                                            radius (108 cm)
+
+
+Figure 14. Same as Fig. 13, but standard deviation profiles of the mass                Figure 15. Same as Fig. 14, but normalised standard deviation profiles for
+fraction for 16 O, 20 Ne, 24 Mg, 28 Si, defined as 𝜎i = ( 𝑋
+                                                           ′′ 𝑋 ′′ ) 1/2 .            16 O, 20 Ne, 24 Mg, 28 Si, defined as 𝜎 /𝑋 .
+                                                           i    i                                                             i  i
+
+
+
+models. The largest deviations of up to a few tens of percents (see                    convective core but totally ignore any CBM in later phases, when
+Fig. 15) are found at the convective boundary locations. These de-                     convection is even stronger and its effects are more important. In
+viations are explained by the deformation of the boundary due to                       other works, multi-D models are started from initial conditions with
+the convective flow plowing into it as well as entrainment and the                     little to no CBM, always leading to a very strong entrainment that
+interaction of different layers at the interface (see e. g. Fig. 2). In-               is completely in disagreement with the initial 1D model. With this
+side the convective zone, on the other hand, the mixing makes the                      work, we make a step forward towards the convergence of 3D to 1D
+composition more homogeneous and reduces the dispersion down                           stellar models (321D approach). Our 3D simulations of a burning
+to a percent or less. It is interesting to note that deviations are still              shell, run continuously from early development to fuel exhaustion,
+present below the convective region due to the fluctuations generated                  show that a) entrainment in late-phase shells does not proceed in-
+by entrainment and internal gravity waves.                                             definitely as previously supposed, engulfing the entire star, but it
+Overall, the magnitude of the standard deviation is quite small and                    halts when fuel is exhausted and convection dies (see Fig. 6), and b)
+we do not expect major deviation from spherical symmetry for nu-                       starting from initial conditions already including strong CBM, the
+cleosynthesis in normal convective burning episodes. The situation,                    resulting entrainment in 3D is much more in agreement with the 1D
+however, is expected to be different in more dynamic contexts, such                    model (see Fig. 9). In particular for this last point, our entrainment
+as merging shells or in cases where fuel is ingested in an unusual                     study produced a law that may be equally well applied to CBM in
+burning region (see Mocák et al. 2018; Andrassy et al. 2020).                          convective cores (large RiB, vertical line in Fig. 9) and to late-phase
+                                                                                       shells (small RiB, data points in Fig. 9). This law may finally close
+                                                                                       the gap between the 1D and 3D stellar models, usually in disagree-
+                                                                                       ment regarding the amount of CBM to be included. Our results show
+4 CONCLUSIONS
+                                                                                       that significant CBM is required not only in the convective core, as
+In this paper, we have presented a set of 3D hydrodynamic simu-                        the most recent 1D models are starting to include, but also in the
+lations of a complete stellar burning phase, a neon-burning shell in                   late-phase convective shells. The presence of large CBM is also sup-
+a 20 M ⊙ star. The accuracy of the simulations has been enhanced                       ported by asteroseismic observations (e.g. Bowman 2020; Pedersen
+by improvements in geometry and resolution, nuclear network and                        et al. 2021).
+burning routine, and initial conditions. We show that results from our                 The work presented in this paper introduces exciting prospects for
+simulations may be analysed in terms of nucleosynthesis, studying                      stellar modelling. We have shown that simulating an entire burning
+the abundance evolution and stratification of the isotopes included in                 phase in more than one dimension is now possible using the right
+the nuclear network, and of hydrodynamics. For the latter, we have                     tools and enough computing resources. The next few years will in-
+analysed the convective motions and tracked the convective bound-                      evitably feature more simulations of significant fractions of the stellar
+ary evolution, allowing observation of the growth of the convective                    lifetime in multi-D. Since covering the entire stellar evolution will
+zone and its death when fuel is exhausted. Studying CBM is also                        probably never be possible in more than one dimension, the 1D stellar
+an excellent way of comparing 1D and multi-D stellar simulations,                      model will remain the main tool for predicting and explaining stellar
+where results are often in disagreement. CBM in 1D models is sub-                      evolution. However, it is the interplay between 1D and 3D models
+ject to uncertainties and needs calibration; hydrodynamic models can                   that really pushes forwards our knowledge of stellar evolution, and
+provide this calibration, but only if started from correct initial con-                we show here that an agreement in results between the two is possi-
+ditions. This shows how the two approaches are mutually dependent,                     ble.
+and a convergence of results can only be achieved by improving one                     We recall here that the range of applications of stellar modelling to
+with the other.                                                                        other branches of Astrophysics is large and various. This includes the
+In previous works, 1D models sometimes include little CBM in the                       production of accurate progenitor models as initial conditions for su-
+
+                                                                                                                                                             MNRAS 000, 1–12 (2023)
+12       Rizzuti et al.
+pernova explosion studies (Müller & Janka 2015; Yoshida et al. 2019;          Cristini A., Hirschi R., Meakin C., Arnett D., Georgy C., Walkington I., 2019,
+Burrows & Vartanyan 2021) with possible deviations from spheri-                   MNRAS, 484, 4645
+cal symmetry, potentially solving the long-standing core-collapse             Cyburt R. H., et al., 2010, ApJS, 189, 240
+supernova engine problems, but also comparison to asteroseismic               Ekström S., et al., 2012, A&A, 537, A146
+measurements (Aerts 2021; Pedersen et al. 2021), analysis and im-             Freytag B., Ludwig H. G., Steffen M., 1996, A&A, 313, 497
+                                                                              Heger A., Woosley S. E., 2002, ApJ, 567, 532
+plementation of magnetic fields and dynamo effects in stars (Varma
+                                                                              Herwig F., 2000, A&A, 360, 952
+& Müller 2021; Leidi et al. 2022), predictions on the nature of the           Higl J., Müller E., Weiss A., 2021, A&A, 646, A133
+different remnants (white dwarfs, neutron stars, black holes) with            Horst L., Hirschi R., Edelmann P. V. F., Andrássy R., Röpke F. K., 2021,
+improvements to the final-initial mass relation (Kaiser et al. 2020;              A&A, 653, A55
+Scott et al. 2021), nucleosynthesis and galactic chemical evolution.          Janka H.-T., Melson T., Summa A., 2016, Annual Review of Nuclear and
+Furthermore, the synergy of theoretical models and observations will              Particle Science, 66, 341
+help tackle today’s open problems of stellar Astrophysics, such as the        Jones S., Andrassy R., Sandalski S., Davis A., Woodward P., Herwig F., 2017,
+red supergiant problem (Smartt 2009) and the black hole mass gap                  MNRAS, 465, 2991
+(Woosley & Heger 2021).                                                       José J., Hernanz M., 1998, ApJ, 494, 680
+                                                                              Kaiser E. A., Hirschi R., Arnett W. D., Georgy C., Scott L. J. A., Cristini A.,
+                                                                                  2020, MNRAS, 496, 1967
+                                                                              Kolmogorov A., 1941, Akademiia Nauk SSSR Doklady, 30, 301
+ACKNOWLEDGEMENTS                                                              Leidi G., et al., 2022, A&A, 668, A143
+                                                                              Lentz E. J., et al., 2015, ApJ, 807, L31
+RH acknowledges support from the World Premier International                  McNeill L. O., Müller B., 2022, MNRAS, 509, 818
+Research Centre Initiative (WPI Initiative), MEXT, Japan and the              Meakin C. A., Arnett D., 2007, ApJ, 667, 448
+IReNA AccelNet Network of Networks (National Science Foun-                    Mocák M., Meakin C., Viallet M., Arnett D., 2014, arXiv e-prints, p.
+dation, Grant No. OISE-1927130). WDA acknowledges support                         arXiv:1401.5176
+from the Theoretical Astrophysics Program (TAP) at the Univer-                Mocák M., Meakin C., Campbell S. W., Arnett W. D., 2018, MNRAS, 481,
+sity of Arizona and Steward Observatory. CG has received funding                  2918
+from the European Research Council (ERC) under the European                   Müller B., Janka H. T., 2015, MNRAS, 448, 2141
+                                                                              Müller B., Melson T., Heger A., Janka H.-T., 2017, MNRAS, 472, 491
+Union’s Horizon 2020 research and innovation program (Grant No.
+                                                                              Nugis T., Lamers H. J. G. L. M., 2000, A&A, 360, 227
+833925). The University of Edinburgh is a charitable body, regis-
+                                                                              Paxton B., Bildsten L., Dotter A., Herwig F., Lesaffre P., Timmes F., 2011,
+tered in Scotland, with Registration No. SC005336. CG, RH, and                    ApJS, 192, 3
+CM acknowledge ISSI, Bern, for its support in organising collabo-             Paxton B., et al., 2013, ApJS, 208, 4
+ration. This article is based upon work from the ChETEC COST                  Paxton B., et al., 2018, ApJS, 234, 34
+Action (CA16117) and the European Union’s Horizon 2020 re-                    Paxton B., et al., 2019, ApJS, 243, 10
+search and innovation programme (ChETEC-INFRA, Grant No.                      Pedersen M. G., et al., 2021, Nature Astronomy, 5, 715
+101008324). The authors acknowledge the STFC DiRAC HPC Facil-                 Rizzuti F., Hirschi R., Georgy C., Arnett W. D., Meakin C., Murphy A. S.,
+ity at Durham University, UK (Grants ST/P002293/1, ST/R002371/1,                  2022, MNRAS, 515, 4013
+ST/R000832/1, ST/K00042X/1, ST/H008519/1, ST/ K00087X/1,                      Scott L. J. A., Hirschi R., Georgy C., Arnett W. D., Meakin C., Kaiser E. A.,
+                                                                                  Ekström S., Yusof N., 2021, MNRAS, 503, 4208
+and ST/K003267/1).
+                                                                              Smartt S. J., 2009, ARA&A, 47, 63
+                                                                              Staritsin E. I., 2013, Astronomy Reports, 57, 380
+                                                                              Varma V., Müller B., 2021, MNRAS, 504, 636
+DATA AVAILABILITY                                                             Vink J. S., de Koter A., Lamers H. J. G. L. M., 2000, A&A, 362, 295
+                                                                              Vink J. S., de Koter A., Lamers H. J. G. L. M., 2001, A&A, 369, 574
+The data underlying this article will be shared on reasonable request         Woosley S. E., Heger A., 2021, ApJ, 912, L31
+to the corresponding author.                                                  Woosley S. E., Heger A., Weaver T. A., 2002, Rev. Mod. Phys., 74, 1015
+                                                                              Yoshida T., Takiwaki T., Kotake K., Takahashi K., Nakamura K., Umeda H.,
+                                                                                  2019, ApJ, 881, 16
+                                                                              Yoshida T., Takiwaki T., Aguilera-Dena D. R., Kotake K., Takahashi K.,
+REFERENCES                                                                        Nakamura K., Umeda H., Langer N., 2021, Monthly Notices of the Royal
+Aerts C., 2021, Rev. Mod. Phys., 93, 015001                                       Astronomical Society: Letters, 506, L20
+Andrassy R., Herwig F., Woodward P., Ritter C., 2020, MNRAS, 491, 972         de Jager C., Nieuwenhuĳzen H., van der Hucht K. A., 1988, A&AS, 72, 259
+Andrassy R., et al., 2022, A&A, 659, A193
+Arnett D., Meakin C., Young P. A., 2009, ApJ, 690, 1715                       This paper has been typeset from a TEX/LATEX file prepared by the author.
+Arnett W. D., et al., 2018, arXiv e-prints, p. arXiv:1810.04659
+Asplund M., Grevesse N., Sauval A. J., Scott P., 2009, ARA&A, 47, 481
+Baraffe I., et al., 2023, MNRAS, 519, 5333
+Böhm-Vitense E., 1958, Z. Astrophys., 46, 108
+Bowman D. M., 2020, Frontiers in Astronomy and Space Sciences, 7
+Brott, I. et al., 2011, A&A, 530, A115
+Burrows A., Vartanyan D., 2021, Nature, 589, 29
+Castro N., Fossati L., Langer N., Simón-Díaz S., Schneider F. R. N., Izzard
+    R. G., 2014, A&A, 570, L13
+Couch S. M., Ott C. D., 2015, ApJ, 799, 5
+Couch S. M., Chatzopoulos E., Arnett W. D., Timmes F. X., 2015, ApJ, 808,
+    L21
+Cristini A., Meakin C., Hirschi R., Arnett D., Georgy C., Viallet M., Walk-
+    ington I., 2017, MNRAS, 471, 279
+
+MNRAS 000, 1–12 (2023)
+

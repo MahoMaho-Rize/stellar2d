@@ -1,0 +1,566 @@
+                                                 Draft version January 27, 2026
+                                                 Typeset using LATEX twocolumn style in AASTeX7.0.1
+
+
+
+
+                                                              Pre-supernova O-C shell mergers could produce more 44 Ti than the explosion
+                                                                                                       1, 2                        1, 2
+                                                                                       Joshua Issa            and Falk Herwig
+                                                   1 Astronomy Research Centre, Department of Physics & Astronomy, University of Victoria, Victoria, BC, V8W 2Y2, Canada
+                                                                                       2 NuGrid Collaboration, http:// nugridstars.org
+
+
+
+                                                                              (Received January 26, 2026; Revised YYYYY; Accepted ZZZZZ)
+
+                                                                                                    Submitted to ApJ
+arXiv:2512.17705v5 [astro-ph.SR] 26 Jan 2026
+
+
+
+
+                                                                                                       ABSTRACT
+                                                                             44
+                                                         The formation of Ti in massive stars is thought to occur during explosive nucleosynthesis, however
+                                                       recent studies have shown it can be produced during O-C shell mergers prior to core collapse. We
+                                                       investigate how mixing according to 3D macro physics derived from hydrodynamic simulations impacts
+                                                       the pre-supernova O-C shell merger nucleosynthesis and if it can dominate the explosive supernova
+                                                       production of 44 Ti and other radioactive isotopes. We compare a range of observations and models
+                                                       of explosive 44 Ti yields to pre-explosive multi-zone mixing-burning nucleosynthesis simulations of an
+                                                       O-C shell merger in a 15 M⊙ stellar model with mixing conditions corresponding to different 3D hydro
+                                                       mixing scenarios. Radioactive species produced in the O shell have a spread in their pre-explosive yields
+                                                       predictions across different 3D mixing scenarios of 2.14 dex on average. 44 Ti has the largest spread of
+                                                       4.78 dex. The pre-explosive production of 44 Ti can be larger than the production of all massive star
+                                                       models in the NuGrid data set where 44 Ti is dominated by the explosive nucleosynthesis contribution,
+                                                       as well all other massive star and supernova models. We conclude that quantitative predictions of 44 Ti
+                                                       and other radioactive species more broadly require an understanding of the 3D hydrodynamic mixing
+                                                       conditions present during the O-C shell merger.
+
+
+                                                       Keywords: Oxygen burning (1193) — Nuclear astrophysics (1129) — Stellar convection envelopes (299)
+                                                                 — Supernova remnants (1667) — Massive stars (732)
+
+                                                                 1. INTRODUCTION                                   effi & M. Limongi 2017; L. Roberti et al. 2025). Mergers
+                                                 The radioactive isotope       44
+                                                                                Ti is a key tracer of              occur a few hours prior to the CCSN of a red supergiant,
+                                               explosive nucleosynthesis in core collapse supernovae               therefore 44 Ti (t1/2 = 59.1 yr) synthesized in this event
+                                               (CCSN). It is primarily synthesized during α-rich freeze-           can contribute to the observed signal seen in supernova
+                                               out from nuclear statistical equilibrium in the innermost           remnants. This may be the case for Cassiopeia A, as
+                                               ejecta associated with explosive Si burning by the reac-            observations of its Si, Ne, Cl, and P have recently been
+                                               tions 40 Ca(α, γ) and 43 Sc(p, γ) (S. E. Woosley & T. A.            interpreted as signatures of an O-C shell merger prior
+                                               Weaver 1995; L.-S. The et al. 2006; G. Magkotsios et al.            to collapse (T. Sato et al. 2025; M. Audard et al. 2025).
+                                               2010; A. Sieverding et al. 2023). It is observed by the                Cassiopeia A (A. F. Iyudin et al. 1994; B. W. Grefen-
+                                               emission lines 67.87, 78.32, and 1157 keV from the de-              stette et al. 2014, 2017) and SN 1987A (S. A. Grebenev
+                                               cay chain 44 Ti → 44 Sc → 44 Ca in supernova remnants               et al. 2012; S. E. Boggs et al. 2015) both have asymmet-
+                                               (A. F. Iyudin et al. 1994; S. A. Grebenev et al. 2012;              ric and clumpy distributions of 44 Ti. This may be a sig-
+                                               S. E. Boggs et al. 2015; B. W. Grefenstette et al. 2014,            nature of the pre-explosive origin of 44 Ti in an O-C shell
+                                               2017).                                                              merger, as 3D hydrodynamic simulations show mergers
+                                                 Recently it has been shown that 44 Ti can be signifi-             have asymmetric and large-scale non-radial flows whose
+                                               cantly produced prior to the explosion during an O-C                features could be preserved in the remnant (R. Andrassy
+                                               shell merger in massive stars (C. Tur et al. 2010; A. Chi-          et al. 2020; N. Yadav et al. 2020; F. Rizzuti et al. 2024;
+                                                                                                                   T. Sato et al. 2025). Nucleosynthesis during mergers
+                                                                                                                   in these 3D macro physical flows diverges significantly
+                                               Corresponding author: Joshua Issa                                   from 1D stellar evolution predictions in the O shell (N.
+                                               Email: joshuaissa@uvic.ca
+2
+
+Yadav et al. 2020; F. Rizzuti et al. 2024; J. Issa et al.                     a downturn in the mixing efficiency profile at the bot-
+2025a,b).                                                                     tom of the O shell (D3D−insp. in this work, inspired by
+  In this study, we explore how pre-explosive nucleosyn-                      C. A. Meakin & D. Arnett 2006; S. Jones et al. 2017), in-
+thesis of 44 Ti and other radioactive isotopes depend on                      creased convective velocities compared to mixing length
+the mixing conditions during an O-C shell merger as                           theory (MLT) of factors 3, 10, and 50 (a range seen
+motivated by 3D hydrodynamic simulations. This Let-                           in the simulations of S. Jones et al. 2017; R. Andrassy
+ter is organized as follows: §2 provides an overview of the                   et al. 2020; F. Rizzuti et al. 2024), and quenching ef-
+post-processed O-C shell conditions, §3 demonstrates                          fects due to possibly strong energy feedback and par-
+how 44 Ti is produced non-explosively and compares the                        tial merging (R. Andrassy et al. 2020). They also have
+production in the O-C shell merger to explosive yields,                       a range of C-shell entrainment rates into the O shell
+and finally in §4 we discuss the implications of these                        from no entrainment to a full merger of the convective
+results for observations.                                                     O and C shells, as the simulations of R. Andrassy et al.
+                                                                              (2020) show that entrainment depends on the luminosity
+                               2. METHODS                                     of 12 C + 12 C burning.
+  The NuGrid data set includes massive star models                              We provide results in terms of an overproduction fac-
+with initial masses 12−25 M⊙ and initial metallicities                        tor defined as
+Z = 10−4 to 0.02 (C. Ritter et al. 2018). These models
+                                                                                    OPR15 = Xmodel /XPre−Explosive 15 M⊙ Z=0.02
+were calculated in 1D using MESA (B. Paxton et al. 2010)
+without rotation and no convective overshooting after                         where Xmodel is the ejected yield for a species from a
+the end of core helium burning (M. Pignatari et al. 2016;                     given model and XPre−Explosive 15 M⊙ Z=0.02 is the un-
+C. Ritter et al. 2018). Five models have an O-C shell                         decayed pre-explosive yield from the 15 M⊙ , Z = 0.02
+merger shortly before core collapse: 15 M⊙ Z = 0.02,                          model from C. Ritter et al. (2018). The simulations
+12 M⊙ Z = 0.01, 15 M⊙ Z = 0.01, 20 M⊙ Z = 0.01,                               from J. Issa et al. (2025a,b) simulate the O shell alone
+and 12 M⊙ Z = 0.001.                                                          for 110 s, and so the yields for these models are esti-
+  We have post-processed the O shell of the 15 M⊙ Z =                         mated according to the method described by §2.3 of J.
+0.02 NuGrid multi-zone code mppnp (M. Pignatari et al.                        Issa et al. (2025b). Further simulation details can be
+2016) to study how nucleosynthesis of the light odd-Z                         found in J. Issa et al. (2025a,b).
+isotopes and p nuclei are changed by 3D-inspired mixing
+scenarios (J. Issa et al. 2025a,b). This stellar model                                              3. RESULTS
+produces a number of radioactive species in the O-C                              3.1. Nuclear production of 44 Ti during O-C shell
+merger prior to the explosion as shown in Fig. 1.                                                      mergers
+                                                                                 All mixing cases considered in this work
+             4                                                                share a single, common reaction chain that
+                                                                              produces 44 Ti during the O-C shell merger:
+             6                                                                38
+                                                                                 Ar(α, γ)42 Ca(n, γ)43 Ca(p, γ)44 Sc(p, n)44 Ti. The im-
+             8                                                                portance of 44 Sc is not seen in explosive nucleosynthesis,
+log10(Xi)
+
+
+
+
+                                                                              but it is clearly shown in Fig. 2 for our pre-explosive con-
+                                            22Na           60Fe               ditions. All mixing conditions also share 44 Ti(γ, α)40 Ca
+            10                              24Na           56Co
+                                            26Al           56Ni
+                                                                              as the dominant destruction channel at the base of the
+            12                              44Ti           65Zn               shell where T = 2.77−2.83 × 109 K. 44 Ti(n, γ)45 Ti is
+                                            51Cr           O shell            also a destruction channel, but to a lesser extent.
+            14                              59Fe           O-C region            The mixing cases with a 50 × D3D−insp. profile have
+             1.5   2.0   2.5   3.0    3.5   4.0    4.5   5.0   5.5      6.0   some exceptions to the 38 Ar and 42 Ca contributions
+                                     Mass (M )                                to 44 Ti.     These cases feature significant contribu-
+                                                                              tions of 39 K(α, p)42 Ca and 43 Sc(γ, p)42 Ca along with
+                                                                              38
+Figure 1. Mass fractions of radioactive isotopes in the                          Ar(α, γ)42 Ca. The contribution of 43 Sc to 42 Ca may
+15 M⊙ Z = 0.02 model from C. Ritter et al. (2018) at the                      seem counter-intuitive as Fig. 2 shows 42 Ca(p, γ)43 Sc
+final time step before explosion. Both the O shell and O-C                    as a destruction channel for 42 Ca. However, it is be-
+region are shaded to indicate their extent.                                   cause the O shell is a convective-reactive enviornment
+                                                                              where species can advect on a similar timescale to their
+  The mixing scenarios inspired by 3D hydrodynamic                            reactions. Fig. 2 shows a build-up of 43 Sc which is
+simulations (Figures 4 and 5, J. Issa et al. 2025a) include                   mixed deeper in the O and undergoes 43 Sc(γ, p)42 Ca
+                                                                    O-C Mergers and 44 Ti                                                                       3
+
+                26                                                     4                          (4.95,1014)(4.95,1013) (7.5,1014) (7.5,1013)
+                25               47   48   49   50   51   52   Mn                                                                                104
+                                                                       5                Quenched
+                24          45   46   47   48   49   50   51   Cr
+                                                                                                                                                 103
+Proton Number
+
+
+
+                23          44   45   46   47   48   49   50   V                     50 × D3D insp.
+                                                                       6
+
+
+
+
+                                                                       log10(fij)
+                22     42   43   44   45   46   47   48   49   Ti
+
+
+
+
+                                                                                                                                                       OPR15(44Ti)
+                                                                                     10 × D3D insp.                                              102
+                21     41   42   43   44   45   46   47   48   Sc
+                                                                       7
+                20     40   41   42   43   44   45   46   47   Ca                     3 × D3D insp.                                              101
+                19     39   40   41   42   43   44   45   46   K       8                  D3D insp.
+                18     38   39   40   41   42   43   44   45   Ar                                                                                100
+                17                                                     9                      DMLT
+                  19   20 21 22 23 24 25 26 27 28                                                                                                10 1
+                                 Neutron Number                                                   No Merger 4 × 10 5 4 × 10 4 4 × 10 3
+
+Figure 2.        Chart of reactions between isotopes at                             Figure 3. Predicted yields of 44 Ti compared to the 15 M⊙
+m = 1.6 M⊙ [T = 2.494 × 109 K] for the 50 × D3D−insp.                               Z = 0.02 pre-explosive yields (OPR15 ). The lower x-axis has
+mixing case with an ingestion rate of 4 × 10−3 M⊙ s−1 at                            the entrainment rates in M⊙ s−1 and the upper x-axis has
+t = 110 s. Both arrow colour and size indicate log10 (fij ),                        the quenched mixing cases summarized as (location of dip in
+the reaction flux as defined in J. Issa et al. (2025a), and ar-                     Mm, maximum extent of the dip in cm2 s−1 ). Colour indi-
+rows point in the direction of the reaction.                                        cates magnitude and size indicates distance from OPR15 = 1.
+                                                                                    The explosive production of the 15 M⊙ Z = 0.02 model is
+                                                                                    OPR15 = 0.49 dex.
+at those hotter temperatures. For 38 Ar, in all other
+cases it is produced by 30 Si(α, γ)34 S(α, γ)38 Ar, but in
+the 50 × D3D−insp. mixing cases it is also produced                                 mixing speed in for pre-explosive nucleosynthesis of 44 Ti
+by 35 Cl(γ, p)34 S(α, γ)38 Ar and 39 K(γ, p)38 Ar. How 30 Si                        during an O-C shell merger.
+and the light odd-Z isotopes 35 Cl and 39 K are produced
+                                                                                    3.2. Mixing and explosive yields of radioactive species
+in the O-C shell merger is discussed in J. Issa et al.
+(2025b). The importance of the (α, γ) channels of 34 S                                 Mixing potentially impacts the estimated pre-
+and 38 Ar for 44 Ti production are interesting as their                             explosive yields of a broader range of radioactive iso-
+(p, γ) channels may dominate energy production in the                               topes produced in the O shell, beyond 44 Ti. Fig. 4 shows
+O-C shell (L. Roberti & M. Pignatari 2025).                                         the maximum and minimum yields for radioactive iso-
+   Despite the shared chain of production, Fig. 3 shows                             topes from our pre-explosive mixing scenarios and ex-
+44
+   Ti production is dependent on the mixing conditions                              plosive yields from models and observations for 44 Ti.
+of the merger. Only models with the highest entrain-                                   Fig. 4 shows that all radioactive isotopes considered in
+ment rate of 4 × 10−3 M⊙ s−1 and a boosted 3D-inspired                              this work except 26 Al feature a multi-dex spread in their
+mixing profile show significant increase to the produc-                             predicted yields, with an average spread of 2.14 dex (ex-
+tion of 44 Ti compared to the pre-explosive production of                           cluding 26 Al as it is not exclusive to the O-C merger as
+the 15 M⊙ , Z = 0.02 model from C. Ritter et al. (2018).                            shown in Fig. 1). Considering only the 15 M⊙ , Z = 0.02
+44
+   Ti production is also monotonic with mixing speed                                model, Depending on the mixing conditions, the yields
+for the 3D-inspired mixing profiles. Despite having the                             of 22 Na, 44 Ti, 51 Cr, and 65 Zn could be dominated by
+same entrainment rate, the MLT and quenched mixing                                  pre-explosive merger nucleosynthesis rather than the ex-
+cases show a decrease in 44 Ti production compared to                               plosion. 59 Fe and 60 Fe are not dominated but could be
+the pre-explosive model.                                                            significantly contributed to by the merger. Among the
+   Entrainment of C-shell material supplies a significant                           radioactive isotopes considered, 44 Ti is the most sensi-
+source of 43 Ca which boosts the 44 Sc. As the mixing                               tive to the mixing conditions with a spread of 4.78 dex.
+speed increases, the location of the reaction peak for                                 The range of predicted pre-explosive yields in our mix-
+43
+   Ca(p, γ)44 Sc and 44 Sc(p, n)44 Ti move from 1.65 M⊙                             ing scenarios for 22 Na, 44 Ti, and 51 Cr are comparable or
+[T = 2.23 × 109 K] in the MLT case to 1.59 M⊙                                       larger than the explosive yields of all massive star mod-
+[T = 2.56 × 109 K] in the 50 × D3D−insp. case. The                                  els in the NuGrid data set. Our pre-explosive yields of
+                                                                                    59
+location of peak burning shifting is a feature of the                                  Fe, 60 Fe, and 65 Zn are also comparable or larger than
+convective-reactive nucleosynthesis explored in J. Issa                             many of the explosive yields in the NuGrid data set. Ta-
+et al. (2025a,b) and shown in Appendix A. This demon-                               ble 2 in Appendix B shows that explosive nucleosynthe-
+strates the importance of both the entrainment rate and                             sis dominates 44 Ti yields in the NuGrid data set except
+                                                                                    for the 15 M⊙ , Z = 0.02 model and the 20 M⊙ , Z = 0.01
+4
+
+        1012                                                                        4. CONCLUSIONS
+                  Observations of Supernova Remnants
+        1010      Non-NuGrid 44Ti Explosive Yields                   This work highlights the need to understand the 3D
+                  NuGrid Explosive Yields                         macro physics of mixing in the O shell during a merger.
+        108       15 M Z = 0.02 NuGrid Explosive Yields
+                  Range of Pre-Explosive Yields in This Work      We have shown how 44 Ti can be significantly produced
+        106                                                       by pre-explosive nucleosynthesis during an O-C shell
+OPR15
+
+
+
+
+                                                                  merger in massive stars by 44 Sc(p, n)44 Ti and its sensi-
+        104                                                       tivity to both entrainment and mixing speed. We have
+        102                                                       also found that 22 Na, 51 Cr, 59,60 Fe, and 65 Zn also have
+                                                                  relevant pre-explosive nucleosynthesis depending on the
+        100                                                       mixing conditions. Further, we have shown for 44 Ti that
+                                                                  the pre-explosive O-C shell production can dominate
+        10 2 22Na 24Na 26Al 44Ti 51Cr 59Fe 60Fe 56Co 56Ni 65Zn
+                                                                  over explosive yields from a wide range of massive star
+                                                                  models and are consistent with observations.
+Figure 4. OPR15 for (1) inferred yields of 44 Ti from su-            These predicted results do not properly account for
+pernova remnants observations (triangles with error bars)         the pre-collapse evolution of the O-C shell merger and
+(2) explosive 44 Ti yields of non-NuGrid models (blue circles)    how feedback effects may alter the final nucleosynthe-
+(3) explosive yields of all considered radioactive species from
+                                                                  sis. However, this work does show the importance of
+NuGrid models (small black stars) (4) explosive yields of the
+15 M⊙ Z = 0.02 NuGrid model (large black stars) (5) the           including insights from 3D macro physics into 1D stel-
+maximum and minimum predicted pre-explosive yields for            lar evolution and explosion models to better understand
+all scenarios (purple bars). Appendix B provides the full list    the nucleosynthesis of radioactive isotopes in massive
+of citations.                                                     stars. Another feature missing from this model is a
+                                                                  treatment of rotation as A. Chieffi & M. Limongi (2017)
+model as the only two models where pre-explosive yields           found it could boost pre-explosive 44 Ti production dur-
+of 44 Ti are comparable to the explosion. Notably the             ing convective O shell burning. 3D effects of a convec-
+other three models with O-C shell mergers do not show             tive downturn and boosted mixing speeds compared to
+significant pre-explosive production of 44 Ti, but could          MLT are general features of O shell convection (S. Jones
+do so if 3D mixing effects were included as in this work.         et al. 2017), and our results find a spread even in the
+   We have also compared our results to a number of 1D,           absence of a merger (left column of Fig. 3). 3D explosive
+2D, and 3D models of massive star yields of 44 Ti from            effects may also complicate this picture as 44 Ti produc-
+the literature, some of which include rotation. Fig. 4            tion is boosted compared to 1D explosions (A. Sieverd-
+shows that the range of predicted pre-explosive yields            ing et al. 2023). We note that both A. Chieffi & M.
+for 44 Ti can dominate regardless of the different mod-           Limongi (2017) and A. Sieverding et al. (2023) results
+elling assumptions and dimensionality of the explosion.           are included in Fig. 4. The relationship between merg-
+Additionally, our predicted range does not exceed the in-         ers and the subsequent explosion need further study as
+ferred yields of 44 Ti from observed supernova remnants,          the non-radial perturbations from it may also play a sig-
+although the largest upper limit comes from Vela Ju-              nificant role in how the subsequent supernova explodes
+nior which has large uncertainties in its distance and            (S. M. Couch & C. D. Ott 2013; B. Müller et al. 2017;
+age (C. Weinberger et al. 2020). Comparing our re-                B. Müller 2020; R. Andrassy et al. 2020; N. Yadav et al.
+sults to C. Weinberger et al. (2020) Cassiopeia A ejected         2020; C. E. Fields & S. M. Couch 2020; F. Rizzuti et al.
+(2.6 ± 0.6) × 10−4 M⊙ of 44 Ti which is between our 3×            2024; E. Laplace et al. 2025).
+and 10 × D3D−insp. cases with the fastest entrainment                If the O-C merger contributes to the yields of radioac-
+rate of 4 × 10−3 M⊙ s−1 . If the progenitor of Cassiopeia         tive isotopes of massive stars, then understanding the
+A underwent an O-C shell merger prior to explosion (T.            mixing conditions has a wide range of implications for
+Sato et al. 2025; M. Audard et al. 2025), the mixing              observations. Supernova remnants like Cassiopeia A (T.
+profile of its O shell having a convective downturn and           Sato et al. 2025), interpretation of pre-solar grain mea-
+mixing speeds boosted by 3−10 compared to MLT would               surements of 44 Ca from 44 Ti decays (M. Pignatari et al.
+explain the 44 Ti yield without much synthesis in the ex-         2013; N. Liu et al. 2024), and understanding supernova
+plosion. These results demonstrate the critical impor-            light curves powered by 22 Na or 44 Ti decays (M. Pig-
+tance of understanding the mixing conditions during the           natari et al. 2025) are all potentially impacted by the
+O-C shell merger for predicting the yields of radioactive         mixing discussed in this work. Upcoming missions such
+isotopes for pre-supernova models, especially 44 Ti.              as COSI will measure decay lines for 44 Ti and 60 Fe,
+                                                                  providing more data to constrain massive star nucle-
+                                                  O-C Mergers and 44 Ti                                                      5
+
+osynthesis with supernova remnants (J. Tomsick et al.           online virtual research environment (https://astrohub.
+2019). We conclude 3D hydrodynamic macro physics are            uvic.ca), developed and operated by the Computational
+a crucial part of understanding the nucleosynthesis and         Stellar Astrophysics group at the University of Victoria
+origin of radioactive isotopes, particularly 44 Ti, during      and hosted on the Digital Research Alliance of Canada
+O-C mergers.                                                    Arbutus Cloud at the University of Victoria. These sim-
+                                                                ulations were performed on Digital Research Alliance’s
+                                                                Niagara supercomputer cluster operated by SciNet at
+               ACKNOWLEDGEMENTS                                 the University of Toronto. This work benefited from in-
+                                                                teractions and workshops co-organized by The Center
+We would like to thank Marco Pignatari, Lorenzo
+                                                                for Nuclear astrophysics Across Messengers (CeNAM)
+Roberti, and Frank Timmes for useful discussions and
+                                                                which is supported by the U.S. Department of Energy,
+feedback. FH is supported by a Natural Sciences and
+                                                                Office of Science, Office of Nuclear Physics, under Award
+Engineering Research Council of Canada (NSERC) Dis-
+                                                                Number DE-SC0023128.
+covery Grant. This research has used the Astrohub
+
+
+                                                       REFERENCES
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020,      Issa, J., Herwig, F., Mojzsis, S. J., & Pignatari, M. 2025b,
+   Monthly Notices of the Royal Astronomical Society, 491,         3D Macro Physics and Light Odd-Z Element Production
+   972, doi: 10.1093/mnras/stz2952                                 in O-C Shell Mergers: Implications for
+Audard, M., Awaki, H., Ballhausen, R., et al. 2025, Nature         $ˆ{40}\mathrm{K}$ Production and Radiogenic
+   Astronomy, 1, doi: 10.1038/s41550-025-02714-4                   Heating Inventories of Rocky Exoplanets, arXiv,
+Boggs, S. E., Harrison, F. A., Miyasaka, H., et al. 2015,          doi: 10.48550/arXiv.2509.19240
+   Science, 348, 670, doi: 10.1126/science.aaa2259              Iyudin, A. F., Diehl, R., Bloemen, H., et al. 1994,
+Borkowski, K. J., Reynolds, S. P., Green, D. A., et al. 2010,     Astronomy and Astrophysics, 284, L1
+   The Astrophysical Journal Letters, 724, L161,                Jerkstrand, A., Fransson, C., & Kozma, C. 2011,
+   doi: 10.1088/2041-8205/724/2/L161                              Astronomy & Astrophysics, 530, A45,
+Chieffi, A., & Limongi, M. 2017, The Astrophysical                doi: 10.1051/0004-6361/201015937
+   Journal, 836, 79, doi: 10.3847/1538-4357/836/1/79            Jones, S., Andrassy, R., Sandalski, S., et al. 2017, Monthly
+Couch, S. M., & Ott, C. D. 2013, The Astrophysical                Notices of the Royal Astronomical Society, 465, 2991,
+   Journal, 778, L7, doi: 10.1088/2041-8205/778/1/L7
+                                                                  doi: 10.1093/mnras/stw2783
+Eichler, M., Nakamura, K., Takiwaki, T., et al. 2017,
+                                                                Laplace, E., Schneider, F. R. N., & Podsiadlowski, P. 2025,
+   Journal of Physics G: Nuclear and Particle Physics, 45,
+                                                                  Astronomy & Astrophysics, 695, A71,
+   014001, doi: 10.1088/1361-6471/aa8891
+                                                                  doi: 10.1051/0004-6361/202451077
+Fields, C. E., & Couch, S. M. 2020, The Astrophysical
+                                                                Liu, N., Lugaro, M., Leitner, J., Meyer, B. S., &
+   Journal, 901, 33, doi: 10.3847/1538-4357/abada7
+                                                                  Schönbächler, M. 2024, Space Science Reviews, 220, 88,
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012,
+                                                                  doi: 10.1007/s11214-024-01122-w
+   The Astrophysical Journal, 749, 91,
+                                                                Magkotsios, G., Timmes, F. X., Hungerford, A. L., et al.
+   doi: 10.1088/0004-637X/749/1/91
+                                                                 2010, The Astrophysical Journal Supplement Series, 191,
+Grebenev, S. A., Lutovinov, A. A., Tsygankov, S. S., &
+                                                                 66, doi: 10.1088/0067-0049/191/1/66
+   Winkler, C. 2012, Nature, 490, 373,
+   doi: 10.1038/nature11473                                     Meakin, C. A., & Arnett, D. 2006, The Astrophysical
+Grefenstette, B. W., Harrison, F. A., Boggs, S. E., et al.       Journal, 637, L53, doi: 10.1086/500544
+   2014, Nature, 506, 339, doi: 10.1038/nature12997             Müller, B. 2020, Living Reviews in Computational
+Grefenstette, B. W., Fryer, C. L., Harrison, F. A., et al.       Astrophysics, 6, 3, doi: 10.1007/s41115-020-0008-5
+   2017, The Astrophysical Journal, 834, 19,                    Müller, B., Melson, T., Heger, A., & Janka, H.-T. 2017,
+   doi: 10.3847/1538-4357/834/1/19                               Monthly Notices of the Royal Astronomical Society, 472,
+Issa, J., Herwig, F., Denissenkov, P., & Pignatari, M.           491, doi: 10.1093/mnras/stx1962
+   2025a, Impact of 3D Macro Physics and Nuclear Physics        Paxton, B., Bildsten, L., Dotter, A., et al. 2010, The
+   on the p Nuclei in O-C Shell Mergers, arXiv,                   Astrophysical Journal Supplement Series, 192, 3,
+   doi: 10.48550/arXiv.2507.16965                                 doi: 10.1088/0067-0049/192/1/3
+6
+
+Pignatari, M., Wiescher, M., Timmes, F. X., et al. 2013,      Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., &
+  The Astrophysical Journal Letters, 767, L22,                  Janka, H.-T. 2016, The Astrophysical Journal, 821, 38,
+  doi: 10.1088/2041-8205/767/2/L22                              doi: 10.3847/0004-637X/821/1/38
+Pignatari, M., Herwig, F., Hirschi, R., et al. 2016, The      The, L.-S., Clayton, D. D., Diehl, R., et al. 2006,
+  Astrophysical Journal Supplement Series, 225, 24,             Astronomy and Astrophysics, 450, 1037,
+  doi: 10.3847/0067-0049/225/2/24                               doi: 10.1051/0004-6361:20054626
+Pignatari, M., Amari, S., Hoppe, P., et al. 2025, The         Tomsick, J., Zoglauer, A., Sleator, C., et al. 2019, The
+  Astrophysical Journal, 990, 19,                               Compton Spectrometer and Imager, eprint:
+  doi: 10.3847/1538-4357/adef4c                                 arXiv:1908.04334: arXiv, doi: 10.48550/arXiv.1908.04334
+Ritter, C., Herwig, F., Jones, S., et al. 2018, Astronomy &   Troja, E., Segreto, A., La Parola, V., et al. 2014, The
+  Astrophysics, 615, doi: 10.1051/0004-6361/201732345           Astrophysical Journal Letters, 797, L6,
+Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, Monthly       doi: 10.1088/2041-8205/797/1/L6
+  Notices of the Royal Astronomical Society, 533, 687,        Tur, C., Heger, A., & Austin, S. M. 2010, The Astrophysical
+  doi: 10.1093/mnras/stae1778                                   Journal, 718, 357, doi: 10.1088/0004-637X/718/1/357
+Roberti, L., & Pignatari, M. 2025, Astronomy and              Vink, J., Laming, J. M., Kaastra, J. S., et al. 2001, The
+  Astrophysics, 703, L15,                                       Astrophysical Journal, 560, L79, doi: 10.1086/324172
+  doi: 10.1051/0004-6361/202556941                            Wang, W., & Li, Z. 2016, The Astrophysical Journal, 825,
+                                                                102, doi: 10.3847/0004-637X/825/2/102
+Roberti, L., Pignatari, M., Brinkman, H. E., et al. 2025,
+                                                              Weinberger, C., Diehl, R., Pleintinger, M. M. M., Siegert,
+  Astronomy and Astrophysics, 698, A216,
+                                                                T., & Greiner, J. 2020, Astronomy and Astrophysics,
+  doi: 10.1051/0004-6361/202554461
+                                                                638, A83, doi: 10.1051/0004-6361/202037536
+Sato, T., Matsunaga, K., Uchida, H., et al. 2025, The
+  Astrophysical Journal, 990, 103,                            Wongwathanarat, A., Janka, H. T., Müller, E., Pllumbi, E.,
+  doi: 10.3847/1538-4357/aded14                                 & Wanajo, S. 2017, Astrophysical Journal, 842, 13,
+                                                                doi: 10.3847/1538-4357/aa72de
+Siegert, T., Diehl, R., Krause, M. G. H., & Greiner, J.
+                                                              Woosley, S. E., & Weaver, T. A. 1995, The Astrophysical
+  2015, Astronomy & Astrophysics, 579, A124,
+                                                                Journal Supplement Series, 101, 181, doi: 10.1086/192237
+  doi: 10.1051/0004-6361/201525877
+                                                              Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+Sieverding, A., Kresse, D., & Janka, H.-T. 2023, The
+                                                                A. 2020, The Astrophysical Journal, 890, 94,
+  Astrophysical Journal, 957, L25,
+                                                                doi: 10.3847/1538-4357/ab66bb
+  doi: 10.3847/2041-8213/ad045b
+                                                O-C Mergers and 44 Ti                                                                           7
+
+
+                                                       APPENDIX
+
+
+                                        A. CONDITIONS OF 44 Ti PRODUCTION
+  Fig. 5 provides the temperature and density conditions where 44 Ti is produced during the O-C shell merger and how
+the peak of the nucleosynthesis shifts with different mixing scenarios. As described in §3.1, the higher mixing speeds
+mix 44 Ca and 44 Sc deeper in the shell where temperatures are higher, boosting 44 Ti production.
+
+
+                          10 6                                                                                    3.0
+                                                                Temperature
+                                                                Density
+                          10 7
+
+
+
+
+                                                                                                                      T (109 K); (106 g cm 3)
+                                                                DMLT (4 × 10 3 M s 1)                             2.5
+ Net production of 44Ti
+
+
+
+
+                                                                D3D insp. (4 × 10 3 M s 1)
+                          10 8                                  3 × D3D insp. (4 × 10 3 M s 1)
+                                                                10 × D3D insp. (4 × 10 3 M s 1)
+                                                                                                                  2.0
+                          10 9                                  50 × D3D insp. (4 × 10 3 M s 1)
+                          10 10                                              3.0
+                                                                                                                  1.5
+                                                                             2.5
+                          10 11                                                                                   1.0
+                                                                 T (109 K)
+
+
+
+                                                                             2.0
+
+                          10 12                                              1.5
+                                                                                                                  0.5
+                                                                                    0.5     1.0    1.5   2.0
+                                                                                          (106 g cm 3)
+                          10 13
+                              1.55   1.60     1.65          1.70                   1.75           1.80         1.85
+                                                     Mass (M )
+Figure 5. The temperature and density conditions for 44 Ti production. The coloured shading show the net production for
+44
+  Ti at each mass coordinate for the DMLT and each of the D3D−insp. mixing profiles with an ingestion rate of 4 × 10−3 M⊙ s−1
+at t = 110 s. The solid grey line is the temperature and the dashed grey line is the density for this region. We also include
+ρ-T inset in the lower right corner showing the densities and temperatures where 44 Ti is produced for all mixing conditions
+considered in this work.
+
+
+
+                                                     B. 44 Ti YIELDS
+  Here we provide a full list of citations for the yields of 44 Ti shown in Fig. 4. Table 1 is the predicted pre-explosive
+44
+  Ti yields from this work that are calculated according to the method described in J. Issa et al. (2025b). Table 2
+provides the pre-explosive and explosive 44 Ti yields from the massive stars from the NuGrid data set (M. Pignatari
+et al. 2016; C. Ritter et al. 2018) using the delayed explosion mass cut from C. L. Fryer et al. (2012). Table 3 is the
+selection of 1D, 2D, and 3D models from the literature that report explosive 44 Ti yields. Finally, Table 4 is a list of
+inferred 44 Ti yields from observed supernova remnants in the literature.
+8
+
+    Table 1. Predicted pre-explosive 44 Ti yields from the J. Issa et al. (2025a,b) models.
+
+    Mixing Profile                         Ingestion Rate (M⊙ s−1 )    Predicted 44 Ti Yield (M⊙ )
+    DMLT                                                0                      1.94 × 10−7
+    DMLT                                            4 × 10−5                   2.00 × 10−7
+    DMLT                                            4 × 10−4                   2.83 × 10−7
+    DMLT                                            4 × 10−3                   5.40 × 10−7
+    D3D−insp.                                           0                      1.61 × 10−7
+    D3D−insp.                                       4 × 10−5                   1.66 × 10−7
+    D3D−insp.                                       4 × 10−4                   2.46 × 10−7
+    D3D−insp.                                       4 × 10−3                   1.60 × 10−6
+    3 × D3D−insp.                                       0                      1.85 × 10−7
+    3 × D3D−insp.                                   4 × 10−5                   2.22 × 10−7
+    3 × D3D−insp.                                   4 × 10−4                   9.54 × 10−7
+    3 × D3D−insp.                                   4 × 10−3                   5.65 × 10−5
+    10 × D3D−insp.                                      0                      2.40 × 10−7
+    10 × D3D−insp.                                  4 × 10−5                   3.03 × 10−7
+    10 × D3D−insp.                                  4 × 10−4                   1.53 × 10−6
+    10 × D3D−insp.                                  4 × 10−3                   9.83 × 10−4
+    50 × D3D−insp.                                      0                      2.96 × 10−7
+    50 × D3D−insp.                                  4 × 10−5                   3.66 × 10−7
+    50 × D3D−insp.                                  4 × 10−4                   1.67 × 10−6
+    50 × D3D−insp.                                  4 × 10−3                   6.69 × 10−3
+    Quenched at 4.95 Mm to 1014 cm2 s−1             4 × 10−3                   2.38 × 10−7
+    Quenched at 4.95 Mm to 1013 cm2 s−1             4 × 10−3                   1.29 × 10−7
+    Quenched at 7.5 Mm to 1014 cm2 s−1              4 × 10−3                   2.61 × 10−7
+    Quenched at 7.5 Mm to 1013 cm2 s−1              4 × 10−3                   1.10 × 10−7
+                                                        O-C Mergers and 44 Ti                                                       9
+
+                   Table 2. Pre-explosive and explosive 44 Ti yields of the C. Ritter et al. (2018) models.
+
+                           Mass    Metallicity    Pre-Explosive Yield (M⊙ )          Explosive Yield (M⊙ )   O-C Merger
+                                                                        −9                        −4
+                           12      0.0001                     3.74 × 10                   1.25 × 10
+                           12      0.001                      2.41 × 10−9                 6.30 × 10−5           Yes
+                           12      0.006                      2.62 × 10−9                 1.09 × 10−4
+                           12      0.01                       5.02 × 10−9                 1.02 × 10−4           Yes
+                           12      0.02                       3.51 × 10−9                 8.37 × 10−5
+                           15      0.0001                  1.93 × 10−10                   8.39 × 10−6
+                           15      0.001                   1.75 × 10−11                   4.14 × 10−6
+                           15      0.006                   2.13 × 10−10                   6.16 × 10−5
+                           15      0.01                    1.69 × 10−9                    7.36 × 10−6           Yes
+                           15      0.02                    5.36 × 10−7                    1.65 × 10−6           Yes
+                           20      0.0001                  3.70 × 10−12                   5.19 × 10−7
+                           20      0.001                   3.83 × 10−11                   5.97 × 10−6
+                           20      0.006                   1.49 × 10−11                   6.88 × 10−4
+                           20      0.01                    2.67 × 10−7                    2.67 × 10−7           Yes
+                           20      0.02                    2.55 × 10−11                   6.17 × 10−7
+                           25      0.0001                  2.41 × 10−14                  4.64 × 10−11
+                           25      0.001                   2.05 × 10−13                  6.64 × 10−8
+                           25      0.006                   3.26 × 10−13                  4.44 × 10−9
+                           25      0.01                    4.23 × 10−13                  5.21 × 10−6
+                           25      0.02                    1.32 × 10−11                  7.72 × 10−9
+
+
+
+
+                                   Table 3. Explosive 44 Ti yields from models in the literature.
+
+                                                  44
+Paper                                                  Ti Yield (M⊙ )                                   Notes
+                                                         −33                −4
+S. E. Woosley & T. A. Weaver (1995)         1.35 × 10          −2.44 × 10                  1D Models (11−40 M⊙ , 0−1 Z⊙ )
+                                                                  −4
+G. Magkotsios et al. (2010)                            1.04 × 10                             1D Supernova (16 M⊙ , Z⊙ )
+                                                       2.66 × 10−5                           1D Hypernova (16 M⊙ , Z⊙ )
+                                                       6.98 × 10−5                       2D Rotating Supernova (15 M⊙ , Z⊙ )
+T. Sukhbold et al. (2016)a                        (0−7.45) × 10−5                  1D Neutrino-Driven Supernovae (9−120 M⊙ , Z⊙ )
+                                                                       −5
+A. Chieffi & M. Limongi (2017)                   (0.89−6.0) × 10                 1D Non-Rotating Models (13−120 M⊙ , [Fe/H] = −1, 0)
+                                                  (0.6−5.8) × 10−5                 1D Rotating Models (13−120 M⊙ , [Fe/H] = −1, 0)
+M. Eichler et al. (2017)                         (1.14−1.35) × 10−5                           2D Supernova (17 M⊙ , Z⊙ )
+                                                         −6                 −4
+A. Wongwathanarat et al. (2017)             8.66 × 10         −1.49 × 10              3D Neutrino-Driven Supernova (15 M⊙ , Z⊙ )
+                                                                  −5
+A. Sieverding et al. (2023)                            1.80 × 10                    3D Neutrino-Driven Supernova (18.88 M⊙ , Z⊙ )
+                                        a
+                                Note— Yields for this work are from http://doi.org/10.17617/1.b.
+10
+
+                  Table 4. 44 Ti yields from observations in the literature.
+
+          Paper                               Inferred 44 Ti Yield (M⊙ )           Notes
+                                                                     −4
+          A. F. Iyudin et al. (1994)              (1.4 ± 0.4) × 10             Cassiopeia A
+                                                  (3.2 ± 0.8) × 10−4
+          J. Vink et al. (2001)                    (0.8−2.5) × 10−4            Cassiopeia A
+                                                                −5
+          K. J. Borkowski et al. (2010)            2.8+2.3
+                                                      −1.7 × 10                 G1.9+0.3 a
+                                                   1.3−0.94 × 10−5
+                                                      +1.3
+
+                                                                 −5
+                                                   3.3+3.2
+                                                      −2.35 × 10
+
+          A. Jerkstrand et al. (2011)             (1.5 ± 0.5) × 10−4             SN 1987A
+                                                                     −4
+          S. A. Grebenev et al. (2012)            (3.1 ± 0.8) × 10               SN 1987A
+          E. Troja et al. (2014)                    (0.3−3) × 10−4             Tycho’s SNRa
+          S. E. Boggs et al. (2015)               (1.5 ± 0.3) × 10−4             SN 1987A
+                                                                      −4
+          T. Siegert et al. (2015)               (1.37 ± 0.19) × 10            Cassiopeia A
+                                                                     −4
+          W. Wang & Z. Li (2016)                  (1.3 ± 0.4) × 10             Cassiopeia A
+                                                                      −4
+          B. W. Grefenstette et al. (2017)       (1.54 ± 0.21) × 10            Cassiopeia A
+          C. Weinberger et al. (2020)             2.6 ± 0.6 × 10−4             Cassiopeia A
+                                                    ≤6.9 × 10−4                  SN 1987A
+                                             ≤3.3 × 10−5 or ≤2.2 × 10−1         Vela Juniorb
+                                                    ≤4.8 × 10−4                Tycho’s SNRa
+                                                     ≤3 × 10−5                  G1.9E+0.3a
+                                                     ≤4 × 10−4                 Kepler’s SNRa
+
+     Note— a Thought to be a Type Ia supernova remnant. b Unknown supernova type.
+

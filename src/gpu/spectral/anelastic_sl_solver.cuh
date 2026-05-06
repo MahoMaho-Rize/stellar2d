@@ -196,6 +196,23 @@ struct AnelasticSLSolver {
     double* d_strang_db    = nullptr;
     bool td_strang_nonlinear = false;  // env ANSL_TD_KIND=strang_nonlinear
 
+    // ── Passive tracer X (Route A — Andrassy 2022 2D companion) ─────────
+    // Single composition scalar, advected by the (u, v) velocity field.
+    // No source, no projection: X keeps its kx=0 column (= ⟨X⟩_x(y, t), the
+    // horizontally-averaged composition profile that IS the Andrassy 2022
+    // entrainment diagnostic).  NOT projected onto V_K — passive scalars
+    // have no divergence constraint; the W-advection precedent (2026-05-04
+    // fix) only applies to dynamical fields coupled through continuity.
+    //
+    // Enabled via set_tracer_enabled(true) before init_*.  Default off so
+    // existing DNS runs pay no memory / time cost.
+    bool    tracer_enabled  = false;
+    double* d_X             = nullptr;   // (ncell,) row-major like d_v
+    double* d_strang_x0     = nullptr;   // RK4 snapshot / accumulator / substep / deriv
+    double* d_strang_x_acc  = nullptr;
+    double* d_strang_x_s    = nullptr;
+    double* d_strang_dx     = nullptr;
+
     // Chebyshev differentiation matrix on [0, Ly] (ny × ny, col-major for DGEMM).
     // Uploaded once in set_background, reused every RK substep.
     double* d_Dy = nullptr;
@@ -369,6 +386,25 @@ struct AnelasticSLSolver {
     double probe_v_center();
 
     void download_b(std::vector<double>& h_b);
+
+    // Route A passive tracer API -----------------------------------------
+    // Must be called before init(): allocates d_X and Strang scratch.
+    void set_tracer_enabled(bool on) { tracer_enabled = on; }
+
+    // tanh interface IC:  X(y) = 0.5·(1 + tanh((y - y0)/δ))
+    // Horizontal-uniform (kx=0 only).  Smooth enough to avoid Gibbs.
+    void init_tracer_tanh(double y0, double delta);
+
+    // Uniform initial value X(x, y) = x0 everywhere (solid-body rotation test).
+    void init_tracer_uniform(double x0);
+
+    // Download physical-space X into host buffer (size ncell).
+    void download_X(std::vector<double>& h_X);
+
+    // Total ρ₀-weighted tracer mass ∫ρ₀·X dV, integrated with Clenshaw-
+    // Curtis weights in y and trapezoid in x (periodic).  Used as the pure-
+    // advection conservation diagnostic (should be invariant to ~1e-12).
+    double total_tracer_mass();
 
     // ────────────────────────────────────────────────────────────────────
     // 2D anelastic g-mode EVP  (Phase 1e foundation)

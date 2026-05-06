@@ -1,0 +1,729 @@
+                                                 Draft version March 27, 2026
+                                                 Typeset using LATEX twocolumn style in AASTeX7.0.1
+
+
+
+
+                                               Production of heavy α-elements and 44Ti in Cas A: comparison to abundances from 1D core-collapse
+                                                                supernova models and evidence for Carbon-Oxygen shell mergers
+                                                L. Boccioli     ,1, 2 L. Roberti      ,3, 4, 5, 6 C. Fryer   ,7, 8 S. Safi-Harb   ,9 S. Jones    ,10 and M. Pignatari          3, 4, 11, 12
+
+                                                                              1 Department of Physics, University of California, Berkeley, CA 94720, USA
+                                                                         2 Department of Astronomy, University of California, Berkeley, CA 94720, USA
+                                                3 Konkoly Observatory, Research Centre for Astronomy and Earth Sciences, HUN-REN, Konkoly Thege Miklós út 15-17, Budapest,
+
+                                                                                                             H-1121, Hungary
+arXiv:2603.24758v1 [astro-ph.HE] 25 Mar 2026
+
+
+
+
+                                                           4 CSFK HUN-REN, MTA Centre of Excellence, Konkoly Thege Miklós út 15-17, Budapest, H-1121, Hungary
+                                                   5 Istituto Nazionale di Astrofisica – Osservatorio Astronomico di Roma, Via Frascati 33, Monte Porzio Catone, I-00040, Italy
+                                                         6 Istituto Nazionale di Fisica Nucleare - Laboratori Nazionali del Sud, Via Santa Sofia 62, Catania, I-95123, Italy
+                                                               7 Center for Theoretical Astrophysics, Los Alamos National Laboratory, Los Alamos, NM 87545, USA
+                                                                  8 Center for Nonlinear Studies, Los Alamos National Laboratory, Los Alamos, NM 87545, USA
+                                                                 9 Department of Physics & Astronomy, University of Manitoba, Winnipeg, MB R3T 2N2, Canada
+                                                                      10 Theoretical Division, Los Alamos National Laboratory, Los Alamos, NM 87545, USA
+                                                             11 Bavarian Geoinstitute (BGI), University of Bayreuth, Universitätsstraße 30, 95447 Bayreuth, Germany
+                                                                                         12 NuGrid Collaboration, http://www.nugridstars.org
+
+
+
+                                                                                                             ABSTRACT
+                                                          The merger between the carbon (C) and oxygen (O) shells hours to days before the collapse of a
+                                                       massive star significantly changes its nucleosynthesis, which is reflected in the elemental ratios observed
+                                                       in supernova remnants (SNRs). We present a nucleosynthesis study of 44 Ti production in core-collapse
+                                                       supernovae (CCSNe), highlighting large silicon (Si), sulfur (S), calcium (Ca), and, most importantly,
+                                                       argon (Ar) to neon (Ne) ratios as diagnostics for carbon-oxygen (C–O) shell mergers. We compare
+                                                       yields from eight different sets of CCSNe models to observations of Cassiopeia A (Cas A), and show
+                                                       that C–O shell mergers are consistently the models that best match X-ray and infrared observations.
+                                                       These models produce high Ar/Ne ratios (≳ 0.1), due to 20 Ne depletion and production of 36 Ar and
+                                                       38
+                                                          Ar, while lower ratios are obtained from non-merger cases. Based on the Ar/Ne diagnostic, we
+                                                       compare the range of expected 44 Ti produced by C–O shell mergers, which is up to ∼ 20 − 30% of
+                                                       the overall 44 Ti, but expected to be located outside the reverse shock. Based on the sets of models
+                                                       considered, the photon flux expected from the 44 Ti synthesized in the C–O shell merger in Cas A is
+                                                       below the NuSTAR and COSI detection limits, compatible with current limits locating most of the
+                                                       44
+                                                          Ti interior to the reverse shock, but might be detectable from proposed missions like ASCENT.
+                                                       Finally, for the SNR of 1987A, a dominant C–O merger origin of the observed 44 Ti is unlikely based
+                                                       on the observed redshift in its 44 Ti line.
+
+                                                                 1. INTRODUCTION                                        will therefore leave an imprint in the supernova rem-
+                                                 During the explosion of a core-collapse supernova                      nant (SNR) hundreds of years after the explosion (D.
+                                               (CCSN), the shock travels through the outer layers of                    Milisavljevic & R. A. Fesen 2017; A. Jerkstrand et al.
+                                               the star, compressing and heating up material that is                    2026).
+                                               eventually swept up and ejected. Some of this mate-                         One of the most studied SNRs is Cassiopeia A
+                                               rial reaches temperatures high enough to synthesize new                  (Cas A), which has recently been suggested to be the
+                                               elements during successive explosive burning episodes                    result of the explosion of a star that experienced a C–O
+                                               (W. D. Arnett 1969; S. Woosley & T. Weaver 1995; M.                      shell merger (T. Sato et al. 2025). The C–O shell merger
+                                               Limongi & A. Chieffi 2018). The rest of the material is                  is a phenomenon observed in several 1D stellar evolution
+                                               instead ejected without being reprocessed, and all of the                simulations (C. Ritter et al. 2018b; L. Roberti et al.
+                                               explosive and pre-supernova nucleosynthetic signatures                   2025) and has also been studied with multi-dimensional
+                                                                                                                        simulations of convective shells in massive stars (R. An-
+                                                                                                                        drassy et al. 2020; F. Rizzuti et al. 2023, 2024). Days or
+                                               Email: lbocciol@berkeley.edu                                             even hours before core-collapse, the O-burning shell can
+2
+
+ingest material from the overlying Ne and C shells, acti-      length theory (MLT) prescription calibrated to multi-
+vating several fusion reactions involving 12C, 16O and, as     dimensional simulations. Therefore, explosion energies,
+a consequence, several proton-capture reactions predom-        mass cuts, and explodability arise consistently once the
+inantly on S, P, and Ar (i.e. SPAr burning, L. Roberti         mixing length has been calibrated. To these, we added
+& M. Pignatari 2025) powering the convective-reactive          118 CCSN yields from T. Sukhbold et al. (2016), whose
+event.                                                         explosion simulations follow a more approximate pre-
+   C–O shell mergers have been investigated mostly be-         scription. However, as we will show throughout the pa-
+cause of their nucleosynthetic signatures in the produc-       per, most of the material coming from the C–O shell
+tion of p-process nuclei beyond Fe (C. Ritter et al. 2018b;    ends up being ejected with very little reprocessing from
+L. Roberti et al. 2023) and odd-Z nuclei (J. Issa et al.       the shock, showing that this analysis is only weakly de-
+2025; L. Roberti et al. 2025; J. Issa et al. 2026). In light   pendent on the exact prescription adopted for the explo-
+of these studies, the XRISM collaboration (M. Audard           sion, and it is mostly dependent on the pre-supernova
+et al. 2025; T. Sato et al. 2025) has recently analyzed        evolution. We selected progenitor models spanning a
+the emission from Cl, K, Ne, Mg, Si, and Ar in Cas A,          wide range of initial conditions, and more details about
+finding many similarities with the nucleosynthetic sig-        the pre-supernova and explosion models can be found in
+natures of C–O shell merger progenitors.                       Appendix A. Out of these 274 progenitor models ana-
+   In this work, we study the production of 44Ti in the C–     lyzed, 20 show evidence of a C–O shell merger.
+O merger, together with the α-elements neon (Ne), sili-           Although 1D CCSN models are widely used for vari-
+con (Si), sulfur (S), argon (Ar), and calcium (Ca), and        ous astrophysical applications – such as input for galac-
+directly compare it to abundance estimates of Cas A and        tic chemical evolution simulations and direct compar-
+other remnants. Contrary to previous studies, which fo-        isons with observations (e.g., stellar archaeology and
+cused on selected regions in the remnant, we focus on          cosmochemistry) – their limitations in reproducing cer-
+the entire observable ejecta. Therefore, we are able to        tain observational features have been previously high-
+derive a global and robust condition to determine the          lighted (see, e.g., C. Braun et al. 2023; S. Orlando et al.
+occurrence of a C–O merger based on the Ar/Ne ratio            2025a,b; C. Treyturik et al. 2026, for comparisons with
+estimated in any SNR. Moreover, we also discuss predic-        SNRs). Nevertheless, extensive grids of 1D CCSN mod-
+tions and place bounds on the amount of 44Ti in Cas A          els enable building a broad picture of abundance yields
+that could have been produced in a C–O shell merger.           and nuclear reaction rate combinations achievable across
+   This work is organized as follows: in Section 2 the stel-   progenitor histories (e.g., L. Roberti et al. 2025) and
+lar models adopted are described; in Section 3 we sum-         explosion configurations (e.g., S. Andrews et al. 2019),
+marize the basic nucleosynthesis in C–O shell mergers;         within a realistic range of conditions.
+the production of α-elements and of 44Ti in comparison            It should be stressed that 1D models may not accu-
+with Cas A observations are given in Sections 4 and 5,         rately predict the integrated yields of individual isotopes
+respectively, where we also discuss how velocity distri-       and their spatial distributions due to multi-dimensional
+butions in the ejecta of 1987A can be used as indications      mixing, during both the pre-supernova convection and
+of C–O shell mergers. Summary and conclusions are in           the explosion phase. However, they still produce similar
+Section 6.                                                     thermodynamic conditions to 3D simulations since the
+                                                               nuclear reactions driving the production of the elements
+                     2. METHODS                                are expected to be the same (e.g., L. Roberti & M. Pig-
+                                                               natari 2025). Therefore, specific isotopic and elemental
+  To investigate the impact of C–O mergers on the
+                                                               ratios for abundant species sharing the same nucleosyn-
+production of heavy α-elements and 44Ti, we analyze
+                                                               thesis origin are preserved when the same nuclear rates
+the explosive nucleosynthesis yields from eight differ-
+                                                               are adopted. In the following sections, we demonstrate
+ent sets of pre-supernova models available in the lit-
+                                                               how we can leverage the advantages in computational
+erature. The explosion and nucleosynthesis of seven of
+                                                               efficiency and parameter exploration of 1D models to
+these sets (for a total of 156 progenitors) were computed
+                                                               provide valuable insights into SNRs despite their limita-
+following L. Boccioli & L. Roberti (2025). These are
+                                                               tions relative to 3D simulations. More detailed compar-
+1D+ explosion simulations, carried out using the open-
+                                                               isons with 3D simulations, particularly regarding asym-
+source code GR1D (E. O’Connor & C. D. Ott 2011;
+                                                               metries and other multi-D effects, are beyond the scope
+E. O’Connor 2015) coupled with the neutrino-driven
+                                                               of this paper and left for future work.
+convection model STIR (S. M. Couch et al. 2019; L.
+Boccioli et al. 2021). Contrary to other 1D explosion
+simulations, GR1D+ uses a time-dependent mixing-
+                                                                                                                        3
+
+3. PRE-EXPLOSIVE NUCLEOSYNTHESIS IN C–O                       productions of 56Ni as in earlier works (P. A. Young
+                                                      44
+   SHELL MERGERS AND PRODUCTION OF                      TI    et al. 2006).
+   C–O shell mergers are characterized by the inges-
+                                                                         4. ALPHA-ELEMENTS IN SNR
+tion of C-, Ne-, and O-rich material into the former O-
+burning shell from the overlaying burning shells. They          SNRs can be observed across a wide range of wave-
+occur a few hours to a few days before collapse, and          lengths; for this paper, we focus on infrared and X-ray
+their occurrence generally depends on the CO core mass        wavelengths. These two bands provide direct access to
+and the central 12 C abundance at the end of core He          emission lines from the key elements mentioned above.
+burning (L. Roberti et al. 2025). At such late stages,
+this ingestion provides the fuel to sustain an even more                     4.1. Infrared observations
+energetic O-burning, leading to a significant overproduc-       Instruments such as Spitzer and JWST can map the
+tion of light particles, such as protons and alpha parti-     entire remnant of Cas A (J. M. Laming & T. Temim
+cles, which can promptly interact with the surrounding        2020; D. Milisavljevic et al. 2024). They can therefore
+environment. Specifically, radiative proton-capture re-       be used to estimate the amount of unshocked ejecta,
+actions are activated via SPAr burning, which can dom-        with the most recent estimate being 0.47+0.47
+                                                                                                         −0.27 M⊙ (J. M.
+inate the local energy production (L. Roberti & M. Pig-       Laming & T. Temim 2020), compatible with other esti-
+natari 2025). The major nucleosynthesis products in-          mates: 0.18−0.3 M⊙ from U. Hwang & J. Laming (2012)
+clude heavy α-chain elements (Si, S, Ar, and up to Ca),       and 0.39 M⊙ from T. DeLaney et al. (2014). The most
+as well as odd-Z elements (P, Cl, K, Sc, C. Ritter et al.     recent JWST observations focused instead on 4 specific
+2018a; L. Roberti et al. 2025; J. Issa et al. 2025). The      points in the shocked and unshocked ejecta. Given the
+freshly synthesized material pollutes both the former O-      large contribution of dust emission and the theoretical
+and C-shell regions and will be ejected largely unpro-        challenges in modeling it, deriving abundance ratios is
+cessed by the subsequent CCSN explosion.                      far from straightforward. Nonetheless, spectra of the un-
+   Another isotope that can be produced in C–O shell          shocked material exhibit strong Ar and S emission lines.
+mergers is 44 Ti (A. Chieffi & M. Limongi 2017; L.            Notice that Ne lines in the unshocked material (specif-
+Roberti & M. Pignatari 2025; J. Issa & F. Herwig 2025).       ically, in the so-called “Green-Monster”) have been de-
+With a lifetime of ∼ 60 years, its radioactive decay can      tected (D. Milisavljevic et al. 2024). However, given
+be observed in SNRs that are a few hundred years old          their low velocities, they might be due to circumstel-
+(B. Grefenstette et al. 2014). At the same time, this         lar gas, and therefore their central location might sim-
+means that only hydrostatic burning at the very end of        ply be a projection effect (D. Milisavljevic et al. 2024).
+stellar evolution or explosive nucleosynthesis will be rel-   This overall would favor a C–O merger scenario (see also
+evant for its production. However, the 44 Ti produced         Section 4.2).
+during hydrostatic Si-burning is typically destroyed by         Given the small field size of the regions selected for the
+the passage of the shock, and only a very marginal pro-       NIRCam observations (∼ 10 − 50 arcsec2 D. Milisavlje-
+duction occurs in other hydrostatic burning in classi-        vic et al. 2024), a global analysis directly comparing to
+cal stellar evolution models. Several production chan-        1D simulations could be misleading. Nonetheless, these
+nels are instead available during explosive nucleosynthe-     infrared observations show evidence that a C–O merger
+sis, most notably incomplete Si-burning, α-rich freeze        scenario could be invoked in the context of Cas A. To
+out, and the “(p-γ)-leakage” channel in neutrino-driven       demonstrate this, we now compare nucleosynthesis mod-
+winds (G. Magkotsios et al. 2010). Traditionally, spher-      els more quantitatively with X-ray observations.
+ically symmetric explosions underestimate the produc-
+tion of 44Ti by a factor of 3–5 compared to Cas A and                          4.2. X-ray observations
+1987A observations (S. Woosley & A. Heger 2007; T.              The elemental composition of SNRs can be observed
+Sukhbold et al. 2016; M. Limongi & A. Chieffi 2018; S.        by X-ray telescopes like Chandra (M. C. Weisskopf
+Curtis et al. 2018; L. Boccioli & L. Roberti 2025). How-      et al. 2000), XMM-Newton (F. Jansen et al. 2001), and
+ever, as shown by the latest multi-dimensional simula-        XRISM ( XRISM Science Team 2020). However, only
+tions (A. Sieverding et al. 2023; T. Wang & A. Burrows        the material outside of the reverse shock (i.e., in the
+2024), a combination of re-heating at low densities due       shocked region) is detectable, because the yet unshocked
+to multi-dimensional turbulent effects, as well as proton-    material is too cold to emit X-ray photons. Once the re-
+rich neutrino-driven winds, can boost the production of       verse shock hits this material, it will be heated to X-ray-
+44
+  Ti to values typical of SNRs, without requiring over-       emitting temperatures. Deriving elemental masses and
+                                                              mass ratios from X-ray observations depends on several
+4
+
+assumptions adopted for the plasma modeling. There-            Audard et al. 2025; T. Sato et al. 2025). In particular,
+fore, different groups find different values for the overall   they focused on Cl/S versus K/Ar (M. Audard et al.
+masses of each element, as well as mass ratios, which is       2025) and Ne/Mg versus Si/Mg (T. Sato et al. 2025).
+why we focus on overall trends and global comparisons          However, from the nucleosynthesis point of view, most
+instead of trying to match a specific stellar model to a       of these ratios may not provide a robust diagnostic to
+specific observation.                                          verify whether the progenitor of the SNR experienced a
+  In this analysis, we focus on observations and abun-         C–O merger. For example, the odd elements Cl and K
+dance estimates from J. Vink et al. (1996); R. Willingale      are both expected to be strongly overproduced by the
+et al. (2002) and U. Hwang & J. Laming (2012). We also         C–O merger (e.g., C. Ritter et al. 2018a). However, Cl/S
+compared with the abundance ratios of T. Sato et al.           and K/Ar ratios also suffer from the S and Ar enhance-
+(2025) who, however, only focused on specific regions,         ment, and therefore, they may also be more sensitive to
+spanning a relatively small portion of the remnant. As         local dynamical properties that may not be accurately
+a consequence, the mass ratios reported for their inves-       captured by 1D models. The Ne/Mg ratio is also not
+tigated regions span the entire range of x and y axes          expected to be a robust diagnostic, since both Ne and
+in the two leftmost panels of Figure 1, which the au-          Mg are destroyed at typical O-burning conditions.
+thors attribute to an inhomogeneous mixing during the             An additional benefit of using Ne is that it is not going
+C–O merger. However, only detailed 3D simulations of           to be affected by molecular or dust condensation. Simi-
+the convective-reactive merger could investigate spatial       larly, the noble gas Ar is preserved by further chemical
+distributions and inhomogeneities in the ejecta, and we        processing in SNR material. This can be quite impor-
+therefore do not speculate further in this work.               tant since, for example, due to the complex modeling
+  As briefly outlined in the previous section (see also        of dust formation and its molecular chemistry, IR ob-
+D. Milisavljevic et al. 2024, for more details), the com-      servations have identified the same lines with different
+position of unshocked ejecta probably reflects Si- and         molecules: R. G. Arendt et al. (2014) attributed 21 µm
+O-burning conditions, given the presence of O, Si, S,          dust features to Mg0.7 SiO2.7 , whereas the same features
+and Ar (F.-K. Thielemann et al. 1996; A. Chieffi et al.        have been attributed to SiO2 grains by J. Rho et al.
+1998; S. Woosley et al. 2002). Therefore, the estimates        (2018). Therefore, mass estimates in the ejecta of Si
+of these elements’ total yields based on X-ray observa-        and Mg become even more uncertain, whereas Ne and
+tions are most likely a lower limit.                           Ar overcome this problem entirely.
+                                                                  In Figure 1, we show our diagnostic ratios to distin-
+        4.3. Model comparison to observations                  guish progenitors with a C–O shell merger from those
+                                                               without. In the three-element plots shown, the com-
+   In progenitors experiencing C–O shell mergers, ex-
+                                                               bined high Ar/Ne, Si/Ne, S/Ne, and Ca/Ne (≳ 0.1,
+tended parts of the SNR are expected to be enriched
+                                                               ≳ 1, ≳ 1, and ≳ 0.2 respectively) allow us to discrim-
+with heavy α-elements synthesized by the O burn-
+                                                               inate between models with and without a C–O shell
+ing. In particular, as discussed in Section 3, the C–
+                                                               merger. Notice that Ca/Ne is not as good a diagnos-
+O shell merger overproduces Si (28,29,30 Si), S (32,34 S),
+                                                               tic as the other ratios, as shown by the overlap between
+Ar (36,38 Ar), and possibly Ca (mostly 40,42 Ca), while
+                                                               progenitors with and without C–O mergers with similar
+it tends to destroy C-burning products (such as 20 Ne,
+23
+                                                               Ca/Ne ratios. This is due to the significant explosive
+   Na, and 24 Mg). In a typical pre-SN progenitor, Ne
+                                                               component of Ca, which is also the cause of the slightly
+and Mg are not reprocessed by the shock, since they are
+                                                               different slopes found in the GR1D models and in the
+usually synthesized in the C-burning shell, where peak
+                                                               ones from T. Sukhbold et al. (2016). We also include
+temperatures are quite low. Therefore, potentially, they
+                                                               data points where mass ratios were derived by J. Vink
+are both suitable elements to use as a reference. How-
+                                                               et al. (1996); R. Willingale et al. (2002); U. Hwang &
+ever, Ne is more sensitive to its combined depletion by
+                                                               J. Laming (2012) for Cas A. As mentioned above, dif-
+photodisintegration, via the 20 Ne(γ,α)16 O reaction and
+                                                               ferent abundance estimates from different authors can
+the α-capture reaction 20 Ne(α,γ)24 Mg, directly convert-
+                                                               change the value of these ratios. Nonetheless, the over-
+ing Ne in Mg. This last channel mitigates the Mg de-
+                                                               all trends can be clearly seen across observations, and
+pletion in these conditions. Therefore, Ne is more easily
+                                                               one can conclude that the only models matching ob-
+depleted in a C–O shell merger, providing a more sensi-
+                                                               servational estimates for all the three-element plots in
+tive diagnostic compared to Mg.
+                                                               Figure 1 are those that underwent a C–O shell merger.
+   Recently, several studies have targeted peculiar ele-
+ments synthesized during the C–O merger and analyzed
+their abundance ratios in different regions of Cas A (M.
+                                                                                                                                                                               5
+
+                                                                                                                                      0.8
+                        S16
+
+
+
+
+                                                                                                                                            Fraction of Merger Completeness
+                        GR1D
+                        Vink+ 96                                                                                                      0.7
+             100        Willingale+ 20
+                        Hwang+ 12
+                                                                                                                                      0.6
+  Ar / Ne
+
+
+
+
+            10−1                                                                                                                      0.5
+
+                                                                                                                                      0.4
+                 −2
+            10
+                                                                                                                                      0.3
+
+                                                                                                                                      0.2
+                      10−1         100    101 10−2   10−1      100   101   10−2    10−1   100    0.0   2.5      5.0    7.5   10.0
+                                                                                                         44
+                              Si / Ne                   S / Ne                    Ca / Ne                   Ti
+                                                                                                       Mejected [10−5 M ]
+
+
+Figure 1. Mass ratios of selected elements after the explosion, when all isotopes have decayed back to stability, for the
+nucleosynthesis yields from L. Boccioli & L. Roberti (2025) (star symbols) and T. Sukhbold et al. (2016) (squares). The x-axis
+of the rightmost panel shows the amount of 44Ti synthesized in the C–O merger and then ejected, calculated as outlined in the
+caption of Figure 2. Points are color-coded by the fraction of merger completeness (i.e. hoe well mixed the shell is (M. Loddo
+2026)), where everything below ∼ 0.4 − 0.5 (i.e. the cyan points) can be considered to not have experienced a C–O merger. The
+green dots show mass ratio estimates from U. Hwang & J. Laming (2012) for two values of the filling factor. Orange crosses are
+from three different regions (N, SE, W) observed by J. Vink et al. (1996). Red points are from R. Willingale et al. (2002), but
+since the rms uncertainty associated with them is very large, we decided not to show it.
+
+                                5. 44 TI IN CAS A                           and 44Ti synthesized in the merger are ejected without
+  Another powerful diagnostic in SNR is radioactive de-                     being reprocessed by any explosive burning.
+cay of 44Ti. The main reason is that the plasma and                           The total amount of 44Ti produced in the C–O merger
+spectral modeling uncertainties mentioned above do not                      that is eventually ejected (i.e. y-axis in Figure 2) ranges
+affect 44Ti, since decay lines are usually a much cleaner                   from 5 × 10−6 − 5 × 10−5 M⊙ , for models with Ar/Ne
+signal to detect by hard X-ray and gamma-ray tele-                          ratios compatible with Cas A. This corresponds to ∼
+scopes, such as NuSTAR and COSI, respectively. This                         5 − 30% of the total Cas A yield. Notice that, since 1D
+means that, in principle, 44Ti can be observed every-                       CCSN models typically underestimate the explosive 44Ti
+where in the remnant. The latest estimate of the amount                     production by a factor of 3-5 as discussed earlier, we do
+of 44Ti produced by Cas A is (1.54 ± 0.21) × 10−4 M⊙                        not discuss the explosive component, which is however
+(B. Grefenstette et al. 2014; B. W. Grefenstette et al.                     still expected to dominate the overall abundance of 44Ti.
+2016). Its spatial distribution has been mapped by B.
+                                                                                         5.1. Predicted line fluxes for 44Ti
+Grefenstette et al. (2014) using NuSTAR data (F. A.
+Harrison et al. 2013), revealing that most of the 44Ti is                     In B. W. Grefenstette et al. (2016), NuSTAR data is
+centrally located.                                                          used to infer the amount of 44Ti in the remnant. The
+  This seems to be at odds with the C–O shell merger                        angular resolution is 18” and, since Cas A spans ∼ 5 ar-
+scenario, according to which some 44Ti should be present                    cmin in the sky, the remnant is mapped in 64 different
+in O-rich regions located in the shocked regions farther                    regions. Only in 10 of these bins (all centrally located),
+out. One possibility is that the 44Ti produced in the                       a positive detection of the 68 keV line was reported. Up-
+C–O merger is destroyed by the passage of the shock.                        per limits for the photon flux F68 were provided for the
+However, as shown in the right panel of Figure 1 and                        other regions (see Figure 7 of B. W. Grefenstette et al.
+in Figure 2, a significant fraction is still ejected, and                   2016), ranging from 5 − 10 × 10−7 γ cm−2 s−1 .
+we will discuss what the expected photon flux from this                       To test whether the 44Ti ejected from the C–O shell
+component would be in Section 5.1. When the sudden                          merged shell could be detected, we calculated the ex-
+merger ignites nuclear burning, the shells expand and                       pected photon flux F68 by using Equation (1) from J.
+decrease their densities, readjusting the envelope to re-                   Weng et al. (2024):
+spond to the newly ignited burning episode. Later on,                                                           τ                 F68
+when the shock sweeps the shell, this causes the peak                              M ( 44Ti) = 44mp × 4πD2               2t/τ ×         ,                                     (1)
+temperatures to decrease relatively quickly. The net re-                                                          ln2               Iγ
+sult, as shown in Figure 2, is that most of the C–O shell
+                                                                            where M ( 44Ti) is the total mass of 44Ti, mp is the proton
+                                                                            mass, D is the distance of the SNR, τ is the half life
+6
+
+                                                                                      2.00                               lower, and the entire Cas A remnant will be mapped into
+                                                                  015f300
+                                                                                                                         one pixel. Using again (1), this sensitivity corresponds
+                                                                                                                         to ∼ 10−5 M⊙ , and COSI will therefore be able to sig-
+
+
+
+
+                                                                                             Mass of merged shell [M ]
+                         6                               015z300                      1.75
+                                                                                                                         nificantly improve the estimate for the total amount of
+             [10−5 M ]
+
+
+
+
+                                                             015f450                                                     44
+                                                                  015e300             1.50                                 Ti in Cas A.
+                                                                   015f600
+                         4                                                                                                  Future proposed missions like ASCENT (F. Kislat
+                                                                                      1.25                               et al. 2023) could reach narrow line sensitivities of
+                                               013a250
+    Mejected
+
+
+
+
+                                                                                                                         ∼ 2 − 4 × 10−7 γ cm−2 s−1 , and therefore might be
+       Ti
+
+
+
+
+                                                                                      1.00
+    44
+
+
+
+
+                         2                                                                                               able to put better constraints on how much 44Ti was
+                                                                                      0.75                               produced in Cas A from the C–O merger.
+                                                   013 bin
+                              015d000                                    011 bin                                            We can also use Equation (1) to derive a conservative
+                         0                    015d150
+                                                                                      0.50                               upper limit based on non-detection of 44Ti in the exter-
+                             0.00        0.25        0.50       0.75           1.00
+                                              44
+                                                 Ti       44
+                                                             Ti                                                          nal regions: even assuming that all those upper limits
+                                            Mejected / Mmerger
+                                                                                                                         were close to the 44Ti actually present in the bins, they
+                                        44
+                                                                                                                         would sum up to 4 × 10−5 M⊙ , which corresponds to
+                  Ti
+Figure 2. Mmerger      represents the 44Ti produced in the                                                               about 26% of the total 44Ti measured by NuSTAR in
+merger. We define it as the integrated yield above the                                                                   Cas A.
+                                              44
+                                                 Ti
+Si/Si-O interface in the pre-SN progenitor. Mejected is then                                                                In summary, we cannot exclude that, if the progenitor
+calculated by considering only the shells above the Si/Si-O
+                                                                                                                         of Cas A experienced a C–O shell merger before collapse,
+interface where the pre-SN abundance of 44Ti changes by less
+than 1 % after the explosion. Grey points are stars without                                                              there could still be up to ∼ 25% of 44Ti in the outer
+a C–O merger, whereas those with a C–O merger have been                                                                  ejecta, below NuSTAR detection limits, although future
+color-coded by the mass of the merged shell, and annotated                                                               confirmed (COSI ) and proposed (ASCENT ) missions
+with the model ID convention outlined in Table 1 and in Ap-                                                              will be able to improve on these estimates. Based on the
+pendix A.                                                                                                                approximate estimation provided here using 1D models
+                                                                                                                         with similar Ar/Ne ratios to what is observed in Cas A,
+of 44Ti, t is the age of the SNR, Iγ is the absolute γ                                                                   the fraction of 44 Ti present in the C–O shell would be
+intensity, and F68 is the 68 keV line flux. We adopt                                                                     up to 20% of the total 44 Ti, which is compatible with
+standard values for D = 3.4 kpc and t = 355 yrs, as in                                                                   the upper limits derived above.
+(B. W. Grefenstette et al. 2016), and τ = 59.1 yrs and
+Iγ = 0.93 as in J. Chen et al. (2011). For the amount of                                                                   5.2. 1987A: preliminary considerations about C–O
+44
+  Ti, we use M ( 44Ti) = 3 − 3.5 × 10−5 M⊙ based on the                                                                             shell merger contributions using 44Ti
+44
+  Ti ejected in models that reproduce Ar/Ne found in
+                                                                                                                            1987A is the only other SNR from a core-collapse ex-
+Cas A (see right panel of Figure 1). From Equation (1),
+                                                                                                                         plosion where a confirmed detection of 44Ti lines was re-
+this leads to F68 ≈ 4 × 10−6 γ cm−2 s−1 .
+                                                                                                                         ported (S. Boggs et al. 2015). There, the total 44 Ti mass
+   However, we also have to take into account how the
+44                                                                                                                       is measured to be 1.5+0.3
+                                                                                                                                                −0.3 × 10
+                                                                                                                                                         −4
+                                                                                                                                                             M⊙ , similar to that of
+  Ti produced in the merger is distributed. Since it
+                                                                                                                         Cas A. We choose not to discuss any elemental mass
+will be spread out over the ejecta of the former C–O
+                                                                                                                         ratios for this SNR, since most of the X-ray emission
+shell, it will be distributed on multiple bins of NuSTAR,
+                                                                                                                         from SN1987 is dominated by the circumstellar medium
+and therefore the flux estimates above (i.e., M ( 44Ti) in
+                                                                                                                         (CSM) (A. P. Ravi et al. 2024; XRISM Collaboration
+Equation (1)) should be divided by the number of bins
+                                                                                                                         et al. 2025), and this makes their comparison with stellar
+that span the outer ejecta. A reasonable estimate, based
+                                                                                                                         models highly uncertain at the moment. More extensive
+on the maps reported in B. W. Grefenstette et al. (2016),
+                                                                                                                         observations are needed.
+would be ∼ 8−10 bins, i.e. the bins immediately outside
+                                                                                                                            The breadth and asymmetry in the γ−ray lines of 56 Ni
+the reverse shock. This would lower the expected flux
+                                                                                                                         decay (J. Tueller et al. 1990), led to the development of
+to an average of ∼ 1 − 4 × 10−7 γ cm−2 s−1 , which is
+                                                                                                                         the current convection-enhanced neutrino-driven super-
+a factor of 2-10 below the detection limit of NuSTAR
+                                                                                                                         nova paradigm with a single large ejecta mode predom-
+mentioned earlier.
+                                                                                                                         inantly moving away from our line of sight (K. J. Grant
+   In the future gamma-ray telescope COSI, the detec-
+                                                                                                                         & A. J. Dean 1993). The 44 Ti decay line features are
+tion sensitivity of the total amount of 44Ti will be
+                                                                                                                         also redshifted (S. Boggs et al. 2015), suggesting the
+a factor of two better than NuSTAR, i.e. 1 − 2 ×
+                                                                                                                         bulk of the 44 Ti was produced together with 56 Ni. In
+106 γ cm−2 s−1 (H. Yoneda et al. 2025). However,
+                                                                                                                         the case that a high fraction of 44 Ti was produced in a
+the angular resolution of gamma-ray telescopes is much
+                                                                                                                         hypothetical extended C–O shell merger, its ejecta com-
+                                                                                                                        7
+
+ponent should have been visible with non-redshifted or                equivalent to about 20% of the observed 44 Ti. This
+even blueshifted features. This would have generated                  number is compatible with 1D model predictions
+a much broader line with no clear redshift. With cur-                 from C–O mergers for models with similar Cas A
+rent observational errors, it is difficult to derive stringent        Ar/Ne ratios. Instead, based on the very similar
+quantitative constraints. Therefore, we conclude that a               redshift in gamma-ray lines and, therefore, veloc-
+strong 44 Ti contribution from a C–O merger in 1987A                  ity distributions of 56Ni and 44Ti, we concluded
+is extremely unlikely.                                                that a strong 44Ti component from a C–O merger
+                                                                      in 1987A is extremely unlikely.
+                   6. CONCLUSIONS
+  In this work, we have conducted a nucleosynthesis
+investigation for the production of 44 Ti and the α-                • Similar considerations could be derived for other
+elements Ne, Si, S, Ar, and Ca in core-collapse super-                SNRs, where measurements of Ne and/or Ar are
+novae (CCSNe), with a focus on the diagnostic poten-                  more uncertain or not available (e.g., G15.9+0.2,
+tial of large argon-to-neon (Ar/Ne) ratios to identify                Kes 79, Puppis A, G349.7+0.2, G350.1–0.3 C.
+pre-explosion carbon–oxygen (C–O) shell mergers. By                   Braun et al. 2023), oftentimes due to their high
+comparing yields from several distinct sets of 274 CCSN               column density. We therefore reiterate the impor-
+models - spanning standard single-star progenitors and                tance of estimating abundances of both Ne (or, if
+those incorporating C–O shell mergers - we demonstrate                not available, Mg) and Ar, as these are elements
+that merger scenarios provide the most consistent match               that can robustly probe the occurrence of C–O
+to the observational properties of Cassiopeia A (Cas A).              shell mergers.
+  The key findings are as follows:
+                                                                   Although 1D models have inherent limitations in cap-
+    • C–O shell merger models produce high Ar/Ne
+                                                                 turing multi-dimensional asymmetries and mixing com-
+      mass ratios (≳ 0.1) through substantial depletion
+                                                                 ing from the intrinsic 3D nature of C–O shell mergers,
+      of Ne via nuclear reactions during the merger,
+                                                                 we expect them to preserve major qualitative signatures
+      while Ar (in particular 36 Ar and 38 Ar) is enhanced.
+                                                                 such as correlated elemental/isotopic ratios mostly gov-
+      In contrast, non-merger models yield systemati-
+                                                                 erned by nuclear reaction rates. This makes them valu-
+      cally show lower ratios within a wide range of pro-
+                                                                 able tools for diagnostic applications like the Ar/Ne ra-
+      genitor masses, metallicities, rotations, and CCSN
+                                                                 tio and other ratios explored here (Si/Ne, S/Ne, Ca/Ne).
+      explosion setups considered. We therefore con-
+                                                                 In particular, for the considered mass ratios, we do not
+      clude that Ar/Ne is a powerful, observationally
+                                                                 see any specific point of failure for 1D CCSN models
+      accessible tracer for merger signatures in SNRs.
+                                                                 with the current observational limitations, particularly
+      Contrary to other elements and elemental ratios
+                                                                 when considering the entirety of the ejecta.
+      previously used to identify C–O merger signatures
+                                                                   The large number of 1D models adopted spans a wide
+      in Cas A, Ne and Ar are noble gases, and there-
+                                                                 range of ZAMS masses, metallicities, and rotations, in-
+      fore not affected by molecular or dust condensa-
+                                                                 cluding some binary progenitors. Therefore, they pro-
+      tions in SNRs, and they are accessible to both X-
+                                                                 vide an ideal statistical background to explore the full
+      ray (e.g., Chandra, XMM-Newton, XRISM ) and
+                                                                 range of nuclear-reaction activations and ensuing nucle-
+      IR (e.g., Spitzer, JWST ) spectroscopy, of shocked
+                                                                 osynthesis signatures to compare with observations, and
+      and unshocked ejecta. Combined with the bench-
+                                                                 identify relevant diagnostics for the macroscopic prop-
+      mark Ar/Ne ratio, we show that high Si/Ne, S/Ne,
+                                                                 erties of C–O shell mergers. The overall agreement be-
+      and Ca/Ne ratios can also be used to identify the
+                                                                 tween 1D stellar models, despite their inherent inability
+      nucleosynthesis signature of C–O shell mergers.
+                                                                 to model asymmetries, and observations of the entire
+    • We confirm that nucleosynthesis induced by C–O             ejecta of Cas A is remarkable. Moreover, their successes
+      mergers can efficiently produce 44 Ti. This merger         and limitations can be used to constrain the main prop-
+      component of 44 Ti is expected to have broader ve-         erties of the next generations of 3D C–O shell merger
+      locity distributions and to be located at relatively       models, with the goal to reproduce quantitative elemen-
+      large radii. However, for the specific case of Cas A,      tal yields and asymmetries in the C–O shell merger of
+      NuSTAR finds 44 Ti to be very centrally located            the Cas A progenitor, or of other SNRs that will be
+      (B. W. Grefenstette et al. 2016). We therefore de-         studied in the future.
+      rive an observational upper limit for the 44 Ti based
+      on the non-detection in the external Cas A bins,
+8
+
+                ACKNOWLEDGMENTS                                         oped and operated by the Computational Stellar Astro-
+The authors would like to thank Kasun Wimalasena and                    physics group (http://csa.phys.uvic.ca) at the Univer-
+Fabian Kislat for useful discussions on ASCENT. Nu-                     sity of Victoria and hosted on the Computed Canada Ar-
+Grid was supported by the European Union’s Horizon                      butus Cloud at the University of Victoria. LR acknowl-
+2020 research and innovation programme (ChETEC-                         edges the support from the PRIN URKA Grant Number
+INFRA – Project no. 101008324), the Lendület Pro-                      prin_2022rjlwhn. The work by CLF was supported by
+gram LP2023-10 of the Hungarian Academy of Sciences,                    the US Department of Energy through the Los Alamos
+the Hungarian NKFIH via K-project 138031 and NKKP                       National Laboratory. Los Alamos National Laboratory
+Advanced grant 153697, and the IReNA network by                         is operated by Triad National Security, LLC, for the Na-
+NSF AccelNet (Grant No. OISE-1927130). LB is sup-                       tional Nuclear Security Administration of U.S. Depart-
+ported by the U.S. Department of Energy under Grant                     ment of Energy (Contract No. 89233218CNA000001).
+No. DE-SC0004658 and SciDAC grant, DE-SC0024388.                        SSH acknowledges support from the Natural Sciences
+LB would like to thank the N3AS center for its hospi-                   and Engineering Research Council of Canada (NSERC)
+tality and support, and Dan Kasen and Tianshu Wang                      through the Canada Research Chairs and the Discovery
+for fruitful discussions. MP thanks the support from                    Grants programs. This work benefited from interactions
+the ERC Synergy Grant Programme (Geoastronomy,                          and workshops co-organized by The Center for Nuclear
+grant agreement number 101166936, Germany). MP                          astrophysics Across Messengers (CeNAM) which is sup-
+thanks access to viper, the University of Hull HPC Fa-                  ported by the U.S. Department of Energy, Office of Sci-
+cility. This research has used the Astrohub online virtual              ence, Office of Nuclear Physics, under Award Number
+research environment (https://astrohub.uvic.ca), devel-                 DE-SC0023128.
+
+
+                                                              APPENDIX
+
+
+                                   A. PRE-SUPERNOVA AND EXPLOSION MODELS
+
+
+Table 1. Explosion properties of progenitors that underwent a C–O merger. Notice that none of the progenitors from S.
+Woosley & A. Heger (2007) and M. Limongi et al. (2024) underwent a C–O merger. The first column follows the nomenclature
+described in Appendix A, the second column shows the reference for each model, where LC18, F23, R24, and F25 refer to M.
+Limongi & A. Chieffi (2018), R. Farmer et al. (2023), L. Roberti et al. (2024), and A. Falla et al. (2025), respectively. Subsequent
+                                                                                                      grav
+columns are the final explosion energy Eexp , the gravitational mass of the cold neutron star MNS          , the baryonic mass of the
+                                   bary
+neutron star (i.e. the mass cut) MNS , the ejecta mass Mej , the pre-SN mass of the model Mpre−SN , the Ar/Ne ratio, and the
+                                        44
+mass of 44Ti ejected in the C–O shell Mejected
+                                           Ti
+                                               .
+                                                       grav      bary                                   44
+                                                                                                           Ti
+                   Model ID      Ref       Eexp      MNS       MNS        Mej    Mpre−SN   Ar/Ne       Mejected
+                                                                                                        −5
+                                        [1051 erg]   [M⊙ ]     [M⊙ ]     [M⊙ ]    [M⊙ ]              [10 M⊙ ]
+
+                   013a300      LC18      0.799      1.694     1.822     3.477    5.302     0.323       0.597
+                   013b150      LC18      0.645      1.688     1.812     9.457   11.271     0.561       2.138
+                   015d000      LC18      0.802      1.573     1.687    13.114   14.802     0.394       0.335
+                   015d150      LC18      1.189      1.779     1.913    11.194   13.109     0.465       0.054
+                   011 bin       F23      0.235      1.265     1.366    1.804     3.171     0.967       0.412
+                   013 bin       F23      0.484      1.380     1.499    2.484     3.985     0.226       0.577
+                   015f600      R24       0.531      1.732     1.872    11.135   13.009     1.114       4.148
+                   015f300      R24       0.502      1.732     1.871    10.758   12.630     1.712       7.044
+                   015z300      R24       0.677      1.775     1.922     4.745    6.669     2.068       6.083
+                   015f450      R24       0.607      1.711     1.847    12.987   14.835     2.515       5.084
+                   015e300      R24       0.536      1.799     1.948     4.504    6.454     1.339       4.574
+                   013a250       F25      0.816      1.596     1.734    3.464     5.200     2.161       3.100
+
+
+
+  For this analysis, we considered 121 CCSN models by L. Boccioli & L. Roberti (2025), taken from three sets of stellar
+evolution models. We consider 25 single-star, solar metallicity progenitors from KEPLER (S. Woosley & A. Heger
+                                                                                                                          9
+
+2007); 57 single-star models at seven different metallicities and 3 different initial rotational velocities from FRANEC
+(M. Limongi & A. Chieffi 2018); 39 solar metallicity progenitors from MESA (R. Farmer et al. 2023), 16 of which are
+binary stars and the rest are single stars. To these we added, following the same explosion (simulated with GR1D
+E. O’Connor & C. D. Ott 2010; E. O’Connor 2015; L. Boccioli et al. 2021) and post-process nucleosynthesis setup
+(with SkyNet J. Lippuner & L. F. Roberts 2017): 13 rotating, low metallicity progenitors from FRANEC (L. Roberti
+et al. 2024); 6 low-mass progenitors at solar metallicity from FRANEC (M. Limongi et al. 2024); 16 rotating, solar
+metallicity progenitors from FRANEC (A. Falla et al. 2025). Finally, we also analyzed the nucleosynthesis yields from
+118 exploding models at solar metallicity from T. Sukhbold et al. (2016), where the explosion has been simulated with
+a more approximate neutrino heating scheme compared to the present work.
+  The metallicities considered in FRANEC models (M. Limongi & A. Chieffi 2018; L. Roberti et al. 2024; M. Limongi
+et al. 2024; A. Falla et al. 2025) range from z = z⊙ to z = 10−6 z⊙ , as well as some zero metallicity progenitors from L.
+Roberti et al. (2024). In this paper, we follow the original FRANEC nomenclature “xxxmyyy”, where “xxx” indicate
+the zero-age main sequence (ZAMS) mass in units of M⊙ , “yyy” indicate the initial rotational velocity in units of
+km/s, and “m” is a letter referring to the metallicity of the model, with “a” being z = z⊙ , “b” being z = 10−1 z⊙ , all
+the way to “g” being z = 10−6 z⊙ , with each subsequent letter scaled down by an order of magnitude each. The letter
+“z” refers to zero metallicity progenitors. For the progenitors of R. Farmer et al. (2023) we instead identify each star
+with “xxx sin” or “xxx bin” depending on wether they are a single or binary star, with “xxx” being the ZAMS mass.
+  From T. Sukhbold et al. (2016), the ZAMS masses of the progenitors that underwent a C–O merger are: 19.7 M⊙ ,
+19.8 M⊙ , 20.2 M⊙ , 20.4 M⊙ , 20.5 M⊙ , 25.7 M⊙ , and 25.8 M⊙ . The other progenitors that underwent a C–O merger
+and whose explosion we simulated with GR1D (E. O’Connor & C. D. Ott 2010; E. O’Connor 2015) are listed in Table 1,
+alongside some of the explosion properties.
+
+
+                                                       REFERENCES
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020,      Chieffi, A., Limongi, M., & Straniero, O. 1998, The
+  Monthly Notices of the Royal Astronomical Society, 491,         Astrophysical Journal, 502, 737, doi: 10.1086/305921
+  972, doi: 10.1093/mnras/stz2952                               Couch, S. M., Warren, M. L., & O’Connor, E. P. 2019, The
+Andrews, S., Fryer, C., Even, W., Jones, S., & Pignatari,         Astrophysical Journal, 890, 127,
+  M. 2019, The Astrophysical Journal, 890, 35,                    doi: 10.3847/1538-4357/ab609e
+  doi: 10.3847/1538-4357/ab64f8                                 Curtis, S., Ebinger, K., Fröhlich, C., et al. 2018, The
+Arendt, R. G., Dwek, E., Kober, G., Rho, J., & Hwang, U.          Astrophysical Journal, 870, 2,
+  2014, The Astrophysical Journal, 786, 55,                       doi: 10.3847/1538-4357/aae7d2
+  doi: 10.1088/0004-637X/786/1/55                               DeLaney, T., Kassim, N. E., Rudnick, L., & Perley, R. A.
+Arnett, W. D. 1969, The Astrophysical Journal, 157, 1369,         2014, The Astrophysical Journal, 785, 7,
+  doi: 10.1086/150157                                             doi: 10.1088/0004-637X/785/1/7
+Audard, M., Awaki, H., Ballhausen, R., et al. 2025, Nature      Falla, A., Roberti, L., Limongi, M., & Chieffi, A. 2025, The
+  Astronomy, 10, 144, doi: 10.1038/s41550-025-02714-4             Astrophysical Journal, 991, 21,
+Boccioli, L., Mathews, G. J., & O’Connor, E. P. 2021, The         doi: 10.3847/1538-4357/adfa05
+  Astrophysical Journal, 912, 29,                               Farmer, R., Laplace, E., Ma, J.-z., de Mink, S., & Justham,
+  doi: 10.3847/1538-4357/abe767                                   S. 2023, The Astrophysical Journal, 948, 111,
+Boccioli, L., & Roberti, L. 2025, ,                               doi: 10.3847/1538-4357/acc315
+  arXiv:2510.16365doi: 10.48550/arXiv.2510.16365                Grant, K. J., & Dean, A. J. 1993, Astronomy &
+Boggs, S., Harrison, F., Miyasaka, H., et al. 2015, Science,      Astrophysics Suppl., 97, 211
+  348, aaa2259, doi: 10.1126/science.aaa2259                    Grefenstette, B., Harrison, F., Boggs, S., et al. 2014,
+Braun, C., Safi-Harb, S., Fryer, C., & Zhou, P. 2023,             Nature, 506, 339, doi: 10.1038/nature12997
+  Monthly Notices of the Royal Astronomical Society, 525,       Grefenstette, B. W., Fryer, C. L., Harrison, F. A., et al.
+  6257, doi: 10.1093/mnras/stad2592                               2016, The Astrophysical Journal, 834, 19,
+Chen, J., Singh, B., & Cameron, J. A. 2011, Nuclear Data          doi: 10.3847/1538-4357/834/1/19
+  Sheets, 112, 2357, doi: 10.1016/j.nds.2011.08.005             Harrison, F. A., Craig, W. W., Christensen, F. E., et al.
+Chieffi, A., & Limongi, M. 2017, The Astrophysical                2013, The Astrophysical Journal, 770, 103,
+  Journal, 836, 79, doi: 10.3847/1538-4357/836/1/79               doi: 10.1088/0004-637X/770/2/103
+10
+
+Hwang, U., & Laming, J. 2012, The Astrophysical Journal,       Orlando, S., Miceli, M., Ono, M., et al. 2025b, Astronomy
+ 746, 130, doi: 10.1088/0004-637X/746/2/130                      & Astrophysics, 699, A305,
+Issa, J., & Herwig, F. 2025, ,                                   doi: 10.1051/0004-6361/202554862
+   arXiv:2512.17705doi: 10.48550/arXiv.2512.17705              Ravi, A. P., Park, S., Zhekov, S. A., et al. 2024, The
+Issa, J., Herwig, F., Denissenkov, P. A., & Pignatari, M.        Astrophysical Journal, 966, 147,
+   2026, Astrophys. J., 997, 41,                                 doi: 10.3847/1538-4357/ad3800
+   doi: 10.3847/1538-4357/ae1efb                               Rho, J., Gomez, H. L., Boogert, A., et al. 2018, Monthly
+Issa, J., Herwig, F., Mojzsis, S. J., & Pignatari, M. 2025,     Notices of the Royal Astronomical Society, 479, 5101,
+   arXiv e-prints, arXiv:2509.19240,                            doi: 10.1093/mnras/sty1713
+   doi: 10.48550/arXiv.2509.19240                              Ritter, C., Andrassy, R., Côté, B., et al. 2018a, Monthly
+Jansen, F., Lumb, D., Altieri, B., et al. 2001, Astronomy &      Notices of the Royal Astronomical Society: Letters, 474,
+  Astrophysics, 365, L1, doi: 10.1051/0004-6361:20000036         L1, doi: 10.1093/mnrasl/slx126
+Jerkstrand, A., Milisavljevic, D., & Müller, B. 2026, in      Ritter, C., Herwig, F., Jones, S., et al. 2018b, Monthly
+  Encyclopedia of Astrophysics (Elsevier), 639–668,              Notices of the Royal Astronomical Society, 480, 538,
+  doi: 10.1016/B978-0-443-21439-4.00090-0                        doi: 10.1093/mnras/sty1729
+Kislat, F., Becker, D., Bennett, D., et al. 2023, Journal of   Rizzuti, F., Hirschi, R., Arnett, W. D., et al. 2023, Monthly
+  Astronomical Telescopes, Instruments, and Systems, 9,          Notices of the Royal Astronomical Society, 523, 2317,
+  014002, doi: 10.1117/1.JATIS.9.1.014002                        doi: 10.1093/mnras/stad1572
+Laming, J. M., & Temim, T. 2020, The Astrophysical             Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, Monthly
+  Journal, 904, 115, doi: 10.3847/1538-4357/abc1e5               Notices of the Royal Astronomical Society, 533, 687,
+Limongi, M., & Chieffi, A. 2018, The Astrophysical Journal       doi: 10.1093/mnras/stae1778
+  Supplement Series, 237, 13,                                  Roberti, L., Limongi, M., & Chieffi, A. 2024, The
+  doi: 10.3847/1538-4365/aacb24                                  Astrophysical Journal Supplement Series, 270,
+Limongi, M., Roberti, L., Chieffi, A., & Nomoto, K. 2024,        arXiv:2312.02942, doi: 10.3847/1538-4365/ad1686
+  The Astrophysical Journal Supplement Series, 270, 29,        Roberti, L., & Pignatari, M. 2025, Astronomy and
+  doi: 10.3847/1538-4365/ad12c1                                  Astrophysics, 703, L15,
+Lippuner, J., & Roberts, L. F. 2017, The Astrophysical           doi: 10.1051/0004-6361/202556941
+  Journal Supplement Series, 233, 18,                          Roberti, L., Pignatari, M., Psaltis, A., et al. 2023,
+  doi: 10.3847/1538-4365/aa94cb                                  Astronomy and Astrophysics, 677, A22,
+Loddo, M. 2026 in prep.                                          doi: 10.1051/0004-6361/202346556
+Magkotsios, G., Timmes, F. X., Hungerford, A. L., et al.       Roberti, L., Pignatari, M., Brinkman, H., et al. 2025,
+ 2010, The Astrophysical Journal Supplement Series, 191,         Astronomy and Astrophysics, 698, A216,
+ 66, doi: 10.1088/0067-0049/191/1/66                             doi: 10.1051/0004-6361/202554461
+Milisavljevic, D., & Fesen, R. A. 2017, in Handbook of         Sato, T., Matsunaga, K., Uchida, H., et al. 2025, The
+ supernovae, ed. A. W. Alsabti & P. Murdin, 2211,                Astrophysical Journal, 990, 103,
+ doi: 10.1007/978-3-319-21846-5 97                               doi: 10.3847/1538-4357/aded14
+Milisavljevic, D., Temim, T., De Looze, I., et al. 2024, The   Sieverding, A., Kresse, D., & Janka, H.-T. 2023, The
+ Astrophysical Journal, 965, L27,                                Astrophysical Journal, 957, L25,
+ doi: 10.3847/2041-8213/ad324b                                   doi: 10.3847/2041-8213/ad045b
+O’Connor, E. 2015, The Astrophysical Journal Supplement        Sukhbold, T., Ertl, T., Woosley, S., Brown, J. M., & Janka,
+  Series, 219, 24, doi: 10.1088/0067-0049/219/2/24               H. T. 2016, The Astrophysical Journal, 821, 38,
+O’Connor, E., & Ott, C. D. 2010, Classical and Quantum           doi: 10.3847/0004-637X/821/1/38
+  Gravity, 27, 114103,                                         Thielemann, F.-K., Nomoto, K., & Hashimoto, M.-A. 1996,
+  doi: 10.1088/0264-9381/27/11/114103                            The Astrophysical Journal, 460, 408, doi: 10.1086/176980
+O’Connor, E., & Ott, C. D. 2011, The Astrophysical             Treyturik, C., Braun, C., Safi-Harb, S., Fryer, C. L., &
+  Journal, 730, 70, doi: 10.1088/0004-637X/730/2/70              Ferrand, G. 2026, The Astrophysical Journal, 997, 211,
+Orlando, S., Janka, H.-T., Wongwathanarat, A., et al.            doi: 10.3847/1538-4357/ae2c50
+  2025a, Astronomy and Astrophysics, 696, A108,                Tueller, J., Barthelmy, S., Gehrels, N., et al. 1990, The
+  doi: 10.1051/0004-6361/202553833                               Astrophysical Journal, 351, L41, doi: 10.1086/185675
+                                                                                                                            11
+
+Vink, J., Kaastra, J. S., & Bleeker, J. A. M. 1996,             Woosley, S., Heger, A., & Weaver, T. 2002, Reviews of
+  Astronomy and Astrophysics, 307, L41                            Modern Physics, 74, 1015,
+Wang, T., & Burrows, A. 2024, The Astrophysical Journal,          doi: 10.1103/RevModPhys.74.1015
+  974, 39, doi: 10.3847/1538-4357/ad6983                        Woosley, S., & Weaver, T. 1995, The Astrophysical Journal
+Weisskopf, M. C., Tananbaum, H. D., Speybroeck, L. P. V.,         Supplement Series, 101, 181, doi: 10.1086/192237
+  & O’Dell, S. L. 2000, in Proc. SPIE Int. Soc. Opt. Eng.,
+                                                                XRISM Collaboration, Audard, M., Awaki, H., et al. 2025,
+  ed. J. E. Truemper & B. Aschenbach, Vol. 4012 (SPIE /
+                                                                  Publications of the Astronomical Society of Japan, 77,
+  International Society for Optics and Photonics), 2,
+                                                                  S193, doi: 10.1093/pasj/psaf056
+  doi: 10.1117/12.391545
+Weng, J., Zhou, P., Perets, H. B., Wik, D. R., & Chen, Y.       XRISM Science Team. 2020,
+  2024, Mon. Not. Roy. Astron. Soc., 529, 999,                    https://arxiv.org/abs/2003.04962
+  doi: 10.1093/mnras/stae584                                    Yoneda, H., Siegert, T., Martinez-Castellanos, I., et al.
+Willingale, R., Bleeker, J., van der Heyden, K., Kaastra, J.,     2025, Astronomy & Astrophysics, 697, A117,
+  & Vink, J. 2002, Astronomy and Astrophysics, 381, 1039,         doi: 10.1051/0004-6361/202453528
+  doi: 10.1051/0004-6361:20011614                               Young, P. A., Fryer, C. L., Hungerford, A., et al. 2006, The
+Woosley, S., & Heger, A. 2007, Physics Reports, 442, 269,         Astrophysical Journal, 640, 891, doi: 10.1086/500108
+  doi: 10.1016/j.physrep.2007.02.009
+

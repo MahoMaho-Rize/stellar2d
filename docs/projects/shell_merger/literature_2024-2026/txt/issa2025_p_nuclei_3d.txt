@@ -1,0 +1,2208 @@
+                                                 Draft version December 24, 2025
+                                                 Typeset using LATEX twocolumn style in AASTeX7.0.1
+
+
+
+
+                                                         Impact of 3D macro physics and nuclear physics on the p nuclei in O-C shell mergers
+                                                         Joshua Issa     ,1, 2 Falk Herwig     ,1, 2 Pavel A. Denissenkov        ,1, 2 and Marco Pignatari      3, 4, 5, 2
+
+                                                   1 Astronomy Research Centre, Department of Physics & Astronomy, University of Victoria, Victoria, BC, V8W 2Y2, Canada
+                                                                                         2 NuGrid Collaboration, http:// nugridstars.org
+                                                               3 HUN REN Konkoly Observatory, CSFK, H-1121, Budapest, Konkoly Thege M. út 15–17, Hungary
+                                                                4 CSFK, MTA Centre of Excellence, Budapest, Konkoly Thege Miklós út 15-17., H-1121, Hungary
+                                                                         5 University of Bayreuth, BGI, Universitätsstraße 30, 95447 Bayreuth, Germany
+arXiv:2507.16965v2 [astro-ph.SR] 23 Dec 2025
+
+
+
+
+                                                                        (Received July 22, 2025; Revised October 8, 2025; Accepted October 8, 2025)
+
+                                                                                                      Submitted to ApJ
+
+                                                                                                         ABSTRACT
+                                                          O-C shell mergers in massive stars are a site for producing the p nuclei by the γ process, but
+                                                       1D stellar models rely on mixing length theory, which does not match the radial velocity profiles of
+                                                       3D hydrodynamic simulations. We investigate how 3D macro physics informed mixing impacts the
+                                                       nucleosynthesis of p nuclei. We post-process the O shell of the MZAMS = 15 M⊙ , Z = 0.02 model
+                                                       from the NuGrid stellar data set. Applying a downturn to velocities at the boundary and increasing
+                                                       velocities across the shell as obtained in previous results, we find non-linear, non-monotonic increase
+                                                       in p-nuclei production with a spread of 0.96 dex, and find that isotopic ratios can change. Reducing
+                                                       C-shell ingestion rates as found in 3D simulations suppresses production, with spreads of 1.22–1.84 dex
+                                                       across MLT and downturn scenarios. Applying dips to the diffusion profile to mimic quenching events
+                                                       also suppresses production, with a 0.51 dex spread. We analyze the impact of varying all photo-
+                                                       disintegration rates of unstable n-deficient isotopes from Se–Po by a factor of 10 up and down. The
+                                                       nuclear physics variations for the MLT and downturn cases have a spread of 0.56–0.78 dex. We also
+                                                       provide which reaction rates are correlated with the p nuclei, and find few correlations shared between
+                                                       mixing scenarios. Our results demonstrate that uncertainties in mixing arising from uncertain 3D
+                                                       macro physics are as significant as nuclear physics and are crucial for understanding p-nuclei production
+                                                       during O-C shell mergers quantitatively.
+
+
+                                                       Keywords: Massive stars (732) — Oxygen burning (1193) — Stellar convective shells (300) — P-process
+                                                                 (1195) — Nuclear astrophysics (1129)
+
+                                                                 1. INTRODUCTION                                    massive stars. Woosley & Howard (1978) found these
+                                                  The origin of the solar pattern of the 35 stable p nuclei         photo-disintegrations could create the distribution of
+                                               is a long-standing problem for understanding nucleosyn-              p-process nuclei during the passage of the supernova
+                                               thesis. Burbidge et al. (1957) first identified these iso-           shock over the internal progenitor structure, which they
+                                               topes as a distinct group, produced primarily not by                 called the γ process. Following works better defined
+                                               the s or r process, but instead by a p process through               γ process production in Type II supernovae and more in
+                                               (p, γ), (γ, p), and (γ, n) reactions occurring during Type           general in core-collapse supernovae (CCSNe e.g., Prant-
+                                               II supernovae and possibly Type I supernovae. Based                  zos et al. 1990; Rayet et al. 1995; Travaglio et al. 2018;
+                                               on the first generations of stellar computational models,            Choplin et al. 2022; Roberti et al. 2023, 2024).
+                                               Arnould (1976) found that the p process could be driven                 A variety of additional processes and astrophysical
+                                               by all photo-disintegration reactions (γ, n), (γ, α) and             sites have been discussed, and no single mechanism
+                                               (γ, p) during the most advanced evolutionary stages of               produces all the p nuclei. Woosley & Hoffman (1992)
+                                                                                                                    found that 74 Se–92 Mo could be produced during the α-
+                                                                                                                    rich freezeout of a supernova. Fröhlich et al. (2006)
+                                               Corresponding author: Joshua Issa                                    found high neutrino fluxes during a supernova can cre-
+                                               Email: joshuaissa@uvic.ca                                            ate 74 Se–108 Cd by (n, p), (n, γ), and (p, γ) reactions
+2
+
+in a νp process. Schatz et al. (1998) suggested that              The O shell where p nuclei are produced during a
+a hydrogen-rich accretion disk around a neutron star            merger is a convective-reactive environment where mix-
+could undergo a series of rapid proton captures in a            ing and nuclear burning timescales are equal (Ritter
+rp process to produce 74 Se–98 Ru. Xiong et al. (2024)          et al. 2018a; Yadav et al. 2020). If there is signifi-
+proposed that neutrino induced reactions of r-process           cant energy released the flow can be modified (Dimo-
+material in a νr process could produce 78 Kr–138 La in          takis 2005), such as H-ingestion into He-burning shell
+the winds of a proto-neutron star. Goriely et al. (2002)        (Herwig et al. 2011, 2014) or O-C shell mergers causing
+proposed that a proton-poor and neutron boosted re-             violent mixing (Andrassy et al. 2020; Yadav et al. 2020).
+gion could undergo proton-captures could produce all            The Damköhler number (Dimotakis 2005) quantifies the
+p nuclei by a pn process during He-detonation of a C-O          ratio of these timescales and is defined as:
+white dwarf’s ejected envelope. Rauscher et al. (2002)                                         τmix
+found that the γ process can produce the p nuclei in                                    Dα ≡                          (1)
+                                                                                               τreact
+massive stars during core-collapse supernovae, and also
+beforehand if the O shell merges with the C shell, but          where τmix is the mixing timescale and τreact is the nu-
+that the γ process underproduces 92,94 Mo and 96,98 Ru.         clear reaction timescale. Convective regions where the
+Ritter et al. (2018a) and Roberti et al. (2023) confirmed       mixing timescale is much faster than the nuclear burn-
+these results and studied the p process triggered by O-C        ing timescale have Dα ≪ 1, and species are well-mixed
+shell merger.                                                   across the region. Convective-reactive regions where
+   The γ process describes the flow of (γ, n), (γ, p), and      timescales are equal have Dα ∼ 1, and species can ei-
+(γ, α) reactions on the stable isotopic seeds that are al-      ther react at a location or advect to another location
+ready present in the shell at temperatures of 1.5 ≤ T ≤         and react with the material there, and as a consequence
+3×109 K (Rauscher et al. 2013). However, the γ process          are not well-mixed. The mixing and reaction timescales
+in massive stars underproduces not only the Mo and Ru,          can be given by:
+but all p nuclei with A = 90−130 (Arnould & Goriely
+2003; Woosley & Heger 2007). Travaglio et al. (2011)                               ℓ2                        1
+                                                                         τmix =          ;   τreact =                 (2)
+showed that the γ process could produce all p nuclei                              DMLT                  ρNA ⟨σv⟩Yj
+during a Type Ia supernova from the s-process ma-
+                                                                where ℓ is the mixing length, DMLT is the mixing diffu-
+terial synthesized during stellar evolution without the
+                                                                sion coefficient, ρ is the local density, NA is Avogadro’s
+underproduction of 92,94 Mo and 96,98 Ru. Furthermore,
+                                                                number, ⟨σv⟩ is the thermally averaged reaction rate,
+Travaglio et al. (2015) found that modifying the dis-
+                                                                and Yj is the molar abundance of the interacting species.
+tribution of s-process material significantly influenced
+                                                                The diffusion coefficient is DMLT = 13 vMLT · ℓ, where
+the production of the p nuclei, especially the heaviest
+                                                                vMLT is the convective velocity and the mixing length is
+ones, and that the lightest three were strongly depen-
+                                                                ℓ = α · Hp where Hp is the pressure scale height and α
+dent on the metallicity. Battino et al. (2020) addition-
+                                                                is a free parameter (Vitense 1953; Böhm-Vitense 1958;
+ally found that the H-flashes of rapidly accreting white
+                                                                Kippenhahn et al. 2013, as reviewed in Arnett et al.
+dwarfs which undergo the i process could modify the
+                                                                2015).
+seed distribution to produce p nuclei with 96 < A < 196
+                                                                   Existing massive star models that calculate p-nuclei
+by the γ process during the subsequent SNIa.
+                                                                nucleosynthesis are 1D and rely on mixing length the-
+   Since the first isotopic classification made by Burbidge
+                                                                ory (MLT) to describe convection. However, multi-
+et al. (1957), it has been found that not all p nuclei in the
+                                                                dimensional hydrodynamic simulations of convective O-
+solar pattern are produced by a single process. Bisterzo
+                                                                shell burning predict higher convective velocities than
+et al. (2011) state that 152 Gd, 164 Er, and 180 Ta have
+                                                                MLT and show a gradual downturn in the mixing ef-
+significant contributions of 70.5%, 75.5%, and 74.5%
+                                                                ficiency profile at shell boundaries (Meakin & Arnett
+from the s process. Dillmann et al. (2008) found that
+113                                                             2007; Jones et al. 2017). 3D simulations reveal fea-
+    In and 115 Sn are made by β-decays after the r process
+                                                                tures absent in 1D, such as asymmetric nuclear burn-
+through isomeric states. Goriely et al. (2001) argue that
+                                                                ing (Bazan & Arnett 1994; Yadav et al. 2020), large-
+(γ, n) was too weak to produce 138 La, and instead that
+                                                                scale non-radial density asymmetries, and potentially
+it is made by νe -capture on 138 Ba during the CCSN,
+                                                                lower C-shell ingestion rates during O-Ne-C shell merg-
+and Arnould & Goriely (2003) similarly say that 180m Ta
+                                                                ers (Andrassy et al. 2020; Yadav et al. 2020). In 1D
+could also have ν-induced contributions. Sieverding
+                                                                models like those from Ritter et al. (2018b), O-C shell
+et al. (2018) also found that the ν-process is important
+                                                                mergers occur because the upper boundary of the O
+for the nucleosynthesis of 113 In, 138 La, and 180m Ta.
+                                                                shell entrains 12 C and 20 Ne as it burns, flattening the
+                                                                                                                          3
+
+entropy gradient. In contrast, 3D simulations by Rizzuti                   1.6
+et al. (2024) find the lower boundary of the C shell ex-
+tending downward and engulfing the O shell. Similarly,
+                                                                           1.4
+Yadav et al. (2020) show that entropy generation in nu-                    1.2
+clear burning hotspots within the Ne shell leads to down-
+
+
+
+
+                                                            (Mass - 1.4) / M
+drafts that raise the entropy in the O shell. Dynamic                      1.0
+behaviour shortly before the core collapse for these su-                   0.8
+pernova progenitors late in their evolution are not cap-
+tured in 1D (Arnett & Meakin 2011; Müller 2016; Yadav                     0.6
+et al. 2020). While 3D hydrodynamic simulations may
+not be solving all relevant equations, such as a robust
+                                                                           0.4
+nuclear network, 1D models fundamentally fail to repre-                    0.2
+sent the non-radial mixing and spherically asymmetric
+instabilities during O-C shell mergers (Meakin & Arnett                    0.03.5   3.6   3.7 3.8 3.9 4.0         4.1   4.2
+2006; Andrassy et al. 2020; Yadav et al. 2020).                                            log10(t tend) / [yr]
+  This has consequences for p-nuclei production. Nu-
+clei with A > 110 are primarily synthesized during the         Figure 1. Kippenhahn diagram showing the merger of
+                                                               the convective O and Cburning shells. The Oburning
+merger, not during explosive burning, regardless of the
+                                                               shell extends from 1.55 M⊙ to 1.95 M⊙ , and the first in-
+peak CCSN energy (Roberti et al. 2023, 2024). To ex-           gested C-burning shell from 1.96 M⊙ to 2.11 M⊙ . A
+plore the impact of the macrophysical uncertainties in         red guideline has been provided to mark the thin radia-
+the O shell during a merger, we adopt a 3D hydrody-            tive layer separating the O and C shell. Other convec-
+namic inspired set of modified radial mixing profiles and      tive regions are also Cburning shells. The merger onsets at
+ingestion rates to determine the impact of mixing on the       log10 (t − tend )/yr ≈ −3.85 and reaches full extent at ≈ −4.
+γ process. We will also explore how varying the nuclear        A black triangle marks where the initial composition is taken
+                                                               from and a white star marks the location where the ingested
+reaction rates impact the nucleosynthesis of the p nuclei
+                                                               C-shell material is taken from for this study.
+as the O shell is a convective-reactive environment.
+  Section 2 describes the post-processing of the Ritter
+et al. (2018b) model using 3D hydrodynamic-inspired            where f = 0.005 until the end of core He burning, after
+mixing profiles and assesses the impact of varying nu-         which f = 0. This model has a merger of its convective
+clear reaction rates. Section 3.1 examines how the             O and C-burning shells late in its evolution as shown
+convective-reactive environment produces the p nuclei          in Figure 1. During this merger, the C-burning ashes
+and the role of C-shell ingestion. Sections 3.2–3.4 ex-        and stable isotopic material are ingested into the much
+plore how 3D hydrodynamic insights affect p nuclei pro-        hotter O-burning shell.
+duction: 3.2 analyzes the impact of downturns and                The detailed nucleosynthesis is calculated with the
+boosted velocities in the O shell, 3.3 investigates re-        1D multi-zone post-processing code mppnp (Pignatari
+duced C-shell ingestion, and 3.4 evaluates dips in the         et al. 2016). mppnp is a multi-zone post-processing code
+mixing efficiency due to quenching. Section 3.5 presents       that uses stellar structure calculated by stellar evolution
+the sensitivity to nuclear rates, their correlation with       codes to calculate the full nucleosynthesis of a stellar
+p nuclei, and their relation to mixing profiles and ve-        model. mppnp treats mixing, nuclear burning, and in-
+locities. Finally, Section 4 summarizes our findings and       gestion separately rather than the coupled treatment by
+their implications.                                            a code like MESA (Paxton et al. 2010). A convergence test
+                                                               was performed by decreasing the timesteps and increas-
+                 2. METHODOLOGY                                ing the number of mass zones. It found that a timestep
+                                                               of ∆t = 0.01 s and 400 equidistant mass zones with 4
+     2.1. Initial Model and Post-Processing Setup              additional zones at the bottom of the O shell were suffi-
+  We post-process the MZAMS = 15 M⊙ , Z = 0.02                 cient to resolve both the burning and mixing timescales
+massive stellar model from the NuGrid data set (Rit-           with a decreasing mixing efficiency profile. Calculations
+ter et al. 2018b). The 1D stellar model was com-               initially used a 5234 isotope network, but many n-rich
+puted with MESA (Paxton et al. 2010) without rotation          species were unnecessary. A network of only the nec-
+and convective boundary mixing is treated using an             essary 1470 isotopes was adopted, focusing on the n-
+exponential-diffusive prescription (Freytag et al. 1996;       deficient isotopes, for faster calculations. Isomeric states
+Herwig 2000) with an overshoot parameter of f = 0.022          were not included in this network so 180m Ta is not cal-
+at all boundaries except at the base of convective shells
+4
+
+culated. Entrainment of C-shell material is treated the            2.2. 1D implementation of 3D macrophysics
+same as described in Denissenkov et al. (2019) and does          MLT predictions of the radial mixing efficiency pro-
+not depend on the time step. A single simulation costs        file deviate from the more realistic predictions from 3D
+approximately 8 hours on 40 cores, for a total of 274         simulations. 3D convective O burning simulations show
+core years for this work.                                     that the radial convective velocity profile gradually de-
+   The mppnp code calculates both the undecayed mass          creases near the shell boundary, in contrast to MLT
+fraction as a function of mass and the decayed mass-          predictions of a stiff boundary (Meakin & Arnett 2007;
+averaged mass fraction at a temperature of T = 100 MK         Jones et al. 2017). This downturn is seen at both the
+without explosive contributions. The mass fraction Xi         bottom and top of convective shells (Herwig et al. 2006;
+of species i is defined as the ratio of the mass of that      Meakin & Arnett 2007; Jones et al. 2017). The decrease
+species
+      P to the total mass of the stellar material, such       occurs because mixing is driven by convective plumes in
+that i Xi = 1 for all isotopes.                               these simulations, rather than the idealized convective
+   To analyze the impact of macrophysical uncertain-          blobs in MLT. Plumes exhibit strong radial velocities in
+ties and varying the nuclear reaction rates during the        the interior of the convective region but lose their radial
+merger, isotopic mass fractions are taken just before the     component as they reach the boundary, while non-radial
+onset of merger at log10 (t−tend )/yr = −3.845 from m =       velocity components increase. This behavior contrasts
+1.8 M⊙ , and the ingested C-shell material is taken from      with MLT, which predicts a sharp drop to zero veloc-
+m = 2.0 M⊙ at the same time, as shown in s 1 and 2.           ity at the boundary. Using Equation 4 from Jones et al.
+Earlier in the model, there is some p-nuclei production in    (2017), the downturn to the mixing efficiency profile can
+the first convective O shell, which extends from 1.55 M⊙      be implemented in 1D:
+to 1.95 M⊙ during log10 (t − tend )/yr = −1.76 to −2.16.
+These nuclei are not processed by any further burning
+                                                                                      1
+before the merger.                                                      D3D-insp. =     vMLT × min (ℓ, r − r0 )      (5)
+                                                                                      3
+   The results are presented in terms of an overproduc-
+tion OP compared to the initial composition:
+                                                              where ℓ is the mixing length, r0 is the Schwarzschild
+                                     !
+                                  Xf                          boundary at the bottom of the O shell, and an addi-
+                    OP = log10                         (3)    tional factor of 1/3 is applied to match the MLT diffu-
+                                  Xi
+                                                              sion coefficient at the top of the shell.
+where Xf is the final mass-averaged decayed mass frac-           MLT also underpredicts the strength of the convective
+tion of a species in the O shell and Xi is the inital mass    velocities in the O shell. Jones et al. (2017) found that
+fraction. The average overproduction factor is calcu-         convective velocities are stronger by a factor of ∼ 30
+lated as the arithmetic mean of OP:                           compared to MLT. Andrassy et al. (2020) in their 3D
+                                                              C-shell entrainment simulations show that their veloci-
+                                N
+                            1 X                               ties could be up to ∼ 5 times stronger than Jones et al.
+                   ⟨OP⟩ =       OPi                    (4)
+                            N i                               (2017) depending on the luminosity of C and O burn-
+                                                              ing. It is possible the velocities could be even higher as
+where N is the number of p nuclei. The mean logarith-         these simulations do not include feedback from a nuclear
+mic value is defined similar to hs and ls for the s process   network or treatment of radiation pressure (Jones et al.
+as done by Busso et al. (1999).                               2017; Andrassy et al. 2020). Rizzuti et al. (2024) finds
+  The stellar structure used is from the onset of the         that velocities are boosted by a factor of ∼ 10 due to
+merger at log10 (t − tend )/yr = −3.856 and to clearly an-    the feedback from new reactions with the ingested ma-
+alyze the impact of mixing alone, the stellar structure is    terial in their 3D O-C shell mergers. We implement this
+kept constant. Although the structure is not static in the    by applying a boost factor of 3×, 10×, and 50× to the
+model, the change to the temperature, density, and en-        convective velocities as shown in Figure 4.
+tropy between the initial composition and where we take          The entrainment rate of C-shell material could be
+the structure from is less than 5% during those 110 s.        lower during the merger depending on the strength of
+The merger at log10 (t − tend )/yr = −3.856 is not fully      burning (Jones et al. 2017; Andrassy et al. 2020). To in-
+developed, but MLT cannot accurately describe this re-        vestigate the impact of this, a range of rates are consid-
+gion as the mixing length ℓ is too large (Renzini 1987;       ered: 4×10−5 M⊙ s−1 , 4×10−4 M⊙ s−1 , 4×10−3 M⊙ s−1 ,
+Arnett et al. 2019). Because of this, the mixing effi-        and a scenario with no entrainment. The maximum
+ciency profile is smoothed at the top as shown in Figure      mass of the convective C-shell in our model is 0.8 M⊙ ,
+3 to simulate a full merger.                                  and since our simulation goes from log10 (t − tend )/yr =
+                                                                                                                                                5
+
+                      6 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+                      7
+                      8
+                      9
+                     10
+log10(Xi)
+
+
+
+                     11
+                     12
+                     13
+                     14
+                     15
+                     16
+                     17
+                     18 78Kr 92Mo 96Ru 102Pd 108Cd 112Sn 115Sn 124Xe 130Ba 138La 138Ce 152Gd 158Dy 164Er 174Hf 180W 190Pt
+                                                               m=1.8 M        m=2.0 M
+ Figure 2. Mass fractions of the p nuclei from log10 (t − tend )/yr = −3.856 used for initial O-shell composition and ingested
+ C-shell material. Markers are the same as Figure 1.
+                                                                   5                         1017
+                   1015
+                                                                                             1016
+                                                                   4
+                                                                           Dconv (cm2 s 1)
+ Dconv (cm2 s 1)
+
+
+
+
+                                                                                             1015
+                                                                   (Mm)
+
+
+
+
+                                                                   3
+                   1014                                                                      1014
+                                                                                                        DMLT                   10 × D3D insp.
+                                                                   2                                    D3D insp.
+                                       DMLT (MESA)                                           1013                              50 × D3D insp.
+                                       Smoothed DMLT                                                    3 × D3D insp.
+                   1013                                            1                         1012
+                          3      4     5     6      7    8     9                                    3   4        5      6          7        8
+                                      Radius (Mm)                                                                Radius (Mm)
+ Figure 3. The diffusion coefficient profile and mixing length              Figure 4. The diffusion coefficient profiles for the MLT
+ at model number 9200 for the MZAMS = 15 M⊙ , Z = 0.02                      and 3D-inspired gradual downturn scenarios. The dashed
+ model. The light blue line is D from MESA, the orange line                 orange line is DMLT and the dashed light grey line, dotted
+ the smoothed D used for the MLT mixing scenario in this                    light blue line, solid grey line, and dashed dark blue line are
+ paper, and the grey line is the mixing length. Black dashed                the downturn profiles with boost factors of 1, 3, 10, and 50
+ lines mark the shell boundaries for this paper.                            respectively.
+
+
+ −3.856 to -3.845 (110 s), the maximum entrainment rate                     of species and labelled the event Global Oscillation of
+ would be 7×10−3 M⊙ s−1 similar to Ritter et al. (2018a).                   Shell Hydrogen-Ingestion (GOSH). Similar effects dur-
+    1D and 3D simulations show that the convective pro-                     ing C-shell entrainment could be possible, as Andrassy
+ file can be quenched as material is ingested as entropy                    et al. (2020) found that strong oscillatory modes like
+ changes due to entrainment and burning (Iben 1975;                         GOSHs were present in their 3D simulations. Energy
+ Sackmann et al. 1974; Herwig et al. 1999; Miller Berto-                    feedback events like this could explain supernova ob-
+ lami et al. 2006; Herwig et al. 2011, 2014). As an                         servations (Smith & Arnett 2014). There is no clear
+ example, during H-ingestion into a He-shell, the en-                       prescription for how to implement this effect into 1D
+ ergy feedback from the ingested protons quickly burn-                      models, but it is clear that there would be decreased
+ ing can cause a split in the convective profile with a                     mixing because of a split. To investigate a possible con-
+ very small amount of entrainment (Herwig et al. 2011).                     vective quenching, we consider a GOSH-like event and a
+ Herwig et al. (2014) found this effect could decrease                      partial merger, where a Gaussian dip (but not full split)
+ the radial velocity profile and reduce the entrainment
+6
+
+                  1016       DGOSH                   DPartial                  isotopes from Se to Po by a random factor uniformly
+                             Stronger DGOSH          Stronger DPartial         selected between 0.1 to 10 by a Monte Carlo method
+                                                                               for 1000 cases. This applies the same approach used
+Dconv (cm2 s 1)
+
+
+
+                  1015                                                         for (n, γ) rates during the i process developed by Denis-
+                                                                               senkov et al. (2018) and Denissenkov et al. (2021). This
+                                                                               was done for the MLT and downturn mixing scenarios in
+                  1014                                                         Figure 4 with an ingestion rate of 4 × 10−3 M⊙ s−1 . This
+                                                                               approach also allows for the identification of reaction
+                                                                               rates that are relevant for the production of an isotope
+                  1013                                                         using correlations. The Pearson coefficient describes
+                                                                               correlations between X/Xno variation and the variation
+                         3    4        5      6          7        8
+                                       Radius (Mm)                             factors where X is the final mass-averaged and decayed
+                                                                               mass fraction for a Monte Carlo case and Xno variation
+Figure 5. The quenched mixing scenario convective profiles.                    is the same for the default case where all variation fac-
+The dashed light orange line and dotted light grey line are                    tors are 1. All correlations with |rP | ≥ 0.15 are reported
+the GOSH-like profiles with a dip centred at r = 4.95 Mm.                      in this study. In addition to the Pearson coefficient,
+The solid red line and dashed dark grey line are the partial                   a logarithmic slope ζ is also reported to determine the
+merger profiles with a dip centred r = 7.5 Mm.
+                                                                               importance of a reaction on the final mass fraction of
+                                                                               an isotope, which is discussed along with caveats about
+occurs in the MLT diffusion profile:                                           correlation rates in Appendix A.
+                                                     "             #
+                                         (r − a)2                                                    3. RESULTS
+     Dquench = DMLT − (DMLT − c) × exp −                                 (6)
+                                            w2
+                                                                                 An overview of our results in terms of overproduction
+where c is the maximum extent of the dip, w is the                             factors and average spreads of overproduction factors
+width, and a is the center of the dip. The GOSH-like                           are presented in Table 1.
+convective splitting could occur at the location where
+Dα = 1 for a significant burning event (Herwig et al.                            3.1. Convective-reactive production of the p nuclei
+2011). We centre this event at a = 4.95 Mm, where                                Convective-reactive nucleosynthesis is characterized
+1 Mm = 106 m, at a location of probable energetic feed-                        by a region where the timescales for advection and
+back could occur. The O shell could partially merge                            nuclear reactions are similar. In the γ process, heav-
+with the C shell due to feedback effects, so we consider                       ier species are produced at cooler temperatures of
+a partial merger at a = 7.5 Mm where the unmerged                              2.3−2.5 GK and destroyed at higher temperatures,
+MLT profile has a dip as seen in Figure 3. A width of                          and lighter species are produced in temperatures up to
+w = 0.25 Mm is used for both scenarios, which is ap-                           3.5 GK (Rauscher et al. 2013). Whether an isotope un-
+proximately the distance between the top of the O shell                        dergoes (γ, n) and (n, γ) reactions or contributes to the
+and the convective bump above it in Figure 3. For both                         production of lighter p nuclei by (γ, p) and (γ, α) reac-
+scenarios we consider a weaker dip to c = 1014 cm2 s−1                         tions depends on the temperature at that position. The
+and a stronger dip to c = 1013 cm2 s−1 to investigate the                      convective-reactive environment of the O shell allows for
+impact on nucleosynthesis. The profiles for the GOSH-                          the production of both light and heavy p nuclei because
+like and partial merger scenarios are shown in Figure                          the shell is not well-mixed, which allows the shell to pro-
+5.                                                                             duce most of the p nuclei, although temperatures in the
+                                                                               O shell are too cool to sufficiently produce those with
+    2.3. Determining impact of varying nuclear reactions                       A < 110. Figure 6 shows how different mass ranges of
+  Many of the reactions involving the unstable n-                              p nuclei can be produced and peak at different positions
+deficient isotopes from Se to Po have not been mea-                            in the O shell.
+sured experimentally and are determined by theoreti-                             Locations of peak destruction can be identified by a
+cal models, and the uncertainties of unmeasured reac-                          sudden drop in mass fraction as seen for 156 Dy, 196 Hg,
+tions for unstable isotopes are much greater than for                          and to a lesser extent 144 Sm. This is the location where
+stable isotopes. To determine the impact of nuclear                            Dα = 1, which is different for each isotope (Herwig et al.
+physics for the γ process, we vary our (γ, α), (γ, p),                         2011). This is contrary to the normal assumption of a
+and (γ, n) photo-disintegration rates used by the NuGrid                       well-mixed convective environment where Dα ≪ 1 or ra-
+code (Pignatari et al. 2016) for all unstable n-deficient                      diative burning where little to no mixing occurs, and is
+                                                                                                                                                                            7
+
+        Table 1. ⟨OP⟩ for each mixing scenario and the average spread (OPmax − OPmin ) for the Monte Carlo simulations for
+        the p nuclei. All Monte Carlo simulations are calculated with an ingestion rate of 4 × 10−3 M⊙ s−1 .
+
+            Scenario                     No Ingestion     4 × 10−5 M⊙ s−1              4 × 10−4 M⊙ s−1             4 × 10−3 M⊙ s−1       Monte Carlo Spread
+            MLT                             −0.11              1.06                                  1.92               2.24                     0.56
+            1× Downturn                     0.05               1.12                                  1.98               2.58                     0.59
+            3× Downturn                     −0.23              1.28                                  2.18               2.83                     0.69
+            10× Downturn                    −1.23              1.18                                  2.10               2.89                     0.76
+            50× Downturn                    −5.47              0.88                                  1.81               2.72                     0.79
+            GOSH-like                        –                  –                                      –                2.06                       –
+            Stronger GOSH-like                –                  –                                     –                1.78                      –
+            Partial Merger                    –                  –                                    –                 2.13                      –
+            Stronger Partial Merger           –                 –                                      –                1.91                       –
+
+
+
+             6                                                  3.0
+                                                                2.8                                   16.0                                                          14
+             8                                                  2.6
+                  Te
+
+
+
+
+                                                                                                      16.5
+                                                                    Temperature (GK)
+                       mp
+
+
+
+
+                                                                2.4                                                                                                 15
+            10
+                        era
+
+
+
+
+                                                                                                                                            157Dy( ,n)156Dy
+                                                                                                      17.0
+                         tur
+
+
+
+
+                                                                2.2
+
+
+
+
+                                                                                                                                                                     log10(Xi)
+log10(Xi)
+
+
+
+
+                                                                                        log10(fij)
+                            e
+
+
+
+
+                                                                                                                                            157Ho( ,p)156Dy
+            12                                                  2.0                                                                         160Er( , )156Dy
+                                                                                                                                                                    16
+                                                                                                      17.5
+                                                                1.8                                                                         156Dy( , )152Gd
+            14                                                                                                                                                      17
+                                                                1.6                                   18.0                                  156Dy( ,n)155Dy
+
+                                74Se        136Ce         156Dy 1.4
+                                                                                                                                            X(156Dy)
+            16                                                                                        18.5                                  X(157Dy)                18
+                                92Mo        144Sm         196Hg 1.2
+                                                                                                                                            X(158Dy)
+            18                                                  1.0                                   19.0                                                          19
+                  1.6          1.7         1.8      1.9       2.0                                            1.6        1.7        1.8        1.9             2.0
+                                     Mass (M )                                                                                Mass (M )
+ Figure 6. Undecayed mass fractions at t = 110 sec for the                               Figure 7. Reaction fluxes fij for 156 Dy and undecayed mass
+ MLT mixing scenario without C-shell ingestion.                                          fractions Xi for 156−158 Dy for the MLT scenario with no
+                                                                                         ingestion after t = 110 s. Reactions in the legend are written
+                                                                                         in the direction i → j
+ a key reason why the γ process in the O shell produces
+ the whole range of p nuclei. Figure 7 shows the domi-                                   .
+ nant reactions that 156 Dy is produced and destroyed by
+                                                                                            Entraining C-shell material is important for this pro-
+ in the simulation without C-shell ingestion. These reac-
+                                                                                         cess, as heavier species can be gradually depleted by
+ tions are shown as reaction fluxes fij which are defined
+                                                                                         (γ, α) and (γ, p) reactions. Figure 8 shows the same
+ as the net flux of a reaction between species i and j:
+                                                                                         as Figure 7, but with a C-shell ingestion rate of 4 ×
+                                                          !                              10−3 M⊙ s−1 , the maximum considered in this study.
+                        Xi Xj                                                            Since the initial amount of 156 Dy in the ingested C shell
+                  fij =       ρNA ⟨σv⟩ij − ⟨σv⟩ji                        (7)
+                        Ai Aj                                                            is negligible as shown in Figure 2, the role of the merger
+                                                                                         is to provide species in the C shell that are critical for
+ where X is the mass fraction, A is the atomic mass, ρ                                   the production of 156 Dy such as the stable Dy isotopes
+ is the density, NA is Avogadro’s number, and ⟨σv⟩ij is                                  that undergo a (γ, n) photodisintegration chain and the
+ the reaction rate between species i and j.                                              stable Er isotopes that do a sequence of (γ, n) until the
+    The reactions that 156 Dy undergoes in the O shell de-                               160
+                                                                                             Er(γ, α)156 Dy.
+ pend on the location in the shell, however Figure 7 shows                                  There are several differences between Figures 7 and 8.
+ that the dominant destruction channel 156 Dy(γ, n)155 Dy                                First, fij and Xi are larger by several orders of mag-
+ net destroys 156 Dy, as Figure 11 will show. It is also ev-                             nitude and 156 Dy has a net production in the shell, as
+ ident that the mass fraction is not well-mixed as the                                   Figure 11 will show in Section 3.3. Second, the mass
+ gradient of the mass fraction is steep at the location of                               fraction of 156 Dy has a tilt up where it is net produced
+ peak destruction.
+ 8
+                 12.5
+                                                                                      11             Figures 7 and 8 demonstrate that in a convective-
+                 13.0                                                                              reactive environment isotopes are not well-mixed, and
+                                                                                      12           that the relevance of a reaction rate depends on their
+                 13.5                                         157Dy( ,n)156Dy
+                                                                                                   location in the shell. Figure 8 also show how isotopes
+                                                              157Ho( ,p)156Dy         13
+                 14.0
+
+
+
+
+                                                                                       log10(Xi)
+log10(fij)
+
+
+
+                                                              160Er( , )156Dy                      can contribute to the production of each other at dif-
+                                                              156Dy( , )152Gd         14           ferent locations in the shell. Finally, comparing Figure
+                 14.5                                         156Dy( ,n)155Dy
+                                                                                                   8 to Figure 7 shows the importance of ingesting C-shell
+                 15.0
+                                                              156Dy(n, )157Dy         15           material for significant production of the p nuclei in the
+                                                              X(156Dy)
+                                                                                      16           O shell.
+                 15.5                                         X(157Dy)
+                                                              X(158Dy)
+                 16.0                                                                 17
+                             1.6           1.7        1.8         1.9           2.0                  3.2. Impact from a downturn and boosting mixing
+                                                 Mass (M )                                                                  speeds
+                                                                                                      Here we present the impact of a 3D-inspired gradual
+ Figure 8. Reaction fluxes fij for 156 Dy and undecayed mass
+ fractions Xi for 156−158 Dy for the MLT scenario with an
+                                                                                                   downturn at the lower boundary and boosting mixing
+ ingestion rate of 4 × 10−3 M⊙ s−1 after t = 110 s. Reactions                                      speeds as explained in Section 2.2 with the diffusion co-
+ in the legend are written in the direction i → j.                                                 efficients in Figure 4. These cases are calculated with
+                                                                                                   an ingestion rate of 4 × 10−3 M⊙ s−1 and the results are
+                                                                                                   shown in Figure 10.
+                70                                                                12.5                The MLT simulation has an ⟨OP⟩ of 2.24 dex, and
+                69   153 154 155 156 157 158 159 160 161 162 Tm                                    the downturn scenarios have ⟨OP⟩ of 2.58 dex, 2.83 dex,
+                                                                                  13.2             2.89 dex, and 2.72 dex for the 1×, 3×, 10×, and 50×3D-
+                68   152 153 154 155 156 157 158 159 160 161 Er
+Proton Number
+
+
+
+
+                                                                                                   inspired mixing scenarios respectively. The average
+                67   151 152 153 154 155 156 157 158 159 160 Ho                   13.9             spread in production for each isotope OPmax − OPmin =
+                                                                                      log10(fij)
+
+
+
+
+                                                                                                   0.96 dex, which shows that mixing speeds are impor-
+                66   150 151 152 153 154 155 156 157 158 159 Dy                   14.6             tant for the production of the p nuclei. This O shell
+                65   149 150 151 152 153 154 155 156 157 158 Tb                                    during the merger significantly produces all p nuclei ex-
+                                                                                  15.3             cept 74 Se, 78 Kr, and 84 Sr.
+                64   148 149 150 151 152 153 154 155 156 157 Gd                                       The 3D-inspired 1× scenario favours the production of
+                63                                                                16.0             the heavier p nuclei compared to the MLT scenario be-
+                        84         86      88        90      92         94                         cause τmix decreases as the temperature increases. Be-
+                                        Neutron Number                                             cause of this, more reactions occur at the cooler tem-
+ Figure 9.          Chart of reactions between isotopes at                                         peratures where the (n, γ) and (γ, n) reactions are more
+ m = 1.64 M⊙ [T = 2.28 GK] for the same conditions as                                              favoured than the (γ, α) and (γ, p) reactions. All iso-
+ Figure 8. Both arrow colour and size indicate log10 (fij ), and                                   topes are comparably produced to MLT or more pro-
+ arrows point in the direction of the reaction. The range of                                       duced except 74 Se, 78 Kr, and 84 Sr who require the
+ log10 (fij ) is the same as Figure 8.                                                             hottest temperatures for their production.
+                                                                                                      As mixing speeds increase, the production increases
+ and then drops off sharply at the location of peak de-                                            in a non-linear and non-monotonic way. For the 50×
+ struction instead of the decline seen in Figure 7.                                                case, the average production of all p nuclei is lower than
+    156
+        Dy is produced because the ingestion of C-shell ma-                                        the 3× and 10× scenarios. This is because the mixing
+ terial allows for 158 Dy to be replenished as it advects                                          speeds are high enough that material is advected to the
+ into the shell. With a continual supply of 158 Dy, the                                            bottom of the O shell fast enough despite the downturn,
+ chain 158 Dy(γ, n)157 Dy(γ, n)156 Dy can occur and signif-                                        and correspondingly the lighter p nuclei are generally
+ icantly contribute to the production of 156 Dy equal to                                           more favoured including 74 Se, 78 Kr, and 84 Sr. Produc-
+ 160
+     Er(γ, α)156 Dy.                                                                               tion for individual isotopes also can be non-linear and
+    Figure 8 also shows another feature of this convective-                                        non-monotonic. For example, 115 Sn, 132 Ba, and 138 La
+ reactive environment: 156 Dy and 157 Dy co-produce each                                           all increase for the 1× and 3× scenarios, but then their
+ other. 156 Dy is advected from its location of peak pro-                                          production is not as strong for the 10× and 50× scenar-
+ duction at ∼1.63 M⊙ both deeper into the shell where                                              ios.
+ it is fully destroyed, and toward the top where it under-                                            Another result is that isotopic pairs of the same el-
+ goes 156 Dy(n, γ)157 Dy, which mildly contributes to the                                          ement are not affected the same way by the downturn
+ production of 157 Dy and peaks at ∼1.73 M⊙ .                                                      compared to MLT, nor by the increase in mixing speed
+                                                                                                                         9
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+      4.5
+      4.0
+      3.5
+      3.0
+      2.5
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+      2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+                         MLT      D3D insp.      3 × D3D insp.     10 × D3D insp.      50 × D3D insp.
+Figure 10. The overproduction compared to initial of the p nuclei for the MLT and 3D-inspired mixing scenarios. The average
+spread in production OPmax − OPmin = 0.96 dex. OP = 0 dex is the initial amount. Average OP for each scenario are provided
+as dashed lines and corresponds to the values presented in Table 1.
+
+and we find that the ratio between these isotopes is de-        more stable isotopes enter the shell as demonstrated in
+pendent on the mixing scenario. Since these isotopes are        Section 3.1. The lightest three have the opposite be-
+connected by (γ, n) and (n, γ) reactions, if the location       haviour because without ingestion they are destroyed
+of Dα = 1 for a reaction changes because of a change to         less by (n, γ) reactions. The difference in OP between
+the mixing speed or the presence of the decreasing dif-         two ingestion rates is largely uniformly for 92 Mo–196 Hg.
+fusion profile, then the production of these isotopes will      The average spread OPmax − OPmin between the dif-
+change. 94 Mo is produced more for all mixing scenarios         ferent ingestion rates for the MLT and 3D-inspired sce-
+except for the 50× scenario, where 92 Mo has a larger           narios is 1.22, 1.58, 1.64, 1.78, and 1.84 dex. This shows
+OP, and likewise 115 Sn exhibits this behaviour when            that the non-linear and non-monotonic behaviour in Sec-
+compared to 112 Sn and 114 Sn. We find that it is pos-          tion 3.2 is because of the changing location of peak burn-
+sible that the ratio can tend to unity as mixing speeds         ing in the convective-reactive environment and not just
+increase as seen for 96,98 Ru, 106,108 Cd, and 112,114 Sn.      more material being present.
+For 136,138 Ce the lighter isotope is always favoured as           Without ingestion of C-shell material, the MLT, 1×,
+mixing speed increases and for 156,158 Dy the opposite is       and 3× scenarios see little to no production, but for
+true. This demonstrates the importance of the decreas-          the 10× and 50× scenarios there is a significant under-
+ing diffusion profile and increasing mixing speed is for        production of the heavier p nuclei. This is because in
+the production of the p nuclei.                                 the fastest cases the species are advected to the bot-
+                                                                tom of the shell where the temperatures are purely de-
+      3.3. Impact from varying the ingestion rate               structive and there is no replenishment from the C shell.
+                                                                This shows that entrainment of C-shell material is nec-
+  Here we present the impact of entraining C-shell ma-          essary for significant contributions from pre-explosive
+terial with 4 × 10−5 M⊙ s−1 , 4 × 10−4 M⊙ s−1 , 4 ×             γ process.
+10−3 M⊙ s−1 as well as no entrainment as explained in              Another important feature of ingestion is that n-
+Section 2.2. Figure 11 shows the results for the MLT            heavier isotopes are more favoured as the rate increases
+mixing scenario and Figures B1–B4 in Appendix B show            for all mixing speeds in our study. For isotopic pairs,
+the results for all downturn scenarios.                         production of the heavier isotope with respect to the
+  The results show that the production of the p nuclei is       lighter increases with ingestion rate due to the increase
+monotonically increased by the ingestion of C-shell ma-         in released neutrons from burning C and O. Figure 11
+terial for all isotopes except 74 Se, 78 Kr, and 84 Sr who      shows, for example, how 106,108 Cd are similar for the no
+exhibit the opposite behaviour for all mixing scenarios.        merger case but as ingestion rate increases 108 Cd be-
+The only exception is that 74 Se production increases for       comes increasingly more abundant compared to 106 Cd.
+the 10× and 50×3D-inspired scenarios with ingestion             Other isotopic pairs exhibit an increase of the heav-
+rate. This is because with higher ingestion rates, the
+10
+
+       5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+       4.5
+       4.0
+       3.5
+       3.0
+       2.5
+       2.0
+       1.5
+OP
+
+
+
+
+       1.0
+       0.5
+       0.0
+       0.5
+       1.0
+       1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+       2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+                         4 × 10 3 M s 1        4 × 10 4 M s 1         4 × 10 5 M s 1        No Merger
+Figure 11. The overproduction compared to initial of the p nuclei for the MLT mixing scenario for no ingestion, 4×10−5 M⊙ s−1 ,
+4 × 10−4 M⊙ s−1 , and 4 × 10−3 M⊙ s−1 . The average spread in production OPmax − OPmin = 1.22 dex excluding the no ingestion
+case. OP = 0 is the initial amount. Average OP for each scenario are provided as dashed lines and corresponds to the values
+presented in Table 1.
+
+ier isotope when ingestion is present but OP between               The partial merger scenario both limits the ingested C-
+the two does not change with ingestion rate, such as               shell material and slows down the material from deeper
+156,158
+        Dy.                                                        in the O shell from advecting up to the top of the shell
+  The sign of the ratio of isotopic pairs is largely pre-          where very few reactions occur. The GOSH-like dip
+served across the ingestion rates for the MLT, 1×, 3×,             slows down the material from reaching their preferential
+and 50× scenarios, but the magnitude of the ratio does             temperatures, and also prevents material at the deep-
+change. The few exceptions are 162,164 Er in the 1×                est part of the O shell from mixing up to the top of
+and 3× scenarios who become roughly equal for the                  the shell which keeps it at hotter temperatures where
+fastest ingestion rate, 115 Sn which becomes more abun-            it can be destroyed. This is also why the deeper dips
+dant than 112,114 Sn in the 3× scenario. In the 10× sce-           suppress production more, as the velocities are slower
+nario production of isotopic pairs is largely equal for the        by an additional factor of 10 at the deepest point of the
+slower ingestion rates, but at the fastest ingestion rate          dip.
+the ratio can become unequal. This shows that the the                 The suppression of production is largely uniform for
+ingestion rate matters for the magnitude of the ratio              all isotopes except for 74 Se, 78 Kr, 84 Sr, and 180 Ta. Ad-
+between isotopic pairs, but that the sign of the ratio             ditionally, it appears that isotopes A ≥ 138 are more
+depends on which diffusion profile is used.                        strongly affected by the stronger GOSH-like dip. The
+                                                                   isotopes 74 Se, 78 Kr, and 84 Sr have a minor increase from
+     3.4. Impact from dips from convective quenching
+                                                                   these dips because the location of their production is
+  Here we present the impact of dips from convective               at the bottom of the O shell where the dips are not
+quenching using the profiles shown in Figure 5 from Sec-           present. The boost in production of 180 Ta is because
+tion 2.2 which represent GOSH-like feedback and a par-             the peak production and destruction locations happen
+tial merger. The results are shown in Figure 12.                   to be centered at the exact same location as the GOSH
+  The MLT simulation has ⟨OP⟩ of 2.24 dex, the                     dip, which lowers its destruction and slightly boosts its
+GOSH-like scenarios have OP = 2.06 dex and 1.78 dex,               production. Isotopic ratios are not significantly affected
+and the partial merger scenarios have OP = 2.13 dex                by the dips, although the magnitude of the ratios can
+and 1.91 dex. We find that the GOSH-like scenarios                 increase slightly. This demonstrates the importance of
+suppresses the production more than the partial merger             both the location and magnitude of the convective dips
+scenarios of equal dip depths, and that the deeper dips            in the O shell for convective-reactive γ process.
+are suppress production more than the shallow with an
+average spread OPmax − OPmin = 0.51.                               3.5. Nuclear physics impact and mixing dependencies
+  The dip functions as a barrier for the convective-                 Here we present the impact of varying our adopted nu-
+reactive flow, and can section off parts of the O shell.           clear physics rates for the MLT and 3D-inspired mixing
+                                                                                                                        11
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+      4.5
+      4.0
+      3.5
+      3.0
+      2.5
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+      2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+              MLT      GOSH-like        Stronger GOSH-like         Partial Merger        Stronger Partial Merger
+Figure 12. The overproduction compared to initial of the p nuclei for the MLT, GOSH-like, and partial merger scenarios with
+ingestion rate 4 × 10−3 M⊙ s−1 . The average spread in production OPmax − OPmin = 0.51 dex. OP = 0 is the initial amount.
+Average OP for each scenario are provided as dashed lines and corresponds to the values presented in Table 1.
+
+scenarios for an ingestion rate of 4 × 10−3 M⊙ s−1 . The        have it in others. Additionally, the magnitude of which
+result for the MLT mixing scenario is shown in Figure           peak is favoured is also dependent on the mixing sce-
+13 and Table C1, and the 3D-inspired mixing scenarios           nario as seen for 78 Kr and 84 Sr.
+are shown in Figures C1–C4 and Tables C1–C5 which                  Whether a particular reaction rate is correlated an iso-
+can be found in Appendix C.                                     tope’s final mass fraction along with the strength of the
+   The MLT mixing scenario has an average spread in             correlation is dependent on the mixing scenario. Table
+production of OPmax − OPmin = 0.56 dex, and the 3D-             2 lists the rates unique to single mixing scenario.
+inspired scenarios have an average spread of 0.59 dex,             It is clearly important to consider the mixing condi-
+0.69 dex, 0.76 dex, and 0.79 dex for the 1×, 3×, 10×,           tions if an experiment is to be proposed to measure a
+and 50× scenarios respectively. We find that the spread         reaction rate. As Table 2 shows for the 50×3D-inspired
+in production increases with mixing speed because the           scenario, there are many reactions even for a single iso-
+material is able to reach hotter temperatures and the           tope that can be correlated uniquely in that mixing sce-
+number of possible nucleosynthetic pathways changes.            nario. This clearly shows that a decreasing radial veloc-
+   In the MLT mixing scenario about a third of the iso-         ity profile and the exact magnitude of the mixing speeds
+topes are not affected in any significant way, but in the       are crucial for understanding the nuclear reactions in
+3D-inspired scenarios only 5 are not affected although          this convective-reactive environment.
+the specific isotopes vary. The isotopes that appear the           There are also correlated reactions that all mixing
+least affected across mixing scenario are 138 Ce, 152 Gd,       scenarios share as shown in Table 3. Additionally, all
+158
+    Dy, and 180 Ta.                                             downturn cases share correlations not found in the MLT
+   The spread of an individual isotope is dependent on          scenario: X(115 Sn) with 110 Sn(γ, α) and X(138 Ce) with
+the mixing scenario. Species like 106 Cd, 156 Dy, and           138
+                                                                    Nd(γ, p). However, the shared correlations are not of
+180
+    W have a different spread in production for each            equal strength across all mixing scenarios. As an exam-
+mixing scenario. While the change can be monotonic              ple the final mass fraction of 156 Dy is correlated with
+for species like 180 W, 184 Os, and 190 Pt, for 106 Cd and      160
+                                                                    Er(γ, α), but in the 50×3D-inspired the correlation
+112
+    Sn, and 130 Ba they decrease for the 50×3D-inspired         is much weaker. This underscores the possible difficul-
+scenario.                                                       ties in using 1D astrophysical sites to identify important
+   This mixing scenario dependence for the spread is also       reactions for nuclear physics experiments.
+seen for the distribution of OP as no isotope is dou-              The spread in production for varying our adopted nu-
+ble peaked across all mixing scenarios. As examples,            clear physics rates for each of the mixing scenarios is
+74
+   Se, 113 In, and 138 La in some mixing scenarios clearly      comparable to the spread seen from varying the mix-
+are double peaked, indicating that there are distinctive        ing conditions. The results in Section 3.4 have a spread
+branches in the nucleosynthetic pathways, but do not            of 0.51 dex, Section 3.2 0.96 dex, and the maximum
+12
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm156Dy 162Er 168Yb 180Ta 184Os 196Hg     103
+      4.5
+      4.0
+
+
+
+
+                                                                                                                        Number of MC runs out of 1000
+      3.5
+      3.0
+      2.5                                                                                                            102
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5                                                                                                            101
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+              Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt                                                      100
+      2.0
+Figure 13. Histogram showing the spread due to varying (γ, p), (γ, n), (γ, α) and corresponding capture rates for unstable
+n-deficient isotopes from Se–Po for the MLT mixing scenario. Colour and size both correspond to the logarthimic binning of
+Monte Carlo runs. The average spread OPmax − OPmin = 0.56 dex. OP = 0 is the initial amount.
+
+spread in Section 3.3 is 1.84 dex. The average spread in             • A gradual downturn motivated by 3D simulations
+production from varying the nuclear physics rates ranges               increases production of the p nuclei, but increasing
+from 0.56–0.79 dex.                                                    mixing speeds impacts the production in a non-
+  Rauscher et al. (2016) studied the impact of nuclear                 linear and non-monotonic way.
+uncertainties for the explosive γ-process for a 15 M⊙ and
+two 25 M⊙ models with solar metallicity using a Monte                • The ratio of isotopic pairs is sensitive to the mixing
+Carlo method. The spread in their 90% probability in-                  scenario.
+terval for the 15 M⊙ model was 0.61 dex, 0.63 dex for                • Increasing the entrainment rate of C-shell material
+the 25 M⊙ KEPLER model, and 0.99 dex for the model                     increases the production of the p nuclei.
+from Hashimoto et al. (1989). This is comparable to
+the maximum spread found in this work, although we                   • Without entrainment, the p nuclei are negligibly
+are considering pre-explosive γ process. Rauscher et al.               produced or net destroyed.
+(2016) also provide tables of correlated rates, but only
+                                                                     • A dip in the convective profile can suppress the
+a handful of these rates appear in our Tables C1–C5 in-
+                                                                       production of the p nuclei.
+cluding those they find with rP ≥ |0.65|. This is because
+the convective-reactive environment we consider allows               • The location and magnitude of the convective dip
+for different reaction pathways to be favoured depending               impacts the nucleosynthesis of the p nuclei.
+on the mixing conditions.
+                                                                     • Varying the adopted reactions rates have a com-
+                                                                       parable spread in production to changing mixing
+       4. DISCUSSIONS AND CONCLUSION
+                                                                       conditions.
+  In this paper, we have shown that understanding the
+mixing details in the O-burning shell during an O-C                  • The spread due to varying the reaction rates is
+shell merger is crucial for accurately modelling the nu-               dependent on the mixing scenario.
+cleosynthesis of the p nuclei. This work raises the impor-           • Whether a reaction rate is correlated with an iso-
+tance of 3D hydrodynamic simulations for understand-                   tope is dependent on the mixing scenario, and
+ing the nucleosynthesis in O-C shell mergers (Bazan &                  some are unique to a single mixing scenario.
+Arnett 1994; Yadav et al. 2020; Rizzuti et al. 2024). We
+have demonstrated the convective-reactive nature of the            Figure 14 shows the maximum spread for the p nuclei
+nucleosynthesis in the O shell, where the timescales for         across all mixing scenarios considered in this paper, ex-
+advection and reaction are comparable and our results            cluding the case of no merger, have an average spread
+show that:                                                       of 2.45 dex. This shows the significant impact of the
+                                                                                                                             13
+
+Table 2.         Reactions correlated with the produc-             Table 3. Reactions correlated with the produc-
+tion/destruction of an isotope unique to an individual mixing      tion/destruction of an isotope shared across all mixing
+scenario.                                                          scenarios.
+
+ Isotope    Unique Correlated Reaction Rates                        Isotope    Shared Correlated Reaction Rates
+                                                                    74         75
+ MLT Mixing Case                                                       Se         Se(γ, n)
+ 138      139                                                       78         79
+     Ce       Pr(γ, p)                                                 Kr         Kr(γ, n)
+ 168      176                                                       84         85
+     Yb       W(γ, α)                                                  Sr         Sr(γ, n)
+ 174      178                                                       92         93
+     Hf       W(γ, n)                                                  Mo         Mo(γ, n)
+ 184      186                                                       94         93
+     Os       Pt(γ, n) 188 Pt(γ, n)                                    Mo         Mo(γ, n)
+                                                                    96         97
+ 3D-inspired Mixing Scenario                                           Ru         Ru(γ, n)
+                                                                    98         100
+ 113
+     In   114
+              In(γ, n)                                                 Ru          Pd(γ, α) 100 Pd(γ, p)
+                                                                    102        100
+ 152
+     Gd   150
+              Gd(γ, α) 196 Pb(γ, n)                                     Pd         Pd(γ, α) 100 Pd(γ, p) 103 Pd(γ, n)
+                                                                    106        107
+ 180
+     Ta   179
+              Ta(γ, α)                                                  Cd         Cd(γ, n) 110 Sn(γ, α)
+                                                                    108        107
+ 3×3D-inspired Mixing Scenario                                          Cd         Cd(γ, n)
+                                                                    113        113
+ 180
+     W    181
+              Os(γ, n)                                                  In         Sn(γ, n)
+                                                                    112        113
+ 10×3D-inspired Mixing Scenario                                         Sn         Sn(γ, n)
+                                                                    114        110
+ 84
+    Sr    84
+             Rb(γ, n)                                                   Sn         Sn(γ, α) 113 Sn(γ, n) 122 Xe(γ, α)
+                                                                    115        113
+ 120
+     Te   119
+              Te(γ, n)                                                  Sn         Sn(γ, n)
+                                                                    120        122
+ 126
+     Xe   122
+              Xe(γ, n)                                                  Te         Xe(γ, α) 122 Xe(γ, p)
+                                                                    124        122
+ 130
+     Ba   126
+              Ba(γ, p) 128 Ba(γ, α) 128 Ba(γ, p)                        Xe         Xe(γ, α) 122 Xe(γ, p)
+                                                                    138        137
+ 132
+     Ba   128
+              Ba(γ, α)                                                  La         La(γ, n)
+                                                                    136        138
+ 168
+     Yb   169
+              Hf(γ, n)                                                  Ce         Nd(γ, n) 138 Nd(γ, p) 140 Nd(γ, α)
+                                                                    144        196
+ 174
+     Hf   176
+              W(γ, α)                                                   Sm         Pb(γ, n) 142 Sm(γ, n) 142 Sm(γ, p)
+                                                                               143
+ 184
+     Os   185
+              Pt(γ, α)                                                             Sm(γ, n)
+                                                                    152        152
+ 50×3D-inspired Mixing Scenario                                         Gd         Dy(γ, α)
+                                                                    156        160
+ 92
+    Mo    100
+              Pd(γ, α) 100 Pd(γ, p) 110 Sn(γ, n) 110 Sn(γ, p)           Dy         Er(γ, α)
+                                                                    164        164
+ 96
+    Ru    97
+             Ru(γ, α) 110 Sn(γ, α) 110 Sn(γ, n) 110 Sn(γ, p)            Er         Yb(γ, α) 164 Yb(γ, n)
+                                                                    174        174
+ 102
+     Pd   104
+              Cd(γ, α) 104 Cd(γ, p)                                     Hf         W(γ, α)
+                                                                    180        179
+ 106
+     Cd   104
+              Cd(γ, p) 110 Sn(γ, p)                                     Ta         Ta(γ, n)
+                                                                    180        180
+ 108
+     Cd   110
+              Sn(γ, α)                                                  W          Os(γ, α) 180 Os(γ, n) 196 Pb(γ, n)
+                                                                    184        196
+ 112
+     Sn   110
+              Sn(γ, p)                                                  Os         Pb(γ, n) 184 Pt(γ, α)
+                                                                    190        190
+ 115
+     Sn   122
+              Xe(γ, n)                                                  Pt         Hg(γ, α) 190 Hg(γ, n) 196 Pb(γ, n)
+                                                                    196        196
+ 120
+     Te   120
+              Xe(γ, α)                                                  Hg         Pb(γ, n) 202 Pb(γ, n)
+ 126      127
+     Xe       Ba(γ, n)
+ 130      132
+     Ba       Ce(γ, α) 132 Ce(γ, n) 132 Ce(γ, p)
+          134
+              Ce(γ, α) 134 Ce(γ, n)
+ 132      132
+     Ba       Ce(γ, α) 132 Ce(γ, n) 132 Ce(γ, p)                merger dominates production of the p nuclei (Roberti
+          133
+              Ce(γ, n) 134 Ce(γ, α)                             et al. 2023, 2024).
+ 138
+     Ce   139
+              Nd(γ, n)                                            Although we find that the mixing conditions signifi-
+ 156
+     Dy   156
+              Er(γ, α) 158 Er(γ, α) 158 Er(γ, n)                cantly impact the results of Section 3.5, not all scenarios
+ 162
+     Er   168
+              Hf(γ, n) 162 Yb(γ, α) 164 Yb(γ, α)                are equally likely to represent the conditions in a merger.
+ 184
+     Os   184
+              Pt(γ, n)                                          The MLT mixing scenario, 1×, and 50× case may not
+                                                                be representative of the conditions for realistic O-C shell
+                                                                mergers. 3D hydrodynamic simulations show the O shell
+                                                                has a downturn to radial convective velocities and mix-
+                                                                ing speeds roughly 3 − 10 times larger than what MLT
+macrophysical uncertainties in 1D stellar models on nu-         predicts (Jones et al. 2017; Andrassy et al. 2020; Rizzuti
+cleosynthesis, and this highlights the importance of un-        et al. 2024). This suggests that the 3× and 10× down-
+derstanding hydrodynamic models better as the shell             turn mixing scenarios are likely more representative of
+                                                                the conditions in a merger. The exploration done in this
+14
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+      4.5
+      4.0
+      3.5
+      3.0
+      2.5
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+      2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+
+Figure 14. Bars representing the maximum and minimum OP across all mixing scenarios, excluding those without C-shell
+ingestion. The average spread OPmax − OPmin = 2.45 dex. OP = 0 is the initial amount.
+
+paper shows the importance of understanding the mix-           less of explosive energy (Roberti et al. 2024). Even if the
+ing conditions, but not all scenarios are equally likely to    results in Figure 14 do not represent the whole of the
+represent the conditions in a merger.                          nucleosynthesis of the p nuclei, they are still crucial for
+   The results in this work are important for the inter-       understanding the nucleosynthesis in the O shell prior
+pretation of presolar grains. As shown in this work, the       to the CCSN.
+ratio of isotopic pairs is sensitive to the mixing condi-        The results of this work have implications beyond the
+tions in the O shell. This means that comparing the            p nuclei. The light odd-Z elements P, Cl, K, and Sc are
+grains data to the results of this work can be used as a       also produced during O-C shell mergers and based on
+diagnostic tool to constrain the mixing details of O-C         our preliminary results are likewise impacted by vary-
+shell mergers and connect measured isotopic ratios to          ing the mixing conditions (Ritter et al. 2018a; Roberti
+3D hydrodynamics.                                              et al. 2025). The long-lived radioactive isotope 40 K
+   There are limitations to the results provided in this       (t1/2 = 1.25 × 109 yr), which is relevant to the heating
+work and further extensions that could be done. We             of planets early in their formation (Frank et al. 2014;
+have focused on the impact of mixing conditions and            O’Neill et al. 2020), is also affected along with the sta-
+varying reaction rates, but do not investigate how differ-     ble K isotopes 39 K and 41 K. Finally, observations have
+ent stellar conditions are relevant to the nucleosynthesis     found P-enhanced stars (Masseron et al. 2020; Brauner
+or if changing the stable seeds from the C shell impact        et al. 2023, 2024) which could be explained by a O-C
+these results. The distribution of stable seeds and the        shell merger from a previous massive star.
+metallicity of the star are of significant importance for         O-C shell mergers have a potentially huge impact on
+the nucleosynthesis of the p nuclei (Travaglio et al. 2015;    galactic chemical evolution models (Ritter et al. 2018a),
+Battino et al. 2020). It is possible that earlier in stellar   and massive star models show this feature regardless
+evolution that weak s process in the C shell could mod-        of metallicity and stellar evolution model (Roberti et al.
+ify the stable seeds (Pignatari et al. 2010), which could      2025). Further work is needed to understand the impact
+be relevant for the lighter p nuclei.                          of the macrophysical uncertainties in 1D stellar models
+   Other stellar models could have different O-shell sizes     on the nucleosynthesis of these light odd-Z elements.
+and temperature profiles due to different mixing pre-
+scriptions, initial mass, and rotations, which would di-
+rectly affect locations of peak burning and how the mix-                     ACKNOWLEDGEMENTS
+ing conditions impact the nucleosynthesis. However, if
+                                                               The authors would like to thank Stephen Mojzsis for
+the shell is convective-reactive, a spread in production
+                                                               the useful discussions. MP acknowledges the support
+comparing mixing scenarios would still be expected.
+                                                               to NuGrid from the “Lendulet-2023” Program of the
+   Finally, O-C shell mergers are crucial to the nucle-
+                                                               Hungarian Academy of Sciences (LP2023-10, Hungary),
+osynthesis of a massive star prior to the CCSN regard-
+                                                               the ERC Synergy Grant Programme (Geoastronomy,
+                                                                                                                                 15
+
+grant agreement number 101166936, Germany), the                     (https://astrohub.uvic.ca), developed and operated
+ERC Consolidator Grant funding scheme (Project RA-                  by the Computational Stellar Astrophysics group at
+DIOSTAR, G.A. n. 724560, Hungary), the ChETEC                       the University of Victoria and hosted on the Digital
+COST Action (CA16117), supported by the European                    Research Alliance of Canada Arbutus Cloud at the
+Cooperation in Science and Technology, and the IReNA                University of Victoria. This work benefited from in-
+network supported by NSF AccelNet (Grant No. OISE-                  teractions and workshops co-organized by The Center
+1927130). MP also thanks the support from NKFI via                  for Nuclear astrophysics Across Messengers (CeNAM)
+K-project 138031 (Hungary). FH is supported by a                    which is supported by the U.S. Department of Energy,
+Natural Sciences and Engineering Research Council of                Office of Science, Office of Nuclear Physics, under Award
+Canada (NSERC) Discovery Grant and acknowledges                     Number DE-SC0023128.
+support from the NSERC award SAPPJ-797 2021-00032
+Nuclear physics of the dynamic origin of the elements.                Software: The data and analysis tools are available
+We acknowledge support from the ChETEC-INFRA                        on Zenodo under an open-source Creative Commons At-
+project funded by the European Union’s Horizon                      tribution license: doi:10.5281/zenodo.17576026. They
+2020 Research and Innovation programme (Grant                       are also available for download from the NuGrid collab-
+Agreement No 101008324). This research has used                     oration website: download.nugridstars.org.
+the Astrohub online virtual research environment
+
+
+                                                             REFERENCES
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020,          Brauner, M., Pignatari, M., Masseron, T.,
+  Monthly Notices of the Royal Astronomical Society, 491,             Garcı́a-Hernández, D. A., & Lugaro, M. 2024, Unveiling
+  972, doi: 10.1093/mnras/stz2952                                     the Chemical Fingerprint of Phosphorus-Rich Stars II.
+                                                                      Heavy-element Abundances from UVES/VLT Spectra,
+Arnett, W. D., & Meakin, C. 2011, The Astrophysical
+                                                                      doi: 10.48550/arXiv.2408.12938
+  Journal, 733, 78, doi: 10.1088/0004-637X/733/2/78
+                                                                    Burbidge, E. M., Burbidge, G. R., Fowler, W. A., & Hoyle,
+Arnett, W. D., Meakin, C., Viallet, M., et al. 2015, The
+                                                                      F. 1957, Reviews of Modern Physics, 29, 547,
+  Astrophysical Journal, 809, 30,                                     doi: 10.1103/RevModPhys.29.547
+  doi: 10.1088/0004-637X/809/1/30                                   Busso, M., Gallino, R., & Wasserburg, G. J. 1999, Annual
+Arnett, W. D., Meakin, C., Hirschi, R., et al. 2019, The              Review of Astronomy and Astrophysics, 37, 239,
+  Astrophysical Journal, 882, 18,                                     doi: 10.1146/annurev.astro.37.1.239
+  doi: 10.3847/1538-4357/ab21d9                                     Choplin, A., Goriely, S., Hirschi, R., Tominaga, N., &
+Arnould, M. 1976, Astronomy and Astrophysics, 46, 117                 Meynet, G. 2022, Astronomy and Astrophysics, 661, A86,
+                                                                      doi: 10.1051/0004-6361/202243331
+Arnould, M., & Goriely, S. 2003, Physics Reports, 384, 1,
+                                                                    Denissenkov, P., Perdikakis, G., Herwig, F., et al. 2018,
+  doi: 10.1016/S0370-1573(03)00242-4
+                                                                      Journal of Physics G Nuclear Physics, 45, 055203,
+Battino, U., Pignatari, M., Travaglio, C., et al. 2020,               doi: 10.1088/1361-6471/aabb6e
+  Monthly Notices of the Royal Astronomical Society, 497,           Denissenkov, P. A., Herwig, F., Perdikakis, G., & Schatz,
+  4981, doi: 10.1093/mnras/staa2281                                   H. 2021, Monthly Notices of the Royal Astronomical
+Bazan, G., & Arnett, D. 1994, The Astrophysical Journal,              Society, 503, 3913, doi: 10.1093/mnras/stab772
+  433, L41, doi: 10.1086/187543                                     Denissenkov, P. A., Herwig, F., Woodward, P., et al. 2019,
+Bisterzo, S., Gallino, R., Straniero, O., Cristallo, S., &            Monthly Notices of the Royal Astronomical Society, 488,
+  Käppeler, F. 2011, Monthly Notices of the Royal                    4258, doi: 10.1093/mnras/stz1921
+                                                                    Dillmann, I., Rauscher, T., Heil, M., et al. 2008, Journal of
+  Astronomical Society, 418, 284,
+                                                                      Physics G Nuclear Physics, 35, 014029,
+  doi: 10.1111/j.1365-2966.2011.19484.x
+                                                                      doi: 10.1088/0954-3899/35/1/014029
+Böhm-Vitense, E. 1958, Zeitschrift fur Astrophysik, 46, 108
+                                                                    Dimotakis, P. E. 2005, Annual Review of Fluid Mechanics,
+Brauner, M., Masseron, T., Garcı́a-Hernández, D. A., et al.          37, 329, doi: 10.1146/annurev.fluid.36.050802.122015
+  2023, Astronomy & Astrophysics, 673, A123,                        Frank, E. A., Meyer, B. S., & Mojzsis, S. J. 2014, Icarus,
+  doi: 10.1051/0004-6361/202346048                                    243, 274, doi: 10.1016/j.icarus.2014.08.031
+16
+
+Freytag, B., Ludwig, H. G., & Steffen, M. 1996, Astronomy        Paxton, B., Bildsten, L., Dotter, A., et al. 2010, The
+  and Astrophysics, 313, 497                                       Astrophysical Journal Supplement Series, 192, 3,
+Fröhlich, C., Martı́nez-Pinedo, G., Liebendörfer, M., et al.     doi: 10.1088/0067-0049/192/1/3
+  2006, Physical Review Letters, 96, 142502,                     Pignatari, M., Gallino, R., Heil, M., et al. 2010, The
+  doi: 10.1103/PhysRevLett.96.142502                               Astrophysical Journal, 710, 1557,
+Goriely, S., Arnould, M., Borzov, I., & Rayet, M. 2001,            doi: 10.1088/0004-637X/710/2/1557
+  Astronomy and Astrophysics, 375, L35,                          Pignatari, M., Herwig, F., Hirschi, R., et al. 2016, The
+  doi: 10.1051/0004-6361:20010956                                  Astrophysical Journal Supplement Series, 225, 24,
+Goriely, S., José, J., Hernanz, M., Rayet, M., & Arnould,         doi: 10.3847/0067-0049/225/2/24
+  M. 2002, Astronomy and Astrophysics, 383, L27,                 Prantzos, N., Hashimoto, M., Rayet, M., & Arnould, M.
+  doi: 10.1051/0004-6361:20020088                                  1990, Astronomy and Astrophysics, 238, 455
+Hashimoto, M., Nomoto, K., & Shigeyama, T. 1989,                 Rauscher, T., Dauphas, N., Dillmann, I., et al. 2013,
+  Astronomy and Astrophysics, 210, L5                              Reports on Progress in Physics, 76, 066201,
+Herwig, F. 2000, The Evolution of AGB Stars with                   doi: 10.1088/0034-4885/76/6/066201
+  Convective Overshoot, arXiv,                                   Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E.
+  doi: 10.48550/arXiv.astro-ph/0007139                             2002, The Astrophysical Journal, 576, 323,
+Herwig, F., Blöcker, T., Langer, N., & Driebe, T. 1999, On        doi: 10.1086/341728
+  the Formation of Hydrogen-Deficient Post-AGB Stars,            Rauscher, T., Nishimura, N., Hirschi, R., et al. 2016,
+  arXiv, doi: 10.48550/arXiv.astro-ph/9908108                      Monthly Notices of the Royal Astronomical Society, 463,
+Herwig, F., Freytag, B., Hueckstaedt, R. M., & Timmes,             4153, doi: 10.1093/mnras/stw2266
+  F. X. 2006, The Astrophysical Journal, 642, 1057,              Rayet, M., Arnould, M., Hashimoto, M., Prantzos, N., &
+  doi: 10.1086/501119                                              Nomoto, K. 1995, Astronomy and Astrophysics, 298, 517
+Herwig, F., Pignatari, M., Woodward, P. R., et al. 2011,         Renzini, A. 1987, Astronomy and Astrophysics, 188, 49
+  The Astrophysical Journal, 727, 89,                            Ritter, C., Andrassy, R., Côté, B., et al. 2018a, Monthly
+  doi: 10.1088/0004-637X/727/2/89                                  Notices of the Royal Astronomical Society, 474, L1,
+Herwig, F., Woodward, P. R., Lin, P.-H., Knox, M., &               doi: 10.1093/mnrasl/slx126
+  Fryer, C. 2014, The Astrophysical Journal Letters, 792,        Ritter, C., Herwig, F., Jones, S., et al. 2018b, Monthly
+  L3, doi: 10.1088/2041-8205/792/1/L3                              Notices of the Royal Astronomical Society, 480, 538,
+Iben, Jr., I. 1975, The Astrophysical Journal, 196, 525,           doi: 10.1093/mnras/sty1729
+  doi: 10.1086/153433                                            Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, Monthly
+Jones, S., Andrassy, R., Sandalski, S., et al. 2017, Monthly       Notices of the Royal Astronomical Society, 533, 687,
+  Notices of the Royal Astronomical Society, 465, 2991,            doi: 10.1093/mnras/stae1778
+  doi: 10.1093/mnras/stw2783                                     Roberti, L., Pignatari, M., Fryer, C., & Lugaro, M. 2024,
+Kippenhahn, R., Weigert, A., & Weiss, A. 2013, Stellar             Astronomy & Astrophysics, 686, L8,
+  Structure and Evolution (Springer),                              doi: 10.1051/0004-6361/202449994
+  doi: 10.1007/978-3-642-30304-3                                 Roberti, L., Pignatari, M., Psaltis, A., et al. 2023,
+Masseron, T., Garcı́a-Hernández, D. A., Santoveña, R.,           Astronomy & Astrophysics, 677, A22,
+  et al. 2020, Nature Communications, 11, 3759,                    doi: 10.1051/0004-6361/202346556
+  doi: 10.1038/s41467-020-17649-9                                Roberti, L., Pignatari, M., Brinkman, H. E., et al. 2025,
+Meakin, C. A., & Arnett, D. 2006, The Astrophysical                The Occurrence and Impact of Carbon-Oxygen Shell
+  Journal, 637, L53, doi: 10.1086/500544                           Mergers in Massive Stars, arXiv
+—. 2007, The Astrophysical Journal, 667, 448,                    Sackmann, I. J., Smith, R. L., & Despain, K. H. 1974, The
+  doi: 10.1086/520318                                              Astrophysical Journal, 187, 555, doi: 10.1086/152666
+Miller Bertolami, M. M., Althaus, L. G., Serenelli, A. M., &     Schatz, H., Aprahamian, A., Görres, J., et al. 1998, Physics
+  Panei, J. A. 2006, Astronomy and Astrophysics, 449, 313,         Reports, 294, 167, doi: 10.1016/S0370-1573(97)00048-3
+  doi: 10.1051/0004-6361:20053804                                Sieverding, A., Martı́nez-Pinedo, G., Huther, L., Langanke,
+Müller, B. 2016, Publications of the Astronomical Society         K., & Heger, A. 2018, The Astrophysical Journal, 865,
+  of Australia, 33, e048, doi: 10.1017/pasa.2016.40                143, doi: 10.3847/1538-4357/aadd48
+O’Neill, C., Lowman, J., & Wasiliev, J. 2020, Icarus, 352,       Smith, N., & Arnett, W. D. 2014, The Astrophysical
+  114025, doi: 10.1016/j.icarus.2020.114025                        Journal, 785, 82, doi: 10.1088/0004-637X/785/2/82
+                                                                                                                        17
+
+Travaglio, C., Gallino, R., Rauscher, T., Röpke, F. K., &     Woosley, S. E., & Heger, A. 2007, Physics Reports, 442,
+  Hillebrandt, W. 2015, The Astrophysical Journal, 799,          269, doi: 10.1016/j.physrep.2007.02.009
+                                                               Woosley, S. E., & Hoffman, R. D. 1992, The Astrophysical
+  54, doi: 10.1088/0004-637X/799/1/54
+                                                                 Journal, 395, 202, doi: 10.1086/171644
+Travaglio, C., Rauscher, T., Heger, A., Pignatari, M., &       Woosley, S. E., & Howard, W. M. 1978, The Astrophysical
+  West, C. 2018, The Astrophysical Journal, 854, 18,             Journal Supplement Series, 36, 285, doi: 10.1086/190501
+  doi: 10.3847/1538-4357/aaa4f7                                Xiong, Z., Martı́nez-Pinedo, G., Just, O., & Sieverding, A.
+                                                                 2024, Physical Review Letters, 132, 192701,
+Travaglio, C., Röpke, F. K., Gallino, R., & Hillebrandt, W.
+                                                                 doi: 10.1103/PhysRevLett.132.192701
+  2011, The Astrophysical Journal, 739, 93,                    Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+  doi: 10.1088/0004-637X/739/2/93                                A. 2020, The Astrophysical Journal, 890, 94,
+Vitense, E. 1953, Zeitschrift fur Astrophysik, 32, 135           doi: 10.3847/1538-4357/ab66bb
+18
+
+
+                                                                                    APPENDIX
+
+
+                                                            A. CORRELATIONS OF NUCLEAR REACTION RATES
+   The Pearson correlation coefficient, rP , is insufficient to assess the importance of a correlated rate. As shown in Figure
+A1, a strong correlation does not necessarily imply a significant impact on the final mass fraction of a species. To better
+quantify this impact, we use ζ, which is defined as the slope of the linear regression between log10 (X/Xno variation ) and
+log10 (variation factor), where X is the final, mass-averaged, and decayed mass fraction for a variation, and Xno variation
+is the corresponding default case with no rate variation.
+
+                                                                                                                                      0.10
+                                                                               = 0.18
+
+
+
+
+                                                                                               98Ru log10(X/Xno variation)
+          74Se log10(X/Xno variation)
+
+
+
+
+                                         0.1
+                                                                             rP = 0.93                                                0.05
+                                         0.0
+                                                                                                                                      0.00
+                                         0.1
+                                                                                                                                      0.05           = 0.03
+                                         0.2                                                                                                       rP = 0.51
+                                                                                                                                      0.10
+                                               1.0    0.5       0.0          0.5         1.0                                                 1.0      0.5       0.0         0.5          1.0
+                                                     log10(75Se( , n) variation)                                                                    log10(100Pd( , ) variation)
+                                        0.20                                   = 0.03                                                  0.5                                     = 0.41
+                                                                                                       196Hg log10(X/Xno variation)
+ 184Os log10(X/Xno variation)
+
+
+
+
+                                        0.15                                 rP = 0.44                                                                                       rP = 0.71
+                                        0.10                                                                                           0.0
+                                        0.05
+                                                                                                                                       0.5
+                                        0.00
+                                        0.05                                                                                           1.0
+                                               1.0    0.5        0.0         0.5         1.0                                                 1.0      0.5       0.0          0.5         1.0
+                                                     log10(184Pt( , ) variation)                                                                    log10(196Pb( , n) variation)
+
+Figure A1. Examples of strong correlations between mass fractions and reaction rates for four species under the MLT scenario.
+Orange dots indicate mass fractions for each variation factor, and the black line shows the linear fit to log10 (X/Xno variation )
+versus log10 (variation factor). Top left and bottom right: strong correlation and significant mass fraction changes for 74 Se and
+196
+    Hg. Top right: strong correlation for 98 Ru with large scatter. Bottom left: correlation for 184 Os with a weak slope and
+asymmetric impact.
+
+   Figure A1 demonstrates that strong correlations do not always imply significance, nor does a strong ζ guarantee
+it. For instance, the bottom right panel shows 196 Hg with both a strong correlation and slope, while the bottom left
+shows a strong correlation for 184 Os but a weak slope. Only rates with both high rP and ζ substantially affect final
+abundances.
+   A caveat of rP for this method of varying the reaction rates is that it not distinguish between the photo-disintegration
+and corresponding capture rate because the same variation factor is applied to both. All correlated rates are re-
+ported according to their photo-disintegration rates, but as shown by the upper left plot of Figure A1 for 74 Se and
+75
+   Se(γ, n)74 Se this results in a production term having a negative correlation because 74 Se(n, γ)75 Se is also modified
+in the same way. As explained in Section 3.1, the reactions in this shell are not balanced and both a destruction and
+production term could be relevant at different locations, although as Figure 8 shows for heavier species the (γ, n) rate
+is typically much stronger.
+                                                                                                                           19
+
+                                B. RESULTS OF VARYING THE INGESTION RATE
+  Here we provide the results for varying the ingestion rates for the scenarios with a downturn in the mixing efficiency
+profile as shown in Figure 4.
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+      4.5
+      4.0
+      3.5
+      3.0
+      2.5
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+      2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+                        4 × 10 3 M s 1        4 × 10 4 M s 1         4 × 10 5 M s 1        No Merger
+Figure B1. The overproduction compared to initial of the p nuclei for the 3D-inspired mixing scenario for no ingestion,
+4 × 10−5 M⊙ s−1 , 4 × 10−4 M⊙ s−1 , and 4 × 10−3 M⊙ s−1 . The average spread in production OPmax − OPmin = 1.58 dex. OP = 0
+is the initial amount. Average OP for each scenario are provided as dashed lines and corresponds to the values presented in
+Table 1.
+
+
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+      4.5
+      4.0
+      3.5
+      3.0
+      2.5
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+      2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+                        4 × 10 3 M s 1        4 × 10 4 M s 1         4 × 10 5 M s 1        No Merger
+Figure B2. The overproduction compared to initial of the p nuclei for the 3×3D-inspired mixing scenario for no ingestion,
+4 × 10−5 M⊙ s−1 , 4 × 10−4 M⊙ s−1 , and 4 × 10−3 M⊙ s−1 . The average spread in production OPmax − OPmin = 1.64 dex excluding
+the no ingestion case. OP = 0 is the initial amount. Average OP for each scenario are provided as dashed lines and corresponds
+to the values presented in Table 1.
+20
+
+     5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+     4.5
+     4.0
+     3.5
+     3.0
+     2.5
+     2.0
+     1.5
+OP
+
+
+
+
+     1.0
+     0.5
+     0.0
+     0.5
+     1.0                                      2.1               2.8         2.8 2.4 2.9 2.5     2.6 6.4 2.7 2.5
+
+     1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+     2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+                       4 × 10 3 M s 1        4 × 10 4 M s 1         4 × 10 5 M s 1          No Merger
+Figure B3. The overproduction compared to initial of the p nuclei for the 10×3D-inspired mixing scenario for no ingestion,
+4 × 10−5 M⊙ s−1 , 4 × 10−4 M⊙ s−1 , and 4 × 10−3 M⊙ s−1 . Arrows denote OP out of bounds and the true OP is written above.
+The average spread in production OPmax − OPmin = 1.78 dex excluding the no ingestion case. OP = 0 is the initial amount.
+Average OP for each scenario are provided as dashed lines and corresponds to the values presented in Table 1.
+
+
+
+
+     5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm 156Dy 162Er 168Yb 180Ta 184Os 196Hg
+     4.5
+     4.0
+     3.5
+     3.0
+     2.5
+     2.0
+     1.5
+OP
+
+
+
+
+     1.0
+     0.5
+     0.0
+     0.5
+     1.0                                      3.5 3.5 3.6 2.4 2.9 3.4 8.3    2.9 3.2 6.3 6.4 6.8 6.2 4.8 5.6 6.0 83.1 5.4 5.8 6.1 4.6
+
+     1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+     2.0     Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt
+                       4 × 10 3 M s 1        4 × 10 4 M s 1               4 × 10 5 M s 1                No Merger
+Figure B4. The overproduction compared to initial of the p nuclei for the 50×3D-inspired mixing scenario for no ingestion,
+4 × 10−5 M⊙ s−1 , 4 × 10−4 M⊙ s−1 , and 4 × 10−3 M⊙ s−1 . Arrows denote OP out of bounds and the true OP is written above.
+The average spread in production OPmax − OPmin = 1.84 dex excluding the no ingestion case. OP = 0 is the initial amount.
+Average OP for each scenario excluding “No Merger” are provided as dashed lines and corresponds to the values presented in
+Table 1.
+                                                                                                                                        21
+
+                         C. RESULTS OF VARYING THE INPUT NUCLEAR REACTIONS
+   Here we provide the results for varying the input nuclear reactions for the scenarios with a downturn in the mixing
+efficiency profile as shown in Figure 4 and the reaction rate correlation tables for the MLT and downturn scenarios.
+
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm156Dy 162Er 168Yb 180Ta 184Os 196Hg       103
+      4.5
+      4.0
+
+
+
+
+                                                                                                                          Number of MC runs out of 1000
+      3.5
+      3.0
+      2.5                                                                                                              102
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5                                                                                                              101
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+              Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt                                                        100
+      2.0
+Figure C1. Histogram showing the spread due to varying (γ, p), (γ, n), (γ, α) and corresponding capture rates for unstable
+n-deficient isotopes from Se–Po for the 3D-inspired mixing scenario. Colour and size both correspond to the logarithmic binning
+of Monte Carlo runs. The average spread OPmax − OPmin = 0.59 dex. OP = 0 is the initial amount.
+
+
+
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm156Dy 162Er 168Yb 180Ta 184Os 196Hg       103
+      4.5
+      4.0
+
+
+
+
+                                                                                                                          Number of MC runs out of 1000
+      3.5
+      3.0
+      2.5                                                                                                              102
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5                                                                                                              101
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+              Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt                                                        100
+      2.0
+Figure C2. Histogram showing the spread due to varying (γ, p), (γ, n), (γ, α) and corresponding capture rates for unstable
+n-deficient isotopes from Se–Po for the 3×3D-inspired mixing scenario. Colour and size both correspond to the logarithmic
+binning of Monte Carlo runs. The average spread OPmax − OPmin = 0.69 dex. OP = 0 is the initial amount.
+22
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm156Dy 162Er 168Yb 180Ta 184Os 196Hg   103
+      4.5
+      4.0
+
+
+
+
+                                                                                                                     Number of MC runs out of 1000
+      3.5
+      3.0
+      2.5                                                                                                          102
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5                                                                                                          101
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+              Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt                                                    100
+      2.0
+Figure C3. Histogram showing the spread due to varying (γ, p), (γ, n), (γ, α) and corresponding capture rates for unstable
+n-deficient isotopes from Se–Po for the 10×3D-inspired mixing scenario. Colour and size both correspond to the logarithmic
+binning of Monte Carlo runs. The average spread OPmax − OPmin = 0.76 dex. OP = 0 is the initial amount.
+
+      5.0 74Se 84Sr 94Mo 98Ru 106Cd 113In 114Sn 120Te 126Xe 132Ba 136Ce 144Sm156Dy 162Er 168Yb 180Ta 184Os 196Hg   103
+      4.5
+      4.0
+
+
+
+
+                                                                                                                     Number of MC runs out of 1000
+      3.5
+      3.0
+      2.5                                                                                                          102
+      2.0
+      1.5
+OP
+
+
+
+
+      1.0
+      0.5                                                                                                          101
+      0.0
+      0.5
+      1.0
+      1.5 78 92 96 102 108 112 115 124 130 138 138 152 158 164 174 180 190
+              Kr Mo Ru Pd Cd Sn Sn Xe Ba La Ce Gd Dy Er Hf W Pt                                                    100
+      2.0
+Figure C4. Histogram showing the spread due to varying (γ, p), (γ, n), (γ, α) and corresponding capture rates for unstable
+n-deficient isotopes from Se–Po for the 50×3D-inspired mixing scenario. Colour and size both correspond to the logarithmic
+binning of Monte Carlo runs. The average spread OPmax − OPmin = 0.79 dex. OP = 0 is the initial amount.
+
+                 Table C1. Correlations and ζ slopes between mass fraction and reaction rates for the MLT
+                 mixing scenario.
+
+
+                      Isotope     Reaction        rP       ζ     Isotope    Reaction          rP       ζ
+                      74         75                              144        142
+                           Se         Se(γ, n)   −0.93   −0.18         Sm         Sm(γ, n)   −0.19   −0.02
+                      78         79                                         142
+                           Kr         Kr(γ, n)   −0.88   −0.28                    Sm(γ, p)   −0.17   −0.02
+
+
+                                                       Table C1 continued
+                                                                                          23
+                                  Table C1 (continued)
+
+Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+84         85                                            143
+     Sr         Sr(γ, n)    −0.88    −0.28                     Sm(γ, n)   −0.25   −0.03
+92         93                                            146
+     Mo         Mo(γ, n)    −0.94    −0.07                     Sm(γ, n)   0.20    0.03
+           110                                           150
+                 Sn(γ, α)   0.16      0.01                     Gd(γ, n)   0.17    0.02
+94         93                                            150
+     Mo         Mo(γ, n)    0.97      0.06                     Gd(γ, α)   −0.15   −0.02
+96         97                                            196
+     Ru         Ru(γ, n)    −0.88    −0.12                     Pb(γ, n)   0.47    0.06
+           100                                           202
+                 Pd(γ, α)   0.20      0.03                     Pb(γ, n)   0.21    0.03
+98         97                                152         152
+     Ru         Ru(γ, n)    0.36      0.02         Gd          Dy(γ, α)   −0.40   −0.01
+           100                                           154
+                 Pd(γ, p)   0.62      0.04                     Dy(γ, α)   −0.15   −0.00
+           100                                           160
+                 Pd(γ, α)   −0.51    −0.03                     Er(γ, α)   0.39    0.00
+102        100                               156         159
+      Pd         Pd(γ, p)   −0.29    −0.05         Dy          Er(γ, n)   −0.18   −0.06
+           100                                           160
+                 Pd(γ, α)   −0.30    −0.05                     Er(γ, α)   0.74    0.26
+           103                                           202
+                 Pd(γ, n)   −0.66    −0.12                     Pb(γ, n)   0.18    0.05
+106        107                               158         158
+      Cd         Cd(γ, n)   −0.86    −0.16         Dy          Er(γ, α)   −0.23   −0.01
+           110                                           160
+                 Sn(γ, α)   0.23      0.05                     Er(γ, α)   0.56    0.01
+108        107                                           196
+      Cd         Cd(γ, n)   0.72      0.10                     Pb(γ, n)   0.16    0.00
+           109                                           202
+                 Cd(γ, n)   −0.46    −0.06                     Pb(γ, n)   0.18    0.00
+           110                               162         159
+                 Sn(γ, p)   0.16      0.02         Er          Er(γ, n)   −0.18   −0.06
+113        113                                           160
+      In         Sn(γ, n)   0.91      0.37                     Er(γ, n)   −0.18   −0.06
+112        110                                           160
+      Sn         Sn(γ, α)   −0.17    −0.03                     Er(γ, α)   −0.26   −0.07
+           113                                           161
+                 Sn(γ, n)   −0.83    −0.15                     Er(γ, n)   0.21    0.06
+114        110                                           166
+      Sn         Sn(γ, α)   −0.15    −0.01                     Yb(γ, α)   0.53    0.14
+           113                                           196
+                 Sn(γ, n)   0.74      0.06                     Pb(γ, n)   0.25    0.07
+           122                                           202
+                 Xe(γ, n)   −0.18    −0.01                     Pb(γ, n)   0.17    0.05
+           122                               164         164
+                 Xe(γ, p)   0.20      0.02         Er          Yb(γ, n)   −0.24   −0.09
+           122                                           164
+                 Xe(γ, α)   0.41      0.04                     Yb(γ, α)   −0.58   −0.32
+115        113                                           196
+      Sn         Sn(γ, n)   0.80      0.05                     Pb(γ, n)   0.17    0.05
+           122                               168         168
+                 Xe(γ, p)   0.17      0.01         Yb          Hf(γ, α)   −0.28   −0.14
+           122                                           172
+                 Xe(γ, α)   0.35      0.02                     Hf(γ, α)   0.60    0.24
+120        121                                           176
+      Te         Te(γ, n)   −0.71    −0.09                     W(γ, α)    0.20    0.07
+           122                                           196
+                 Xe(γ, p)   0.45      0.05                     Pb(γ, n)   0.21    0.07
+           122                               174         174
+                 Xe(γ, α)   −0.32    −0.04         Hf          W(γ, n)    −0.21   −0.03
+124        122                                           174
+      Xe         Xe(γ, n)   −0.17    −0.04                     W(γ, α)    −0.40   −0.08
+           122                                           178
+                 Xe(γ, p)   −0.24    −0.06                     W(γ, n)    −0.15   −0.03
+           122                                           178
+                 Xe(γ, α)   −0.45    −0.15                     W(γ, α)    0.42    0.07
+           123                               180         179
+                 Xe(γ, n)   0.16      0.03         Ta          Ta(γ, n)   −0.91   −0.02
+           125                               180         180
+                 Xe(γ, n)   −0.46    −0.16         W           Os(γ, n)   −0.28   −0.07
+126        122                                           180
+      Xe         Xe(γ, α)   −0.34    −0.09                     Os(γ, α)   −0.52   −0.21
+           125                                           196
+                 Xe(γ, n)   0.49      0.13                     Pb(γ, n)   0.21    0.05
+           127                               184         185
+                 Xe(γ, n)   −0.25    −0.07         Os          Os(γ, n)   0.33    0.02
+           126                                           184
+                 Ba(γ, p)   −0.18    −0.04                     Pt(γ, α)   −0.44   −0.03
+           126                                           186
+                 Ba(γ, α)   −0.32    −0.09                     Pt(γ, n)   0.17    0.01
+
+
+                                   Table C1 continued
+24
+                                           Table C1 (continued)
+
+         Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+         130        126                                           186
+               Ba         Ba(γ, α)   −0.17    −0.01                     Pt(γ, α)   −0.16   −0.01
+                    128                                           188
+                          Ba(γ, n)   −0.19    −0.01                     Pt(γ, n)   −0.17   −0.01
+                    129                                           196
+                          Ba(γ, n)   0.23      0.01                     Pb(γ, n)   0.16    0.01
+                    131                               190         190
+                          Ba(γ, n)   −0.79    −0.05         Pt          Hg(γ, n)   −0.28   −0.03
+         132        131                                           190
+               Ba         Ba(γ, n)   0.66      0.09                     Hg(γ, α)   −0.51   −0.06
+                    133                                           196
+                          Ba(γ, n)   −0.61    −0.08                     Pb(γ, n)   0.20    0.02
+         138        137                               196         196
+               La         La(γ, n)   −0.71    −0.37         Hg          Pb(γ, n)   −0.71   −0.41
+         136        138                                           197
+               Ce         Nd(γ, n)   −0.38    −0.05                     Pb(γ, n)   −0.16   −0.06
+                    138                                           200
+                          Nd(γ, p)   0.65      0.08                     Pb(γ, n)   0.19    0.10
+                    138                                           202
+                          Nd(γ, α)   −0.16    −0.02                     Pb(γ, n)   0.30    0.14
+                    140
+                          Nd(γ, α)   0.34      0.04
+         138        137
+               Ce         Ce(γ, n)   0.51      0.02
+                    139
+                          Ce(γ, n)   −0.43    −0.01
+                    139
+                          Pr(γ, p)   0.29      0.01
+                    138
+                          Nd(γ, n)   −0.30    −0.01
+                    138
+                          Nd(γ, α)   −0.22    −0.01
+     Note—The data is split into two sets of four columns.
+
+
+
+
+     Table C2. Correlations and ζ slopes between mass fraction and reaction rates for the
+     3D-inspired mixing scenario.
+
+
+         Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+         74         75                                152         150
+              Se         Se(γ, n)    −0.83    −0.22         Gd          Gd(γ, α)   −0.18   −0.00
+         78         79                                            151
+              Kr         Kr(γ, n)    −0.79    −0.24                     Gd(γ, n)   −0.20   −0.00
+         84         85                                            152
+              Sr         Sr(γ, n)    −0.80    −0.34                     Dy(γ, α)   −0.31   −0.01
+         92         93                                            154
+              Mo         Mo(γ, n)    −0.91    −0.14                     Dy(γ, α)   −0.17   −0.00
+         94         93                                            160
+              Mo         Mo(γ, n)    0.93      0.10                     Er(γ, α)   0.39    0.01
+         96         97                                            196
+              Ru         Ru(γ, n)    −0.82    −0.14                     Pb(γ, n)   0.16    0.00
+                    100                               156         157
+                          Pd(γ, α)   0.21      0.04         Dy          Dy(γ, n)   −0.28   −0.12
+         98         97                                            159
+              Ru         Ru(γ, n)    0.50      0.02                     Er(γ, n)   −0.17   −0.05
+                    100                                           160
+                          Pd(γ, p)   0.58      0.03                     Er(γ, α)   0.68    0.26
+                    100                                           196
+                          Pd(γ, α)   −0.31    −0.01                     Pb(γ, n)   0.16    0.05
+                    110                               158         157
+                          Sn(γ, α)   0.22      0.01         Dy          Dy(γ, n)   0.24    0.03
+         102        100                                           159
+               Pd         Pd(γ, p)   −0.18    −0.04                     Dy(γ, n)   −0.21   −0.03
+                    100                                           159
+                          Pd(γ, α)   −0.21    −0.04                     Er(γ, n)   −0.17   −0.02
+                    103                                           160
+                          Pd(γ, n)   −0.72    −0.16                     Er(γ, α)   0.66    0.07
+         106        107                                           196
+               Cd         Cd(γ, n)   −0.75    −0.16                     Pb(γ, n)   0.16    0.02
+                    110                                           202
+                          Sn(γ, α)   0.31      0.07                     Pb(γ, n)   0.20    0.02
+
+
+                                            Table C2 continued
+                                                                                          25
+                                  Table C2 (continued)
+
+Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+108        107                               162         159
+      Cd         Cd(γ, n)   0.20      0.05         Er          Er(γ, n)   −0.25   −0.10
+           109                                           159
+                 Cd(γ, n)   −0.83    −0.20                     Er(γ, α)   −0.16   −0.05
+113        114                                           160
+      In         In(γ, n)   −0.32    −0.05                     Er(γ, n)   −0.23   −0.09
+           110                                           160
+                 Sn(γ, p)   −0.16    −0.02                     Er(γ, α)   −0.44   −0.15
+           110                                           161
+                 Sn(γ, α)   −0.27    −0.04                     Er(γ, n)   0.16    0.06
+           113                                           166
+                 Sn(γ, n)   0.60      0.10                     Yb(γ, α)   0.33    0.11
+           169                                           196
+                 Lu(γ, n)   0.15      0.02                     Pb(γ, n)   0.27    0.10
+112        113                                           202
+      Sn         Sn(γ, n)   −0.80    −0.18                     Pb(γ, n)   0.16    0.06
+114        110                               164         164
+      Sn         Sn(γ, α)   −0.17    −0.01         Er          Yb(γ, n)   −0.26   −0.07
+           113                                           164
+                 Sn(γ, n)   0.65      0.05                     Yb(γ, α)   −0.56   −0.18
+           122                                           196
+                 Xe(γ, p)   0.21      0.02                     Pb(γ, n)   0.21    0.06
+           122                                           202
+                 Xe(γ, α)   0.44      0.03                     Pb(γ, n)   0.18    0.05
+115        110                               168         164
+      Sn         Sn(γ, α)   −0.16    −0.01         Yb          Yb(γ, α)   −0.19   −0.09
+           113                                           166
+                 Sn(γ, n)   0.74      0.06                     Yb(γ, n)   −0.22   −0.08
+           122                                           166
+                 Xe(γ, p)   0.16      0.01                     Yb(γ, α)   −0.38   −0.13
+           122                                           167
+                 Xe(γ, α)   0.33      0.03                     Yb(γ, n)   0.20    0.07
+120        121                                           172
+      Te         Te(γ, n)   −0.76    −0.19                     Hf(γ, α)   0.43    0.16
+           122                                           196
+                 Xe(γ, p)   0.26      0.05                     Pb(γ, n)   0.28    0.09
+           122                                           202
+                 Xe(γ, α)   −0.23    −0.05                     Pb(γ, n)   0.19    0.06
+124        122                               174         172
+      Xe         Xe(γ, p)   −0.19    −0.05         Hf          Hf(γ, α)   −0.40   −0.07
+           122                                           174
+                 Xe(γ, α)   −0.39    −0.15                     W(γ, α)    −0.19   −0.04
+           125                                           178
+                 Xe(γ, n)   −0.54    −0.23                     W(γ, α)    0.51    0.09
+126        122                                           182
+      Xe         Xe(γ, α)   −0.35    −0.14                     Os(γ, α)   0.18    0.03
+           125                                           196
+                 Xe(γ, n)   0.22      0.09                     Pb(γ, n)   0.19    0.03
+           127                               180         179
+                 Xe(γ, n)   −0.63    −0.27         Ta          Ta(γ, n)   −0.91   −0.07
+130        131                                           179
+      Ba         Ba(γ, n)   −0.82    −0.13                     Ta(γ, α)   −0.15   −0.01
+132        131                               180         180
+      Ba         Ba(γ, n)   0.36      0.14         W           Os(γ, n)   −0.27   −0.05
+           133                                           180
+                 Ba(γ, n)   −0.76    −0.30                     Os(γ, α)   −0.51   −0.13
+138        133                                           196
+      La         La(γ, p)   −0.20    −0.07                     Pb(γ, n)   0.23    0.04
+           135                               184         182
+                 La(γ, n)   −0.35    −0.12         Os          Os(γ, α)   −0.38   −0.02
+           136                                           184
+                 La(γ, n)   0.26      0.08                     Pt(γ, α)   −0.33   −0.02
+           137                                           186
+                 La(γ, n)   −0.34    −0.14                     Pt(γ, α)   −0.15   −0.01
+136        137                                           188
+      Ce         Ce(γ, n)   −0.49    −0.07                     Pt(γ, α)   0.23    0.01
+           138                                           196
+                 Nd(γ, n)   −0.27    −0.03                     Pb(γ, n)   0.19    0.01
+           138                               190         190
+                 Nd(γ, p)   0.48      0.06         Pt          Hg(γ, n)   −0.30   −0.02
+           140                                           190
+                 Nd(γ, α)   0.38      0.04                     Hg(γ, α)   −0.50   −0.05
+138        137                                           196
+      Ce         Ce(γ, n)   0.65      0.07                     Pb(γ, n)   0.20    0.02
+           139                               196         196
+                 Ce(γ, n)   −0.52    −0.05         Hg          Pb(γ, n)   −0.68   −0.35
+           138                                           197
+                 Nd(γ, p)   0.16      0.01                     Pb(γ, n)   −0.26   −0.10
+144        142                                           200
+      Sm         Sm(γ, n)   −0.15    −0.02                     Pb(γ, n)   0.17    0.07
+           142                                           202
+                 Sm(γ, p)   −0.16    −0.02                     Pb(γ, n)   0.24    0.10
+
+
+                                   Table C2 continued
+26
+                                           Table C2 (continued)
+
+         Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+                    143
+                          Sm(γ, n)   −0.19    −0.03
+                    146
+                          Sm(γ, n)   0.19      0.03
+                    146
+                          Sm(γ, α)   −0.22    −0.03
+                    150
+                          Gd(γ, n)   0.21      0.03
+                    150
+                          Gd(γ, α)   −0.20    −0.03
+                    196
+                          Pb(γ, n)   0.46      0.06
+                    202
+                          Pb(γ, n)   0.20      0.03
+     Note—The data is split into two sets of four columns.
+
+
+
+
+     Table C3. Correlations and ζ slopes between mass fraction and reaction rates for the
+     3×3D-inspired mixing scenario.
+
+
+         Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+         74         75                                144         142
+              Se         Se(γ, n)    −0.81    −0.24         Sm          Sm(γ, n)   −0.23   −0.02
+         78         79                                            142
+              Kr         Kr(γ, n)    −0.76    −0.20                     Sm(γ, p)   −0.23   −0.03
+         84         85                                            143
+              Sr         Sr(γ, n)    −0.75    −0.26                     Sm(γ, n)   −0.30   −0.04
+         92         93                                            146
+              Mo         Mo(γ, n)    −0.91    −0.23                     Sm(γ, α)   −0.17   −0.02
+         94         93                                            150
+              Mo         Mo(γ, n)    0.92      0.17                     Gd(γ, n)   0.17    0.02
+         96         97                                            150
+              Ru         Ru(γ, n)    −0.84    −0.25                     Gd(γ, α)   −0.16   −0.02
+         98         97                                            196
+              Ru         Ru(γ, n)    0.65      0.05                     Pb(γ, n)   0.44    0.05
+                    100                                           202
+                          Pd(γ, p)   0.47      0.03                     Pb(γ, n)   0.17    0.02
+                    100                               152         151
+                          Pd(γ, α)   −0.23    −0.02         Gd          Gd(γ, n)   −0.17   −0.00
+                    110                                           152
+                          Sn(γ, α)   0.21      0.01                     Dy(γ, α)   −0.39   −0.01
+         102        100                                           154
+               Pd         Pd(γ, p)   −0.20    −0.06                     Dy(γ, α)   −0.19   −0.00
+                    100                                           160
+                          Pd(γ, α)   −0.22    −0.06                     Er(γ, α)   0.33    0.01
+                    103                               156         157
+                          Pd(γ, n)   −0.71    −0.26         Dy          Dy(γ, n)   −0.21   −0.08
+         106        107                                           159
+               Cd         Cd(γ, n)   −0.78    −0.27                     Er(γ, n)   −0.18   −0.06
+                    110                                           160
+                          Sn(γ, α)   0.21      0.08                     Er(γ, α)   0.69    0.25
+         108        107                                           196
+               Cd         Cd(γ, n)   0.24      0.08                     Pb(γ, n)   0.15    0.05
+                    109                                           202
+                          Cd(γ, n)   −0.80    −0.24                     Pb(γ, n)   0.15    0.05
+         113        110                               158         157
+               In         Sn(γ, p)   −0.22    −0.04         Dy          Dy(γ, n)   0.20    0.02
+                    110                                           159
+                          Sn(γ, α)   −0.33    −0.06                     Er(γ, n)   −0.19   −0.02
+                    113                                           160
+                          Sn(γ, n)   0.62      0.15                     Er(γ, α)   0.67    0.07
+                    169                                           196
+                          Lu(γ, n)   0.16      0.03                     Pb(γ, n)   0.16    0.02
+         112        113                                           202
+               Sn         Sn(γ, n)   −0.78    −0.31                     Pb(γ, n)   0.20    0.02
+         114        110                               162         159
+               Sn         Sn(γ, p)   −0.17    −0.02         Er          Er(γ, n)   −0.29   −0.12
+                    110                                           159
+                          Sn(γ, α)   −0.26    −0.03                     Er(γ, α)   −0.17   −0.05
+                    113                                           160
+                          Sn(γ, n)   0.70      0.08                     Er(γ, n)   −0.22   −0.09
+
+
+                                            Table C3 continued
+                                                                                              27
+                                      Table C3 (continued)
+
+    Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+               122                                           160
+                     Xe(γ, p)   0.16      0.02                     Er(γ, α)   −0.40   −0.13
+               122                                           161
+                     Xe(γ, α)   0.27      0.03                     Er(γ, n)   0.18    0.08
+               169                                           166
+                     Lu(γ, n)   0.15      0.01                     Yb(γ, α)   0.32    0.11
+    115        110                                           196
+          Sn         Sn(γ, p)   −0.17    −0.02                     Pb(γ, n)   0.27    0.10
+               110                                           202
+                     Sn(γ, α)   −0.25    −0.03                     Pb(γ, n)   0.15    0.06
+               113                               164         164
+                     Sn(γ, n)   0.73      0.08         Er          Yb(γ, n)   −0.24   −0.08
+               122                                           164
+                     Xe(γ, α)   0.24      0.03                     Yb(γ, α)   −0.56   −0.24
+               169                                           165
+                     Lu(γ, n)   0.15      0.01                     Yb(γ, n)   −0.17   −0.06
+    120        121                                           196
+          Te         Te(γ, n)   −0.78    −0.24                     Pb(γ, n)   0.19    0.06
+               122                                           202
+                     Xe(γ, p)   0.24      0.06                     Pb(γ, n)   0.15    0.06
+               122                               168         164
+                     Xe(γ, α)   −0.22    −0.06         Yb          Yb(γ, α)   −0.22   −0.10
+    124        122                                           166
+          Xe         Xe(γ, p)   −0.20    −0.07                     Yb(γ, n)   −0.18   −0.07
+               122                                           166
+                     Xe(γ, α)   −0.36    −0.18                     Yb(γ, α)   −0.34   −0.12
+               125                                           167
+                     Xe(γ, n)   −0.54    −0.33                     Yb(γ, n)   0.19    0.07
+    126        122                                           172
+          Xe         Xe(γ, p)   −0.19    −0.07                     Hf(γ, α)   0.43    0.16
+               122                                           196
+                     Xe(γ, α)   −0.39    −0.18                     Pb(γ, n)   0.29    0.10
+               125                                           202
+                     Xe(γ, n)   0.22      0.11                     Pb(γ, n)   0.19    0.06
+               127                               174         172
+                     Xe(γ, n)   −0.57    −0.29         Hf          Hf(γ, α)   −0.31   −0.06
+    130        126                                           174
+          Ba         Ba(γ, α)   −0.16    −0.02                     W(γ, n)    −0.19   −0.03
+               131                                           174
+                     Ba(γ, n)   −0.81    −0.15                     W(γ, α)    −0.30   −0.07
+    132        131                                           178
+          Ba         Ba(γ, n)   0.41      0.15                     W(γ, α)    0.46    0.08
+               133                                           182
+                     Ba(γ, n)   −0.74    −0.27                     Os(γ, α)   0.17    0.03
+    138        133                                           196
+          La         La(γ, p)   −0.19    −0.08                     Pb(γ, n)   0.20    0.04
+               135                               180         179
+                     La(γ, n)   −0.31    −0.12         Ta          Ta(γ, n)   −0.89   −0.07
+               136                               180         180
+                     La(γ, n)   0.25      0.08         W           Os(γ, n)   −0.26   −0.08
+               137                                           180
+                     La(γ, n)   −0.35    −0.16                     Os(γ, α)   −0.50   −0.21
+    136        137                                           181
+          Ce         Ce(γ, n)   −0.47    −0.07                     Os(γ, n)   −0.16   −0.04
+               138                                           196
+                     Nd(γ, n)   −0.31    −0.04                     Pb(γ, n)   0.22    0.06
+               138                               184         182
+                     Nd(γ, p)   0.52      0.07         Os          Os(γ, α)   −0.19   −0.02
+               140                                           185
+                     Nd(γ, α)   0.32      0.04                     Os(γ, n)   0.17    0.01
+    138        137                                           184
+          Ce         Ce(γ, n)   0.66      0.08                     Pt(γ, α)   −0.45   −0.04
+               139                                           186
+                     Ce(γ, n)   −0.37    −0.04                     Pt(γ, α)   −0.16   −0.01
+               138                                           188
+                     Nd(γ, n)   −0.16    −0.02                     Pt(γ, α)   0.16    0.01
+               138                                           196
+                     Nd(γ, p)   0.28      0.03                     Pb(γ, n)   0.20    0.01
+               140                               190         190
+                     Nd(γ, α)   0.18      0.02         Pt          Hg(γ, n)   −0.30   −0.04
+                                                             190
+                                                                   Hg(γ, α)   −0.51   −0.07
+                                                             196
+                                                                   Pb(γ, n)   0.19    0.02
+                                                 196         196
+                                                       Hg          Pb(γ, n)   −0.68   −0.42
+                                                             197
+                                                                   Pb(γ, n)   −0.28   −0.13
+                                                             202
+                                                                   Pb(γ, n)   0.20    0.10
+Note—The data is split into two sets of four columns.
+28
+
+
+
+     Table C4. Correlations and ζ slopes between mass fraction and reaction rates for the
+     10×3D-inspired mixing scenario.
+
+
+         Isotope    Reaction          rP        ζ     Isotope    Reaction          rP       ζ
+         74         75                                138        137
+              Se         Se(γ, n)    −0.87    −0.30         Ce         Ce(γ, n)   0.58    0.05
+         78         79                                           139
+              Kr         Kr(γ, n)    −0.81    −0.35                    Ce(γ, n)   −0.19   −0.01
+         84         84                                           138
+              Sr         Rb(γ, n)    0.16      0.06                    Nd(γ, n)   −0.31   −0.02
+                    85                                           138
+                         Sr(γ, n)    −0.81    −0.33                    Nd(γ, p)   0.37    0.03
+         92         93                                           138
+              Mo         Mo(γ, n)    −0.93    −0.17                    Nd(γ, α)   −0.17   −0.01
+         94         93                                           140
+              Mo         Mo(γ, n)    0.94      0.21                    Nd(γ, α)   0.20    0.01
+         96         97                                144        142
+              Ru         Ru(γ, n)    −0.88    −0.25         Sm         Sm(γ, n)   −0.31   −0.04
+         98         97                                           142
+              Ru         Ru(γ, n)    0.68      0.07                    Sm(γ, p)   −0.29   −0.03
+                    100                                          143
+                          Pd(γ, p)   0.45      0.05                    Sm(γ, n)   −0.41   −0.05
+                    100                                          196
+                          Pd(γ, α)   −0.29    −0.03                    Pb(γ, n)   0.35    0.04
+                    110                               152        152
+                          Sn(γ, α)   0.18      0.02         Gd         Dy(γ, α)   −0.50   −0.02
+         102        100                                          154
+               Pd         Pd(γ, p)   −0.29    −0.08                    Dy(γ, α)   −0.16   −0.00
+                    100                                          158
+                          Pd(γ, α)   −0.30    −0.08                    Er(γ, n)   0.15    0.00
+                    103                                          160
+                          Pd(γ, n)   −0.65    −0.21                    Er(γ, α)   0.19    0.00
+         106        107                               156        159
+               Cd         Cd(γ, n)   −0.83    −0.30         Dy         Er(γ, n)   −0.19   −0.06
+                    110                                          160
+                          Sn(γ, α)   0.19      0.07                    Er(γ, α)   0.70    0.26
+         108        107                                          202
+               Cd         Cd(γ, n)   0.63      0.15                    Pb(γ, n)   0.16    0.05
+                    109                               158        159
+                          Cd(γ, n)   −0.50    −0.10         Dy         Dy(γ, n)   0.19    0.01
+         113        110                                          158
+               In         Sn(γ, p)   −0.17    −0.05                    Er(γ, n)   −0.16   −0.01
+                    110                                          158
+                          Sn(γ, α)   −0.24    −0.08                    Er(γ, α)   −0.28   −0.01
+                    113                                          159
+                          Sn(γ, n)   0.82      0.34                    Er(γ, n)   −0.18   −0.01
+         112        110                                          160
+               Sn         Sn(γ, α)   −0.17    −0.05                    Er(γ, α)   0.56    0.02
+                    113                                          196
+                          Sn(γ, n)   −0.78    −0.33                    Pb(γ, n)   0.17    0.01
+         114        110                                          202
+               Sn         Sn(γ, p)   −0.18    −0.02                    Pb(γ, n)   0.17    0.01
+                    110                               162        159
+                          Sn(γ, α)   −0.27    −0.04         Er         Er(γ, n)   −0.28   −0.10
+                    113                                          159
+                          Sn(γ, n)   0.76      0.12                    Er(γ, α)   −0.16   −0.05
+                    122                                          160
+                          Xe(γ, α)   0.15      0.03                    Er(γ, n)   −0.19   −0.07
+                    169                                          160
+                          Lu(γ, n)   0.16      0.02                    Er(γ, α)   −0.29   −0.09
+         115        110                                          161
+               Sn         Sn(γ, p)   −0.18    −0.02                    Er(γ, n)   0.18    0.06
+                    110                                          166
+                          Sn(γ, α)   −0.27    −0.04                    Yb(γ, α)   0.40    0.12
+                    113                                          196
+                          Sn(γ, n)   0.77      0.12                    Pb(γ, n)   0.26    0.09
+                    169                                          202
+                          Lu(γ, n)   0.16      0.02                    Pb(γ, n)   0.15    0.05
+         120        119                               164        164
+               Te         Te(γ, n)   −0.20    −0.04         Er         Yb(γ, n)   −0.23   −0.10
+                    121                                          164
+                          Te(γ, n)   −0.66    −0.13                    Yb(γ, α)   −0.59   −0.43
+                    122                                          165
+                          Xe(γ, p)   0.42      0.07                    Yb(γ, n)   −0.17   −0.09
+                    122                                          196
+                          Xe(γ, α)   −0.35    −0.06                    Pb(γ, n)   0.16    0.07
+         124        122                               168        168
+               Xe         Xe(γ, n)   −0.22    −0.08         Yb         Hf(γ, n)   −0.16   −0.05
+                    122                                          168
+                          Xe(γ, p)   −0.27    −0.10                    Hf(γ, α)   −0.40   −0.21
+
+
+                                            Table C4 continued
+                                                                                              29
+                                      Table C4 (continued)
+
+    Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+               122                                           169
+                     Xe(γ, α)   −0.44    −0.23                     Hf(γ, n)   −0.17   −0.05
+               125                                           172
+                     Xe(γ, n)   −0.40    −0.22                     Hf(γ, α)   0.41    0.19
+    126        122                                           196
+          Xe         Xe(γ, n)   −0.21    −0.06                     Pb(γ, n)   0.22    0.08
+               122                               174         174
+                     Xe(γ, p)   −0.26    −0.08         Hf          W(γ, n)    −0.23   −0.06
+               122                                           174
+                     Xe(γ, α)   −0.46    −0.19                     W(γ, α)    −0.52   −0.19
+               125                                           176
+                     Xe(γ, n)   0.38      0.16                     W(γ, α)    −0.15   −0.05
+               127                               180         179
+                     Xe(γ, n)   −0.26    −0.11         Ta          Ta(γ, n)   −0.88   −0.03
+    130        126                               180         180
+          Ba         Ba(γ, p)   −0.18    −0.02         W           Os(γ, n)   −0.30   −0.12
+               126                                           180
+                     Ba(γ, α)   −0.31    −0.03                     Os(γ, α)   −0.54   −0.39
+               128                                           196
+                     Ba(γ, n)   −0.26    −0.03                     Pb(γ, n)   0.21    0.08
+               128                               184         184
+                     Ba(γ, p)   −0.16    −0.01         Os          Pt(γ, α)   −0.49   −0.10
+               128                                           185
+                     Ba(γ, α)   −0.27    −0.02                     Pt(γ, α)   −0.16   −0.02
+               129                                           196
+                     Ba(γ, n)   0.21      0.02                     Pb(γ, n)   0.16    0.02
+               131                               190         190
+                     Ba(γ, n)   −0.51    −0.05         Pt          Hg(γ, n)   −0.27   −0.06
+    132        128                                           190
+          Ba         Ba(γ, α)   −0.18    −0.02                     Hg(γ, α)   −0.52   −0.15
+               131                                           196
+                     Ba(γ, n)   0.63      0.12                     Pb(γ, n)   0.18    0.04
+               133                               196         196
+                     Ba(γ, n)   −0.56    −0.10         Hg          Pb(γ, n)   −0.75   −0.53
+    138        137                                           202
+          La         La(γ, n)   −0.65    −0.35                     Pb(γ, n)   0.20    0.12
+    136        138
+          Ce         Nd(γ, n)   −0.39    −0.06
+               138
+                     Nd(γ, p)   0.65      0.10
+               138
+                     Nd(γ, α)   −0.16    −0.03
+               140
+                     Nd(γ, α)   0.31      0.05
+Note—The data is split into two sets of four columns.
+
+
+
+
+Table C5. Correlations and ζ slopes between mass fraction and reaction rates for the
+50×3D-inspired mixing scenario.
+
+
+    Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+    74         75                                130         126
+         Se         Se(γ, n)    −0.95    −0.10         Ba          Ba(γ, α)   −0.19   −0.01
+    78         79                                            132
+         Kr         Kr(γ, n)    −0.91    −0.28                     Ce(γ, n)   −0.23   −0.01
+    84         85                                            132
+         Sr         Sr(γ, n)    −0.92    −0.26                     Ce(γ, p)   0.32    0.01
+    92         93                                            132
+         Mo         Mo(γ, n)    −0.57    −0.03                     Ce(γ, α)   −0.20   −0.01
+               100                                           134
+                     Pd(γ, p)   0.19      0.01                     Ce(γ, n)   −0.20   −0.01
+               100                                           134
+                     Pd(γ, α)   0.20      0.01                     Ce(γ, α)   0.41    0.02
+               110                               132         132
+                     Sn(γ, n)   0.16      0.01         Ba          Ce(γ, n)   −0.28   −0.04
+               110                                           132
+                     Sn(γ, p)   0.23      0.01                     Ce(γ, p)   −0.25   −0.03
+               110                                           132
+                     Sn(γ, α)   0.37      0.02                     Ce(γ, α)   −0.31   −0.04
+    94         93                                            133
+         Mo         Mo(γ, n)    0.89      0.08                     Ce(γ, n)   −0.19   −0.03
+
+
+                                       Table C5 continued
+30
+                                       Table C5 (continued)
+
+     Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+     96         97                                            134
+          Ru         Ru(γ, n)    −0.62    −0.05                     Ce(γ, α)   −0.18   −0.02
+                97                                138         137
+                     Ru(γ, α)    −0.18    −0.01         La          La(γ, n)   −0.75   −0.45
+                100                               136         138
+                      Pd(γ, α)   0.33      0.03         Ce          Nd(γ, n)   −0.42   −0.09
+                110                                           138
+                      Sn(γ, n)   0.16      0.01                     Nd(γ, p)   0.66    0.14
+                110                                           140
+                      Sn(γ, p)   0.16      0.01                     Nd(γ, α)   0.25    0.06
+                110                               138         138
+                      Sn(γ, α)   0.23      0.02         Ce          Nd(γ, n)   −0.33   −0.04
+     98         100                                           138
+          Ru          Pd(γ, p)   0.70      0.13                     Nd(γ, p)   −0.31   −0.04
+                100                                           138
+                      Pd(γ, α)   −0.53    −0.10                     Nd(γ, α)   −0.24   −0.02
+     102        100                                           139
+           Pd         Pd(γ, p)   −0.39    −0.06                     Nd(γ, n)   −0.31   −0.04
+                100                               144         142
+                      Pd(γ, α)   −0.38    −0.05         Sm          Sm(γ, n)   −0.36   −0.06
+                103                                           142
+                      Pd(γ, n)   −0.23    −0.04                     Sm(γ, p)   −0.29   −0.04
+                104                                           143
+                      Cd(γ, p)   0.17      0.03                     Sm(γ, n)   −0.50   −0.09
+                104                                           196
+                      Cd(γ, α)   −0.27    −0.04                     Pb(γ, n)   0.19    0.03
+     106        104                               152         152
+           Cd         Cd(γ, p)   −0.23    −0.03         Gd          Dy(γ, α)   −0.50   −0.05
+                107                                           158
+                      Cd(γ, n)   −0.62    −0.07                     Er(γ, n)   0.18    0.01
+                110                               156         156
+                      Sn(γ, p)   0.20      0.02         Dy          Er(γ, α)   −0.44   −0.27
+                110                                           158
+                      Sn(γ, α)   0.40      0.05                     Er(γ, n)   0.19    0.09
+     108        107                                           158
+           Cd         Cd(γ, n)   0.61      0.11                     Er(γ, α)   −0.18   −0.07
+                110                                           160
+                      Sn(γ, p)   0.49      0.08                     Er(γ, α)   0.25    0.15
+                110                               158         158
+                      Sn(γ, α)   −0.33    −0.06         Dy          Er(γ, n)   −0.28   −0.02
+     113        113                                           158
+           In         Sn(γ, n)   0.94      0.44                     Er(γ, α)   −0.53   −0.05
+     112        110                               162         162
+           Sn         Sn(γ, p)   −0.25    −0.03         Er          Yb(γ, α)   −0.49   −0.30
+                110                                           164
+                      Sn(γ, α)   −0.34    −0.04                     Yb(γ, α)   −0.16   −0.07
+                113                                           168
+                      Sn(γ, n)   −0.65    −0.08                     Hf(γ, n)   0.17    0.07
+     114        110                               164         164
+           Sn         Sn(γ, α)   −0.21    −0.02         Er          Yb(γ, n)   −0.31   −0.17
+                113                                           164
+                      Sn(γ, n)   0.78      0.08                     Yb(γ, α)   −0.56   −0.51
+                122                                           202
+                      Xe(γ, n)   −0.28    −0.03                     Pb(γ, n)   0.16    0.09
+                122                               168         168
+                      Xe(γ, p)   0.16      0.02         Yb          Hf(γ, n)   −0.28   −0.12
+                122                                           168
+                      Xe(γ, α)   0.23      0.03                     Hf(γ, α)   −0.55   −0.57
+                169                               174         174
+                      Lu(γ, n)   0.15      0.01         Hf          W(γ, n)    −0.30   −0.13
+     115        110                                           174
+           Sn         Sn(γ, α)   −0.21    −0.02                     W(γ, α)    −0.53   −0.37
+                113                               180         179
+                      Sn(γ, n)   0.80      0.08         Ta          Ta(γ, n)   −0.87   −0.00
+                122                               180         180
+                      Xe(γ, n)   −0.27    −0.03         W           Os(γ, n)   −0.38   −0.21
+                122                                           180
+                      Xe(γ, p)   0.15      0.02                     Os(γ, α)   −0.52   −0.46
+                122                                           196
+                      Xe(γ, α)   0.22      0.03                     Pb(γ, n)   0.19    0.11
+                169                               184         184
+                      Lu(γ, n)   0.15      0.01         Os          Pt(γ, n)   −0.16   −0.05
+     120        120                                           184
+           Te         Xe(γ, α)   −0.22    −0.05                     Pt(γ, α)   −0.55   −0.29
+                122                                           196
+                      Xe(γ, p)   0.58      0.11                     Pb(γ, n)   0.16    0.04
+                122                               190         190
+                      Xe(γ, α)   −0.49    −0.10         Pt          Hg(γ, n)   −0.30   −0.13
+     124        122                                           190
+           Xe         Xe(γ, n)   −0.28    −0.10                     Hg(γ, α)   −0.49   −0.30
+                122                                           196
+                      Xe(γ, p)   −0.31    −0.11                     Pb(γ, n)   0.20    0.08
+
+
+                                        Table C5 continued
+                                                                                              31
+                                      Table C5 (continued)
+
+    Isotope    Reaction          rP        ζ     Isotope     Reaction          rP       ζ
+               122                               196         196
+                     Xe(γ, α)   −0.43    −0.21         Hg          Pb(γ, n)   −0.76   −0.60
+               123                                           202
+                     Xe(γ, n)   0.18      0.06                     Pb(γ, n)   0.18    0.11
+    126        126
+          Xe         Ba(γ, p)   −0.35    −0.17
+               126
+                     Ba(γ, α)   −0.48    −0.32
+               127
+                     Ba(γ, n)   −0.22    −0.12
+Note—The data is split into two sets of four columns.
+

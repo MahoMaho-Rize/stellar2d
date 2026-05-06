@@ -1,0 +1,5150 @@
+The Open Journal of Astrophysics
+
+Preprint typeset using LATEX style openjournal v. 09/06/15
+
+PHLEGETHON: A FULLY COMPRESSIBLE MAGNETOHYDRODYNAMIC CODE FOR SIMULATIONS IN STELLAR
+ASTROPHYSICS
+G. Leidi1 , A. Holas1 , K. Vitovsky1 , F. Rizzuti1,2,3 , A. Roy1,4 , J. Reichert1,4 , K. Bayer1,5 , D. Gagnier6,1 , R. Andrassy6,1 , P. Christians7,8 ,
+P. V. F. Edelmann9 , V. Varma10 , R. Hirschi1,10,11 , and F. K. Röpke1,4
+1 Heidelberger Institut für Theoretische Studien, Schloss-Wolfsbrunnenweg 35, D-69118 Heidelberg, Germany
+2 INAF, Osservatorio Astronomico di Trieste, via G.B. Tiepolo 11, I-34131 Trieste, Italy
+3 INFN, Sezione di Trieste, via Valerio 2, I-34134 Trieste, Italy
+
+4 Zentrum für Astronomie der Universität Heidelberg, Institut für Theoretische Astrophysik, Philosophenweg 12, D-69120 Heidelberg, Germany
+
+arXiv:2604.12672v1 [astro-ph.SR] 14 Apr 2026
+
+5 Universität Heidelberg, Fakultät für Mathematik und Informatik, Im Neuenheimer Feld 205, 69120 Heidelberg, Germany
+
+6 Zentrum für Astronomie der Universität Heidelberg, Astronomisches Rechen-Institut, Mönchhofstr. 12-14, D-69120 Heidelberg, Germany
+7 GSI Helmholtzzentrum für Schwerionenforschung, Planckstraße 1, 64291 Darmstadt, Germany
+
+8 Institut für Kernphysik (Theoriezentrum), Fachbereich Physik, Technische Universität Darmstadt, Schlossgartenstraße 2, 64289 Darmstadt, Germany
+
+9 Computing and Artificial Intelligence (CAI) Division and Center for Theoretical Astrophysics (CTA), Los Alamos National Laboratory, Los Alamos, PO
+
+Box 1663, NM 87545, USA
+
+10 Astrophysics Group, Lennard-Jones Laboratories, Keele University, Keele ST5 5BG, UK and
+11 Kavli IPMU (WPI), University of Tokyo, 5-1-5 Kashiwanoha, Kashiwa 277-8583, Japan
+
+Version April 15, 2026
+
+ABSTRACT
+We present PHLEGETHON, a fully compressible, Eulerian magnetohydrodynamic (MHD) code designed for
+multidimensional simulations in stellar astrophysics. The code uses a time-explicit, second-order, finite-volume
+method optimized to model a wide range of dynamical processes in stars, from very low-Mach-number turbulent convection in the cores of massive stars to supersonic flows in subsurface convection zones. PHLEGETHON
+employs low-dissipation Riemann solvers and a well-balanced method to accurately capture slow flows arising
+from strongly stratified media, alongside shock-capturing schemes for handling supersonic regimes. The induction equation is solved using a staggered constrained-transport method to ensure divergence-free evolution of
+the magnetic field. The MHD equations can be coupled to arbitrary nuclear reaction networks solved in a timeimplicit approach, together with super-time-stepping for efficient treatment of thermal diffusion. Equations of
+state appropriate for stellar plasmas are available, accounting for partial ionization, electron degeneracy, and
+electron–positron pair production. Multiple grid geometries are supported, including Cartesian, spherical, and
+cubed-sphere grids. The code is implemented in a compact and user-friendly manner while retaining computational efficiency, and it scales to tens of thousands of CPU cores using MPI-based domain decomposition. We
+perform several verification tests to demonstrate the accuracy and versatility of the code, and present simulations of magnetoconvection in a core-collapse supernova progenitor star. The rich variety of physical effects
+and numerical methods implemented in PHLEGETHON enables the code to model diverse multidimensional processes that play a crucial role in stellar-interior dynamics, such as reactive convection, convective boundary
+mixing, internal-wave excitation, and magnetic-field amplification mechanisms. Within a single framework,
+these phenomena can be investigated across a wide range of stellar evolutionary stages, from main-sequence
+stars to supernova progenitors. PHLEGETHON is publicly accessible online.
+Subject headings: Methods: numerical — Magnetohydrodynamics (MHD) — Dynamo — Convection — Nuclear reactions, nucleosynthesis, abundances — Equation of state
+1. INTRODUCTION
+
+The increasing precision of observations from modern
+ground- and space-based telescopes, e.g., VLT (Dekker et al.
+2000), CoRoT (Auvergne et al. 2009), Gaia (Gaia Collaboration et al. 2016), or TESS (Ricker et al. 2015), places stringent
+constraints on theoretical models of stellar structure and evolution. In particular, asteroseismology provides direct probes
+of the internal structure of stars with unprecedented accuracy
+(Aerts et al. 2010). Interpreting these observations requires
+reliable models of convection, convective boundary mixing,
+wave excitation, diffusive energy transport, angular momentum transport, and magnetic field amplification. Traditional
+one-dimensional (1D) stellar evolution models cannot capture these inherently multidimensional processes in a selfconsistent way. Instead, they rely on simplified parameterized
+prescriptions, which substantially limit their predictive power
+(e.g., Davis et al. 2019; Kaiser et al. 2020; Temaj et al. 2024).
+
+Fully compressible hydrodynamic and magnetohydrodynamic (MHD) simulations provide a general framework for
+studying stellar interiors, although they are often restricted
+to the relatively short dynamical timescale of stellar convection because of their high computational cost (see, e.g., Brun
+& Browning 2017; Kupka & Muthsam 2017; Müller 2020;
+Lecoanet & Edelmann 2023). In such simulations, multidimensional fluid-dynamical processes emerge directly from
+the governing equations without the need for phenomenological parameterizations. At the same time, the diverse dynamical conditions present in stellar interiors pose significant challenges for standard numerical methods used in astrophysical MHD (e.g., Miczek et al. 2015; Wongwathanarat
+et al. 2016; Edelmann et al. 2021). Convective flows in deep
+stellar envelopes and cores typically have velocities u much
+smaller than the local sound speed cs , so that their Mach number M = |u|/cs lies between 10−4 and 10−2 (e.g., Kippenhahn
+et al. 2013; Horst et al. 2021; Jermyn et al. 2022). In ad-
+
+2
+vanced burning shells of massive stars, the Mach number may
+reach M ∼ 0.1 (Müller 2020), while convection in subsurface
+regions can become supersonic (Freytag et al. 2012; Grassitelli et al. 2015). Accurate models of stellar-interior dynamics therefore require numerical methods capable of handling
+flows spanning several orders of magnitude in Mach number
+in a wide range of physical regimes.
+Standard compressible Godunov-type schemes relying on
+explicit time stepping and total-variation-diminishing reconstruction can, in principle, be applied across all flow regimes.
+In very low Mach number subsonic flows, however, these
+schemes often encounter significant numerical difficulties
+(Guillard & Viozat 1999; Fleischmann et al. 2020). Upwinding based on acoustic wave speeds introduces excessive numerical dissipation when the flow velocity is small compared
+to the sound speed, degrading the quality of the solution (e.g.,
+Dumbser et al. 2019; Minoshima & Miyoshi 2021; Leidi et al.
+2022). Explicit time integration is further constrained by
+the Courant–Friedrichs–Lewy (CFL) stability criterion, which
+can lead to prohibitively small time steps when M ≪ 10−3 .
+Implicit methods are unconditionally stable and can relax this
+time step restriction (e.g., Viallet et al. 2011; Kifonidis &
+Müller 2012; Miczek et al. 2015), but they require iterative
+solvers that may fail to converge, particularly when both lowand high-Mach-number flows are present on the same grid
+(Dumbser et al. 2019; Fambri 2021). Alternative approaches
+rely on modified sets of equations, such as the anelastic (e.g.,
+Brun et al. 2005; Rogers et al. 2013; Featherstone et al. 2022)
+or the pseudo-compressibility (Almgren et al. 2007) approximations, which remove acoustic waves and thereby relax the
+time step constraint. These formulations, however, cannot accurately capture shocks or transonic flows and do not follow
+compressible pressure modes by design. Still, retaining such
+modes is highly desirable because they broaden the range of
+numerical results that can be compared with asteroseismic observations (e.g., Mosser et al. 2012; Deheuvels et al. 2012;
+Montalbán et al. 2013; Coppée et al. 2024).
+An additional challenge arises from the fact that, in layers deep inside stars, slow flows often develop as perturbations around hydrostatic configurations. Standard finite volume Godunov-type methods generally do not preserve hydrostatic solutions exactly at the discrete level (e.g., Edelmann
+et al. 2021; Käppeli 2022). Fluxes are evaluated at cell faces,
+while the gravitational force per unit volume depends on cellvolume averages stored at cell centers. This mismatch can
+drive artificial motions that easily overwhelm the physical
+flows. These artifacts become particularly severe when the
+subsonic buoyant flows arise from steep stratifications where
+pressure gradients are large, as is typical in stellar interiors
+(Edelmann et al. 2021).
+The numerical challenges faced by MHD simulations of
+stellar interiors motivate the development of numerical methods that remain accurate across both low- and high-Mach
+regimes while preserving the hydrostatic equilibrium of
+strongly stratified backgrounds. A promising strategy is to
+combine explicit time-stepping with low-dissipation Riemann
+solvers (e.g., Thornber et al. 2008; Xie et al. 2019; Minoshima
+& Miyoshi 2021; Leidi et al. 2024) and well-balanced discretizations (Berberich et al. 2021; Edelmann et al. 2021).
+Low-dissipation solvers allow low-Mach, nearly incompressible flows to be resolved without introducing excessive numerical diffusion. Well-balanced schemes, in turn, preserve
+hydrostatic equilibrium at the discrete level and prevent spurious accelerations even in strongly stratified regions with large
+
+background pressure gradients. Together, these techniques
+allow explicit schemes to remain computationally competitive with implicit approaches when the Mach number exceeds roughly ∼ 10−3 (Brun & Browning 2017; Leidi et al.
+2022), while still capturing shocks and strongly nonlinear
+flows. Long-term simulations of stellar MHD flows can therefore benefit from this combination, achieving both high accuracy in low-Mach regions and robustness in more dynamic
+layers.
+Realistic simulations of stars also require an equation of
+state (EoS) that covers a wide range of physical conditions,
+from partial ionization to electron–positron pair production
+in advanced burning stages (Maeder 2009). Nuclear reaction networks and thermal neutrino cooling are required to
+accurately track energy generation and composition changes
+in late evolutionary phases. Radiative and conductive diffusion can strongly affect the evolution of dynamical processes
+of interest (e.g., Käpylä 2019; Schwab et al. 2020; Andrassy
+et al. 2023), and must therefore also be modeled accurately.
+Moreover, the solenoidal constraint ∇ · B = 0 on the magnetic field is not automatically satisfied when discretizing the
+MHD equations on a finite grid, so further care is required for
+MHD simulations. In fact, if the divergence-free property of
+the magnetic field is violated, magnetic monopole errors introduce spurious accelerations through the Lorentz force, distort the magnetic-field topology, and potentially lead to numerical instabilities (Brackbill & Barnes 1980). Staggered
+constrained transport (CT) methods are particularly attractive
+in this regard because, by construction, they evolve the magnetic fluxes through cell faces in a manner that preserves one
+discretization of ∇ · B to round-off error (see, e.g., Mignone
+& Del Zanna 2021, for a review).
+Several existing compressible hydrodynamic and MHD
+codes, such as FLASH (Fryxell et al. 2000), CASTRO (Almgren
+et al. 2011), ATHENA++ (Stone et al. 2020), PPMSTAR (Woodward et al. 2014), MUSIC (Viallet et al. 2011), SEVEN-LEAGUE
+HYDRO (SLH, Miczek 2013), PROMPI (Meakin & Arnett 2007),
+CO5BOLD (Freytag et al. 2012), or PENCIL (Pencil Code Collaboration et al. 2021), provide powerful tools for studying astrophysical flows and stellar-interior dynamics. Nevertheless,
+modeling MHD flows across multiple evolutionary stages and
+in different types of stars requires a specific combination
+of low-Mach methods, well-balanced treatment of gravity,
+robust shock-capturing divergence-free MHD schemes, nuclear networks, and flexible stellar plasma microphysics. At
+present, such a combination is not found in a single framework.
+In this work, we present PHLEGETHON1 , a time-explicit,
+fully compressible Godunov-type MHD code developed for
+simulations of stellar interiors in regimes of Mach numbers
+M ≳ 10−3 , where explicit time integration remains computationally efficient. The code uses a finite-volume discretization on Eulerian grids. It employs low-dissipation Riemann
+solvers (Minoshima & Miyoshi 2021) that recover the correct asymptotic behavior of the underlying governing equations in the limit M → 0, together with well-balanced discretizations (Berberich et al. 2021; Edelmann et al. 2021) that
+preserve hydrostatic equilibrium in strongly stratified media.
+The MHD system of equations is coupled to flexible timeimplicit nuclear reaction network solvers and advanced equations of state that include thermal radiation, partial ioniza1 PHLEGETHON is publicly available at
+https://github.com/phlegethon-stellar-hydro/phlegethon
+
+3
+tion effects (Vetter et al., in prep), and arbitrarily degenerate
+and relativistic electron–positron plasmas via the Helmholtz
+EoS (Timmes & Swesty 2000). Stiff diffusive processes are
+treated using super-time-stepping (Meyer et al. 2012; Meyer
+et al. 2014). Magnetic fields are evolved using the ContactCT scheme of Gardiner & Stone (2005), which preserves a
+divergence-free evolution of the magnetic field while employing an upwinded discretization of the induction equation. The
+code supports multiple grid geometries, enabling applications
+ranging from local convection studies to simulations of extended stellar stratifications and a wide range of astrophysical fluid dynamics problems, from convective boundary mixing (CBM) and magnetic dynamos in massive main-sequence
+stars to the coupling of convection, nuclear burning, and magnetic fields in the late stages of core-collapse supernova progenitors (see Sect. 4)
+The paper is organized as follows. Section 2 describes
+the governing equations and numerical methods, and provides benchmark measurements of code efficiency. Section 3
+presents a series of verification tests. Section 4 demonstrates
+the capabilities of the code through simulations of magnetoconvection in a convective shell of a core-collapse supernova
+progenitor star. Finally, Section 5 summarizes the results.
+2. METHODS
+In this section, we summarize the numerical methods that
+allow PHLEGETHON to perform multidimensional MHD simulations in stellar astrophysics. We present the governing
+equations solved by the code, followed by an overview of the
+finite-volume discretization and time-integration scheme. The
+implementation of additional components required for stellarinterior applications, including equations of state of stellar
+plasmas, treatment of gravity, thermal diffusion, and nuclear
+energy generation, is also outlined. We also discuss the computational performance of the code, including its parallel scaling and the relative cost of the main algorithmic components.
+The accuracy and robustness of these methods are assessed
+through a series of benchmark tests presented in Sect. 3.
+
+2.1. Governing equations
+PHLEGETHON solves the equations of fully compressible
+ideal MHD including source terms which account for gravity and nuclear energy generation. The system can be written
+in conservative form as
+∂t ρ + ∇ · (ρu) = 0,
+∂t (ρu) + ∇ · (ρu ⊗ u + Pt I − B ⊗ B) = ρg,
+
+(1)
+(2)
+
+∂t (ρXl ) + ∇ · (ρXl u) = ρẊl ,
+(3)
+∂t B + ∇ · (u ⊗ B − B ⊗ u) = 0,
+(4)
+∇ · B = 0,
+(5)
+
+
+∂t (ρe) + ∇ · (ρe + Pt )u − B(B · u) − K∇T = ρg · u + ρė.
+(6)
+
+Here, ρ is the mass density, u the fluid velocity, B the magnetic field1 , and Pt = P + |B|2 /2 the total pressure including
+both thermal and magnetic contributions. The specific energy
+is e = eint + |u|2 /2 + |B|2 /(2ρ), where eint is the specific internal energy. K denotes the thermal conductivity, T the temperature, while ė and Ẋl denote an energy source (including
+neutrino cooling) and the rate of change of the mass fraction
+1 Throughout this work, we use Heaviside–Lorentz units, B = b /
+
+√
+
+4π .
+
+of species l, respectively. I is the identity tensor and ⊗ is the
+tensor product operator. Gravity is assumed to be Newtonian,
+g = −∇ϕ , and the gravitational potential, ϕ, is obtained from
+Poisson’s equation,
+∇2 ϕ = 4πGρ,
+
+(7)
+
+e → e + ϕ,
+
+(8)
+
+where G is the gravitational constant.
+If the gravitational potential is time-independent, redefining
+the specific energy as
+yields the conservative form
+
+
+∂t (ρe) + ∇ · (ρe + Pt )u − B(B · u) − K∇T = ρė.
+
+(9)
+
+For isolated systems in the absence of energy sources or sinks,
+a numerical scheme that solves Eq. (9) preserves the total energy exactly. This property is highly desirable especially in
+simulations of subsonic flows, where even small energy conservation errors can drive the dynamics of the system (Müller
+2020).
+Finally, PHLEGETHON offers the option of solving Eqs. (1)–
+(6) in a rotating frame with a fixed angular frequency vector
+Ω. When this option is enabled, the centrifugal and Coriolis
+forces are added to the right-hand side of the momentum and
+energy equations as
+Sρu = −2ρ Ω × u − ρ Ω × (Ω × r),
+
+
+Sρe = −ρ u · Ω × (Ω × r) ,
+
+(10)
+(11)
+
+where r is the position vector measured from the rotation axis.
+2.2. Equation of state
+The system of conservation laws in Eqs. (1)–(6) is closed
+by an equation of state that relates temperature and thermal
+pressure to mass density, composition, and specific internal
+energy. In PHLEGETHON, the EoS is formulated in terms of the
+primary variables (ρ, T, Xl ), from which all thermodynamic
+quantities are computed. However, temperature is not directly
+evolved in the governing equations, so it must be recovered
+from the conserved variables by finding the root of
+eint − eint,EoS (ρ, T, Xl ) = 0,
+
+(12)
+
+P = PEoS (ρ, T, Xl ).
+
+(13)
+
+where eint is the specific internal energy obtained from the
+conserved variables (ρ, ρu, ρXl , B, ρe), and eint,EoS is the specific internal energy prescribed by the EoS for a given set
+(ρ, T, Xl ). Once the temperature is known, the thermal pressure is computed as
+This temperature inversion is performed using a Newton–
+Raphson iterative scheme. First, the specific internal energy
+and mass fractions are computed from the set of conserved
+variables. Then, starting from an initial guess T̃ taken from
+the previous time step, the residual is computed as
+δeint = eint − eint,EoS (ρ, T̃ , Xl ).
+
+(14)
+
+The temperature is then updated iteratively according to
+T̃ → T̃ +
+
+δeint
+,
+cv (ρ, T̃ , Xl )
+
+(15)
+
+where cv = ∂eint,EoS /∂T ρ,X is the specific heat at constant
+l
+volume evaluated at the current temperature guess. The iteration proceeds until the relative residual satisfies |δeint |/eint < ϵ
+
+4
+(ϵ = 10−11 is the default value in PHLEGETHON). Usually, the
+convergence criterion is met after a few iterations only. An
+analogous Newton–Raphson procedure can be applied if temperature must be recovered from density, composition, and
+thermal pressure (see Sect. 2.6).
+Depending on the physical regime of interest, several equations of state are available in the code:
+(i) For simple cases, the fluid can be modeled as a classical ideal gas with an optional contribution from thermal
+radiation,
+ρRT aT 4
++
+,
+µ
+3
+aT 4
+RT
++
+,
+eint =
+(γ − 1)µ
+ρ
+P=
+
+(16)
+(17)
+
+where R is the gas constant, a the radiation constant,
+and γ the adiabatic index of the gas. In PHLEGETHON,
+the mean molecular weight µ can either be prescribed
+by the user as a global parameter or computed from
+mass fraction abundances assuming full ionization,
+µ=
+with
+
+A
+Z+1
+
+(18)
+
+,
+
+
+
+X Xl −1
+
+ ,
+A = 
+Al 
+l
+
+Z = Ye A,
+X Zl
+Xl .
+Ye =
+Al
+l
+
+(19)
+(20)
+(21)
+
+Al and Zl are the mass and charge numbers of species
+l, respectively. In this notation, A and Z represent the
+mean mass and charge number of the mixture, while Ye
+is the electron fraction. In simulations where individual isotopic abundances are not required, the reduced
+−1
+composition variables ρYe and ρA can be advected
+instead,
+∂t (ρYe ) + ∇ · (ρYe u) = 0,
+
+∂t (ρA
+
+−1
+
+) + ∇ · (ρA
+
+−1
+
+u) = 0,
+
+(22)
+(23)
+
+allowing the EoS to still be evaluated.
+(ii) In scenarios where electrons and positrons must
+be treated as an arbitrarily relativistic and degenerate Fermi–Dirac gas, PHLEGETHON can employ the
+Helmholtz EoS of Timmes & Swesty (2000). In
+this EoS, the gas is assumed to be fully ionized, and
+electron–positron pair production is included assuming
+chemical equilibrium for the reaction
+−
+
+γ+γ ⇆e +e .
++
+
+(24)
+
+Thermodynamic variables associated with the electron–
+positron mixture are derived via biquintic Hermite interpolation of the Helmholtz free energy tabulated in
+(ρYe , T ), ensuring that thermodynamic consistency relations are satisfied to round-off error (see Timmes &
+Swesty 2000). Radiation is included assuming local
+thermodynamic equilibrium as in Eqs. (16)–(17), while
+
+ions are treated as a classical ideal gas with adiabatic
+index γ = 5/3. The combined contributions to the EoS
+read
+aT 4
+,
+3
+A
+3 RT aT 4
+eint = eele,pos + eCoul +
++
+,
+2 A
+ρ
+P = Pele,pos + PCoul +
+
+ρRT
+
++
+
+(25)
+(26)
+
+where Pele,pos and eele,pos denote the pressure and specific internal energy of the electron-positron gas, resulting from the interpolation of the tabulated Helmholtz
+free energy. PCoul and eCoul denote optional Coulomb
+corrections to the EoS, included following Yakovlev &
+−1
+Shalybkov (1989). Also for this EoS, ρYe and ρA can
+be advected according to Eqs. (22) and (23) when tracking individual isotopic abundances in the simulation is
+not desirable.
+(iii) For partially ionized plasmas, PHLEGETHON employs
+a novel EoS based on biquintic interpolation of the
+Helmholtz free energy, closely analogous to the fully
+ionized case. Tables are constructed for arbitrary mixtures of chemical species at fixed mass fractions, ranging from 1 H to 56 Fe, including molecular hydrogen
+(H2 ). All species are treated as classical particles obeying Maxwell–Boltzmann statistics, and all ionization
+stages are assumed to be in the ground state. Populations are computed using the Saha equation. Dissociation of H2 is also considered, including internal vibrational and rotational partition functions following Tomida et al. (2013). The Helmholtz free energy is tabulated in (ρ, T ), guaranteeing full thermodynamic consistency while accurately capturing ionization effects (a
+detailed description of this EoS can be found in Vetter et al., in prep). Thermal radiation can optionally be
+included, yielding
+aT 4
+,
+3
+aT 4
+eint = egas +
+,
+ρ
+P = Pgas +
+
+(27)
+(28)
+
+where Pgas and egas are the interpolated values of pressure and specific internal energy for the partially ionized mixture, respectively. This EoS is particularly
+suited for modeling stellar envelopes, where partial
+ionization is crucial to determine the stability of the
+medium against convection (Kippenhahn et al. 2013).
+Moreover, the interpolation routines developed for the
+fully ionized Helmholtz EoS can be reused directly by
+setting Ye = 1 during table lookups in (ρYe , T ), simplifying code implementation and maintenance.
+2.3. Solution strategy
+The equations of compressible MHD with source terms
+presented in Sect. 2.1 are discretized using the finite-volume
+framework (e.g., LeVeque 2002). This approach ensures exact conservation of mass, momentum, energy, and magnetic
+flux for an isolated system, as long as gravity is included
+in conservative form as in Eq. (9) and no additional nonconservative source terms are present. The computational
+domain is divided into control volumes (cells) Vi, j,k , each indexed by (i, j, k). The integral form of the conservation laws
+
+5
+is solved over each cell,
+Z
+I
+Z
+∂
+U dV +
+F · n dA =
+S dV,
+∂t Vi, j,k
+A(Vi, j,k )
+Vi, j,k
+
+(29)
+
+where U is the vector of conserved variables, F the flux tensor, n the outward normal at the cell faces, and S the source
+term vector (e.g., gravity, fictitious forces, or nuclear energy
+generation). The surface A(Vi, j,k ) denotes the boundary of the
+control volume Vi, j,k .
+In PHLEGETHON, both volume and surface integrals are approximated in space to second-order accuracy using the midpoint rule (see, e.g., LeVeque 2002), while leaving the system
+continuous in time. This semi-discrete, directionally-unsplit
+approach yields a system of ordinary differential equations
+(ODEs),
+∂
+1 X
+⟨U⟩i, j,k +
+A f F f · n f = Si, j,k ,
+(30)
+∂t
+Vi, j,k f
+where ⟨U⟩i, j,k is the cell-volume averaged vector of conserved
+variables. The sum in Eq. (30) runs over the cell faces f of
+cell (i, j, k), where A f denotes the face area and F f the flux
+evaluated at the face center. The source term Si, j,k is evaluated
+at the cell center.
+The code supports multiple grid geometries in two and
+three dimensions, including Cartesian, polar, and spherical
+geometries, as well as the cubed-sphere grid of Calhoun
+et al. (2008)2 . For any geometry, the computational domain
+is represented in a logically rectangular coordinate system
+(x1 , x2 , x3 ) and discretized into N x1 × N x2 × N x3 cells. Parallelization is implemented via domain decomposition of the
+logical grid, with inter-process communication handled using
+the Message Passing Interface (MPI) (Message Passing Interface Forum 2025) on CPUs.
+For polar and spherical grids, the governing equations are
+formulated in curvilinear coordinates, which give rise to geometric source terms (see, e.g., Mignone 2014; Luo et al.
+2026). In these geometries the equations are written in differential form, and the divergence of the flux tensor is discretized using conservative flux differences that are algebraically equivalent to the finite-volume formulation. For example, in two-dimensional (2D) polar coordinates (r, ψ) the
+divergence of the flux tensor,
+∇·F=
+
+1 ∂(rFr ) 1 ∂Fψ
++
+,
+r ∂r
+r ∂ψ
+
+(31)
+
+is approximated as
+(∇ · F)i, j,k =
+
+1 ri+1/2, j,k Fr,i+1/2, j,k − ri−1/2, j,k Fr,i−1/2, j,k
+(32)
+ri, j,k
+ri+1/2, j,k − ri−1/2, j,k
+1 Fψ,i, j+1/2,k − Fψ,i, j−1/2,k
++
+.
+ri, j,k ψi, j+1/2,k − ψi, j−1/2,k
+
+Here, face-centered indices such as (i + 1/2, j, k) denote the
+location of the flux on the cell face. Analogous expressions
+are used for spherical grids. Geometric source terms in Si, j,k
+are evaluated to second-order accuracy at cell centers. Grid
+spacing can be uniform or stretched. Currently, only radial
+stretching is supported for polar and spherical geometries.
+2 At present, MHD and radiative diffusion are not supported on the cubed-
+
+sphere grid.
+
+2.4. Constrained transport
+Magnetic fields are evolved using the Contact-CT method
+of Gardiner & Stone (2005). In this approach, the induction
+equation is solved in curl form,
+∂t B + ∇ × E = 0,
+
+(33)
+
+where E = −u × B is the electromotive force (EMF). Integrating Eq. (33) over the cell surface A f leads to the evolution
+equation for the face-averaged magnetic field component normal to a cell interface, ⟨B f ⟩,
+∂
+1 X
+ld Ed = 0,
+(34)
+⟨B f ⟩ +
+∂t
+Af d
+
+where the sum runs over cell edges d, ld is the edge length,
+and Ed the edge-centered EMF. For polar and spherical grids,
+the constrained-transport update is applied to the curvilinear
+components of the face-centered magnetic field.
+In Contact-CT, the EMF is computed to second-order accuracy as the arithmetic average of the four neighboring cell
+faces, with additional upwind terms based on the direction
+propagation of the contact wave at those faces (Gardiner &
+Stone 2005). These upwind terms are essential to maintain
+stability and prevent numerical artifacts and spurious growth
+of the magnetic field (e.g., Flock et al. 2010; Mignone & Del
+Zanna 2021).
+By solving the induction equation in curl form using the
+EMF, the Contact-CT scheme preserves a discrete approximation of the magnetic-field divergence, up to the accumulation of round-off errors. On a Cartesian grid, the preserved
+divergence is
+Bx,i+1/2, j,k − Bx,i−1/2, j,k
+(∆x)i, j,k
+By,i, j+1/2,k − By,i, j−1/2,k
++
+(∆y)i, j,k
+Bz,i, j,k+1/2 − Bz,i, j,k−1/2
++
+,
+(∆z)i, j,k
+
+(∇ · B)i, j,k =
+
+(35)
+
+where (∆x)i, j,k , (∆y)i, j,k , and (∆z)i, j,k denote the grid-cell sizes
+in the three spatial directions. For curvilinear grids, the divergence expressed in curvilinear components, analogous to
+Eq. (32), is preserved.
+2.5. Spatial reconstruction
+The face-centered fluxes F f in Eq. (30) are computed using
+the Godunov algorithm (Godunov 1959). In this approach, a
+local 1D Riemann problem is solved at each cell interface to
+determine the fluxes. In PHLEGETHON, the left and right Riemann states at each cell face are obtained by reconstructing
+the set of primitive variables W = (ρ, u, Xl , B, P) from cellcentered values3 ,
+Wi−1/2,R = P− (Wi−q,...,i+q ),
+Wi+1/2,L = P+ (Wi−q,...,i+q ).
+
+(36)
+(37)
+
+Here, P denotes the reconstruction operator, 2q + 1 is the
+width of the stencil, and the superscripts + and − indicate
+reconstruction from the cell center toward the right and left
+interfaces, respectively.
+3 Because the spatial reconstruction algorithms and Riemann solvers implemented in PHLEGETHON are 1D, for simplicity we drop the j and k indices
+here.
+
+6
+Three reconstruction schemes are implemented in the code,
+all operating in logical coordinates:
+(i) A second-order accurate linear reconstruction method
+with the van Leer slope limiter (van Leer 1974).
+(ii) The third-order piecewise parabolic hybrid (PPH)
+method of Leidi et al. (2024), in which all primitive
+variables except the mass fractions are reconstructed
+using unlimited parabolas, while mass fractions use
+limited parabolic reconstruction.
+(iii) A limited fifth-order polynomial reconstruction following the piecewise quintic hybrid (PQH) method of Leidi
+et al. (2024). Unlike the PQH method presented in
+Leidi et al. (2024), here, limited fifth-order reconstruction is applied to all variables, not just mass fraction
+abundances.
+The van Leer linear reconstruction method is very robust
+for shocks but is the most diffusive of the available methods. PPH is accurate for smooth flows and it is one of the
+cheapest methods to achieve a given numerical accuracy in
+subsonic regimes (Leidi et al. 2024), though its partially unlimited nature makes it unsuitable for supersonic flows. Both
+the van Leer method and PPH use a three-cell-wide stencil
+(q = 1). Our limited fifth-order reconstruction combines high
+accuracy for smooth flows with good robustness near shocks,
+but it is approximately twice as expensive as the van Leer and
+PPH methods on a given grid and it requires a wider stencil
+(q = 2).
+2.6. Approximate Riemann solvers
+The reconstructed pair of Riemann states, Wi+1/2,L and
+Wi+1/2,R , is passed to an approximate Riemann solver to compute the interface flux Fi+1/2 . The code supports state-of-theart approximate Riemann solvers for hydrodynamic and magnetohydrodynamic flows:
+(i) For purely hydrodynamic problems, the three-wave
+Harten–Lax–van Leer–Contact solver (HLLC, Toro
+et al. 1994) accurately resolves contact discontinuities
+and shocks.
+(ii) For magnetized flows, the five-wave Harten–Lax–van
+Leer–Discontinuities solver (HLLD, Miyoshi & Kusano 2005) is employed, which captures fast magnetosonic, Alfvén, and contact waves. HLLD discards
+slow-magnetosonic waves, which are averaged out in
+the region of the Riemann fan between the contact and
+Alfvén waves.
+In both the HLLC and HLLD solvers, the interface flux is
+evaluated based on the direction of propagation of the characteristic waves. For instance, on any given cell face, the HLLD
+flux is determined according to
+
+FL if 0 ≤ CL ,
+
+
+
+
+
+F∗L if CL < 0 ≤ CL∗ ,
+
+
+
+∗
+∗
+
+F∗∗
+L if C L < 0 ≤ C ,
+F(WL , WR ) = 
+(38)
+∗∗
+∗
+∗
+
+F
+if
+C
+<
+0
+≤
+C
+
+
+R
+R,
+
+∗
+∗
+
+
+F if C < 0 ≤ CR ,
+
+
+FR if CR < 0,
+R
+
+R
+
+where the fluxes are computed in the different regions of the
+Riemann fan delimited by the fast-magnetosonic waves, CL
+
+and CR , the Alfvén waves, CL∗ and CR∗ , and the contact discontinuity, C ∗ .
+To approximate the speeds CL/R of the fastest waves (either
+sound waves or fast-magnetosonic waves), the solver must
+compute the sound speed from both the left and right states.
+Moreover, the specific internal energy is not directly reconstructed to cell faces, so its value must be recovered from the
+reconstructed primitive variables. Computing cs and eint requires an iterative procedure (see Sect. 2.2) to first determine
+the temperature from the set (ρ, P, Xl ). Because this operation
+must be repeated for every cell face on the computational grid
+multiple times per time step, it can become relatively expensive, especially for a tabulated EoS.
+Although PHLEGETHON provides this option, a significantly
+cheaper alternative is to reconstruct the auxiliary indices
+P
++ 1,
+(39)
+ρeint
+ρc2
+γc = s ,
+(40)
+P
+in addition to the set of primitive quantities (e.g. Colella &
+Glaz 1985; Reinecke et al. 1999). We verified that reconstructing γe and γc does not introduce appreciable numerical
+errors, consistent with expectations given that these indices
+are of order unity and vary smoothly in most relevant thermodynamic regimes. γe and γc can be computed from the
+EoS using cell-centered quantities once per grid cell before
+reconstructing the primitive variables to the six faces of the
+cell. The reconstructed indices can then be combined with the
+reconstructed ρ and P states to compute
+γe =
+
+PL/R
+1
+,
+ρL/R γe,L/R − 1
+!
+PL/R 1/2
+cs,L/R = γc,L/R
+,
+ρL/R
+
+eint,L/R =
+
+(41)
+(42)
+
+without requiring an iterative procedure. We find that this approach reduces the computational cost of the Riemann solve
+by a factor up to six without affecting the accuracy of the numerical scheme when the Helmholtz EoS is employed (see
+also Sect. 2.15). It is therefore chosen as the default method
+in PHLEGETHON.
+In the standard HLLC and HLLD flux functions, the expression of the thermal pressure in the star regions is typically
+derived as the sum of a physical and a dissipative contribution. For HLLC, the interface pressure can be obtained from
+the linearized gas-dynamics solver of Toro (1991),
+1
+1
+(PL + PR ) − ρ̄c̄s (u x1 ,R − u x1 ,L ),
+(43)
+2
+2
+where the first term on the right-hand side corresponds to the
+physical central-flux estimate, while the second term introduces upwinding. Here, ρ̄ and c̄ s denote suitable averages
+of the mass density and sound speed (see, e.g., Leidi et al.
+2024). Analogous expressions can be derived for HLLD (e.g.,
+Miyoshi & Kusano 2005; Minoshima & Miyoshi 2021). The
+numerical upwind term in Eq. (43) scales linearly with the local Mach number (Minoshima & Miyoshi 2021). This scaling
+guarantees that sufficient dissipation is provided to stabilize
+the numerical solution in transonic and supersonic regimes,
+but it is inconsistent with the asymptotic behavior of thermal
+pressure fluctuations as M → 0, whose amplitude scales as
+O(M2 ) (Guillard & Viozat 1999; Miczek et al. 2015). As a
+P∗ =
+
+7
+result, in low-Mach-number regimes the numerical dissipation can dominate the physical evolution of the flow.
+To alleviate this issue, low-dissipation extensions of HLLC
+and HLLD, known as LHLLC and LHLLD (Minoshima
+& Miyoshi 2021; Leidi et al. 2024), are implemented in
+PHLEGETHON. In these solvers, the numerical dissipation term
+in P∗ is multiplied by an additional factor ξ ∝ max(ML , MR )
+as
+1
+1
+P∗ = (PL + PR ) − ξ ρ̄c̄s (u x1 ,R − u x1 ,L ),
+(44)
+2
+2
+thereby restoring the correct low-Mach-number scaling of P∗ .
+In the code, we apply this correction only when the local
+Mach number falls below a conservative threshold, M < 0.6,
+ensuring that the character of the Riemann solution remains
+unchanged as the flow approaches the transonic regime. Despite its simplicity, this modification has been shown to significantly improve the quality of numerical solutions in studies of subsonic convection and turbulent dynamos (e.g., Leidi
+et al. 2023, 2024), and yields a solver that remains robust and
+accurate from very low-Mach to mildly supersonic regimes.
+In all verification tests discussed in Sect. 3, we use the
+LHLLC/D Riemann solvers.
+2.7. Shock-flattening procedure
+To ensure robustness in the presence of strong shocks and
+to avoid the carbuncle instability (Quirk 1994), a ‘shockflattening’ procedure can be used (e.g., Martı́ & Müller 2003;
+Stone et al. 2008). After performing the reconstruction step
+in Sect. 2.5, regions satisfying
+|Pi+1, j,k − Pi−1, j,k | + |Pi, j+1,k − Pi, j−1,k | + |Pi, j,k+1 − Pi, j,k−1 |
+>1
+ϵSF Pi, j,k
+(45)
+are flagged as shock regions ( ϵSF = 0.2 is chosen as the default value in PHLEGETHON). All cells within a 5×5×5 neighborhood of a flagged cell are also marked, ensuring that
+the shock-flattener smoothly covers the shock and its immediate surroundings. In these cells, the reconstruction of
+the primitive variables is performed with the second-order
+van Leer limited scheme. Additionally, the Riemann solver
+is switched to the more diffusive two-wave HLL solver of
+Harten et al. (1983), which provides additional damping of
+non-physical oscillations near shocks (see also Sect. 3.1).
+This approach preserves high-order accuracy in smooth regions of the flow while still capturing strong-shock dynamics
+(Mignone & Bodo 2005; Stone et al. 2008).
+2.8. Well-balancing
+To maintain hydrostatic solutions and reduce discretization
+errors arising from the imbalance between volumetric gravitational accelerations and pressure gradients, PHLEGETHON employs the deviation method (Berberich et al. 2021; Edelmann
+et al. 2021). This method splits the set of conserved quantities
+into a hydrostatic background state Û and a finite-amplitude
+deviation ∆U,
+U = Û + ∆U.
+(46)
+The background state Û needs to be known a priori and is held
+fixed in time.
+In the deviation method, the system of conservation laws
+applied to the background state is subtracted from the system
+applied to the full state, yielding
+h
+i
+∂t U + ∇ · F(U) − F(Û) = S(U) − S(Û).
+(47)
+
+At the level of the partial differential equations, subtracting
+the system of conservation laws applied to the background
+state is equivalent to subtracting 0. However, in the discrete
+sense, this procedure preserves hydrostatic solutions to roundoff error. In fact, although Godunov-type schemes generally
+result in
+∇ · F(Û) , S(Û),
+(48)
+substituting U = Û into Eq. (47) immediately yields
+∂t U = 0.
+
+(49)
+
+For this scheme to work, the cell-centered equilibrium source
+terms Ŝ := S(Û), as well as the face-centered equilibrium
+fluxes F̂ := F(Û), must be known a priori. Practically, the subtraction of the equilibrium fluxes and source terms in Eq. (47)
+is performed in two stages:
+(i) After the Riemann solve step described in Sect. 2.6,
+the equilibrium fluxes are subtracted from the interface
+flux,
+Fi+1/2 → Fi+1/2 − F̂i+1/2 .
+(50)
+Analogous expressions can be derived for the fluxes in
+the x2 - and the x3 -direction.
+
+(ii) Equilibrium source terms are subtracted at cell centers,
+Si, j,k → Si, j,k − Ŝi, j,k .
+
+(51)
+
+In addition to subtracting numerical residuals that arise
+from discretization errors, the deviation method also modifies
+the spatial reconstruction step described in Sect. 2.5 by reconstructing only the deviation from the hydrostatic background
+state to the cell interfaces. Within the Godunov algorithm
+implemented in PHLEGETHON, the deviation of the primitive
+variables is first computed at cell centers,
+∆Wi = Wi − Ŵi .
+
+(52)
+
+∆Wi−1/2,R = P− (∆Wi−q,...,i+q ),
+∆Wi+1/2,L = P+ (∆Wi−q,...,i+q ).
+
+(53)
+(54)
+
+Next, the deviation is reconstructed to cell interfaces using the
+same methods introduced in Sect. 2.5, yielding
+
+The equilibrium state is then added back at cell interfaces,
+e.g.,
+Wi+1/2,L/R = ∆Wi+1/2,L/R + Ŵi+1/2 .
+(55)
+Finally, the resulting pair of Riemann states is passed to the
+Riemann solver. Riemann solvers are numerically consistent
+with the underlying system of governing equations, so when
+∆Wi+1/2,L/R = 0 everywhere, as is the case for hydrostatic
+solutions, the interface flux reads
+Fi+1/2 = F(Ŵi+1/2 , Ŵi+1/2 ) = F̂i+1/2 .
+
+(56)
+
+Using this flux in Eq. (50), alongside Eq. (51), yields a wellbalanced evolution. To use the deviation method, the equilibrium primitive variables must be known a priori both at cell
+centers, Ŵi, j,k , and at cell faces, e.g., Ŵi+1/2, j,k .
+Reconstructing the deviation is particularly important when
+modeling low-Mach-number flows arising from steep background pressure gradients, typical of layers deep inside stars.
+In such cases, reconstructing the full state can introduce spatial discretization errors that overwhelm the small physical
+pressure fluctuations that arise in low-Mach-number flows,
+
+8
+which are ∆P/P̂ ≈ M2 (see, e.g., Miczek et al. 2015). By
+contrast, reconstructing the deviation typically produces reconstruction errors that remain smaller than the dynamical
+fluctuations. This aspect of the deviation method allows a
+Godunov-like scheme to simulate Mach numbers as low as
+permitted by the finite precision of floating-point arithmetic
+(e.g., Edelmann et al. 2021). Additionally, when the auxiliary
+indices γe and γc are used in the simulation (see Sect. 2.6),
+we find that reconstructing the deviation of γe from its background state helps suppress numerical artifacts that can arise
+in strongly stratified flows whose Mach number is M ≲ 10−3 .
+One design flaw of the deviation method is that any timeindependent background state Û is balanced by construction,
+even if it is not a formal hydrostatic solution of the governing equations. Using background stratifications that formally
+are not hydrostatic leads to a numerical discretization that
+is inconsistent with the governing equations and may overstabilize the time evolution of the conserved quantities U.
+Therefore, when only numerical solutions are available for Û,
+it is necessary to ensure that the residual |∇P̂ − ρ̂g| vanishes
+up to discretization errors.
+
+source terms that require special treatment are discussed in
+Sects. 2.10 and 2.13.
+PHLEGETHON evaluates the time step ∆t according to the
+CFL stability criterion that constraints the hyperbolic part of
+the governing equations,
+ 3
+
+−1
+X |u s,i, j,k | + C x ,i, j,k 
+
+s
+ ,
+(64)
+∆t = ∆th = CFL max 
+i, j,k
+∆x s,i, j,k
+
+2.9. Time discretization
+The system of ODEs resulting from the spatial discretization of fluxes and source terms is advanced in time using
+explicit strong stability preserving (SSP) Runge–Kutta (RK)
+methods. PHLEGETHON incorporates the SSP-RK2 and SSPRK3 methods of Shu & Osher (1988), which are second- and
+third-order accurate in time, respectively.
+In particular, the SSP-RK2 update from tn to tn+1 = tn + ∆t
+is performed in two stages,
+
+
+⟨U(∗) ⟩i, j,k = ⟨U(n) ⟩i, j,k − Ri, j,k ⟨U(n) ⟩ ∆t,
+(57)
+
+
+1
+1
+1
+⟨U(n+1) ⟩i, j,k = ⟨U(n) ⟩i, j,k + ⟨U(∗) ⟩i, j,k − Ri, j,k ⟨U(∗) ⟩ ∆t.
+2
+2
+2
+(58)
+
+These rescaled abundances are then used to compute the advective fluxes ρXl u. This procedure guarantees that the sum of
+the individual species mass fluxes is consistent with the total
+mass flux,
+X
+ρu =
+ρXl u,
+(66)
+
+The SSP-RK3 update requires three stages,
+
+
+⟨U(∗) ⟩i, j,k = ⟨U(n) ⟩i, j,k − Ri, j,k ⟨U(n) ⟩ ∆t,
+
+(59)
+
+
+
+3
+1
+1
+⟨U(∗∗) ⟩i, j,k = ⟨U(n) ⟩i, j,k + ⟨U(∗) ⟩i, j,k − Ri, j,k ⟨U(∗) ⟩ ∆t,
+4
+4
+4
+(60)
+
+
+1
+2
+2
+⟨U(n+1) ⟩i, j,k = ⟨U(n) ⟩i, j,k + ⟨U(∗∗) ⟩i, j,k − Ri, j,k ⟨U(∗∗) ⟩ ∆t.
+3
+3
+3
+(61)
+
+Here, R(U) denotes the spatial residual vector, computed
+using the methods described in the previous sections,
+1 X
+Ri, j,k (U) =
+A f F f (U) · n f − Si, j,k (U).
+(62)
+Vi, j,k f
+Magnetic-field components at cell faces are updated concurrently with the other conserved quantities. The corresponding
+residuals, for example at the face i + 1/2, j, k, are given by
+1 X
+Ri+1/2, j,k (U) =
+ld Ed (U).
+(63)
+Af d
+
+Source terms, including gravity, rotation, and thermal diffusion, are incorporated directly in Ri, j,k (U) and are advanced together with the fluxes in each SSP-RK stage. Stiff
+
+s=1
+
+where s denotes the spatial direction and C xs is the local
+fastest characteristic speed along that direction (sound speed
+for hydrodynamics and fast-magnetosonic speed for MHD).
+In all verification tests presented in Sect. 3, we use SSP-RK3
+with CFL = 0.8, unless explicitly stated otherwise.
+To ensure that the mass fraction abundances sum to unity
+after each SSP-RK substep update, the consistent multi-fluid
+advection method of Plewa & Müller (1999) is used. Before
+entering the Riemann solver subroutine (see Sect. 2.6), the
+mass fractions are rescaled as
+Xl
+Xl → P .
+(65)
+l Xl
+
+l
+
+even at the discrete level.
+
+2.10. Super-time-stepping for stiff diffusive heat transport
+Transport of thermal energy is accounted for in the diffusive
+limit. The thermal flux in Eq. (6) is first discretized at cell
+faces using the second-order finite-difference formula (here
+for simplicity given for a Cartesian grid geometry)
+Fth,i+1/2 = −Ki+1/2
+
+T i+1 − T i
+,
+xi+1 − xi
+
+(67)
+
+and then added to the spatial residuals in Eq. (62). The thermal conductivity at the cell interface, Ki+1/2 , is computed as
+the harmonic mean of the values in the two cells neighboring
+the interface,
+4ac 2χi χi+1
+Ki+1/2 =
+,
+(68)
+3 χi + χi+1
+where
+χi =
+
+T i3
+,
+κi ρi
+
+(69)
+
+and c is the speed of light. The total opacity κ is derived from
+the radiative, κrad , and conductive, κcond , opacities as
+κrad κcond
+κ=
+.
+(70)
+κrad + κcond
+In PHLEGETHON, radiative and conductive opacities can either
+be mapped onto the grid and held fixed in time, or computed
+at runtime following the analytical prescriptions of Timmes
+(2000), which are functions of (ρ, T, A, Ye )4 .
+4 The implemenation of conductive and radiative opacities in PHLEGETHON
+is based on sig99.tar.xz available at https://cococubed.com/code pages/
+kap.shtml (last accessed 10 April 2026).
+
+9
+The operator discretizing thermal diffusion is parabolic, so
+it can only be integrated in a stable manner using time-explicit
+methods if the time step satisfies the parabolic CFL stability
+constraint (see, e.g., LeVeque 2007),
+ 3
+−1
+
+X Di, j,k 
+
+
+1
+
+
+
+max 
+,
+(71)
+∆t < ∆tp = 
+
+
+
+2
+
+
+2 i, j,k s=1 (∆x s,i, j,k ) 
+where
+
+D=
+
+4acT 3
+.
+3κρ2 cv
+
+(72)
+
+On fine grids or in regions of low opacity, this stability constraint can become prohibitively restrictive. One way to overcome this limitation is to employ super-time-stepping (STS)
+techniques, which relax the stability constraint for parabolic
+operators at moderate computational cost via a sequence of
+explicit substeps designed to suppress unstable modes. These
+methods are particularly suitable for non-symmetric operators
+with purely negative real eigenvalues, as it is the case for thermal diffusion.
+PHLEGETHON employs the second-order Runge–Kutta–
+Legendre (RKL2) super time-stepper scheme of Meyer et al.
+(2012). The method is implemented through operator splitting
+and coupled to the system of MHD equations using secondorder Strang splitting (Strang 1968). During the STS substeps, the mass density, velocity, magnetic field, and mass
+fractions are held fixed, while only the specific internal energy is evolved. Under these conditions, Eq. (6) reduces to
+ρ∂t eint = ∇ · (K∇T ),
+
+which can be written in operator form as
+
+
+∂t eint = M T (eint ) .
+
+(73)
+(74)
+
+The RKL2 method advances the solution over a super time
+step ∆tSTS through a sequence of NSTS substeps. Denoting the
+internal energy at stage m by e(m)
+int , the algorithm proceeds as
+follows:
+(n)
+(i) The initial state e(0)
+int = eint is set.
+
+(ii) The first stage is performed using a forward Euler step,
+h  (0) i
+(0)
+e(1)
+=
+e
++
+µ̃
+∆t
+M
+T eint .
+(75)
+1
+STS
+int
+int
+
+(iii) For stages m = 2, . . . , NSTS , the solution is updated according to
+(m−1)
+e(m)
++ νm e(m−2)
+int = µm eint
+int
+
++ (1 − µm − νm )e(0)
+i
+h int
++ µ̃m ∆tSTS M T e(m−1)
+int
+h  i
++ γ̃m ∆tSTS M T e(0)
+int .
+
+The number of substeps NSTS determines the effective time
+step that can be taken relative to the explicit parabolic stability
+limit ∆tp . For the RKL2 scheme, the maximum stable super
+time step is
+2
+NSTS
++ NSTS − 2
+∆tp ,
+4
+which for large NSTS can be approximated as
+
+∆tSTS =
+
+2
+NSTS
+∆tp .
+(79)
+4
+Consequently, increasing the number of substeps allows the
+diffusion operator to be advanced over time intervals much
+larger than the explicit stability limit while preserving secondorder accuracy in time. In PHLEGETHON, both steps of Strangsplitting determine the number of substeps as if the thermal
+diffusion operator were to be advanced over the full hyperbolic CFL time step in Eq. (64),
+% 
+
+$  s
+
+
+
+ 
+1 
+∆th
+
+
+ 9 + 16
+1+
+NSTS = max 
+− 1 , 3
+,
+(80)
+
+
+
+
+2
+∆tp
+
+∆tSTS ≈
+
+where ⌊·⌋ denotes the floor function5 . A minimum of three
+substeps is required to ensure that the scheme retains secondorder accuracy in time (Meyer et al. 2012).
+One limitation of the RKL2 method is that the equation of
+state must be evaluated in every substep to determine the temperature corresponding to the current specific internal energy,
+while holding density and composition fixed (see Sect. 2.2).
+When the EoS evaluation is computationally expensive, as in
+the case of a tabulated EoS, the overall cost of the simulation
+can become prohibitively high for large numbers of substeps.
+One possible solution to this problem is to evolve the equivalent temperature equation
+ρcv ∂t T = ∇ · (K∇T ).
+
+Explicit expressions for the coefficients µm , µ̃m , νm ,
+and γ̃m are given in Meyer et al. (2012) and are chosen to maximize the permitted time step ∆t for a given
+NSTS while maintaining stability in the integration of
+parabolic terms.
+(iv) After completing the NSTS substeps, the solution is updated as
+STS )
+e(n+1)
+= e(N
+.
+(77)
+int
+int
+
+(81)
+
+The STS update formulas are equivalent to those used when
+evolving the specific internal energy, only the operator M has
+a different form,
+ 
+1  
+MT → MT .
+(82)
+cv
+
+By fixing the value of cv at the beginning of the time step, the
+governing equation can be solved without repeatedly invoking
+the EoS routine, except for updating the internal energy at the
+end of the STS step,
+e(n+1)
+= eint,EoS (ρ(n+1) , T (n+1) , Xl(n+1) ).
+int
+
+(76)
+
+(78)
+
+(83)
+
+Although this choice formally reduces the temporal accuracy
+of the scheme to first order, the leading first-order error terms
+are subdominant on grids of practical resolution provided that
+the specific heat cv does not vary significantly over a single
+time step (see also Sect. 3.3). In PHLEGETHON, either the
+method that directly updates the specific internal energy or the
+method that evolves the temperature equation can be used.
+Moreover, when deviation well-balancing is enabled (see
+Sect. 2.8), the code also offers the option of applying the thermal diffusion operator only to the deviation from the background hydrostatic temperature, ∆T , rather than to the full
+5 This implementation is based on that in the ATHENA++ code (Stone et al.
+2020).
+
+10
+with
+
+state,
+ρ∂t eint = ∇ · (K∇∆T ),
+
+(84)
+
+ρcv ∂t T = ∇ · (K∇∆T ).
+
+(85)
+
+or, equivalently,
+
+This option is useful whenever thermal excess relative to the
+background state needs to be diffused in stratified setups,
+thereby avoiding the generation of large thermal fluxes associated with background temperature gradients (see Sect. 3.6).
+2.11. Boundary conditions
+PHLEGETHON employs layers of ghost cells surrounding
+each local computational domain block to reconstruct pairs of
+Riemann states at the domain boundaries. MPI send-receive
+communication calls are used to pass the primitive-variable
+values from one domain to fill the ghost cells of a neighboring block. In contrast, the ghost cells at the edges of the global
+grid are filled according to the selected boundary conditions.
+The number of ghost cells required to run a given numerical algorithm depends on the reconstruction method. Two
+ghost cells are sufficient for van Leer and PPH reconstructions, while the limited fifth-order reconstruction method requires three ghost cells. To guarantee that the shock-flattening
+procedure (Sect. 2.7) produces consistent results across different domain decompositions, at least three ghost cells are
+required.
+Several boundary conditions are implemented in the code,
+including periodic, constant-ghost, reflecting, outflow, diode,
+a purely-normal magnetic field, and fixed-temperature conditions (the latter only for thermal diffusion; see Table 1). In
+addition, PHLEGETHON supports inscribed solid boundaries,
+in which solid geometries are embedded within the computational domain by marking grid faces that coincide with the
+solid surface. Reflecting boundary conditions are enforced on
+the primitive variables at these interfaces. This capability is
+currently available only on Cartesian grids (see also Sect. 4).
+2.12. Poisson solver
+In simulations where the gravitational potential must be updated in time, Poisson’s equation
+∇2 ϕ = 4πGρ,
+
+(86)
+
+can either be solved at the beginning of every Runge–Kutta
+stage, or before the hyperbolic update using first-order Godunov time splitting. Currently, the Poisson solver is only
+supported for Cartesian grids with the option to apply an arbitrary stretching function to each coordinate axis separately.
+Boundary conditions for the gravitational potential are imposed using a multipole expansion of the mass distribution
+inside the computational domain. The monopole term is always included, while quadrupole and octupole corrections can
+optionally be added.
+A finite-difference discretization of the Laplacian operator
+for non-uniform Cartesian grids is employed,
+L1,x ϕi−1, j,k + L2,x ϕi, j,k + L3,x ϕi+1, j,k +
+L1,y ϕi, j−1,k + L2,y ϕi, j,k + L3,y ϕi, j+1,k +
+L1,z ϕi, j,k−1 + L2,z ϕi, j,k + L3,z ϕi, j,k+1 = 4πGρi, j,k
+
+(87)
+
+2
+,
+∆x− (∆x− + ∆x+ )
+2
+L2,x = −
+,
+∆x− ∆x+
+2
+,
+L3,x =
+∆x+ (∆x− + ∆x+ )
+2
+L1,y =
+,
+∆y− (∆y− + ∆y+ )
+2
+L2,y = −
+,
+∆y− ∆y+
+2
+,
+L3,y =
+∆y+ (∆y− + ∆y+ )
+2
+L1,z =
+,
+∆z− (∆z− + ∆z+ )
+2
+L2,z = −
+,
+∆z− ∆z+
+2
+,
+L3,z =
+∆z+ (∆z− + ∆z+ )
+L1,x =
+
+and
+
+(88)
+(89)
+(90)
+(91)
+(92)
+(93)
+(94)
+(95)
+(96)
+
+∆x− = xi, j,k − xi−1, j,k ,
+∆x+ = xi+1, j,k − xi, j,k ,
+∆y− = yi, j,k − yi, j−1,k ,
+∆y+ = yi, j+1,k − yi, j,k ,
+∆z− = zi, j,k − zi, j,k−1 ,
+∆z+ = zi, j,k+1 − zi, j,k .
+
+(97)
+(98)
+(99)
+(100)
+(101)
+(102)
+
+Lϕ = 4πGρ
+
+(103)
+
+This finite-difference discretization is formally only firstorder accurate on non-uniform grids, with the leading firstorder error term being proportional to |∆ξ+ − ∆ξ− | (ξ = x, y, z).
+Although first-order convergence is expected on sufficiently
+fine grids, in practice second-order convergence is achieved
+on grids of practical resolution with smoothly varying cell
+sizes (see Sect. 3.4).
+The resulting linear system
+is solved iteratively using a matrix-free implementation of
+the bi-conjugate gradient stabilized method (BiCGSTAB) of
+van der Vorst (1992). In Eq. (103), L is the discrete Laplacian operator, ϕ is the discrete gravitational potential vector,
+and ρ is the discrete mass density vector. When non-uniform
+grids are used, the discretized operator L becomes asymmetric and a simple Jacobi diagonal preconditioner is employed
+to achieve faster convergence (LeVeque 2007).
+The iteration is terminated once the root-mean-square relative residual
+v
+u
+u
+t
+!
+Ny X
+Nz
+Nx X
+X
+(Lϕ)i, j,k − 4πGρi, j,k 2
+1
+(104)
+N x Ny Nz i=1 j=1 k=1
+4πGρi, j,k
+falls below a prescribed tolerance ϵ (a default value of
+ϵ = 10−4 is used in PHLEGETHON). The gravity vector
+g = −∇ϕ, needed to compute source terms in the momentum and energy equations (see Sect. 2.1), is discretized using a second-order central-derivative approximation for non-
+
+11
+TABLE 1
+Boundary conditions available in PHLEGETHON.
+Type
+
+Description
+
+Periodic
+Constant ghost
+Reflecting
+Outflow
+Diode
+Fixed-temperature (only for thermal diffusion)
+Purely normal magnetic field
+Inscribed solid
+
+Ghost-cell values are copied from the opposite side of the computational domain.
+Primitive variables fixed to user-prescribed values in the ghost cells.
+un = 0, Bn = 0, and ∂n W = 0 for remaining primitive variables.
+∂n W = 0 for all primitive variables.
+Outflow with un ≥ 0.
+T = T bc at the last cell face; ghost cells filled via 2nd-order extrapolation.
+∂n Bn = 0 and zero transverse magnetic field components at the boundary, Bt = 0.
+Reflecting conditions applied at embedded solid interfaces.
+
+uniform grids,
+
+governed by (see, e.g., Reichert et al. 2023)
+
+∆x−
+∆x+ − ∆x−
+ϕi+1, j,k −
+ϕi, j,k
+∆x+ (∆x+ + ∆x− )
+∆x+ ∆x−
+∆x+
+ϕi−1, j,k ,
+(105)
++
+∆x− (∆x+ + ∆x− )
+∆y+ − ∆y−
+∆y−
+ϕi, j+1,k −
+gy = −
+ϕi, j,k
+∆y+ (∆y+ + ∆y− )
+∆y+ ∆y−
+∆y+
++
+ϕi, j−1,k ,
+(106)
+∆y− (∆y+ + ∆y− )
+∆z+ − ∆z−
+∆z−
+ϕi, j,k+1 −
+gz = −
+ϕi, j,k
+∆z+ (∆z+ + ∆z− )
+∆z+ ∆z−
+∆z+
+ϕi, j,k−1 .
+(107)
++
+∆x− (∆z+ + ∆z− )
+
+gx = −
+
+2.13. Nuclear reaction network solvers
+PHLEGETHON incorporates arbitrary nuclear reaction networks that can be coupled to the MHD equations. The nuclear
+network is treated as a source term for the mass fractions and
+specific internal energy of the gas. Below, we present the governing equations solved by the code and outline the numerical
+methods used.
+The first law of thermodynamics for a multi-species reacting fluid reads (e.g., Weiss et al. 2004)
+T Dt s + N A
+
+X
+l
+
+Φl Dt Yl = Dt eint,t −
+
+P
+Dt ρ = δq̇,
+ρ2
+
+(108)
+
+where s is the specific entropy, Yl = Xl /Al are the molar abundances, NA is Avogadro’s number, Φl is the chemical potential
+of species l, and Dt = ∂t + u · ∇ is the Lagrangian derivative.
+The total specific internal energy, including the rest mass of
+each species, ml , is
+X
+eint,t = eint + NA
+ml c2 Yl ,
+(109)
+l
+
+and δq̇ represents the net heat gained or lost by the mixture.
+The thermal component, eint , is the quantity directly tracked
+in the simulation (see Sect. 2.1). Equation (108) can be rearranged to yield the evolution equation for eint ,
+Dt eint = δq̇ +
+
+X
+P
+Dt ρ − N A
+ml c2 Dt Yl .
+2
+ρ
+l
+
+(110)
+
+At the same time, the evolution of the molar abundance of
+a species involved in one-, two-, and three-body reactions is
+
+Dt Yl =
+
+X
+
+αr1 ,l Yl λr1
+
+r1
+
++
+
+XX
+r2
+
++
+
+αr2 ,l,p
+
+p
+
+XXX
+r3
+
+p
+
+q
+
+Yl Y p
+ρNA ⟨σu⟩r2
+1 + δ p,l
+
+αr3 ,l,p,q
+
+(111)
+
+Yl Y p Yq 2 2
+ρ NA ⟨l, p, q⟩r3 ,
+1 + ∆q,p,l
+
+where αr1 ,l , αr2 ,l,p , αr3 ,l,p,q are the stoichiometric coefficients
+for species l in each type of reaction. The sum is carried over
+all reactions participating in the network. The Kronecker delta
+δ p,l ensures correct counting for identical reactants, and
+∆q,p,l = δq,p + δq,l + δ p,l + 2δ p,q,l .
+
+(112)
+
+Here, λr1 is the one-body reaction rate, ⟨σu⟩r2 is the thermally
+averaged reaction rate for two-body reactions, and ⟨l, p, q⟩r3 is
+the rate coefficient for three-body reactions.
+PHLEGETHON uses reaction rates from the JINA REACLIB
+database (Cyburt et al. 2010), which are given as exponentials of temperature-dependent functions. Weak reaction rates
+for medium-mass nuclei are interpolated from precomputed
+tables (Fuller et al. 1982; Oda et al. 1994; Langanke &
+Martı́nez-Pinedo 2001) in (ρYe , T ). Electron screening corrections can optionally be enabled, following Wallace et al.
+(1982). Reverse reactions are multiplied by partition functions from Rauscher & Thielemann (2000) to account for thermally populated excited nuclear states in high-temperature
+plasmas.
+Nuclear reactions can have characteristic timescales much
+shorter than the hyperbolic CFL time step in Eq. (64) that governs the time integration algorithm. As a result, implicit time
+integration is generally required. In PHLEGETHON, implicit nuclear network solvers are coupled to the MHD system of equations via either Godunov or Strang splitting. During the timesplit network step, the mass density is held fixed and species
+advection is neglected because it is already accounted for in
+the MHD update. Under these assumptions, the Lagrangian
+derivative reduces to a simple Eulerian derivative,
+Dt → ∂t ,
+
+(113)
+
+and the network step requires solving the coupled, nonlinear
+
+12
+system of ODEs
+∂t eint = δq̇ − NA
+∂t Yl =
+
+X
+
+X
+
+αr1 ,l Yl λr1 +
+
+r1
+
++
+
+r3
+
+ml c 2 ∂ t Y l ,
+
+l
+
+XX
+r2
+
+XXX
+p
+
+Focusing on BE for simplicity, the residuals in each substep
+of the root-finding algorithm are obtained as
+
+αr2 ,l,p
+
+p
+
+Yl Y p
+ρNA ⟨σu⟩r2
+1 + δ p,l
+
+(114)
+The medium is assumed to be transparent for neutrinos, so
+δq̇ < 0 accounts for mean neutrino losses, which have both
+thermal and nuclear contributions. Thermal neutrino losses
+are computed following Itoh et al. (1996), which includes pair,
+photo-, plasma, Bremsstrahlung, and recombination neutrinos6 , while nuclear neutrino energy losses are included via
+weak rates tabulated in (ρYe ,T ) (Fuller et al. 1982; Oda et al.
+1994; Langanke & Martı́nez-Pinedo 2001) .
+PHLEGETHON solves Eq. (114) using either the first-order
+backward Euler (BE) method or the trapezoidal backwarddifferentiation second-order (TR-BDF2) method of Hosea
+& Shampine (1996), the latter being an explicit-first-stage,
+singly diagonally implicit Runge–Kutta scheme. Both methods are A- and L-stable (see, e.g., Hosea & Shampine 1996),
+which makes them suited for solving stiff ODE systems. To
+reduce implementation complexity, reaction rates are evaluated at the beginning of the nuclear network step, allowing
+the thermal energy equation to be decoupled from the species
+evolution. It should be noted that holding the value of the
+reaction rates fixed throughout the implicit solve can reduce
+numerical accuracy in vigorous burning regimes, such as in
+strong detonations (see, e.g., Zingale et al. 2021), but such extreme regimes are outside the intended scope of PHLEGETHON.
+When casting the governing equation for the molar abundances Yl as
+∂t Yl − Rl (Y) = 0,
+(115)
+where Rl (Y) denotes the net production rate of species l, the
+BE method reads
+
+(116)
+
+The discrete form of Eq. (115) in the TR-BDF2 method can
+be obtained from the Butcher tableau (see Hosea & Shampine
+1996)
+0
+
+0
+
+0
+
+0
+
+θ
+
+θ
+2
+3θ−θ2 −1
+2θ
+3θ−θ2 −1
+2θ
+
+θ
+2
+1−θ
+2θ
+1−θ
+2θ
+
+0
+
+1
+
+(117)
+
+∂El
+∂Rl (Y∗ )
+∆t.
+∗ = δlb −
+∂Yb
+∂Yb Y∗
+
+(118)
+
+where Y is the current guess. Therefore, the Jacobian is
+Jlb =
+
+Yl Y p Yq 2 2
+ρ NA ⟨l, p, q⟩r3 .
+αr3 ,l,p,q
+1 + ∆q,p,l
+q
+
+Yln+1 − Yln − Rl (Yn+1 )∆t = 0.
+
+∗
+
+El (Y∗ ) = Yl∗ − Yln − Rl (Y∗ )∆t,
+
+θ
+2
+θ
+2
+
+√
+with θ = 2 − 2. Both the BE and TR-BDF2 implementations employ a Newton–Raphson root-finding algorithm, using Yl∗ = Yln as an initial guess. In PHLEGETHON, the Jacobian of the system is computed and stored as a dense matrix. For small reaction networks (Nspecies ≲ 400), this approach remains competitive with sparse-matrix solvers while
+substantially reducing implementation complexity (Reichert
+et al. 2023).
+6 The implementation of thermal neutrino energy loss rates in PHLEGETHON
+is based on sneut5.tbz available at https://cococubed.com/code pages/
+nuloss.shtml (last accessed 10 April 2026).
+
+The increment ∆Yl∗ on the guess Y ∗ is obtained by solving a
+Nspecies × Nspecies linear system of equations,
+J∆Y∗ = −E.
+
+(119)
+
+This linear system is solved iteratively using BiCGSTAB.
+When the solution to the linear system is obtained, the
+Newton–Raphson iteration proceeds until the root mean
+square relative residual
+s
+1 X 2 ∗
+E (Y )
+(120)
+Nspecies l l
+falls below a prescribed threshold (the default value is 10−13
+in PHLEGETHON).
+Once convergence is reached for the abundances, the internal energy is updated. In BE,
+X
+
+n+1
+n
+eint
+= eint
++ δq̇n+1 ∆t − NA
+ml c2 Yln+1 − Yln .
+(121)
+l
+
+Analogous expressions follow straightforwardly for the TRBDF2 scheme. The temperature is then reconstructed from
+the updated internal energy and composition, using the iterative approach described in Sect. 2.2.
+2.14. Summary of the time integration algorithm
+The governing equations presented in Sect. 2.1 are integrated in time using an operator-split approach in which the
+hyperbolic MHD equations, thermal diffusion, nuclear reactions, gravity, and other source terms are advanced sequentially within each global time step. Depending on the problem and the numerical method employed, some of these operators can be combined within a single update of the Godunov scheme, or symmetric operator splitting. Therefore,
+the algorithm described below represents a typical implementation adopted in PHLEGETHON, in which diffusive and reactive
+source terms are coupled to the MHD system of equations using second-order Strang splitting.
+The update from time tn to tn+1 = tn + ∆t on the set of conserved quantities U proceeds through a sequence of intermediate stages U(m) as follows:
+(i) At time tn , the global time step ∆t is evaluated based on
+the hyperbolic wave speeds as in Eq. (64).
+(ii) Poisson’s equation is solved at the mass density
+state ρ(n) , yielding the gravitational potential ϕ(n) (see
+Sect. 2.12).
+(iii) The nuclear reaction network is advanced over a half
+time step, ∆t/2, updating mass fractions and specific
+internal energy, U(n) → U(1) . During this substep,
+mass density, velocity, and magnetic field are held fixed
+(Sect. 2.13).
+
+13
+(iv) Thermal diffusion is advanced over a half time step,
+∆t/2, updating the specific internal energy, U(1) → U(2) .
+During this substep, mass density, velocity, magnetic
+field, and mass fractions are held fixed (see Sect. 2.10).
+(v) The ideal MHD system of equations, including source
+terms such as gravity or rotation, is advanced over the
+full time step ∆t, updating all conserved quantities,
+U(2) → U(3) (see Sects. 2.5–2.9).
+(vi) Thermal diffusion is advanced over the remaining half
+time step, ∆t/2, updating the specific internal energy,
+U(3) → U(4) .
+(vii) The nuclear reaction network is advanced over the remaining half time step, ∆t/2, updating mass fractions
+and specific internal energy, U(4) → U(5) .
+(viii) The global time is updated, tn+1 = tn + ∆t, as well as the
+set of conserved variables, U(n+1) = U(5) , completing
+the integration cycle.
+The cycle is repeated until a stopping criterion is met. In
+PHLEGETHON, the stopping criterion may be a maximum simulation time, a maximum number of time steps, or a maximum
+wall-clock time. During the time integration, the code outputs
+grid snapshots and restart files at user-specified intervals, using the HDF5 library (The HDF Group 2023) for parallel I/O.
+The flowchart of a typical time integration loop is shown in
+Fig. 1.
+2.15. Code scaling and relative cost of the numerical
+algorithms
+Figure 2 shows the weak scaling efficiency of PHLEGETHON,
+measured on the Tier-2 HoreKa HPC system7 , using Intel
+Xeon ‘Ice Lake’ 2.4 GHz processors. To avoid load imbalances, we consider a three-dimensional (3D) Cartesian
+grid with spatially homogeneous thermodynamic variables.
+Specifically, we adopt a temperature of T = 2.06 × 109 K
+and a density of ρ = 4.83 × 105 g cm−3 , together with a 12species oxygen-burning network. The chosen temperature
+and density correspond to conditions at the base of the convective shell in the core-collapse supernova progenitor model described in Sect. 4. The same 12-species oxygen-burning network is used there. All magnetic, velocity, and gravitational
+field components are set to zero but are retained in the computation. The nuclear network is coupled to the MHD equations via Godunov splitting, and the nuclear network step is
+solved with the time-implicit backward-Euler method. We include thermal neutrinos and use the Helmholtz EoS. The base
+Godunov algorithm employs the PPH reconstruction scheme
+with two ghost cells (including the reconstruction of γe and
+γc ), the LHLLD Riemann solver, and the three-stage SSPRK3 time stepper. To ensure that all tests perform the same
+number of operations per Runge–Kutta stage, the time step is
+fixed at ∆t = 0.01 s. The setup is evolved for 100 time steps.
+Although this setup does not correspond to a physically realistic scenario, it engages all algorithmic components. It performs the full set of operations typical of a production-quality
+simulation and is designed to stress-test the code’s scaling.
+In fact, the computation involves communicating a total of 20
+7 https://www.scc.kit.edu/en/services/horeka.php
+
+collocated quantities and six staggered (non-collocated) quantities8 three times per time step. For these tests, we use a 64core simulation as a reference, nearly filling a HoreKa node
+(76 cores), so that the per-core memory bandwidth is close to
+that of production-quality simulations at scale. PHLEGETHON
+demonstrates good weak scaling: on HoreKa, increasing the
+number of cores by a factor of 512, from 64 to 32768, reduces
+the parallel efficiency by ≈ 24% for 323 local grid sizes and
+by only ≈ 15% for 643 local grid sizes.
+For reference, Table 2 summarizes the typical computational cost of the main algorithmic components relative to a
+single Godunov MHD update. Thermal diffusion is included,
+solved both explicitly and using super-time-stepping. The
+value of the opacity is varied so that the super time-stepper
+performs between 3 and 43 substeps. Several equations of
+state are also considered, from ideal gas law to the Helmholtz
+EoS. A Poisson solver is coupled to the MHD system of equations via Godunov splitting, and both the gravitational potential and the gravity vector are reset to zero before calling the
+Godunov algorithm. Overall, the computational cost of the
+numerical methods implemented in PHLEGETHON is in most
+cases smaller than, or at most comparable to, the cost of the
+core Godunov algorithm. Not surprisingly, the most expensive components are the nuclear reaction network solver and
+the Poisson solver, the latter being up to a factor of seven more
+expensive than the Godunov algorithm itself. Moreover, the
+reconstruction of the auxiliary thermodynamic indices γe and
+γc (see Sect. 2.5) is essential for reducing the computational
+cost of the simulation. In setups that are partially electrondegenerate, this approach can lead to a speed-up of up to a
+factor of six.
+TABLE 2
+Typical computational cost of key algorithmic components in PHLEGETHON
+on a 3.8 GHz AMD EPYC 9554 64-Core Processor. The cost is given
+relative to the cost of a single Godunov MHD update. Values are
+averaged over three runs of the setup described in Sect. 2.15. Unless
+specified, all tests are run on a 323 Cartesian grid on a single processor.
+1 σ errors in the averages are smaller than 1%.
+Component
+Godunov MHD, 12 species1
+Contact-CT
+Well balancing
+EoS (ideal gas + thermal radiation)
+EoS (ideal gas + thermal radiation,
+γe,c reconstruction)
+EoS (Helmholtz)
+EoS (Helmholtz, γe,c reconstruction)
+Explicit thermal diffusion
+STS2 (ideal gas + thermal radiation,
+γe,c reconstruction)
+Poisson solver3
+Nuclear network4
+Thermal neutrino losses
+
+Relative cost per time step
+1
+0.37
+0.05
+0.35
+0.08
+8.9
+1.4
+0.05
+0.18–0.72–2.2
+0.12–1.05–6.9
+2.6
+0.39
+
+1 The wall-clock time required to perform a Godunov update for one cell
+
+over a single time step, excluding EoS calls, is 1.03 µs.
+2 For 3, 14, and 43 STS RKL2 substeps, respectively.
+3 Coupled to the MHD equations via Godunov splitting for 323 , 2563 , and
+10243 cells, respectively.
+4 Coupled to the MHD equations via Godunov splitting and solved using the
+time-implicit backward Euler method.
+8 Cell-centered quantities include 12 species, ρ, u = (u , u , u ), P, T ,
+x1 x2 x3
+γe , and γc , while face-centered quantities include two components of the
+electromotive force per cell face.
+
+14
+
+Set domain decomposition
+
+t > tmax ?
+
+Allocate grid
+
+Exit
+
+no
+
+Write snapshot
+yes
+
+yes
+
+no
+
+Evaluate ∆t
+Poisson solve
+
+t > toutput ?
+Nuclear network solve over ∆t/2
+Initialize variables
+or read restart file
+Thermal diffusion solve over ∆t/2
+no
+Ideal MHD + gravity + rotation solve over ∆t
+Thermal diffusion solve over ∆t/2
+
+yes
+
+Write restart
+
+t > trestart ?
+Nuclear network solve over ∆t/2
+t → t + ∆t
+
+Fig. 1.— Flowchart illustrating a typical full simulation execution loop in PHLEGETHON.
+
+HoreKa weak scaling
+1.00
+
+323
+643
+1 node : 76 cores
+
+efficiency
+
+0.95
+0.90
+
+20483
+
+0.85
+0.80
+
+10243
+
+102
+
+103
+
+104
+
+cores
+Fig. 2.— Weak scaling of PHLEGETHON for the MHD setup described in
+Sect. 2.15. Local grids of 323 and 643 cells are considered. The panel shows
+the efficiency measured on the Tier-2 HoreKa HPC system, which uses Intel
+Xeon ‘Ice Lake’ 2.4 GHz processors with 38 cores per socket and two sockets
+per node. The maximum global grid size reached in each scaling is indicated.
+To ensure that the per-core memory bandwidth is representative of typical
+usage in production-quality simulations at scale, the reference run for the
+weak scaling on HoreKa is taken at 64 cores, nearly filling a node.
+
+3. CODE VERIFICATION
+
+In this section, we present a set of verification tests to assess
+the stability and accuracy of the numerical methods described
+in Sect. 2 on 1D, 2D, and 3D grids. The benchmarks are cho-
+
+sen to probe different aspects of PHLEGETHON, including its
+shock-capturing capability, its asymptotic-preserving behavior at low Mach numbers, and its ability to handle stiff source
+terms such as fast thermal diffusion and nuclear energy generation.
+The tests include standard problems such as the Brio–Wu
+shock tube and the Balsara vortex, which verify wave propagation and evaluate the MHD solver’s performance across
+both high- and low-Mach-number regimes. Fast thermal diffusion of a 2D temperature pulse is used to verify the implementation of the super time-stepper described in Sect. 2.10.
+The accuracy of our Poisson gravity solver is quantified using a problem with a known analytical solution. A onezone hot-CNO cycle model tests our nuclear network solver,
+validated against the established PYNUCASTRO code (Smith
+et al. 2023). Simulations of a non-magnetic burning-radiating
+buoyant bubble verify the code’s ability to evolve slow flows
+in a strongly stratified medium, as well as the integration
+of nuclear source terms and their coupling to hydrodynamics and diffusive heat transport. The code-comparison setup
+of Andrassy et al. (2022), which includes heat-driven turbulent convection, CBM, and wave excitation on the same grid,
+provides a realistic cross-code benchmark for stellar hydrodynamics, confirming that our results are consistent with established codes such as SLH, PROMPI, FLASH, PPMSTAR, and
+MUSIC.
+These tests provide a comprehensive view of
+PHLEGETHON’s capabilities across physical regimes relevant to stellar MHD. A full application is presented in Sect. 4,
+for which we ran an MHD simulation of a core-collapse
+supernova progenitor star, thus demonstrating the code’s
+
+15
+reliability in a production-quality astrophysical scenario. All
+tests were performed using version v2026.4.1 of the code
+(Leidi et al. 2026).
+
+with good accuracy.
+
+3.1. Brio–Wu shock tube
+To assess the shock-capturing capabilities of PHLEGETHON,
+we consider the Brio–Wu shock-tube test problem (Brio &
+Wu 1988). This is a 1D Riemann problem for ideal MHD
+that gives rise to a rich family of waves, including a compound structure in which the left-going slow-magnetosonic
+and Alfvén waves propagate together, posing a challenge for
+many MHD schemes.
+The computational domain spans x ∈ (0, 1), and the primitive variables exhibit a discontinuity at x = 0.5. The left and
+right states at the discontinuity are given by
+
+3.2. Balsara vortex
+We consider here the 2D MHD vortex of Balsara (2004), a
+smooth, stationary solution of the homogeneous MHD equations in which centrifugal, Lorentz, and pressure-gradient
+forces are in balance. The grid is Cartesian, covering the spatial domain (x, y) ∈ (−5, 5) × (−5, 5), with periodic boundary
+conditions on all sides. For this test, we employ the PPH reconstruction scheme. The EoS is that of a classical ideal gas.
+The primitive states are mapped onto the Cartesian grid as
+
+(ρ, u x , uy , By , P)L = (1, 0, 0, 1, 1),
+(ρ, u x , uy , By , P)R = (0.125, 0, 0, −1, 0.1),
+
+(122)
+(123)
+
+with Bx = 0.75. The equation of state is that of an ideal gas
+with adiabatic index γ = 2. At both boundaries of the domain,
+constant ghost-cell boundary conditions are imposed.
+Higher-order limited reconstruction methods, such as our
+limited fifth-order scheme (see Sect. 2.5), are known to suffer from spurious oscillations near discontinuities (e.g., Stone
+et al. 2008). In this test, we therefore explore the robustness of
+our limited fifth-order reconstruction method when combined
+with the shock-flattener procedure described in Sect. 2.7. For
+all simulations presented in this section, we set the hyperbolic
+CFL number to 0.4 to improve the stability of the numerical
+schemes in capturing MHD shocks.
+As commonly done for this test problem in the literature,
+we examine the solution at t = 0.08 (in code units) using a
+grid with 500 cells in the x-direction. We also compute a reference solution using van Leer reconstruction on a grid with
+4000 cells. The results are shown in Fig. 3. The solution consists of a sequence of MHD waves, including a left-going fast
+rarefaction, a compound slow–Alfvén wave, a contact discontinuity, a slow shock, and a right-going fast rarefaction.
+Using the fifth-order method to reconstruct pairs of Riemann states at cell faces leads to large-amplitude spurious oscillations in the numerical solution, as expected. These artifacts are most clearly visible in the region between the rightgoing fast rarefaction and the slow shock, as well as across the
+contact discontinuity. Despite the presence of oscillations, the
+positions of the discontinuities agree closely with those in the
+reference solution.
+When the higher-order method is combined with the shockflattening procedure using ϵSF = 0.2 (see Sect. 2.7), the discontinuities are spread over approximately 10–15 cells, compared to only 3–5 cells without the shock flattener. However,
+the amplitude of the spurious oscillations is reduced, while
+the jumps across the MHD waves, including the compound
+wave, remain well captured and occur at the correct locations.
+The compound wave is also captured accurately.
+For comparison, we also show results obtained with van
+Leer limited reconstruction used without shock flattening.
+This method achieves accuracy comparable to a limited
+fifth-order reconstruction with shock flattening near discontinuities, but is generally more dissipative across the
+smooth rarefaction waves. These results demonstrate that
+the shock-flattening procedure substantially improves the
+robustness of the fifth-order reconstruction scheme while still
+allowing discontinuities and rarefaction waves to be captured
+
+1−r2
+
+(u x , uy ) = ũe 2 (−y, x),
+1−r2
+
+(Bx , By ) = B̃e 2 (−y, x),
+#
+" 2
+ũ2 1−r2
+B̃
+2
+(1 − r ) −
+e ,
+P=1+
+2
+2
+ρ = 1,
+
+(124)
+
+p
+where r = x2 + y2 , and ũ and B̃ are the maximum rotational
+speed and largest Alfvén velocity on the grid, respectively.
+Following Leidi et al. (2022), the vortex is advected along the
+diagonal of the grid with an advective speed uadv = ũ,
+uadv
+(125)
+ux → ux + √ ,
+2
+uadv
+uy → uy + √ .
+(126)
+2
+The advection
+is followed for one grid-crossing time,
+√
+τ = 10 2/ũ, during which the vortex rotates approximately
+2.25 times around its barycenter.
+To test the low-Mach capabilities of PHLEGETHON, we run
+a grid of models spanning ũ ∈ {10−4 , 10−3 , 10−2 , 10−1 } and
+βK ∈ {10−2 , 10−1 , 1, 101 , 102 }, where
+!2
+B̃
+βK =
+(127)
+ũ
+is the initial magnetic-to-kinetic energy ratio. Therefore, this
+setup explores Mach numbers from ∼ 10−4 to ∼ 0.1 (the
+sound speed is ≈ 1 ) in both weakly and strongly magnetized
+regimes. Figure 4 shows the volumetric magnetic energy,
+|B|2 /2, normalized by B̃2 /2, for the chosen parameter space
+on 642 grids. Despite the wide range of Mach numbers, after
+one grid-crossing time both the fraction of magnetic energy
+converted into heat by numerical resistive processes and the
+shape of the vortex are essentially independent of ũ, reflecting
+the asymptotic-preserving property of the LHLLD scheme as
+M → 0 (see Sect. 2.6). The numerical dissipation, however,
+increases with the magnetic-to-kinetic energy ratio, ranging
+from 2% for βK = 10−2 up to 16% for βK = 102 . This is
+expected because the upwind terms in LHLLD scale linearly
+with the Alfvénic Mach number Ma (see, e.g., Leidi et al.
+2022),
+|u|
+|B|
+Ma =
+,
+Ca = √ ,
+(128)
+Ca
+ρ
+where Ca is the Alfvén velocity. Therefore, LHLLD is
+not strictly asymptotic-preserving in the limit Ma → 0.
+Fully asymptotic-preserving schemes for subsonic and subAlfvénic flows exist (e.g., Boscheri & Thomann 2024), but
+
+16
+
+1.0
+
+Lim 5th
+Lim 5th, SF = 0.2
+Van Leer
+reference
+
+CSA
+0.8
+
+LFR
+
+C
+
+0.6
+
+0.4
+0.2
+
+0.4
+
+0.0
+
+RS
+0.2
+
+0.6
+
+RFR
+
+ρ
+
+−0.2
+
+ux
+
+1.0
+
+0.00
+−0.25
+
+0.5
+
+−0.50
+−0.75
+
+0.0
+
+−1.00
+−0.5
+
+−1.25
+−1.50
+
+uy
+
+−1.0
+
+1.0
+
+10
+
+0.8
+
+8
+
+0.6
+
+6
+
+0.4
+
+4
+
+0.2
+
+2
+
+P
+0.4
+
+0.5
+
+0.6
+
+x
+
+0.7
+
+0.8
+
+By
+
+P/ργ
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+0.8
+
+x
+
+Fig. 3.— Brio–Wu shock-tube test computed on a grid with 500 cells. The panels show the solution at t = 0.08 (in code units) for the mass density, x- and
+y-velocity components, transverse magnetic field, pressure, and pseudo-entropy P/ργ . Results obtained with the limited fifth-order reconstruction method (green),
+the same method combined with the shock-flattening procedure (orange), and second-order van Leer limited reconstruction (gray) are compared. The black solid
+lines represent the reference solution computed using van Leer reconstruction on a grid with 4000 cells. The solution consists of a left-going fast rarefaction
+(LFR), a compound slow–Alfvén wave (CSA), a contact discontinuity (C), a right-going slow shock (RS), and a right-going fast rarefaction (RFR).
+
+17
+they have so far only been implemented with semi-implicit
+time discretizations. Notably, for βK = 10, where the medium
+is already significantly magnetized, only about 6% of the total
+magnetic energy is dissipated after t = τ. Moreover, the symmetry of the vortex is well preserved in all cases, suggesting
+that dispersion errors play a subdominant role even in strongly
+magnetized regimes.
+To examine the scaling of global truncation errors with
+grid resolution, we repeat the Balsara vortex test for a case
+representative of stellar-interior MHD systems targeted by
+PHLEGETHON, i.e., ũ = 10−2 and βK = 11 , on grids ranging
+from 642 to 10242 cells, doubling the linear resolution N each
+time. Figure 5 shows the resolution dependence of the L1 error norm in the primitive variables at t = τ relative to their
+distribution at t = 0,
+N
+
+L1 (N) =
+
+N
+
+1 XX
+qi, j − q0,i, j ,
+N 2 i=1 j=1
+
+(129)
+
+where q denotes a primitive variable. The errors are normalized by ũ for velocity and magnetic field, and by the ram pressure ũ2 for mass density2 and thermal pressure. As expected,
+all primitive variables exhibit second-order convergence on
+fine grids, with error magnitudes comparable across variables,
+within a factor of two.
+3.3. Thermal diffusion of a 2D temperature pulse
+To benchmark the super time-stepper solver for treating stiff thermal diffusion, described in Sect. 2.10, we
+consider the 2D diffusion of a temperature pulse. The
+grid geometry is Cartesian, and periodic boundary conditions are applied on all sides. The spatial domain spans
+(x, y) ∈ (−5R⊙ , 5R⊙ ) × (−5R⊙ , 5R⊙ ), where R⊙ is the solar radius. The density and opacity are homogeneous in space and
+take values ρ = 1.0 g cm−3 and κ = 1 g cm−2 , respectively.
+The temperature is initialized as the sum of a homogeneous
+base state and a compact-support smooth perturbation,
+ 
+
+πr
+
+, r ≤ R⊙ ,
+T b + δT cos2 2R
+⊙
+T =
+(130)
+T ,
+r > R⊙ ,
+b
+
+7
+where
+p T b = 10 K is the base temperature, δT = T b /10, and
+2
+2
+r = x + y . These thermodynamic conditions are chosen
+to be representative of those found in the interior of massive
+main sequence stars (Kippenhahn et al. 2013). The equation
+of state is that of a classical ideal gas with mean molecular
+weight µ = 1 and includes thermal radiation (see Sect. 2.2).
+In this test, the Godunov update is disabled and only thermal diffusion is allowed to operate. The value of the super
+time step ∆tSTS is fixed as a multiple of the parabolic CFL
+time step,
+3 (∆x)2
+∆tSTS = CFLp
+,
+(131)
+4 c
+where ∆x is the grid spacing. The system is evolved until the
+initial pulse diffuses over a distance l = 2R⊙
+
+τ=
+
+3l2
+.
+c
+
+(132)
+
+1 Such dynamical conditions are expected in subsonic stellar convection
+zones in the presence of a large-scale dynamo (e.g., Brun & Browning 2017).
+2 In low-Mach-number flows, density fluctuations scale as M2 (Meakin &
+Arnett 2007).
+
+This choice yields τ = 64570 yr.
+As a reference, Fig. 6 shows the time evolution of the temperature profile taken along the x-direction in a test run with
+CFLp = 1. As expected, as time progresses, the amplitude of
+the temperature pulse decreases while its width increases.
+To quantify the convergence properties of the RKL2 STS
+method implemented in PHLEGETHON, Fig. 7 shows L1 error
+norms as functions of the linear grid resolution N, ranging
+from 642 to 20482 with successive factors of two. The time
+step is varied such that CFLp ∈ {1, 10, 100, 1000}, corresponding to numbers of STS substeps NSTS of 4, 8, 22, and 65, respectively. The L1 error norms are computed as
+L1 (N) =
+
+N/2 N/2
+4 X X i, j
+i, j
+|T − T N/2
+|,
+δT N 2 i=1 j=1 N
+
+(133)
+
+where T N and T N/2 are the temperature distributions on grids
+with linear resolution N and N/2, respectively. The finer T N
+grid is restricted to the coarser grid by averaging blocks of
+2 × 2 cells.
+At a given resolution, the error increases monotonically
+with CFLp . Remarkably, the errors of simulations run up
+to CFLp = 100 are comparable within 20% even on a relatively coarse 1282 grid. The error dispersion between different cases diminishes as the grid is refined. All cases except
+CFLp = 1000 show second-order convergence on the finer
+grids. The highest CFL case exhibits an apparent third- to
+fourth-order scaling, but produces errors approximately two
+orders of magnitude larger than the other cases on coarse
+grids. On the finest grid, the error of the CFLp = 1000
+run is about 40% larger than that of the reference case with
+CFLp = 1.
+In Fig. 8, we show the ratio of the error obtained from
+simulations evolving the temperature according to Eq. (85)
+to the error produced by the more accurate standard mode
+that evolves the specific internal energy in Eq. (73). For simulations with CFLp up to 10, the errors remain comparable
+within a few percent. For the case with CFLp = 100, the
+error in the temperature-evolution mode increases to values
+up to 40% larger than those of the standard mode but it still
+scales second-order, while for CFLp = 1000 the ratio of the
+two errors approaches one dex. This behavior arises because,
+on sufficiently fine grids, the magnitude of spatial discretization errors becomes small enough that time-discretization errors are dominant. In particular, the temperature-evolution
+formulation introduces a first-order contribution associated
+with holding the specific heat cv fixed during the update. For
+CFLp = 1000, the time step is sufficiently large that this firstorder contribution dominates the local-truncation error, causing the method to exhibit first-order scaling.
+3.4. Accuracy of the Poisson solver
+In this section, we investigate the accuracy of our gravitational Poisson solver using a 3D test problem run on a Cartesian grid. Here, the Godunov algorithm is disabled, and only
+the Poisson solver is used to compute the numerical solution
+for a spherical mass density distribution,
+ 
+2
+
+2
+
+
+ρ0 1 − rr2 , r ≤ r0 ,
+ρ=
+(134)
+0
+
+
+0,
+r > r0 ,
+
+with ρ0 = 1 and r0 = 0.25. For this test, G = 1. For this
+mass density distribution, Poisson’s equation has an analytical
+
+18
+ũ = 10−4
+Madv = 1.55 × 10−4
+
+ũ = 10−3
+Madv = 1.55 × 10−3
+
+ũ = 10−2
+Madv = 1.55 × 10−2
+
+ũ = 10−1
+Madv = 1.55 × 10−1
+
+0.98
+
+0.98
+
+0.98
+
+0.98
+
+0.98
+
+0.98
+
+0.98
+
+0.97
+
+0.97
+
+0.97
+
+0.97
+
+0.94
+
+0.94
+
+0.94
+
+0.94
+
+0.84
+
+0.84
+
+0.84
+
+0.85
+
+βK = 102
+
+βK = 101
+
+βK = 1
+
+βK = 10−1
+
+βK = 10−2
+
+0.98
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+|B|2 / B̃2
+
+0.8
+
+1.0
+
+Fig. 4.— Magnetic energy density normalized by its maximum value at t = 0 for the 2D Balsara vortex test, shown for all combinations of the initial magneticto-kinetic energy ratio βK and advective speed ũ. Here, the grid is 642 . The vortex is advected along the grid diagonal with advective speed uadv = ũ. The
+corresponding advective Mach number, Madv , is also indicated. All snapshots are taken after one advective crossing time of the vortex. Numbers in the insets
+show the fraction of magnetic energy remaining relative to the initial value.
+
+19
+10−2
+L1ρ /ũ2
+u
+
+L1y /ũ
+
+10−3
+
+10−3
+
+L1P /ũ2
+L1Bx /ũ
+
+L1 error in T
+
+relative error
+
+CFLp = 1
+CFLp = 10
+CFLp = 100
+CFLp = 1000
+∝ N −2
+
+10−2
+
+L1ux /ũ
+
+B
+
+L1 y /ũ
+∝ N −2
+
+10−4
+
+10−4
+10−5
+
+−5
+
+10
+
+10−6
+10−6
+
+102
+
+103
+
+102
+
+N
+
+N
+
+Fig. 5.— L1 global truncation error norms for the primitive variables as a
+function of linear grid resolution N in the Balsara vortex test. Here, the advective speed and magnetic-to-kinetic energy ratio are ũ = 10−2 and βK = 1,
+respectively. Errors in velocity and magnetic field are normalized by ũ, which
+is appropriate since ũ = B̃ in this case. Errors in mass density and thermal
+pressure are rescaled by the ram pressure ũ2 . The black dotted line indicates
+second-order scaling.
+
+×107
+
+Fig. 7.— L1 global truncation error norms in temperature as functions of
+the linear grid resolution in the 2D thermal diffusion test. Different colors
+correspond to different values of the parabolic CFL number CFLp , while the
+black dotted line indicates second-order scaling.
+
+101
+
+CFLp = 1
+CFLp = 10
+CFLp = 100
+CFLp = 1000
+error ∝ N −1
+
+1.08
+
+0.8
+
+1.06
+
+0.6
+
+1.04
+
+0.4
+
+1.02
+
+0.2
+
+1.00
+−4
+
+−2
+
+0
+
+2
+
+100
+
+0.0
+
+4
+
+102
+
+x [R ]
+
+103
+
+N
+
+Fig. 6.— Temporal evolution of the temperature profile along the x-direction
+in the 2D thermal diffusion test.
+
+solution (see, e.g., Mandal et al. 2023),
+
+
+
+2
+
+1 r4
+1 r6
+
+− 23 πρ0 r02 + 4πρ0 r6 − 10
+2 + 42 r 4 ,
+r
+ϕ(r) = 
+0
+0
+
+− M ,
+
+r ≤ r0 ,
+
+r > r0 ,
+(135)
+where the mass of the sphere is M = 32πρ0 r03 /105. The radial
+gravitational acceleration is
+
+
+
+3
+5
+
+
+−4πρ0 3r − 25 rr2 + 17 rr4 , r ≤ r0 ,
+(136)
+gr (r) = 
+0
+0
+
+− M ,
+r>r .
+r
+
+r2
+
+errorT−mode /erroreint −mode
+
+1.0
+
+t [τ]
+
+T [K]
+
+1.10
+
+103
+
+0
+
+We run a series of tests where the linear resolution of the grid N spans 16 to 512, doubling the
+resolution each time.
+The spatial domain spans
+(x, y, z) ∈ (−0.5, 0.5) × (−0.5, 0.5) × (−0.5, 0.5).
+The grid
+is non-uniform, with physical coordinates mapped from
+logical coordinates as, e.g.,
+
+1
+xi =
+ηi + η5i ,
+(137)
+4
+
+Fig. 8.— Ratio of the L1 error norms in temperature as a function of the
+linear grid resolution for the temperature-based and specific internal energybased formulations of the thermal diffusion operator in the 2D thermal diffusion test. Different colors indicate different parabolic CFL numbers, CFLp ,
+while the black dotted line shows first-order scaling. The horizontal black
+dashed line serves to guide the eye. At high resolution for CFLp = 1000,
+the apparent first-order scaling arises because the specific heat at constant
+volume is held fixed throughout the super-time-stepping solve.
+
+where
+
+2
+ηi = −1 + (i − 1) .
+(138)
+N
+Analogous expressions are used to compute the y− and
+z−coordinates. The chosen mapping yields a linear resolution at the origin that is twice that of a uniform Cartesian grid
+with the same number of grid cells (see Fig. 9). Monopole
+boundary conditions are used for the gravitational potential,
+and the tolerance for the BiCGSTAB convergence criterion is
+set to 10−10 . The initial gravitational potential guess used by
+the linear solver is set to 0 everywhere.
+Since the mass density vanishes outside the sphere, the relative error normalized by density given in Eq. (104) is not
+meaningful. Therefore, during the BiCGSTAB solve, we
+
+20
+
+A similar procedure is applied to the radial component of
+gravity.
+The error scaling is shown in Fig. 10. Both the global truncation errors for the gravitational potential and radial gravitational acceleration exhibit second-order convergence from the
+coarsest to finest of the tested grids. Although the discretization of Poisson’s equation used in PHLEGETHON is formally
+only first-order accurate, on smoothly varying grids, like the
+one employed in this test, the leading first-order error term becomes subdominant compared to the second-order error term
+for the grid resolutions considered.
+Finally, in Fig. 11 we show the number of BiCGSTAB iterations required to reach a convergence threshold of 10−10
+across all grids. When rescaling the iteration count by the
+linear resolution, the curves nearly overlap, suggesting that
+the complexity of our Poisson solver is O(N 4 ). This scaling is steeper than that of multigrid methods, which typically
+is O(N 3 log N) (e.g., LeVeque 2007). Nevertheless, our approach remains fast enough that the gravity solve is only a
+few times more expensive than the Godunov step up to grids
+with 10243 cells (see Table 2), making it suitable even for
+production-quality simulations (see, e.g., Lau et al., in prep.).
+3.5. One-zone network calculation
+Here, we perform one-zone nuclear reaction network calculations. The test is carried out on a logical grid consisting of a single cell, with the Godunov solver disabled. The
+mass density and temperature are initialized at t = 0 with values ρ = 104 g cm−3 and T = 2 × 108 K and are held fixed
+throughout the calculation. These thermodynamic conditions are typical of the convective phase preceding a classical
+nova explosion on a carbon–oxygen white dwarf star (e.g.,
+Casanova et al. 2016; José et al. 2020).
+We track nine isotopes, p, 4 He, 12 C, 13 C, 13 N, 14 N, 15 N, 14 O,
+and 15 O, which are connected through a network of eight reactions involved in the hot-CNO cycle (see, e.g., Iliadis 2007),
+13
+
+N(β+ )13 C, 13 N(p, γ)14 O,
+O(β+ )14 N, 13 C(p, γ)14 N,
+15
+O(β+ )15 N, 14 N(p, γ)15 O,
+12
+C(p, γ)13 N, 15 N(p, α)12 C.
+
+(141)
+
+The initial composition is Xp = 0.5, X4 He = 0.25, and
+X12 C = 0.25. The corresponding molar fractions are computed
+as Yl = Xl /Al .
+As a reference solution, we use results obtained with the
+established PYNUCASTRO code (Smith et al. 2023). The same
+thermodynamic conditions, reaction network, initial composition, and time step sizes are used in PYNUCASTRO, but the governing system of ODEs is solved with the fifth-order accurate
+
+−0.04
+
+0.2
+
+y
+
+−0.08
+
+−0.2
+
+−0.10
+
+−0.4
+
+−0.12
+
+φ
+
+−0.06
+
+0.0
+
+3.0
+2.5
+
+∆x/∆xuniform
+
+After solving Poisson’s equation, we compute the L1 error
+norm for the gravitational potential using the numerical solution, ϕn , and the analytical solution, ϕa , provided in Eq. (135),
+as
+N N N
+1 XXX
+L1 (N) = 3
+|ϕa,i, j,k − ϕn,i, j,k |.
+(140)
+N i=1 j=1 k=1
+
+14
+
+0.4
+
+(139)
+
+2.0
+1.5
+1.0
+0.5
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+x
+
+Fig. 9.— Top: slice in the z = 0 plane of the numerical solution for the
+gravitational potential ϕ from the Poisson solver accuracy test on a 323 grid.
+Solid lines delineate the grid cell boundaries. Bottom: ratio of the grid cell
+size in the x-direction on the non-uniform grid used in this test problem to
+that of a uniform grid with the same number of cells.
+
+gr
+φ
+∝ N −2
+
+10−3
+
+L1 error in gr and φ
+
+monitor the residual as
+v
+u
+t
+N N N
+i2
+1 XXXh
+(Lϕ)i, j,k − 4πρi, j,k .
+3
+N i=1 j=1 k=1
+
+10−4
+
+10−5
+
+10−6
+102
+
+N
+Fig. 10.— L1 global truncation error norm as a function of the linear grid
+resolution for the radial gravitational acceleration (circles) and gravitational
+potential (triangles) in the Poisson solver accuracy test. The black dotted
+lines indicate the second-order scaling.
+
+21
+
+BiCGSTAB residual
+
+104
+
+163
+323
+643
+1283
+2563
+5123
+
+101
+10−2
+10−5
+10
+
+−8
+
+10−11
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+3.0
+
+# iter / N
+Fig. 11.— BiCGSTAB residual as a function of the number of iterations,
+with the iteration count rescaled by the linear grid resolution, for the Poisson
+solver accuracy test. Results are shown for grids ranging from 163 to 5123 .
+
+Radau solver for stiff systems (Hairer & Wanner 1996), using a relative tolerance of 10−14 . In the PHLEGETHON run, the
+second-order TR-BDF2 solver is employed (see Sect. 2.13).
+In both calculations, electron screening is disabled so that the
+comparison isolates differences arising purely from the time
+integration of the reaction network. Reaction rates are taken
+from the JINA REACLIB library (Cyburt et al. 2010, version
+2021-06-24).
+In these one-zone models, the time step is not constrained
+by the hyperbolic CFL condition. Instead, it is adaptively updated according to
+"
+#
+Yl
+∆t → ∆t min
+,
+(142)
+{Yl >10−10 } max(10−15 , |∆Yl |)
+
+where ∆Yl = Yln+1 − Yln denotes the change in the molar fraction of species l during a time step. The conservative factor
+10−15 in Eq. (142) prevents division by zero when ∆Yl = 0.
+The initial time step is set to ∆t = 10−9 s, which is about five
+times smaller than what predicted by Eq. (142) after the first
+time step integration. This procedure ensures that even the
+fastest reactions are accurately resolved in time and allows
+the results from the two codes to be compared over a wide
+range of temporal scales.
+Figure 12 shows the temporal evolution of the mass fractions until t = 104 s, which proceeds as follows:
+
+(i) At early times (t ≲ 10−1 s), the network is dominated
+by rapid proton-capture reactions. The initial 12 C seed
+is quickly processed through 12 C(p, γ)13 N, leading to
+a rapid increase in the abundance of 13 N. Subsequent
+proton capture produces 14 O through 13 N(p, γ)14 O. The
+much slower β+ decay of 13 N (which occurs on a
+timescale of ∼ 103 s ) generates only a ∼ 10−6 mass
+fraction abundance of 13 C. During this phase, the abundance of 12 C decreases rapidly as it is converted into
+heavier CNO isotopes.
+(ii) At intermediate times ( 10−1 s ≲ t ≲1 s ) as the abundance of 12 C drops below 10−2 , proton captures on 12 C
+become inefficient and the reaction flow becomes regulated by proton captures on 13 N. As a result, 14 O
+
+reaches an abundance of ≈ 0.3, even exceeding that of
+4
+He.
+(iii) At later times ( 1 s ≲ t ≲ 103 s ), the system approaches
+a quasi-steady state in which CNO nuclei act as catalysts that mediate the conversion of hydrogen into helium. The abundances of the intermediate isotopes vary
+only slowly as a balance is established between proton
+captures and β+ decays along the cycle. The dominant
+reservoirs within the CNO group are 14 O and 15 O.
+(iv) Finally, at late times (t ≳ 103 s), the decreasing proton
+abundance leads to the gradual termination of efficient
+hydrogen burning. As hydrogen is converted into 4 He,
+the helium mass fraction increases, while the reaction
+flow through the CNO cycle diminishes and unstable
+isotopes decay away exponentially.
+Both codes produce solutions that agree to very high accuracy at all times. The maximum relative difference in the
+mass fractions between t = 1 and t = 100 s , when none of
+the abundances are negligibly small, is approximately 10−5 .
+We also compare the time-integrated nuclear energy release
+per unit mass, one of the key quantities in reacting-convective
+flows,
+X
+∆eN (t) = NA
+ml c2 [Yl (t) − Yl (0)] .
+(143)
+l
+
+In this test, however, it is not used to update the specific internal energy. The evolution of ∆eN is shown in Fig. 13. Because
+∆eN increases monotonically with time, it provides a convenient integrated diagnostic of the network evolution. Over the
+course of the calculation, the time-integrated nuclear energy
+release increases by approximately three orders of magnitude,
+while the relative difference between the results of the two
+codes remains below ≈ 10−4
+In production-quality simulations of stellar interiors, fast
+transients in a nuclear network often occur on timescales
+much shorter than the hyperbolic CFL time step. Updating
+the isotopes during the network solve using the time-step criterion based on Eq. (142) is therefore computationally infeasible. To test the robustness of our nuclear network solver
+when dealing with stiff systems and large time steps, we rerun the one-zone hot-CNO cycle model using a fixed time step
+of ∆t = 1 s, which is significantly longer than the initial fast
+transient dominated by proton captures on 12 C and 13 N. The
+result is shown in Fig. 14. Although the implicit solver overshoots the reference solution during the first few time steps
+for some abundances, the solution subsequently recovers the
+correct asymptotic values on longer timescales.
+To better assess the scaling of global temporal truncation
+errors generated by our implicit methods, we compute the L1
+relative error norm in the time-integrated nuclear energy release at t = 102 s between adjacent time step resolutions as
+L1 (∆t) =
+
+|∆eN,∆t − ∆eN,∆t/2 |
+.
+∆eN,∆t/2
+
+(144)
+
+For this test, the nonlinear convergence tolerance in Eq. (120)
+is set to a conservative value of 10−15 . The results shown in
+Fig. 15 confirm the expected first and second-order scaling
+for BE and TR-BDF2, respectively, as the time step is decreased. The error deviates from the predicted scaling only at
+the smallest tested time-step values, likely because the global
+
+22
+100
+13 N
+
+10−2
+
+14 N
+
+14 O
+
+10−8
+
+10−12
+10−3
+
+10−2
+
+10−1
+
+100
+
+101
+
+14 N
+
+12 C
+
+10−6
+
+102
+
+103
+
+reference
+∆t = 1 s
+
+10−12
+10−3
+
+104
+
+15 N
+
+13 C
+
+10−10
+
+PYNUCASTRO
+PHLEGETHON
+
+15 O
+
+14 O
+
+10−8
+
+15 N
+
+13 C
+
+13 N
+
+10−4
+12 C
+
+10−2
+
+10−1
+
+100
+
+t [s]
+
+101
+
+102
+
+103
+
+104
+
+t [s]
+
+Fig. 12.— Time evolution of the isotopic mass fractions in the one-zone
+hot-CNO cycle calculation. The colored solid lines show the results obtained
+with the PYNUCASTRO code, while the black dotted lines correspond to the
+results from PHLEGETHON.
+
+×10−4
+
+1019
+
+4 He
+
+p
+
+10−2
+
+15 O
+
+10−6
+
+10−10
+
+100
+
+X
+
+X
+
+10−4
+
+4 He
+
+p
+
+Fig. 14.— Time evolution of the isotopic mass fractions in the one-zone
+hot-CNO cycle calculation. The colored solid lines show a reference solution
+obtained with PHLEGETHON using the adaptive time step criterion in Eq. (142),
+while the dotted black lines correspond to results obtained with a fixed time
+step of ∆t = 1 s. The downward-pointing arrow indicates the end of the first
+integration step.
+
+0
+1017
+
+−1
+
+1016
+
+−2
+
+PYNUCASTRO
+PHLEGETHON
+
+1015
+10−3
+
+10−1
+
+101
+
+103
+
+t [s]
+Fig. 13.— Time evolution of the time-integrated nuclear energy release
+per unit mass in the one-zone hot-CNO cycle calculation. The red solid
+line shows the result obtained with PYNUCASTRO, while the black dotted line
+shows the result from PHLEGETHON. The blue solid curve represents the relative difference between the two codes.
+
+truncation error becomes comparable to the accumulated numerical residuals associated with the finite convergence tolerance of the Newton–Raphson solver. These tests therefore
+demonstrate that the nuclear network solvers in PHLEGETHON
+can robustly and accurately integrate stiff reaction systems relevant to stellar-interior applications.
+3.6. Burning-radiating buoyant bubble
+We design this test problem to verify multiple numerical
+schemes and physics modules simultaneously, including wellbalancing, the nuclear reaction network solver, the thermal
+diffusion solver, and a tabulated equation of state. In particular, we present simulations of a low-Mach buoyant bubble
+rising in an isentropic and hydrostatic background. Similar
+tests have been presented in the literature (see, e.g., Zingale
+et al. 2019; Edelmann et al. 2021). Here, the problem is set
+up so that the bubble undergoes nuclear burning, while the
+energy excess generated within it is allowed to diffuse away.
+The balance between these two processes regulates the bubble’s buoyant acceleration.
+
+L1 relative error in ∆eN (t = 100 s)
+
+∆eN [erg g−1 ]
+
+1018
+
+relative difference
+
+1
+BE
+TR-BDF2
+∝ ∆t
+∝ (∆t)2
+
+10−2
+10−4
+10−6
+10−8
+10−10
+
+10−4
+
+10−3
+
+10−2
+
+10−1
+
+100
+
+101
+
+∆t [s]
+Fig. 15.— L1 relative error norm in the time-integrated nuclear energy release up to t = 100 s. These errors are functions of the time step, measured
+between simulations with adjacent time step resolutions in the one-zone hotCNO cycle model. Results are shown for the BE (circles) and TR-BDF2
+(triangles) methods. The black dotted and dash-dotted lines indicate firstand second-order scaling, respectively.
+
+The background hydrostatic stratification is assumed to be
+isentropic, i.e., ∇ = ∇ad , where ∇ = d ln T/d ln P and ∇ad is
+the adiabatic temperature gradient. The composition of the
+background medium is pure 12 C. The system is assumed
+to be spherically symmetric, with temperature and density
+at r = 0 given by T 0 = 109 K and ρ0 = 107 g cm−3 . These
+thermodynamic conditions are typical of the interiors of, e.g.,
+electron-capture or core-collapse supernova progenitors (e.g.,
+Takahashi et al. 2013; Müller 2020). To account for effects
+of electron degeneracy, in these simulations we employ the
+Helmholtz EoS.
+The initial stratification is generated numerically by solving the coupled system of ODEs enforcing hydrostatic equi-
+
+23
+librium and an adiabatic temperature gradient,
+∂r P = ρgr ,
+T
+∂r T = − ∇ad ,
+HP
+
+(145)
+(146)
+
+subject to the constraints
+ρ = ρEoS (P, T, X12 C = 1),
+P
+gr = −
+,
+ρHP
+
+(147)
+(148)
+
+where HP is the pressure scale height. Its value is fixed such
+that HP = Rmax /3, where Rmax = c s,0 (0.75 s) = 2.8 × 108 cm
+is the radial extent of the domain and c s,0 is the sound speed
+at r = 0 derived from the EoS. With this choice of parameters,
+the pressure decreases by a factor of ≈ 20 across the domain.
+The mass density ρ is obtained from pressure, temperature,
+and composition, using a Newton–Raphson root-finding procedure analogous to that described in Sect. 2.2. Once the
+value of the mass density is retrieved, the adiabatic temperature gradient ∇ad is evaluated through a forward EoS call,
+(ρ, T, X12 C ) → ∇ad .
+
+(149)
+
+For the chosen parameterization, Eq. (145) admits the analytical solution
+!
+r
+P(r) = P0 exp −
+.
+(150)
+HP
+
+The coupled equations governing the stratification are integrated numerically using a fourth-order Runge–Kutta method
+on a 1D grid with 105 radial nodes. The integration starts
+from r = 0 with T 0 and P0 = PEoS (ρ0 , T 0 , X12 C ) and proceeds
+outward. Throughout the resulting stratification, the contribution of electron degeneracy to the total thermal pressure P is
+approximately 50%.
+The newly generated stratification is mapped onto a 3D
+spherical wedge spanning
+(r, θ, ψ) ∈ (Rmax /10, Rmax ) × (π/3, 2π/3) × (−π/6, π/6),
+
+where θ and ψ denote the colatitude and azimuthal angles,
+respectively. Reflecting boundary conditions are applied at
+all grid domain boundaries (see Sect. 2.11). The isentropic
+stratification is perturbed at r = Rmax /3 by replacing a small
+fraction of 12 C with 4 He according to
+ 
+
+
+∆X4 He cos2 2rπr̃b , r̃ ≤ rb ,
+X4 He (r̃) = 
+(151)
+0,
+r̃ > rb ,
+
+where
+p rb = Rmax /8 is the radius of the bubble,
+r̃ = (x − Rmax /3)2 + y2 + z2 , and X12 C = 1 − X4 He . Helium is allowed to burn into carbon via the 3α reaction,
+4
+
+He +4 He +4 He →12 C + γ.
+
+(152)
+
+The amplitude of the perturbation is set to ∆X4 He = 0.01. Inside the bubble, the temperature is recomputed at t = 0 to
+account for the modified composition while maintaining mechanical equilibrium,
+T (r ≤ rb ) = T EoS (ρ, P, Xl ).
+
+(153)
+
+This operation results in a negative temperature perturbation
+inside the bubble with an amplitude relative to the surrounding isentropic background of ≈ 5 × 10−3 .
+
+Thermal diffusion is enabled and the opacity is assumed to
+be spatially constant with value κ = 3 × 10−13 g cm−2 . This
+value is chosen such that the Péclet number
+ub Rmax
+Pe = 3κρrb
+≈ 0.1,
+(154)
+c
+implying efficient thermal diffusion over the rising time of the
+buoyant bubble. Here ub ∼ 3 × 106 cm s−1 is the characteristic initial rise velocity of the bubble and ρrb = 5 × 106 g cm−3
+is the mass density at the center of the bubble at t = 0.
+We run 3D, purely hydrodynamical simulations on grids
+with 323 , 643 , 1283 , and 2563 cells. In these simulations, deviation well-balancing is used (see Sect. 2.8). To treat fast
+thermal diffusion, we use the RKL2 STS method described
+in Sect. 2.10. The thermal diffusion operator is applied only
+to the temperature deviation according to Eq. (85). This approach allows us to simulate the two competing processes
+that determine the thermal content of the bubble (namely thermal diffusion and nuclear burning) without affecting the background stratification. On the 2563 grid, the ratio between the
+hyperbolic and parabolic CFL time steps is 169, which results in 26 RKL2 STS substeps. For these simulations, we
+use the PPH reconstruction method. The 3α reaction is coupled to the system of gas-dynamics equations and gravity using Strang splitting, and the nuclear network solver employs
+the TR-BDF2 implicit time stepper. Overall, the combined
+numerical methods are expected to achieve second-order accuracy.
+Figure 16 shows the evolution of the bubble from t = 0
+to t = 35 s on the 2563 grid. Within t ≈ 1 s, thermal energy
+is rapidly transported from the hotter surroundings into the
+cooler bubble, thereby increasing its temperature. This fast
+transient, alongside the increase in pressure due to heating
+by 3α, breaks the initial mechanical equilibrium causing the
+bubble to expand. The resulting buoyant acceleration remains
+weak, and the bubble reaches Mach numbers of M ∼ 0.01 by
+the end of the simulation. During the buoyant rise of the bubble, the helium mass decreases by roughly a factor of 5% as a
+result of the action of 3α. However, the entropy of the bubble
+remains almost unaltered over time because thermal diffusion
+acts as a balancing mechanism that efficiently removes excess entropy produced by nuclear burning. At later times, as
+the central region of the bubble develops the largest density
+fluctuations, it accelerates more rapidly than its surroundings,
+leading to the onset of nonlinear effects and the formation of
+a vortex ring along the bubble’s sides.
+To quantify the numerical convergence of the combined numerical methods, we employ Richardson extrapolation (see,
+e.g., Press et al. 1992). For three consecutive grids with refinement ratio r = 2, the estimated convergence rate of the
+numerical solution is computed as
+!
+||q3 − q2 ||1
+ln
+||q2 − q1 ||1
+p=
+,
+(155)
+ln(r)
+where qm denotes the numerical solution obtained on grid m.
+In Eq. (155) the || · ||1 operator denotes the L1 error norm, e.g.,
+||q2 − q1 ||1 =
+
+Nψ
+Nθ X
+Nr X
+X
+1
+|q2,i, j,k − q1,i, j,k |.
+Nr Nθ Nψ i=1 j=1 k=1
+
+(156)
+
+The subtraction of one numerical solution from another is performed by restricting the finer grid to the coarser grid through
+
+24
+volume averaging of a block of 2 × 2 × 2 neighboring cells.
+The convergence rates as functions of time obtained from
+the 323 –643 –1283 and 643 –1283 –2563 grid combinations are
+shown in Fig. 17. In particular, convergence rates are computed for the helium mass fraction, entropy, and temperature
+deviations from the background state. At early times in the
+evolution ( t ≲ 16 s ), while the bubble remains smooth, the
+code achieves the expected second-order convergence. At
+later times, the bubble develops steep gradients in both composition and entropy at the top of the bubble that are resolved
+by only a few grid cells, as shown in Fig. 18. As a result, the
+observed convergence rate drops to first order. The evolution
+of the convergence rate is consistent across the different grid
+combinations and variables considered. Moreover, thanks to
+the well-balanced property of PHLEGETHON, the background
+stratification remains isentropic to a level of ∼ 10−6 , with most
+of the residual error arising from the biquintic interpolation
+of the Helmholtz EoS table. Overall, this test demonstrates
+that PHLEGETHON can robustly handle the coupled effects of
+hydrodynamics, nuclear burning, thermal diffusion, and a realistic equation of state in a strongly stratified medium.
+3.7. Andrassy code-comparison setup
+As a last test, we run simulations of the code-comparison
+setup of Andrassy et al. (2022). This problem involves turbulent convective motions simulated in plane-parallel geometry, driven by a time-independent heat source placed close to
+the bottom boundary of the computational domain. The convection interacts with a convective boundary that is initially
+located at half the vertical domain height. This interaction excites waves and drives mixing processes, causing the convection zone to grow in mass and drift over time in the direction
+opposite to gravity. This setup provides an excellent test of
+whether a given combination of numerical schemes can accurately capture a broad range of hydrodynamic phenomena
+closely related to those occurring in convection zones and radiative regions inside stars. Because the resulting flows are
+both subsonic and strongly stratified, this problem also represents a good benchmark for testing the well-balanced and lowMach-number properties of the chosen numerical methods.
+The outputs of the simulations presented in Andrassy et al.
+(2022) are publicly available3 , making this test particularly
+well suited for direct quantitative comparisons with established stellar hydrodynamics codes, including SLH, PROMPI,
+FLASH, PPMSTAR, and MUSIC.
+The spatial domain spans (x, y, z) ∈ (−1, 1) × (1, 3) × (−1, 1).
+Gravity points in the negative y-direction and is described by
+a smooth function of the y-coordinate. The initial stratification is piecewise polytropic such that in the lower half of the
+domain the polytropic index is equal to the adiabatic index of
+the classical gas equation of state employed, γ = 5/3, yielding an isentropic stratification. This region smoothly connects
+to a subadiabatic stratification in the upper half of the domain.
+A detailed description of the initial conditions can be found in
+Andrassy et al. (2022).
+We run simulations at the intermediate 2563 grid resolution used in Andrassy et al. (2022) until t = 2000 in code
+units, testing both our PPH and limited fifth-order reconstruction methods. The Riemann solver used in both simulations is
+LHLLC. Boundary conditions are periodic at the lateral sides
+of the box and reflective in the direction of gravity.
+3 https://github.com/robert-andrassy/CoCoPy
+
+Figure 19 shows snapshots of the Mach number in the z = 0
+plane halfway through the simulation. Overall, the morphology of the flows in both of our simulations is similar to the
+results obtained by the five hydrodynamic codes considered
+in the 2022 study. The convection exhibits a relatively wide
+scale separation, with large-scale buoyant flows driven by the
+heat source that develop shear instabilities and undergo a turbulent cascade. The resulting Mach numbers in both simulations are similar, with typical values ranging from 0.02 to
+0.08, consistent with the results reported in Andrassy et al.
+(2022). Other properties of the system dynamics, such as the
+location of the upper convective boundary and the characteristic wavelengths of internal gravity waves visible in the upper
+part of the domain, are qualitatively similar in the two runs.
+Nonlinear effects give rise to marginal wave breaking, which
+appears to be captured in both simulations. However, the limited fifth-order reconstruction method produces smaller-scale
+structures in both the convective and stable regions. This result is consistent with the findings of Leidi et al. (2024), who
+showed that higher-order reconstruction methods tend to yield
+finer-scale flow structures in both convection and wave motions.
+Similar to the codes tested in Andrassy et al. (2022),
+PHLEGETHON relies on the implicit large-eddy simulation
+(ILES) approach to model viscous dissipation of kinetic energy in turbulent flows. To verify the ILES properties of
+the methods used in our code, we compute the kinetic energy power spectrum across the y = 1.7 plane in the convective
+q layer as a function of the horizontal wavenumber
+kh = k2x + ky2 . The spectrum is averaged over the time interval t ∈ (500, 2000) to suppress statistical variations arising from the chaotic nature of the turbulent flows. The
+results are shown in Fig. 20, where we compare them to
+those of the other hydrodynamic codes used in the original
+code-comparison study. Overall, there is excellent agreement
+with the other codes, especially in the inertial range of the
+spectrum, where the scaling of kinetic power follows Kolmogorov’s −5/3 law . Differences between codes become
+more apparent in the viscous range, where the amount of numerical dissipation depends on the specific combination of
+methods employed. PHLEGETHON’s solutions closely follow
+that of SLH up to kh = 50, beyond which the power resulting
+from the simulation using PPH decreases significantly relative
+to SLH. At the Nyquist wavelength, the limited fifth-order reconstruction method yields the least dissipative scheme in the
+ensemble after SLH, which employs the flux-splitting-based
+AUSM+ -up Riemann solver (Liou 2006) and a semi-discrete
+adaptation of the piecewise-parabolic method of Colella &
+Woodward (1984). Figure 20 also shows kinetic energy power
+spectra computed at y = 2.7, which lies in the convectivelystable region. Again, we observe very good agreement with
+the other codes, with the largest spread occurring near the
+Nyquist wavelength where numerical dissipative processes
+dominate the dynamics of the waves.
+The test problem includes a passive scalar whose abundance
+at t = 0 is zero in the adiabatic layer while smoothly transitioning to unity in the subadiabatic part of the stratification.
+This passive scalar acts as a tracer for the fluid in the stable
+region, so it allows the position of the boundary between the
+convective and stable regions to be tracked over time. This
+result is obtained by locating the steepest radial gradient in
+horizontal averages of the scalar. In fact, convection efficiently mixes any scalar abundance that enters the convec-
+
+25
+t=5 s
+
+t = 15 s
+
+t = 20 s
+
+t = 25 s
+
+t = 35 s
+
+0.0100
+
+0
+
+0.0050
+0.0025
+
+−1
+
+0
+12
+
+z [108 cm]
+
+−1
+
+11
+
+1
+
+0.01
+
+0
+
+0.00
+
+−1
+
+−0.01
+
+1
+
+0.02
+
+0
+
+0.01
+
+−1
+1
+
+2
+
+x [108 cm]
+
+1
+
+2
+
+x [108 cm]
+
+1
+
+2
+
+x [108 cm]
+
+1
+
+2
+
+x [108 cm]
+
+1
+
+2
+
+s/sb − 1
+
+z [108 cm]
+
+13
+
+log10 ė3α / erg g−1 s−1
+
+0.0000
+14
+
+1
+
+z [108 cm]
+
+X4 He
+
+0.0075
+
+Mach
+
+z [108 cm]
+
+1
+
+0.00
+
+x [108 cm]
+
+Fig. 16.— Slices at ψ = 0 showing the time evolution of the helium mass fraction, specific energy generation rate from the 3α reaction, specific entropy
+deviations from the background isentropic state, and Mach number in the burning–radiating buoyant bubble problem. The panels show results computed on a
+2563 spherical wedge grid.
+
+tive layer, so the steepest radial gradient in X naturally develops at the convective boundary. This procedure enables
+us to quantify how much mass has been entrained into the
+convective layer. CBM plays a crucial role in stellar structure and evolution (Zahn 1991), so it is vital that the numerical methods implemented in the code can capture this process accurately. In Fig. 21, we show the time evolution of
+the total mass entrained into the convective layer in the two
+PHLEGETHON simulations, alongside the results obtained by
+Andrassy et al. (2022). Both of our tested methods yield results consistent with the five hydrodynamic codes considered
+in the original study. At t = 2000 in code units, our results
+show a relative deviation from the reference solution (computed on a 5123 grid with the PPMSTAR code) of 5% for the
+simulation using the limited fifth-order reconstruction method
+and and 1% for the simulation using PPH. Overall, the results
+presented in this section are encouraging because they confirm that PHLEGETHON can accurately resolve hydrodynamic
+phenomena relevant to stellar interiors, achieving a level of
+accuracy comparable to established codes in the field.
+
+4. MAGNETOHYDRODYNAMIC SIMULATION OF A
+
+CORE-COLLAPSE SUPERNOVA PROGENITOR
+In this section, we apply a combination of the numerical methods described in Sect. 2 to model an astrophysical
+scenario. In particular, we consider an extended convective
+shell in a massive star shortly before the onset of core collapse. This setup involves the interplay of several physical processes, including turbulent convection, small-scale dynamo action, nuclear energy generation, and neutrino cooling. The simulation requires the use of a nuclear reaction
+network solver, an electron–positron equation of state, constrained transport for evolving the magnetic field while preserving the solenoidal constraint, well-balanced methods to
+maintain the hydrostatic background stratification, and lowdissipation Riemann solvers to reduce numerical dissipation
+when modeling the subsonic convective flows. Therefore, the
+considered setup constitutes a demanding test problem that allows us to assess the reliability of PHLEGETHON in productionquality astrophysical simulations where multiple complex numerical methods are used concurrently.
+
+26
+3.00
+
+3.0
+
+2.75
+
+2.5
+
+0.08
+PPH
+
+2.0
+
+0.07
+
+2.25
+
+y
+
+1.5
+
+0.5
+0
+
+0.06
+
+1.75
+
+X4 He
+s
+T − Tb
+323 − 643 − 1283
+643 − 1283 − 2563
+
+1.0
+
+2.00
+
+1.50
+
+0.05
+
+1.25
+
+10
+
+20
+
+1.00
+3.00
+
+30
+
+t [s]
+
+2.75
+
+Lim 5th
+0.03
+
+2.50
+2.25
+
+y
+
+Fig. 17.— Convergence rates as functions of time for the helium mass fraction, specific entropy, and temperature deviation from the hydrostatic background state in the burning–radiating buoyant bubble problem. Dotted and
+dashed-dotted lines represent results obtained from Richardson extrapolation
+using the 323 , 643 , and 1283 grids and the 643 , 1283 , and 2563 grids, respectively. The two horizontal black dashed lines indicate first- and second-order
+convergence rates and serve as guides to the eye.
+
+0.04
+
+Mach
+
+convergence rate
+
+2.50
+
+0.02
+
+2.00
+1.75
+
+t=5 s
+t = 15 s
+t = 20 s
+t = 25 s
+t = 35 s
+
+X4 He
+
+0.0075
+0.0050
+0.0025
+
+0.01
+
+1.50
+1.25
+1.00
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+1.0
+
+0.00
+
+x
+
+Fig. 19.— Snapshots of the Mach number in the z = 0 plane in the codecomparison benchmark of Andrassy et al. (2022) run with PHLEGETHON on
+2563 grids at t = 1000. The two panels show results obtained with our PPH
+and limited fifth-order reconstruction methods, respectively. The white dotted
+lines represent the location of the upper boundary of the adiabatic region at
+t = 0.
+
+0.0000
+
+s/sb − 1
+
+0.010
+
+0.005
+
+0.000
+0.5
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+r [108 cm]
+Fig. 18.— Radial profiles of helium mass fraction and deviations of specific entropy from the hydrostatic background state in the burning–radiating
+buoyant bubble problem, along the ray at θ = π/2 and ψ = 0.
+
+4.1. Initial conditions
+We consider, as input model for the MHD simulation, a
+1D stellar evolution calculation produced by Whitehead et al.
+(2026) using revision 10398 of the Modules for Experiments
+in Stellar Astrophysics (MESA) code (Paxton et al. 2011,
+2013, 2015, 2018, 2019). Whitehead et al. (2026) presents a
+large grid of low-metallicity (Z = 0.001) massive-star (10–45
+M⊙ ) models, investigating CBM with traditional, f0p02,
+versus updated, SH21, prescriptions (see Whitehead et al.
+2026, for more details about the f0p02 and SH21 CBM
+prescriptions). We choose for our initial conditions the model
+25f0p02 with initial mass 25 M⊙ from grid f0p02, which
+
+assumes exponential diffusive CBM with f = 0.02 above
+every upper convective boundary and f = 0.004 below every
+lower convective boundary (see Whitehead et al. 2026, for
+more details). Our choice is motivated by the fact that this
+model presents, right before collapse, a large convective shell
+above the iron core, as a product of the merging of multiple
+shells of different composition. The size of the convective
+zone, the presence of vigorous turbulent convective flows,
+and the multiple nuclear burning reactions occurring inside
+the shell represent an interesting but complex physical problem. PHLEGETHON incorporates all the numerical methods
+needed to model these different physical mechanisms, and
+most importantly their interplay, thus demonstrating the full
+capabilities of the code.
+Figure 22 shows the structure evolution diagram of the stellar
+evolution model. A zoom-in on this area is presented in the
+right panel of Fig. 22, showing the time domain covered by
+our 3D simulation, which corresponds to the final evolution
+of the convective shell until the time of predicted collapse.
+4.2. Mapping the stratification onto the 3D grid
+The initial conditions for the 3D simulation are extracted
+approximately one hour before the predicted core collapse.
+The stellar stratification, including mass density, thermal pres-
+
+27
+0.08
+y = 1.7
+
+−4
+
+10
+
+0.07
+0.06
+
+10−6
+
+FLASH
+MUSIC
+PPMSTAR
+PROMPI
+SLH
+PPMSTAR, 5123
+PHLEGETHON, PPH
+PHLEGETHON, Lim 5th
+
+−7
+
+10
+
+10−8
+−9
+
+10
+
+0.05
+∝ kh−5/3
+
+ment
+
+u∗ u/2
+
+10−5
+
+0.03
+0.02
+0.01
+0.00
+
+10−5
+
+y = 2.7
+
+10−6
+
+0
+
+500
+
+1000
+
+1500
+
+2000
+
+t
+Fig. 21.— Total mass entrained from the upper stable region into the convective layer as a function of time in the code-comparison test problem of
+Andrassy et al. (2022) run on 2563 grids. Results obtained with our PPH and
+limited fifth-order reconstruction methods are shown alongside the outputs
+from the original code-comparison study.
+
+10−7
+
+u∗ u/2
+
+FLASH
+MUSIC
+PPMSTAR
+PROMPI
+SLH
+PPMSTAR, 5123
+PHLEGETHON, PPH
+PHLEGETHON, Lim 5th
+
+0.04
+
+10−8
+10−9
+10−10
+10−11
+10−12
+100
+
+101
+
+102
+
+kh
+Fig. 20.— Power spectra of specific kinetic energy as functions of the horizontal wavenumber kh in the code-comparison test problem of Andrassy
+et al. (2022), for simulations run with the PPH and limited fifth-order reconstruction methods on 2563 grids. The power spectra shown here include
+those presented in Andrassy et al. (2022), which are publicly available at
+https://github.com/robert-andrassy/CoCoPy. The top panel shows spectra
+computed in the convective layer at y = 1.7, while the bottom panel shows
+spectra computed in the subadiabatic region at y = 2.7. All spectra are averaged over the time interval t ∈ (500, 2000) in code units. In the top panel,
+the black dashed line represents Kolmogorov’s kh−5/3 scaling law.
+
+sure, temperature, chemical composition, and gravitational
+acceleration, is mapped onto a uniform 3D Cartesian grid
+with 5123 cells in 4π geometry. While both codes use a
+similar EoS, to ensure consistency with the EoS used in
+the PHLEGETHON model, the input stratification is first reintegrated in hydrostatic equilibrium while enforcing the profiles in T , A, and Z as functions of radius from the MESA model
+using the Helmholtz EoS. The resulting stratification is shown
+in Fig. 23 for mass density, temperature, thermal pressure,
+specific entropy, A, and degeneracy parameter,
+η=
+
+Φe
+,
+kb T
+
+(157)
+
+where Φe is the electron chemical potential and kb is Boltzmann’s constant. Relative deviations with respect to the input
+MESA model after the re-integration are at most 2%.
+The mapped model spans radii from 0.6 × 109 cm to
+6 × 109 cm. We apply the inscribed boundaries technique (see
+Sect. 2.11) and place solid spherical boundaries at the inner
+and outer domain radii. This choice ensures that the lower
+boundary of the convective shell coincides with the innermost
+
+embedded sphere. The computational domain thus includes
+the nearly isentropic convective shell and a narrow subadiabatic helium-rich layer above it. Within this spatial domain,
+the temperature reaches a maximum of 2×109 K at the base of
+the convective shell. The pressure and density decrease across
+the mapped radial domain by factors of 2159 and 457, respectively, corresponding to approximately 7.7 pressure scale
+heights and 6.1 density scale heights. At the base of the convective shell, electron degeneracy accounts for roughly 7% of
+the thermal pressure, whereas radiation pressure accounts for
+approximately 46%. Unlike in, e.g., Müller et al. (2016) or
+Yadav et al. (2020), here the lower boundary of the convective shell is held fixed in space and time for simplicity.
+The hydrostatic background stratification is seeded with
+a low-amplitude thermal pressure white noise perturbation
+(δP/P ∼ 10−4 ) to break spherical symmetry. Moreover, at
+t = 0, we introduce a weak magnetic seed field which is computed from a vector potential B = ∇×A, with A = (A x , Ay , Az )
+being defined on a compact support as
+
+ 
+
+
+A0 cos2 πr̃2 , r̃ ≤ 1,
+Aψ (r̃) = 
+
+0,
+r̃ > 1,
+(158)
+A x (r̃, ψ) = −Aψ (r̃) sin ψ,
+Ay (r̃, ψ) = Aψ (r̃) cos ψ,
+Az (r̃, ψ) = 0.
+
+Here, ψ is the polar angle and
+q
+1
+r̃ =
+(x − x0 )2 + (y − y0 )2 + z2 ,
+ay
+
+(159)
+
+where
+
+x0 = Rc cos(ψ),
+y0 = Rc sin(ψ).
+
+(160)
+(161)
+
+This choice of vector potential results in a purely toroidal seed
+field. Because rotation is absent in this setup, we expect a
+small-scale turbulent dynamo to dominate the magnetic field
+amplification (see, e.g., Batchelor 1950; Schekochihin et al.
+
+28
+
+25
+
+7
+
+1015
+
+6
+
+1014
+
+20
+
+radius (109 cm)
+
+5
+
+Mr /M
+
+15
+
+10
+
+6.00 M
+
+5.00 M
+
+1
+
+6
+
+4
+
+2
+
+0
+
+−2
+
+log10 (t∗ /yrs)
+
+−4
+
+1012
+
+3
+
+5
+
+0
+
+1013
+
+4
+
+2
+
+↑
+
+7.00 M
+
+1011
+
+4.00 M
+3.00 M
+
+1010
+
+2.00 M
+1.00 M
+109
+
+0
+−6
+
+−8
+
+−20000 −15000 −10000 −5000
+Age - ageref [s]
+
+0
+
+5000
+
+Fig. 22.— Left: Structure evolution diagram of the f0p02 25 M⊙ 1D MESA model as a function of the time left until the predicted collapse of the star (in years,
+log scale). Convective zones are drawn in blue, CBM zones in purple. The red arrow indicates the time and shell where initial conditions were extracted. Right:
+Zoom-in on the C–Ne–O shell merger, as a function of time in seconds from the start of the 3D simulations. In color scale, the kinetic energy per unit mass
+(erg g−1 ). The black lines are isomass contours. The vertical blue bars represent the radial and time extent of the 3D simulations.
+
+2004). The strength and topology of the seed field do not
+significantly affect the dynamo action or the saturated field
+strength in the nonlinear regime, provided the seed is weak
+enough not to directly influence the turbulent flows (Seta
+& Federrath 2020). Therefore, we set ay = 0.6 × 109 cm,
+Rc = 3.3 × 109 cm, and A0 = 0.6 × 1013 G cm, resulting in a
+maximum seed field Bmax ≈ 104 G, which is much weaker
+than the expected convective equipartition field ( ∼ 1010 G).
+
+4.3. Methods
+Gravity is held fixed throughout the simulation, and we
+employ the deviation method (see Sect. 2.8) to preserve the
+hydrostatic equilibrium of the background stratification. The
+Helmholtz equation of state with Coulomb corrections is used
+(see Sect. 2.2). Spatial reconstruction is performed using
+the PPH method and the Riemann solver is LHLLD (see
+Sects. 2.5 and 2.6). Auxiliary indices γe and γc are reconstructed following the procedure described in Sect. 2.5. For
+this simulation, diffusive heat transport is not considered.
+Nuclear burning is modeled with a 12-species C-, Ne-, and
+O-burning network, including p, 4 He, 12 C, 16 O, 20 Ne, 23 Na,
+24
+Mg, 28 Si, 31 P, 32 S, 36 Ar, and 40 Ca. The initial composition
+inside the convective shell consists of 60−80% 16 O, 9% 24 Mg,
+6 − 10% 28 Si, 2 − 5% 20 Ne, with minor contributions (≈ 1%)
+from 32 S and 12 C. In the subadiabatic layer above the convective shell, the mass fraction of 4 He increases outward to
+about 60%, while that of 12 C is approximately 20% (see also
+
+Fig. 28). The network includes
+12
+16
+3α(γ)12 C,
+C(α, γ)16 O,
+O(α, γ)20 Ne,
+20
+24
+20
+23
+23
+Ne(α, γ) Mg,
+Ne(α, p) Na,
+Na(p, γ)24 Mg,
+23
+20
+24
+28
+28
+Na(p, α) Ne,
+Mg(α, γ) Si,
+Si(α, γ)32 S,
+31
+32
+32
+36
+36
+P(p, γ) S,
+S(α, γ) Ar,
+Ar(α, γ)40 Ca,
+12
+12
+23
+12
+12
+20
+16
+C( C, p) Na,
+C( C, α) Ne, O(16 O, p)31 P,
+16
+16
+28
+16
+O( O, α) Si,
+O(12 C, α)24 Mg 20 Ne(12 C, p)31 P
+20
+12
+28
+Ne( C, α) Si,
+(162)
+and their reverse, for a total of 38 reactions. Nuclear burning is coupled to the MHD equations using Godunov splitting and solved with the implicit backward-Euler time integration scheme. Thermal neutrino losses are also included
+(see Sect. 2.13).
+
+4.4. 3D magnetohydrodynamic simulation
+The initial perturbations, together with nuclear energy release, drives buoyant bubbles of higher entropy relative to the
+background. Within ∼ 200 s of simulation time, these bubbles develop into fully turbulent convective motions, achieving Mach numbers in the range 0.1 ≲ M ≲ 0.3. The convective plumes collide with the boundary of the neighboring subadiabatic layer, overturning and triggering mixing processes that entrain material into the convective shell. Turbulent eddies stretch the initial magnetic field at spatial scales
+close to viscous range, initiating a small-scale turbulent dynamo. The time evolution of the total kinetic and magnetic
+energies in the convective shell is shown in Fig. 24. Within
+the first 1000 s, convective flows achieve a root-mean-square
+speed urms of 4 × 107 cm s−1 . The corresponding convective
+turnover timescale, defined as
+τconv =
+
+2L
+,
+urms
+
+(163)
+
+ρ [g cm−3 ]
+
+10
+
+8
+
+MESA
+PHLEGETHON
+
+106
+104
+
+T [109 K]
+
+29
+
+4
+2
+0
+
+s/baryon [kb ]
+
+P [dyne cm−2 ]
+
+1026
+1024
+1022
+1020
+
+10
+
+5
+
+η = Φe /kb T
+
+Ā
+
+30
+20
+10
+
+0
+
+−5
+0
+
+5
+
+r [109 cm]
+
+10
+
+0
+
+5
+
+10
+
+r [109 cm]
+
+Fig. 23.— Initial stratification used for the simulation of the core-collapse
+supernova progenitor presented in Sect. 4. The six panels show mass density, temperature, thermal pressure, specific entropy per baryon, mean mass
+number (A) and electron degeneracy parameter (η). The orange solid line
+corresponds to the 1D MESA model, while the black dashed line shows the
+re-integrated stratification, which is used as initial conditions for the 3D
+PHLEGETHON simulation. The vertical black dotted lines denote the boundaries of the spatial domain of the PHLEGETHON model.
+
+is τconv ≈ 250 s, where L ≈ 5 × 109 cm is the radial extent of
+the convective shell. In the first eight convective turnovers, the
+magnetic energy grows exponentially by more than ten orders
+of magnitude relative to the initial seed value. The kinetic
+energy experiences a burst within the first 500 s before gradually decreasing, tracking the decline in nuclear luminosity
+that drives convection. The setup is evolved until t = 4000 s,
+time at which the 1D stellar model predicts the onset of corecollapse.
+At t ≈ 1500 s, the turbulent dynamo saturates. The Lorentz
+force begins to feed back on the convective flows, suppressing small-scale structures, while the stretching of magnetic
+field lines is balanced by numerical Ohmic dissipation, thus
+achieving a statistical steady state configuration. The resulting magnetic field strength reaches values of ∼ 109 –1010 G,
+corresponding to 10–30% of equipartition with the local kinetic energy. Figure 25 shows the power spectra of kinetic
+and magnetic energy as a function of angular wavenumber ℓ
+extracted at r = 3 × 109 cm. The spectra are averaged over
+t ∈ (2000, 4000) s to suppress statistical fluctuations due to
+the chaotic nature of the turbulent flows, covering the nonlinear, saturated phase of the dynamo. For comparison, results from a purely hydrodynamical simulation run on the
+same grid are also shown. Both the hydrodynamic and MHD
+simulations show a narrow inertial range (3 ≲ ℓ ≲ 10) where
+the kinetic energy spectrum closely follows the Kolmogorov
+
+scaling law (ℓ−5/3 ). Such scaling is often seen in simulations
+of late convective shells of core-collapse supernova progenitors (e.g., Yadav et al. 2020; Fields & Couch 2020; Varma
+& Müller 2021). The hydrodynamic simulation also exhibits
+a power excess across a wide range of angular wavenumbers
+between the inertial and viscous ranges. This phenomenon
+has been observed in numerous simulations of turbulent flows
+and is commonly referred to in the literature as the ‘bottleneck effect’ (see, e.g., Falkovich 1994; Dobler et al. 2003;
+Andrassy et al. 2022). Although several hypotheses have
+been proposed regarding the underlying mechanism responsible for this power excess, including non-local energy transport
+(Mininni et al. 2008), incomplete thermalization (Frisch et al.
+2008), and backscatter from smaller scales (Johnson 2021),
+its origin remains unclear.
+Consistent with previous MHD studies of analogous convective shells of massive stars (e.g., Varma & Müller 2021;
+Leidi et al. 2023), magnetic power accumulates near the bottom of the inertial range and declines rapidly at the resistive
+scale. At large scales ( ℓ ≲ 30 ), the magnetic field is subdominant, while at smaller scales ( ℓ ≳ 30 ), it reaches superequipartition strenghts down to the Nyquist wavenumber.
+The kinetic energy spectrum exhibits a prominent peak at
+ℓ = 2 (quadrupole), and deviates from the hydrodynamical
+case around ℓ ≈ 10 , where the turbulent dynamo starts to efficiently amplify magnetic energy at the expense of the kinetic
+energy content of the convection. The quadrupolar behavior can be understood as a consequence of the inner boundary conditions, which inhibit radial convective motions near
+the center and thereby suppress the largest-scale overturning modes. In contrast, multidimensional simulations of core
+convection in massive stars tend to exhibit significant power
+in large-scale, dipole-like flow components (e.g., Woodward
+et al. 2019; Herwig et al. 2023; Lecoanet & Edelmann 2023;
+Blouin et al. 2023, 2024). Although in reality the lower
+boundary of the convective shell is not solid, simulations of
+late burning shells in massive stars show that the buoyant response of the stable layer beneath the convective boundary
+is strong enough to prevent significant entrainment processes
+(see also Meakin & Arnett 2007; Jones et al. 2016; Varma &
+Müller 2021; Rizzuti et al. 2024).
+2D slices in the equatorial ( z = 0 ) plane are shown in
+Fig. 26, displaying the 20 Ne mass fraction, the nuclear energy release by alpha-capture on oxygen, radial velocity, magnetic field strength in the saturated stage of the turbulent dynamo, the Mach number, and specific entropy fluctuations at
+t = 2400 s. The convective flow exhibits a clear scale separation, with small-scale turbulence superimposed on large-scale
+overturning plumes driven by nuclear energy release at the
+base of the shell. At this stage, the root-mean-square convective velocity has dropped to urms ≈ 2 × 107 cm s−1 , which
+leads to a convective turnover time of ≈ 500 s. The average
+magnetic field strength decreases with radius, reflecting the
+scaling of the equipartition field with the square root of the
+local density, which declines outward, while the root-meansquare velocity remains nearly uniform. In the convective
+shell, root-mean-square fluctuations of both mass density and
+specific entropy are on the order of 1% compared with the
+background stratification.
+The nuclear energy generation rate from 16 O(α, γ)20 Ne
+shown in Fig. 26 highlights the entrainment of material from
+the subadiabatic layer above into the convection zone. The
+α-capture reaction exhibits a double-peaked distribution. One
+
+30
+
+*g+
+*g+
+*g+
+ėN
+ėν
+ϵd
+′′
+′′
+]
+⟨ρ⟩Dt ⟨e
+s⟩ + ∇r ⟨ρ⟩⟨ s ur ⟩ = ⟨ρ⟩
++ ⟨ρ⟩
++ ⟨ρ⟩
+,
+T
+T
+T
+(164)
+ḟ ⟩,
+′′ u′′ ⟩ = ⟨ρ⟩⟨ X
+e + ∇r ⟨ρ⟩⟨X]
+⟨ρ⟩Dt ⟨X⟩
+N
+r
+
+(165)
+
+where the operator
+
+∇r =
+
+1 ∂  2
+r · .
+r2 ∂r
+
+(166)
+
+Here, ur is the radial component of the velocity and X repre-
+
+1049
+1047
+1045
+
+E [erg]
+
+peak is located at the base of the shell, where temperatures are
+highest. There, photodisintegration of 20 Ne produces a 10−8
+mass fraction abundance of 4 He. Part of those α particles gets
+captured on 16 O to generate 20 Ne, while the rest undergoes α
+captures on 20 Ne, 24 Mg, and 28 Si, allowing the burning phase
+to progress. The second peak lies within the convective region, and it is mostly driven by the entrainment of heliumrich material from the upper stable region, which provides
+additional α particles for the neon burning. This behavior
+is sometimes known as ‘convective-reactive’, and it can predict the occurrence of multiple burning episodes within the
+same convective region, often leading to strong gradients and
+asymmetries in chemical composition (see Mocák et al. 2018;
+Yadav et al. 2020; Rizzuti et al. 2024).
+This two-regime burning is also evident in Fig. 27, which
+shows horizontally averaged nuclear energy generation rates
+per unit mass as functions of radius for several reactions at
+t = 2400 s. The energetics at the base of the convective shell
+are dominated by reactions associated with carbon and neon
+burning, together with α-capture reactions on 24 Mg and 28 Si.
+In contrast, reactions associated with oxygen burning contribute only subdominantly to the total energy generation.
+By the end of the simulation at t = 4000 s, mass fractions
+are largely homogenized by convective mixing (see Fig. 28),
+with the exception of 4 He which shows important radial gradients in chemical composition as a result of the convectivereactive behavior. Significant entrainment provides important
+amounts of extra helium and carbon into the convective region and expands the outer boundary of the convective shell
+nearly to the domain boundary. While the total partial masses
+of most species remain largely unchanged, 20 Ne is depleted
+by ∼ 50%.
+To interpret the 3D simulation results in a reduced
+1D framework, we employ implicit large-eddy simulation
+Reynolds averaging (RA-ILES; Meakin & Arnett 2007; Viallet et al. 2013; Mocák et al. 2018; Arnett et al. 2019). In
+this approach, variables are decomposed into mean and fluctuating components using both Reynolds and Favre averages,
+denoted ⟨·⟩ and ⟨e·⟩, respectively. For a generic quantity
+q, the Reynolds decomposition is q = ⟨q⟩ + q′ , where the
+bracket operator ⟨·⟩ denotes the time average of the horizontal (spherical-shell) average over the full solid angle 4π.
+The Favre decomposition for density-weighted quantities is
+q = ⟨e
+q⟩ + q′′ , where q′ and q′′ are the fluctuations, and the
+Favre average is defined as ⟨e
+q⟩ = ⟨ρq⟩/⟨ρ⟩. This formalism
+allows us to compute turbulent fluxes and dissipation terms
+directly from the simulation data, providing insight into the
+transport of entropy, composition, and energy by turbulent
+motions.
+Figure 29 shows RA-ILES results for the entropy evolution
+equation and 4 He evolution, which can be written as
+
+1043
+1041
+1039
+
+Lnuc τconv
+Ekin
+Emag
+
+1037
+0
+
+1000
+
+2000
+
+3000
+
+4000
+
+t [s]
+Fig. 24.— Time evolution of the volume-integrated kinetic (orange dashed
+line) and magnetic energy (green dotted line) in the convective zone of the
+simulation of the core-collapse supernova progenitor star (see Sect. 4). The
+product of the nuclear luminosity and the convective turnover timescale,
+τconv ≈ 250 s (computed within the first 1000 s) is also shown (blue dashdotted line).
+
+sents the mass fraction of 4 He. In the entropy equation, ėN and
+ėν are the nuclear and neutrino energy generation/loss rates
+per unit mass, respectively, while ϵd represents the effective
+dissipation due to numerical viscosity and resistivity. In the
+composition equation, ẊN is the net nuclear production rate of
+′′ u′′ ⟩,
+′′ u′′ ⟩ and ∇ ⟨ρ⟩⟨ X
+]
+helium. The divergence terms, ∇r ⟨ρ⟩⟨ s]
+r
+r
+r
+describe the turbulent transport of entropy and composition by
+convective motions.
+Most of the entropy generated at the base of the convective
+shell is transported outward by turbulent convection. Nuclear
+luminosity increases by ∼ 10% near 3 × 109 cm due to αcapture reactions induced by the entrainment of helium from
+the subadiabatic layer. The convective entropy flux is positive
+throughout the shell, becoming negative at the boundary with
+the subadiabatic region, indicating entrainment of entropy in
+addition to composition. The contribution of neutrino cooling
+is approximately 5% of the nuclear entropy luminosity, which
+is itself comparable to the entropy luminosity associated with
+viscous and resistive dissipation. The 4 He profiles show that
+in the upper half of the convective shell, abundance changes
+are dominated by inward turbulent fluxes. At radii between
+1.4 × 109 cm 4 × 109 cm, α-capture reactions balance inward
+turbulent transport. At the base, the small imbalance between
+photodisintegration of 20 Ne and α-capture on 16 O is compensated by outward turbulent fluxes.
+The presented 3D MHD simulation demonstrates that
+PHLEGETHON is capable of robustly modeling the complex interplay of turbulent convection, nuclear burning, and magnetic field amplification in realistic stellar environments.
+These results highlight the ability of the numerical methods implemented in PHLEGETHON to handle highly nonlinear,
+multi-physics problems relevant to late-stage stellar evolution.
+Moreover, this simulation exhibits features commonly observed in previous studies of this type, including Kolmogorovlike turbulence, the dominance of large-scale flow patterns,
+and super-equipartition field strengths in the viscous range.
+These results further support the conclusion that the code can
+reliably simulate the physics of core-collapse supernova progenitors, in line with other established codes in the field.
+
+31
+1019
+
+` P` [erg cm−3 ]
+
+1018
+1017
+1016
+
+` P`,kin , hydro
+` P`,kin , mhd
+` P`,mag , mhd
+
+1015
+
+P` ∝ `−5/3
+
+100
+
+101
+
+102
+
+`+1
+Fig. 25.— Kinetic (orange dashed line) and magnetic (green solid line)
+power spectra as functions of the angular wavenumber ℓ in the simulation
+of the core-collapse supernova progenitor discussed in Sect. 4. The spectra are averaged over the time interval t ∈ (2000, 4000) s and multiplied by ℓ
+to better highlight the distribution of power across scales. For reference, the
+kinetic power spectrum from a purely hydrodynamical simulation (blue dashdotted line) is also shown. All curves are evaluated at a radius of 3 × 109 cm.
+The black dashed line represents Kolmogorov ℓ−5/3 scaling law.
+
+5. CONCLUSIONS
+
+In this paper, we have presented PHLEGETHON, a finitevolume Eulerian code optimized for applications in stellar
+magnetohydrodynamics. The code employs a rich suite of numerical methods that allow it to simulate a broad range of dynamical conditions, from low-Mach-number flows in steeply
+stratified media to supersonic regimes. This versatility is
+achieved through the use of low-dissipation Riemann solvers,
+which significantly reduce numerical dissipation in subsonic
+flows while remaining robust at high Mach numbers, and a
+well-balanced discretization, which is essential for accurately
+modeling slow flows in steep stratifications. Several reconstruction methods are available, allowing the user to prioritize
+robustness in highly dynamic flows or accuracy in smooth regions.
+PHLEGETHON supports arbitrary nuclear reaction networks
+and equations of state tailored for stellar plasmas, including the effects of electron degeneracy, pair production, and
+partial ionization. Stiff diffusive processes, such as thermal
+conduction and radiative diffusion, can be efficiently integrated using super-time-stepping, circumventing the restrictive parabolic CFL stability criterion. A staggered formulation of constrained transport ensures that the magnetic field
+remains divergence-free to round-off error. A gravitational
+Poisson solver is available when the gravitational potential
+needs to be explicitly evolved in time.
+PHLEGETHON runs on CPUs with MPI-based parallelization
+and has been shown to scale efficiently up to 32768 cores on
+the Tier-2 HoreKa HPC system, making it suitable for largescale, production-quality simulations. Extensive verification
+of the methods implemented in the code has been performed
+in Sect. 3 using standard benchmark tests, including 1D Brio–
+Wu shock tubes, 2D magnetized vortices, and the diffusion
+of a temperature pulse, which confirm second-order convergence for most combinations of numerical methods. More
+advanced setups, including convective flows driven by an energy source such as the 3D code-comparison test of Andrassy
+et al. (2022), further demonstrate that PHLEGETHON can accu-
+
+rately capture convective and turbulent dynamics in stratified,
+astrophysically relevant environments.
+To illustrate that PHLEGETHON can robustly handle
+production-quality astrophysical setups, we ran 3D MHD
+simulations of a convective shell in a 25 M⊙ core-collapse
+supernova progenitor star in Sect. 4. This model contains all
+the ingredients necessary for advanced applications to stellar interiors, including strong stratification, nuclear burning
+networks, neutrino cooling, a complex equation of state, and
+magnetic fields. These simulations capture small-scale turbulent dynamos, convective entrainment, and detailed nuclear
+burning processes, and demonstrate that the code can be used
+reliably for production-quality simulations of complex, multiphysics stellar environments.
+Overall, PHLEGETHON provides a versatile platform for simulating stellar flows and MHD phenomena across multiple
+evolutionary stages and stellar types. It allows researchers to
+investigate the interplay between turbulence, magnetic fields,
+nuclear burning, diffusive energy transport, and rotation, supporting studies of the complex dynamics of stellar interiors.
+PHLEGETHON has been made publicly available, enabling the
+community to apply it to a wide range of astrophysical problems, benchmark its performance, and further extend its capabilities. For example, efforts are currently underway to port
+the code to GPUs.
+Future applications of the code will focus on open questions in stellar astrophysics. These include the impact of magnetic fields on convective boundary mixing in massive mainsequence stars, which is crucial for determining the size of the
+helium core and subsequent evolutionary stages. The code
+will also be used to study the excitation of internal waves,
+their coupling to magnetic fields, the resulting asteroseismic
+signals in low- and high-mass stars, and the transport of angular momentum and chemical species by waves. Finally, we
+will investigate sources of asymmetries in core-collapse and
+electron-capture supernova progenitors, thereby aiding our
+understanding of the explosion mechanisms in both cases.
+ACKNOWLEDGMENTS
+We acknowledge support by the Klaus Tschira Foundation.
+RA, DG, and FKR acknowledge funding by the European
+Union (ERC, ExCEED, project number 101096243). Views
+and opinions expressed are however those of the authors only
+and do not necessarily reflect those of the European Union
+or the European Research Council Executive Agency. Neither the European Union nor the granting authority can be
+held responsible for them. FR is a fellow of the Alexander von Humboldt Foundation, and acknowledges support by
+the INAF Mini grant 2024, ‘GALoMS – Galactic Archaeology for Low Mass Stars’ (1.05.24.07.02). PC acknowledges
+support by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) – Project-ID MA 4248/3-1. KV
+is a fellow of the International Max Planck Research School
+for Astronomy and Cosmic Physics at the University of Heidelberg (IMPRS-HD) and acknowledges financial support
+from IMPRS-HD. PVFE was supported by the U.S. Department of Energy through the Los Alamos National Laboratory
+(LANL). LANL is operated by Triad National Security, LLC,
+for the National Nuclear Security Administration of the U.S.
+Department of Energy (Contract No. 89233218CNA000001).
+This work has been assigned a document release number
+LA-UR-26-22807. The authors gratefully acknowledge the
+computing time provided on the high-performance computer
+HoreKa by the National High-Performance Computing Cen-
+
+32
+
+1014
+
+6
+
+1012
+
+2
+
+−2
+
+0.010
+
+−4
+
+0.005
+
+−6
+
+0.000
+
+2
+
+1.5
+
+3.0
+2.5
+2.0
+
+1.0
+
+1.5
+
+0.5
+
+0
+
+0.0
+−0.5
+
+−2
+
+√
+|b| = 4π |B| [1010 G]
+
+1.0
+0.5
+
+−1.0
+
+−4
+
+−1.5
+
+−6
+
+0.0
+
+−2.0
+
+6
+
+1.00
+
+0.14
+
+4
+
+0.75
+
+0.12
+
+2
+
+0.50
+
+0.10
+0.08
+
+0
+
+0.06
+−2
+−4
+−5.0
+
+−2.5
+
+0.0
+
+x [109 cm]
+
+2.5
+
+5.0
+
+0.25
+0.00
+−0.25
+
+0.04
+
+−0.50
+
+0.02
+
+−0.75
+
+0.00
+
+−5.0
+
+−2.5
+
+0.0
+
+2.5
+
+5.0
+
+s0rms / s̄ [%]
+
+y [109 cm]
+
+104
+
+2.0
+
+4
+
+y [109 cm]
+
+106
+
+ur [107 cm s−1 ]
+
+6
+
+108
+
+16
+
+0.015
+
+X20 Ne
+
+0
+
+−6
+
+1010
+
+0.020
+
+Mach
+
+y [109 cm]
+
+0.025
+
+O(α, γ)20 Ne [erg g−1 s−1 ]
+
+0.030
+4
+
+−1.00
+
+x [109 cm]
+
+Fig. 26.— 2D slices in the equatorial ( z = 0 ) plane from the simulation of the convective shell presented in Sect. 4. The six panels show the mass fraction of
+
+20 Ne (upper left), the nuclear energy generation rate per unit mass from α-capture on 16 O (upper right), radial velocity (center left), the magnetic field strength
+
+(center right), Mach number (lower left), and relative root-mean-square fluctuations in specific entropy (lower right). All panels are extracted at t = 2400 s. To
+save disk space, the energy generation rate from nuclear reactions (including α-capture on 16 O) is recorded in a separate output channel, where neighboring
+2 × 2 × 2 cell blocks are first averaged before writing the output to disk. Movie available at https://youtu.be/zIzC-aaGXF4.
+
+33
+ter at KIT (NHR@KIT). This center is jointly supported
+by the Federal Ministry of Education and Research and
+the Ministry of Science, Research and the Arts of BadenWürttemberg, as part of the National High-Performance
+Computing (NHR) joint funding program (https://www.nhrverein.de/en/our-partners). HoreKa is partly funded by the
+German Research Foundation (DFG). RH acknowledges support from the World Premier International Research Centre
+Initiative (WPI Initiative), MEXT, Japan, the IReNA AccelNet Network of Networks (NSF, Grant No. OISE-1927130),
+the Wolfson Foundation that part-funded the greenHPC facility at Keele and a 2025 Klaus Tschira Gast professorship
+from HITS. The authors used ChatGPT (GPT-5.2, OpenAI)
+to assist with grammar and language polishing. All scientific
+content, analysis, and conclusions were written and verified
+by the authors.
+
+1020
+20
+
+Ne(γ, α)16 O
+16
+O(α, γ)20 Ne
+20
+Ne(α, γ)24 Mg
+23
+Na(p, γ)24 Mg
+28
+Si(α, p)31 P
+
+1017
+
+|ėN | [erg g−1 s−1 ]
+
+1014
+
+31
+
+P(p, α)28 Si
+12
+C(12 C, p)23 Na
+12
+C(12 C, α)20 Ne
+16
+O(16 O, p)31 P
+16
+O(16 O, α)28 Si
+
+1011
+108
+105
+102
+
+10−1
+10−4
+
+1
+
+2
+
+3
+
+4
+
+5
+
+r [109 cm]
+Fig. 27.— Radial profiles (horizontal averages) of the nuclear energy generation rate per unit mass for several reactions in the simulation of the corecollapse supernova progenitor star. Dash-dotted lines indicate positive energy
+generation, while dotted lines indicate energy losses. All curves are extracted
+at t = 2400 s.
+REFERENCES
+Aerts, C., Christensen-Dalsgaard, J., & Kurtz, D. W. 2010,
+Asteroseismology
+Almgren, A. S., Bell, J. B., & Zingale, M. 2007, Journal of Physics:
+Conference Series, 78, 012085
+Almgren, A. S., Beckner, V. E., Bell, J. B., et al. 2011, CASTRO:
+Multi-dimensional Eulerian AMR Radiation-hydrodynamics Code,
+Astrophysics Source Code Library, record ascl:1105.010, ascl:1105.010
+Andrassy, R., Leidi, G., Higl, J., et al. 2023, arXiv e-prints,
+arXiv:2307.04068
+Andrassy, R., Higl, J., Mao, H., et al. 2022, A&A, 659, A193
+Arnett, W. D., Meakin, C., Hirschi, R., et al. 2019, ApJ, 882, 18
+Auvergne, M., Bodin, P., Boisnard, L., et al. 2009, A&A, 506, 411
+Balsara, D. S. 2004, ApJS, 151, 149
+Batchelor, G. K. 1950, Proceedings of the Royal Society of London. A.
+Mathematical and Physical Sciences, 201, 405
+Berberich, J. P., Chandrashekar, P., & Klingenberg, C. 2021, Computers &
+Fluids, 219, 104858
+Blouin, S., Herwig, F., Mao, H., Denissenkov, P., & Woodward, P. R. 2024,
+MNRAS, 527, 4847
+Blouin, S., Mao, H., Woods, T. E., et al. 2023, MNRAS, 521, 4605
+Boscheri, W. & Thomann, A. 2024, arXiv e-prints, arXiv:2403.04517
+Brackbill, J. U. & Barnes, D. C. 1980, Journal of Computational Physics,
+35, 426
+Brio, M. & Wu, C. 1988, Journal of Computational Physics, 75, 400
+Brun, A. S. & Browning, M. K. 2017, Living Reviews in Solar Physics, 14, 4
+Brun, A. S., Browning, M. K., & Toomre, J. 2005, ApJ, 629, 461
+Calhoun, D. A., Helzel, C., & LeVeque, R. J. 2008, SIAM Review, 50, 723
+Casanova, J., Jose, J., Garcia-Berro, E., & Shore, S. N. 2016, arXiv e-prints,
+arXiv:1606.08734
+Colella, P. & Glaz, H. M. 1985, Journal of Computational Physics, 59, 264
+Colella, P. & Woodward, P. R. 1984, Journal of Computational Physics, 54,
+174
+Coppée, Q., Müller, J., Bazot, M., & Hekker, S. 2024, A&A, 690, A324
+Cyburt, R. H., Amthor, A. M., Ferguson, R., et al. 2010, The Astrophysical
+Journal Supplement Series, 189, 240
+Davis, A., Jones, S., & Herwig, F. 2019, MNRAS, 484, 3921
+Deheuvels, S., Garcı́a, R. A., Chaplin, W. J., et al. 2012, ApJ, 756, 19
+Dekker, H., D’Odorico, S., Kaufer, A., Delabre, B., & Kotzlowski, H. 2000,
+in Society of Photo-Optical Instrumentation Engineers (SPIE) Conference
+Series, Vol. 4008, Optical and IR Telescope Instrumentation and
+Detectors, ed. M. Iye & A. F. Moorwood, 534
+Dobler, W., Haugen, N. E., Yousef, T. A., & Brandenburg, A. 2003,
+Phys. Rev. E, 68, 026304
+Dumbser, M., Balsara, D. S., Tavelli, M., & Fambri, F. 2019, International
+Journal for Numerical Methods in Fluids, 89, 16
+Edelmann, P. V. F., Horst, L., Berberich, J. P., et al. 2021, A&A, 652, A53
+Falkovich, G. 1994, Physics of Fluids, 6, 1411
+
+Fambri, F. 2021, International Journal for Numerical Methods in Fluids, 93,
+3447
+Featherstone, N. A., Edelmann, P. V. F., Gassmoeller, R., et al. 2022,
+geodynamics/Rayleigh: Rayleigh Version 1.1.0
+Fields, C. E. & Couch, S. M. 2020, ApJ, 901, 33
+Fleischmann, N., Adami, S., & Adams, N. A. 2020, Journal of
+Computational Physics, 423, 109762
+Flock, M., Dzyurkevich, N., Klahr, H., & Mignone, A. 2010, A&A, 516,
+A26
+Freytag, B., Steffen, M., Ludwig, H.-G., et al. 2012, Journal of
+Computational Physics, 231, 919
+Frisch, U., Kurien, S., Pandit, R., et al. 2008, Phys. Rev. Lett., 101, 144501
+Fryxell, B., Olson, K., Ricker, P., et al. 2000, ApJS, 131, 273
+Fuller, G. M., Fowler, W. A., & Newman, M. J. 1982, ApJ, 252, 715
+Gaia Collaboration, Prusti, T., de Bruijne, J. H. J., et al. 2016, A&A, 595, A1
+Gardiner, T. A. & Stone, J. M. 2005, Journal of Computational Physics, 205,
+509
+Godunov, S. K. 1959, Matematicheskii Sbornik, 89, 271
+Grassitelli, L., Fossati, L., Langer, N., et al. 2015, A&A, 584, L2
+Guillard, H. & Viozat, C. 1999, Computers & Fluids, 28, 63
+Hairer, E. & Wanner, G. 1996, Solving Ordinary Differential Equations II.
+Stiff and Differential-Algebraic Problems, Vol. 14
+Harten, A., Lax, P. D., & Leer, B. V. 1983, SIAM Review, 25, 35
+Herwig, F., Woodward, P. R., Mao, H., et al. 2023, MNRAS, 525, 1601
+Horst, L., Hirschi, R., Edelmann, P. V. F., Andrássy, R., & Röpke, F. K.
+2021, A&A, 653, A55
+Hosea, M. & Shampine, L. 1996, Applied Numerical Mathematics, 20, 21,
+method of Lines for Time-Dependent Problems
+Iliadis, C. 2007, Nuclear Physics of Stars
+Itoh, N., Hayashi, H., Nishikawa, A., & Kohyama, Y. 1996, ApJS, 102, 411
+Jermyn, A. S., Anders, E. H., Lecoanet, D., & Cantiello, M. 2022, The
+Astrophysical Journal Supplement Series, 262, 19
+Johnson, P. L. 2021, Journal of Fluid Mechanics, 922, A3
+Jones, S., Andrassy, R., Sandalski, S., et al. 2016, Monthly Notices of the
+Royal Astronomical Society, 465, 2991
+José, J., Shore, S. N., & Casanova, J. 2020, A&A, 634, A5
+Kaiser, E. A., Hirschi, R., Arnett, W. D., et al. 2020, MNRAS, 496, 1967
+Käppeli, R. 2022, Living Reviews in Computational Astrophysics, 8, 2
+Käpylä, P. J. 2019, A&A, 631, A122
+Kifonidis, K. & Müller, E. 2012, A&A, 544, A47
+Kippenhahn, R., Weigert, A., & Weiss, A. 2013, Stellar Structure and
+Evolution
+Kupka, F. & Muthsam, H. J. 2017, Living Reviews in Computational
+Astrophysics, 3, 1
+Langanke, K. & Martı́nez-Pinedo, G. 2001, Atomic Data and Nuclear Data
+Tables, 79, 1
+Lecoanet, D. & Edelmann, P. V. F. 2023, Galaxies, 11, 89
+Leidi, G., Andrassy, R., Barsukow, W., et al. 2024, A&A, 686, A34
+
+0.8
+
+X16 O
+
+0.6
+0.4
+0.2
+
+t=0
+t = 4000 s
+
+0.0
+0.12
+
+20
+
+Ne
+Mg
+28
+Si
+24
+
+0.10
+
+entropy luminosity [1037 erg K−1 s−1 ]
+
+34
+
+X
+
+0.08
+0.06
+
+hρiDt he
+si
+00 u00 i
+∇r hρihsg
+r
+
+2.5
+
+hρihėg
+N /T i
+hρihėg
+ν /T i
+
+2.0
+
+hρihg
+d /T i
+
+1.5
+1.0
+0.5
+0.0
+
+10
+
+rate [g cm−3 s−1 ]
+
+0.02
+0.00
+100
+10−1
+
+ḟ i
+00 u00 i = hρih X
+e + ∇r hρihXg
+hρiDt hXi
+N
+r
+
+10−4
+10−6
+
+10−3
+
+10−10
+He
+C
+32
+S
+12
+
+1
+
+1
+
+2
+
+3
+
+4
+
+5
+
+r [109 cm]
+
+4
+
+10−5
+
+ḟ i
+hρihX
+N
+
+10−2
+
+10−8
+
+10−4
+
+e
+hρiDt hXi
+00 u00 i
+∇r hρihXg
+r
+
+0
+
+10−2
+
+10−6
+
+00 u00 i = hρihėg
+g
+g
+hρiDt he
+si + ∇r hρihsg
+N /T i + hρihėν /T i + hρihd /T i
+r
+
+102
+
+0.04
+
+X
+
+3.0
+
+2
+
+3
+
+4
+
+5
+
+r [109 cm]
+Fig. 28.— Reynolds-averaged mass fractions as functions of radius for the
+simulation of the core-collapse supernova progenitor. Dotted lines show
+the initial profiles at t = 0, while dashed lines correspond to the profiles at
+t = 4000 s.
+Leidi, G., Andrassy, R., Higl, J., Edelmann, P. V. F., & Röpke, F. K. 2023,
+A&A, 679, A132
+Leidi, G., Birke, C., Andrassy, R., et al. 2022, A&A, 668, A143
+Leidi, G., Holas, A., Vitovsky, K., et al. 2026, Phlegethon
+LeVeque, R. J. 2002, Finite Volume Methods for Hyperbolic Problems,
+Cambridge Texts in Applied Mathematics (Cambridge University Press)
+LeVeque, R. J. 2007, Finite Difference Methods for Ordinary and Partial
+Differential Equations (Society for Industrial and Applied Mathematics),
+https://epubs.siam.org/doi/pdf/10.1137/1.9780898717839
+Liou, M.-S. 2006, Journal of Computational Physics, 214, 137
+Luo, H., Zhang, B., Tian, J., et al. 2026, arXiv e-prints, arXiv:2602.12307
+Maeder, A. 2009, Physics, Formation and Evolution of Rotating Stars
+Mandal, A., Mukherjee, D., & Mignone, A. 2023, ApJS, 268, 40
+Martı́, J. M. & Müller, E. 2003, Living Reviews in Relativity, 6, 7
+Meakin, C. A. & Arnett, D. 2007, ApJ, 667, 448
+Message Passing Interface Forum. 2025, MPI: A Message-Passing Interface
+Standard Version 5.0
+Meyer, C. D., Balsara, D. S., & Aslam, T. D. 2012, Monthly Notices of the
+Royal Astronomical Society, 422, 2102
+Meyer, C. D., Balsara, D. S., & Aslam, T. D. 2014, Journal of
+Computational Physics, 257, 594
+Miczek, F. 2013, PhD thesis, Technische Universität München
+Miczek, F., Röpke, F. K., & Edelmann, P. V. F. 2015, A&A, 576, A50
+Mignone, A. 2014, Journal of Computational Physics, 270, 784
+Mignone, A. & Bodo, G. 2005, MNRAS, 364, 126
+
+Fig. 29.— Reynolds-averaged terms in the entropy and 4 He evolution equations. All quantities are averaged over the time interval t ∈ (2000, 4000) s.
+Reynolds and Favre averages are denoted by ⟨·⟩ and ⟨e·⟩, respectively (see also
+Viallet et al. 2013). In the bottom panel, solid lines indicate positive contributions, while dashed lines indicate negative contributions. For the entropy
+equation, the individual terms are integrated over volume to yield cumulative
+profiles.
+Mignone, A. & Del Zanna, L. 2021, Journal of Computational Physics, 424,
+109748
+Mininni, P. D., Alexakis, A., & Pouquet, A. 2008, Phys. Rev. E, 77, 036306
+Minoshima, T. & Miyoshi, T. 2021, Journal of Computational Physics, 446,
+110639
+Miyoshi, T. & Kusano, K. 2005, Journal of Computational Physics, 208, 315
+Mocák, M., Meakin, C., Campbell, S. W., & Arnett, W. D. 2018, MNRAS,
+481, 2918
+Montalbán, J., Miglio, A., Noels, A., et al. 2013, The Astrophysical Journal,
+766, 118
+Mosser, B., Goupil, M. J., Belkacem, K., et al. 2012, A&A, 548, A10
+Müller, B. 2020, Living Reviews in Computational Astrophysics, 6, 3
+Müller, B., Viallet, M., Heger, A., & Janka, H.-T. 2016, ApJ, 833, 124
+Oda, T., Hino, M., Muto, K., Takahara, M., & Sato, K. 1994, Atomic Data
+and Nuclear Data Tables, 56, 231
+Paxton, B., Bildsten, L., Dotter, A., et al. 2011, ApJS, 192, 3
+Paxton, B., Cantiello, M., Arras, P., et al. 2013, ApJS, 208, 4
+Paxton, B., Marchant, P., Schwab, J., et al. 2015, ApJS, 220, 15
+Paxton, B., Schwab, J., Bauer, E. B., et al. 2018, ApJS, 234, 34
+Paxton, B., Smolec, R., Schwab, J., et al. 2019, ApJS, 243, 10
+Pencil Code Collaboration, Brandenburg, A., Johansen, A., et al. 2021, The
+Journal of Open Source Software, 6, 2807
+Plewa, T. & Müller, E. 1999, A&A, 342, 179
+Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery, B. P. 1992,
+Numerical recipes in C. The art of scientific computing
+Quirk, J. J. 1994, International Journal for Numerical Methods in Fluids, 18,
+555
+Rauscher, T. & Thielemann, F.-K. 2000, Atomic Data and Nuclear Data
+Tables, 75, 1
+
+35
+Reichert, M., Winteler, C., Korobkin, O., et al. 2023, ApJS, 268, 66
+Reinecke, M., Hillebrandt, W., & Niemeyer, J. C. 1999, A&A, 347, 739
+Ricker, G. R., Winn, J. N., Vanderspek, R., et al. 2015, Journal of
+Astronomical Telescopes, Instruments, and Systems, 1, 014003
+Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, MNRAS, 533, 687
+Rogers, T. M., Lin, D. N. C., McElwaine, J. N., & Lau, H. H. B. 2013, ApJ,
+772, 21
+Schekochihin, A. A., Cowley, S. C., Maron, J. L., & McWilliams, J. C.
+2004, Phys. Rev. Lett., 92, 054502
+Schwab, J., Farmer, R., & Timmes, F. X. 2020, ApJ, 891, 5
+Seta, A. & Federrath, C. 2020, MNRAS, 499, 2076
+Shu, C.-W. & Osher, S. 1988, Journal of Computational Physics, 77, 439
+Smith, A. I., Johnson, E. T., Chen, Z., et al. 2023, The Astrophysical
+Journal, 947, 65
+Stone, J. M., Gardiner, T. A., Teuben, P., Hawley, J. F., & Simon, J. B. 2008,
+ApJS, 178, 137
+Stone, J. M., Tomida, K., White, C. J., & Felker, K. G. 2020, ApJS, 249, 4
+Strang, G. 1968, SIAM Journal on Numerical Analysis, 5, 506
+Takahashi, K., Yoshida, T., & Umeda, H. 2013, ApJ, 771, 28
+Temaj, D., Schneider, F. R. N., Laplace, E., Wei, D., & Podsiadlowski, P.
+2024, A&A, 682, A123
+The HDF Group. 2023, HDF5: Hierarchical Data Format Version 5, The
+HDF Group, http://www.hdfgroup.org/HDF5/, version 1.14.2
+Thornber, B., Mosedale, A., Drikakis, D., Youngs, D., & Williams, R. 2008,
+Journal of Computational Physics, 227, 4873
+Timmes, F. X. 2000, ApJ, 528, 913
+Timmes, F. X. & Swesty, F. D. 2000, ApJS, 126, 501
+Tomida, K., Tomisaka, K., Matsumoto, T., et al. 2013, ApJ, 763, 6
+Toro, E. F. 1991, Proceedings of the Royal Society of London Series A, 434,
+683
+
+This paper was built using the Open Journal of Astrophysics
+LATEX template. The OJA is a journal which provides fast and
+easy peer review for new papers in the astro-ph section of
+
+Toro, E. F., Spruce, M., & Speares, W. 1994, Shock Waves, 4, 25
+van der Vorst, H. A. 1992, SIAM Journal on Scientific and Statistical
+Computing, 13, 631
+van Leer, B. 1974, Journal of Computational Physics, 14, 361
+Varma, V. & Müller, B. 2021, Monthly Notices of the Royal Astronomical
+Society, 504, 636
+Viallet, M., Baraffe, I., & Walder, R. 2011, A&A, 531, A86
+Viallet, M., Meakin, C., Arnett, D., & Mocák, M. 2013, The Astrophysical
+Journal, 769, 1
+Wallace, R. K., Woosley, S. E., & Weaver, T. A. 1982, ApJ, 258, 696
+Weiss, A., Hillebrandt, W., Thomas, H.-C., & Ritter, H. 2004, Cox and
+Giuli’s Principles of Stellar Structure
+Whitehead, E. E., Hirschi, R., Varma, V., et al. 2026, Monthly Notices of the
+Royal Astronomical Society, 546, staf2245
+Wongwathanarat, A., Grimm-Strele, H., & Müller, E. 2016, A&A, 595, A41
+Woodward, P. R., Herwig, F., & Lin, P.-H. 2014, The Astrophysical Journal,
+798, 49
+Woodward, P. R., Lin, P.-H., Mao, H., Andrassy, R., & Herwig, F. 2019, in
+Journal of Physics Conference Series, Vol. 1225, Journal of Physics
+Conference Series (IOP), 012020
+Xie, W., Zhang, R., Lai, J., & Li, H. 2019, International Journal for
+Numerical Methods in Fluids, 89, 430
+Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger, A. 2020, ApJ, 890,
+94
+Yakovlev, D. G. & Shalybkov, D. A. 1989, Astrophys. Space Phys. Res., 7,
+311
+Zahn, J.-P. 1991, A&A, 252, 179
+Zingale, M., Katz, M. P., Bell, J. B., et al. 2019, ApJ, 886, 105
+Zingale, M., Katz, M. P., Willcox, D. E., & Harpole, A. 2021, Research
+Notes of the American Astronomical Society, 5, 71
+
+the arXiv, making the reviewing process simpler for authors
+and referees alike. Learn more at http://astro.theoj.org.
+
+

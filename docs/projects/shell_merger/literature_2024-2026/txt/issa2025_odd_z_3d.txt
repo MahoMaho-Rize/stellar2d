@@ -1,0 +1,918 @@
+                                                 Draft version December 24, 2025
+                                                 Typeset using LATEX twocolumn style in AASTeX7.0.1
+
+
+
+
+                                                3D Macro Physics and Light Odd-Z Element Production in O-C Shell Mergers: Implications for 40 K
+                                                               production and radiogenic heating inventories of rocky exoplanets
+                                                          Joshua Issa     ,1, 2 Falk Herwig     ,1, 2 Stephen J. Mojzsis      ,3, 4, 5 and Marco Pignatari      4, 5, 3, 2
+
+
+                                                   1 Astronomy Research Centre, Department of Physics & Astronomy, University of Victoria, Victoria, BC, V8W 2Y2, Canada
+                                                                                         2 NuGrid Collaboration, http:// nugridstars.org
+                                                 3 Geoastronomy Research Group, Bayerisches Geoinstitut, Universität Bayreuth, Universitätsstraße 30, 95447 Bayreuth, Germany
+                                                4 HUN-REN Research Center for Astronomy and Earth Sciences (CSFK), 1121 Budapest, Konkoly Thege Miklós út 15-17, Hungary
+                                                                5 CSFK, MTA Centre of Excellence, Budapest, Konkoly Thege Miklós út 15-17., H-1121, Hungary
+arXiv:2509.19240v2 [astro-ph.SR] 23 Dec 2025
+
+
+
+
+                                                                   (Received September 23, 2025; Revised December 8, 2025; Accepted December 8, 2025)
+
+                                                                                                      Submitted to ApJ
+
+                                                                                                         ABSTRACT
+                                                          The light odd-Z elements P, Cl, K, and Sc are underproduced in galactic chemical evolution models
+                                                       compared to spectroscopic observations of stars in the Milky Way. The most promising solution
+                                                       to this puzzle is that some massive stars experience O-C shell mergers boosting their yields through
+                                                       dynamic, convective-reactive nucleosynthesis. We report how convective macro physics based on 3D 4π
+                                                       hydrodynamic simulations impacts production in the O shell by post-processing the MZAMS = 15 M⊙
+                                                       Z = 0.02 model from the NuGrid dataset. We explore a mixing downturn, boosted velocities, reduced
+                                                       ingestion rate, and convective quenching. Across 24 mixing cases, the pre-explosive yields for [P/Fe],
+                                                       [Cl/Fe], [K/Fe], and [Sc/Fe] are modified by [−0.33, 0.23] dex, [−0.84, 0.64] dex, [−0.78, 1.48] dex, and
+                                                       [−0.36, 1.29] dex, respectively. Cases with a convective downturn with the fastest ingestion rate have
+                                                       the largest enhancement, and production is non-monotonic with boosted velocities. Which reactions
+                                                       are most important for the convective-reactive element production pathways depends on the mixing
+                                                       case. We parameterize production of 40 K (t1/2 = 1.248 Gyr), an important radiogenic heat source
+                                                       for younger (2−3 Gyr) rocky planets and find a yield variation exceeding three orders of magnitude.
+                                                       This range of initial abundances for 40 K implies the early geodynamic behaviour of silicate mantles
+                                                       in rocky planets can differ greatly from that of Earth. These results underscore the importance of
+                                                       investigating the 3D macro physics of shell merger convection through hydrodynamic simulations to
+                                                       develop a predictive understanding of the origin and variability of the light odd-Z elements and the
+                                                       40
+                                                          K/K ratio in planet host stars.
+
+
+                                                       Keywords: Massive stars (732) — Oxygen burning (1193) — Stellar convective shells (300) — Nuclear
+                                                                 astrophysics (1129) — Exoplanets (498) — Planetary atmospheres (1244)
+
+                                                                 1. INTRODUCTION                                    mary mechanism for transferring volatiles from plane-
+                                                  The radiogenic isotope       40
+                                                                                 K with a half-life of              tary interiors to atmospheres. Variations in initial 40 K
+                                               1.248 Gyr is the dominant heat-producing nuclide for                 inventories directly affect the duration and intensity of
+                                               rocky exoplanets in the first few billion years of their geo-        volcanic degassing (L. Noack & D. Breuer 2014), par-
+                                               logic histories (e.g. C. O’Neill et al. 2020), with Earth as         ticularly during the critical first 2−3 billion years when
+                                               the baseline example (J. Korenaga 2008). Of the long-                secondary atmosphere formation occured when 40 K was
+                                               lived radionuclides present in silcate mantles of rocky              still a dominant heat-producer (T. P. Fischer & A.
+                                               planets, 40 K-driven radiogenic heating contributes to               Aiuppa 2020).
+                                               mantle convection that feeds into volcanism, the pri-                   Therefore, any model of the geodynamic evolution of
+                                                                                                                    rocky exoplanets requires knowledge of the initial 40 K
+                                                                                                                    inventories. However, K belongs to a group of ele-
+                                               Corresponding author: Joshua Issa                                    ments with a particularly uncertain production history.
+                                               Email: joshuaissa@uvic.ca                                            A long-standing problem has been that the light odd-Z
+2                                                       J. Issa et al.
+
+elements P, Cl, K, and Sc are produced in insufficient           F. Rizzuti et al. 2024). Finally, convective quenching
+quantities in galactic chemical evolution (GCE) models.          due to energy feedback from the ingestion of fresh fuel
+Indeed, GCE models predict that the majority contribu-           has been demonstrated in 3D simulations of H-ingestion
+tion for these elements comes from core-collapse super-          in post-AGB (asymptotic giant branch; AGB) stars (F.
+novae (CCSNe), but they cannot match observed stellar            Herwig et al. 2014), and the ingestion of C-shell mate-
+abundances (e.g. T. Mishenina et al. 2017; N. Prantzos           rial into the O shell may play a similar restricting role
+et al. 2018; C. Kobayashi et al. 2020). A recent real-           in O-C shell mergers (R. Andrassy et al. 2020).
+ization has been that the light odd-Z elements are sig-             These mixing conditions directly affect the nucleosyn-
+nificantly produced during O-C shell merger in massive           thesis as the O shell is a convective-reactive environment
+stars prior to a CCSN at all metallicities (T. Rauscher          where the timescales for mixing and burning are com-
+et al. 2002; C. Ritter et al. 2018a; L. Roberti et al. 2025),    parable (C. Ritter et al. 2018a; N. Yadav et al. 2020; F.
+and GCE models including this effect parametrically can          Rizzuti et al. 2024). F. Rizzuti et al. (2024) have shown
+match stellar abundance observations.                            in their 3D simulation of an O-C shell merger that all
+   Current K and by extension 40 K predictions from O-C          isotopes have significantly different results compared to
+shell mergers remain uncertain. A key source of uncer-           1D simulations.
+tainty is the impact of macro physics of convection dur-            Here we consider how the isotopes 31 P, 35,37 Cl,
+                                                                 39,40,41
+ing the dynamic nucleosynthesis, possibly with feedback,                  K, and 45 Sc are produced in the O shell and how
+as demonstrated recently for the p-process-production in         it is impacted by the mixing conditions. This extends
+O-C shell mergers (J. Issa et al. 2025). A 40 K produc-          the work done by J. Issa et al. (2025) that analyzed how
+tion variability similar to that seen for p-process abun-        the p nuclei are affected by the mixing conditions during
+dance predictions taking into account different scenarios        the shell merger. We analyze the production of these
+of macro physics of convection based on stellar hydro-           nuclides, with special attention to K and its isotopes.
+dynamics simulations, could lead to divergent planetary          While stellar spectral data of the host star can be used
+atmospheric evolution pathways. Differences in compo-            to infer plausible major element compositions of rocky
+sition and thickness of planet atmospheres depend on             exoplanets (e.g. R. J. Spaargaren et al. 2023), only GCE
+both the thermal state driving outgassing efficiency and         models can provide likely relative abundances of the ra-
+the pressure-temperature conditions controlling volatile         dioactive nuclides (40 K, 232 Th, 235−238 U), tied to the
+speciation (G. Ortenzi et al. 2020), creating potentially        age of that system, that can be used to infer heat pro-
+observable signatures in CO2 /H2 O ratios and atmo-              duction in the interiors of rocky exoplanets (E. A. Frank
+spheric oxidation states that future missions like the           et al. 2014). While indeed for Th it is possible to directly
+Habitable Worlds Observatory could detect (P. Liggins            observe 232 Th in stars in the Milky Way disk, current
+et al. 2022a). A predictive, quantitative understanding          spectroscopic observation uncertainties still hinder pre-
+of 40 K production would remove a key roadblock in our           cise derivation of its abundances (e.g., R. B. Botelho
+ability to model the thermal evolution of silicate-metal         et al. 2019; T. Mishenina et al. 2022, and references
+exoplanets (E. A. Frank et al. 2014).                            therein).
+   Not surprisingly, three-dimensional (3D) hydrody-                This paper is structured as follows. In §2, we describe
+namic simulations of the O shell where the nucleosyn-            our methodology, including the initial conditions from
+thesis occurs show very different mixing conditions com-         the NuGrid stellar model, the post-processed models
+pared to one-dimensional (1D) predictions using mixing           with different mixing scenarios, and our approach for
+length theory (MLT) (C. A. Meakin & D. Arnett 2006,              estimating final yields and reaction contributions. §3
+2007; S. Jones et al. 2017; T. Yoshida et al. 2019; R. An-       presents our main results, focusing on the nucleosyn-
+drassy et al. 2020; N. Yadav et al. 2020; T. Yoshida et al.      thesis of light odd-Z isotopes and how different mixing
+2021; C. E. Fields & S. M. Couch 2021; F. Rizzuti et al.         conditions impact their production. In §4, we discuss
+2024). These simulations have shown that the radial              the production of 40 K and its implications for hetero-
+mixing efficiency profile has a downturn as the convec-          geneous pollution of the interstellar medium and radio-
+tive boundary is approached, which is not captured in            genic heating in rocky exoplanets. Finally, §5 provides
+1D models which predict the mixing should be nearly              our discussion and conclusions, highlighting the impor-
+constant across the convective shell (C. A. Meakin & D.          tance of mixing conditions for understanding the origin
+Arnett 2006, 2007; S. Jones et al. 2017). They also pre-         of light odd-Z elements, their impact on galactic chem-
+dict that the convective velocities could be larger by up        ical evolution models and radiogenic heating in rocky
+to a factor of 30 or more than what is predicted by 1D           exoplanets.
+models (S. Jones et al. 2017; R. Andrassy et al. 2020;
+                                Mixing Conditions and Light Odd-Z Elements                                           3
+
+                 2. METHODOLOGY                             quasi-equilibrium state. All nucleosynthesis is captured
+           2.1. The O-C shell merger model                  with a network of 1470 isotopes.
+                                                              The MLT mixing case with a mixing efficiency profile
+  The radial stratification for the O shell multizone nu-   essentially constant across the O shell as taken from C.
+cleosynthesis simulations in this paper are taken from      Ritter et al. (2018b). 3D simulations, however, predict
+the non-rotating, 1D 15 M⊙ Z = 0.02 massive star            a mixing efficiency downturn as the convective bound-
+model from the NuGrid data set (C. Ritter et al. 2018b)     ary is approached and an increased mixing efficiency
+calculated with the MESA stellar evolution code (B. Pax-    compared to MLT (C. A. Meakin & D. Arnett 2007;
+ton et al. 2010) and post-processed with the multi-         S. Jones et al. 2017; R. Andrassy et al. 2020; C. E.
+zone NuGrid code mppnp (M. Pignatari et al. 2016).          Fields & S. M. Couch 2021; F. Rizzuti et al. 2024),
+This model does not have exponential-diffusive convec-      to some degree depending on the uncertain hydrody-
+tive boundary mixing (B. Freytag et al. 1996; F. Her-       namic response to the ingestion and burning of addi-
+wig 2000) after the cessation of core He burning (which     tional nuclear fuel. Therefore, we implement the 3D-
+was explored in A. Davis et al. 2018). The evolution        inspired mixing profile from S. Jones et al. (2017) that
+of the convection zones is shown in a Kippenhahn dia-       features a convective downturn, and boost the MLT ve-
+gram (Figure 1) in J. Issa et al. (2025). The light odd-Z   locities by factors of 1, 3, 10, and 50. The MLT and
+elements are mildly produced in the first convective O      3D-inspired cases are calculated with ingestion rates of
+shell, which extends from 1.55 M⊙ to 1.95 M⊙ during a       4 × 10−5 M⊙ s−1 , 4 × 10−4 M⊙ s−1 , 4 × 10−3 M⊙ s−1 ,
+time interval log10 (t − tend )/yr = −1.76 to −2.16, but    which are consistent with those adopted in the 3D sim-
+the O-C shell merger at log10 (t−tend )/yr = −3.85 is the   ulations of R. Andrassy et al. (2020). The extent of
+dominant source of the elements (C. Ritter et al. 2018a).   the C shell is 0.8 M⊙ , so for a post-processing simula-
+  Table 1 summarizes the NuGrid model properties with       tion time of 110 s, the maximum ingestion rate would
+O-C shell mergers from C. Ritter et al. (2018b). The 12,    be 7 × 10−3 M⊙ s−1 like C. Ritter et al. (2018a). Our
+15, and 20 M⊙ models show clear differences in the size     fastest ingestion rate of 4 × 10−3 M⊙ s−1 reflects a full
+of the merged shells ∆m, duration of the merger ∆t, and     merger and a case without ingestion is also included for
+overproduction factors OP for 39−41 K. However, both        reference. Quenched mixing cases are also considered
+15 M⊙ models with metallicities Z = 0.01 and Z =            by implementing a dip in the mixing efficiency profile.
+0.02 are quite similar in all these properties, including   This may arise due to energy feedback in the middle of
+in OP, although the Z = 0.02 model produces three           the shell at 4.95 Mm and partial merging of the shells at
+times more 39 K by the end of the merger because of a       7.5 Mm as 3D simulations suggest (R. Andrassy et al.
+higher initial mass fraction. This would suggest that       2020). Two quenching strengths expressed as dips in the
+initial stellar mass is more determinate of the merger      profile to 1014 cm2 s−1 and 1013 cm2 s−1 are considered.
+and its nucleosynthesis than its metallicity. In fact, L.   The quenched mixing cases are calculated with an in-
+Roberti et al. (2025) shows that models with O-C shell      gestion rate of 4 × 10−3 M⊙ s−1 only. There are 4 MLT,
+mergers do not have a general trend in [K/Mg] across        16 3D-inspired, and 4 quenched mixing cases for a total
+metallicities of Z = 10−9 −10−2 .                           of 24 simulations. This reflects both our limited knowl-
+              2.2. Post-Processed Models                    edge of and the intrinsically varying conditions in real
+                                                            3D stars. The mppnp code treats mixing as a diffusive
+   We use the post-processed models from J. Issa et al.
+                                                            process and splits the operators of mixing and burning
+(2025) of the 15 M⊙ Z = 0.02 NuGrid model that im-
+                                                            (M. Pignatari et al. 2016), so care has been taken that
+plement insights from 3D hydrodynamic simulations to
+                                                            our post-processing models are converged with respect
+motivate mixing scenarios expressed in terms of mixing
+                                                            to spatial and temporal resolution. J. Issa et al. (2025)
+efficiency profiles that are different from the MLT 1D
+                                                            provides further explanation of all simulation details.
+predictions. We focus solely on the 15 M⊙ Z = 0.02
+model for this exploratory study as it has the largest               2.3. Estimating Pre-Explosive Yields
+production of the p nuclei (C. Ritter et al. 2018a) and       The post-processed models in this work are calculated
+39−41
+       K (Table 1) for the merger models. These simula-     only for the O shell without the rest of the star, includ-
+tions use mass fractions from just before merger onset      ing the merging C shell. Therefore, we must estimate
+at log10 (t − tend )/yr = −3.845 and a constant stellar     the final yields if our mixing prescriptions were imple-
+structure, including mixing profile, from the onset at      mented into a full stellar evolution calculation. The final
+log10 (t − tend )/yr = −3.856. This is run for 110 s, the   ejected mass of a species i is given by:
+same time between these moments, which corresponds
+to at least 2 − 3 convective turnovers which implies a                      EMi = EMwind
+                                                                                    i    + EMSN
+                                                                                             i
+4                                                             J. Issa et al.
+
+        MZAMS     Zini      ∆m            ∆t      ⟨X(39 K)⟩fin     OP(39 K)       ⟨X(40 K)⟩fin    OP(40 K)     ⟨X(41 K)⟩fin    OP(41 K)
+        12 M⊙     0.01     0.6 M⊙       0.029 h   2.48 × 10−4          1.531      6.72 × 10−6       1.362      1.49 × 10−6       0.487
+        15 M⊙     0.01    1.52 M⊙       0.74 h    3.01 × 10−4           1.98      3.24 × 10−5       1.934      2.71 × 10−5        1.63
+        20 M⊙     0.01     3.6 M⊙       5.43 h    2.28 × 10−4          1.841      3.56 × 10−6       0.895      7.01 × 10−7       0.004
+        15 M⊙     0.02    1.43 M⊙       1.252 h   9.43 × 10−4          2.028      5.85 × 10−5       1.965      2.38 × 10−5       1.305
+Table 1. Properties of the merger and production of K for the NuGrid models with O-C shell mergers. The averaged mass
+fractions are within the maximum extent of the merger region and OP = log10 (⟨Xfin ⟩/⟨Xini ⟩) where ⟨Xini ⟩ and ⟨Xfin ⟩ are taken
+at the start and end of the merger. Note that the models have different initial mass fractions of 39−41 K.
+
+where EMwind i   are the yields from winds throughout                          subscript ref = R) and the solar measurements from M.
+stellar evolution and EMSN  i  are the ejected yields due                      Asplund et al. (2009) (ref = ⊙):
+to a supernova without explosive burning as described
+by C. Ritter et al. (2018b). Winds are taken from the                                [X/Y]ref = log10 (X/Y)norm − log10 (X/Y)ref
+surface abundances and are not affected by the mixing
+                                                                               where X and Y are mass fractions calculated with
+conditions in the O shell, and are the same as C. Rit-
+                                                                               Eq. (1), and the subscript norm indicates what is be-
+ter et al. (2018b), but the pre-explosive supernova yields
+                                                                               ing compared to the reference value.
+are altered by the mixing conditions. Our assumption is
+that the ratio of the decayed mass fractions calculated                                 2.4. Estimating Reaction Contribution
+in our models at t = 110 s to those in the C. Ritter
+et al. (2018b) O shell at log10 (t − tend )/yr = −3.856                          The reaction flux fij is defined as the net flux of the
+(the corresponding time in the NuGrid model) remains                           reaction between species i and j:
+the same for all subsequent evolution across the whole                                                                     !
+                                                                                               Xi Xj
+O-C region. Since the convective turnover is shorter                                     fij =       ρNA ⟨σv⟩ij − ⟨σv⟩ji
+than the simulation time, this assumption is reasonable.                                       Ai Aj
+This allows us to estimate what the yields of an entire
+                                                                               where X is the mass fraction, A is the atomic mass, ρ
+stellar model would be if our 3D-inspired mixing condi-
+                                                                               is the density, NA is Avogadro’s number, and ⟨σv⟩ij is
+tions were used, although this neglects feedback effects
+                                                                               the reaction rate between species i and j.
+that cannot be captured without full stellar evolution
+                                                                                  To estimate the total contribution of a reaction to the
+calculations. Therefore, these results are not meant as
+                                                                               production and destruction of a species, we calculate the
+predictive yields, but rather an exploratory study of how
+                                                                               average reaction flux Fij over mass and time:
+mixing conditions may impact nucleosynthesis.
+  Following C. Ritter et al. (2018b), we use the delayed                                                     Z tc +δt Z mtop
+                                                                                               1
+explosion mass cut of C. L. Fryer et al. (2012) to find                         Fij =                                          |fij (m, t)|dmdt
+                                                                                        δt(mtop − mbot )      tc      mbot
+m = 1.619 M⊙ for our approximated yields:
+             Z 2.95 M⊙                         Z mτ                            Using this, we can define what percentage a particular
+    EMSN =               Xi · ratioi dm +                 Xi dm                reaction contributes to the total flux for a species:
+      i
+              1.619 M⊙                          2.95 M⊙
+                                                                                                                     Fij
+                                                                                                 ⟨contribution⟩ij = P                        (2)
+where Xi is the mass fraction of an element i, ratioi is                                                             j Fij
+the ratio across the O shell of the decayed mass fractions
+for a model and C. Ritter et al. (2018b) for element i, mτ                     calculated at tc = 110 sec and δt = 1 sec. This pro-
+is the extent of the star at collapse, and 1.619−2.95 M⊙                       vides quasi-equilibrium reaction fluxes at the end of the
+is the O-C merger region above the mass-cut. The mass                          simulation.
+fraction is calculated as the yield of a given species nor-
+                                                                                                       3. RESULTS
+malized to the total yield:
+                                                                                   3.1. Nucleosynthesis of the light odd-Z isotopes
+                                 N
+                                 X                                               The reference case is the nucleosynthesis of the light
+                  Xi = EMi ÷             EMi                     (1)
+                                    i
+                                                                               odd-Z isotopes in the O shell with the MLT-based
+                                                                               mixing efficiency profile with an ingestion rate of 4 ×
+where N is the total number of species.                                        10−3 M⊙ s−1 . 16 O produces p, n, and α by the main O-
+  The final results are calculated in square bracket no-                       burning reaction 16 O+16 O, but the ingestion of 12 C adds
+tation against C. Ritter et al. (2018b) (indicated by the                      to the p, n, and α release by 12 C + 12 C and 12 C + 16 O
+                                   Mixing Conditions and Light Odd-Z Elements                                                                        5
+
+reactions at O-burning temperatures. The sudden in-                              22                                                5.0
+crease of p, n, and α increases the capture reactions                            21         39 40 41 42 43 44 45 46 Sc
+(p, γ), (n, γ), (α, γ), (α, p), and (p, α) significantly which                                                                     5.8
+                                                                                 20   36 37 38 39 40 41 42 43 44 45 Ca
+
+
+
+
+                                                                 Proton Number
+is one of the reasons why the light odd-Z elements are
+produced much more during the merger than the first                              19   35 36 37 38 39 40 41 42 43 44 K              6.6
+
+
+
+
+                                                                                                                                        log10(fij)
+(cf. §2.1) convective O shell.
+   The main reaction channels are shown in Fig. 1.                               18   34 35 36 37 38 39 40 41 42 43 Ar
+                                                                                                                                   7.4
+Many additional reactions that are not shown as the                              17   33 34 35 36 37 38 39 40 41 42 Cl
+convective-reactive nature of the O shell means differ-                                                                            8.2
+                                                                                 16   32 33 34 35 36 37 38 39 40 S
+ent locations in the shell have varying contributions.
+Fig. 2 shows the isotopic mass fractions across the O                            15                                                9.0
+                                                                                      16   18      20    22      24         26
+shell, and as it shows the light odd-Z isotopes have a                                          Neutron Number
+peak 1.6−1.7 M⊙ .
+   Important isotopes like 30 Si, 32,34 S, and 38 Ar are         Figure 1.        Chart of reactions between isotopes at
+created in the first convective O shell, and 37 Cl,              m = 1.65 M⊙ [T = 2.231 GK] for the MLT mixing case
+40
+   Ar, and 44 Ca are created in the C shell and in-              with an ingestion rate of 4 × 10−3 M⊙ s−1 at t = 110 s. Both
+gested during the merger. These pathways were de-                arrow colour and size indicate log10 (fij ), and arrows point
+termined by analyzing the production of each of the              in the direction of the reaction.
+species during the evolution of the C. Ritter et al.
+(2018b) model and the fluxes in our post-processed                                0
+models. The only stable P isotope 31 P is produced
+by 16 O(16 O, p)31 P. The stable Cl isotope 35 Cl is
+                                                                                  1
+produced by 30 Si(α, γ)34 S(p, γ)35 Cl, 32 S(α, p)35 Cl, and                      2
+35
+   S(p, n)35 Cl. 37 Cl is both ingested from the C shell and
+                                                                                  3
+produced by 34 S(p, α)37 Cl and 35 Cl(n, γ)36 Cl(n, γ)37 Cl.
+                                                                                  4
+                                                                  log10(Xi)
+
+
+
+The principal stable isotope of K, 39 K is produced by
+38
+   Ar(p, γ)39 K, the long-lived radioisotope 40 K is pro-
+                                                                                  5
+duced by 39 K(n, γ)40 K, and the other stable K isotope
+41
+   K is produced by 40 K(n, γ)41 K and 40 Ar(p, γ)41 K.                           6
+Finally, the only stable Sc isotope 45 Sc is produced                             7         16O         32S           39K        41K
+by 38 Ar(α, γ)42 Ca(n, γ)43 Ca(n, γ)44 Ca(p, γ)45 Sc. How-
+                                                                                            30Si        35Cl          40K        45Sc
+ever, our analysis shows that different reactions domi-                           8
+                                                                                            31P         38Ar
+nate the light odd-Z isotopic production depending on                             9
+the mixing conditions as shown in Tables 2 and 3. Ad-                                  1.60 1.65 1.70 1.75 1.80 1.85 1.90 1.95
+ditionally, the transient before the quasi-equilibrium at
+                                                                                                        Mass (M )
+the end of the simulation will have different dominant
+                                                                 Figure 2. Isotopic mass fractions at t = 110 s without
+reactions, but we assume that this is not important for
+                                                                 decays for the MLT mixing case with an ingestion rate of
+the final yields.                                                4 × 10−3 M⊙ s−1 .
+
+  3.2. Impact of macro physics mixing on light odd-Z             are the most affected by the mixing conditions, and 40 K
+                 nucleosynthesis production                      has the largest spread of all isotopes. This underscores
+  Fig. 3 shows the spread across all 24 mixing cases in          the importance of understanding the 3D macro physics
+overproduction in the O shell only at the end of the             from hydrodynamic simulations to reliably predict the
+merger, OP = log10 (Xi /Xi,ini ), where Xi is the final de-      final production during a merger.
+cayed, mass-averaged mass fraction of an isotope and                Figures 4–7 show the modification to the pre-explosive
+Xi,ini is the initial mass fraction at the start of the          yields of C. Ritter et al. (2018b) as described in
+merger. Over the range of mixing scenarios and en-               §2.3. The ratios [P/Fe], [Cl/Fe], [K/Fe], and [Sc/Fe]
+trainment rates, 31 P has a spread OPmax − OPmin of              are changed by [−0.33, 0.23] dex, [−0.84, 0.64] dex,
+0.58 dex, 35 Cl has 1.76 dex, 37 Cl has 0.81 dex, 39 K           [−0.78, 1.48] dex, and [−0.36, 1.29] dex respectively.
+has 2.42 dex, 40 K has 3.37 dex, 41 K has 2.31 dex,              The elemental abundances are most enhanced for the
+and 45 Sc has 1.68 dex with an average spread across             fastest ingestion rate of 4×10−3 M⊙ s−1 and for the mix-
+all light odd-Z isotopes of 1.82 dex. The K isotopes             ing cases with a downturn in the mixing efficiency. This
+6                                                                                       J. Issa et al.
+                                         16
+                          Isotope             O(16 O,p)   (α,γ)    (α,n)     (α,p)      (p,γ)   (p,n)        (n,γ)       (γ,n)    (γ,p)     (n,p)    (n,α)     (p,α)
+                          31
+                             P                +0.97                          −0.01      +0.01
+                          35
+                             Cl                           +0.01              +0.18      −0.57   +0.22                    −0.01   +0.01
+                          37
+                             Cl                                              +0.23      +0.07                +0.02               −0.45     +0.22
+                          39
+                             K                            +0.02              +0.04      −0.71   +0.14                    −0.05   +0.01                         −0.02
+                          40
+                             K                                     −0.09                +0.03   −0.05        +0.64       −0.09   −0.04     −0.05
+                          41
+                             K                            +0.1               −0.28      +0.24                +0.18               −0.03     −0.17
+                          45
+                             Sc                                                         +0.49   +0.01                    −0.07   −0.42
+
+Table 2. Reaction fluxes contributing to the light odd-Z isotopes using Eq. (2) for the MLT mixing case with an ingestion rate
+of 4 × 10−3 M⊙ s−1 . Contributions starting with + are productive (should be read as i → j e.g. 34 S(p, γ)37 Cl with +0.23), those
+starting with − are destructive (should be read as i ← j e.g. 34 S(p, γ)35 Cl with −0.57), and those left blank contribute less
+than 1%.
+
+
+                                  16
+                  Isotope              O(16 O,p)      (α,γ)     (α,n)   (α,p)     (p,γ)     (p,n)       (n,γ)      (γ,n)     (γ,p)     (n,p)     (γ,α)     (n,α)     (p,α)
+                  31
+                     P                  +0.91                           −0.04    +0.02                                      −0.01                          −0.01
+                  35
+                     Cl                                                 +0.05    −0.9      +0.01                            −0.03                          −0.01
+                  37
+                     Cl                                                 −0.06    +0.03                                      −0.52     +0.38
+                  39
+                     K                                                  +0.01    −0.96                                      −0.01                          −0.01
+                  40
+                     K                                          −0.02   −0.03    +0.02     −0.01        +0.33      −0.02    −0.2      −0.37
+                  41
+                     K                                +0.11             −0.33    +0.2                   +0.15               −0.05     −0.15      +0.01
+                  45
+                     Sc                                                 +0.08    +0.29                  +0.01      −0.02    −0.49     +0.1
+
+Table 3. Reaction fluxes contributing to the light odd-Z isotopes using Eq. (2) for the 50 × D3D−insp. mixing case with an
+ingestion rate of 4 × 10−3 M⊙ s−1 . Contributions starting with + are productive (should be read as i → j e.g. 39 K(n, γ)40 K
+with +0.33), those starting with − are destructive (should be read as i ← j e.g. 40 Ca(n, p)40 K with −0.37), and those left blank
+contribute less than 1%.
+
+                         4.0      31P              37Cl           40K            45Sc                                (4.95,1014) (4.95,1013) (7.5,1014) (7.5,1013)
+                         3.5                                                                                                                                           1.5
+                                                                                                           Quenched
+                         3.0                                                                                                                                           1.0
+                         2.5                                                                            50 × D3D insp.
+OP = log10(Xi/Xi, ini)
+
+
+
+
+                         2.0                                                                            10 × D3D insp.                                                 0.5
+
+
+
+
+                                                                                                                                                                             [P/Fe]R
+                         1.5
+                         1.0                                                                             3 × D3D insp.                                                 0.0
+                         0.5                                                                                 D3D insp.
+                         0.0                                                                                                                                            0.5
+                                                                                                                 DMLT
+                         0.5              35Cl            39K              41K                                                                                          1.0
+                         1.0                                                                                         No Merger 4 × 10 5 4 × 10 4 4 × 10 3
+
+Figure 3. Overproduction of the light odd-Z isotopes for all                                        Figure 4.        The change in dex for [P/Fe] to the
+24 mixing cases in the O shell at 110 s. The average spread                                         MZAMS = 15 M⊙ Z = 0.02 model from C. Ritter et al.
+OPmax − OPmin = 1.82 dex, and the line at OP = 0 is the                                             (2018b) as described in §2.3. The lower x-axis is the inges-
+initial amount.                                                                                     tion rate in M⊙ s−1 for the MLT (circles) and 3D-inspired
+                                                                                                    mixing (squares) cases. The upper x-axis is the centre of
+enhancement is non-monotonic with increasing convec-                                                the mixing efficiency dip in Mm and the extent of the dip in
+                                                                                                    cm2 s−1 for the quenched (diamonds) mixing cases. Size in-
+tive velocities for all elements except K which is indeed
+                                                                                                    dicates distance from [P/Fe]R = 0, and colour indicates the
+most enhanced for the 50 × D3D−insp. mixing case.                                                   magnitude. The C. Ritter et al. (2018b) full delayed pre-ex-
+  Isotopes of the same element are not affected the same                                            plosive yield [P/Fe]⊙ = 2.13 dex, and the contributions just
+way by the mixing conditions (Fig. 3), and therefore el-                                            from winds are −0.04 dex
+emental and isotopic enhancements are not necessarily                                               .
+                                            Mixing Conditions and Light Odd-Z Elements                                                                          7
+
+                 (4.95,1014) (4.95,1013) (7.5,1014) (7.5,1013)                                     (4.95,1014) (4.95,1013) (7.5,1014) (7.5,1013)
+                                                                 1.5                                                                               1.5
+       Quenched                                                                          Quenched
+                                                                 1.0                                                                               1.0
+    50 × D3D insp.                                                                    50 × D3D insp.
+    10 × D3D insp.                                               0.5                  10 × D3D insp.                                               0.5
+
+
+
+
+                                                                                                                                                         [Sc/Fe]R
+                                                                       [Cl/Fe]R
+     3 × D3D insp.                                               0.0                   3 × D3D insp.                                               0.0
+         D3D insp.                                                                         D3D insp.
+                                                                  0.5                                                                               0.5
+             DMLT                                                                              DMLT
+                                                                  1.0                                                                               1.0
+                 No Merger 4 × 10 5 4 × 10 4 4 × 10 3                                              No Merger 4 × 10 5 4 × 10 4 4 × 10 3
+
+Figure 5. The same as Fig. 4 but for [Cl/Fe]R . The                               Figure 7. The same as Fig. 4 but for [Sc/Fe]R . The
+C. Ritter et al. (2018b) full delayed pre-explosive yield                         C. Ritter et al. (2018b) full delayed pre-explosive yield
+[Cl/Fe]⊙ = 2.14 dex, and the contributions just from winds                        [Sc/Fe]⊙ = 1.79 dex, and the contributions just from winds
+are 0.21 dex                                                                      are 0.06 dex
+.                                                                                 .
+
+
+                                                                                                   (4.95,1014)(4.95,1013) (7.5,1014) (7.5,1013)
+                 (4.95,1014) (4.95,1013) (7.5,1014) (7.5,1013)                           Quenched                                                  0.2
+                                                                 1.5
+       Quenched                                                                                                                                    0.0
+                                                                                      50 × D3D insp.
+                                                                 1.0
+    50 × D3D insp.                                                                                                                                  0.2
+                                                                                      10 × D3D insp.
+
+
+
+
+                                                                                                                                                         [40K/K]R
+    10 × D3D insp.                                               0.5                                                                                0.4
+                                                                       [K/Fe]R
+
+
+
+
+                                                                                       3 × D3D insp.
+     3 × D3D insp.                                               0.0                                                                                0.6
+                                                                                           D3D insp.
+         D3D insp.                                                                                                                                  0.8
+                                                                  0.5                          DMLT
+             DMLT                                                                                                                                   1.0
+                                                                                                   No Merger 4 × 10 5 4 × 10 4 4 × 10 3
+                                                                  1.0
+                 No Merger 4 × 10 5 4 × 10 4 4 × 10 3
+                                                                                  Figure 8. The same as Fig. 4 but for [40 K/K]R . The
+Figure 6. The same as Fig. 4 but for [K/Fe]R . The                                C. Ritter et al. (2018b) full delayed pre-explosive yield
+C. Ritter et al. (2018b) full delayed pre-explosive yield                         [40 K/K]⊙ = 1.54 dex, and the contributions just from winds
+[K/Fe]⊙ = 1.59 dex, and the contributions just from winds                         are −1.32 dex. Note that the colourbar is different from
+are −0.03 dex                                                                     Figures 4–7.
+
+.
+                                                                                  mixing case in Fig. 9 and the 50 × D3D−insp. mixing case
+aligned. Elemental K has the largest enhancement for                              in Fig. 10.
+the 50 × D3D−insp. mixing case (Fig. 6), but the isotope                             Comparing Figures 9 and 10 we see that for the faster
+40
+   K is most enhanced for the 1 and 3 × D3D−insp. mix-                            mixing case (1) the reaction fluxes log10 (fij ) are stronger
+ing cases (Fig. 8). Elemental K is primarily 39 K. The                            (2) the mass fractions Xi are higher and have a differ-
+enhancement of 40 K in the lower mixing cases implies                             ent shape (3) the location of the strongest reactions are
+that the mixing conditions affect how these isotopes are                          deeper in the shell (4) the dominant reactions are dif-
+produced relative to each other.                                                  ferent. In both cases, 40 K is both produced and de-
+   Mixing conditions affect nucleosynthesis in a non-                             stroyed by 39 K(n, γ)40 K, but in the faster mixing case
+monotonic way because the O shell is a convective-                                these reactions occur at hotter temperatures deeper in
+reactive environment. As explored in J. Issa et al.                               the shell and the destructive channels 40 K(p, n)40 Ca and
+                                                                                  40
+(2025), when the mixing speeds change, so does the lo-                               K(p, γ)41 Ca are much stronger. Note that 40 K is being
+cation of peak burning. For example, consider the reac-                           net destroyed in the faster mixing case, but still has a
+tions contributing to the 40 K mass fraction for the MLT                          higher mass fraction because 39 K is being produced even
+8                                                                     J. Issa et al.
+
+              7.00                                             3                            2.00
+              7.25                                             4                            1.75
+              7.50                                             5                            1.50
+              7.75
+                                                               6
+
+
+
+
+                                                                   log10(Xi)
+log10(fij)
+
+
+
+                                                                                            1.25
+              8.00
+
+
+
+
+                                                                                [40K/39K]
+                            37Cl( ,n)40K        40K(n,p)40Ar   7                            1.00
+              8.25          39Ar(p, )40K        40K( ,n)39K
+                                                               8                            0.75
+              8.50          39K(n, )40K         40K(n, )41K
+                            40K(n, )37Cl        X(39K)                                      0.50
+              8.75                                             9
+                            40K( ,p)39Ar        X(40K)
+              9.00                                             10                           0.25         R18 + CO merger
+                     1.6   1.7        1.8       1.9                                                      LC18 no CO merger
+                                 Mass (M )                                                  0.00         t.w. 10×D3D insp.
+                                                                                                   0.6       0.5      0.4    0.3    0.2   0.1   0.0   0.1
+                                           40
+Figure 9. Reaction fluxes fij for K and mass fractions Xi
+                                                                                                                             [41K/39K]
+for 39,40 K for the MLT mixing case with an ingestion rate
+of 4 × 10−3 M⊙ s−1 at t = 110 s. The direction of reactions                    Figure 11. Predicted dispersion of K isotopic ratios in the
+i → j are written as left to right in the legend. Note that the                interstellar medium (ISM) resulting from pollution by a sin-
+reaction direction notation as always left to right is different               gle CCSN explosion, based on stellar yields from a 15 M⊙
+than Table 2.                                                                  star at solar metallicity with O-C shell merger (R18, C. Rit-
+                                                                               ter et al. 2018a) and without (LC18 M. Limongi & A. Chieffi
+                                                                               2018), as well as shell-merger only predictions from this work
+              5.00                                             2               (t.w.) for the 10 × D3D−insp. mixing case with an ingestion
+              5.25                                                             rate of 4 × 10−3 M⊙ . Isotopic ratios are expressed in bracket
+                                                               3               notation, reported as logarithms base 10, and normalized to
+              5.50
+                                                                               solar values.
+              5.75                                             4
+                                                                   log10(Xi)
+log10(fij)
+
+
+
+
+                                                39K(n, )40K
+              6.00                                                             known that this could reconcile the [K/Fe] observations
+                                                40K( ,n)39K
+              6.25                              40K(p, )41Ca
+                                                               5               in the Milky Way disk with GCE simulations (C. Ritter
+              6.50                              40K(p,n)40Ca                   et al. 2018a). 40 K receives the biggest boost compared
+                                                X(39K)         6               to the solar scaled initial abundances. Let’s consider as
+              6.75                              X(40K)                         example the 15 M⊙ Z = 0.02 model by C. Ritter et al.
+              7.00                                             7               (2018a), affected by O-C shell merger, and the analo-
+                     1.6   1.7         1.8       1.9
+                                 Mass (M )                                     gous non-rotating model in the stellar set by M. Limongi
+                                                                               & A. Chieffi (2018). The 39 K, 40 K and 41 K yields by
+Figure 10. The same as Fig. 9 but for the 50 × D3D−insp.                       the model with O-C shell merger are 1.959 × 10−3 M⊙ ,
+mixing case with an ingestion rate of 4 × 10−3 M⊙ s−1 . Note                   1.165×10−4 M⊙ and 6.694×10−5 M⊙ , respectively. The
+that the reaction direction notation as always left to right is                model without O-C shell merger ejects 1.061×10−4 M⊙ ,
+different than Table 3.                                                        6.071 × 10−7 M⊙ and 1.046 × 10−5 M⊙ , respectively.
+                                                                               While 39 K and 41 K boosts are in the order of a factor
+more. This is evident when comparing to Fig. 8 where                           of 10 or less (C. Ritter et al. 2018a), the 40 K increase in
+the 50 × D3D−insp. mixing case has a lower [40 K/K] ra-                        our 1D model with O-C shell merger is almost 200 times
+tio than the MLT case. Since the shell is convective-                          larger compared to a standard CCSN production seen
+reactive, the nucleosynthesis is sensitive to the ratio of                     in the model by M. Limongi & A. Chieffi (2018). Addi-
+the timescales for mixing and burning which changes the                        tionally, we consider yields from our most enhanced 40 K
+location where reaction peaks occur. This behaviour is                         production cases, the 10 × D3D−insp. case with an inges-
+relevant for all nucleosynthesis in the O shell and is the                     tion rate of 4 × 10−3 M⊙ , which should be considered as
+cause of the spread in Fig. 3 and elemental abundance                          an indicative upper limit in terms of 40 K yields based on
+enhancements in Figures 4–7.                                                   the current simulations. The 10 × D3D−insp. case ejects
+                                                                               3.992×10−2 M⊙ , 3.054×10−3 M⊙ and 9.857×10−4 M⊙
+             4. HETEROGENEOUS 40 K INTERSTELLAR
+                                                                               of 39 K, 40 K and 41 K, respectively.
+             MEDIUM ENRICHMENT AND IMPACT FOR
+                                                                                  Although this needs to be investigated further, it is
+                   ROCKY PLANET HEATING
+                                                                               likely that the occurrence of O-C shell mergers and the
+  As discussed in the previous sections, all K isotopes                        associated strong boost in 40 K takes place in a signifi-
+are efficiently produced in O-C shell mergers. It is
+                                  Mixing Conditions and Light Odd-Z Elements                                           9
+
+cant fraction of but not all massive stars (C. Ritter et al.   dial heat from planet formation powers the (internal)
+2018a). When it happens, this is likely with variable          geodynamics of a rocky planet like Earth. Rocky planet
+strength. To some degree the latter is reflected by the        mantle temperatures govern, for example, expressed in
+different assumed entrainment rates. Such efficient, yet       crustal compositions, style of (L. H. Rüpke et al. 2004)
+variable production can introduce a heterogeneous sig-         as well as tectonic regime (e.g., C. O’Neill et al. 2016;
+nature of 40 K in the local ISM once the CCSN explode,         M. Brown et al. 2020)
+in addition to other K sources in GCE. In Fig. 11, we             Thermal evolution models offer a unique approach
+show the dispersion of K isotopic ratios in the ISM re-        to understanding the evolution of temperatures within
+sulting from pollution by two single CCSN explosions,          rocky planetary interiors (Earth, Venus, Mercury, Mars,
+using the yields just provided and assuming a solar-like       large asteroids, icy moons, trans-neptunian objects, and
+ISM composition. For each CCSN pollution scenario, we          ’terrestrial-type’ exoplanets). These models are used to
+generated a random distribution of 10,000 points, con-         constrain their volcanism and surface geology. Subordi-
+sidering a factor of 3 uncertainty in the K isotopic yields    nate lithophile elements such as K and Cl also help sta-
+and a range of dilutions from 2 × 103 M⊙ (lower limit          bilize minerals that control bulk transport properties,
+derived for a low-energy CCSN, A. P. Ji et al. 2020) to a      and/or volatile transport in rocky crusts and mantles
+typical value of 105 M⊙ of ISM material. The obtained          (H. Fei et al. 2017; M. Nishi et al. 2014; M. G. Pamato
+41
+   K/39 K dispersions are less than 10% using the model        et al. 2015; W. Xu et al. 2008) A rocky planet’s internal
+without O-C shell merger and up to about a factor of           heat production is a function of potential and kinetic en-
+two for the model with O-C shell merger by C. Ritter           ergy released during accretion and core formation, and
+et al. (2018a). Similar variations could also be expected      radioactive decay (cf. S. Labrosse & C. Jaupart 2007)
+in the solar neighborhood due to GCE effects, such as          thus, mantle heat production depends on planet(star)
+different metal enrichment histories in the disk (e.g., V.     age. A planet’s ability to sustain a mantle convective
+Hegedűs et al. 2025, and references therein) and stellar      regime and crustal processes changes considerably with
+migration (e.g., M. Kubryk et al. 2015). If instead we         its evolving thermal profile due to cooling over geologic
+consider the 10 × D3D−insp. mixing case presented in the       timescales of billions of years (N. H. Sleep 2000). Here,
+previous sections, we obtain a variation up to a factor        we have shown that across different extrasolar systems
+of 4 from the solar 41 K/39 K ratio.                           we can expect the starting inventories of these nuclides
+   On the other hand, local ISM pollution from the             to vary in abundance, including in their isotopes such as
+                                                               40
+CCSN model by C. Ritter et al. (2018a) would generate             K even if the elemental abundances may be similar to
+a 40 K/39 K dispersion up to a factor of 20. Likewise, the     Solar. Despite the long-suspected (but hitherto, uncon-
+10 × D3D−insp. mixing case from this work would pro-           strained) variability, the majority of exoplanet studies
+duce an even larger dispersion, up to about a factor of        up to now have applied Solar values for radionuclide (U,
+100, while the model without O-C shell merger would            Th, K) concentrations, often without considering the
+show again an insignificant dispersion. Note, that we          decay after planet formation (E. A. Frank et al. 2014).
+are showing in this way only the 10 × D3D−insp. mixing            As an example, we illustrate this in Fig. 12, which
+case, which is the one with the largest 40 K production        shows the heating rate over time for Earth. To mimic
+but not the one with the largest 40 K/39 K ratio (Fig. 8).     the 40 K variations observed in Fig. 11, we multiply and
+The latter is obtained for the 1 and 3×D3D−insp. mixing        divide the current abundance of 40 K in Earth’s silicate
+cases.                                                         mass (3.04 × 10−8 kg/kg, e.g. E. A. Frank et al. 2014,
+   The showcased O-C shell merger cases would intro-           and references therein) by a factor of 3. Although simi-
+duce a strongly heterogeneous signature in the GCE K           lar terawatt (TW) values are obtained today by varying
+abundances of the ISM, locally decoupling the abun-            the 40 K abundance, the planet’s heating history would
+dance of 40 K from the other K isotopes obtained from          clearly be significantly different.
+GCE. Consequently, the Sun cannot be used as a ro-                We will explore in detail elsewhere the implications
+bust reference for the 40 K/K ratio for stars in the so-       of this for different types of rocky planets, considering
+lar neighborhood. Instead, our work shows that solar           more detailed pollution scenarios. Indeed, it is unclear
+“twins” with otherwise similar metallicity and K abun-         whether the Solar System has a 40 K/K ratio consistent
+dance could have significantly different initial 40 K abun-    with GCE or if it reflects local pollution from CCSNe.
+dance compared to the solar system.                            Another interesting aspect, beyond the scope of this
+   The 40 K isotopic effect described here has important       analysis, is whether we should expect local variations
+thermal histories for rocky exoplanets. Energy produced        in the other radioactive sources, U and Th. The cur-
+from natural radioactive decay and the leftover primor-        rent GCE of Th in the Milky Way disk is under de-
+10                                                       J. Issa et al.
+
+                                                                 namic simulations to constrain the mixing conditions
+                                                                 during these events to improve predictions. We have
+                                                                 previously shown that mixing scenario changes which re-
+                                                                 action rates are correlated with isotopic production (J.
+                                                                 Issa et al. 2025), so with realistic 3D mixing conditions
+                                                                 the next critical step is to explore the uncertainties in
+                                                                 these rates. Observations can provide constraints, such
+                                                                 as those that report a low dispersion in [K/Fe] for metal-
+                                                                 poor stars (e.g., S. M. Andrievsky et al. 2010; J. G. Co-
+                                                                 hen et al. 2013; I. U. Roederer et al. 2014; M. N. Ishigaki
+                                                                 et al. 2025). This could indicate that mixing conditions
+                                                                 are more uniform in real stars than the range explored
+                                                                 here, however GCE calculations that include a realistic
+                                                                 range of shell merger conditions are needed to confirm
+                                                                 this. C. Ritter et al. (2018a) show that O-C shell merg-
+                                                                 ers are necessary to explain the light odd-Z elements in
+                                                                 GCE, but L. Roberti et al. (2025) show that this could
+Figure 12. The evolution over time of the radioactive heat
+production is shown for an Earth-like planet, where 40 K         also lead to models producing more than observations.
+abundances are increased and decreased by a factor of 3 com-     Future 3D modelling will be needed to define the correct
+pared to the typical Earth values. The combined total heat       mixing conditions, possibly yielding K abundances com-
+productions by 40 K, 232 Th, 235 U, and 238 U are also shown.    patible with both stellar archaeology and GCE. Finally,
+Time on the x-axis is in Myr before present and so moves         because the O shell is convective-reactive, the variations
+from right to left. Negative values on the x-axis refer to       in yields due to mixing may not be the same for models
+future time.
+                                                                 with different temperature profiles or shell sizes. There-
+                                                                 fore, the results presented here cannot be extrapolated
+bate (e.g., R. B. Botelho et al. 2019; T. Mishenina et al.       to other stellar models without further study.
+2022), while measuring U in stellar spectra is even more            Mixing conditions are set by the 3D macro physics of
+challenging. Since r-process sources are expected to be          convection of the O-C shell merger and strongly affects
+much rarer than CCSNe (e.g., C. Sneden et al. 2008; J. J.        the production of 40 K, which is a long-lived radionuclide
+Cowan et al. 2021), heterogeneous signatures from local          with a half-life of t1/2 = 1.248 Gyr that contributes to
+235,238
+        U and 232 Th pollution are likely to be extremely        radiogenic heating in planets (E. A. Frank et al. 2014;
+rare and possibly directly associated with the stellar Th        C. O’Neill et al. 2020). Not only is the elemental K en-
+abundance. However, the relevance of such heterogene-            hanced, but so is [40 K/Fe] up to 26× compared to C.
+ity affecting also the r-process actinide abundances can-        Ritter et al. (2018b) result for the 10 × D3D−insp. mix-
+not be ruled out. It is worth noting that a significant          ing case with an ingestion rate of 4×10−3 M⊙ s−1 (using
+244
+    Pu abundance enhancement, where 244 Pu is a short-           square bracket notation adding the results of Fig. 6 and
+lived radioactive isotope also made by the r process,            Fig. 8). This would mean that the 40 K contributed to
+can be inferred for the Early Solar System compared              GCE is significantly enhanced. As we showed in Fig. 11,
+to measurements representative of the present ISM, de-           there is a large variation in the 40 K/39 K ratio which
+rived from deep-sea crust and other planetary materials          tracks the 40 K/K ratio as 39 K is the dominant isotope
+(e.g., K. Hotokezaka et al. 2015; A. Wallner et al. 2021;        of K. This combined with the fact that the mixing con-
+B. Wehmeyer et al. 2023; X. Wang et al. 2023; S. Bishop          ditions do not non-monotonically affect the production
+et al. 2025).                                                    of 39 K and 40 K means that the 40 K/39 K ratio can vary
+       5. DISCUSSIONS AND CONCLUSIONS                            significantly between stars with otherwise similar metal-
+                                                                 licity and elemental K observations, which brings into
+  As shown in this analysis, O-C shell mergers sig-
+                                                                 question the validity of deriving 40 K from an elemental
+nificantly modify the pre-explosive yields of the light
+                                                                 abundance measurement of the host star. Furthermore,
+odd-Z elements, particularly elemental K which can be
+                                                                 we have shown that the production of 40 K in O-C shell
+enhanced by up to 38× compared to C. Ritter et al.
+                                                                 mergers is so high that it could potentially introduce
+(2018b). These results reflect the systematic uncertainty
+                                                                 heterogeneous signatures in the local ISM. With the ref-
+in 1D stellar models due to the treatment of mixing, and
+                                                                 erence CCSN model considered in this work, we find
+highlight the potential instrinsic variability in massive
+                                                                 that 40 K could be enhanced by up to a factor of 20 com-
+stars. This indicates the importance for 3D hydrody-
+                                Mixing Conditions and Light Odd-Z Elements                                           11
+
+pared to its background GCE abundance, decoupling            that may occur, and uses a first-order approximation to
+the 40 K abundance from the observable K abundances          estimate the final yields. The post-processing approach
+resulting from GCE. With the most 40 K-rich mixing           does not properly account for the evolution of the merger
+model discussed in this work, we find possible hetero-       in the 1D model, as temperature and density evolve and
+geneous signatures affecting all K isotopes, with a 40 K-    we do not simulate the mixing of material in the O shell
+enhancement up to a factor of a hundred.                     up into the merged C shell. Further, it is not clear
+   An enhanced 40 K would have a significant effect on       what the length of the merger would be in 3D nor its
+the history of radiogenic heat production in the man-        behaviour for energy feedback in response to the burn-
+tle of an Earth-like planet. A higher initial inventory      ing of ingested fuel, such as the recently identified SPAr
+of 40 K raises the radiogenic heat budget and sustains       process (L. Roberti & M. Pignatari 2025). While these
+vigorous mantle convection and melt production for           approximations limit presently the accuracy of specific
+longer, which in turn prolongs outgassing and delays         quantitative predictions, the result presented here, that
+tectonic/volcanic shutdown. Thermal-chemical evolu-          3D macro physics mixing conditions strongly affect the
+tion models show that increased internal heating can         nucleosynthesis, is robust. We also demonstrated that
+keep silicate planets volcanically and climatically active   the 1D mixing prescriptions used here do not capture
+for Gyr timescales beyond nominal cases by maintain-         the full range of possible mixing behaviours that may
+ing continuous outgassed supply to the atmosphere and        occur in 3D.
+postponing secular cooling (E. A. Frank et al. 2014).           Additionally, one would expect the MLT 4 ×
+In our context, a ∼ 3× enhancement in 40 K plausibly         10−3 M⊙ s−1 mixing case to match the C. Ritter et al.
+extends the duration of high outgassing and temperate        (2018b) model most closely in Figures 4–8. The dif-
+surface conditions into later epochs relative to an Earth    ference results from a combination of the above fac-
+twin, while a ∼ 10× case would push the system toward        tors and possibly also that in our targeted, zoom-in
+a long-lived super-volcanic regime (still buffered by the    post-processing we took great care that temporal and
+carbon-silicate feedback), thereby broadening the tem-       spatial resolution is sufficient to resolve the convective-
+poral window for habitability via sustained greenhouse       reactive nucleosynthesis, which cannot be expected from
+forcing and volatile cycling (B. J. Foley & A. J. Smye       survey stellar evolution models as those by C. Ritter
+2018).                                                       et al. (2018b). This highlights the difficulty of capturing
+   An elevated 40 K budget implies persistently high vol-    convective-reactive events in 1D stellar evolution mod-
+canic fluxes and a greater frequency of large erup-          els and the need for 3D hydrodynamic simulations to
+tions. Time-variable outgassing (e.g., SO2 pulses that       inform 1D models.
+rapidly convert to sulfate aerosols) imprints may be de-        The highest priority, therefore, is to investigate the
+tectable, time-dependent changes in atmospheric compo-       macro physics of O-C shell mergers with fully 3D hy-
+sition—most notably in O3 and H2 O bands—on Earth-           drodynamic simulations. Such simulations must quan-
+like exoplanets (C. M. Ostberg et al. 2023). Multi-epoch     tify the mixing, identify feedback mechanisms, and es-
+direct imaging/spectroscopy with future facilities such      tablish when and how often mergers occur. Ultimately,
+as the Habitable Worlds Observatory may therefore have       full stellar-evolution calculations with mixing prescrip-
+the potential to discriminate a super-volcanic, high-40 K    tions calibrated to these 3D simulations are needed to
+Earth-analog from a more quiescent twin (P. Liggins          assess the impact of mixing conditions on pre-supernova
+et al. 2022b; C. M. Ostberg et al. 2023).                    and ejecta yields, and inform planetary science studies
+   Although our results demonstrate that mixing condi-       of the impact of 40 K on planetary thermal histories.
+tions strongly influence the production of the light odd-
+Z elements, they do not yet provide a complete picture.
+Our analysis examines a single stellar model at Z = 0.02.                   ACKNOWLEDGMENTS
+The 39−41 K mass fractions can vary by factors of 3, 16,
+                                                             FH is supported by a Natural Sciences and En-
+and 38 respectively in the merged O-C shells listed in
+                                                             gineering Research Council of Canada (NSERC)
+Table 1. Model differences are not as impactful as mix-
+                                                             Discovery    Grant     and   acknowledges       support
+ing conditions, however, as §3.2 shows that final pro-
+                                                             from the NSERC award SAPPJ-797 2021-00032
+duction of 39 K, 40 K, and 41 K in the O shell can vary
+                                                             Nuclear physics of the dynamic origin of the elements.
+by factors of 263, 2340, and 204 respectively across all
+                                                             We acknowledge support from the ChETEC-INFRA
+mixing cases.
+                                                             project funded by the European Union’s Horizon
+   Our results in Figures 4–8 omit the subsequent core-
+                                                             2020 Research and Innovation programme (Grant
+collapse supernova and any explosive nucleosynthesis
+                                                             Agreement No 101008324). This research has used
+12                                                       J. Issa et al.
+
+the Astrohub online virtual research environment                 programme in support of the Synergy Grant - Geoas-
+(https://astrohub.uvic.ca), developed and operated               tronomy, grant agreement number 101166936. SJM also
+by the Computational Stellar Astrophysics group at               thanks the BGI/University of Bayreuth in Germany for
+the University of Victoria and hosted on the Digital             hosting the Geoastronomy Research Group.
+Research Alliance of Canada Arbutus Cloud at the
+University of Victoria. This work benefited from in-                           AUTHOR CONTRIBUTIONS
+teractions and workshops co-organized by The Center              JI performed the simulations, analyzed the results, and
+for Nuclear astrophysics Across Messengers (CeNAM)               wrote the manuscript. FH provided guidance and sup-
+which is supported by the U.S. Department of Energy,             port for the project and edited the manuscript. MP cal-
+Office of Science, Office of Nuclear Physics, under Award        culated the impact of heterogeneous mixing in the ISM
+Number DE-SC0023128. MP acknowledges the support                 of K isotopes, participating in data analysis and in writ-
+to NuGrid from the “Lendület-2023” Program of the               ing the manuscript. SM computed the differential heat
+Hungarian Academy of Sciences (LP2023-10, Hungary),              production of variable starting 40 K abundances, partic-
+the ERC Consolidator Grant funding scheme (Project               ipating in data analysis, and in writing the manuscript.
+RADIOSTAR, G.A. n. 724560, Hungary), the ChETEC
+COST Action (CA16117), supported by the European
+Cooperation in Science and Technology, and the IReNA               Software: The data and analysis tools are available
+network supported by NSF AccelNet (Grant No. OISE-               on Zenodo under an open-source Creative Commons At-
+1927130). MP also thanks the support from NKFI via               tribution license: doi:10.5281/zenodo.17576026. They
+K-project 138031 (Hungary). SJM and MP acknowl-                  are also available for download from the NuGrid collab-
+edge funding from the ERC Horizon Europe funding                 oration website: download.nugridstars.org.
+
+
+                                                       REFERENCES
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020,       Fields, C. E., & Couch, S. M. 2021, The Astrophysical
+  Monthly Notices of the Royal Astronomical Society, 491,          Journal, 921, 28, doi: 10.3847/1538-4357/ac24fb
+  972, doi: 10.1093/mnras/stz2952                                Fischer, T. P., & Aiuppa, A. 2020, Annual Review of Earth
+Andrievsky, S. M., Spite, M., Korotin, S. A., et al. 2010,         and Planetary Sciences, 48, 529,
+  Astronomy and Astrophysics, 509, A88,                            doi: 10.1146/annurev-earth-053018-060321
+  doi: 10.1051/0004-6361/200913223                               Foley, B. J., & Smye, A. J. 2018, Astrobiology, 18, 873,
+Asplund, M., Grevesse, N., Sauval, A. J., & Scott, P. 2009,        doi: 10.1089/ast.2017.1695
+  Annual Review of Astronomy and Astrophysics, 47, 481,          Frank, E. A., Meyer, B. S., & Mojzsis, S. J. 2014, Icarus,
+  doi: 10.1146/annurev.astro.46.060407.145222                      243, 274, doi: 10.1016/j.icarus.2014.08.031
+Bishop, S., Stanciu, I., Cabré, A., et al. 2025, PSJ, 6, 75,
+                                                                 Frank, E. A., Meyer, B. S., & Mojzsis, S. J. 2014, Icarus,
+  doi: 10.3847/PSJ/adbbd6
+                                                                   243, 274, doi: 10.1016/j.icarus.2014.08.031
+Botelho, R. B., Milone, A. d. C., Meléndez, J., et al. 2019,
+                                                                 Frank, E. A., Meyer, B. S., & Mojzsis, S. J. 2014, Icarus,
+  MNRAS, 482, 1690, doi: 10.1093/mnras/sty2791
+                                                                   243, 274, doi: 10.1016/j.icarus.2014.08.031
+Brown, M., Johnson, T., & Gardiner, N. J. 2020, Annual
+                                                                 Freytag, B., Ludwig, H. G., & Steffen, M. 1996, Astronomy
+  Review of Earth and Planetary Sciences, 48, 291,
+                                                                   and Astrophysics, 313, 497
+  doi: 10.1146/annurev-earth-081619-052705
+                                                                 Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012,
+Cohen, J. G., Christlieb, N., Thompson, I., et al. 2013, The
+                                                                   The Astrophysical Journal, 749, 91,
+  Astrophysical Journal, 778, 56,
+  doi: 10.1088/0004-637X/778/1/56                                  doi: 10.1088/0004-637X/749/1/91
+Cowan, J. J., Sneden, C., Lawler, J. E., et al. 2021, Reviews    Hegedűs, V., Mészáros, S., Világos, B., et al. 2025, A&A,
+  of Modern Physics, 93, 015002,                                   699, A293, doi: 10.1051/0004-6361/202553951
+  doi: 10.1103/RevModPhys.93.015002                              Herwig, F. 2000, The Evolution of AGB Stars with
+Davis, A., Jones, S., & Herwig, F. 2018, Monthly Notices of        Convective Overshoot, arXiv,
+  the Royal Astronomical Society, 484, 3921,                       doi: 10.48550/arXiv.astro-ph/0007139
+  doi: 10.1093/mnras/sty3415                                     Herwig, F., Woodward, P. R., Lin, P.-H., Knox, M., &
+Fei, H., Huang, R., & Yang, X. 2017, Geophysical Research          Fryer, C. 2014, The Astrophysical Journal Letters, 792,
+  Letters, 44, 10226, doi: 10.1002/2017GL075070                    L3, doi: 10.1088/2041-8205/792/1/L3
+                                  Mixing Conditions and Light Odd-Z Elements                                                   13
+
+Hotokezaka, K., Piran, T., & Paul, M. 2015, Nature               Ortenzi, G., Noack, L., Sohl, F., et al. 2020, Scientific
+   Physics, 11, 1042, doi: 10.1038/nphys3574                       Reports, 10, 10907, doi: 10.1038/s41598-020-67751-7
+Ishigaki, M. N., Tominaga, N., Aoki, W., et al. 2025,            Ostberg, C. M., Guzewich, S. D., Kane, S. R., et al. 2023,
+   Potassium Abundances in Extremely Metal Poor Stars:             AJ, 166, 199, doi: 10.3847/1538-3881/acfe12
+   Implications for Nucleosynthesis in the Final Stages of       Pamato, M. G., Myhill, R., Ballaran, T. B., et al. 2015,
+   Massive Star Evolution, arXiv,                                  Nature Geoscience, 8, 75, doi: 10.1038/NGEO2306
+   doi: 10.48550/arXiv.2508.20484                                Paxton, B., Bildsten, L., Dotter, A., et al. 2010, The
+Issa, J., Herwig, F., Denissenkov, P., & Pignatari, M. 2025,       Astrophysical Journal Supplement Series, 192, 3,
+   Impact of 3D Macro Physics and Nuclear Physics on the           doi: 10.1088/0067-0049/192/1/3
+   p Nuclei in O-C Shell Mergers, arXiv,                         Pignatari, M., Herwig, F., Hirschi, R., et al. 2016, The
+   doi: 10.48550/arXiv.2507.16965                                  Astrophysical Journal Supplement Series, 225, 24,
+Ji, A. P., Li, T. S., Simon, J. D., et al. 2020, ApJ, 889, 27,     doi: 10.3847/0067-0049/225/2/24
+   doi: 10.3847/1538-4357/ab6213                                 Prantzos, N., Abia, C., Limongi, M., Chieffi, A., &
+Jones, S., Andrassy, R., Sandalski, S., et al. 2017, Monthly       Cristallo, S. 2018, MNRAS, 476, 3432,
+   Notices of the Royal Astronomical Society, 465, 2991,           doi: 10.1093/mnras/sty316
+   doi: 10.1093/mnras/stw2783                                    Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E.
+Kobayashi, C., Karakas, A. I., & Lugaro, M. 2020, The              2002, The Astrophysical Journal, 576, 323,
+   Astrophysical Journal, 900, 179,
+                                                                   doi: 10.1086/341728
+   doi: 10.3847/1538-4357/abae65
+                                                                 Ritter, C., Andrassy, R., Côté, B., et al. 2018a, Monthly
+Korenaga, J. 2008, Terra Nova, 20, 419,
+                                                                   Notices of the Royal Astronomical Society, 474, L1,
+   doi: 10.1111/j.1365-3121.2008.00843.x
+                                                                   doi: 10.1093/mnrasl/slx126
+Kubryk, M., Prantzos, N., & Athanassoula, E. 2015, A&A,
+                                                                 Ritter, C., Herwig, F., Jones, S., et al. 2018b, Monthly
+   580, A126, doi: 10.1051/0004-6361/201424171
+                                                                   Notices of the Royal Astronomical Society, 480, 538,
+Labrosse, S., & Jaupart, C. 2007, Earth and Planetary
+                                                                   doi: 10.1093/mnras/sty1729
+   Science Letters, 260, 465, doi: 10.1016/j.epsl.2007.05.046
+                                                                 Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, Monthly
+Liggins, P., Jordan, S., Rimmer, P. B., & Shorttle, O.
+                                                                   Notices of the Royal Astronomical Society, 533, 687,
+   2022a, Journal of Geophysical Research: Planets, 127,
+                                                                   doi: 10.1093/mnras/stae1778
+   e2021JE007123, doi: 10.1029/2021JE007123
+                                                                 Roberti, L., & Pignatari, M. 2025, The SPAr Process:
+Liggins, P., Jordan, S., Rimmer, P. B., & Shorttle, O.
+                                                                   Proton Captures Powering Carbon-Oxygen Shell Mergers
+   2022b, Journal of Geophysical Research: Planets, 127,
+                                                                   in Massive Stars, doi: 10.48550/arXiv.2509.13749
+   e2021JE007123, doi: 10.1029/2021JE007123
+                                                                 Roberti, L., Pignatari, M., Brinkman, H. E., et al. 2025,
+Limongi, M., & Chieffi, A. 2018, ApJS, 237, 13,
+                                                                   The Occurrence and Impact of Carbon-Oxygen Shell
+   doi: 10.3847/1538-4365/aacb24
+                                                                   Mergers in Massive Stars, arXiv
+Meakin, C. A., & Arnett, D. 2006, The Astrophysical
+   Journal, 637, L53, doi: 10.1086/500544                        Roederer, I. U., Preston, G. W., Thompson, I. B., et al.
+Meakin, C. A., & Arnett, D. 2007, The Astrophysical               2014, The Astronomical Journal, 147, 136,
+   Journal, 667, 448, doi: 10.1086/520318                         doi: 10.1088/0004-6256/147/6/136
+Mishenina, T., Pignatari, M., Gorbaneva, T., et al. 2022,        Rüpke, L. H., Morgan, J. P., Hort, M., & Connolly, J. A. D.
+   MNRAS, 516, 3786, doi: 10.1093/mnras/stac2361                   2004, 223, 17, doi: 10.1016/j.epsl.2004.04.018
+Mishenina, T., Pignatari, M., Côté, B., et al. 2017,           Sleep, N. H. 2000, Journal of Geophysical Research:
+   MNRAS, 469, 4378, doi: 10.1093/mnras/stx1145                    Planets, 105, 17563, doi: 10.1029/2000JE001240
+Nishi, M., Irifune, T., Tsuchiya, J., et al. 2014, Nature        Sneden, C., Cowan, J. J., & Gallino, R. 2008, ARA&A, 46,
+   Geoscience, 7, 224, doi: 10.1038/NGEO2074                       241, doi: 10.1146/annurev.astro.46.060407.145207
+Noack, L., & Breuer, D. 2014, Planetary and Space Science,       Spaargaren, R. J., Wang, H. S., Mojzsis, S. J., Ballmer,
+   98, 41, doi: 10.1016/j.pss.2013.06.020                          M. D., & Tackley, P. J. 2023, The Astrophysical Journal,
+O’Neill, C., Lenardic, A., Weller, M., et al. 2016, Physics of     948, 53, doi: 10.3847/1538-4357/acac7d
+   the Earth and Planetary Interiors, 255, 80,                   Wallner, A., Froehlich, M. B., Hotchkis, M. A. C., et al.
+   doi: 10.1016/j.pepi.2016.04.002                                2021, Science, 372, 742, doi: 10.1126/science.aax3972
+O’Neill, C., Lowman, J., & Wasiliev, J. 2020, Icarus, 352,       Wang, X., Clark, A. M., Ellis, J., et al. 2023, ApJ, 948, 113,
+   114025, doi: 10.1016/j.icarus.2020.114025                      doi: 10.3847/1538-4357/acbeaa
+14                                                           J. Issa et al.
+
+Wehmeyer, B., López, A. Y., Côté, B., et al. 2023, ApJ,           Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+                                                                       A. 2020, The Astrophysical Journal, 890, 94,
+  944, 121, doi: 10.3847/1538-4357/acafec                              doi: 10.3847/1538-4357/ab66bb
+                                                                     Yoshida, T., Takiwaki, T., Aguilera-Dena, D. R., et al.
+Xu, W., Lithgow-Bertelloni, C., Stixrude, L., & Ritsema, J.            2021, Monthly Notices of the Royal Astronomical
+                                                                       Society, 506, L20, doi: 10.1093/mnrasl/slab067
+  2008, Earth and Planetary Science Letters, 275, 70,                Yoshida, T., Takiwaki, T., Kotake, K., et al. 2019, The
+                                                                       Astrophysical Journal, 881, 16,
+  doi: 10.1016/j.epsl.2008.08.012                                      doi: 10.3847/1538-4357/ab2b9d
+

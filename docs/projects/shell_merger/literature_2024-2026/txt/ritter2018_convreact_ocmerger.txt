@@ -1,0 +1,439 @@
+                                               MNRAS 000, 1–?? (2016)                                             Preprint 25 October 2021               Compiled using MNRAS LATEX style file v3.0
+
+
+
+
+                                               Convective-reactive nucleosynthesis of K, Sc, Cl and p-process
+                                               isotopes in O-C shell mergers
+
+                                               C. Ritter1,6,7? , R. Andrassy1,6 , B. Côté1,2,6,7 , F. Herwig1,6,7 , P. R. Woodward3,6 ,
+                                               M. Pignatari4,7 , S. Jones5,7
+                                               1 Department of Physics and Astronomy, University of Victoria, Victoria, BC, V8P5C2, Canada
+                                               2 National Superconducting Cyclotron Laboratory, Michigan State University, MI, 48823, USA
+arXiv:1704.05985v2 [astro-ph.SR] 25 Sep 2017
+
+
+
+
+                                               3 LCSE and Department of Astronomy, University of Minnesota, Minneapolis, MN 55455, USA
+                                               4 E. A. Milne Centre for Astrophysics, Department of Physics & Mathematics, University of Hull, HU6 7RX, United Kingdom
+                                               5 Heidelberg Institute for Theoretical Studies, Schloss-Wolfsbrunnenweg 35, D-69118 Heidelberg, Germany
+                                               6 JINA-CEE, Michigan State University, East Lansing, MI, 48823, USA
+                                               7 NuGrid collaboration, http://www.nugridstars.org
+
+
+
+
+                                               Last updated 2016 May 22; in original form 2013 September 5
+
+
+
+                                                                                      ABSTRACT
+                                                                                      We address the deficiency of odd-Z elements P, Cl, K and Sc in galactic chemical evolution
+                                                                                      models through an investigation of the nucleosynthesis of interacting convective O- and C
+                                                                                      shells in massive stars. 3D hydrodynamic simulations of O-shell convection with moderate
+                                                                                      C-ingestion rates show no dramatic deviation from spherical symmetry. We derive a spheri-
+                                                                                      cally averaged diffusion coefficient for 1D nucleosynthesis simulations which show that such
+                                                                                      convective-reactive ingestion events can be a production site for P, Cl, K and Sc. An entrain-
+                                                                                      ment rate of 10−3 M /s features overproduction factors OPs ≈ 7. Full O-C shell mergers in our
+                                                                                      1D stellar evolution massive star models have overproduction factors OPm > 1dex but for such
+                                                                                      cases 3D hydrodynamic simulations suggest deviations from spherical symmetry. γ-process
+                                                                                      species can be produced with overproduction factors of OPm > 1dex, e.g. for 130,132 Ba. Using
+                                                                                      the uncertain prediction of the 15 M , Z = 0.02 massive star model (OPm ≈ 15) as repre-
+                                                                                      sentative for merger or entrainment convective-reactive events involving O- and C-burning
+                                                                                      shells, and assume that such events occur in more than 50% of all stars, our chemical evolution
+                                                                                      models reproduce the observed Galactic trends of the odd-Z elements.
+                                                                                      Key words: stars: abundances - stars: evolution - stars: interiors - hydrodynamics - galaxy:
+                                                                                      abundances
+
+
+
+                                               1    INTRODUCTION                                                             simulations compared to the solar abundances has always been
+                                                                                                                             recognized (see Pignatari et al. 2016a, and references therein).
+                                               Massive stars are the main producers of intermediate-mass elements
+                                               below the Fe peak (e.g. Woosley et al. 2002). However, the odd-Z                    While previous attempts to explain the production of odd-Z
+                                               elements K and Sc in galactic chemical evolution (GCE) models of              elements focussed on explosive nucleosynthesis environments, we
+                                               the Milky Way based on yields of Kobayashi et al. (2006, K06) or              are proposing that odd-Z elements, as well as possibly p-process
+                                               Nomoto et al. (2013) are up to 1 dex lower compared to halo and disk          species, are forming in convective-reactive events in pre-supernova
+                                               stars. Several promising production scenarios have been considered            stellar evolution. In 1D stellar models the mixing-length theory
+                                               for Sc, such as the ejecta of proton-rich neutrino winds (Fröhlich            (Cox & Giuli 1968) describes convection in a time and spatially
+                                               et al. 2006), jet-induced core-collapse supernova explosions (e.g.            averaged way that provides realistic results in conditions where the
+                                               Tominaga 2009) and hypernovae (e.g. Sneden et al. 2016). However              nuclear reaction time scale is much larger than the convective mixing
+                                               the impact of these mechanisms on GCE models has not yet been                 timescale, i.e. the Damköhler number Da = τmix /τreac << 1. In
+                                               demonstrated.                                                                 that case the convective region is instantaneously mixed compared
+                                                     Massive stars are also considered the main source of rare p-            to the reaction time scale and the detailed shape of the mixing profile
+                                               rich stable isotopes beyond iron, although the underproduction in             is not important. However, in convective-reactive nucleosynthesis
+                                                                                                                             Da ∼ 1 and the combined mixing and nuclear processes at each
+                                                                                                                             radial location determines the overall nuclear production of the
+                                                                                                                             region. In more extreme cases the energy feedback from nuclear
+                                               ?   Contact e-mail: critter@uvic.ca                                           reactions on the convective turn-over time scale may be dynamically
+
+                                               © 2016 The Authors
+2         C. Ritter et al.
+
+    Run ID      Hydrodynamic simulations                                                          25 M stellar evolution model (M25Z0.02J, Table 1) and the same
+                Û e [ M /s]
+                M                  LO [ L ]         LC [ L ]          fQO     fQC    Stationary   numerical approach (3D hydrodynamics code PPMstar, Woodward
+    I2          3.13 × 10−7     4.27 × 1010        8.29 × 109          1.0     1.0         yes
+                                                                                                  et al. 2015). We run simulations in 4π geometry on a 7683 grid of
+    I13         1.07 × 10−4     5.10 × 1012       2.54 × 1012         67.5     1.0         yes    the ingestion of C-rich material from a stable layer atop the O shell.
+    I11         2.24 × 10−4     8.02 × 1011       1.32 × 1013         13.5    10.0          no
+                                                                                                  Instead of driving the convection with a constant volume heating
+    Run ID      1D post-processing simulations of I2                                              term, we now use a realistic O burning prescription according to
+                Û e [ M /s]
+                M                      OPs                fD    tt ot [min]                       Eq. 18.75 in Kippenhahn et al. (2012).
+    Sm5          1.2 × 10−5                1.23           1.0         16.5                              Our initial nucleosynthesis analysis of C-shell material inges-
+    Sm5L         1.2 × 10−5                1.65           1.0        291.7
+    Sm4          1.2 × 10−4                2.38           1.0         16.5
+                                                                                                  tion into the O shell with a 1-zone simulation showed that the
+    Sm3          1.2 × 10−3                4.70           1.0         16.5                        12 C(12 C,α)20 Ne (Caughlan & Fowler 1988) and the 16 O(α,g)20 Ne
+    Sm3D         1.2 × 10−3                7.00          15.7         16.5
+                                                                                                  reactions produce most of the energy over most of the O shell. We
+    Run ID      Stellar evolution tracks
+                                                                                                  assume that each α particle liberated by the first reaction imme-
+                      OPm        Mini [ M ]                Z    Reference                         diately triggers the second since plenty of 16 O is available. Thus,
+    M15Z0.02          14.74                 15           0.02         R17                         the energy release of C burning is the sum of Q values of the two
+    M12Z0.01           8.34                 12           0.01         R17
+    M15Z0.01          33.53                 15           0.01         R17                         reactions. The mass fraction of 12 C in the C shell of the stellar
+    M20Z0.01          12.15                 20           0.01         R17                         model M25Z0.02J is 0.026. We use five times that value for the
+    M25Z0.02R                               20           0.02         R17
+    M25Z0.02J                               25           0.02         J17                         fluid in the top stable layer in the PPMstar simulations to shorten
+                                                                                                  the simulations’ transition to a stationary state, which reduces the
+Table 1. Overview of simulations and their properties. Given are the en-                          overall computational costs. In addition to this simulation (I2) we
+trainment rates M Û e , time-averaged O- and C-burning luminosities LO and                        perform additional runs with enhanced O- and C-burning energy
+LC , the increase of the Q values of O-shell and C-shell fluid burning by                         release (Table 1).
+factors fQO and fQC and an indication whether the entrainment process                                   The 16 O + 12 C reaction, which we ignore in this initial set of
+can be considered stationary. The luminosities of I13 and I11 vary in the
+                                                                                                  hydro simulations, may also become relevant, sensitively depend-
+time interval adopted for averaging by up to a factor of ∼ 4. The entrainment
+rate in I11 was derived using a different method to be described in (Andrassy
+                                                                                                  ing on the temperature, the mixing efficiency and the amount of
+et al. 2017, in preparation) and corresponds to the last 2.5 min before the                       entrained C-shell material. Indeed, in the I2 (I13) hydro simula-
+flow became so viollent that the simulation had to be stopped. Stellar evo-                       tions the C-shell fluid is mixed fast to the hottest layers in quantities
+lution tracks of R17 with mean overproduction factors of convective O-C                           such that the reaction provides a factor 8 (0.7) more energy than the
+shell mergers OP of P, Cl, P and Sc, the increase of the diffusion coefficient                    reactions included in the hydro network. A detailed analysis of this
+by a factor fD and the total run time tt ot . Mini and Z are the initial mass                     complex, non-linear problem is beyond the scope of this work and
+and metallicity of the stellar evolution models.                                                  will be addressed elsewhere (Andrassy et al. in prep).
+                                                                                                        The detailed nucleosynthesis is computed with the 1D multi-
+                                                                                                  zone post-processing code mppnp as in Herwig et al. (2011). The
+relevant. This situation can be encountered in the late phases of                                 stratification is the same as in the hydrodynamic simulation I2,
+stellar evolution of both low-mass and massive stars, such as in                                  which is based on the stellar model M25Z0.02J. C-shell material
+simulations of combustion of H-rich material ingested into He-shell                               with an abundance distribution of the post-processed stellar model
+flash convection in post-AGB stars. This can lead to a 3D non-radial                              M25Z0.02R at a range of rates is injected into the upper part of the
+instability Global Oscillation of Shell H-ingestion (GOSH, Herwig                                 convective shell. Mixing is modelled based on a diffusion coefficient
+et al. 2014). This convective-reactive environment gives rise to                                  determined from the 3D simulations I2 (Fig. 2).
+exotic i-process nucleosynthesis (Herwig et al. 2011; Denissenkov                                       We model the chemical evolution of the Milky Way with a
+et al. 2017).                                                                                     one-zone, open-box model with galactic inflows and outflows in
+      2D hydrodynamic simulations of Meakin & Arnett (2006) sug-                                  OMEGA (Côté et al. 2016, 2017) which is part of the NuGrid
+gested that the entrainment at the top of the O shell in a simultaneous                           chemical evolution framework at http://nugrid.github.io/
+O- and C-shell convection simulation can reach 10−4 M /s and sig-                                 NuPyCEE. Here we use yields of AGB and massive star models
+nificantly affect the evolution. Nucleosynthesis in 1D models of O-C                              from NuGrid (Pignatari et al. 2016b; Ritter et al. 2017, in prep.),
+shell mergers has been mentioned in the literature (Rauscher et al.                               and alternatively for massive stars from K06, as well as for PopIII
+2002; Tur et al. 2007). In the NuGrid model library (Ritter et al.                                stars (Heger & Woosley 2010) and SNIa (Seitenzahl et al. 2013).
+2017, in prep., R17) O-C shell mergers are found in stellar mod-                                  The initial mass function of Kroupa (2001) is adopted over the initial
+els with initial mass between 12 M and 20 M at Z = 0.02 and                                       mass range from 0.1 M to 100 M , and we assume the ejection of
+Z = 0.01 (Table 1).                                                                               stellar yields between the initial masses of 1 M and 30 M .
+      We explore C ingestion into a convective O-shell with 3D hy-
+drodynamic simulations. A diffusion coefficient profile is derived
+and applied in 1D nucleosynthesis simulations. Shell mergers in
+stellar evolution models are analyzed and predictions tested against                              3     RESULTS
+observations using GCE models. The simulation tools are intro-
+                                                                                                  3.1    Convection and feedback in 3D
+duced in Section 2, the results are in Section 3 and discussion and
+conclusion in Section 4.                                                                          3D hydrodynamic simulations of J17 of the first O shell show a mass
+                                                                                                  entrainment rate of 1.3×10−6 M /s. If the O shell of that underlying
+                                                                                                  stellar model grows outward at this rate it can reach the C shell in
+                                                                                                  1.9 days. This is before the end of O shell convection which suggests
+2   METHODS
+                                                                                                  the possibility of significantly enhanced entrainment rates or even
+We perform 3D simulations of the first convective O shell as in Jones                             an O-C shell merger.
+et al. (2017, J17). We adopt the same radial stratification based on a                                  In simulation I2, C-rich material is entrained into the O shell
+
+                                                                                                                                                MNRAS 000, 1–?? (2016)
+                                                     log10 FV
+          Convective-reactive nucleosynthesis of K, Sc, Cl and p-process isotopes in O-C shell mergers
+                     0       1       2       3         4        5       6       7       8                                                                                   3
+
+                                                                                                            10 -2      D
+                                                                                                                                                            16
+
+                                                                                                            10 -3
+
+
+
+
+                                                                                                                                                              log D [cgs]
+                                                                                                                                                            14
+
+
+
+
+                                                                                                       Xi
+                                                                                                                           Ne-20
+                                                                                                                           Cl-35
+                                                                                                            10 -4          Cl-35, ni
+                                                                                                                           K-39
+                                                                                                                           K-39, ni
+                                                                                                                                                            12
+                                                                                                            10 -6
+                                                                                                                           Sc-45
+
+
+
+
+                                                                                                       Xi
+                                                                                                                           Sc-45, ni
+                                                                                                            10 -70.0          0.2        0.4     0.6
+                                                                                                                                       M [M¯ ]
+                                                                                                Figure 2. Abundance profiles of run Sm4 after 16.5 min of ingesting C-
+                                                                                                shell material at a rate of 1.2 × 10−4 M /s. For comparison, the abundances
+                                                                                                produced over the same time with no ingestion (ni). The diffusion coefficient
+                                                                                                D is extracted from the 3D hydrodynamic simulation I2.
+
+
+                                                                                                the 3D mixing with a diffusion coefficient (see J17 for details) and
+                                                                                                applying it in 1D nucleosynthesis models.
+                                                                                                      Significantly higher ingestion rates might occur when the O-
+                                                                                                shell merges with the C-shell, or in a later and more luminous
+                                                                                                pre-supernova O shell (J17, Meakin & Arnett 2006). For this phase
+                                                                                                the 1D stellar models of R17 do show in fact O-C shell mergers for
+                                                                                                several cases (Table 1). In order to start exploring 3D hydrodynamic
+                                                                                                properties of such high-entrainment or even merger regimes we ar-
+                                                                                                tificially increase the O-burning luminosity in simulation I13 by
+                                                                                                ≈ 2dex to 5.1 × 1012 L by increasing the Q value of the O-burning
+                                                                                                reaction by a factor of 67.5, which corresponds to the increase be-
+                                                                                                tween the first and second O shell of the stellar model M15Z0.02
+                                                                                                (Table 1). The average entrainment rate is 1.07 × 10−4 M /s in this
+                                                                                                case, in agreement with the entrainment-luminosity law of J17. The
+                         8       7       6       5         4        3       2       1       0
+                                                     log10 FV                                   flow is more inhomogeneous and the convective boundary is sig-
+                                                                                                nificantly more deformed than in I2 (Fig. 1), but we do not find any
+                                                                                                global entrainment instability (c.f. Herwig et al. 2014). Therefore,
+Figure 1. Volume fraction of the C-rich fluid in a sphere slice of 3D convec-                   at this high entrainment rate nucleosynthesis may still be estimated
+tive O-shell simulations on a 7683 grid. Top: Simulation I2 after 148min.                       from spherically symmetric mppnp simulations.
+Bottom: Run I13 after 10.5min. The entrainment rate is 342 times higher
+                                                                                                      Although the mass exchange in shell mergers could initially
+than in I2.
+                                                                                                be hindered by the entropy gradient between the shells it has to
+                                                                                                be considered that strong non-spherical instabilities similar to the
+over 110 convective turn-over times of 132s. The burning of the                                 GOSH can occur with an unkown range of effective C-burning
+entrained material is turned off in the code for the first 34 turnovers.                        luminosities. In order to explore such scenarios we perform as an
+The entrained fluid reaches the bottom of the convective O shell                                experiment simulation I11 (Table 1) were we enhance the energy
+(Fig. 1) and, after C burning has been turned on, its spherically                               release from O and C burning fluid by factors of 13.5 and 10.0
+averaged abundance develops towards a stationary state with an                                  respectively. In this case a violent, global, non-radial oscillation
+entrainment rate of 3.13 × 10−7 M /s. This rate is lower than that                              does emerge, in which case the 1D approach would break down.
+measured by J17 because (1) the luminosity is lower in our case and
+(2) our experience to date with the PPMstarcode’s present version
+                                                                                                3.2   Nucleosynthesis in 1D
+indicates a decline in ingestion rate at very low luminosities that falls
+below well established trends that we observe at higher luminosities.                           We perfom 1D mppnp simulations for a range of ingestion rates
+We suspect this fall-off to be due to numerical rather than physical                            (Table 1), from 1.2 × 10−7 M /s to 1.2 × 10−3 M /s, at which point
+causes at the grid resolution of run I2, namely 7683 cells. Checking                            the whole C shell would be entrained in 1000s which is approxi-
+that the ingestion rate has converged using simulations of double the                           mately eight overturning timescales. In the limit of near-sonic mass
+grid resolution of run I2 is quite expensive, and such checks have                              transport the mass exchange rate could even reach 1 M /s.
+been successfully carried out already for high luminosity cases (cf.                                 With entrainment rates corresponding to hydro run I2 no rel-
+J17). We are addressing this issue instead by modifying the code to                             evant production of odd-Z elements is observed. For an entrain-
+compute in future a potentially fully nonlinear perturbation to the                             ment rate of 1.2 × 10−5 M /s the O shell may reach the C shell in
+star’s very rapidly varying base state.                                                         291.7min, without any significant element production (Sm5,Sm5L).
+      The energy release from C burning does not significantly affect                           For entrainment rates that correspond to 3D simulation I13 (mppnp
+the flow properties in I2. The stationary nature and approximate                                run Sm4, Table 1) and above considerable amounts of 35 Cl, 39 K
+spherical symmetry of the convective shell justify approximating                                and 45 Sc (Fig. 2) as well as 31 P are produced in the lower part of
+
+MNRAS 000, 1–?? (2016)
+4      C. Ritter et al.
+
+
+
+
+                                                                               Figure 4. Overproduction factors OPs due to C-shell ingestion for different
+                                                                               entrainment rates of C-shell material, total run times and diffusion coeffi-
+                                                                               cients in our synthetic models (Table 1). In comparison the overproduction
+Figure 3. Abundance profiles during entrainment of C-shell material into       factors OPm in the O-C shell merger of the stellar model M15Z0.02.
+the O shell about 4 min after the end of convective Si core burning in model
+M15Z0.02. The blue shades indicate convective regions. The black vertical
+line shows the position of the remnant mass of the CCSN explosion model.
+
+
+
+the O shell through convective-reactive entrainment and burning of
+20 Ne. The element production of Cl, K and Sc is larger for higher
+convective velocities and for higher entrainment rates (Table 1).
+      Through repeated multi-zone simulations with individual rates
+turned off it emerges that burning of ingested Ne leads to the produc-
+tion of odd-Z isotopes 31 P, 35 Cl, 39 K and 45 Sc at different depths
+in the convective zone. (γ,p) reactions, such as 31 P(γ,p), release
+protons which produce odd-Z elements through reactions such as
+38 Ar(p,γ)39 K. A further detailed investigation of this convective-
+reactive nucleosynthesis site is required to fully determine the nu-           Figure 5. Overproduction factors OPm of p nuclei in O-C shell mergers
+cleosynthesis paths that involve conditions at several layers simul-           of stellar models of NuGrid. 180 Ta values are omitted for clarity and are
+taneously.                                                                     2.95, 0.7, 5.61 and 0.64 in legend order, starting from the top. The dashed
+      In order to consider properly contributions from all burning             horizontal lines show an overproduction factor of 0.5 and 2.
+shells to the total stellar yields we compare the material produced
+in an O-shell with ingestion (Yi ) to the material that would result
+without ingestion (Yni ) relative to the total yields Ytot of the stellar      constantly transported down to the O-burning shell, providing new
+model M25Z0.02R (Fig. 4). Thus, the overproduction factor for 1D               seeds for photo-disintegration.
+mppnp runs is OPs = (Yi + Ytot )/(Yni + Ytot ).                                      We compare the overproduction factors of the classical 35 p
+      The 1D stellar model M15Z0.02 experiences an O-C shell                   nuclei of the O-C shell merger in the stellar models M15Z0.02,
+merger about 4min after the end of convective Si core burning. After           M20Z0.01, M15Z0.01 and M12Z0.01 (Fig. 5). In these models we
+an initial partial mixing phase both convective shells merge (Fig. 3),         find strong variations in the overproduction factors with stellar mass
+and large amounts of 35 Cl, 39 K and 45 Sc are produced (Fig. 4).              and metallicity. Light p nuclei are destroyed while heavier species
+Again, the 1D simulations are not reliable at such high entrainment            are effectively produced. Most of those species have the largest
+rates, but merely indicative (see Section 3.1). For stellar models             overproduction factors in the stellar model M15Z0.02. We confirm
+the overproduction factors are calculated as OPm = Yf /Yini where              the results of Rauscher et al. (2002) that p nuclei can be made in
+Yini and Yf are the total amounts of material above the mass cut at            an O-C shell merger. At this level of production, the impact of O-C
+onset and after inter-shell mixing, respectively (Table 1). Fallback is        shell mergers may change the GCE scenario of at least some of the
+taken into account with the adoption of the mass cut of the delayed            p nuclei.
+explosion prescription as in R17. The overproduction factors due to
+the O-C shell merger in the stellar model are qualitatively similar to
+                                                                               3.3   K and Sc trends in the Milky Way
+what we found in our 1D mppnp ingestion simulations (Fig. 4).
+      Due to its deep location, the O shell is significantly modified by       Some stellar models of R17 at Z = 0.01 and Z = 0.02 show O-
+the core-collapse SN explosion and affected by fallback. We use the            C shell mergers (Table 1). These shell mergers cause the rise in
+CCSN prescription for the stellar model M15Z0.02 with a neutron-               [K,Sc/Fe] above [Fe/H] > −1 with NuGrid yields in Fig. 6. We
+star remnant coordinate based on the delayed explosion prescription            infer that the K06 and Nomoto et al. (2013) yields do not have
+of Fryer et al. (2012). The remnant coordinate is below the peak               significant O-C shell mergers.
+production of 31 P, 35 Cl, 39 K and 45 Sc (Fig. 3). The overproduction              NuGrid models from R17 at Z < 0.01 show convective O
+factors based solely on the explosive nucleosynthesis indicate that            and C shells separated only by a thin radiative layer which might
+P, Cl, K and Sc are little affected in our explosion model.                    be overcome in the real 3D star, as suggested by the convective
+      The γ process occurs in Ne and O shell burning in the CCSN               boundary mixing reported in 3D hydrodynamic simulations (J17).
+explosion of massive star models through photo-disintegration reac-            Dedicated 3D hydrodynamic similations will have to determine
+tions on heavy elements (Woosley & Howard 1978; Pignatari et al.               under which conditions O-C shell mergers occur in real stars.
+2016a). During an O-C shell merger, “fresh” heavy elements are                      We explore the assumption that shell mergers can happen in all
+
+                                                                                                                               MNRAS 000, 1–?? (2016)
+          Convective-reactive nucleosynthesis of K, Sc, Cl and p-process isotopes in O-C shell mergers                                                 5
+                                                                                 production. A larger convective C shell enables the entrainment of
+                                                                                 more material which boosts the production of elements such as P,
+                                                                                 Cl, and K. can be transported further outwards and will be less
+                                                                                 affected by fallback. The time span between the onset of an O-C
+                                                                                 shell merger and core collapse is also crucial to enable sufficient
+                                                                                 element production.
+                                                                                       Higher temperatures in the O shells of lower mass stars might
+                                                                                 lead to a stronger production of lighter p nuclei which are trans-
+                                                                                 ported into the upper part of the C shell. For the highest masses,
+                                                                                 such as the 25 M R17 models at all metallicities, the C-shell con-
+                                                                                 vection is either patchy or absent (especially at lower Z), which may
+                                                                                 help or hinder ingestion of C-shell material.
+                                                                                       More generally, stellar evolution models indicate that O-C shell
+                                                                                 mergers may happen. In some cases they do, in others the shells
+                                                                                 are just stopping short of a merger. How do these results depend
+                                                                                 on various uncertain modeling assumptions in 1D, as well as on
+                                                                                 numerical convergence criteria? But even if the stellar evolution
+                                                                                 uncertainties are addressed to the best of our ability the question
+                                                                                 of whether a merger will happen in a particular, possibly marginal,
+                                                                                 case requires sufficiently realistic 3D hydrodynamic simulations.
+                                                                                 Once it is clear under which conditions O-C shell mergers happen,
+                                                                                 3D simulations will be required to determine how O-C shell merg-
+                                                                                 ers proceed, whether they are ultimately dominated by non-radial,
+                                                                                 global oscillations, and how the nuclear burning energy feedback
+                                                                                 alters the flow.
+                                                                                       In our 3D hydrodynamic simulations, we observe approxi-
+                                                                                 mately spherically symmetric, quasi-steady-state behaviour for en-
+                                                                                 trainment rates that lead to noticeable odd-Z element production.
+Figure 6. Comparison of the predictions of P, Cl, K and Sc of our Milky          However, it appears that to fully explain the lack of Sc and K in
+Way model with observational data (if available). Predictions with 10%,          present yields for GCE models actual mergers of the O and C shells
+50% and 100% addition of material produced in the O-C shell merger of the        are required. Our preliminary 3D simulation experiments suggest
+stellar model M15Z0.02 to all massive stars without O-C shell merger. For        that the assumption of spherical symmetry may break down for such
+comparison, we show GCE predictions based on yields from K06. P and K
+                                                                                 conditions. GCE simulations which assume that O-C shell mergers
+data are from the APOGEE survey (Wilson et al. 2010; SDSS Collaboration
+                                                                                 as in model M15Z0.02 occur in ≈ 10% to 50% of all massive stars
+et al. 2016), and Sc data from Ishigaki et al. (2012, 2013, crosses), Roederer
+et al. (2014, dots) and Battistini & Bensby (2015, stars).                       can account for the observed abundance of K and Sc in Milky Way
+                                                                                 stars.
+                                                                                       Our 1D nucleosynthesis models so far display a wide range of
+                                                                                 39 K/41 K and 35 Cl/37 Cl ratios, depending on mixing and thermo-
+massing star models at all Z by applying the material produced in
+the O-C shell merger of model M15Z0.02 to all massive star models                dynamic details, some of them within a factor of a few and some
+which do not experience O-C shell mergers. We add the material                   much larger compared to the solar ratios. The isotopic ratios will be
+to a fraction of 10%, 50% and 100% of these stars. If the merger                 an important constraint for more realistic 3D models with updated
+fraction defined in this way is between 10% and 50% the observed                 nuclear physics.
+amounts of K and Sc can be reproduced (Fig. 6).                                        With the entrainment of C-shell material heavy-element seeds
+      An increased γ-process production via O-C shell mergers                    are swept into the O shell and serve as a boost for the p-nuclei
+might also boost the Galactic γ-process contribution of massive                  production. In 1D stellar models we find a variety of production
+stars. Since Rayet et al. (1995) a global underproduction of p nu-               efficiencies which vary with initial mass and metallicity and the
+clides in massive stars compared to what is necessary to explain                 overproduction factors are more than 1 dex for many isotopes beyond
+the solar-system distribution is found. We speculate that the shell              Ba. Such strong production might influence the GCE of p-process
+merger production could enable us to match the solar distribution                isotopes. A future investigation will be required to test this scenario.
+when assuming a wide spectrum of entrainment rates, 3D hydrody-
+namic merger conditions and stellar structures.
+                                                                                 ACKNOWLEDGEMENTS
+                                                                                 NuGrid acknowledges support from NSF grant PHY-1430152
+4   DISCUSSION AND CONCLUSION
+                                                                                 (JINA Center for the Evolution of the Elements). NCSA’s Blue
+Our results have a number of limitations. In our GCE model test we               Waters and Westgrid provided the computing and data processing
+add material produced in one particular O-C shell merger from a                  resources for this project. RA acknowledges CITA national fel-
+1D stellar evolution model The 1D model prediction are uncertain                 low support. BC acknowledges supported by the FRQNT (Quebec,
+because 3D effects will likely play an important role. In addition               Canada) PDF program. PRW acknowledges NSF grants 1413548
+we neglect the dependence on initial mass and metallicity. While                 and 1515792. FH acknowledges support from a NSERC Discovery
+more massive stars are affected by larger fallback (Fryer et al. 2012),          grant. MP acknowledges the support from SNF (Switzerland). SJ is
+they also inhibit larger O and C shells which boost the γ-process                a fellow of the Alexander von Humboldt Foundation and acknowl-
+
+MNRAS 000, 1–?? (2016)
+6      C. Ritter et al.
+edges support from the Klaus Tschira Stiftung. We acknowledge
+Brad Gibson for reminding us to check the isotopic ratios of our
+models.
+
+
+REFERENCES
+Andrassy, R., et al. 2017, in preparation
+Battistini, C., & Bensby, T. 2015, VizieR Online Data Catalog, 357
+Caughlan, G. R., & Fowler, W. A. 1988, Atomic Data and Nuclear Data
+    Tables, 40, 283
+Côté, B., O’Shea, B. W., Ritter, C., Herwig, F., & Venn, K. A. 2017, ApJ,
+    835, 128
+Côté, B., West, C., Heger, A., Ritter, C., O’Shea, B. W., Herwig, F.,
+    Travaglio, C., & Bisterzo, S. 2016, MNRAS, 463, 3755
+Cox, J. P., & Giuli, R. T. 1968, Principles of stellar structure (New York :
+    Gordon and Breach)
+Denissenkov, P. A., Herwig, F., Battino, U., Ritter, C., Pignatari, M., Jones,
+    S., & Paxton, B. 2017, ApJ, 834, L10
+Fröhlich, C., et al. 2006, ApJ, 637, 415
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., Dominik, M., Kalogera, V.,
+    & Holz, D. E. 2012, ApJ, 749, 91
+Heger, A., & Woosley, S. E. 2010, ApJ, 724, 341
+Herwig, F., Pignatari, M., Woodward, P. R., Porter, D. H., Rockefeller, G.,
+    Fryer, C. L., Bennett, M., & Hirschi, R. 2011, ApJ, 727, 89
+Herwig, F., Woodward, P. R., Lin, P.-H., Knox, M., & Fryer, C. 2014, ApJ,
+    792, L3
+Ishigaki, M. N., Aoki, W., & Chiba, M. 2013, ApJ, 771, 67
+Ishigaki, M. N., Chiba, M., & Aoki, W. 2012, ApJ, 753, 64
+Jones, S., Andrassy, R., Sandalski, S., Davis, A., Woodward, P., & Herwig,
+    F. 2017, MNRAS, 465, 2991
+Kippenhahn, R., Weigert, A., & Weiss, A. 2012, Stellar Structure and Evo-
+    lution
+Kobayashi, C., Umeda, H., Nomoto, K., Tominaga, N., & Ohkubo, T. 2006,
+    ApJ, 653, 1145
+Kroupa, P. 2001, MNRAS, 322, 231
+Meakin, C. A., & Arnett, D. 2006, ApJ, 637, L53
+Nomoto, K., Kobayashi, C., & Tominaga, N. 2013, ARA&A, 51, 457
+Pignatari, M., Göbel, K., Reifarth, R., & Travaglio, C. 2016a, International
+    Journal of Modern Physics E, 25, 1630003
+Pignatari, M., et al. 2016b, ApJS, 225, 24
+Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E. 2002, ApJ, 576,
+    323
+Rayet, M., Arnould, M., Hashimoto, M., Prantzos, N., & Nomoto, K. 1995,
+    A&A, 298, 517
+Ritter, C., Herwig, F., Jones, S., Pignatari, M., Fryer, C., & Hirschi, R. 2017,
+    preprint, in prep.
+Roederer, I. U., Preston, G. W., Thompson, I. B., Shectman, S. A., Sneden,
+    C., Burley, G. S., & Kelson, D. D. 2014, AJ, 147, 136
+SDSS Collaboration et al. 2016, ArXiv e-prints
+Seitenzahl, I. R., et al. 2013, MNRAS, 429, 1156
+Sneden, C., Cowan, J. J., Kobayashi, C., Pignatari, M., Lawler, J. E., Den
+    Hartog, E. A., & Wood, M. P. 2016, ApJ, 817, 53
+Tominaga, N. 2009, ApJ, 690, 526
+Tur, C., Heger, A., & Austin, S. M. 2007, ApJ, 671, 821
+Wilson, J. C., et al. 2010, in Proc. SPIE, Vol. 7735, Ground-based and
+    Airborne Instrumentation for Astronomy III, 77351C
+Woodward, P. R., Herwig, F., & Lin, P.-H. 2015, ApJ, 798, 49
+Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Reviews of Modern
+    Physics, 74, 1015
+Woosley, S. E., & Howard, W. M. 1978, ApJS, 36, 285
+
+
+
+
+                                                                                   MNRAS 000, 1–?? (2016)
+

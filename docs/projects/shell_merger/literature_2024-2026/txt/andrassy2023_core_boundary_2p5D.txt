@@ -1,0 +1,2273 @@
+Astronomy & Astrophysics manuscript no. convective_penetration
+August 20, 2024
+
+©ESO 2024
+
+Towards a self-consistent model of the convective core boundary
+in upper main sequence stars. Part I: 2.5D and 3D simulations
+R. Andrassy1 , G. Leidi1 , J. Higl1, 2 , P. V. F. Edelmann3 , F. R. N. Schneider1, 4 , and F. K. Röpke1, 5
+
+arXiv:2307.04068v2 [astro-ph.SR] 19 Aug 2024
+
+1
+
+Heidelberger Institut für Theoretische Studien, Schloss-Wolfsbrunnenweg 35, D-69118 Heidelberg, Germany
+e-mail: robert.andrassy@h-its.org
+2
+High-Performance Computing Center Stuttgart, Nobelstraße 19, 70569 Stuttgart, Germany
+3
+Computer, Computational and Statistical Sciences (CCS) Division and Center for Theoretical Astrophysics (CTA), Los Alamos
+National Laboratory, Los Alamos, NM 87545, USA
+4
+Zentrum für Astronomie der Universität Heidelberg, Astronomisches Rechen-Institut, Mönchhofstr. 12-14, 69120 Heidelberg, Germany
+5
+Zentrum für Astronomie der Universität Heidelberg, Institut für Theoretische Astrophysik, Philosophenweg 12, D-69120 Heidelberg, Germany
+Received ; accepted
+ABSTRACT
+
+There is strong observational evidence that the convective cores of intermediate-mass and massive main sequence stars are substantially larger than those predicted by standard stellar-evolution models. However, it is unclear what physical processes cause
+this phenomenon or how to predict the extent and stratification of stellar convective boundary layers. Convective penetration is a
+thermal-timescale process that is likely to be particularly relevant during the slow evolution on the main sequence. We use our lowMach-number Seven-League Hydro code to study this process in 2.5D and 3D geometries. Starting with a chemically homogeneous
+model of a 15 M⊙ zero-age main sequence star, we construct a series of simulations with the luminosity increased and opacity decreased by the same factor, ranging from 103 to 106 . After reaching thermal equilibrium, all of our models show a clear penetration
+layer; its thickness becomes statistically constant in time and it is shown to converge upon grid refinement. The penetration layer
+becomes nearly adiabatic with a steep transition to a radiative stratification in simulations at the lower end of our luminosity range.
+This structure corresponds to the adiabatic ‘step overshoot’ model often employed in stellar-evolution calculations. The simulations
+with the highest and lowest luminosity differ by less than a factor of two in the penetration distance. The high computational cost of
+3D simulations makes our current 3D data set rather sparse. Depending on how we extrapolate the 3D data to the actual luminosity of
+the initial stellar model, we obtain penetration distances ranging from 0.09 to 0.44 pressure scale heights, which is broadly compatible
+with observations.
+Key words. hydrodynamics – convection – turbulence – methods: numerical – stars: massive – stars: interiors
+
+1. Introduction
+Numerous observations strongly suggest that the convective,
+hydrogen-burning cores of intermediate-mass and massive stars
+are larger than those predicted based on the linear-stability criteria of Schwarzschild and Ledoux (see e.g. Kippenhahn et al.
+2012). The evidence has traditionally been based on colour–
+magnitude diagrams of open clusters (e.g. Maeder & Mermilliod 1981; Demarque et al. 1994) and observations of eclipsing
+binary systems (Claret & Torres 2016, and references therein).
+More recently, core sizes have also been measured using asteroseismology (Aerts 2013; Anders & Pedersen 2023, and references in the latter), confirming the large core radii. The size of
+the mixed core on the main sequence influences stellar lifetimes
+as well as stellar structure and evolution in later evolutionary
+stages. The umbrella term ‘convective overshooting’ has traditionally been used to describe all physical processes that contribute to extending stellar convection zones, although the terms
+‘convective penetration’ and ‘convective boundary mixing’ are
+also used, often interchangeably. We reserve the term convective
+penetration for a process that is fast enough to change the thermal stratification beyond the Schwarzschild boundary (see also
+Anders & Pedersen 2023). Classical one-dimensional (1D) stel-
+
+lar evolution theory resorts to simple parametric prescriptions
+for such processes, which severely limits the predictive power of
+current stellar-evolution models. Two prescriptions are particularly popular (see e.g. Kippenhahn et al. 2012): ‘step overshoot’
+and ‘exponentially decaying diffusion’. The first represents an
+approximate model of convective penetration. It assumes that
+mixing that is approximately as fast as that in the formally convective layer extends some distance beyond the Schwarzschild
+boundary, making the stratification chemically homogeneous
+and adiabatic with a discontinuous transition to the radiative
+stratification. The second prescription describes the mixing of
+chemical species using a diffusion coefficient decreasing exponentially with distance from the convective boundary while assuming that the thermal stratification remains radiative.1 Both
+1
+This prescription (see e.g. Paxton et al. (2011), Kippenhahn et al.
+(2012), or Anders & Pedersen (2023) for details) is physically inconsistent close to the convection zone, where the chemical diffusion coefficient is often assumed to be much larger than the coefficient of radiative
+diffusion but the exchange of heat associated with the rapid exchange
+of species between fluid elements is ignored. Some authors also assume
+the temperature gradient to be radiative when using the step overshoot
+prescription (see Anders & Pedersen (2023) for an overview).
+
+Article number, page 1 of 16
+
+A&A proofs: manuscript no. convective_penetration
+
+prescriptions involve a free parameter that describes the radial
+extent of the mixing.
+Core convection is characterised by low Mach numbers (of
+order 10−4 to 10−3 ) in main sequence stars. The overlying stratification is so stable that it stops the slow convective flows within
+a tiny fraction of the pressure scale height (Roxburgh 1965;
+Saslaw & Schwarzschild 1965). This kind of dynamical ‘overshoot’ cannot reconcile stellar-evolution models with the observations mentioned above. Three-dimensional (3D), hydrodynamic simulations show that convective flows turning around at
+the convective boundary can entrain relatively small mass fractions of material originally located beyond the formal boundary of convective instability. This process of mass entrainment
+occurs even at very stiff convective boundaries (e.g. Meakin &
+Arnett 2007; Woodward et al. 2015; Horst et al. 2021). However, simulations of core convection on the main sequence predict unrealistically high mass-entrainment rates (Meakin & Arnett 2007; Gilet et al. 2013; Herwig et al. 2023), suggesting that
+the observed fast entrainment is just a transient phenomenon.
+Indeed, most simulations of this kind do not include radiative
+diffusion, making it impossible to sustain the expected stellar
+structure with a convective core and a radiative envelope on
+long timescales. Particularly relevant is the thermal timescale
+on which heat transport processes, including convective penetration, set the thermal structure of the star.
+Processes occurring on the thermal timescale can be qualitatively described in terms of how they affect the radial profile
+of entropy. Both nuclear burning and hydrodynamic entrainment
+of high-entropy material from the radiative envelope increase the
+mean entropy of the mixed core. On the other hand, radiative diffusion carries energy outwards, decreasing the core entropy. It is
+reasonable to assume that the two processes reach equilibrium
+and the core stops changing its size on the thermal timescale
+(ignoring slow changes in chemical composition occurring on
+the nuclear timescale). Somewhat surprisingly, analytical constraints can be placed on how large the convective core can be
+in the equilibrium state. Roxburgh (1978, 1989) averages the 3D
+equations of fluid motion and radiative heat transport in space
+and time and, assuming statistically stationary convection, derives a simple integral criterion for the size of the convective
+core:
+Z 
+Z
+ 1 dT 0
+Φ0
+F−Γ 2
+dV =
+dV,
+(1)
+T 0 dr
+V
+V T0
+where F and Γ are the mean radial components of the radiative
+flux and of the energy flux from nuclear sources, respectively, T
+is the temperature, and Φ the dissipation rate of kinetic energy.
+The subscript ‘0’ refers to the mean state and the integration is
+performed over volume V of the core. The radial profile of the
+dissipation rate Φ0 depends on details of the turbulent convective flow. Neglecting this term, Roxburgh obtains the maximum
+possible core mass, concluding that it can be substantially larger
+than the mass inside the formal Schwarzschild boundary. Roxburgh (1978, 1989) as well as Zahn (1991) argue that the whole
+core must be nearly adiabatic, including its extension beyond the
+Schwarzschild boundary now known as the ‘convective penetration layer’. However, the thickness of this layer cannot be further
+constrained without constraining the turbulent dissipation rate.
+Multi-dimensional hydrodynamic simulations can encompass all physical processes needed to compute detailed models
+of penetrative convection. However, the thermal timescale associated with typical stellar convective layers is orders of magnitude longer than the convective turnover timescale and the only
+Article number, page 2 of 16
+
+way to to obtain thermally relaxed simulations is to boost the
+heat flux by several orders of magnitude. Using this technique,
+a few research groups recently managed to approach the thermal
+timescale and to observe the formation of a convective penetration layer in various stellar environments (Hotta 2017; Käpylä
+2019; Baraffe et al. 2023; Blouin et al. 2023; Mao et al. 2023).
+Baraffe et al. (2023) ran 2D simulations of a range of main sequence stars with convective cores but only one of their simulations (of a 3 M⊙ star) uses sufficient luminosity boosting for
+the penetration layer to start approaching thermal equilibrium.
+The growth of the convective core of a 25 M⊙ main sequence
+star slows down on the thermal timescale in the 3D simulations
+of Mao et al. (2023) but the core does not stop growing. This
+might be a consequence of continued chemical mixing in the
+simulation. In the simpler case of a chemically homogeneous
+stratification, Anders et al. (2022) show that the penetration layer
+stops growing on a sufficiently long timescale, reaching a statistically stationary state. However, their simulations use a simplified stratification rather than a realistic stellar model and their
+use of the Boussinesq approximation eliminates any effects of
+compressibility, which may be important in the strongly stratified stellar interior.
+Our study focuses on thermal aspects of the stellar
+convective-penetration problem. We eliminate compositional effects by using a realistic model of a 15 M⊙ zero-age main sequence (ZAMS) star. Employing the standard approach of luminosity boosting, we show that a penetration layer forms at the
+core boundary and stops growing on the thermal timescale. We
+measure the core size in the thermally relaxed state and extrapolate towards the star’s nominal luminosity. We run both 2.5D
+(a sphere with assumed axial symmetry) and 3D simulations using our fully compressible, low-Mach number Seven-League Hydro (SLH) code (Miczek 2013; Edelmann 2014; Edelmann et al.
+2021) to explore both the limit of low turbulent dissipation, as
+expected in 2D convection and assumed by Roxburgh, and the
+more realistic case of 3D turbulent convection.
+We describe our 1D initial stellar model in Sections 2.1 and
+2.2. The numerical setup of the 2.5D and 3D SLH simulations is
+detailed in Sect. 2.3. We use a simple numerical experiment to
+illustrate the importance of radiative diffusion in Sect. 3.1. Relevant properties of our 2.5D and 3D simulations and their numerical convergence are described in Sections 3.2–3.4. We then
+extrapolate the thickness of the penetration layer to the actual
+luminosity of the stellar model in Sect. 3.5. Our results are summarised and discussed in Sect. 4.
+
+2. Methods
+2.1. One-dimensional stellar model
+
+We use version 15140 of the stellar-evolution code MESA (Paxton et al. 2011, 2013, 2015, 2018, 2019; Jermyn et al. 2023) to
+compute a model of a 15 M⊙ star with a metallicity of Z = 0.02
+at the ZAMS. The evolution model is stopped at the age of
+7.96 × 104 yr, when the convective core has fully developed
+and the star has reached thermal equilibrium. At this stage, the
+central hydrogen mass fraction has decreased by 0.156% from
+its initial value of 0.700. The star’s radius and luminosity are
+R⋆ = 3.47 × 1011 cm (4.98 R⊙ ) and L⋆ = 7.49 × 1037 erg s−1
+(1.95 × 104 L⊙ ), respectively. The model does not include any
+convective ‘overshoot’ or penetration. The latter evolves in
+our multi-dimensional models in a self-consistent way. The
+Schwarzschild boundary of the core is located at 8.74 × 1010 cm
+
+R. Andrassy et al.: Towards a self-consistent model of the convective core boundary in upper main sequence stars
+
+(0.252 R⋆ ). The MESA inlist for the model as well as the resulting profile file are available on Zenodo2 .
+
+100
+
+2.2. Simplification of the initial 1D model
+
+10−1
+
+
+h
+i
+r2
+
+
+erg cm−3 for r < r0 ,
+4.135 × 105 exp − (3.15×10
+10 cm)2
+ρεnuc = 
+
+0 otherwise,
+(2)
+where r0 = 8.736×1010 cm is the radius of the initial core boundary. This profile is almost indistinguishable from that provided
+by MESA for r < r0 , see Fig. 1. There is a small-amplitude
+spike in the energy generation rate at r = r0 in the MESA model
+due to a slight change in composition. We do not model this
+spike. Additionally, our 2.5D and 3D simulations have a central
+cut-out with a radius of 8.7 × 109 cm (0.025 R⋆ , see Sect. 2.3
+for details). Taking into account all of these effects, the total luminosity of the modified model is 5.5% lower than that of the
+original MESA model.
+2.3. 2.5D and 3D simulations
+
+As mentioned in Sect. 1, the time and length scales involved in
+the process of convective penetration in stars make the problem
+prohibitively costly for multidimensional hydrodynamic simulations. We illustrate this in Table 1, which is based on results
+of our simulations (see Sect. 3 for details). The last row of the
+table is an extrapolation to our 15 M⊙ star’s actual parameters.
+The thermal timescale of the model is 5.9 × 104 yr, which corresponds to 6.5 × 105 convective turnover timescales. This is well
+beyond what can currently be achieved using multidimensional
+simulations. Additionally, we must consider the need to resolve
+the length scale of radiative diffusion on the turnover timescale.
+Table 1 shows that this length scale evaluated at the core boundary is only 0.4 cell widths on a grid with 512 radial grid cells.
+To marginally resolve it by 4 cells, we would need a grid with
+≈ 5000 radial cells, making the simulations extremely expensive.
+2
+
+https://doi.org/10.5281/zenodo.8127093
+
+4
+
+10−2
+
+3
+
+10−3
+
+2
+
+p
+ρεnuc
+κ
+s
+
+10−4
+
+s [108 erg g−1 K−1 ]
+
+p, ρεnuc , κ
+
+The MESA model contains a 0.093% jump in the mean molecular weight at the core boundary because some hydrogen burning occurred during the initial thermal adjustment of the model.
+We remove this step by applying the central value of the mean
+molecular weight µ = 0.6174 to the whole star in order to eliminate any compositional effects. To obtain an initial condition
+for multidimensional simulations, we re-integrate the hydrostatic
+stratification assuming that the difference between the actual
+temperature gradient ∇ and the adiabatic gradient ∇ad is given by
+the MESA model everywhere but in the convective core, where
+it is set to zero. The equation of state used in this integration process as well as in the hydrodynamic simulations described below
+accounts for a mixture of fully ionised, monatomic gas and radiation. The radial profile of gravitational acceleration is interpolated from the MESA model without any modification. The
+resulting profiles of the pressure p as well as specific entropy s
+closely match those of the original MESA model, see Fig. 1.
+Figure 1 also shows the profiles of opacity κ and energy generation rate per unit volume ρεnuc . The opacity is simply interpolated without any modification. The profile of the energy generation rate is for reasons of computational efficiency modelled
+using the fitting function
+
+5
+
+1
+0
+
+10−5
+0.0
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+r/R?
+
+0.5
+
+0.6
+
+0.7
+
+0.8
+
+Fig. 1. Stratification of the pressure p, energy generation rate per unit
+volume ρεnuc , opacity κ, and specific entropy s in the MESA model
+(thick grey lines) and in the SLH model at t = 0 (thin coloured lines).
+The profiles of p and ρεnuc are normalised such that their maximum
+values are unity. The entropy of the convective core is set to 0. The
+jump in ρεnuc at the boundary of the fully-mixed core is caused by a
+slight change in chemical composition, which is neglected in the SLH
+model.
+
+Table 1. Time and length scales for the 15 M⊙ ZAMS star.
+
+b
+
+τth [yr]
+
+τconv [d]
+
+τth /τconv
+
+ld /∆r512
+
+106
+105
+104
+103
+
+5.9 × 10−2
+5.9 × 10−1
+5.9 × 100
+5.9 × 101
+
+7.5 × 10−1
+1.4 × 100
+2.6 × 100
+5.0 × 100
+
+2.9 × 101
+1.5 × 102
+8.1 × 102
+4.3 × 103
+
+69
+29
+12
+5.0
+
+100
+
+5.9 × 104
+
+3.3 × 101
+
+6.5 × 105
+
+0.4
+
+Notes. The variables in the header are the boost factor b, thermal
+timescale τth , convective turnover timescale τconv , radiative diffusion
+length scale ld on the convective turnover timescale, and the radial grid
+spacing ∆r512 in a simulation with 512 radial cells.
+
+We solve these problems by increasing the energy-generation
+rate by a boost factor b ranging from 103 to 106 , which shortens both the thermal and convective turnover timescales. We
+decrease the opacity by the same factor, which increases the
+thermal diffusion length scale. This choice also has the advantage that the radiative temperature gradient ∇rad , which is proportional to the product of the luminosity and opacity, becomes
+independent of b at a given temperature and density. The stratification of the radiative layer remains largely the same, although
+slight changes (≲ 25% in ∇/∇ad ) still occur near the outer boundary of the simulation box (r/R⋆ ≳ 0.7) as the hydrostatic stratification adjusts in response to (1) an initial growth of the convective core (see Sect. 3.3 for details) and (2) the decreased luminosity as compared with the MESA model (by 5.5%, see Sect. 2.2
+for details).
+We use the SLH code to simulate the convective penetration
+process using the simplified 1D model as an initial condition.
+The code solves the following set of compressible, inviscid Euler
+Article number, page 3 of 16
+
+A&A proofs: manuscript no. convective_penetration
+
+equations with gravity and diffusive heat transport:
+∂t ρ + ∇·(ρu) = 0,
+∂t (ρu) + ∇·(ρu ⊗ u + pI) = ρg,
+∂t (ρet ) + ∇·[(ρet + p)u − χ∇T ] = ρεnuc ,
+
+(3)
+(4)
+(5)
+
+where ρ, u, p, I, g, χ, T , εnuc denote the density, velocity, pressure, unit tensor, gravity, thermal conductivity, temperature, and
+energy generation rate by nuclear reactions, respectively. The
+specific total energy et = ei + ek + Ψ includes internal energy
+ei (ρ, T ), kinetic energy ek = 21 |u|2 , and a time-independent gravitational potential Ψ.
+The equations are solved on two types of grids: 2.5D and 3D.
+Both of them match the spherical geometry of stars to suppress
+discretisation errors. The 3D grid is a spherical grid with uniform
+spacing in the radius r, polar angle (colatitude) ϑ, and azimuthal
+angle (longitude) φ. The 2.5D grid is a polar grid with uniform
+spacing in r and ϑ that describes a 3D spherical system with
+all variables constant in φ (rotational symmetry around the polar
+axis). This results in a geometric source term in the numerical
+scheme, which is taken into account. The grids cover the radial
+range from 8.7 × 109 cm (0.025 R⋆ ) to 2.8 × 1011 cm (0.808 R⋆ ).
+We limit the range of polar angles to 30◦ ≤ ϑ ≤ 150◦ because
+the cell width in the azimuthal direction drops close to the polar
+axis, severely limiting the time-step length. In the 3D case, we
+include azimuthal angles in the range −60◦ ≤ φ ≤ 60◦ .
+To judge numerical convergence of our results, we run simulations with each boost factor b on a range of grids. The number
+of radial grid cells is Nr ∈ (128, 256, 512, 1024) in 2.5D and
+Nr ∈ (128, 192, 256) in 3D. The only exception is that we do not
+include a 2.5D simulation with b = 103 and Nr = 1024, which
+would be too costly. The number of cells in each of the two angular directions is always Nr /2.
+We impose reflective boundary conditions (see e.g. LeVeque
+2002) at all boundaries of the computational domain. This is implemented via ghost cells filled such that the component of momentum normal to the boundary becomes an odd function and
+all other variables become even functions of the distance from
+the boundary.3 The only exception is the outer radial boundary,
+where the temperature in the first ghost cell is set to the value
+given by the initial 1D model when and only when the radiativediffusion term is computed.4 The reflective boundaries in the angular directions eliminate horizontal shear flows, which often become strong with periodic boundaries.
+The SLH code is based on a finite-volume discretisation and
+offers both explicit and implicit time steppers via the method
+of lines. In this work, we use the ESDIRK23 implicit stepper
+(Hosea & Shampine 1996). The bulk Mach numbers reported
+in Sect. 3.2 may suggest that the flows in some of our simulations are fast enough to be better suited for explicit time steppers.
+However, this impression is misleading. Even without considering radiative diffusion, the length of explicit time steps would be
+limited by the inner edge of the computational grid, where the
+sound speed is fastest and grid cells are narrowest in the angular
+3
+The even symmetry implies that the boundary does not restrict the
+component of momentum parallel to the boundary, i.e. we have a freeslip boundary.
+4
+The alternative of keeping the outgoing radiative flux constant becomes unstable when the opacity is assumed constant as is the case in
+our simulations. A large-enough negative temperature fluctuation at the
+boundary strongly reduces thermal conductivity χ ∝ T 3 , blocking the
+flux from deeper layers. The constant-flux boundary condition makes
+the temperature drop further, closing a positive feedback loop, which
+ultimately reduces the temperature to zero close to the boundary.
+
+Article number, page 4 of 16
+
+directions. For this reason, implicit time steps can be 50 to 80
+times longer than explicit ones even with the highest boost factor b = 106 . This ratio is of similar order as the cost-per-step ratio of the implicit to a comparable explicit stepper, making both
+approaches comparably expensive with b = 106 . However, fast
+radiative diffusion caused by low density at the outer edge of the
+simulation domain imposes much stricter time-step constraints.
+The ratio of the lengths of implicit to diffusion-limited explicit
+time steps in the 2.5D simulation with b = 106 and computed
+on the 1024 × 512 grid is ≈ 5000. Diffusion is much less constraining in simulations with b = 103 but convection is so slow
+in those that than longest possible explicit time steps would be
+≈ 500 times shorter than implicit steps. All in all, the implicit
+approach saves a significant amount of computing time.5
+We use unlimited parabolic reconstruction in space. Because
+the stratification spans five orders of magnitude in pressure (see
+Fig. 1), hydrostatic equilibrium requires a special treatment to
+suppress spurious flows caused by discretisation errors, see Edelmann et al. (2021) for details. Specifically, we use the wellbalancing method of Berberich et al. (2021), later referred to
+as the ‘deviation method’ by Edelmann et al. (2021). We further increase our resolving power by employing the low-Machnumber numerical flux function AUSM+-up of Liou (2006),
+which is much less dissipative than standard Riemann solvers in
+slow flows. We slightly modify the flux function as described by
+Edelmann et al. (2021). The modified flux uses the parameters
+fa = 10−10 and fap = 10−1 in the notation of the latter paper.
+Although our numerical solver is deterministic, turbulent
+convection is well known to be highly sensitive to initial conditions and perturbations. A pair of simulations with initial conditions differing by small amounts or one with identical initial conditions but a small change to the implicit time stepper (e.g. allowing one more iteration per time step) are likely to produce completely different flow patterns after a few convective timescales.
+Time-averaged quantities become well defined when averaging
+over many convective timescales, assuming that there is a statistically stationary state. However, the statistical nature of turbulence must still be taken into account when comparing averages
+from different simulations. We take great care to quantify statistical variation our simulation data. We express statistical-variation
+ranges using ±1σ intervals, where σ is the uncorrected standard
+deviation of the statistical sample, unless mentioned otherwise.
+
+3. Results
+3.1. Importance of radiative diffusion
+
+We start by demonstrating that the presence of radiative diffusion
+is essential for our simulations to reach a statistically stationary
+state. In Fig. 2, we compare two simulations performed with a
+boost factor of 104 on a 256 × 128 grid. The convective core
+keeps growing in the simulation that does not include radiative
+diffusion until, ultimately, the whole model becomes convective.
+This effect can be understood even without considering hydrodynamic mass entrainment. The heat source in the core keeps
+increasing the mean entropy of the mixed core. Whenever that
+entropy becomes greater than the entropy of a stably stratified
+layer atop the core, that layer gets mixed into the core. Ultimately, the entropy of the whole model becomes approximately
+the same and the star becomes fully convective. This process
+is further accelerated by the presence of strong internal gravity
+5
+
+In principle, we could treat only the diffusion term implicitly in simulations with high boost factors but this feature has not been implemented
+in SLH.
+
+R. Andrassy et al.: Towards a self-consistent model of the convective core boundary in upper main sequence stars
+
+effect is evident in Fig. 3 and it is further amplified by the dependence on b of the radiative diffusivity, which filters out the
+shortest wavelengths.
+
+1.0
+6.0
+
+without diffusion
+with diffusion
+
+0.10
+
+0.8
+
+5.0
+4.0
+
+0.6
+
+0.00
+0.0
+
+3.0
+
+0.1
+
+0.2
+
+t/τth
+
+s [108 erg g−1 K−1 ]
+
+0.05
+
+0.3
+
+0.4
+2.0
+
+0.2
+
+1.0
+0.0
+
+0.0
+0.0
+
+0.2
+
+0.4
+r/R?
+
+0.6
+
+0.8
+
+Fig. 2. Time evolution of the radial profiles of the specific entropy s in
+2.5D simulations without and with radiative diffusion. Both simulations
+have b = 104 and Nr = 256. The profiles are shifted such that the entropy of the convective core is 0 at t = 0. Simulation time is given as a
+fraction of the thermal timescale τth on the colour bar. Each curve, except for that showing the initial condition, corresponds to a time average
+over 0.05τth .
+
+waves, which seem to induce some mixing and flatten the entropy profile close to the outer boundary of the computational
+domain (i.e. where the waves reach their maximum amplitude).
+On the other hand, changes to the entropy profile are much more
+subtle in the simulation with radiative diffusion, in which the initial outward propagation of the convective boundary stops early
+on and the simulation reaches a statistically stationary state. This
+is possible because radiative diffusion is sufficiently fast to transport entropy generated in the core through the radiative envelope.
+The heat then leaves the box owing to the constant-temperature
+outer boundary condition. This statistically stationary state can
+be maintained indefinitely because we do not model changes to
+the chemical composition of the core due to nuclear burning. We
+only discuss simulations with radiative diffusion in the rest of
+this section.
+3.2. Velocity field
+
+The velocity field depends primarily on the boost factor b. This
+factor sets both convective velocity and efficiency. Because we
+scale κ ∝ b−1 , the rate of radiative diffusion increases in proportion to b and fluid parcels exchange increasing amounts of heat
+with their surroundings as they rise and sink in the convective
+core. This effect makes convection less efficient at transporting
+heat. Figure 3 shows the velocity field in 2.5D simulations with
+boost factors ranging from 106 down to 103 . The velocity field
+in the core is dominated by large-scale vortices as typical of 2D
+convection. Small-scale motions are further suppressed by radiative damping. The structure of the convective flow is completely
+different in 3D, see Fig. 4. Instead of large vortices, we obtain a
+turbulent cascade from large to small scales as expected for 3D
+convection (without strong rotation or magnetic fields).
+The convective core generates internal gravity waves
+(IGWs), which propagate through the radiative envelope. When
+we decrease the boost factor b, the convection becomes slower
+and it generates waves at lower temporal frequencies. Basic theory of linear IGWs (see e.g. Lighthill 2001; Sutherland 2010)
+predicts that a decrease in frequency corresponds to a decrease in
+the radial wavelength for the same horizontal wavelength. This
+
+The simulations in Fig. 3 are shown after a statistically stationary state has been reached. The figure also shows the radius
+of the convective boundary rcb (solid lines), the exact definition of which we defer to the next section. For now, we only
+use it to measure convective velocity uconv . We define this quantity to be the the mass-weighted, root-mean-square (rms) velocity averaged between the inner boundary of the computational
+domain and the radius rcb of the convective boundary. Figure 5
+shows uconv as a function of time, boost factor, grid resolution,
+and the dimensionality of the simulation. The convective velocity rapidly reaches a statistically stationary state. For each boost
+factor b, the velocity is not only statistically constant in time but
+it is also the same for 2.5D and 3D simulations and all grid resolutions. This is rather surprising since the structure of the convective flows differs substantially between 2.5D and 3D (Fig. 4).
+Although the same total energy flux has to be transported in both
+cases, the velocity is only one of several variables that contribute
+to the fluxes of enthalpy and kinetic energy. Indeed, numerical
+studies of stellar convection usually show faster convective velocities in 2D than in 3D with the same initial condition (Muthsam et al. 1995; Meakin & Arnett 2007; Pratt et al. 2020; Horst
+et al. 2021). It is possible that the growth of convective instability is in our simulations limited by the same phenomenon in
+both geometries, which could be radiative damping or buoyancy
+braking in the penetration layer.
+To shed more light on this issue, we show in Appendix A
+a set of 2.5D simulations with b = 104 that include radiative
+diffusion but eliminate mass entrainment from the stably stratified envelope. These simulations develop smooth, large-scale
+convective cells much faster than those in the analogous simulations of convective penetration. Moreover, the velocity in the
+large cells does not converge upon grid refinement, which is understandable considering the fact that numerical viscosity is the
+only mechanism dissipating kinetic energy in these simulations.
+On the other hand, the convective velocity is numerically converged in the simulations of convective penetration, suggesting
+that the growth of kinetic energy in those simulations is limited
+by a resolved, physical effect. We suspect that the buoyancy of
+the high-entropy material entrained from the radiative envelope
+into the core plays an important role in determining the convective velocity.
+Convective velocity scales with b1/3 in simulations of adiabatic convection (Jones et al. 2017; Cristini et al. 2019; Edelmann et al. 2019; Horst et al. 2021; Herwig et al. 2023). Our
+best-fit scaling is uconv ∝ b0.285±0.002 for the four 2.5D simulations with Nr = 512, see Fig. 6. The mean exponent of the scaling differs by −26σ from the adiabatic value of 1/3. To obtain a
+measure of statistical variation for each data point, we consider
+the convective velocities averaged over each of the nbins = 14
+time bins after the initial transient (t > 0.3τth ) as statistically
+independent measurements. The standard deviation of the average of all of the bins is then estimated to be σ = σseries /n1/2
+bins ,
+where σseries is the standard deviation of the time series. We then
+compute 105 statistical realisations of the scaling law assuming
+a normal distribution of statistical fluctuations, fit a power law to
+each of them, and compute the mean scaling and the statistical
+spread around the mean as a function of b. All 2.5D and 3D data
+points shown in Fig. 6 are statistically consistent with the scaling
+Article number, page 5 of 16
+
+A&A proofs: manuscript no. convective_penetration
+
+0.6
+
+b = 106
+
+b = 105
+
+b = 104
+
+b = 103
+
+0.4
+
+100
+
+u / uconv
+
+z/R?
+
+0.2
+
+0.0
+
+−0.2
+10−1
+−0.4
+−0.6
+0.2
+
+0.4
+x/R?
+
+0.6
+
+0.8
+
+0.2
+
+0.4
+x/R?
+
+0.6
+
+0.8
+
+0.2
+
+0.4
+x/R?
+
+0.6
+
+0.8
+
+0.2
+
+0.4
+x/R?
+
+0.6
+
+0.8
+
+Fig. 3. Velocity fields in 2.5D simulations with boost factors b ∈ (106 , 105 , 104 , 103 ) performed on the 512 × 256 grid. The velocity is normalised
+using the typical convective velocity uconv as given by the scaling law shown in Fig. 6. The dashed and solid lines give the time-averaged radii of
+the Schwarzschild and convective boundaries, respectively. The simulations are shown at t = 0.5τth (b).
+
+0.6
+
+2.5D
+
+3D
+
+0.4
+
+100
+
+u / uconv
+
+z/R?
+
+0.2
+0.0
+−0.2
+10−1
+
+−0.4
+−0.6
+0.2
+
+0.4
+x/R?
+
+0.6
+
+0.8
+
+0.2
+
+0.4
+x/R?
+
+0.6
+
+0.8
+
+Fig. 4. As in Fig. 3, but comparing 2.5D and 3D simulations with a
+boost factor of b = 105 performed on grids of 256 × 128 and 256 × 1282
+cells, respectively. In the 3D case, a slice with the spherical angle φ = 0
+is shown.
+
+law.6 Our best estimate of convective velocity at the star’s nominal luminosity (i.e. b = 1) is (7.49 ± 0.13) × 104 cm s−1 . Taking
+the mass-weighted average sound speed cref = 7.96 × 107 cm s−1
+inside the initial Schwarzschild radius as a reference, we obtain
+a nominal Mach number of (9.41 ± 0.16) × 10−4 . If we only fit
+the two lowest-luminosity 2.5D data points the resulting scaling exponent is 0.291 ± 0.004, which is statistically consistent
+with the exponent based on the full 2.5D data set. Finally, if
+we only fit the two 3D data points we obtain a scaling exponent of 0.295 ± 0.006, which differs by −6.3σ from the adiabatic value of 1/3 and is statistically consistent with the exponent based on the full 2.5D data set. The 3D-based scaling gives
+a convective velocity of (6.65 ± 0.50) × 104 cm s−1 at b = 1,
+which is consistent with the 2.5D-based prediction. All of the
+2.5D data points are also statistically consistent with the 3D6
+The most significant deviation is 1.7σ for the 3D simulation with
+b = 106 .
+
+Article number, page 6 of 16
+
+based scaling.7 It is possible that radiative damping makes the
+scaling shallower, although it is unclear why its exponent does
+not approach 1/3 at low boost factors, i.e. when radiative diffusion becomes relatively slow in the core. One might also suspect
+numerical effects. However, Edelmann et al. (2021) demonstrate
+that the SLH code produces the expected 1/3 velocity scaling
+for adiabatic convection down to Mach numbers of 2 × 10−4 in
+a star-like environment. Simulations of 3D turbulent convection
+with mass entrainment performed using the SLH code have also
+been shown to closely agree with those obtained using another
+four major hydrodynamic codes used in the field, see Andrassy
+et al. (2022). Finally, we provide a set of test simulations in Appendix B, which show that the results of SLH simulations converge upon grid refinement.
+We define the convective turnover timescale as
+τconv =
+
+2rcb
+.
+uconv
+
+(6)
+
+For simplicity, we set rcb = rSb,0 + α(b)Hp,Sb,0 in this estimate, where the rSb,0 and Hp,Sb,0 are the radius of and pressure
+scale height at the Schwarzschild boundary in the initial MESA
+model, and we take the scaling law α(b) derived from our 2.5D
+simulations in Sect. 3.5 and shown in Fig. 12. The resulting values of τconv , summarised in Table 1, range from 0.75 d at b = 106
+to 5.0 d at b = 103 . Extrapolating to the nominal luminosity
+(b = 1), we obtain τconv = 33 d.
+3.3. Thermal evolution
+
+In all of our simulations, we initially observe rapid growth in the
+size of the convective core. To illustrate this, we plot in Fig. 7 the
+time evolution of the actual and radiative temperature gradients
+∇ and ∇rad in the 2.5D simulation with b = 104 and Nr = 1024.
+The gradients are normalised using the adiabatic temperature
+gradient ∇ad , so the formal Schwarzschild boundary is located
+at the radius rSb where ∇rad /∇ad = 1. The Schwarzschild boundary moves slightly inwards over the thermal timescale. In con7
+The most significant deviation is 1.6σ for the 2.5D simulation with
+b = 105 .
+
+R. Andrassy et al.: Towards a self-consistent model of the convective core boundary in upper main sequence stars
+107
+
+b = 106
+b = 105
+
+b = 104
+b = 103
+
+2.5D
+3D
+
+1.0
+
+10−1
+
+1.00
+0.95
+
+0.8
+
+Nr = 128
+Nr = 192
+Nr = 256
+Nr = 512
+Nr = 1024
+
+6
+
+10
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1.0
+
+1.2
+
+∇/∇ad , ∇rad /∇ad
+
+0.6
+
+0.85
+
+t/τth
+
+uconv [cm/s]
+
+Maconv = uconv /cref
+
+0.90
+
+0.80
+
+0.4
+
+0.75
+0.25
+
+1.0
+
+10−2
+
+0.30
+
+0.35
+
+0.2
+
+∇/∇ad
+∇rad /∇ad
+
+0.0
+0.0
+
+1.4
+
+t/τth
+
+Fig. 5. Time evolution of the convective velocity uconv in all of our simulations with radiative diffusion. The time axis shows simulation time as
+a fraction of the thermal timescale τth (b). Each data point corresponds
+to a time average over 0.05τth . The right vertical axis shows the corresponding Mach numbers computed using the reference sound speed
+cref = 7.96 × 107 cm s−1 .
+
+0.2
+
+0.4
+r/R?
+
+0.6
+
+0.8
+
+Fig. 7. Time evolution of the radial profiles of the actual and radiative
+temperature gradients ∇ and ∇rad , respectively, in the 2.5D simulation
+with b = 104 and Nr = 1024. The gradients are normalised using the
+adiabatic temperature gradient ∇ad . Simulation time is given as a fraction of the thermal timescale τth on the colour bar. Each curve, except
+for that showing the initial condition, corresponds to a time average over
+0.05τth . The inset zooms in onto the convective-penetration layer with
+dots marking the location of the steepest gradient in ∇/∇ad .
+
+2.5D (Nr = 512)
+3D (Nr = 256)
+
+uconv [cm/s]
+
+6
+
+10
+
+10−2
+
+105
+
+Maconv = uconv /cref
+
+(7.49 ± 0.13) × 104 b0.285±0.002
+∝ b1/3
+
+10−3
+100
+
+101
+
+102
+
+103
+b
+
+104
+
+105
+
+106
+
+Fig. 6. Dependence of the convective velocity uconv on the boost factor b. The right vertical axis shows the corresponding Mach numbers
+computed using the reference sound speed cref = 7.96 × 107 cm s−1 .
+Statistical-variation ranges for the individual data points are smaller
+than the markers and not shown. A straight line is fitted to the 2.5D data
+points using the Monte-Carlo procedure described in Sect. 3.2. The grey
+shading shows the 3σ statistical-variation interval around the mean fit.
+Parameters of the scaling law are given in the legend. The usual adiabatic scaling uconv ∝ b1/3 is also shown for comparison.
+
+trast, the growth in the radial extent of the nearly-adiabatic core
+is much more pronounced. A convective-penetration layer develops above the Schwarzschild boundary. The temperature gradient in the bulk of this layer is slightly sub-adiabatic but significantly super-radiative, i.e. the total flux could in principle be
+transported by radiative diffusion but vigorous convection is still
+present. The outward propagation rate of the convective boundary drops rapidly after ≈ 0.1τth and a statistically stationary state
+seems to have been reached by ≈ (0.2 − 0.3)τth . There is some
+slight late-time adjustment of the temperature gradient near the
+outer boundary of the simulation box (r/R⋆ ≳ 0.7). However,
+the layer affected by it is sufficiently far out to not influence the
+penetration distance.
+
+To better quantify when the penetration distance stops changing, we compute the radii rSb and rcb of the Schwarzschild and
+convective boundaries, respectively, using simulation data averaged over the spherical angles and over time bins 0.05 τth long.
+We define rcb as the radius, where the drop in ∇(r)/∇ad (r) is the
+steepest, see the inset in Fig. 7. The dimensionless penetration
+distance is then α = (rcb − rSb )/H p,Sb , where the pressure scale
+height H p,Sb at the Schwarzschild boundary is derived from the
+same space- and time-averaged data. The time evolution of α
+is shown in Fig. 8 for four example simulations. The statistical
+variation in the simulations with b = 106 is so large that all 20
+data points seem to be consistent with a constant state. However,
+simulations with smaller boost factors cover many more convective timescales (see Table 1) and the statistical variation is
+largely suppressed in the time averages. These simulations show
+a clear initial increase in α followed by a statistically constant
+state. Based on Fig. 8, we define the first 0.3τth to be an initial
+transient for the purpose of measuring α. This transient is excluded from further analysis.
+We show the radial profiles of the temperature gradient ∇ in
+2.5D simulations with four different boost factors in Fig. 9. The
+stratification in the core becomes increasingly closer to being
+adiabatic as the boost factor is decreased. However, the stratification is at least slightly sub-adiabatic at r ≳ 0.17R⋆ , which is
+well inside the Schwarzschild boundary at all four boost factors.
+The drop in the temperature gradient at the convective boundary
+(the outer boundary of the penetration layer) becomes increasingly steep with decreasing boost factor.
+Our simulations suggest that a simplified model, often referred to as ‘step overshoot’, which assumes that the penetration
+layer is fully mixed, perfectly adiabatic, and ends with a discontinuous jump to the radiative temperature gradient at the convective boundary is a good approximation to the thermal structure to
+be expected at the nominal luminosity (b = 1). A MESA model
+of a 15 M⊙ ZAMS star computed using a parametric description
+Article number, page 7 of 16
+
+A&A proofs: manuscript no. convective_penetration
+1.4
+
+1.3
+
+1.3
+
+0.95
+
+1.2
+
+1.2
+
+0.90
+
+α = (rcb − rSb )/H p,Sb
+
+1.4
+
+1.1
+
+1.0
+
+1.0
+
+0.85
+0.80
+
+∇/∇ad
+
+1.1
+
+1.00
+
+0.9
+
+0.75
+
+0.9
+
+0.8
+
+0.8
+
+0.7
+
+0.7
+b = 106
+b = 105
+
+0.6
+
+b = 104
+b = 103
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1.0
+
+t/τth
+
+Fig. 8. Time evolution of the dimensionless penetration distance
+α = (rcb − rSb )/H p,Sb , where rcb is the radius of the convective boundary, rSb the radius of the Schwarzschild boundary, and H p,Sb the pressure scale height at rSb . The four example simulations are 2.5D with
+Nr = 512. The time axis shows the time as a fraction of the thermal
+timescale τth (b). The dotted vertical line at t = 0.3τth marks the end of
+the initial transient. Each data point corresponds to a time average over
+0.05τth .
+
+of the penetration process is shown in Fig. 9 for comparison.8
+We use α = 0.6 in this model, which is approximately the value
+we obtain by extrapolating the results of our 2.5D simulation to
+the actual stellar luminosity (b = 1) in Sect. 3.5. In comparison,
+the popular alternative approach to model convective overshooting – exponentially decaying diffusion of chemical elements –
+assumes the temperature gradient to be radiative beyond the convective boundary. We do not show such a model in Fig. 9 because
+it would be indistinguishable from the model without any extra
+mixing at the convective boundary. It is possible if not likely that
+some slower form of mixing exists beyond the penetration layer.
+One could use the diffusive model beyond the layer covered by
+the adiabatic step-overshoot model, obtaining a combined model
+that Anders & Pedersen (2023) refer to as ‘extended convective
+penetration.’
+3.4. Numerical convergence of the penetration distance
+
+For each boost factor and grid dimensionality, we run simulations on a range of grids in order to quantify and suppress discretisation effects. Figure 10 shows that 2.5D simulations with
+the highest boost factor (b = 106 ) are consistent with having
+the same value of α for all of our 2.5D grids (Nr = 128 to
+Nr = 1024), i.e. the simulations resolve all relevant scales well
+enough and α is numerically converged. The remaining sets of
+2.5D and 3D simulations show some resolution dependence. For
+a second-order code, we would asymptotically expect the dependence α = α∞ + CNr−2 , where α∞ is the unknown value of α for
+Nr → ∞, and the constant C sets the magnitude of the error term.
+We observe first-order convergence, α = α∞ +CNr−1 , instead, see
+Fig. 10.
+8
+
+The ‘step overshoot’ prescription that can be activated in MESA via
+an inlist file only mixes composition in the ‘overshoot’ layer and
+the temperature gradient ∇ is kept radiative. However, it is possible to
+enforce ∇ = ∇ad and model convective penetration by adding a simple
+subroutine to run_star_extras.f90 as we did in this example. Our
+MESA set-up is available on Zenodo (https://doi.org/10.5281/
+zenodo.8127093).
+Article number, page 8 of 16
+
+0.30
+
+0.35
+
+0.6
+
+0.7
+
+SLH, b = 106
+SLH, b = 105
+SLH, b = 104
+
+0.6
+
+0.5
+
+0.25
+
+MESA, α = 0.0
+MESA, α = 0.6
+
+SLH, b = 103
+
+0.5
+
+0.0
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+r/R?
+
+0.5
+
+0.8
+
+Fig. 9. Radial profiles of the temperature gradient ∇ in 2.5D simulations
+with Nr = 512 and the boost factors given in the legend. The gradients are normalised using the adiabatic temperature gradient ∇ad . The
+curves are derived from simulation data averaged over the time interval
+0.3τth ≤ t ≤ τth except for the b = 103 simulation, for which we use
+the interval 0.3τth ≤ t ≤ 0.5τth . MESA models with α = 0.0 (our initial
+condition) and α = 0.6 are shown for comparison. The inset zooms in
+onto the convective-penetration layer with dots marking the location of
+the steepest gradient in ∇/∇ad .
+
+The diffusion length scales listed in Table 1 suggest that the
+smallest features one would expect to see in the entropy distribution around the core boundary are only marginally resolved on
+the finest of our grids in simulations with b ∈ (103 , 104 ), possibly explaining the slower-than-expected numerical convergence.
+However, there are other numerical effects that affect the mean
+thermal stratification in our simulations and possibly also the
+penetration distance. We include an a posteriori study of these
+effects in Appendix B. In Sect. B.1, we show that the core numerical solver of SLH is second-order accurate. However, our implementation of the constant-temperature boundary condition turns
+out to be only first-order accurate when there is a density gradient inside the computational domain, see Sect. B.2 for details.
+Furthermore, we show in Sect. B.3 that the effect of odd-even decoupling starts to dominate the remaining numerical errors when
+the physical solution becomes sufficiently well resolved. This effect, which is always present in numerical schemes on collocated
+grids, also reduces the convergence rate in our test problem. Both
+the inaccurate boundary condition and the odd-even-decoupling
+effect may have influenced the penetration distance via their influence on the mean thermal stratification, although it is difficult
+to judge which of them is more important.
+Nevertheless, Fig. 10 shows that the penetration distance
+does converge and we can fit the first-order convergence law to
+the data. This way, we obtain a well-defined, extrapolated penetration distance α∞ that would correspond to a hypothetical, infinitely fine grid and is not affected by the aforementioned problems restricting the convergence rate to first order. We employ
+the Monte Carlo procedure described in Sect. 3.2, so we obtain
+a statistical-variation range in addition to the mean fit. We exclude the simulations with Nr = 128 (Nr−1 = 7.8 × 10−3 ) for
+the two lowest boost factors because these simulations seem to
+be severely under-resolved and they deviate significantly from
+the fits based on finer grids. None of the points included in the
+fits deviate from the fitting lines by more than 2σ. The resulting
+values of α∞ are summarised in Table 2.
+
+R. Andrassy et al.: Towards a self-consistent model of the convective core boundary in upper main sequence stars
+Table 2. Dimensionless penetration distance extrapolated to infinite grid
+resolution.
+
+b
+
+2.5D
+2.5D
+2.5D
+2.5D
+
+106
+105
+104
+103
+
+3D
+3D
+
+106
+105
+
+α∞
+
+1.124 ± 0.022
+0.944 ± 0.006
+0.862 ± 0.002
+0.781 ± 0.001
+
+α = (rcb − rSb )/H p,Sb
+
+DIM
+
+1.090 ± 0.025
+0.718 ± 0.007
+
+1.2
+
+α = (rcb − rSb )/H p,Sb
+
+1.1
+b = 106
+b = 105
+b = 104
+b = 103
+
+1.0
+0.9
+0.8
+0.7
+
+0.000
+
+2.5D
+0.001
+
+0.002
+
+0.003
+
+0.004
+
+0.005
+
+0.006
+
+0.007
+
+0.008
+
+Nr−1
+
+1.2
+
+b = 106
+b = 105
+
+α = (rcb − rSb )/H p,Sb
+
+1.1
+1.0
+0.9
+0.8
+0.7
+0.6
+0.000
+
+3D
+0.001
+
+0.002
+
+0.003
+
+0.004
+
+0.005
+
+0.006
+
+(0.580 ± 0.005) b0.043±0.001
+(0.089 ± 0.012) b0.181±0.011
+
+10−1
+
+Notes. The variables in the header are grid dimensionality DIM, boost
+factor b, and dimensionless penetration distance α∞ with its 1σ range of
+statistical variation as extrapolated to infinite grid resolution in Sect. 3.4.
+
+0.6
+
+100
+
+0.007
+
+0.008
+
+Nr−1
+
+Fig. 10. Numerical convergence of the penetration distance α for 2.5D
+and 3D simulations with different boost factors b. The radial grid spacing is expressed as the inverse number of radial grid cells, Nr−1 , so that
+first-order convergence corresponds to a straight line. The error bars indicate 3σ intervals of statistical variation. The grey shading shows σ,
+2σ, and 3σ statistical-variation intervals of the fits. The dashed lines
+show the mean fit in each case and the dotted lines extrapolate the fits
+towards data points excluded from the fitting procedure.
+
+3.5. Luminosity dependence of the penetration distance
+
+Having suppressed discretisation effects, we are left with a single estimate of the penetration distance and its range of statistical variation for each boost factor and grid dimensionality. We
+show these data points in Fig. 11. The 2.5D data points suggest a
+
+2.5D
+3D
+
+100
+
+101
+
+102
+
+103
+b
+
+104
+
+105
+
+106
+
+Fig. 11. Penetration distance α extrapolated to an infinitely fine grid
+(see Fig. 10) as a function of the boost factor b. Assumed power-law
+dependencies α(b) are fitted to the 2.5D and 3D data points separately.
+The grey shading shows σ, 2σ, and 3σ statistical-variation intervals of
+the fits.
+
+weak, although highly statistically significant, dependence of α
+on the boost factor b. We first blindly fit power laws to the 2.5D
+and 3D data sets individually using the Monte Carlo procedure
+described in Sect. 3.2. In the 2.5D case, the scaling exponent
+is only 0.043 ± 0.001 and the penetration distance extrapolated
+to the nominal luminosity (b = 1) is α2.5D = 0.580 ± 0.005. If
+we assume that the α(b) dependence for 3D simulations can also
+be described by a single power law, we obtain a much steeper
+scaling with an exponent of 0.181 ± 0.011. After extrapolating
+over five orders of magnitude, the power law would then imply a
+penetration distance of only α3D = 0.089 ± 0.012. However, our
+current set of 3D simulations on its own does not contain enough
+evidence for the single-power-law model.
+It is also possible that there is a power-law dependence α(b)
+but only for sufficiently low boost factors b, e.g. due to compressibility effects.9 Indeed, the 2.5D data point with b = 106 deviates from the scaling law discussed above and shown in Fig. 11
+by 3.2σ. Therefore, we now exclude the b = 106 data points and
+explore the alternative assumption that the power law’s slope is
+the same for 2.5D and 3D simulations with b ≤ 105 . Figure 12
+shows that the scaling exponent based on the three remaining
+2.5D data points remains essentially unchanged (0.042 ± 0.001)
+because the statistical weight of the b = 106 data point considered in the fit in Fig. 11 is low. The largest deviation from the
+power law is only 0.5σ now. The penetration distance implied by
+the 2.5D simulations at the nominal luminosity does not change
+significantly either (α2.5D = 0.585 ± 0.005). However, the much
+shallower scaling implies a much larger extrapolated penetration
+distance of α3D = 0.443 ± 0.006 for the 3D simulations if we fix
+the scaling exponent and simply shift the 2.5D-based power law
+to make it pass through the 3D-based data point at b = 105 .
+
+4. Summary and discussion
+Observational evidence strongly suggests that the convective
+cores of intermediate-mass and massive, main sequence stars
+are substantially larger that what is predicted by linear stability
+analysis. The process of convective penetration, first described
+9
+The Mach number Ma sometimes exceeds 0.3 in simulations with
+b = 106 . Ram pressure fluctuations are of the order of Ma2 .
+
+Article number, page 9 of 16
+
+A&A proofs: manuscript no. convective_penetration
+
+2.5D
+3D
+
+1.0
+
+α = (rcb − rSb )/H p,Sb
+
+boundary, is a good approximation of the thermal structure to be
+expected at the nominal luminosity (b = 1).
+
+(0.585 ± 0.005) b0.042±0.001
+(0.443 ± 0.006) b0.042±0.001
+
+0.9
+0.8
+0.7
+0.6
+0.5
+
+0.4
+
+100
+
+101
+
+102
+
+103
+b
+
+104
+
+105
+
+106
+
+Fig. 12. As in Fig. 11, but excluding the simulations with b = 106 ,
+fitting a power law to the remaining 2.5D data points and, assuming
+that the scaling exponent is the same in 3D, shifting the power law to
+pass through the data point based on 3D simulations with b = 105 .
+The statistical variation associated with that data point is added to that
+associated with the scaling law.
+
+by Roxburgh (1978), seems to be able to enlarge the convective cores of main sequence stars enough to reconcile them with
+observations. However, the penetration distance depends on the
+complex physics of 3D turbulent convection in the core and such
+effects cannot be consistently captured in analytic treatments.
+We performed a large set of simulations of convective penetration in a chemically homogeneous model of a 15 M⊙ ZAMS
+star. We make it possible to cover the thermal timescale by increasing the luminosity and decreasing the opacity by the same
+large boost factor b ranging from 103 to 106 . This scaling procedure preserves the value of the radiative temperature gradient.
+We run both 2.5D and 3D simulations using our time-implicit,
+low-Mach-number code SLH and quantify their numerical convergence using a range of computational grids.
+We argue that mass entrainment into the convective core cannot stop in the adiabatic approximation and show an adiabatic
+simulation that demonstrates this. Indeed, the star becomes fully
+convective in the adiabatic simulation. On the other hand, simulations with radiative diffusion reach a statistically stationary
+state with a convective core and radiative envelope on the thermal timescale.
+All of our simulations with radiative diffusion show a clear
+penetration layer, the thickness of which becomes statistically
+constant in time once thermal equilibrium has been reached.
+As expected, simulations performed with large luminosity boost
+factors show large deviations from adiabacity in the core. However, the core, including the bulk of the penetration layer, becomes nearly adiabatic as the luminosity is decreased. This result
+qualitatively agrees with the simulations of penetrative convection in similar stellar environments performed by Baraffe et al.
+(2023), Mao et al. (2023), and Blouin et al. (2023), as well
+as with the much more idealised simulations of Anders et al.
+(2022).
+There is a steep jump from the adiabatic to the radiative temperature gradient at the outer boundary of the penetration layer.
+This means that the popular simplified model, often referred to
+as ‘step overshoot’, which assumes that the penetration layer
+is fully mixed, perfectly adiabatic, and ends with a discontinuous jump to the radiative temperature gradient at the convective
+Article number, page 10 of 16
+
+We find strong evidence for a weak dependence of the dimensionless penetration distance α on the boost factor b. Weak
+if any dependence of the core size on b is expected also from the
+theoretical point of view. In the Roxburgh criterion (Eq. (1)), the
+energy flux Γ due to nuclear sources scales in proportion to b; as
+does the radiative flux F because we scale the opacity in inverse
+proportion to b. The turbulent dissipation rate Φ0 is expected to
+scale with u3conv /Lturb , where Lturb is an integral length scale of the
+turbulence. If Lturb is fixed and we consider adiabatic convection,
+we have the usual scaling u3 ∝ b, and so both sides of Eq. (1)
+scale in proportion to b and the size of the core cannot depend
+on b. However, we show in Sect. 3.2 and Fig. 6 that the velocity scaling in our non-adiabatic simulations is slightly shallower
+than that of adiabatic convection. This changes the relative importance of the dissipation term as b is varied over several orders
+of magnitude. The slight change in the core radius rcb itself may
+affect the dissipation rate given that it is reasonable to assume
+that Lturb ∝ rcb . We must also keep in mind that Roxburgh (1989)
+assumes the velocity vector to vanish at the convective boundary
+and that contributions from terms quadratic in fluctuations can
+be neglected. Some of those terms may not be negligible in our
+simulations, especially because some energy flux is needed to
+drive the waves we clearly see in the radiative envelope.
+Extrapolating the results of our 2.5D simulations to b = 1,
+we derive a rather large penetration distance of α = 0.585 ±
+0.005. Our set of 3D simulations covers only two relatively large
+boost factors at the moment. For this reason, we show two possible extrapolations to b = 1 in Sect. 3.5, which give penetration
+distances α = 0.089 ± 0.012 and α = 0.443 ± 0.006. These two
+values differ by a factor of five, but both are broadly consistent
+with observations. For stars of similar masses, the compilation
+of Anders & Pedersen (2023, their Fig. 12) of observational constraints on the penetration distance from asteroseismology shows
+measurements and upper limits that roughly span our two α estimates based on 3D simulations. Brott et al. (2011) discuss a drop
+in rotational velocity observed at a certain value of surface gravity in a sample of stars in the Large Magellanic Cloud. Interpreting the drop as the terminal-age main sequence, their calibration
+gives α = 0.34 ± 0.1 for stellar models in the mass range from
+approximately 10 to 20 M⊙ . The calibration of Claret & Torres
+(2016) based on eclipsing binaries shows that α increases from
+zero at 1.2 M⊙ to ≈ 0.2 at 2.1 M⊙ , where it stops changing and
+remains approximately the same up to 4.4 M⊙ . The fitting formula given by Eqs. (11) – (16) of Jermyn et al. (2022), which
+is based on the simulations and theory of Anders et al. (2022),
+gives α = 0.19 for a 15 M⊙ star.
+The results presented here demonstrate only the most basic
+properties of the rich data set we have created. An analysis based
+on Reynolds averaging is already in progress and is expected to
+quantify differences between our 2.5D and 3D simulations and
+become a basis for constructing simplified models of the penetration process. We are also working on extending our simulations —especially those in 3D geometry— to lower luminosity
+boost factors. Although the simulations are based on a realistic
+stellar model, the model is chemically homogeneous and does
+not rotate or contain magnetic fields. Additionally, our computational grid currently covers a spherical wedge rather than the
+full sphere. All of these assumptions and simplifications should
+be gradually relaxed in order to generate predictions for a wide
+range of observed stars.
+
+R. Andrassy et al.: Towards a self-consistent model of the convective core boundary in upper main sequence stars
+Acknowledgements. We are grateful to Raphael Hirschi and his group at Keele
+University as well as to Saskia Hekker at the Heidelberg Institute for Theoretical
+Studies for fruitful discussions and comments. We acknowledge support by the
+Klaus Tschira Foundation. This work is funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) under Germany’s Excellence Strategy EXC 2181/1 - 390900948 (the Heidelberg STRUCTURES Excellence Cluster). This work has received funding from the European Research
+Council (ERC) under the European Union’s Horizon 2020 research and innovation programme (Grant agreement No. 945806). PVFE was supported by
+the U.S. Department of Energy through the Los Alamos National Laboratory
+(LANL). LANL is operated by Triad National Security, LLC, for the National
+Nuclear Security Administration of the U.S. Department of Energy (Contract
+No. 89233218CNA000001). This work has been assigned a document release
+number LA-UR-23-26456.
+
+References
+Aerts, C. 2013, in EAS Publications Series, Vol. 64, EAS Publications Series,
+ed. K. Pavlovski, A. Tkachenko, & G. Torres, 323–330
+Anders, E. H., Jermyn, A. S., Lecoanet, D., & Brown, B. P. 2022, ApJ, 926, 169
+Anders, E. H. & Pedersen, M. G. 2023, Galaxies, 11, 56
+Andrassy, R., Higl, J., Mao, H., et al. 2022, A&A, 659, A193
+Baraffe, I., Clarke, J., Morison, A., et al. 2023, MNRAS, 519, 5333
+Berberich, J. P., Chandrashekar, P., & Klingenberg, C. 2021, Computers & Fluids, 104858
+Blouin, S., Mao, H., Herwig, F., et al. 2023, MNRAS, 522, 1706
+Brott, I., de Mink, S. E., Cantiello, M., et al. 2011, A&A, 530, A115
+Claret, A. & Torres, G. 2016, A&A, 592, A15
+Cristini, A., Hirschi, R., Meakin, C., et al. 2019, MNRAS, 484, 4645
+Demarque, P., Sarajedini, A., & Guo, X. J. 1994, ApJ, 426, 165
+Edelmann, P. V. F. 2014, Dissertation, Technische Universität München
+Edelmann, P. V. F., Horst, L., Berberich, J. P., et al. 2021, A&A, 652, A53
+Edelmann, P. V. F., Ratnasingam, R. P., Pedersen, M. G., et al. 2019, ApJ, 876, 4
+Gilet, C., Almgren, A. S., Bell, J. B., et al. 2013, ApJ, 773, 137
+Herwig, F., Woodward, P. R., Mao, H., et al. 2023, arXiv e-prints,
+arXiv:2303.05495
+Horst, L., Hirschi, R., Edelmann, P. V. F., Andrássy, R., & Röpke, F. K. 2021,
+A&A, 653, A55
+Hosea, M. & Shampine, L. 1996, Applied Numerical Mathematics, 20, 21 ,
+method of Lines for Time-Dependent Problems
+Hotta, H. 2017, ApJ, 843, 52
+Jermyn, A. S., Anders, E. H., Lecoanet, D., & Cantiello, M. 2022, ApJ, 929, 182
+Jermyn, A. S., Bauer, E. B., Schwab, J., et al. 2023, ApJS, 265, 15
+Jones, S., Andrassy, R., Sandalski, S., et al. 2017, MNRAS, 465, 2991
+Käpylä, P. J. 2019, A&A, 631, A122
+Kippenhahn, R., Weigert, A., & Weiss, A. 2012, Stellar Structure and Evolution
+(Berlin Heidelberg: Springer-Verlag)
+LeVeque, R. J. 2002, Finite volume methods for hyperbolic problems, Vol. 31
+(Cambridge: Cambridge university press)
+Lighthill, J. 2001, Waves in Fluids (Cambridge University Press)
+Liou, M.-S. 2006, Journal of Computational Physics, 214, 137
+Maeder, A. & Mermilliod, J. C. 1981, A&A, 93, 136
+Mao, H., Woodward, P., Herwig, F., et al. 2023, arXiv e-prints, arXiv:2304.10470
+Meakin, C. A. & Arnett, D. 2007, ApJ, 667, 448
+Miczek, F. 2013, Dissertation, Technische Universität München
+Muthsam, H. J., Goeb, W., Kupka, F., Liebich, W., & Zoechling, J. 1995, A&A,
+293, 127
+Paxton, B., Bildsten, L., Dotter, A., et al. 2011, ApJS, 192, 3
+Paxton, B., Cantiello, M., Arras, P., et al. 2013, ApJS, 208, 4
+Paxton, B., Marchant, P., Schwab, J., et al. 2015, ApJS, 220, 15
+Paxton, B., Schwab, J., Bauer, E. B., et al. 2018, ApJS, 234, 34
+Paxton, B., Smolec, R., Schwab, J., et al. 2019, ApJS, 243, 10
+Pratt, J., Baraffe, I., Goffrey, T., et al. 2020, A&A, 638, A15
+Roxburgh, I. W. 1965, MNRAS, 130, 223
+Roxburgh, I. W. 1978, A&A, 65, 281
+Roxburgh, I. W. 1989, A&A, 211, 361
+Saslaw, W. C. & Schwarzschild, M. 1965, ApJ, 142, 1468
+Sutherland, B. 2010, Internal Gravity Waves (Cambridge University Press)
+Woodward, P. R., Herwig, F., & Lin, P.-H. 2015, ApJ, 798, 49
+Zahn, J. P. 1991, A&A, 252, 179
+
+Article number, page 11 of 16
+
+A&A proofs: manuscript no. convective_penetration
+
+Article number, page 12 of 16
+
+∆r = 2
+∆r = 1
+
+107
+
+10−1
+
+uconv [cm/s]
+
+To judge the importance of mass entrainment on the convective velocity in 2.5D convection, we perform a simple numerical
+experiment: we run 2.5D simulations of core convection using
+the same setup as in the convective-penetration simulations except that we impose a reflective boundary condition in the outer
+parts of the initially isentropic core. This way, we eliminate any
+mass entrainment from the radiative envelope. The volume heating and opacity profile are the same as those in the penetration
+simulations with the boost factor b = 104 . We keep the temperature at the outer radial boundary fixed at its initial value. The
+outer boundary is at r = 8.5003125 × 1010 cm, so that we can
+achieve exactly the same grid spacing as in the simulations with
+the radiative envelope. We stop the set of core-only simulations
+after 0.3τth (b).
+The elimination of the radiative envelope and of any mass
+entrainment leads to major qualitative and quantitative changes
+in the velocity field. The simulations with the radiative envelope
+and b = 104 contain a large number of vortices of different sizes,
+the distribution and shapes of which change chaotically in time
+(see Fig. 3 for a representative snapshot). On the other hand,
+the core-only simulations develop a single, smooth convective
+cell filling the core early on, which later splits into two large
+cells. The relative sizes of those cells change on short timescales
+but the cells remain very smooth with essentially no small-scale
+structure.
+Figure A.1 compares the time evolution of the convective
+velocity in the two sets of simulations. The velocity fluctuates
+around the same, nearly constant, function in all four simulations
+with the radiative envelope, independently of their grid resolution. On the other hand, we see a fast increase in the convective velocity in the core-only simulations. It ultimately reaches
+a constant value (after averaging out rapid changes as done in
+Fig. A.1), which increases upon grid refinement. Starting with
+the coarsest grid, the velocity on the next finer grid is larger by
+factors of 1.45, 1.51, and 1.21. The last ratio cannot be interpreted as a sign of numerical convergence because the convective velocity was still increasing in the highest-resolution simulation when it was stopped and it also showed much less variability on short timescales (not visible in Fig. A.1) than the lowerresolution simulations. The velocities in all of the core-only simulations are much larger than those in the analogous simulations
+of convective penetration.
+These effects can be understood as follows. Because the
+core-only simulations lack a stable layer on top of the convective core, they cannot develop small-scale shear instabilities at
+that interface, leading to much more mundane convective flows.
+There is also no mass entrainment of high-entropy material from
+the stable envelope and therefore no buoyancy braking associated with this phenomenon. The only remaining mechanism
+dissipating kinetic energy is numerical diffusion, the magnitude
+of which decreases upon grid refinement. Because the physical
+scale of the convective cells is always the same, the timescale of
+reaching a balance between the driving of convection and numerical dissipation becomes longer upon grid refinement and
+the flows accumulate more kinetic energy by the time a stationary state is reached. The fact that radiative diffusion decreases
+temperature and density fluctuations, hence also the buoyancy
+driving the convection, does not seem to be sufficient to obtain
+low-viscosity flows with a well-defined velocity in two spatial
+dimensions.
+
+∆r = 8
+∆r = 4
+
+core + envelope
+core only
+
+106
+
+Maconv = uconv /cref
+
+Appendix A: 2.5D convection without mass
+entrainment
+
+10−2
+0.00
+
+0.05
+
+0.10
+
+0.15
+t/τth
+
+0.20
+
+0.25
+
+0.30
+
+Fig. A.1. Time evolution of the convective velocity uconv in two series of
+2.5D simulations with radiative diffusion: the simulations of convective
+penetration with mass entrainment from the radiative envelope (‘core +
+envelope’) and similar simulations without the radiative envelope (‘core
+only’). All of the simulations have the boost factor b = 104 . The time
+axis shows simulation time as a fraction of the thermal timescale τth (b).
+Each data point corresponds to a time average over 0.005τth . The right
+vertical axis shows the corresponding Mach numbers computed using
+the reference sound speed cref = 7.96 × 107 cm s−1 . Grid resolution is
+given in terms of the dimensionless radial grid spacing ∆r such that a
+grid with Nr = 1024 in the ‘core + envelope’ case has ∆r = 1.
+
+Appendix B: Accuracy of the SLH code
+Motivated by the first-order convergence of the penetration distance α upon grid refinement (see Sect. 3.4 and Fig. 10), we reevaluated the accuracy of the SLH code on a set of three test
+problems designed to isolate different aspects of the fluid dynamics simulations reported in this work. All three test problems are
+2D and formulated such that one can obtain a ‘converged’ solution on a sufficiently fine grid and use it as a reference to quantify numerical errors affecting solutions on grids coarser than the
+reference grid. More specifically, we define L1 errors in the distribution of an arbitrary quantity q to be
+PNx PNy
+ref
+i=1
+j=1 qi, j − qi, j
+1
+L1 = ref
+,
+(B.1)
+N x Ny
+σ
+where qi, j is the solution on a given grid and qref
+i, j is the reference solution binned onto the same grid of N x × Ny cells.10 The
+L1 error is normalised using the standard deviation σref of q in
+the reference solution because the fluctuations of interest are often much smaller than the mean value. The spatial and temporal discretisation in the same as in the simulations of convective
+penetration, see Sect. 2 for details.
+In the first test problem, a Kelvin-Helmoltz instability with
+radiative diffusion (Sect. B.1), we exclude gravity and use periodic boundary conditions to eliminate any boundary effects. We
+demonstrate that the numerical scheme is second-order accurate
+in this case. In the second test problem, we eliminate hydrodynamics and solve a diffusion problem with constant-temperature
+boundary conditions (Sect. B.2). This problem reveals a subtle effect that makes our original implementation of constanttemperature boundaries first-order accurate when there is a den10
+
+We perform the binning using mass-weighted averaging, which is
+appropriate to the quantities used in our tests (specific internal energy
+and specific entropy).
+
+R. Andrassy et al.: Towards a self-consistent model of the convective core boundary in upper main sequence stars
+1.0
+0.4
+
+0.6
+0.0
+0.4
+−0.2
+
+ei (normalised)
+
+0.8
+0.2
+y
+
+sity stratification inside the computational domain. We fix this
+issue and show that the new implementation, to be used in future
+simulations, is second-order accurate. Finally, we solve a problem involving the buoyant rise of a ‘hot bubble’ under the influence of radiative diffusion in the isentropic core of our 15 M⊙
+stellar model. This last problem demonstrates that the improved
+constant-temperature boundary condition is second-order accurate also when combined with hydrodynamics. However, we find
+that errors related to the infamous odd-even-decoupling effect
+limit the convergence rate to first order once relative errors have
+dropped below ≈ 10−2 . As discussed in Sect. B.3, this effect is
+intrinsic to collocated numerical schemes and it can only be suppressed, not eliminated.
+
+0.2
+
+−0.4
+
+0.0
+0.00
+
+0.25
+
+0.50
+
+0.75
+
+1.00
+x
+
+1.25
+
+1.50
+
+1.75
+
+2.00
+
+Fig. B.1. Reference solution to the 2D Kelvin-Helmholtz problem in
+terms of the specific internal energy ei normalised to range from 0 to 1.
+The solution was computed on a 4096 × 2048 grid.
+
+B.1. Kelvin-Helmholtz instability
+
+100
+
+The initial condition for this test problem is
+(B.2)
+(B.3)
+(B.4)
+(B.5)
+
+where ρ is the density, u and v are the components of the velocity
+vector, p is the pressure, and the function
+1
+
+
+
+
+
+2 1 + sin 16π(y + 0.25) ,
+
+
+
+
+1,
+
+
+η(y) = 
+1
+
+
+
+2 1 − sin 16π(y − 0.25) ,
+
+
+
+0,
+
+9
+7
+for y > − 32
+and y < − 32
+,
+7
+7
+for y ≥ − 32 and y ≤ 32 ,
+7
+9
+for y > 32
+and y < 32
+,
+
+otherwise
+
+(B.6)
+defines a smooth transition between the shearing layers. The
+smoothness of the transition makes it possible to obtain numerically converged solutions. The equation of state is that of an
+ideal monatomic gas with the ratio of specific heats γ = 1.4 and
+mean molecular weight µ = 1. The initial Mach number is approximately 0.01. We include radiative diffusion with a constant
+conductivity coefficient of χ = 3.61 × 10−5 R, where R is the
+gas constant per unit of mass. We stop the simulations at t = 80
+when the instability has evolved well into its non-linear phase,
+see Fig. B.1. Our choice of χ is such that the diffusion affects
+the instability in a significant way without suppressing it completely. In the absence of hydrodynamics, the radiative diffusion
+on its own would widen the smooth transitions between the shear
+layers approximately by a factor of three by t = 80. Depending
+on whether we take the wavelength of the initial perturbation
+(unity) or the initial width of the transitions between the shear
+1
+layers ( 16
+) as a reference length scale, the Péclet number of the
+flow is ≈ 870 and ≈ 55, respectively.
+We compute solutions to this test problem on equidistant,
+Cartesian grids ranging from 32×16 to 4096×2048 cells. The latter serves as the reference solution. The L1 errors in the specific
+internal energy ei are shown in Fig. B.2. As expected, the numerical convergence is slow on very coarse grids, which do not
+resolve important features of the solution. Convergence slightly
+faster than second-order is obtained on grids with at least 256
+cells along the x axis. Our use of parabolic reconstruction, which
+is formally third-order accurate, is the most likely reason for the
+fast convergence.
+
+10−1
+relative L1 error in ei
+
+
+
+ρ = γ 1.25 − 0.5η(y) ,
+
+
+u = 0.01 1 − 2η(y) ,
+v = 0.001 sin(2πx),
+p = 1,
+
+10−2
+
+10−3
+simulation data
+
+N x−2
+
+10−4
+32
+
+64
+
+128
+
+256
+
+512
+
+1024
+
+2048
+
+Nx
+
+Fig. B.2. Numerical convergence of the solutions to the KelvinHelmholtz problem. Relative L1 errors in the specific internal energy
+ei are shown as a function of the grid resolution N x along the x axis. A
+second-order scaling is shown for reference.
+
+B.2. Heat diffusion with constant-temperature boundaries
+
+To test our constant-temperature boundary conditions, we set
+up a problem that involves diffusion but no hydrodynamics.
+We use part of the initially isentropic core of our 15 M⊙ stellar model (Sect. 2.2), namely the radial range from 2 × 1010 cm
+to 8 × 1010 cm, as an initial condition. We fix the temperatures
+at both radial boundaries to their initial values, turn off volume
+heating, and include radiative diffusion with the original stellar
+opacity profile. We use 100 long, implicit time steps to reach 1%
+of the thermal timescale11 (589 yr) and we stop the simulations
+at this point. The resulting change in the temperature gradient is
+shown in Fig. B.3.
+Although the stratification is spherically symmetric, we use
+2.5D grids covering polar angles in the range 82.5◦ ≤ ϑ ≤ 97.5◦ .
+We solve this problem on grids ranging from 16×4 to 2048×512
+cells. The latter serves as the reference solution. The L1 errors
+in the specific internal entropy s are shown in Fig. B.4. The
+constant-temperature boundary condition as implemented for the
+simulations of convective penetration reported in this work is
+denoted ‘old BC’ in the figure. Clearly, the solutions converge
+at first order only. Re-evaluating the implementation, we identified the following subtle issue that causes the slow convergence.
+11
+
+This is the thermal timescale of the whole stratification as included
+in the simulations of convective penetration. We use the same value in
+these simulations for simplicity.
+Article number, page 13 of 16
+
+A&A proofs: manuscript no. convective_penetration
+1.5
+
+100
+
+t = 0.00 τth
+t = 0.01 τth
+
+10−1
+
+1.4
+
+∇/∇ad
+
+relative L1 error in s
+
+1.3
+1.2
+1.1
+
+10−2
+10−3
+10−4
+new BC
+old BC
+
+1.0
+10−5
+
+Nr−1
+
+0.9
+
+Nr−2
+
+10−6
+0.06
+
+0.08
+
+0.10
+
+0.12
+
+0.14
+r/R?
+
+0.16
+
+0.18
+
+0.20
+
+0.22
+
+Fig. B.3. Angle-averaged reference solution to the diffusion problem
+computed on a 2.5D grid of 2048 × 512 cells and visualised in terms of
+the temperature gradient. The isentropic initial state has ∇/∇ad = 1.
+
+When computing the diffusive flux at a given cell face, we use
+the states in the two cells around the interface to compute estimates of the temperature gradient, opacity (which is fixed), and
+the T 3 /ρ factor that enters the thermal conductivity at the cell
+interface. These approximations are second-order accurate for
+smooth solutions. At the domain boundary, we fix the temperature in the first ghost cell and use reflective boundary conditions for the density and momentum as described in Sect. 2.3.
+The temperature varies smoothly across the domain boundary, so
+the estimate of the temperature at the interface is second-order
+accurate. However, if there is a density stratification inside the
+computational domain the reflective boundary condition forces
+the component of the density gradient normal to the boundary
+to suddenly vanish at the domain boundary, introducing a firstorder error term and explaining the first-order convergence observed in Fig. B.4. Because our simulations of convective penetration are long enough to form a statistically stationary state,
+first-order errors would have propagated from the outer domain
+boundary throughout the simulation domain, possibly reducing
+the numerical convergence rate of the mean thermal stratification
+and of the penetration distance.
+We improved our implementation of the constanttemperature boundary condition such that the state at the
+interface is obtained by extrapolating the state from the physical
+domain using second-order-accurate expressions. We also
+compute the temperature gradient using one-sided, secondorder-accurate finite differences, fixing the temperature exactly
+at the domain boundary (rather than in the first ghost cell).
+The same test problem converges at second order with the
+new implementation, see Fig. B.4 (the ‘new BC’ curve). The
+improved implementation will be used in future simulations.
+B.3. Buoyant rise of a hot bubble
+
+Our third and most challenging test problem involves the buoyant rise of a single ‘hot bubble’ in the initially isentropic core
+of our 15 M⊙ stellar model (Sect. 2.2) under the influence of
+radiative diffusion with constant-temperature boundary conditions. The 2.5D simulation domain spans the radial range from
+2 × 1010 cm to 8 × 1010 cm and polar angles 60◦ ≤ ϑ ≤ 120◦ . The
+Article number, page 14 of 16
+
+16
+
+32
+
+64
+
+128
+
+256
+
+512
+
+1024
+
+Nr
+
+Fig. B.4. Numerical convergence of the solutions to the diffusion problem with the constant-temperature boundary condition used in the simulations of convective penetration (old BC) and with an improved version
+of the same boundary condition (new BC). Relative L1 errors in the specific entropy s are shown as a function of the radial grid resolution Nr .
+First- and second-order scaling laws are shown for reference.
+
+‘hot bubble’ is modelled as an entropy perturbation
+
+ ζ
+
+
+∆s cos π2 rb for ζ < rb ,
+s = s0 + 
+
+0 otherwise,
+
+(B.7)
+
+where s0 is the specific entropy of the background stratification,
+∆s the amplitude of the perturbation, rb = 1010 cm the radius
+of the bubble, and ζ the distance from the centre of the bubble located at r = 3.5 × 1010 cm and ϑ = 0◦ . We do not include volume heating in the test problem. Radiative diffusion is
+included with the opacity profile identical to that used in our
+simulations of convective penetration with the boost factors of
+b ∈ (103 , 104 , 105 ). The perturbation amplitude ∆s is 105 , 4×105 ,
+and 1.6 × 106 erg g−1 K−1 and the simulations are stopped after
+1.6×105 , 8×104 , and 4×104 s with boost factors of 103 , 104 , and
+105 , respectively. We keep the temperatures at both radial boundaries at their initial values using both implementations of the
+constant-temperature boundary condition discussed in Sect. B.2.
+Buoyancy makes the bubble accelerate upwards. The central part of the bubble, where the entropy perturbation is largest,
+gradually overtakes the outer parts and the bubble turns into a
+pair of vortices. Radiative diffusion decreases the entropy contrast between the bubble and its surroundings. It also generates
+a mean entropy gradient in the background stratification with
+prominent boundary layers at the radial domain boundaries. We
+stop the simulations at a stage when the bubble has become
+strongly deformed but while it is still possible to obtain a numerically converged solution. We run this test problem on grids
+ranging from 162 to 20482 cells. The latter serves as the reference solution. The distributions of specific entropy at the end of
+the reference simulations are shown in Fig. B.5. The figure also
+includes the corresponding maximum Mach numbers reached
+in the simulation domain, which (by our choise of ∆s) closely
+match the convective velocity in our simulations of convective
+penetration at the same boost factors, see Fig. 6.
+We compute L1 errors in the specific entropy s in two subdomains, which we call ‘bubble’ and ‘boundary’ as depicted
+in Fig. B.5. The L1 errors for the two subdomains, three boost
+factors b, and two implementations of the constant-temperature
+boundary condition are shown in Fig. B.6. As expected, the con-
+
+R. Andrassy et al.: Towards a self-consistent model of the convective core boundary in upper main sequence stars
+1.0
+
+b = 103
+
+0.10
+
+b = 104
+
+b = 105
+0.8
+
+z/R?
+
+0.6
+0.00
+0.4
+
+s (normalised)
+
+0.05
+
+−0.05
+0.2
+−0.10
+
+max(Ma) = 6.8 × 10−3
+0.05
+
+0.10
+
+0.15
+x/R?
+
+max(Ma) = 1.3 × 10−2
+0.20
+
+0.05
+
+0.10
+
+0.15
+x/R?
+
+max(Ma) = 2.2 × 10−2
+0.20
+
+0.05
+
+0.10
+
+0.15
+x/R?
+
+0.20
+
+0.0
+
+Fig. B.5. Reference solutions to the hot-bubble problem with three different boost factors b in terms of the specific entropy s normalised to range
+from 0 to 1. The solutions were computed a 2.5D grid of 2048 × 2048 cells. The ‘bubble’ and ‘boundary’ subdomains, in which we compute the
+L1 errors shown in Fig. B.6, are marked using the white dashes lines.
+
+vergence is slow on coarse grids and low boost factors, i.e. when
+important features of the solutions are unresolved. We now focus
+on finer grids (Nr ≳ 64). The L1 errors for the ‘bubble’ subdomain are essentially the same with both kinds of boundary conditions and second-order convergence is obtained on sufficiently
+fine grids. The only exception is a slight decrease in the convergence rate on the finest grids in simulations with b = 105 ,
+which may be caused by the influence of the boundary effect discussed below. Indeed, the improved constant-temperature
+boundary condition, detailed in Sect. B.2, gives slightly smaller
+errors for the ‘bubble’ subdomain with Nr ≳ 512.
+The new boundary condition greatly improves the convergence rate in the boundary layer, in agreement with the results
+of the diffusion test reported in Sect. B.2. However, the convergence rate drops to (approximately) first order once the relative
+errors have dropped below ≈ 10−2 , a threshold almost independent of the boost factor. The reason for this behaviour is the infamous effect of odd-even decoupling that is unavoidable in numerical schemes working with collocated grids. The decoupling
+occurs when the mean stratification changes and it takes the form
+of grid-scale oscillations in the radial direction. We visualise this
+effect in Fig. B.7 using the signed residuals in s along the radial
+ray at ϑ = 97.5◦ , which passes through one of the vortices, in
+the simulation with b = 104 computed on a 1024 × 1024 grid.
+Whereas the residuals are smooth in the radial range occupied by
+the bubble (c.f. Fig. B.5), they tend to oscillate between positive
+and negative values close to the radial domain boundaries.
+Similar oscillations occur close to the outer radial boundary in our simulations of convective penetration, possibly influencing the numerical convergence rate of the mean thermal
+stratification and of the penetration distance. The decoupling effect can be suppressed by increasing numerical diffusivity (via
+the pressure-diffusion term in the AUSM+-up flux function, see
+Liou (2006)). However, doing so only trades decoupling errors
+for diffusive errors, reducing the effective resolving power of the
+numerical scheme.
+
+Article number, page 15 of 16
+
+A&A proofs: manuscript no. convective_penetration
+
+10−2
+bubble, new BC
+bubble, old BC
+boundary, new BC
+boundary, old BC
+
+−3
+
+10
+
+Nr−1
+Nr−2
+16
+
+32
+
+64
+
+128
+
+256
+
+512
+
+1024
+
+b = 104
+
+relative L1 error in s
+
+100
+
+10−1
+
+10−2
+bubble, new BC
+bubble, old BC
+boundary, new BC
+boundary, old BC
+
+10
+
+Nr−1
+
+10−4
+
+Nr−2
+16
+
+32
+
+64
+
+128
+
+256
+
+512
+
+1024
+
+Nr
+
+b = 105
+
+100
+
+10−1
+
+10−2
+bubble, new BC
+bubble, old BC
+boundary, new BC
+boundary, old BC
+
+10−3
+
+Nr−1
+
+10−4
+
+Nr−2
+16
+
+10−2
+10−3
+
+32
+
+64
+
+128
+
+256
+
+512
+
+1024
+
+Nr
+
+Fig. B.6. Numerical convergence of the solutions to the hot-bubble
+problem with the constant-temperature boundary condition used in the
+simulations of convective penetration (old BC) and with an improved
+version of the same boundary condition (new BC). Relative L1 errors in
+the specific entropy s are shown as a function of the radial grid resolution Nr for three boost factors b. First- and second-order scaling laws
+are shown for reference.
+
+Article number, page 16 of 16
+
+−0.05
+0.215
+
+0.220
+
+0.225
+
+0.230
+
+0
+−10−3
+−10−2
+−10−1
+
+Nr
+
+−3
+
+0.00
+
+relative residual in s at ϑ = 97.5◦
+
+relative L1 error in s
+
+10−1
+
+10−4
+
+relative L1 error in s
+
+10−1
+
+b = 103
+
+100
+
+b = 104 , Nr = 1024
+0.06
+
+0.08
+
+0.10
+
+0.12
+
+0.14
+0.16
+r/R?
+
+0.18
+
+0.20
+
+0.22
+
+Fig. B.7. Relative residuals in the specific entropy s along the radial ray
+at ϑ = 97.5◦ in a simulation of the hot-bubble problem with b = 104
+computed on a 1024 × 1024 grid. The inset shows the outer boundary
+layer on a linear scale, which makes it easier to judge the magnitude of
+the odd-even-decoupling effect.
+
+

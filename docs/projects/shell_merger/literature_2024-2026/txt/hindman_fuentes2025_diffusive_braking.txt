@@ -1,0 +1,934 @@
+Diffusive Braking of Penetrative Convection in Stably-Stratified Fluids
+Bradley W. Hindman1,2,3 and J. R. Fuentes4
+1 Department of Applied Mathematics, University of Colorado Boulder, Boulder, CO 80309-0526, USA
+2 JILA, University of Colorado Boulder, Boulder, CO 80309-0440, USA
+3 Department of Astrophysical and Planetary Sciences,
+
+University of Colorado, Boulder, CO 80309, USA
+
+arXiv:2508.10174v2 [physics.flu-dyn] 4 Nov 2025
+
+4 TAPIR, California Institute of Technology, Pasadena, CA 91125, USA
+
+Mixing at the interface between a convection zone and an adjacent, stably-stratified layer plays a crucial
+role in shaping the structure and evolution of stars and planets. In this work, we present a suite of 2D
+and 3D Boussinesq simulations that explore how bottom-driven convection penetrates into a compositionally stratified region. Our results reveal two distinct regimes: a penetrative regime, where the convection
+zone steadily grows by entraining fluid from above, and a stalled regime, where growth halts and transitions to overshooting convection. We extend classical entrainment theory by incorporating thermal and
+compositional diffusion and by deriving a modified entrainment law that predicts interface speeds in the
+weak-diffusion limit. We show that convection stalls when the interface speed becomes comparable to the
+compositional diffusion speed and validate the transition between behaviors across a wide parameter space
+of Richardson and Lewis numbers. Such diffusively-controlled stalling is unlikely to occur in stellar and
+planetary interiors, where the Lewis number is typically large and compositional diffusion is extremely
+slow. In these environments, compositional diffusion will merely slow the growth of the convection zone
+and convective boundaries are expected to stall only in the presence of other curtailing mechanisms such as
+strong radiative diffusion or rapid rotation.
+
+I.
+
+INTRODUCTION
+
+In astrophysics and geophysics, convective layers often sit directly beneath or above stablystratified regions. When the convective motions are sufficiently fast, convective plumes can overshoot the boundary separating the convection zone from the stable layer, thereby carrying heat and
+material across the boundary and potentially causing mixing between the layers. If this mixing
+results in the slow ingestion of the stable layer into the convection zone, this entrainment process is known as penetrative convection [see, e.g., 1]. Penetrative convection can play a pivotal
+role in controlling the dynamics of planetary atmospheres and interiors. For example, in the interior of Earth-like planets and in the gas giants, convection is responsible for generating magnetic
+fields through a dynamo mechanism [e.g., 2] and penetrative convection is critical in determining
+the spatial extent of the dynamo region. Another example is in the context of “fuzzy” cores in
+Jupiter and Saturn [e.g., 3, 4], where penetrative convection plays a key role in transporting heavy
+elements from the core into the hydrogen-rich envelope. In hot Jupiters, where intense stellar radiation creates dynamic atmospheric layers, penetrative convection may contribute to atmospheric
+mixing and heat redistribution [5]. Beyond the planetary context, penetrative convection is an
+important mechanism in stellar astrophysics. The convective cores of massive stars (Type O–F)
+incinerate their nuclear fuel so rapidly, that continued burning requires transport of fresh fuel from
+the overlying stable envelope. Hence, penetrative convection regulates the star’s luminosity and
+lifetime by controlling the rate at which fuel is injected into the nuclear furnace [e.g., 6].
+Of significant interest in many studies of penetrative convection is the speed at which the convective boundary advances through the region of stable stratification, as this speed governs the
+transport of material into the convection zone. In this context, the response of a compositionally
+1
+
+stratified layer of fluid to heating from below (or cooling from above) has been widely studied
+in laboratory experiments with saltwater [e.g., 7, 8] and with numerical simulations [e.g., 9–11].
+These studies have shown that a well-mixed convective layer develops near the boundary where
+the heating (or cooling) flux is applied and when the initial stratification has a uniform density
+gradient, the thickness of this layer grows with time as h ∝ t1/2 .
+In such systems, diffusion has generally been relatively unimportant, and the growth of the
+convection zone has therefore been ubiquitous and inevitable. However, diffusion should not be
+ignored, as it can either accelerate or delay the motion of the convective boundary depending on
+the configuration of the laboratory or numerical experiment. In theoretical and numerical studies,
+weak thermal diffusion has been shown to slow the speed of the boundary. While the powerlaw behavior, h ∝ t1/2 , remains unmodified, the prefactor can be significantly reduced [10]. A
+recent laboratory experiment has suggested that chemical diffusion may lead to the opposite effect.
+Dorel et al. [12] conducted an experimental study of penetrative convection within ambient air
+laced with a gradient of sulfur hexafluoride gas. Unlike previous work, the initial density profile
+was Gaussian rather than linear and the effects of chemical diffusion were not negligible. Dorel
+et al. [12] found that the convection zone in their experiments grew at a faster rate, h ∝ t2 , than
+the classic prediction and attribute this enhanced interface speed to the chemical diffusion of the
+sulfur hexafluoride.
+Conversely, in stellar astrophysics, convection zone boundaries are almost always thought of
+as static structures on evolutionary timescales. This is attributed to the large radial gradient in the
+opacity leading to rapid radial variation of the thermal diffusivity (conduction by photon transport).
+The convection zone initially grows until thermal conduction becomes sufficiently efficient to suppress convection beyond a certain radius. Once the convective interface reaches this height, the
+boundary stops moving. Mixing can still occur across the boundary through convective overshooting, but the boundary itself becomes stationary. Obviously such stalling behavior is diffusively
+controlled [e.g., 13, 14].
+There are several other factors that can change the growth rate of the convective layer. For
+example, rotation and strong stratification have been shown to decrease the speed of the convective
+interface. For the case of strong stratification, the slowing of the interface is a simple consequence
+of energetics; more potential energy is required to mix an atmosphere with strong stability. This
+stratification effect appears through the buoyancy frequency N of the stable layer, i.e., h ∝ N −1 t1/2
+[e.g., 7, 15, 16]. Rotation on the other hand, instead of changing the energy required to mix,
+changes the amount of energy that is available to perform lifting work. In a rapidly rotating system,
+with a rotation rate of Ω, the kinetic energy in the convection is significantly reduced, changing the
+scaling to h ∝ N −5/6 Ω−1/4 t5/12 [11, 17]. While, the rotation and stability of an atmosphere cannot
+directly cause the convective interface to stop moving (or to stall), we speculate that either effect
+could indirectly lead to a stall by slowing the interface sufficiently that diffusive effects become
+important.
+Here we will seek to explore in detail how such diffusively controlled stalling of convective penetration occurs, under what conditions it should be expected, and the compositional and
+thermal profiles that result. We will accomplish this goal by generating a suite of numerical simulations for which we vary both the stability of the fluid layer and the compositional diffusivity. By
+increasing either, we expect to weaken the growth rate of the thickness of the convective layer and
+eventually, at extreme enough values, stop the growth altogether. We present analytic solutions for
+the propagation of convective boundaries in Section II, discuss 2D and 3D numerical simulations
+of the same processes in Section III, and compare the analytic predictions with the simulation
+results in Section IV. We conclude with a summary and a discussion of the implications of our
+2
+
+findings in Section V.
+II.
+
+MODEL OF THE ENTRAINMENT PROCESS
+
+When the convective boundary is thin and diffusion is neglected, traditional energetic arguments can be used to predict the speed at which the interface advances. For the sake of specificity,
+we assume that the initially stable fluid layer is heated from below, such that the convection zone
+forms at the bottom and eats upward into the stable layer. In a Boussinesq fluid, this set up is
+completely equivalent to cooling the fluid from above with the convection zone expanding downwards. In a stratified fluid, as the convection zone expands, a density jump naturally develops at
+the interface with the stable region. This density jump forms a gravitational potential energy barrier that opposes further entrainment. The entrainment hypothesis [e.g., 18] states that the energy
+to overcome this barrier comes from the kinetic energy of the convective motions; explicitly, the
+rate of potential energy increase is proportional to the vertical kinetic energy flux carried by the
+convection. Such a hypothesis leads to a differential equation for the depth of the convection zone,
+h, i.e.,
+1
+dh γ
+gh ∆ρ
+= ρ0 Uc3 ,
+(1)
+2
+dt
+2
+where g is the gravitational acceleration, ρ0 is the mass density within the convection zone, ∆ρ is
+the density jump across the thin interface, Uc is a typical convective flow speed, and γ is a dimensionless constant of proportionality called the mixing efficiency. The left-hand side of Equation (1)
+is the rate of the change of the potential energy. This formulation is correct for any initial density
+stratification as long as the mass density in the convection zone is well mixed.
+This entrainment equation can be solved for the thickness of the convection zone h and the
+speed of the convective boundary dh/dt given prescriptions for the density jump across the convective interface ∆ρ and the convective speed Uc . Typically, the density jump is specified by
+assuming that the convection zone is well-mixed and the stable layer remains unmodified until
+the fluid is entrained into the convection zone (i.e., diffusive restratification is ignored). Under
+such assumptions, the density jump can be expressed in terms of the buoyancy frequency of the
+initial stable stratification, N0 . For a spatially uniform buoyancy frequency, the density jump is
+proportional to the depth of the convection zone,
+∆ρ =
+
+ρ0 N02 h
+.
+2g
+
+(2)
+
+For the convective velocity, mixing length theory [e.g., 10] is usually employed to provide an
+estimate. Without rotation, this estimate becomes
+!1/3
+gαF∗
+Uc =
+h
+,
+(3)
+ρ0 c p
+where α is the coefficient of thermal expansion, c p is the specific heat capacity at constant pressure,
+and F∗ is the heat flux forced through the convection zone.
+Putting these ingredients together and assuming that the heat flux and the mixing efficiency are
+constants generates the classic entrainment law for the depth of the convection zone,
+1
+h(t) = 2 γ +
+2
+
+!1/2
+
+gαF∗ t
+ρ0 c p N02
+3
+
+!1/2
+∝ F∗1/2 N0−1 t1/2 .
+
+(4)
+
+As expected, the convection zone propagates more rapidly with a larger imposed heat flux and
+more slowly with a steeper initial density gradient, i.e., larger buoyancy frequency.
+A.
+
+Diffusive Effects
+
+A primary weakness of Equation (4) is the lack of diffusive effects in Equations (1) and (2).
+While chemical diffusion can often be ignored under many astrophysical and geophysical conditions, if the convective boundary were to ever stall (e.g., as has been suggested for Jupiter’s
+convection zone [17]), diffusion is likely to adjust the quasi-equilibrium that would be established.
+To address this weakness, we follow the energetic arguments first established by Linden [18], and
+subsequently expanded by Fernando [8] and Fuentes and Cumming [10]. We adapt these previous
+derivations of the speed of the convective boundary by considering the effects of weak chemical
+diffusion of a heavy solute. For simplicity we work in a Boussinesq framework [e.g., 19] where
+the mass density, ρ = ρ0 (1 − αT + βC), can be expressed as a linear combination of the potential temperature T and the solute concentration C. Here, ρ0 is a fiducial density and α and β, are
+the coefficients of thermal expansion and compositional contraction (both assumed to be positive
+constants).
+Since, mass can be redistributed both by mixing and chemical diffusion, Equation (1) must be
+augmented when diffusion is considered,
+!
+1
+γ
+dh
+gh ∆ρ + ρ0 βκC |∂zC|cb = ρ0 Uc3 .
+(5)
+2
+dt
+2
+As in Equation (1), the first term within the parentheses represents the rate of work done to mix the
+light fluid from the stable layer into the convection zone. The additional diffusive term represents
+the energy required to keep the convection zone well-mixed as diffusion removes solute from the
+upper portion of the convection zone. This energy tax depends directly on the compositional diffusive flux which depends on the chemical diffusivity for the heavy solute, κC , and the concentration
+gradient at the base of the stably stratified envelope, just above the convective boundary, |∂zC|cb .
+The jump in the mass density across the convective boundary is related to the corresponding
+jumps in the composition and potential temperature, ∆ρ = ρ0 (β∆C − α∆T ). An estimate for
+each of these jumps can be obtained by considering conservation of solute and by noting that
+the convection zone warms with time due to the heat flux from below, F∗ , and cools due to the
+conductive heat flux Fcb upwards across the convective boundary,
+!
+ρ0 N02 h
+F∗ − Fcb
+t
+∆ρ =
+− α
++ ρ0 βκC |∂zC|cb
+.
+(6)
+2g
+cp
+h
+The conductive flux depends on the thermal diffusivity κT and the temperature gradient |∂z T |cb
+just above the convective boundary, Fcb = ρ0 c p κT |∂z T |cb . The first term on the right-hand side
+of Equation (6) is identical to that appearing in Equation (2) and arises from mixing of the initial density profile and thus involves the buoyancy frequency of the initial stratification, N0 ≡
+p
+g (α∂z T 0 − β∂zC0 ). For simplicity and specificity, we have assumed that the initial stratification
+has a uniform buoyancy frequency. The second term represents changes in the convection zone’s
+mass density due to thermal and compositional diffusion at its boundaries. We assume that Fcb and
+|∂zC|cb are both temporally constant such that the diffusive contribution to the density jump—the
+second term on the right-hand side of Equation (6)—can be written as a linear function of time.
+This assumption has been shown to be valid when diffusion leads to only weak restratification of
+4
+
+the stable fluid above the convective interface [10].
+As in previous studies, we use mixing-length theory to provide an estimate for the convective
+speed, Equation (3). The reader should note, however, that another interpretation of Equation (3) is
+that the ultimate source of energy required for mixing is the gravitational potential energy pumped
+through the lower boundary by the heat flux. The injection rate is given by gαF∗ h/c p , which is the
+quantity that appears on the right-hand side of Equation (3).
+Combine Equations (3)–(6) to obtain the following nonlinear ODE for the depth of the convection zone h as a function of time,
+"
+!
+#
+1 − εT εC 2κT t h dh
+γ
+εC
+1−
++
+=
+−
+.
+(7)
+2
+Ri
+Le h
+2κT dt
+Ri Le
+where Le is the Lewis number and Ri is a global Richardson number,
+ρ0 c p κT N02
+Ri ≡
+.
+gαF∗
+
+κT
+Le ≡
+,
+κC
+
+(8)
+
+The Richardson number encodes the stability of the fluid layer relative to the thermal driving of
+convective overturning. High Richardson numbers indicate strong stratification with a high level
+of stability. Finally, in Equation (7), the diffusive fluxes at the base of the stable envelope have
+been nondimensionalized,
+Fcb
+β|∂zC|cb
+εT ≡
+,
+εC ≡
+.
+(9)
+F∗
+(N02 /g)
+Equation (7) has a general solution for time t as a function of convection zone thickness h,
+!−a
+h
+h2
+t(h) = t0
++
+,
+(10)
+2
+H
+4κT Vcb
+!
+1 − εT
+εC
+2
+(11)
+Vcb ≡ γ +
+Ri−1 − Le−1 ,
+2
+2
+(1 − εT )Ri−1 + εC Le−1
+a ≡
+,
+(12)
+γRi−1 − εC Le−1
+where t0 is an arbitrary constant (used to satisfy the initial condition) and Vcb is a dimensionless
+constant that characterizes the speed of the convective boundary. The homogeneous solution,
+(h/H)−a , is a transient that decays away as the convection zone deepens. The particular solution,
+2
+h2 /(4κT Vcb
+), generates the classic h ∝ t1/2 power-law solution,
+h(t) = 2Vcb (κT t)
+
+1/2
+
+,
+
+ κ 1/2
+dh
+T
+= Vcb
+,
+dt
+t
+
+(13)
+
+In the absence of thermal and compositional diffusion (εT → 0 and Le−1 → 0), the convection
+zone’s depth reduces to the traditional entrainment law, Equation (4). The presence of weak thermal or compositional diffusion slows the progression of the convective boundary (through Vcb ) but
+does not change the power-law relationship with time.
+
+5
+
+B.
+
+Characteristic Propagation Speeds
+
+The speed of the convective interface, Equation (13), has been derived under the assumption
+that diffusion acts slowly enough that diffusive restratification of the stable region above the convective interface can be ignored. Further, we have also assumed that the convective interface is
+thin so that the density jump can be treated as a discontinuity. Both of these approximations are
+justified if the speed of diffusive spread is slow compared to the speed of the interface. Under such
+conditions, the diffusive widening of the convective boundary is balanced by the sharpening of the
+interface caused by entrainment.
+A diffusive boundary layer widens self-similarly with a speed that is a temporal power law,
+V = (κ/t)1/2 , where κ is the relevant diffusivity. Conveniently, this is the same power law as derived
+for the speed of the entrainment front, such that we can easily compare diffusive speeds with
+the interface speed. For example, our assumptions should be valid as long as the compositional
+diffusion speed, VC = (κC /t)1/2 , is slower than the speed of the convective interface,
+ κ 1/2
+C
+
+t
+
+< Vcb
+
+ κ 1/2
+T
+
+t
+
+=⇒ Le−1/2 < Vcb =⇒ Ri <
+
+2γ + 1 − εT
+Le .
+1 + 2εC
+
+(14)
+
+The final inequality above is obtained through use of Equation (11).
+When compositional diffusion is large, such that the previous condition is not satisfied, we
+expect the convective boundary to diffusively widen and the stable layer to be restratified above
+the interface. This has the potential to weaken the buoyancy frequency and lead to faster entrainment (this is the argument made by Dorel et al. [12] to explain the rapid advance of the convective
+boundary in their laboratory experiment). However, once the stable layer starts to restratify, we
+need to consider the boundary conditions on the upper surface. We will find that in our suite of
+simulations, our choice of boundary conditions permits a quasi-equilibrium to be achieved after
+a compositional diffusion time passes. This equilibrium is one in which the convection zone
+is no longer growing, the density jump has disappeared, and the energy available for mixing is
+completely consumed by mixing the mass deficit arising from compositional diffusion out of the
+convection zone.
+III.
+
+NUMERICAL SIMULATIONS
+
+In order to test the validity of Equation (13), we present a suite of 2D and 3D simulations
+performed in Cartesian boxes where convection is driven from below and the ensuing turbulence
+chews its way upward through a stable region with uniform buoyancy frequency. We systematically vary the diffusivities and the buoyancy frequency of the initial stratification by varying the
+Lewis and Richardson numbers. In particular, we are curious if the advance of the convection
+boundary can stall because a diffusive quasi-equilibrium is achieved. The 2D simulations are used
+to examine a broad parameter space, whereas the more limited sampling of 3D simulations are
+used to test the validity of the 2D results. In all simulations, the height of the Cartesian box is H
+with gravity antiparallel to the z-coordinate axis, g = −gẑ, and the bottom of the box corresponds
+to z = 0. The 2D simulations have a horizontal width of 2H to avoid the onset of artificial shear
+flows [20], whereas the 3D simulations have a width of H in both horizontal directions.
+Since the stratification affects the rate of entrainment primarily through the buoyancy frequency, for simplicity, we choose an initially uniform potential temperature, setting T 0 (z) = 0, and
+capture the atmosphere’s stability with a linear concentration profile, C0 (z) = (βg)−1 N02 (H − z).
+While the vertical profile of the initial mass density is stable, convection will be driven by ap6
+
+plying a potential temperature gradient as a boundary condition on the lower boundary of the
+domain. We express this gradient in terms of the heat flux, F∗ , passing through the lower surface,
+∂z T |z=0 = −F∗ /(ρ0 c p κT ).
+A.
+
+Nondimensional Boussinesq Fluid Equations
+
+We numerically solve the fluid equations in nondimensional form. We adopt the layer height
+H as the characteristic length scale, the thermal diffusion time τT = H 2 /κT as the unit of time,
+[T ] = H|∂z T |z=0 as the unit of temperature, and [C] = α[T ]/β as the unit of concentration. With
+this choice, the Boussinesq fluid equations take on the following nondimensional form,
+∂u
++ u · ∇u = −∇ϖ − Ra Pr (C − T ) ẑ + Pr ∇2 u ,
+∂t
+∂T
++ u · ∇T = ∇2 T ,
+∂t
+∂C
++ u · ∇C = Le−1 ∇2C ,
+∂t
+∇ · u = 0.
+
+(15)
+(16)
+(17)
+(18)
+
+In these equations, u is the nondimensional velocity and ϖ is the nondimensional reduced pressure.
+In the momentum equation, hydrostatic balance involving the fiducial density has been removed.
+All other variables have their previous definitions (e.g., T is potential temperature) except they are
+now nondimensional.
+There are four dimensionless numbers that characterize the evolution of the flow. In addition
+to the global Richardson number and the Lewis number that we have already introduced, the flux
+Rayleigh number Ra and the Prandtl number are important,
+Ra ≡
+
+gαF∗ H 4
+,
+ρ0 cP κT2 ν
+
+Pr ≡
+
+ν
+κT
+
+(19)
+
+where ν is the kinematic viscosity. The Rayleigh, Lewis, and Prandtl numbers appear directly
+in the nondimensional fluid equations. The Richardson number appears through the initial and
+boundary conditions. Our initial conditions are a static diffusive equilibrium, i.e.,
+u(t = 0) = 0
+
+T (t = 0) = T 0 (z) = 0 ,
+
+C(t = 0) = C0 (z) = Ri(1 − z) .
+
+(20)
+
+We enforce periodic horizontal boundary conditions on all fluid variables. The upper and lower
+boundaries are impenetrable and stress-free,
+u · ẑ = 0
+
+∂z u × ẑ = 0 .
+
+(21)
+
+We apply fixed-flux boundary conditions on the potential temperature and concentration,
+∂z T (z = 0) = −1 ,
+
+∂z T (z = 1) = 0 ,
+
+∂zC(z = 0) = 0 ,
+
+∂zC(z = 1) = −Ri .
+
+(22)
+
+A schematic of our numerical setup is presented in Figure 1.
+In many astrophysical and geophysical contexts, all of these nondimensional numbers take on
+extreme values. For example in stars, the Rayleigh number and Lewis number are enormous,
+7
+
+FIG. 1. Geometrical set-up
+of the simulations. A Cartesian box with a stably stratified solute gradient is heated
+at a constant rate at the bottom boundary. The horizontal
+boundary conditions are periodic, and the boundary conditions for the velocity field are
+impenetrable, stressfree bottom and top boundaries.
+
+Ra ∼ 1024 and Le ∼ 106 , while the Prandtl number is tiny, Pr ∼ 10−6 [21]. While the Rayleigh
+number is similar in gas giants, the Prandtl and Lewis number for Jovian planets are less extreme,
+with Pr ∼ 10−2 and Le ∼ 102 [22]. Also, from the estimates given in [21] and [23], the radiative
+zone of a solar-like star has N ∼ 10−3 s−1 , a photon thermal diffusivity κT ∼ 109 cm2 s−1 , ρ0 ∼
+1 g cm−3 , g ∼ 104 cm s−2 , c p ∼ 108 erg g−1 K−1 , α ∼ 10−6 K−1 , and F∗ ∼ 1010 erg cm−2 s−1 . These
+values yield a global Richardson number of order Ri ∼ 103 , although we note that the precise
+value can vary significantly among stellar models. On the other hand, in the compositional fuzzy
+cores of gas giants, N ∼ 10−4 s−1 , ρ0 ∼ 3 g cm−3 , κT ∼ 10−1 cm2 s−1 , F∗ ∼ 5 × 103 erg cm−2 s−1 ,
+g ∼ 2 × 103 cm s−2 , c p ∼ 2 × 108 erg g−1 K−1 , and α ∼ 10−5 K−1 [24, 25]. Unlike in stars, these
+values yield Ri ∼ 10−2 for giant planets. Realistic astrophysical and geophysical values of the
+Rayleigh, Lewis, Prandtl, and Richardson numbers are inaccessible in current simulations, so the
+ones implemented in our simulations are more moderate, but the important issue is that we have
+captured the correct ordering of time scales τff < τT < τν ≈ τC , where τff = H/Uff is the freefall
+time, τT = H 2 /κT is the thermal diffusion time, τν = H 2 /ν is the viscous diffusion time, and
+τC = H 2 /κC is the compositional diffusion time.
+Our suite of 2D simulations explores a grid of models in Ri–Le space, each number taking on
+one of five different possibilities, Ri ∈ [1, 3, 5, 7, 10] and Le ∈ [1, 2, 4, 6, 10]. The Rayleigh number and Prandtl number were kept constant (Ra = 108 and Pr = 0.1). Figure 2 graphically presents
+the grid of 2D simulations in Ri–Le space. The 3D simulations were fewer in number, varying
+the Richardson number over three values Ri ∈ [1, 5, 10] while keeping the Rayleigh, Prandtl and
+Lewis numbers fixed (Ra = 108 , Pr = 0.1, and Le = 10).
+B.
+
+Numerical methods
+
+We evolve Equations (15)–(18) using version 3 of the Dedalus pseudospectral solver [26],
+with a Runge-Kutta timestepper RK443 (see §2.8 of [27]) and a Courant–Friedrichs–Lewy (CFL)
+8
+
+FIG. 2. The behavior of the suite of simulations as a function of the Lewis Number, Le, and the Richardson
+Number, Ri. All of the simulations have the same flux Rayleigh Number, Ra = 108 , and Prandtl Number,
+Pr = 0.1. The black squares indicate 2D simulations that exhibit penetrative convection with a rapidly
+ascending convective boundary that eventually chews through the entire computational domain. Red disks
+correspond to 2D simulations that eventually reach a diffusive quasi-equilibrium where the convective interface stalls; these models enter a regime of overshooting convection. The large circles correspond to 3D
+simulations that also exhibit penetrative (black) or stalled (red) convective interfaces. The blue dotted line
+corresponds to parameter values where the analytically derived speed of the convective interface matches
+the compositional diffusion speed, see Equation (14).
+
+safety factor 0.25. In the 2D simulations, all variables are represented using a spectral expansion
+composed of 512 Chebyshev polynomials in the vertical coordinate and 1024 Fourier modes in the
+horizontal coordinate. In 3D, we employ 384 Chebyshev polynomials and 384 Fourier modes in
+both horizontal directions. We use the 3/2-dealiasing rule in all directions, such that nonlinearities
+are calculated in physical space with a 1536 × 768 mesh in 2D or a 5763 grid in 3D. We initialize
+the simulations with random noise in the temperature field, with each value drawn from a normal
+distribution with a magnitude of 10−5 .
+IV.
+
+EVOLUTION OF THE CONCENTRATION AND TEMPERATURE
+
+The initial conditions have a stable stratification (i.e., N02 > 0 for all z) and are in a diffusive
+equilibrium (spatially constant composition and heat fluxes). However, the boundary conditions
+that we apply at the lower boundary (e.g., nonzero heat flux and zero composition flux) are inconsistent with the initial conditions. Hence, immediately after the simulation starts, diffusive
+boundary layers form on the lower surface in both the temperature and concentration. These
+boundary layers widen with time and eventually the unstable layer of fluid at the base of the domain achieves sufficient thickness that it becomes convectively unstable and hot plumes rise from
+9
+
+the lower boundary. After a few overturnings, the convection zone becomes fully formed and well
+mixed. The boundary between the convection zone and overlying stable layer begins to move
+upward and entrainment commences.
+In roughly half of the simulations (shown with the black squares and circles in Figure 2), the
+convective interface ascends rapidly and eventually mixes the entire domain. Because the convection zone continually thickens, these simulations are in a regime of “penetrative convection”. The
+other half of the simulations (indicated with red disks and circles in Figure 2) have a convective interface that ascends slowly and eventually stalls at a finite depth. Once such a stall has occurred, a
+quasi-equilibrium is achieved whereby the box continues to warm and become depleted of solute,
+but the shapes of the concentration and temperature profiles stop evolving. Convective motions
+continue to overshoot into the stable layer, but the convection zone stops growing in space.
+As predicted earlier, the models with a stalled interface are those with the highest compositional diffusion rates (large Le) and strongest stratification (highest Richardson numbers Ri). The
+boundary in Ri–Le space between those models with a rapidly penetrating interface and those with
+a stalled interface is well matched by the line given by Vcb = Le−1/2 , which corresponds to parameter values for which the speed of the convective interface speed equals the compositional diffusion
+speed, see Equation (14). In Figure 2, the dotted blue curve shows this theoretical boundary for
+parameter values γ = 0.50, εT = 0.71, and εC = 0.96. These values were chosen by measuring
+the thickness of the convection zone h(t) over our suite of models and fitting h = q−1 Vcb (κT t)q to
+obtain the speed Vcb and power-law index q for each simulation. Then, we fit the set of speeds for
+γ, εT , and εC , using Equation (11) for the functional form. In the fitting function, there is an indeterminacy between the mixing efficiency γ and the thermal flux ratio εT ; therefore, we have fixed γ
+to a value of one-half when performing the fits. This choice is motivated by the thorough analysis
+of the transport across the interface by Fuentes and Cumming [10], who found that γ ≈ 0.5–1 at
+low Prandtl numbers.
+A.
+
+Fast Penetrating Convection
+
+A 3D simulation (Ri = 5.0, Le = 10.0) with a quickly ascending interface is illustrated in
+Figure 3 with three snapshots showing the vertical velocity. Figure 4a shows vertical profiles of
+the mass density for a 3D penetrative-convection model with a weaker stratification (Ri = 1, Le =
+10). These profiles have been obtained by averaging the flow field horizontally and over a short
+temporal window. As the well-mixed convection zone grows, it mixes the atmosphere’s initial
+concentration profile and a jump in the concentration appears across the convective boundary.
+Similarly, due to heating at the lower boundary, the convection zone also warms and similar jumps
+appear in the temperature. These two effects lead to a corresponding jump across the boundary
+in the mass density. These jumps are clearly visible as inflection points in the vertical profiles
+appearing in Figure 4a. Similar behavior is observed in all of the simulations represented by the
+black squares in Figure 2.
+In this limit of rapid entrainment, the depth of the convection zone does indeed follow the
+classic h ∝ t1/2 entrainment law. Figure 4b shows the height of the convective boundary as a
+function of time for both the 2D and the 3D simulations. We measure this height by seeking
+extrema in the second derivative with respect to height of the horizontally averaged concentration
+profiles. For the 2D model, the measurement of the height is noisier because of averaging only
+over a single horizontal dimension. Hence, the temporal averaging has also been performed over
+a longer window to decrease the convective noise. After an initial transient, the height asymptotes
+to a power-law with the expected index of 1/2. Once the interface approaches close enough to the
+upper boundary of the simulation domain that overshooting convective plumes begin to hit that
+10
+
+FIG. 3. Snapshots from a 3D simulation exhibiting penetrative convection. The simulation has a relatively
+large initial stratification and weak compositional diffusion (Ri = 5, Le = 10). Each image shows the
+vertical component of the velocity. Three distinct times have been illustrated: (a) An early time just after the
+onset of convection. (b) An intermediate time when the convection zone is fully formed and has entrained
+roughly half the spatial domain. (c) A late time when the convection zone has entrained about 75% of the
+domain. In all snapshots, the convection evinces fast upflows and downflows, but even in the overlying
+stable layer weak flows appear due to the presence of internal gravity waves excited by pummeling of the
+convective boundary by rising plumes.
+
+boundary, the smooth ascent of the convective interface is disrupted. In the figure, we remove
+large times for which this boundary interaction has obviously occurred.
+Figures 4c,d show profiles for the vertical fluxes of heat and solute for a single time frame
+during the simulation. We present the diffusive flux and the turbulent flux in addition to the total
+flux. The time at which the fluxes were computed is indicated in Figure 4b with the violet dot.
+Convection has engulfed the lower half of the domain where heat and composition are carried
+exclusively by the turbulence. Whereas, in the relatively untouched region above the convection
+zone, the fluxes are largely diffusive. We note that the turbulent solute flux within the stable region
+is small but nonzero in Figure 4d. The bumps and wiggles oscillate rapidly in time and are the
+result of gravity waves. These waves play essentially no role in the energetics of the interface.
+The convective boundary appears most distinctly in the composition flux, as the region with the
+large negative gradient. Within the convective boundary, mass is being rapidly deposited as the
+convection carries solute from below and mixes it with the lighter material in the overlying stable
+region.
+1.
+
+Verifying the Entrainment Law
+
+Equation (13) provides an analytic entrainment law that describes how rapidly the convective
+boundary ascends when diffusive effects are small. Using our suite of 2D simulations, we test this
+formula by measuring the speed of the interface and comparing it to the theoretical behavior as a
+function of Richardson and Lewis number. Since, we expect Equation (13) to hold only after an
+initial transient has decayed away, we measure the velocity Vcb from each simulation by fitting h(t)
+11
+
+FIG. 4. Vertical profiles and a time trace from a 3D simulation (Ri = 1, Le = 10) exhibiting penetrative convection. The vertical profiles have been measured by averaging the illustrated field horizontally and temporally. (a) Vertical profiles of density fluctuations induced by composition and temperature
+ρ′ /ρ0 = βC − αT . The dotted curves correspond to early times during the diffusive stage before the onset
+of convection, whereas the solid curves indicate later times during the convective stage. The thick dotted
+curve corresponds to the initial stratification and the thick solid curve is for a single time which we have
+emphasized to make the profile shapes readily apparent. (b) The thickness of the convection zone as a function of time for both the 2D and 3d models. Only times after the convection zone is formed are shown. The
+time emphasized in panel a is indicated with the violet circle. The black reference line indicates a power
+law h ∝ t1/2 . (c) Profiles of the vertical heat flux normalized by the heat flux imposed at the lower boundary,
+F∗ . The diffusive and turbulent fluxes are shown separately, as well as added together. (d) Profiles of the
+vertical composition flux normalized by the flux imposed at the upper surface, FC = κC (βg)−1 N02 . Both the
+thermal and compositional fluxes are extracted from the simulation at the time indicated by the violet circle
+in panel b.
+
+only for late times with a power law of the form h(t) = q−1 Vcb (κT t)q .
+Figure 5 presents the resulting speed measurements as a function of the Richardson and Lewis
+numbers. Every 2D model undergoing penetrative convection is included as a square symbol. In
+Figure 5a, different Lewis numbers are indicated by the color. The colored dotted curves present
+the analytic formula from Equation (11). The purple curve indicates a theoretical result for an
+asymptotically large value of the Lewis number. Figure 5b presents the same data, but the color
+now indicates the Richardson number. For the analytic expressions illustrated in Figure 5, we
+have used γ = 0.5, εT = 0.71, and εC = 0.96, the same values used to generate the transition curve
+in the regime diagram shown in Figure 2. Further, these values were obtained by fitting the 2D
+simulation results to Equation (11) for all simulations exhibiting a fast convective interface with
+Ri > 1.
+In general, the simulations with Richardson number greater than 1.0 are well matched by the
+theory. However, the simulations with Ri = 1.0 all possess significantly faster interfaces than the
+12
+
+FIG. 5. Nondimensional convective boundary speed from the simulations (squares) and from theory (curves)
+as a function of the Richardson and Lewis numbers. As indicated in the caption, the colors indicate either
+the Lewis number or Richardson number depending on the panel. The convective boundary speed was
+obtained from those simulations undergoing penetrative convection by fitting the height of the convective
+boundary with a power law in time, h = q−1 Vcb (κT t)q . The theoretical curves come from Equation (11),
+which is applicable in the weak diffusion limit.
+
+theory would suggest. Several factors are at play in this case. First, the simulations with Ri = 1.0
+have such fast interfaces that they often hit the upper surface of the computational domain before
+they have fully asymptoted to the expected h ∝ t1/2 power law. Second, for weak stratification
+(as holds for Ri = 1.0) overshooting hot plumes can extend a significant distance beyond the
+convective interface and these plumes interact with the upper boundary, causing additional mixing
+within the stable layer, a weakening of the stratification, and a corresponding enhancement of the
+interface speed. In future work, deeper boxes (larger Rayleigh number in our notation) should
+allow direct testing of the entrainment law for low Richardson numbers.
+B.
+
+Stalled, overshooting convection
+
+For simulations with strong stratification or high compositional diffusion (see Figure 2), the
+convective boundary eventually stalls after a period of initial growth. Warm convective plumes
+continue to overshoot into the overlying stable stratification, but the convection is no longer penetrative. Figure 6 presents vertical profiles of the mass density and fluxes for our 3D model with
+Ri = 10, Le = 10, which has a Richardson number that is ten times higher than the penetrative
+convection model discussed in the previous subsection. The convective boundary in this model
+stops ascending at a height of roughly 50% of the domain height. The stalling of the interface can
+be clearly seen in Figure 6b.
+In addition to stalling, the profiles for both potential temperature and concentration achieve a
+quasi-equilibrium for which the vertical mean of each profile continues to evolve linearly with
+time, but the gradient of the profile becomes steady. Such ”equilibria” arise because the fluxes of
+heat and composition become linear functions of height (see Figures 6c,d). Since the divergence
+of each flux is spatially constant, the rate of change of temperature and concentration is spatially
+uniform. For the nondimensional temperature this balance becomes,
+13
+
+FIG. 6. Vertical profiles and time traces from a 3D simulation (Ri = 10, Le = 10) exhibiting a stalled
+convective boundary. The curves and colors have the same meaning as in Figure 4. (a) Profiles of density
+fluctuations. (b) The height of the convective boundary as a function of time for both the 3D and 2D models
+with Ri = 10 and Le = 10. (c) Profiles of the normalized vertical heat flux. (d) Profiles of the normalized
+vertical composition flux. Both of the fluxes are extracted from the simulation at the time indicated by the
+violet circle in panel b.
+
+!
+∂ Fheat (z)
+∂T
+∂
+=−
+→ − (1 − z) = 1 ,
+∂t
+∂z
+F∗
+∂z
+
+(23)
+
+T (z, t) → t + θ(z)
+
+(24)
+
+with the solution
+
+where θ(z) is a time-independent profile that is self-consistent with the thermal flux. A similar
+balance is achieved for the composition.
+We emphasize that the jumps at the convective boundary that were characteristic of the penetrative convection regime are absent (see Figure 6a). Hence, the analytic entrainment law derived
+in section II is invalid. All of the models indicated by red circles and disks in Fig. 2 display similar stalling behavior, resulting from the evolution toward a diffusive equilibrium. This common
+behavior is illustrated in Figure 7 which shows the normalized height of the convective interface
+as a function of time for all of the models that exhibit a stalled convective boundary. The height
+of the interface is normalized by the asymptotic height as time becomes large. Time is shown
+in compositional diffusion times since the formation of the convection zone. All of the models
+exhibit a similar temporal behavior and approach the stalled equilibrium after roughly one-half of
+a compositional diffusion time.
+14
+
+FIG. 7. Convection zone thickness for all
+simulations that exhibit a stalled convective
+boundary. For the 2D simulations, the colors
+indicate the Lewis number and the symbols
+the Richardson number. The black curve corresponds to the 3D simulation with Ri = 10
+and Le = 10. The height has been normalized by the height achieved for long times to
+demonstrate that all simulations with a stalled
+convective boundary have similar temporal
+behavior. Time is measured in compositional
+diffusion times elapsed since the formation of
+the convection zone at t = tcz .
+
+V.
+
+SUMMARY AND DISCUSSION
+
+Through a suite of 2D and 3D simulations of bottom-driven convection, we have found two
+regimes of behavior. For models with weak stratification (small buoyancy frequency or equivalently small Richardson number Ri) or low compositional diffusion (large Lewis number Le) we
+find a regime of penetrative convection. The convection zone that develops at the bottom boundary continuously entrains fluid from the overlying stable layer and eventually mixes through the
+entire computational domain. Conversely, models with strong stratification or high compositional
+diffusivity reach a quasi-equilibrium for which the convection zone stops growing and settles into
+a regime of overshooting convection. The boundary between these two regimes appears to coincide with the curve in parameter space where the speed of the convective interface (as expressed
+analytically in Equation (13) equals the compositional diffusion speed. The fate of the system is
+essentially the same in 2D and 3D. The main distinction, as expected from the inverse cascade in
+2D turbulence, is that the 2D cases mix more efficiently than the 3D ones.
+We find that diffusion slows the advance of the convective boundary in our analytic model and
+in all of our simulations. Figure 5 illustrates how increasing the compositional diffusion rate (or
+equivalently decreasing the Lewis number) results in a slower interface in the simulations. In our
+analytic model, the convective boundary ascends with a speed given by
+"
+V=
+
+!
+#1/2
+1 − εT κT εC
+− κC
+t−1/2 ,
+γ+
+2
+Ri
+2
+
+(25)
+
+which is obtained by combining Equations (11) and (13). As the diffusivities increase, the interface
+speed decreases because εT increases and the second term in square brackets increases. The reader
+should note that κT /Ri is independent of the thermal diffusivity; hence thermal diffusion only
+manifests through the heat flux ratio εT = Fcb /F∗ . Physically, all of these diffusive effects manifest
+through an increase in the density jump across the interface and a reduction of the amount of kinetic
+energy that is available for mixing the density profile.
+In the absence of diffusion, the density jump across the interface is controlled by mixing and
+heating within the convection zone. Continual mixing of the initial concentration gradient to
+a uniform value within the convection zone results in a growing concentration jump across the
+15
+
+interface. Such a concentration jump leads to a density jump across the interface which generates
+a potential energy cost to further mixing. On the other hand, heating of the convection zone by the
+imposed heat flux through the lower boundary causes a temperature jump to form that reduces the
+magnitude of the density jump induced by mixing.
+Thermal diffusion through the convective boundary cools the convection zone and hence increases the density jump. Chemical diffusion has two possible effects: diffusion across the interface removes mass from the convection zone hence reducing the density jump. But, the mass that
+is removed is extracted from the upper portion of the convection zone and this mass deficit must
+be mixed throughout the convection zone. This mixing acts as an additional cost on the kinetic
+energy flux and effectively reduces the amount of energy available for entrainment. The first effect (reducing the density jump) speeds up the convective interface, while the second reduces the
+speed. We find that the reduction of the available energy for lifting work is the dominant effect
+and compositional diffusion acts as a net inhibitor of the entrainment rate.
+Recent laboratory experiments by Dorel et al. [12] have measured the advance of a convective
+interface that is remarkably fast. They find that the speed of the convective interface grows linearly
+with time (dh/dt ∝ t or h ∝ t2 ). However, we note that the classic scaling law for the depth of
+the convection zone h ∝ t1/2 is a direct consequence of three assumptions: (1) the initial density
+profile is a linear function of height, (2) the heat flux at the boundary is constant, and (3) there is
+an absence of diffusive restratification above the convective front. The linear stratification ensures
+that the density jump scales as ∆ρ ∝ h and the associated potential energy barrier as E ∝ h3 .
+The constant heat flux results in a kinetic energy flux that scales linearly with the depth of the
+convection zone, Uc3 ∝ F∗ h. When the entrainment hypothesis is applied, the resulting scaling
+is h2 dh/dt ∝ F∗ h or h ∝ t1/2 . The assumption regarding restratification is made for the sake of
+tractability but is usual valid when diffusive effects are negligible.
+In the laboratory experiment of Dorel et al. [12] all three of these classic assumptions are
+invalid: (1) the initial density profile is Gaussian with the peak at the bottom of the domain, (2)
+the boundaries have constant temperature not constant heat flux, and (3) chemical diffusion leads
+to significant restratification above the interface. The first two of these differences should lead
+to acceleration of the interface compared to the classic result. In the absence of restratification,
+upward mixing of a Gaussian profile will initially result in a density jump that grows with time.
+However, once the convective interface has moved through the core of the Gaussian, the density
+of solute in the wings is so low that additional mixing does not appreciably change the amount of
+solute in the convection zone. Therefore, as the convection zone spreads further into the wing, the
+density jump eventually decreases as the reciprocal of the convection zone’s thickness, ∆ρ ∝ 1/h.
+For fixed-flux boundary conditions, this density jump would result in an entrainment equation of
+the form, dh/dt ∝ Fh, which suggests even more rapid acceleration of the convective boundary,
+i.e., h ∝ exp(Γt) where Γ is a positive constant.
+Fixed-temperature boundary conditions lead to further acceleration of the convective interface
+as the heat flux itself increases as the convection zone thickens. If we assume a Nusselt number
+that scales with the Rayleigh number as a power law, Nu ∼ Raδ , one arrrives at a flux that scales
+with the depth of the convection zone, F ∝ h3δ−1 . Further, laboratory and numerical experiments
+suggest that 1/3 ≤ δ ≤ 1/2 (see the review by Plumley and Julien [28]). Thus, for the lower
+bound, δ = 1/3, the flux is constant as the convection zone deepens, but for any larger value, there
+is a weak increase in the flux. For example, at the upper bound, δ = 1/2, the flux scales as the
+square root of the convection zone thickness, F ∝ h1/2 leading to even faster acceleration of the
+convective interface.
+In the experiments of Dorel et al. [12] the combination of the Gaussian profile of the solute
+16
+
+concentration and the fixed temperature boundary conditions should result in a convective interface
+that accelerates at a hyper-exponential rate, we should not be asking why the growth rate in the
+experiment h ∼ t2 is so much faster than the classical result h ∼ t1/2 . Instead, we should be asking
+why the growth rate in the experiment was so slow. We suggest that compositional diffusion is the
+reason. As we discussed earlier for our numerical simulations, compositional diffusion modifies
+the speed of the convective interface in several competing ways. By removing solute from the
+convection zone and adding it to the overlying stable region, diffusion weakens the density jump
+at the interface, reduces the potential energy barrier, and accelerates the interface. Conversely,
+when diffusion removes solute from the top of the convection zone, the resulting mass deficit
+must be mixed throughout the convection zone and this requires energy. Thus, compositional
+diffusion reduces the amount of kinetic energy that is available to do further mixing work, thereby
+slowing the interface speed. Our supposition is that this later mechanism (the reduction of the
+available kinetic energy for mixing) dominates in the experiment, slowing the interfaces’s speed
+from exponential growth to a power law. Such a result is self-consistent with the simulations
+performed here, as this mechanism also dominates in our work.
+In our simulations, when the diffusivities are sufficiently large, diffusive spreading ahead of the
+convective boundary outpaces the boundary’s motion. As a result, the stable layer above the interface can become significantly restratified before the boundary arrives. Further, the restratification
+allows the stable region to diffusively equilibrate and if the boundary conditions are permissive,
+a quasi-steady state can be achieved once a diffusion time has passed. This is the cause of the
+convective stalls that occur in our simulations. These models either have large compositional diffusion (and hence rapid diffusive spread and a slower interface) or they are extremely stable with
+large buoyancy frequency and hence very slow convective interfaces. In our models the boundary
+conditions permit quasi-steady state solutions, by allowing purely linear profiles of the heat and
+compositional fluxes. In the convection zone, the temperature and concentration are essentially
+uniform, whereas in the overlying stable region, these profiles are parabolic (such that their gradients are uniform). Within the convective boundary the profiles smoothly transition from one
+functional form to the other.
+Based on typical values of the chemical diffusivity in stars and planets, where the Lewis number is enormous, Le ∼ Pr−1 ∼ 102 –106 , chemical diffusion is too slow on its own to halt the
+propagation of a convective boundary. However, if a stall should occur for other reasons (such as
+photon diffusion in stars undergoing core convection), chemical diffusion could be an important
+mechanism determining the shape of the convective interface and in modifying the flux of heavy
+elements across that interface. Gas giants are a particularly interesting case as the heat flux that
+drives convection decreases over time (since the luminosity drops as the planet cools), and the extreme rotation of these objects reduces the kinetic energy flux available for mixing (see [11, 29]).
+Both effects have been shown to reduce the propagation rate of the convective boundary and, in a
+variety of relevant cases, can lead to a complete stall of the convective zone (see [17, 30]). Due
+to the slow entrainment rate in such objects, diffusion may play a more active role, slowing the
+convective interface even further, changing the spatial structure of the convective boundary, and
+modifying the regime boundaries in parameter space for stalling behavior.
+We have made two key model simplifications which, if relaxed in future work, could significantly improve and inform models of stellar and planetary evolution. The first is the use of the
+Boussinesq approximation, which assumes nearly incompressible fluids with small density variations. In contrast, real stars and planets span many density scale heights, and this stratification
+undoubtedly alters the potential energy budget required for mixing. As a result, it would likely
+change the scaling of the convective zone’s growth rate. A second simplification is the use of
+17
+
+Cartesian geometry. Real astrophysical objects are spherical, rotate, and exhibit radially varying
+gravity profiles. Recent simulations of semiconvection in rotating spheres have demonstrated that
+both the misalignment between gravity and rotation as a function of latitude, and the radial decline
+in gravity close to the center, can significantly influence the buoyancy flux needed for mixing [31].
+These effects also lead to anisotropic mixing, which could, in principle, modify the entrainment
+rates inferred in earlier studies and affect the overall growth of convective layers. Numerical simulations going beyond Boussinesq and adopting spherical geometry would be of great interest.
+ACKNOWLEDGMENTS
+
+B.W.H. and J.R.F. are supported by NASA Solar System Workings grant 80NSSC24K0927.
+B.W.H. is further supported by NASA grants 80NSSC24K0125 and 80NSSC24K0271. J.R.F. is
+also supported by the Sherman Fairchild Postdoctoral (Burke) Fellowship and the Presidential
+Fellowship at Caltech.
+
+[1] E. H. Anders, A. S. Jermyn, D. Lecoanet, J. R. Fuentes, L. Korre, B. P. Brown, and J. S. Oishi,
+Convective Boundary Mixing Processes, Research Notes of the American Astronomical Society 6, 41
+(2022).
+[2] D. J. Stevenson, Planetary magnetic fields, E&PSL 208, 1 (2003).
+[3] S. Howard, T. Guillot, M. Bazot, Y. Miguel, D. J. Stevenson, E. Galanti, Y. Kaspi, W. B. Hubbard,
+B. Militzer, R. Helled, N. Nettelmann, B. Idini, and S. Bolton, Jupiter’s interior from Juno: Equationof-state uncertainties and dilute core extent, A&A 672, A33 (2023).
+[4] R. Helled and D. J. Stevenson, The Fuzzy Cores of Jupiter and Saturn, AGUA 5, e2024AV001171
+(2024), arXiv:2403.11657 [astro-ph.EP].
+[5] A. P. Showman, X. Tan, and V. Parmentier, Atmospheric Dynamics of Hot Giant Planets and Brown
+Dwarfs, SSRv 216, 139 (2020), arXiv:2007.15363 [astro-ph.EP].
+[6] E. H. Anders, A. S. Jermyn, D. Lecoanet, A. E. Fraser, I. G. Cresswell, M. Joyce, and J. R. Fuentes,
+Schwarzschild and Ledoux are Equivalent on Evolutionary Timescales, ApJL 928, L10 (2022),
+arXiv:2203.06186 [astro-ph.SR].
+[7] J. S. Turner, The behaviour of a stable salinity gradient heated from below, JFM 33, 183 (1968).
+[8] H. J. S. Fernando, The formation of a layered structure when a stable salinity gradient is heated from
+below, JFM 182, 525 (1987).
+[9] M. Jeroen Molemaker and H. A. Dijkstra, The formation and evolution of a diffusive interface, JFM
+331, 199 (1997).
+[10] J. R. Fuentes and A. Cumming, Penetration of a cooling convective layer into a stably-stratified composition gradient: Entrainment at low Prandtl number, PhRvF 5, 124501 (2020), arXiv:2007.04265
+[astro-ph.SR].
+[11] J. R. Fuentes, E. H. Anders, A. Cumming, and B. W. Hindman, Rotation Reduces Convective Mixing
+in Jupiter and Other Gas Giants, ApJL 950, L4 (2023).
+[12] V. Dorel, P. Le Gal, and M. Le Bars, Experimental study of the penetrative convection in gases, PhRvF
+8, 103501 (2023).
+[13] R. Andrassy, F. Herwig, P. Woodward, and C. Ritter, 3D hydrodynamic simulations of C ingestion
+into a convective O shell, MNRAS 491, 972 (2020), arXiv:1808.04014 [astro-ph.SR].
+[14] E. H. Anders, D. Lecoanet, M. Cantiello, K. J. Burns, B. A. Hyatt, E. Kaufman, R. H. D. Townsend,
+
+18
+
+B. P. Brown, G. M. Vasil, J. S. Oishi, and A. S. Jermyn, The photometric variability of massive stars due to gravity waves excited by core convection., Nature Astronomy 7, 1228 (2023),
+arXiv:2306.08023 [astro-ph.SR].
+[15] J. Turner, The coupled turbulent transports of salt and and heat across a sharp density interface, IJHMT
+8, 759 (1965).
+[16] J. R. Fuentes, A. Cumming, and E. H. Anders, Layer formation in a stably stratified fluid cooled from
+above: Towards an analog for Jupiter and other gas giants, PhRvF 7, 124501 (2022).
+[17] B. W. Hindman and J. R. Fuentes, Dwindling Surface Cooling of a Rotating Jovian Planet Leads to
+a Convection Zone That Grows to a Finite Depth, ApJL 957, L23 (2023), arXiv:2310.16124 [astroph.EP].
+[18] P. F. Linden, The deepening of a mixed layer in a stratified fluid, JFM 71, 385 (1975).
+[19] E. A. Spiegel and G. Veronis, On the Boussinesq Approximation for a Compressible Fluid., ApJ 131,
+442 (1960).
+[20] J. R. Fuentes and A. Cumming, Shear flows and their suppression at large aspect ratio: Twodimensional simulations of a growing convection zone, PhRvF 6, 074502 (2021).
+[21] A. S. Jermyn, E. H. Anders, D. Lecoanet, and M. Cantiello, An Atlas of Convection in Main-sequence
+Stars, ApJS 262, 19 (2022), arXiv:2206.00011 [astro-ph.SR].
+[22] M. French, A. Becker, W. Lorenzen, and et al., Ab Initio Simulations for Material Properties along the
+Jupiter Adiabat, ApJS 202, 5 (2012).
+[23] D. Lecoanet and P. V. F. Edelmann, Multidimensional Simulations of Core Convection, Galaxies 11,
+89 (2023), arXiv:2307.15730 [astro-ph.SR].
+[24] D. J. Stevenson and E. E. Salpeter, The phase diagram and transport properties for hydrogen-helium
+fluid planets., ApJS 35, 221 (1977).
+[25] T. Guillot, D. J. Stevenson, W. B. Hubbard, and D. Saumon, The interior of Jupiter, in
+Jupiter. The Planet, Satellites and Magnetosphere, Vol. 1, edited by F. Bagenal, T. E. Dowling, and
+W. B. McKinnon (2004) pp. 35–57.
+[26] K. J. Burns, G. M. Vasil, J. S. Oishi, D. Lecoanet, and B. P. Brown, Dedalus: A flexible framework
+for numerical simulations with spectral methods, PhRvR 2, 023068 (2020).
+[27] U. M. Ascher, S. J. Ruuth, and R. J. Spiteri, Implicit-explicit runge-kutta methods for time-dependent
+partial differential equations, Applied Numerical Mathematics 25, 151 (1997), special Issue on Time
+Integration.
+[28] M. Plumley and K. Julien, Scaling Laws in Rayleigh-Bénard Convection, Earth and Space Science 6,
+1580 (2019).
+[29] J. R. Fuentes, B. W. Hindman, A. E. Fraser, and E. H. Anders, Evolution of Semiconvective Staircases in Rotating Flows: Consequences for Fuzzy Cores in Giant Planets, ApJL 975, L1 (2024),
+arXiv:2408.10833 [astro-ph.EP].
+[30] S. Zhang, J. Fuentes, and A. Cumming, submitted (2025).
+[31] J. R. Fuentes, 3D Simulations of Semiconvection in Spheres: Turbulent Mixing and Layer Formation,
+Astrophys. J. 982, 44 (2025), arXiv:2502.15111 [astro-ph.SR].
+
+19
+
+

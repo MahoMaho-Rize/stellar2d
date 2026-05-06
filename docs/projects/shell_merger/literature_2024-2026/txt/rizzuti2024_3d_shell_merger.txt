@@ -1,0 +1,1626 @@
+                                               MNRAS 000, 1–18 (2024)                                                        Preprint 23 July 2024              Compiled using MNRAS LATEX style file v3.0
+
+
+
+
+                                               Shell mergers in the late stages of massive star evolution: new insight from
+                                               3D hydrodynamic simulations
+                                               F. Rizzuti1,2★ , R. Hirschi1,3 , V. Varma1 , W. D. Arnett4 , C. Georgy5 , C. Meakin6 , M. Mocák1 , A. StJ. Murphy7
+                                               and T. Rauscher8,9
+                                               1 Astrophysics Group, Lennard-Jones Laboratories, Keele University, Keele ST5 5BG, UK
+                                               2 Dipartimento di Fisica, Università degli Studi di Trieste, Via Tiepolo 11, I-34143 Trieste, Italy
+                                               3 Kavli IPMU (WPI), University of Tokyo, 5-1-5 Kashiwanoha, Kashiwa 277-8583, Japan
+                                               4 Steward Observatory, University of Arizona, 933 N. Cherry Avenue, Tucson AZ 85721, USA
+arXiv:2407.15544v1 [astro-ph.SR] 22 Jul 2024
+
+
+
+
+                                               5 Geneva Observatory, Geneva University, CH-1290 Sauverny, Switzerland
+                                               6 Pasadena Consulting Group, 1075 N Mar Vista Ave, Pasadena, CA 91104 USA
+                                               7 School of Physics and Astronomy, University of Edinburgh, Edinburgh EH9 3FD, UK
+                                               8 Department of Physics, University of Basel, Switzerland
+                                               9 Centre for Astrophysics Research, University of Hertfordshire, UK
+
+
+
+
+                                               Accepted 2024 July 19. Received 2024 July 19; in original form 2024 May 4
+
+
+
+                                               ABSTRACT
+                                               One-dimensional (1D) stellar evolution models are widely used across various astrophysical fields, however they are still
+                                               dominated by important uncertainties that deeply affect their predictive power. Among those, the merging of independent
+                                               convective regions is a poorly understood phenomenon predicted by some 1D models but whose occurrence and impact in real
+                                               stars remain very uncertain. Being an intrinsically multi-D phenomenon, it is challenging to predict the exact behaviour of shell
+                                               mergers with 1D models. In this work, we conduct a detailed investigation of a multiple shell merging event in a 20 M⊙ star
+                                               using 3D hydrodynamic simulations. Making use of the active tracers for composition and the nuclear network included in the
+                                               3D model, we study the merging not only from a dynamical standpoint but also considering its nucleosynthesis and energy
+                                               generation. Our simulations confirm the occurrence of the merging also in 3D, but reveal significant differences from the 1D case.
+                                               Specifically, we identify entrainment and the erosion of stable regions as the main mechanisms that drive the merging, we predict
+                                               much faster convective velocities compared to the mixing-length-theory velocities, and observe multiple burning phases within
+                                               the same merged shell, with important effects for the chemical composition of the star, which presents a strongly asymmetric
+                                               (dipolar) distribution. We expect that these differences will have important effects on the final structure of massive stars and
+                                               thus their final collapse dynamics and possible supernova explosion, subsequently affecting the resulting nucleosynthesis and
+                                               remnant.
+                                               Key words: convection - hydrodynamics - nuclear reactions, nucleosynthesis, abundances - stars: evolution –stars: interiors –
+                                               stars: massive
+
+
+
+                                               1 INTRODUCTION                                                                       To further complicate the issue, 1D stellar evolution simulations may
+                                                                                                                                    show another type of occurrence in the evolution of a star: the merging
+                                               Stellar evolution is normally represented as a sequence of burning
+                                                                                                                                    of multiple convective shells into a single convective one (Rauscher
+                                               phases distributed over time. While this is accurate for describing
+                                                                                                                                    et al. 2002; Tur et al. 2007). This environment is very challenging
+                                               the core burning phases, the question is more complex when study-
+                                                                                                                                    to study, due to the complex interaction between convection, nuclear
+                                               ing the burning shells of massive stars. In contrast to the traditional
+                                                                                                                                    burning and entrainment, resulting in new dynamics and alternative
+                                               view of an ‘onion-ring’ structure, i.e. a system of concentric burning
+                                                                                                                                    nucleosynthesis paths that are difficult to include in 1D models with
+                                               shells surrounding the core (see e.g. Shu 1982), 1D stellar evolution
+                                                                                                                                    simplifying prescriptions. These effects are expected to have an im-
+                                               models have been showing that the occurrence and location of the
+                                                                                                                                    portant impact on the structure and chemical composition of the star,
+                                               burning shells depend on the properties of each star (mass, metallic-
+                                                                                                                                    changing its stratification by the time of the collapse and its abun-
+                                               ity, rotation, overshoot), predicting that burning shells may appear,
+                                                                                                                                    dances due to convective mixing, therefore affecting also the possible
+                                               disappear, and reappear in the same or in a different location, with
+                                                                                                                                    supernova explosion and the chemical enrichment of the interstellar
+                                               the same or with a different type of burning (see e.g. Hirschi et al.
+                                                                                                                                    medium.
+                                               2004; Sukhbold & Woosley 2014). Without computing the stellar
+                                                                                                                                    A major source of uncertainty concerning the formation and evo-
+                                               model, one cannot predict exactly how a specific star would behave.
+                                                                                                                                    lution of shell mergers is the limited literature investigating these
+                                                                                                                                    episodes. 1D stellar evolution models have been reporting the oc-
+                                               ★ E-mail: f.rizzuti@keele.ac.uk, federico.rizzuti@inaf.it                            currence of convective shell mergers for a long time: for example,
+
+                                               © 2024 The Authors
+2      Rizzuti et al.
+Rauscher et al. (2002) and Tur, Heger & Austin (2007) observed              included an explicit 25-isotope network to reproduce the energy re-
+the merging of convective oxygen-, neon-, and carbon-burning shells         lease dominated by oxygen- and neon-burning inside the convective
+about 1 day before collapse in 20 M ⊙ models (but not in 19 and 21 M ⊙      shell. More specifically, neon burning results from the heating of en-
+models). More generally, Sukhbold & Woosley (2014) found merged             trained material into the convective layers, while oxygen burning is
+O, Ne and C-burning shells during the final hours of 15 - 20 M ⊙            enhanced by the additional fuel from the stable regions. As a result,
+stars in their grid of non-rotating, solar metallicity models. Collins      a new quasi-steady state is reached: two burning shells are present
+et al. (2018) have analysed an even larger grid of non-rotating, solar-     within the same convective zone, characterized by two distinct peaks
+metallicity models, and found a large prevalence of O, Ne and C-shell       in nuclear energy generation.
+merging events above 15 M ⊙ , with oxygen- and neon-burning in the          While these studies have been innovative, they have all focused their
+same convective zone for 40 per cent of the stars between 16 - 26           attention on environments where an alternative fuel is ingested from
+M ⊙ . More recently, Roberti et al. (2024) found that stellar rotation      a stable region into a convective one. However, stellar simulations
+favours C-O shell mergers in low-metallicity 15 M ⊙ models. These           run with 1D models also show a rather different type of occurrence,
+studies show how common these events are expected to be during              i.e. the merging of multiple convective shells of different composi-
+the late phases of massive star evolution according to 1D models.           tions. In such models, usually the neon or oxygen convective regions
+These works also suggest that shell-merging events in advanced              grow over time and eventually make contact with the shells above.
+phases of massive stars can be responsible for the production of            The evolution of convective shells that begin their life separately and
+isotopes that are difficult to explain otherwise, both during the con-      later merge is an extremely interesting environment to study with
+vective phases and later on in the supernova explosions. Indeed, the        multi-D simulations, both for the effects of these extreme dynamics
+merging event can transport elements to deeper regions where they           on the stellar structure, and for the peculiar nucleosynthesis paths
+can burn more rapidly, and at the same time bring the ashes closer          that can be enabled.
+to the surface, where they are more likely to be ejected into the in-       A 4𝜋-3D hydrodynamic simulation of an oxygen-neon shell merger
+terstellar medium.                                                          has been run by Yadav et al. (2020). Differently from the previous
+In particular, carbon-oxygen merging shells are shown to be a po-           studies, in this work the shells start as convective and independent,
+tential main source for the nucleosynthesis of the odd-Z elements           and dynamically merge during the simulation. Yadav et al. (2020)
+31 P, 35 Cl, 39 K, and 45 Sc (Rauscher et al. 2002; Ritter et al. 2018),    found very strong differences between the 1D and 3D simulations,
+whose production is currently underestimated by Galactic chemical           starting from the very large convective velocities compared to the
+evolution models (see e.g. Cescutti et al. 2012 for the origins of          1D mixing-length-theory predictions. However, their merging takes
+phosphorus). This happens because the heating of ingested carbon at         place only within about 200 seconds before the onset of core col-
+oxygen-burning temperatures can trigger a sequence of 𝛾-reactions           lapse, therefore the merging time-scale is very limited and the system
+that release free protons and produce the odd-Z elements; this is           has only time to present an episodic burning of ingested neon. Ad-
+sometimes called “p-process”. Some studies however suggest that             ditionally, the preliminary contraction of the shells is the primary
+the p-nuclei produced in this way are completely reprocessed dur-           driving mechanism for the merging (see also Collins et al. 2018).
+ing the passage of the following supernova shock (see Woosley &             This is not always the case for shell mergers in massive stars: in
+Howard 1978). Additionally, during the explosive nucleosynthesis in         particular, several 1D models predict shell merging events that occur
+core-collapse supernovae, the collapse of the star can trigger the pho-     many convective turnovers before the stellar collapse, with enough
+todisintegration of heavy isotopes across the carbon-oxygen merger          time for a new equilibrium structure to be established, with important
+site, causing the production of rare proton-rich isotopes beyond iron       implications for the final structure of the star. The merging of inde-
+through a chain of photodisintegrations, also known as “𝛾-process”          pendent convective shells long before the stellar collapse has never
+(see Rauscher et al. 2002; Roberti et al. 2023).                            been investigated in the literature with multi-D models.
+Recently, some works also started to study these peculiar events with       In this paper, we present the results from a set of 3D hydrodynamic
+hydrodynamic models. Ritter et al. (2018) were among the first who          models simulating a shell merging event predicted by a 1D model, 5
+performed 3D hydrodynamic simulations of carbon ingestion from a            hours before the predicted collapse of the star. By analysing both the
+stable layer into a convective oxygen-burning shell, based on a strati-     dynamics and the nucleosynthesis of this environment, we are able
+fication assumed from a 25 M ⊙ stellar evolution model. The resulting       to shed light on these poorly explored shell-merging events, drawing
+nucleosynthesis, that they computed with a 1D model based on the            conclusions of interest for stellar structure and chemical evolution
+3D simulations, confirmed that the high entrainment rates boost the         theory. We organize the paper as follows: in Section 2, we introduce
+production of the odd-Z elements 31 P, 35 Cl, 39 K, and 45 Sc through       the model setup and initial conditions used to run the simulations.
+(𝛾, p) reactions. Their study of the consequent explosive nucleosyn-        In Section 3, we present the results divided into the analysis of the
+thesis also shows that the overproduction factors for these elements        dynamics and of the nucleosynthesis of the simulations. Finally, in
+are little affected, indicating that their principal production sites are   Section 4 we discuss the results and draw conclusions.
+likely to be the convective merging shells.
+Following the same approach, Andrassy et al. (2020) further in-
+vestigated the ingestion of carbon into a convective oxygen-burning
+shell using 3D simulations that include explicit carbon- and oxygen-        2 METHODS
+burning reactions. As a result, in addition to measuring an entrain-
+ment rate that can explain the production of the odd-Z elements,            2.1 The 1D stellar model and initial conditions
+they estimated that the carbon-burning inside the oxygen shell can          The initial conditions for the 3D simulations presented in this paper
+contribute to around 14 - 33 per cent of the total luminosity of the        have been assumed from the same 1D stellar evolution model used in
+shell, showing how impactful the extra burning can be.                      Rizzuti et al. (2023); it is worth summarizing here its most important
+Finally, Mocák et al. (2018) have studied the ingestion of neon into        aspects. This is a MESA (Paxton et al. 2011, 2013, 2018, 2019) stellar
+a convective oxygen-burning shell for a 23 M ⊙ star, with 3D sim-           evolution model of a 20 M ⊙ star at solar metallicity (𝑍 = 0.014,
+ulations in spherical geometry. For a more realistic scenario, they         Asplund et al. 2009). Mass loss rates for O-type stars are assumed
+
+MNRAS 000, 1–18 (2024)
+                                                                                                                                          Shell mergers in massive stars               3
+
+
+                                                                                                                               8                                                1015
+       20.0                                                    6
+       17.5                                                                                                                    7      6.50 M
+                                                                                                                                                                                1014
+                                                               4                              Shell
+       15.0                                                                                  mergers                           6
+
+                                                                                                                                                                                1013
+                                                               2                                                                      6.00 M
+       12.5                                                                                                                    5
+
+
+
+
+                                                                                                             radius (109 cm)
+                                                                   2.0       2.5       3.0        3.5
+Mr/M
+
+
+
+
+       10.0                                                                                                                    4                                                1012
+                                              Convective envelope                                                                     5.00 M
+
+        7.5                          He
+                                                                                                                               3
+                                                                                                                                                                                1011
+                                                                                                                                      4.00 M
+
+        5.0                                                                                                                    2
+                                                                                                                                      3.00 M
+                                               C                    Shell mergers                                                                                               1010
+        2.5 H       He                                                                                                         1
+                                                                                                                                      2.00 M
+                                          C           O
+        0.0                          C            O           ↑
+                                                              Si                                                               0
+                                                                                                                                      1.00 M
+                                                                                                                                                                                109
+                6        4       2            0           2              4         6          8         10                         −20000 −10000     0       10000   20000
+                                          log10 (t * /yrs)                                                                                    Age - ageref [s]
+
+
+ Figure 1. Left: Structure evolution diagram of the 20 M ⊙ 1D MESA model as a function of the time left until the predicted collapse of the star (in years, log
+ scale). Convective zones are drawn in blue, CBM zones in green. The red arrow indicates the shell-merging event, of which a zoom-in is shown in the top right
+ corner. Right: Zoom-in on the shell-merging event, as a function of time in seconds from the start of the 3D simulations. In colour scale, the squared convective
+ velocity (cm s −1 ). The black lines are isomass contours. The vertical blue bars represent the radial and time extent of the 3D simulations.
+
+
+ from Vink et al. (2000, 2001); if the star enters the Wolf-Rayet stage,                            namic simulations but is also consistent with observations, is what
+ i.e. when the surface hydrogen mass fraction drops below 0.4, the                                  makes this model novel. The amount of CBM to be included in stellar
+ mass loss rate switches to Nugis & Lamers (2000); if 𝑇eff < 104 K,                                 models is extremely important for the occurrence of shell merging
+ the empirical mass loss rate from de Jager et al. (1988) is used.                                  events, because it is entrainment that erodes the radiative regions that
+ The mixing-length theory (MLT, Böhm-Vitense 1958) of convec-                                       separate the convective ones, and makes it possible for the merging
+ tion is employed (using the “Henyey” and “MLT++” options), with                                    to occur. This has been shown for example in Davis et al. (2019),
+ an efficiency of 𝛼MLT = 1.67 (Arnett et al. 2018). The convective                                  where the model with the largest CBM is also the one that shows the
+ boundaries are defined by the Schwarzschild criterion, so no semi-                                 occurrence of C-Ne shell merging, though more studies are needed
+ convective mixing is required. For convective boundary mixing, the                                 to confirm these trends.
+ model uses the exponential decaying diffusive prescription of Frey-                                In Fig. 1, we show the structure evolution diagram of the model,
+ tag et al. (1996) and Herwig (2000), with 𝑓ov = 0.05 for the top                                   also represented in Rizzuti et al. (2023). We focus our attention here
+ of convective cores and shells, and 𝑓ov = 0.01 for the bottom of                                   on the shell-merging event, which takes place between 10 −2 - 10 −4
+ convective shells (with 𝑓0 = 𝑓 in both cases). This implementation                                 years before the predicted collapse of the star; we present a zoom-in
+ of convective boundary mixing is the real novelty of this model,                                   of this region in the right panel of Fig. 1. The merging occurs about
+ as presented in Rizzuti et al. (2023). The values chosen for 𝑓ov are                               5 hours before the collapse of the star, which is much longer than
+ larger than what currently used in the grids of stellar models, e.g.                               the convective turnover time-scale, typically up to a couple hundred
+ 𝛼ov = 0.1 in Ekström et al. 2012 and 𝛼ov = 0.335 in Brott et al.                                   seconds; this means that the core contraction is not a driving mecha-
+ 2011, considering that 𝑓ov ∼ 𝛼ov /10 (see Scott et al. 2021). Choos-                               nism of the merging (as in e.g. Yadav et al. 2020). From these plots,
+ ing 𝑓ov = 0.05 here is motivated by the study of Scott et al. (2021),                              it is possible to see the presence of three distinct convective regions
+ which predicts values for 𝑓ov of at least 0.05 for 20 M ⊙ stars in order                           at the start of the 3D simulations, and they are all predicted to merge
+ to reproduce the observed width of the main sequence in the spec-                                  after about 12 000 s. A fourth convective shell forms below the others
+ troscopic Hertzsprung-Russell diagram (Castro et al. 2014). For the                                after the 3D simulations have started, but it does not join the merg-
+ bottom boundary, 𝑓ov = 0.01 is based on 3D hydrodynamic results                                    ing and halts around 10 000 s (see also Fig. 3 in the next section).
+ (Cristini et al. 2019; Rizzuti et al. 2022), that find a weaker convec-                            The first question that the hydrodynamic simulations shall answer is
+ tive boundary mixing (CBM) at the bottom boundary due to it being                                  whether a merging also takes place in 3D within the simulated time
+ stiffer. These choices represent what we call the ‘321D’ approach,                                 range or not. It is still not completely clear whether shell merging
+ where results from hydrodynamic simulations are used to improve                                    is a just a numerical effect of the 1D models, or this phenomenon
+ the prescriptions assumed in the 1D models. In support of this, Scott                              is also expected to occur in real stars: hydrodynamic simulations of
+ et al. (2021) showed that CBM increases with the initial stellar mass                              multiple convective shells will be able to shed more light on this
+ since more massive stars are much more luminous (𝐿 ∼ 𝑀 3 between                                   point. Finally, Figure 1 includes some isomass contours to show that
+ 1 and 20 M ⊙ ); for this reason, our choice of 𝑓ov = 0.05 for 20 M ⊙                               some expansion of the layers occurs during the merging event: to
+ is consistent with the values around 𝑓ov = 0.02 - 0.04 inferred from                               account for that in the 3D simulations, a large radial extent has been
+ asteroseismology for less massive stars (see Bowman 2020). This                                    selected for the 3D domain.
+ new way of modelling CBM, which is derived from 3D hydrody-
+
+                                                                                                                                                                 MNRAS 000, 1–18 (2024)
+     4      Rizzuti et al.
+
+
+          45◦                                                                                       45◦
+                       6
+                             5
+                                    R (109 cm)                                                                                       1.0 × 108
+                                   4
+                                         3
+                                               2                                                                                     7.5 × 107
+                                                     1
+
+
+0◦                                                                                                                     0◦
+                                                                                                                                     5.0 × 107
+
+                                                           1
+                                                                 2
+                                                                                                                                     2.5 × 107
+                                                                       3
+                                                                          4
+                                                                R (109 cm)
+                                                                                    5                                                0.0 × 100
+                                                                                          6
+          -45◦                                                                                     -45◦
+     Figure 2. 3D rendering of model a360n1024 showing the simulation through a cross section along both the equatorial and the longitudinal planes. The frame
+     has been taken at 1500 seconds, and the fluid speed is in colour scale (cm s −1 ). A complete video of the time evolution for this rendering is available online as
+     Supplementary material.
+
+
+     2.2 The 3D model domain and configuration                                           model, one needs to be careful to ensure accuracy and consistency.
+                                                                                         As it is standard procedure in PROMPI, the hydrostatic equilibrium of
+     The 3D hydrodynamic simulations presented in this study have been
+                                                                                         the stratification has been recomputed by obtaining new density and
+     produced employing the PROMPI hydrodynamic code (Meakin & Ar-
+                                                                                         temperature values from pressure and entropy through the equation
+     nett 2007). Its established efficiency and adaptability in performing
+                                                                                         of state, checking that it does not deviate significantly from the origi-
+     multi-dimensional simulations, together with its long history of sim-
+                                                                                         nal values. PROMPI employs the ‘Timmes’ equation of state (Timmes
+     ulating stellar environments (Arnett et al. 2009; Cristini et al. 2017,
+                                                                                         & Arnett 1999).
+     2019; Mocák et al. 2018; Rizzuti et al. 2022, 2023), make PROMPI
+                                                                                         As we showed in Fig. 1, left, for the 3D simulations we selected a
+     the ideal tool for conducting our study. In particular, active tracers for
+                                                                                         radial extent of 0.3 < 𝑟 < 6.8 × 109 cm, including enough space
+     composition and nuclear network as described below are key aspects
+                                                                                         above the convective shells to account for the upward expansion of
+     of the code. Additionally, the code comparison study of Andrassy
+                                                                                         the layers. This domain includes in the outermost part some He-rich
+     et al. (2022) showed that PROMPI is fully consistent with other hy-
+                                                                                         convective layers, which are excluded from the simulations by imple-
+     drodynamic codes commonly employed for stellar studies.
+                                                                                         menting a velocity-damping region at 𝑟 > 6 × 109 cm, also used to
+     We list here the complete set of combustive Euler equations solved by
+                                                                                         dissipate the gravity waves produced by the convective boundaries;
+     PROMPI, as they are described in detail in Meakin & Arnett (2007),
+                                                                                         the damping function used by PROMPI is the one described by Cristini
+     in state-vector form with Q the state vector, 𝚽 the flux vector, and S
+                                                                                         et al. (2017). Finally, convection is triggered by seed perturbations
+     the source vector:
+                                                                                         added to density and temperature between 6 - 7×108 cm (Ne-burning
+      𝜕Q
+          +∇·𝚽=S                                                                         shell) and between 9.5 - 12 × 108 cm (C-burning shell), as described
+      𝜕𝑡                                                                                 by Meakin & Arnett (2007).
+           𝜌
+           
+                          𝜌v
+                          
+                                             0
+                                              
+                                                                                        In this study, we present two different simulations of the shell merging
+           
+           
+            𝜌v
+           
+                          
+                           𝜌v · v + 𝑝
+                          
+                          
+                                              
+                                              
+                                               𝜌g
+                                                                           (1)          event, both started from the same initial conditions but with differ-
+     Q=             𝚽=                   S=                                              ent geometry. Both simulations have spherical geometry and a radial
+             𝜌𝐸             (𝜌𝐸 + 𝑝)v           𝜌v · g + 𝜌𝜖
+                                                                                         extent of 0.3 < 𝑟 < 6.8 × 109 cm, but the angular range covered by
+           
+                         
+                                             
+                                              
+           
+                         
+                                             
+                                              
+            𝜌𝑋            𝜌𝑋 v              𝑅
+            𝑖             𝑖                  𝑖                                        𝜃 and 𝜙 is different. One setup is a 3D wedge with an angular size
+     where 𝜌, 𝑝, v, g, and 𝑇 the density, pressure, velocity, gravity, and               of 60◦ in both 𝜃 and 𝜙, and number of cells 768 × 2562 in 𝑟, 𝜃 and
+     temperature, respectively. 𝐸 is the total specific energy, and the en-              𝜙, respectively; we code-name this model a60n256 after its angular
+     ergy source term 𝜖 is due to nuclear reactions and neutrino cooling.                and grid size. The second model has instead an angular size of 90◦
+     𝑅𝑖 is the time rate of change of species 𝑋𝑖 due to nuclear reactions.               in 𝜃 and 360◦ in 𝜙, and number of cells 512 × 256 × 1024 in 𝑟, 𝜃
+     When remapping the initial conditions from the 1D into the 3D                       and 𝜙, respectively; we code-name this a360n1024. To give a visual
+
+     MNRAS 000, 1–18 (2024)
+                                                                                                       Shell mergers in massive stars                    5
+
+Table 1. Properties of the hydrodynamic simulations presented in this study:     show results only from model a360n1024, which is closer to a full
+model code name; polar angular extent Δ𝜃; azimuthal angular extent Δ𝜙;           sphere. As an example, we have shown in Fig. 2 a representation
+number of radial cells 𝑁𝑟 ; number of polar angle cells 𝑁 𝜃 ; number of          of model a360n1024 containing two cross-sections, one across the
+azimuthal angle cells 𝑁 𝜙 ; end time of the simulation 𝑡end ; cost required to   equatorial plane and the other across the longitudinal plane; these are
+run the simulation in CPU core-hours.                                            shown in more detail in Appendix A, Fig. A1. It is clear the effect of
+                                                                                 the geometry on the fluid motions: from the equatorial plane, we see
+     name         Δ𝜃      Δ𝜙      𝑁𝑟      𝑁𝜃      𝑁𝜙       𝑡end      cost
+                                                                                 large-scale structures that can form thanks to the large radial extent
+                                                            (s)    (106 hr)
+                                                                                 and the 360◦ range spanned by 𝜙. In the vertical plane instead, large-
+   a60n256        60◦    60◦      768     256     256     4250       1.31        scale eddies take up the entire domain, mainly due to the reflective
+  a360n1024       90◦    360◦     512     256    1024     4039       3.34        boundary conditions assumed in 𝜃, that encourage the formation of
+                                                                                 one large eddy. Additional tests show that implementing periodic
+                                                                                 boundary conditions in 𝜃 encourages instead the formation of two
+representation of this setup, we show in Fig. 2 a 3D rendering of the            large eddies within the same convective region. This finding is in line
+domain of model a360n1024, including a cross section that shows                  with the general physical expectations for similar environments (non-
+an equatorial and a longitudinal view of the simulation.                         rotating stars with large radial extent in deep interiors), as e.g. in the
+The reason for running these two different simulations is to study               convective core study of Herwig et al. (2023). This is not necessarily
+the evolution of the same initial conditions in the two geometries, in           the case in other convective environments, for example in envelope
+order to test convergence of results and evolutionary divergences. In            convection, even when the radial extent is large (see Chiavassa et al.
+particular, a60n256 has a higher local resolution but more limited               2011; Freytag et al. 2017).
+spatial extent, while a360n1024 is closer to a full sphere, covering             We shall now study the evolution of the multiple convective shells in
+over 70 per cent of the spherical surface, at the cost of a slightly lower       the 3D simulations. To have a visual representation similar to the stel-
+local resolution. The reason why the PROMPI code cannot perform                  lar evolution diagram showed in Fig. 1 for the 1D model, we present
+full 4𝜋 simulations is the presence in the spherical grid of singu-              in Fig. 3 the time evolution of the angularly averaged kinetic energy
+larities at the centre and along the polar axis, therefore artefacts are         (in colour scale) for the two hydrodynamic models a360n1024 (top
+produced by the code the closer the domain approaches these points               panel) and a60n256 (centre panel), compared to the same diagram
+in space. However, we underline here the importance of going be-                 for the 1D MESA model (bottom panel). To have a comprehensive view
+yond the box-in-a-star setup and towards fully spherical simulations,            on the different convective shells and track their evolution, we applied
+in order to correctly reproduce the fluid motions especially in case             a log scale to the stellar radius. The main event in all simulations is
+of large convective regions.                                                     the merging of the carbon- and the neon-burning shells, generating a
+In both models, periodic boundary conditions have been imple-                    large increase in the kinetic energy due to the burning of the freshly
+mented in 𝜙, but for 𝜃 we chose reflective boundary conditions                   engulfed material. The carbon and neon shells merge both in the
+instead, due to the close proximity to the polar axis, where peri-               3D and 1D simulations, there are nevertheless significant differences
+odic conditions are no longer realistic and can create an excess of              between the two types of simulations. One major difference is that
+kinetic energy, therefore it is more physical to assume that the flow            only in 3D the bottom of the carbon shell migrates downwards into
+cannot cross the axis (see e.g. Müller 2020).                                    the neon-shell until the C- and Ne-rich material from the C-burning
+Finally, one of the key strengths of the PROMPI code is that it ex-              shell reaches the bottom of the Ne-burning shell, triggering the rapid
+plicitly models the evolution of chemical species, used in this study            burning of the fresh fuel and nuclear energy release, visible as a
+as active tracers. For the simulations presented here, a 12-isotope              sharp increase in kinetic energy in Fig. 3. This scenario underlines
+network has been employed to reproduce nuclear reactions and gen-                the necessary role of entrainment processes in the advanced phases
+erate the energy that drives convection. This network, which is the              of massive stars, as it has been studied by works such as Meakin &
+same used in Rizzuti et al. (2023), includes n, p, 4 He, 12 C, 16 O,             Arnett (2007), Viallet et al. (2015), Rizzuti et al. (2023).
+20 Ne, 23 Na, 24 Mg, 28 Si, 31 P, 32 S, and 56 Ni, and it employs the most
+                                                                                 Additionally, in the 1D model CBM is included using the expo-
+recent nuclear rates from the JINA REACLIB data base (Cyburt et al.              nentially decaying diffusion from Freytag et al. (1996) and Herwig
+2010). This list of isotopes is particularly appropriate for reproducing         (2000). This leads to a slower growth of the neon-shell in the 1D
+the shell-merging environment, because it can follow all the energy-             simulation and thus a later merging in 1D compared to 3D (see
+generating reactions that comprise carbon, neon and oxygen burning,              Fig. 3), around 12 000 s for the former and only 1200 s for the lat-
+which are expected to take place in these convective shells. The shell-          ter, from the start of the 3D simulations. This is illustrated also in
+merging environment is dynamical enough that boosting the driving                Fig. 4, where we show the time evolution of the integrated kinetic
+luminosity (used in some simulations e.g. Cristini et al. 2017, 2019)            energy for the 3D versus 1D simulations: in addition to the different
+is not required here, ensuring that no artefacts arise from the changes          time-scale before the merging (recognisable by the sharp increase in
+in the energy generation.                                                        kinetic energy), the 3D simulations reach a total kinetic energy that
+                                                                                 is around one order of magnitude larger than in the 1D, also visible
+                                                                                 by the colour scale in Fig. 3. It is not easy to immediately understand
+3 RESULTS                                                                        this difference, given the complexity of this environment and the in-
+                                                                                 terplay of different effects (entrainment, nuclear burning, convective
+3.1 Dynamics of the shell merging                                                velocities) across the multiple burning shells. First, we must consider
+We present in Table 1 the main properties of the two hydrodynamic                that the stratification assumed from the 1D model does not result in
+simulations included in this study. The two simulations are started              equilibrium once in the hydrodynamic model, giving way to a slight
+from the same initial conditions and run for the same time-scale,                readjustment of the structure during the initial transient phase. This
+but with two different geometries. As we show below, the evolution               can be traced back, among other things, to the fact that the 1D model
+of the two simulations is very similar, so when the analysis is not              assumes hydrostatic equilibrium, which is not necessarily accurate
+focused on the differences arising from the geometry, we prefer to               for this late dynamical phases. The deviations are smaller in the inner
+
+                                                                                                                                MNRAS 000, 1–18 (2024)
+6      Rizzuti et al.
+
+                                     60                                                                        7M
+
+                                              a360n1024                                                        6M
+                                                                                                                            1015
+
+
+
+
+                                                                                                                                   specific turbulent kinetic energy (erg g-1)
+                                     40                                                                        5M
+
+                   radius (108 cm)                                                                             4M
+
+                                     20                                                                        3M
+                                                   C
+                                                                                                                            1014
+                                     10
+                                      8                                                                        2M
+
+                                      6
+                                               Ne
+                                      4       O                                                                             1013
+
+
+                                          0       500     1000   1500        2000      2500      3000   3500         4000
+                                                                            time (s)
+
+                                     60                                                                        7M
+
+                                              a60n256                                                          6M
+                                                                                                                            1015
+
+
+
+
+                                                                                                                                   specific turbulent kinetic energy (erg g-1)
+                                     40                                                                        5M
+
+                                                                                                               4M
+                   radius (108 cm)
+
+
+
+
+                                     20                                                                        3M
+                                                   C
+                                                                                                                            1014
+                                     10
+                                      8                                                                        2M
+
+                                      6
+                                               Ne
+                                      4       O                                                                             1013
+
+
+                                          0       500     1000   1500        2000      2500      3000   3500         4000
+                                                                            time (s)
+
+                                     60
+                                              1D MESA                                                      6M
+                                                                                                                                   specific turbulent kinetic energy (erg g-1)
+
+
+
+                                     40                                                                        5M
+                                                                                                                            1014
+                                                                                                                4M
+                   radius (108 cm)
+
+
+
+
+                                     20
+                                                   C                                                            3M
+                                                                                                                            1013
+
+                                     10
+                                      8
+
+                                      6
+                                               Ne                                                               2M
+                                                                                                                            1012
+
+
+                                      4       O
+                                          0             5000            10000            15000          20000
+                                                                            time (s)
+
+Figure 3. Time evolution of the angularly averaged kinetic energy in colour scale for 3D simulations a360n1024 (top panel), a60n256 (centre panel), and
+the 1D MESA model for comparison (bottom panel). Overlaid in white are the isomass contours. The log scale applied to the radius on the y-axis provides a
+comprehensive view of all the convective shells.
+
+
+
+MNRAS 000, 1–18 (2024)
+                                                                                                      Shell mergers in massive stars                        7
+
+Table 2. Selected time-steps for comparing the 1D and 3D simulations.        Table 3. Properties of the a360n1024 shell-merger simulation, for the three
+                                                                             convective shells burning carbon, neon, and oxygen (refer to Fig. 3) at different
+                             initial      before      after
+                                                                             key times in the simulation: convective velocity 𝑣rms ; shell size Δ𝑟; convective
+                           conditions    merging     merging
+                                                                             turnover time 𝜏c . The carbon and neon shells share the same values after the
+                                                                             merging.
+            1D MESA            0s         7198 s     12518 s
+            3D PROMPI         250 s        750 s      1500 s
+
+                                                                                                 convective velocity 𝑣rms (106 cm s −1 )
+                                                                                                          shell
+                                                                                                                    C          Ne        O
+regions and grow larger going outwards, due to the recomputation.                                time
+Indicatively, the difference in density and temperature is below 10
+and 4 per cent, respectively, in the inner regions, and it reaches a                                 250 s         6.81    8.49         6.68
+                                                                                                     750 s         15.2    7.33         8.41
+maximum around 25 and 8 per cent in the outer regions. Note that
+                                                                                                    1500 s             56.4             5.26
+the outer regions do not play any significant role in our investiga-                                3000 s             41.3              −
+tion, so these large deviations do not change the results presented.
+The slight contraction during the initial transient (visible also from                                   shell size Δ𝑟 (108 cm)
+Fig. 3) results in 3D peak temperatures around 5-10 per cent higher,
+                                                                                                          shell
+depending on the shell; this affects also the nuclear and kinetic en-                                               C          Ne        O
+                                                                                                 time
+ergy, and therefore the time-scale of evolution. However, given the
+multiple burning reactions and dependencies, it is difficult to assign                               250 s         5.12    2.28         0.56
+exact numbers to these estimates.                                                                    750 s         25.7    1.04         0.85
+Finally, we shall now focus our attention on the innermost convective                               1500 s             46.0             0.44
+shell in the domain, the oxygen-burning shell: its behaviour is differ-                             3000 s             52.0              −
+ent in the three models presented in Fig. 3. What all the simulations
+have in common is that the O-shell evolution is suddenly halted at the                               convective turnover time 𝜏c (s)
+time of the shell merging; while in 3D this is due to the downward                                        shell
+migration of the shell merger, in 1D this is more likely the result                                                 C          Ne        O
+                                                                                                 time
+of the expansion of the layers due to the formation of a Si-burning
+shell underneath, producing the same result. After the merging, the                                  250 s         150         53.7     16.8
+fate of the O-shell is different across the models: in 1D, a shallow                                 750 s         338         28.4     20.2
+O-burning layer survives and later merges with the shell above, pro-                                1500 s               163            16.7
+ducing a second important merging around 20 000 s. This second                                      3000 s               252             −
+merging is absent in the 3D simulations, where instead the O-shell
+slowly turns off and is entrained by the shell merger above. To better
+                                                                             3.2 The velocity field
+understand what is happening here, we plot in Fig. 5 the evolution
+of the different entropy profiles in the 1D versus the 3D simulations.       Table 3 shows some key quantities for each of the burning shells of
+Here and in other parts of this paper, we compare the 1D and 3D              a360n1024, at four time-steps chosen to represent the key stages of
+simulations at different time-steps, given the different time-scale of       the simulation: the initial configuration at 250 s; right before and after
+evolution between the two; the selected time-steps are listed in Table       the merging at 750 s and 1500 s, respectively; and the final state at
+2. From the figure, we can highlight the differences between the simu-       3000 s. It is not straightforward to analyse the evolution of convective
+lations: starting from a similar configuration (Fig. 5, left), the plateau   shells with such different properties across time and between each
+corresponding to the O-shell between 4 - 5 × 108 cm grows both in            other. The C and Ne shell mergers increase their convective velocity
+radius and in magnitude over time, but much larger and higher in the         by almost one order of magnitude over time, reaching the maximum
+1D model than in 3D. This can be seen as an effect of the lack of en-        right after the merging, and their convective velocity can be up to 10
+tropy mixing in the MESA code, as we already highlighted in Rizzuti          times larger than the one of the O shell. As a result, the convective
+et al. (2023), producing the artefacts visible in Fig. 5, centre. The net    turnover time spans a wide range of values across the different shells,
+result is that the O-shell entropy plateau in 1D can easily overcome         requiring attention when choosing the time windows for a statistical
+the barrier that separates it from the shell merger at 𝑟 > 7 × 108 cm        analysis.
+(Fig. 5, right) and produce a second merging, as visible in Fig. 3,          A detailed analysis of the velocity profiles in the simulations is pre-
+while in 3D the weaker evolution of the entropy plateau preserves            sented in the comprehensive plots of Fig. 6, showing a comparison
+a strong entropy barrier that prevents the second merging. At later          between the 1D and 3D simulations at three different time-steps. In
+times in 3D, the oxygen burning definitely stops and the O-shell is          particular, in 1D 𝑣 con is the mixing-length-theory velocity, and 𝑣 exp
+eventually entrained by the shell merger (see Fig. 3).                       is the radial expansion velocity; in 3D 𝑣 con is the angularly averaged
+It is worth mentioning here also the presence of a second, weaker con-       root-mean-square velocity, and 𝑣 exp is Favre average of the radial
+vective shell below the oxygen-burning one in model a360n1024,               velocity (see next section for definitions). Overall, we can recognise
+which is not present instead in model a60n256 (see Fig. 3). This             the peaks in 𝑣 con that indicate the same convective shells between
+might be the result of the convectively unstable stratification that         1D and 3D, but the shape and magnitude of the curves are intrin-
+generates a second oxygen-burning shell there in the 1D model, but           sically different. The MESA mixing-length-theory velocity (dashed,
+this is more likely an effect of the geometry of the simulation, which       black) does not present the plateaus that characterise a well-mixed
+going towards the polar singularity in the spherical grid may be gen-        zone, and 𝑣 con in the 1D shells can be up to 10 times smaller than
+erating these artefacts. Anyway, we do not treat this shell as physical,     predicted by the 3D (solid, black), whose plateaus are more regu-
+and it is not included in the analysis.                                      lar but slightly affected by the fast nuclear burning. The larger 𝑣 con
+
+                                                                                                                                      MNRAS 000, 1–18 (2024)
+8                                                  Rizzuti et al.
+specific turbulent kinetic energy (erg g−1 )
+
+
+
+
+                                               1014
+
+
+
+                                               1013
+
+
+
+                                               1012
+
+
+
+                                                                                                                                                                               a60n256
+                                               1011
+                                                                                                                                                                               a360n1024
+                                                                                                                                                                               1D MESA
+
+                                                             0               2000           4000           6000                8000              10000                 12000
+                                                                                                              time (s)
+
+
+
+Figure 4. Specific turbulent kinetic energy integrated across the entire domain for simulations a360n1024 and a60n256, compared to the same quantity in the
+1D MESA model, integrated over the same domain.
+
+
+                                        ×108
+    6
+                                                                       1D entr, t=0                             1D entr, t=7198                                      1D entr, t=12518
+                                                                       3D entr, t=250                           3D entr, t=750                                       3D entr, t=1500
+
+    5
+
+
+
+    4
+
+
+
+    3
+
+
+
+    2
+
+
+                                               3         4        5     6    7   8   9 10     3    4        5     6    7   8   9 10          3           4        5     6    7    8   9 10
+                                                             radius (108 cm)                           radius (108 cm)                                       radius (108 cm)
+
+
+Figure 5. Angularly averaged radial profiles of entropy (erg K −1 ), comparison between 1D MESA model (solid) and 3D model a360n1024 (dashed), at different
+times throughout the simulations: initial conditions (left), before (centre) and after (right) the shell merging event.
+
+
+is linked to the shorter time-scale of the 3D simulations compared                                              that largely changes across radius and over time, but we can see that
+to the original 1D model. Furthermore, the expansion velocity 𝑣 exp                                             Ma peaks around 10 −2 at the beginning of both 1D and 3D simu-
+provides insight into what is happening to the layers. Overall, 𝑣 exp                                           lations, and progressively increases throughout the merging event,
+is always orders of magnitude lower than 𝑣 con , so expansion is al-                                            reaching 5 × 10 −2 in the 1D and 1 × 10 −1 in the 3D shell mergers.
+ways negligible over the time-scale of the simulation. In 1D (dashed,                                           This shows once again the wide range of regimes occurring in the
+blue when positive, orange when negative), a small initial contrac-                                             simulations. As previously noted, after the shell merging in 3D the
+tion gives way to an increasing expansion of the layers during the                                              Mach number slightly decreases due to the weakening convection.
+later phases, while in 3D (solid, blue) a small expansion is present                                            For a better understanding of the evolution of the shells, we also
+since the initial phases but still negligible compared to the convective                                        present in Fig. 8 the time evolution of different nuclear energy gener-
+velocity. The key point that Fig. 6 shows is how underestimated the                                             ation rate profiles from model a360n1024. The total nuclear energy
+convective velocity is in 1D compared to its equivalent in 3D.                                                  is an output of the simulation, while the rates for individual reactions
+With the aim of providing a quantitative evaluation, we show in Fig. 7                                          have been recomputed. In particular, carbon burning is reproduced
+the Mach number Ma of the 1D and 3D simulations. This is a variable
+
+MNRAS 000, 1–18 (2024)
+                                                                                                           Shell mergers in massive stars                          9
+
+ 1010
+                                   1D −vexp , t=0                                 1D |vexp |, t=7198                                       1D vexp , t=12518
+       9                           1D vcon , t=0                                  1D vcon , t=7198                                         1D vcon , t=12518
+  10
+                                   3D vexp , t=250                                3D vexp , t=750                                          3D vexp , t=1500
+                                   3D vcon , t=250                                3D vcon , t=750                                          3D vcon , t=1500
+  108
+
+
+  107
+
+
+  106
+
+
+  105
+
+
+  104
+
+
+  103
+               4       6 8 10       20     40   60              4     6 8 10       20        40      60                 4        6 8 10       20      40   60
+                         radius (108 cm)                                radius (108 cm)                                            radius (108 cm)
+
+
+Figure 6. Angularly averaged radial profiles of the expansion and convective velocities in cm s −1 (see text for definitions), comparison between 1D MESA model
+(dashed) and 3D model a360n1024 (solid), at different times throughout the simulations: initial conditions (left), before (centre) and after (right) the shell
+merging event.
+
+
+  100                                                                             with the rate of Arnett (1974a):
+                   3D Ma, t=250            1D Ma, t=0
+                                                                                    nuc
+                   3D Ma, t=750            1D Ma, t=7198                                 = 4.4 × 1018 𝑌ne20 𝜆ne20 [−7.20 (1 − 𝐴) + 8.20𝐵 + 8.35𝐶]
+                                                                                                                  𝛾𝛼
+                                                                                  𝜖¤ne20
+                   3D Ma, t=1500           1D Ma, t=12518                                                                                        𝛼𝛾
+                                                                                                𝛼𝛾                      𝛼𝛾              𝑌mg24 𝜆mg24
+                   3D Ma, t=3000                                                        𝑌o16 𝜆o16              𝑌ne20 𝜆ne20
+                                                                                  𝐴=                 ;    𝐵=                 ;     𝐶=
+ 10−1                                                                                       𝜉                       𝜉                        𝜉
+                                                                                            𝛼𝛾           𝛼𝛾            𝛼𝛾
+                                                                                  𝜉 = 𝑌o16 𝜆o16 + 𝑌ne20 𝜆ne20 + 𝑌mg24 𝜆mg24
+                                                                                                                                                                (4)
+                                                                                                                                                      𝛼𝛾      𝛾𝛼
+                                                                                  with 𝑌ne20 = 𝑋ne20 /20, 𝑌mg24 = 𝑋mg24 /24, and 𝜆o16 , 𝜆ne20 ,
+ 10−2
+                                                                                  𝜆ne20 , 𝜆 mg24 the reaction rates of 16 O (𝛼, 𝛾) 20 Ne, 20 Ne (𝛾, 𝛼) 16 O,
+                                                                                   𝛼𝛾       𝛼𝛾
+
+                                                                                  20 Ne (𝛼, 𝛾) 24 Mg, 24 Mg (𝛼, 𝛾) 28 Si respectively, taken from Caugh-
+                                                                                  lan & Fowler (1988).
+                                                                                  From Fig. 8, we can see that the three convective shells present be-
+ 10−3                                                                             fore the merging correspond to an equal number of peaks in energy
+           3       4     5 6 7 8 9 10           20    30    40 50 60 70
+                                                                                  generation (at 4, 6 and 9 × 108 cm). The shells are fuelled by specific
+                                   radius (108 cm)
+                                                                                  reactions that dominate each environment: the shell around 4 × 108
+                                                                                  cm is always dominated by O-burning throughout the simulation;
+Figure 7. Angularly averaged radial profiles of the Mach number Ma, com-
+                                                                                  the two central burning shells up to the merging are fueled by Ne-
+parison between 1D MESA model (black) and 3D model a360n1024 (blue),              and C-burning, as expected. After 1200 s, the two outermost peaks,
+at different times throughout the simulations.                                    i.e. the C and Ne-burning shells, merge into a single larger peak
+                                                                                  around 6 × 108 cm. The merged shell presents a combination of Ne-
+                                                                                  and C-burning, specifically the bottom of the shell is fueled by Ne-
+                                                                                  burning, but above 6.8 × 108 cm C-burning becomes dominant. At
+by the rate of Arnett (1972):                                                     the same time, the O-burning shell reduces its energy release until it
+  nuc                                                                             completely disappears, as we already discussed above. Additionally,
+𝜖¤c12 = 4.8 × 1018 𝑌c12
+                    2
+                        𝜌 𝜆c12,c12                                       (2)
+                                                                                  some nuclear burning starts taking place also in the outer layers of the
+with 𝑌c12 = 𝑋c12 /12 and 𝜆c12,c12 the reaction rate of                            shell merger (𝑟 > 20×108 cm); this is due to the entrainment of some
+12 C( 12 C, 𝛾) 24 Mg from Caughlan & Fowler (1988). Oxygen burn-                  helium from the upper layers at 𝑟 > 40 × 108 cm (see Fig. 10) and
+ing is represented by the reaction rate from Arnett (1974b):                      the consequent He-burning, especially the 𝛼-capture on the abundant
+                                                                                  oxygen present, according to 16 O(𝛼, 𝛾) 20 Ne. The general picture is
+  nuc
+𝜖¤o16 = 8.0 × 1018 𝑌o16
+                    2
+                        𝜌 𝜆o16,o16                                       (3)      similar to what described in the simulation of Mocák et al. (2018),
+                                                                                  where different burning regions are present within the same convec-
+with 𝑌o16 = 𝑋o16 /16 and 𝜆o16,o16 the reaction rate of                            tive shell. Here in the shell merger we identify three distinct burning
+16 O( 16 O, 𝛾) 32 S from Caughlan & Fowler (1988). On the other hand,             regions within the same shell: Ne-, C- and He-burning.
+neon burning is a more complex set of reactions that can be expressed             Finally, to further study the velocity fields and also highlight the dif-
+
+                                                                                                                                        MNRAS 000, 1–18 (2024)
+10         Rizzuti et al.
+
+                                       ˙nuc
+                                         c12 , t=250                                           ˙nuc
+                                                                                                 c12 , t=750                                          ˙nuc
+                                                                                                                                                        c12 , t=1500
+      18
+ 10                                    ˙nuc                                                   ˙nuc                                                  ˙nuc
+                                         ne20 , t=250                                            ne20 , t=750                                           ne20 , t=1500
+ 1016                                  ˙nuc
+                                         o16 , t=250                                           ˙nuc
+                                                                                                 o16 , t=750                                          ˙nuc
+                                                                                                                                                        o16 , t=1500
+                                       ˙nuc
+                                         tot , t=250                                           ˙nuc
+                                                                                                 tot , t=750                                          ˙nuc
+                                                                                                                                                        tot , t=1500
+ 1014
+
+ 1012
+
+ 1010
+
+  108
+
+  106
+
+  104
+
+  102
+             4      6 8 10       20             40   60                    4   6 8 10       20       40   60                  4     6 8 10       20           40   60
+                      radius (108 cm)                                            radius (108 cm)                                      radius (108 cm)
+
+
+Figure 8. Angularly averaged radial profiles of the nuclear energy generation rate (erg g −1 s −1 ) for C-burning ( 𝜖¤c12
+                                                                                                                        nuc ), Ne-burning ( 𝜖¤ nuc ), O-burning ( 𝜖¤ nuc ),
+                                                                                                                                              ne20                  o16
+                           nuc ), from model a360n1024, taken at different times throughout the simulation: initial conditions (left), before (centre) and after (right)
+and the total burning ( 𝜖¤tot
+the shell merging event.
+
+
+ferences in geometry between the two 3D simulations, we computed                           tions, convection is isotropic throughout the so-called ‘inertial range’,
+the power spectra of the kinetic energy with 2D Fourier transforms.                        deviating from it at the smallest scales due to dissipative effects, and
+We followed here the same procedure as described in Cristini et al.                        at the largest ones because fluid stops being isotropic. All spectra
+(2019), Andrassy et al. (2022) and applied to spherical geometry in                        in Fig. 9 follow the expected Kolmogorov scaling at most scales,
+Rizzuti et al. (2023). Summarizing, we fix the radius 𝑟 = 1 × 109 cm                       but a60n256 does so for a larger real range (4 × 107 - 4 × 108 cm)
+inside the shell merging event, and compute the 2D Fourier transform                       compared to a360n1024 (6 × 107 - 4 × 108 cm) due to its higher
+of the velocity magnitude as a function of the angular coordinates 𝜃                       local resolution, which induces dissipation at smaller spatial scales.
+and 𝜙:                                                                                     It can also be noted that some strong absorption frequencies are
+                                                                                       !   present in the spectra of a360n1024, always with approximately the
+                                                                        𝑘 𝜃 𝑛𝜃 𝑘 𝜙𝑛𝜙       same magnitude and at the same location, but they are not present in
+                                𝑁∑︁    𝜙 −1
+                                 𝜃 −1 𝑁∑︁                       −𝑖2 𝜋         +
+                          1                                              𝑁𝜃     𝑁𝜙         a60n256. These three frequencies correspond to the combinations
+𝑣ˆ rms (𝑘 𝜃 , 𝑘 𝜙 ) =                           𝑣 rms (𝜃, 𝜙)𝑒
+                        𝑁𝜃 𝑁𝜙                                                              where (𝑘 𝜃 , 𝑘 𝜙 ) assume the values of 2 or 6. The fact that they are
+                                𝑛 𝜃 =0 𝑛 𝜙 =0
+                                                                                           constant in time, and only appear in a360n1024 but not in a60n256,
+                                                                                  (5)
+                                                                                           indicates that they are an effect of the geometry of the simulation,
+with 𝑁 𝜃 , 𝑁 𝜙 the numerical resolution, 𝑛 𝜃 , 𝑛 𝜙 the cell numbers, and                   which in the case of a360n1024 is close to but not exactly a full
+𝑘 𝜃 , 𝑘 𝜙 the wave numbers spanning the range:                                             sphere. Without performing a spherical harmonic decomposition,
+        (                                                                                  which would be challenging and artificial in this context, it is dif-
+          𝑖,         if 0 ≤ 𝑖 < 𝑁 𝜃 /2                                                     ficult to derive any additional information about the impact of the
+𝑘𝜃 =
+          𝑖 − 𝑁 𝜃 , if 𝑁 𝜃 /2 ≤ 𝑖 < 𝑁 𝜃                                                    geometry on the velocity field.
+        (                                                             (6)                  Even though the Kolmogorov scaling is commonly invoked to inter-
+           𝑗,         if 0 ≤ 𝑗 < 𝑁 𝜙 /2                                                    pret convection in stellar hydrodynamic simulations, we must recall
+𝑘𝜙 =
+           𝑗 − 𝑁 𝜙 , if 𝑁 𝜙 /2 ≤ 𝑗 < 𝑁 𝜙                                                   that it is not conclusively established whether this choice is accurate
+                                                                                           or not in this context (see e.g. Brandenburg 1992). For example, for
+                                                  1
+From this we define the specific kinetic energy | 𝑣ˆ rms | 2 , function of                 stably stratified turbulence an alternative theory has been derived by
+                                                  2
+                        √︃                                                                 Bolgiano (1959) and Obukhov (1959), finding that kinetic energy
+the wave number 𝑘 = 𝑘 2𝜃 + 𝑘 2𝜙 . Since the radius has been chosen                         scales as 𝐸 K ∼ 𝑘 −11/5 (Bolgiano-Obukhov scaling) in such envi-
+to fall within the shell merger, all spectra have been averaged over                       ronment. Although it is expected that a crossover scale exists (the
+one convective turnover of the C-burning shell at that moment, using                       Bolgiano length) marking the transition between the two scalings,
+the values listed in Table 3. The resulting spectra are shown in Fig. 9,                   this has not yet been unequivocally identified either experimentally
+for simulations a360n1024 (top panel) and a60n256 (bottom panel).                          or numerically (see Lohse & Xia 2010 for more details).
+The spectra with different geometry have a different extent in space,
+since a360n1024 can reach higher 𝑘 compared to a60n256 due to
+its larger number of cells, and larger scales 𝑥 due to its larger domain.
+                                                                                           3.3 Evolution of the chemical composition
+The ‘Kolmogorov theory’ (Kolmogorov 1941) states that for homo-
+geneous isotropic turbulence the rate of energy dissipation is inde-                       We focus now on the analysis of the chemical abundances in the
+pendent of the scale and of the type of dissipative process, therefore                     fluid of simulation a360n1024 and their evolution over time. In
+the kinetic energy scales as 𝐸 K ∼ 𝑣 2rms ∼ 𝑘 −5/3 . In stellar simula-                    this environment of shell mergers and multiple convective regions,
+
+MNRAS 000, 1–18 (2024)
+                                                                                                                  Shell mergers in massive stars             11
+                                          real space x (cm)                              We present in Fig. 10 the radial distribution of some key isotopes at
+                                    109                    108                     107   different time-steps, focusing on the difference between the 1D and
+              1012                                                 r = 1 × 109 cm        the 3D evolution. Starting from very similar initial conditions (top,
+                                                a360n1024
+                                                                          250 s          left panel), we can easily identify before the merging (top, right) the
+              1011                                                        750 s          three initial convective shells: the O-burning one indicated by the
+                                                                          1500 s         plateau between 4 - 5 × 108 cm; the C-burning one above 9 × 108 cm;
+              1010                                                        3000 s         and in between the Ne-burning one shown by the gradient in 20 Ne
+                                                                                         between 6 - 8 × 108 cm, because neon is consumed faster than it is
+2 v̂rms (k)
+
+
+
+
+              109
+                                                                                         mixed. After the merging (bottom, left) and towards the end of the
+1 2
+
+
+
+
+              108                                                                        simulations (bottom, right), a single large plateau is dominating most
+                                                                                         of the domain, progressively extending inwards due to entrainment,
+              107                                                                        and diminishing the abundance of 12 C and 20 Ne due to their burning,
+                                                                                         while producing 16 O, 24 Mg and 28 Si as a result. Entrainment of
+              106                                                                        4 He and 12 C from the rich upper layers (𝑟 > 40 × 108 cm) is also
+
+              105                                                                        noticeable, contributing to the secondary peak in energy generation
+                                                                                         seen in Fig. 8. The comparison between 1D and 3D also yields
+                        100               101                    102                     interesting results: by the end of the simulations, not only the 3D
+                                           wave number, k
+                                                                                         merged shell has a larger size, but most importantly the burning has
+                                          real space x (cm)                              been much more efficient, completely changing the composition and
+                              109                      108                   107
+                                                                                         consuming more 12 C and 20 Ne while producing more 16 O, 24 Mg
+              1013
+                                                   a60n256         r = 1 × 109 cm        and 28 Si compared to the 1D. Additionally, the burning time-scale
+              10   12                                                     250 s          is so much shorter than the mixing one that very often instead of
+                                                                          750 s          plateaus the abundances present gradients in composition.
+              1011                                                        1500 s         This point can be made clearer by calculating the characteristic time-
+                                                                          3000 s
+              1010
+                                                                                         scales in simulation a360n1024. Specifically, making use of the
+2 v̂rms (k)
+
+
+
+
+                                                                                         RANS framework, we define here (see Mocák et al. 2018) the nuclear
+              109                                                                        burning time-scale for an isotope 𝑖:
+1 2
+
+
+
+
+              108                                                                                    𝑋¤ 𝑖
+                                                                                                𝑋𝑖 / f
+                                                                                         𝜏n,𝑖 = f                                                            (8)
+              107                                                                        where 𝑋¤ 𝑖 is the rate of change of isotope 𝑖; and the transport time-
+                                                                                         scale for isotope 𝑖:
+              106
+                                                                                                𝑋𝑖 /(∇ 𝑥 𝑓𝑖 /𝜌)
+                                                                                         𝜏t,𝑖 = f                                                            (9)
+              105
+                                                                                         where 𝑓𝑖 = 𝜌 𝑋    ′′ ′′
+                                                                                                           𝑖 𝑣 r is the turbulent flux of isotope 𝑖. Finally, we
+                                                                                                         
+                              100                   101                     102
+                                           wave number, k                                also define the Damköhler number Da𝑖 = 𝜏t,𝑖 /𝜏n,𝑖 as the ratio of the
+                                                                                         two time-scales. The meaning of Da is that when Da < 1 convective
+Figure 9. Specific kinetic energy spectra as function of the wave number 𝑘               mixing dominates over nuclear burning, so the convective region is
+and the real space 𝑥, taken inside the shell merger, for a360n1024 (top panel)           always well mixed as it is the case in hydrostatic stellar burning;
+and a60n256 (bottom panel), at different times throughout the simulations.               when instead Da ≳ 1 the nuclear burning is proceeding faster than
+The dashed black line is the Kolmogorov scaling 𝑘 −5/3 ; the vertical dotted             mixing, so we see gradients in the chemical composition such as in
+line on the left is the average radial size of the shell merger, the one on the          Fig. 10. The time-scales defined above can be computed for each
+right is the size of 10 cells.                                                           isotope 𝑖 in the simulation, but of course the dominant time-scales
+                                                                                         (i.e. the shortest ones) are those of the elements that are burnt or
+it can be very challenging to disentangle the different contribu-                        mixed the fastest, which vary throughout the simulation.
+tions coming from convective mixing, nuclear burning and entrain-                        We show in Fig. 11 the time-scales and Da number for 12 C,16 O
+ment. In this section, we make use of a mean-field statistical analy-                    and 20 Ne in a360n1024 right before the merging, as representa-
+sis tool, the Reynolds-averaged Navier-Stokes (RANS) open-source                         tive of the burning in the multiple convective shells; we include a
+code RANSX1 , developed for hydrodynamic simulations in spherical                        more comprehensive study in Appendix B, Fig. B1 at three different
+geometry by Mocák et al. (2014, 2018). Summarizing, in the RANS                          time-steps. The first thing that we see is that at the bottom of the
+framework the Reynolds average (time and angular averaging) of a                         convective regions (shaded in grey) there is a dip in the time-scales,
+quantity 𝑞 on a spherical shell at radius 𝑟 is                                           corresponding to the element that is burnt or mixed the fastest in the
+                                                                                         Ne- and C-burning shells; for the O-shell instead, the element that is
+                                                                                         processed the fastest is 12 C, but this is due to its very low abundance
+               ∫ 𝑇∫
+           1
+𝑞(𝑟) =                  𝑞(𝑟, 𝜃, 𝜙, 𝑡) d𝑡 dΩ                       (7)
+         𝑇ΔΩ 0      ΔΩ                                                                   in the shell. At all times, in the outer regions (𝑟 > 10 × 108 cm)
+with dΩ = sin 𝜃d𝜃d𝜙 the solid angle element, 𝑇 the time window, ΔΩ                       the transport always strongly dominates over the nuclear burning,
+the solid angle of the shell. Then, the Favre average (density-weighted                  as we can see from the very low Da, but for the inner regions this
+average) is defined as 𝑞e = 𝜌𝑞/𝜌. Therefore, the field decomposition                     is often not the case. The Damköhler number in the inner regions
+is done as 𝑞 = 𝑞 + 𝑞 ′ or 𝑞 = 𝑞e+ 𝑞 ′′ , with 𝑞 ′ , 𝑞 ′′ being the fluctuations          strongly fluctuates and often exceeds 1, presenting some important
+of quantity 𝑞.                                                                           peaks above Da ∼ 10. Looking carefully, we can see that some of the
+                                                                                         largest peaks correspond to the bottom of the convective shells, where
+                                                                                         the burning is taking place. Some of the regions where Da > 1 in-
+1    https://github.com/mmicromegas/ransX                                                side the convective shells are large, and they correspond to the layers
+
+                                                                                                                                       MNRAS 000, 1–18 (2024)
+12                         Rizzuti et al.
+
+                                                           1D, t=0                    3D, t=250                                             1D, t=7198                    3D, t=750
+
+
+                  100       28
+                                                                                              4
+                                                                                                  He     100      28
+                                                                                                                                                                                  4
+                                                                                                                                                                                      He
+                                 Si                                                                                    Si
+                                                              16                                                                                  16
+                                                                   O                                                                                   O
+ mass fraction
+
+
+
+
+                                                                       20                                                                                  20
+                                                                            Ne                                                                                  Ne
+
+
+
+                 10−1                                                                                   10−1
+
+                                                                                                                                       24
+                                                 24
+                                                      Mg                                                                                    Mg
+                                                                                                                                        12 C
+                                                  12 C
+
+
+
+                 10−2                                                                                   10−2
+                                      4   6   8 10            20                 40      60                                 4   6   8 10          20                 40      60
+
+
+
+                                                  1D, t=12518                     3D, t=1500                                            1D, t=18485                   3D, t=3000
+
+
+                  100                                                                         4
+                                                                                                  He     100                                                                      4
+                                                                                                                                                                                      He
+                            28                                                                                    28
+                                 Si                           16                                                       Si                         16
+                                                                                                                                                       O
+                                                                   O
+ mass fraction
+
+
+
+
+                                                                       20
+                                                                            Ne
+                                                                                                                                                           20 Ne
+                                                                                                                                       24
+                      −1                                                                                     −1                             Mg
+                 10                              24 Mg
+                                                                                                        10
+
+
+
+
+                                                  12
+                                                       C
+                                                                                                                                        12 C
+                 10−2                                                                                   10−2
+                                      4   6   8 10          20                   40      60                                 4   6   8 10          20                 40      60
+                                                radius (108 cm)                                                                       radius (108 cm)
+
+
+
+Figure 10. Angularly averaged radial profiles of mass fraction for 4 He, 12 C, 16 O, 20 Ne, 24 Mg, and 28 Si, for the 1D MESA model (dashed) and 3D model
+a360n1024 (solid), at different times throughout the simulations: initial conditions (top, left), before (top, right) and after (bottom, left) the shell merging event,
+and towards the end (bottom, right).
+
+
+where a gradient in chemical composition is maintained (compare                                        tween 6 - 8 × 108 cm is burning mostly 20 Ne to produce 16 O and
+to Fig. 10), such as the Ne-burning region at 𝑟 = 6 - 7 × 108 cm,                                      28 Si; and the outermost shell is burning mostly 12 C to produce 20 Ne
+and the C-burning one at 𝑟 = 9 - 10 × 108 cm, before the merging.                                      (compare to Fig. 3). When the C and the Ne-burning shells merge
+Overall, we can conclude that in this highly dynamical environment                                     (𝑡 = 750 - 1500 s, Fig. 12), a single convective region forms, burning
+the nuclear burning is so efficient that the convective shells are rarely                              both 20 Ne and 12 C to generate 16 O, 24 Mg and 28 Si. We also note
+well mixed, especially near the burning locations.                                                     that the magnitude of the flux increases right after the merging by an
+Focusing now only on the transport mechanism, it is possible to                                        order of magnitude, as a result of the increase in radial velocity, and
+study the radial transport of the isotopes with the mean-field radial                                  later with time it starts reducing again, as it is the case also for the
+flux that we defined above as 𝑓i = 𝜌 𝑋    ′′ ′′                                                        kinetic energy (see Fig. 4).
+                                         i 𝑣 r for a species 𝑖. In Fig. 12
+                                       
+we show the flux profiles for the most important isotopes of simula-                                   Finally, we calculate the normalized standard deviation of the mass
+                                                                                                                                           ′′ ′′ 1/2 / 𝑋¯ for a species 𝑖. Fig-
+                                                                                                       fraction, defined as 𝜎𝑖 / 𝑋¯ 𝑖 = ( 𝑋
+tion a360n1024, at the usual four time-steps. The evolution of the                                                                         𝑖 𝑋𝑖 )        𝑖
+flux for each element is a direct result of the mixing of material that                                                        ¯
+                                                                                                       ure 13 shows the 𝜎𝑖 / 𝑋𝑖 profiles for the key isotopes of simulation
+brings the fuel towards the burning regions and the ashes away from                                    a360n1024 before and after the shell merging. Although it is chal-
+them; in this sense, the flux profiles are also a proxy of the nuclear                                 lenging to distinguish the precise layers in these plots, they still
+burning occurring in each layer. Here, positive and negative values                                    provide an estimate of the magnitude of the chemical dispersion,
+of the flux represent upward and downward transport of species, re-                                    which also represents the deviation from the spherical symmetry as-
+spectively. At the beginning of the simulation (top, left of Fig. 12),                                 sumed in 1D models. Before the merging, the normalized dispersion
+the four convective regions are clearly identified by the peaks and                                    can reach up to 200 per cent at the convective boundaries, but inside
+valleys in the flux, as a result of the upward and downward trans-                                     the convective regions it is closer to 10 - 20 per cent for 12 C and up
+port of ashes and fuel, respectively. Specifically, the two innermost                                  to a few per cent for the other isotopes. However, after the merging
+shells are burning mainly 16 O to produce 28 Si; the central shell be-                                 the peaks in normalized deviation go beyond 300 per cent, while the
+
+MNRAS 000, 1–18 (2024)
+                                                                                                                            Shell mergers in massive stars                    13
+
+          106 106                                                  104                          Da 12 C , t=250              104                                     t=250
+                                                                                                                                                           Da 12 C , t=750
+                                                                                                Da 16 O , t=250                                                      t=250
+                                                                                                                                                           Da 16 O , t=750
+          105 105                                                                               Da 20 Ne , t=250                                                      t=250
+                                                                                                                                                           Da 20 Ne , t=750
+                                                                   103                                                       103
+
+          104 104
+
+                                                                   102                                                       102
+          103 103
+
+
+          102 102                                                  101                                                       101
+
+
+t=250 101 101                          τn,12 Cτt,12
+                                                 ,C     t=250
+                                                      , t=750
+                                                    t=250                                            τt,1212,CC
+                                                                                               τn,12τC
+                                                                                                     t,         , ,t=1500
+                                                                                                              t=750 t=750                                     τt,12, C
+                                                                                                                                                        τn,12 C        , t=1500
+                                                                                                                                                                     t=1500
+                                                                   100                                                       100
+ t=250                                 τn,16 Oτt,16, O    t=250
+                                                        , t=750
+                                                     t=250                                           τt,1616O
+                                                                                               τn,16τO
+                                                                                                     t,   ,O    , ,t=1500
+                                                                                                              t=750 t=750                                     τt,16, O
+                                                                                                                                                        τn,16 O        , t=1500
+                                                                                                                                                                     t=1500
+          0   0
+, t=250 10 10                                 τt,20, Ne
+                                       τn,20 Ne      t=250t=250
+                                                        , t=750                                      τt,2020Ne
+                                                                                               τn,20τNe
+                                                                                                     t,     , Ne, ,t=1500
+                                                                                                              t=750 t=750                                     τt,20, Ne
+                                                                                                                                                        τn,20 Ne        , t=1500
+                                                                                                                                                                     t=1500
+                                                                       −1                                                        −1
+                                                                  10                                                        10
+40   60             4   46 8610 8 10 20 20 40 4060 60                       44 466 86810
+                                                                                       108 10 20  20 20 40 40 40
+                                                                                                              60
+                                                                                                               60 60                  44 466 86810
+                                                                                                                                                 108 10 20  20 20 40  40 40
+                                                                                                                                                                         60
+                                                                                                                                                                          60 60    4
+                           radius (108 (10
+                               radius  cm)8 cm)                                    radius
+                                                                                    radius  (108 8(10
+                                                                                           (10
+                                                                                        radius    cm)
+                                                                                                   cm)8
+                                                                                                        cm)                                  radius
+                                                                                                                                              radius  (108 8(10
+                                                                                                                                                     (10
+                                                                                                                                                  radius     cm)8
+                                                                                                                                                              cm) cm)
+
+
+             Figure 11. Angularly averaged radial profiles of the transport time-scale 𝜏t (left), the nuclear burning time-scale 𝜏n (centre), and the ratio between the two
+             (Damköhler number Da, right), for the 3D model a360n1024 at 750 s, averaged over 333 s; the convective shells are shaded.
+
+
+             values inside the merged region have also increased to 30 per cent for             produce the multiple burning phases. The 3D simulations confirm
+             12 C and 28 Si, and at least 10 per cent for 20 Ne and 24 Mg. Overall,             the occurrence of a merging between the carbon-burning and the
+             these values are very large, especially compared to the dispersion in              neon-burning shells as shown in the original 1D model. We analysed
+             more conventional burning phases, such as the Ne-burning shell in                  both the dynamics and nucleosynthesis aspects of the 3D simula-
+             Rizzuti et al. (2023) (see their fig. 15).                                         tions, making use of mean-field analysis tools, and focusing on the
+             To study these variations in more detail, we also show in Fig. 14                  significant differences from the initial-condition 1D model.
+             the fluctuations in 12 C,16 O and 20 Ne abundances around the mean                 Differently from the 1D model, the merging in 3D is driven by the
+             value, in angular cross-sections taken after the shell merging. The plot           entrainment of material from the stable regions into the convective
+             shows that the fluctuations are not mixed homogeneously across the                 ones, progressively eroding the stable layers that separate convec-
+             surface, but they are arranged in large-scale structures, dividing the             tive shells and making the merging possible. The time-scale for the
+             surface in almost two distinct regions, of which one is overabundant               merging is much faster in 3D than in 1D: while this can still be an
+             in 16 O and underabundant in 12 C and 20 Ne, reflecting the nuclear                effect of the new equilibrium of the stratification recomputed onto
+             burning discussed above. This behaviour is an effect of the highly                 the 3D grid, we cannot ignore the fact that several recent studies
+             dynamical environment of the shell mergers, and it can have a sig-                 (Arnett et al. 2018; Rizzuti et al. 2023; Georgy et al. 2024) indicate
+             nificant impact on the stellar nucleosynthesis, especially in relation             that the mixing-length-theory velocity assumed in 1D models may
+             to the following supernova explosion, leading to large fluctuations in             be actually underestimated.
+             the different abundances within the ejected material.                              The shell merger we simulated also proved to be an interesting site
+                                                                                                for nucleosynthesis, presenting an efficient nuclear burning of both
+                                                                                                carbon and neon within the same convective region, as also found in
+                                                                                                similar environments (Mocák et al. 2018). Due to this very energetic
+             4 CONCLUSIONS                                                                      burning, the chemical composition and size of the convective regions
+             A good understanding of the structure and evolution of massive stars               after the merging in 3D are very different from their equivalent in
+             is crucially important for many fields in astrophysics. This becomes               1D. Most importantly, the angular dispersion of species is extremely
+             particularly challenging when addressing the advanced phases of                    large, as a result of the highly dynamical environment, marking a
+             massive stars, whose internal structure is organised in concentric                 net difference from the 1D model, where by definition of spherical
+             shells with multiple convective regions that can interact. In this pa-             symmetry the angular dispersion is always null. In the context of
+             per, we have produced and analysed 3D hydrodynamic simulations of                  stellar nucleosynthesis, this behaviour could have a noticeable im-
+             the merging of two convective shells into a single larger one, several             pact on the predictions of stellar yields for massive stars, affecting
+             hours before the final collapse of the star. This environment is of great          the structure and composition of the ejecta.
+             interest for studying the evolution of the stellar structure towards its           With this paper, we aimed to address some of the uncertainties re-
+             final phases and the nucleosynthesis paths that can be enabled.                    lated to the evolution of massive stars, in order to improve our under-
+             The simulations have been started from initial conditions assumed                  standing of the complex multi-D processes and provide insight into
+             from a 1D model of a 20 M ⊙ star that predicts the merging of multi-               the simplifying assumptions included in 1D stellar models. This is
+             ple convective shells. We designed a nearly 4𝜋 geometry, performing                particularly important considering that, given the very high compu-
+             a comparison with the more usual ‘wedge’ geometry, and we ran the                  tational cost required for running multi-dimensional simulations, the
+             3D stellar simulations at nominal luminosity (i.e. without altering                1D models remain the main tools for predicting and explaining the
+             the energy generation) including an extensive nuclear network to re-               evolution of stellar populations. It is the interplay between 1D and
+
+                                                                                                                                                      MNRAS 000, 1–18 (2024)
+14                           Rizzuti et al.
+
+                           2.0                                                                                               2.0
+                                                                                    t = 250 s                                                                                          t = 750 s
+                           1.5                                                            f12 C                              1.5                                                            f12 C
+                                                                                          f16 O                                                                                             f16 O
+                     g cm−2 s−1 )
+
+
+
+
+                                                                                                                       g cm−2 s−1 )
+                           1.0                                                            f20 Ne                             1.0                                                            f20 Ne
+                                                                                          f24 Mg                                                                                            f24 Mg
+                           0.5                                                            f28 Si                             0.5                                                            f28 Si
+                                                                                          ftot                                                                                              ftot
+                  10
+
+
+
+
+                                                                                                                    10
+         i vr (10
+
+
+
+
+                                                                                                           i vr (10
+                           0.0                                                                                               0.0
+         00 00
+
+
+
+
+                                                                                                           00 00
+ fi = ρ Xg
+
+
+
+
+                                                                                                   fi = ρ Xg
+                     −0.5                                                                                              −0.5
+
+                     −1.0                                                                                              −1.0
+
+                     −1.5                                                                                              −1.5
+
+                     −2.0                                                                                              −2.0
+                                        3   4   5   6 7 8 9 10            20   30    40 50 60 70                                           3   4   5   6 7 8 9 10            20   30    40 50 60 70
+                                                             radius (108 cm)                                                                                    radius (108 cm)
+
+                            10                                                                                                 10
+
+
+                                5                                                                                                     5
+                         g cm−2 s−1 )
+
+
+
+
+                                                                                                                            g cm−2 s−1 )
+
+                                0                                                                                                     0
+                      10
+
+
+
+
+                                                                                                                         10
+
+
+
+
+                              -5                                                                                                -5
+             i vr (10
+
+
+
+
+                                                                                                                i vr (10
+
+
+
+
+                                                                                    t = 1500 s                                                                                         t = 3000 s
+             00 00
+
+
+
+
+                                                                                                                00 00
+     fi = ρ Xg
+
+
+
+
+                                                                                                        fi = ρ Xg
+
+
+
+
+                         -10                                                             f12 C                              -10                                                             f12 C
+                                                                                         f16 O                                                                                              f16 O
+                         -15                                                             f20 Ne                             -15                                                             f20 Ne
+                                                                                         f24 Mg                                                                                             f24 Mg
+                                                                                         f28 Si                                                                                             f28 Si
+                         -20                                                             ftot                               -20                                                             ftot
+
+                                        3   4   5   6 7 8 9 10            20   30    40 50 60 70                                           3   4   5   6 7 8 9 10            20   30    40 50 60 70
+                                                             radius (108 cm)                                                                                    radius (108 cm)
+
+
+
+Figure 12. Radial flux profiles of 12 C, 16 O, 20 Ne, 24 Mg, and 28 Si, from simulation a360n1024 at 250 s (top, left), 750 s (top, right), 1500 s (bottom, left)
+and 3000 s (bottom, right), averaged over 150 s, 333 s, 200 s and 500 s, respectively. The black line is the sum of the flux profiles for all the 12 isotopes in the
+network.
+
+
+multi-D models that really pushes forwards our knowledge of stellar                                            be possible to run stellar simulations with progressively increasing
+evolution. 1D models have been shown to require revision in their                                              resolution and longer time-scales.
+treatment of convection, in particular concerning the size of convec-                                          Finally, we recall that a good understanding of stellar structure and
+tive zones and the shape of convective boundaries, as discussed in                                             evolution has a significant impact on different fields, ranging from
+recent works (Arnett et al. 2018; Cristini et al. 2019; Rizzuti et al.                                         studies of supernova progenitors and explosion mechanisms (Müller
+2023; Andrassy et al. 2024).                                                                                   & Janka 2015; Burrows & Vartanyan 2021), through the production
+On the other hand, hydrodynamic models have also significant poten-                                            of accurate progenitor models as initial conditions, to predictions on
+tial for improvement. Recent studies have started simulating the late                                          the nature and physics of the remnants and the final-initial mass rela-
+stages of stellar convection including self-consistent magnetic fields                                         tion (Kaiser et al. 2020; Scott et al. 2021), but also the interpretation
+coming from dynamo effects (Varma & Müller 2021; Leidi et al.                                                  of observations and asteroseismic measurements (Aerts 2021; Peder-
+2023; Varma & Müller 2023); this will put important constraints on                                             sen et al. 2021), to nuclear physics and galactic chemical evolution.
+the amount of kinetic energy and turbulent motions that the fluid can                                          This multi-disciplinary approach will help tackle astrophysical prob-
+build up. Additionally, recent works are also showing that a contin-                                           lems that are still unsolved today, such as the red supergiant problem
+uously increasing number of chemical species can be now included                                               (Smartt et al. 2009) and the black hole mass gap (Woosley & Heger
+directly into the numerical simulations (Couch et al. 2015; Müller                                             2021).
+et al. 2016; Mocák et al. 2018; Yoshida et al. 2019), contributing to
+the energy release and production of new species. With the advent of
+larger computing facilities and new types of processing units, it will
+
+MNRAS 000, 1–18 (2024)
+                                                                                                                                                      Shell mergers in massive stars                15
+
+
+
+                                    100                                                                                        100
+
+
+
+
+                                                                                              normalised standard deviation
+ normalised standard deviation
+
+
+
+
+                                  10−1                                                                                        10−1
+
+
+
+                                  10−2        t = 250 s                                                                       10−2                            t = 1500 s
+                                                  σ12 C /X12 C                                                                                                  σ12 C /X12 C
+                                                  σ16 O /X16 O                                                                                                  σ16 O /X16 O
+                                                  σ20 Ne /X20 Ne                                                                                                σ20 Ne /X20 Ne
+                                  10−3            σ24 Mg /X24 Mg                                                              10−3                              σ24 Mg /X24 Mg
+                                                  σ28 Si /X28 Si                                                                                                σ28 Si /X28 Si
+
+                                          3   4     5 6 7 8 910           20   30   40 50 60 70                                      3   4   5 6 7 8 910           20                30   40 50 60 70
+                                                             radius (108 cm)                                                                          radius (108 cm)
+
+Figure 13. Normalized standard deviation profiles of 12 C, 16 O, 20 Ne, 24 Mg, and 28 Si as a function of the stellar radius, from simulation a360n1024 at 250 s
+(left) and 1500 s (right), averaged over 150 s and 200 s, respectively.
+
+
+                                 45◦                                                                                                                                                        0.026
+
+
+
+
+                                                                                                                                                                                                           12
+                                                                                                                                                                                                    C mass fraction
+                                                                                                                                                                                            0.021
+
+                                  0◦                                                                                                                                                        0.016
+θ
+
+
+
+
+                                                                                                                                                                                            0.011
+
+                                 -45◦                                                                                                                                                       0.006
+
+                                 45◦                                                                                                                                                        0.647
+
+
+
+
+                                                                                                                                                                                                           16
+                                                                                                                                                                                                    O mass fraction
+                                                                                                                                                                                            0.637
+
+                                  0◦                                                                                                                                                        0.628
+θ
+
+
+
+
+                                                                                                                                                                                            0.619
+
+                                 -45◦                                                                                                                                                       0.609
+
+                                 45◦                                                                                                                                                        0.304
+                                                                                                                                                                                                           20
+                                                                                                                                                                                                    Ne mass fraction
+
+
+                                                                                                                                                                                            0.274
+
+                                  0◦                                                                                                                                                        0.245
+θ
+
+
+
+
+                                                                                                                                                                                            0.216
+
+                                 -45◦                                                                                                                                                       0.186
+                                     -180◦                         -90   ◦
+                                                                                        0◦
+                                                                                                                                             90   ◦
+                                                                                                                                                                           180   ◦
+
+                                                                                        φ
+
+
+Figure 14. Angular cross-sections taken at 𝑟 = 1 × 109 cm from simulation a360n1024 at 1500 s, right after the shell merging, showing the fluctuations in
+12 C, 16 O and 20 Ne mass fractions in colour scale, spanning 2𝜎 around the mean value.
+
+
+
+
+                                                                                                                                                                            MNRAS 000, 1–18 (2024)
+16       Rizzuti et al.
+ACKNOWLEDGEMENTS                                                                 Freytag B., Ludwig H. G., Steffen M., 1996, A&A, 313, 497
+                                                                                 Freytag B., Liljegren S., Höfner S., 2017, A&A, 600, A137
+FR acknowledges the grant PRIN project No. 2022X4TM3H ‘Cos-                      Georgy C., et al., 2024, MNRAS, 531, 4293
+mic POT’ from Ministero dell’Università e della Ricerca (MUR).                   Herwig F., 2000, A&A, 360, 952
+RH acknowledges support from the World Premier International Re-                 Herwig F., et al., 2023, MNRAS, stad2157
+search Centre Initiative (WPI Initiative), MEXT, Japan, the IReNA                Hirschi R., Meynet G., Maeder A., 2004, A&A, 425, 649
+AccelNet Network of Networks (National Science Foundation, Grant                 Kaiser E. A., Hirschi R., Arnett W. D., Georgy C., Scott L. J. A., Cristini A.,
+No. OISE-1927130) and the Wolfson Foundation. WDA acknowl-                           2020, MNRAS, 496, 1967
+edges support from the Theoretical Astrophysics Program (TAP)                    Kolmogorov A., 1941, Akademiia Nauk SSSR Doklady, 30, 301
+at the University of Arizona and Steward Observatory. CG has re-                 Leidi G., Andrassy R., Higl J., Edelmann P. V. F., Röpke F. K., 2023, A&A,
+                                                                                     679, A132
+ceived funding from the European Research Council (ERC) under
+                                                                                 Lohse D., Xia K.-Q., 2010, Annual Review of Fluid Mechanics, 42, 335
+the European Union’s Horizon 2020 research and innovation pro-                   Meakin C. A., Arnett D., 2007, ApJ, 667, 448
+gram (Grant No. 833925). The University of Edinburgh is a chari-                 Mocák M., Meakin C., Viallet M., Arnett D., 2014, preprint
+table body, registered in Scotland, with Registration No. SC005336.                  (arXiv:1401.5176)
+CG, RH, and CM acknowledge ISSI, Bern, for its support in or-                    Mocák M., Meakin C., Campbell S. W., Arnett W. D., 2018, MNRAS, 481,
+ganising collaboration. This article is based upon work from the                     2918
+ChETEC COST Action (CA16117) and the European Union’s Hori-                      Müller B., 2020, Living Reviews in Computational Astrophysics, 6, 3
+zon 2020 research and innovation programme (ChETEC-INFRA,                        Müller B., Janka H. T., 2015, MNRAS, 448, 2141
+Grant No. 101008324). The authors acknowledge the STFC DiRAC                     Müller B., Viallet M., Heger A., Janka H.-T., 2016, ApJ, 833, 124
+HPC Facility at Durham University, UK (Grants ST/P002293/1,                      Nugis T., Lamers H. J. G. L. M., 2000, A&A, 360, 227
+                                                                                 Obukhov A. M., 1959, Dokl. Akad. Nauk. SSSR, 64, 1246
+ST/R002371/1, ST/R000832/1, ST/K00042X/1, ST/H008519/1, ST/
+                                                                                 Paxton B., Bildsten L., Dotter A., Herwig F., Lesaffre P., Timmes F., 2011,
+K00087X/1, and ST/K003267/1).                                                        ApJS, 192, 3
+                                                                                 Paxton B., et al., 2013, ApJS, 208, 4
+                                                                                 Paxton B., et al., 2018, ApJS, 234, 34
+DATA AVAILABILITY                                                                Paxton B., et al., 2019, ApJS, 243, 10
+                                                                                 Pedersen M. G., et al., 2021, Nature Astronomy, 5, 715
+The data underlying this article will be shared on reasonable request            Rauscher T., Heger A., Hoffman R. D., Woosley S. E., 2002, ApJ, 576, 323
+to the corresponding author.                                                     Ritter C., Andrassy R., Côté B., Herwig F., Woodward P. R., Pignatari M.,
+                                                                                     Jones S., 2018, MNRAS, 474, L1
+                                                                                 Rizzuti F., Hirschi R., Georgy C., Arnett W. D., Meakin C., Murphy A. S.,
+                                                                                     2022, MNRAS, 515, 4013
+REFERENCES                                                                       Rizzuti F., Hirschi R., Arnett W. D., Georgy C., Meakin C., Murphy A. S.,
+Aerts C., 2021, Rev. Mod. Phys., 93, 015001                                          Rauscher T., Varma V., 2023, MNRAS, 523, 2317
+Andrassy R., Herwig F., Woodward P., Ritter C., 2020, MNRAS, 491, 972            Roberti L., Pignatari M., Psaltis A., Sieverding A., Mohr P., Fülöp Z., Lugaro
+Andrassy R., et al., 2022, A&A, 659, A193                                            M., 2023, A&A, 677, A22
+Andrassy R., Leidi G., Higl J., Edelmann P. V. F., Schneider F. R. N., Röpke     Roberti L., Limongi M., Chieffi A., 2024, ApJS, 270, 28
+    F. K., 2024, A&A, 683, A97                                                   Scott L. J. A., Hirschi R., Georgy C., Arnett W. D., Meakin C., Kaiser E. A.,
+Arnett W. D., 1972, ApJ, 176, 699                                                    Ekström S., Yusof N., 2021, MNRAS, 503, 4208
+Arnett W. D., 1974a, ApJ, 193, 169                                               Shu F. H., 1982, The Physical Universe: An Introduction to Astronomy.
+Arnett W. D., 1974b, ApJ, 194, 373                                                   University Science Books, Herndon
+Arnett D., Meakin C., Young P. A., 2009, ApJ, 690, 1715                          Smartt S. J., Eldridge J. J., Crockett R. M., Maund J. R., 2009, MNRAS, 395,
+Arnett W. D., et al., 2018, preprint (arXiv:1810.04659)                              1409
+Asplund M., Grevesse N., Sauval A. J., Scott P., 2009, ARA&A, 47, 481            Sukhbold T., Woosley S. E., 2014, ApJ, 783, 10
+Böhm-Vitense E., 1958, Z. Astrophys., 46, 108                                    Timmes F. X., Arnett D., 1999, ApJS, 125, 277
+Bolgiano Jr. R., 1959, Journal of Geophysical Research (1896-1977), 64,          Tur C., Heger A., Austin S. M., 2007, ApJ, 671, 821
+    2226                                                                         Varma V., Müller B., 2021, MNRAS, 504, 636
+Bowman D. M., 2020, Frontiers Astron. Space Sci., 7, 70                          Varma V., Müller B., 2023, MNRAS, 526, 5249
+Brandenburg A., 1992, Phys. Rev. Lett., 69, 605                                  Viallet M., Meakin C., Prat V., Arnett D., 2015, A&A, 580, A61
+Brott I., et al., 2011, A&A, 530, A115                                           Vink J. S., de Koter A., Lamers H. J. G. L. M., 2000, A&A, 362, 295
+Burrows A., Vartanyan D., 2021, Nature, 589, 29                                  Vink J. S., de Koter A., Lamers H. J. G. L. M., 2001, A&A, 369, 574
+Castro N., Fossati L., Langer N., Simón-Díaz S., Schneider F. R. N., Izzard      Woosley S. E., Heger A., 2021, ApJ, 912, L31
+    R. G., 2014, A&A, 570, L13                                                   Woosley S. E., Howard W. M., 1978, ApJS, 36, 285
+Caughlan G. R., Fowler W. A., 1988, Atomic Data and Nuclear Data Tables,         Yadav N., Müller B., Janka H. T., Melson T., Heger A., 2020, ApJ, 890, 94
+    40, 283                                                                      Yoshida T., Takiwaki T., Kotake K., Takahashi K., Nakamura K., Umeda H.,
+Cescutti G., Matteucci F., Caffau E., François P., 2012, A&A, 540, A33               2019, ApJ, 881, 16
+Chiavassa A., Freytag B., Masseron T., Plez B., 2011, A&A, 535, A22              de Jager C., Nieuwenhuĳzen H., van der Hucht K. A., 1988, A&AS, 72, 259
+Collins C., Müller B., Heger A., 2018, MNRAS, 473, 1695
+Couch S. M., Chatzopoulos E., Arnett W. D., Timmes F. X., 2015, ApJ, 808,
+    L21
+Cristini A., Meakin C., Hirschi R., Arnett D., Georgy C., Viallet M., Walk-      APPENDIX A: INSIGHT INTO THE 3D SIMULATIONS
+    ington I., 2017, MNRAS, 471, 279
+Cristini A., Hirschi R., Meakin C., Arnett D., Georgy C., Walkington I., 2019,   In order to better illustrate the structure of the 3D simulations pre-
+    MNRAS, 484, 4645                                                             sented in this work, and complementarily to Fig. 2, we display in
+Cyburt R. H., et al., 2010, ApJS, 189, 240                                       Fig. A1 two cross-sections taken from a360n1024, one showing the
+Davis A., Jones S., Herwig F., 2019, MNRAS, 484, 3921                            equatorial plane (top panel) and the other a longitudinal plane from
+Ekström S., et al., 2012, A&A, 537, A146                                         two sides of the polar axis (bottom panel).
+
+MNRAS 000, 1–18 (2024)
+                                                                                                       Shell mergers in massive stars                     17
+
+                                                                 90◦
+
+
+
+                           135◦                                                                       45◦
+                                                                                                                                    1.00 × 108
+
+
+
+
+                                                                                                                                    7.50 × 107
+
+
+
+            180◦                                                                                                     0◦
+                                                                                                                                    5.00 × 107
+
+
+
+
+                                                                                                                                    2.50 × 107
+
+
+
+
+                                                                                                                                    0.00 × 100
+                           225◦                                                                      315◦
+
+
+
+                                                                270◦
+                            45◦                                                                          45◦
+                                       6
+                                            5
+                                                  R (109 cm)                                                                          1.0 × 108
+                                                 4
+                                                      3
+                                                            2                                                                         7.5 × 107
+                                                                 1
+
+
+            0◦                                                                                                            0◦
+                                                                                                                                      5.0 × 107
+
+                                                                       1
+                                                                            2
+                                                                                                                                      2.5 × 107
+                                                                                 3
+                                                                                     4
+                                                                           R (109 cm)
+                                                                                            5                                         0.0 × 100
+                                                                                                 6
+                           -45◦                                                                          -45◦
+
+Figure A1. Equatorial (top panel) and longitudinal (bottom panel) cross-sections taken from a360n1024 after 1500 seconds, with the fluid speed in colour scale
+in cm s −1 . The two frames show the 360◦ range of the 𝜙-angle (top) and two opposite sides of the 90◦ range of the 𝜃-angle (bottom).
+
+
+
+
+                                                                                                                                   MNRAS 000, 1–18 (2024)
+18       Rizzuti et al.
+APPENDIX B: EVOLUTION OF THE TIME-SCALES
+We display here the time evolution of the key time-scales in the
+hydrodynamic simulations, as introduced in Section 3.3: the transport
+time-scale 𝜏t , the nuclear burning time-scale 𝜏n , and the ratio between
+the two (Damköhler number, Da), for isotopes 12 C,16 O and 20 Ne.
+Complementarily to Fig. 11, we plot in Fig. B1 the radial profiles of
+the time-scales and Damköhler number at three different time-steps
+throughout simulation a360n1024.
+
+This paper has been typeset from a TEX/LATEX file prepared by the author.
+
+
+
+
+MNRAS 000, 1–18 (2024)
+                                                                                                           Shell mergers in massive stars                        19
+
+ 106
+
+
+ 105
+
+
+ 104
+
+
+ 103
+
+
+ 102
+
+
+ 101                            τt,12 C , t=250                                        τt,12 C , t=750                                      τt,12 C , t=1500
+                                τt, O , t=250
+                                   16                                                  τt, O , t=750
+                                                                                          16                                                τt,16 O , t=1500
+ 100                            τt,20 Ne , t=250                                       τt,20 Ne , t=750                                     τt,20 Ne , t=1500
+
+           4       6 8 10       20       40    60                4     6 8 10       20         40    60                 4     6 8 10       20         40    60
+                     radius (108 cm)                                     radius (108 cm)                                        radius (108 cm)
+
+ 106
+
+
+ 105
+
+
+ 104
+
+
+ 103
+
+
+ 102
+
+
+ 101                            τn,12 C , t=250                                       τn,12 C , t=750                                       τn,12 C , t=1500
+                                τn,16 O , t=250                                       τn,16 O , t=750                                       τn,16 O , t=1500
+ 100                            τn,20 Ne , t=250                                      τn,20 Ne , t=750                                      τn,20 Ne , t=1500
+
+           4       6 8 10       20       40    60                4     6 8 10       20         40    60                 4     6 8 10       20         40    60
+                     radius (108 cm)                                     radius (108 cm)                                        radius (108 cm)
+
+  104                            Da 12 C , t=250                                       Da 12 C , t=750                                      Da 12 C , t=1500
+                                 Da 16 O , t=250                                       Da 16 O , t=750                                      Da 16 O , t=1500
+                                 Da 20 Ne , t=250                                      Da 20 Ne , t=750                                     Da 20 Ne , t=1500
+  103
+
+
+
+  102
+
+
+
+  101
+
+
+
+  100
+
+
+
+ 10−1
+               4    6 8 10       20       40   60                 4     6 8 10       20         40   60                  4    6 8 10       20         40    60
+                      radius (108 cm)                                     radius (108 cm)                                       radius (108 cm)
+
+
+Figure B1. Angularly averaged radial profiles of the transport time-scale 𝜏t (top panels), the nuclear burning time-scale 𝜏n (middle panels), and the ratio between
+the two (Damköhler number Da, bottom panels), for the 3D model a360n1024, at different times throughout the simulation: initial conditions (left), before
+(centre) and after (right) the shell merging event, averaged over 150 s, 333 s, and 200 s respectively; the convective shells are shaded.
+
+                                                                                                                                       MNRAS 000, 1–18 (2024)
+

@@ -1,0 +1,844 @@
+                                                 Draft version July 11, 2025
+                                                 Typeset using LATEX twocolumn style in AASTeX7
+
+
+
+
+                                                           Inhomogeneous stellar mixing in the final hours before the Cassiopeia A supernova
+                                                     Toshiki Sato ,1 Kai Matsunaga ,2 Hiroyuki Uchida ,2 Satoru Katsuda ,3 Koh Takahashi ,4
+                                                Hideyuki Umeda,5 Tomoya Takiwaki ,4 Ryo Sawada ,6 Takashi Yoshida ,7 Ko Nakamura ,8 Yui Kuboike,1
+                                                                            Paul P. Plucinsky ,9 and John P. Hughes 10
+                                                                                          1 Meiji University, Department of Physics
+                                                                                         2 Kyoto University, Department of Physics
+                                                                                        3 Saitama University, Department of Physics
+arXiv:2507.07563v1 [astro-ph.HE] 10 Jul 2025
+
+
+
+
+                                                                                        4 National Astronomical Observatory of Japan
+                                                                                    5 The University of Tokyo, Department of Astronomy
+                                                                                6 The University of Tokyo, Institute for Cosmic Ray Research
+                                                                                 7 Kyoto University, Yukawa Institute for Theoretical Physics
+                                                                                    8 Fukuoka University, Department of Applied Physics
+                                                                                     9 Center for Astrophysics — Harvard & Smithsonian
+                                                                                 10 Rutgers University, Department of Physics and Astronomy
+
+
+
+                                                                                                     ABSTRACT
+                                                         Understanding stars and their evolution is a key goal of astronomical research and has long been a fo-
+                                                       cus of human interest. In recent years, theorists have paid much attention to the final interior processes
+                                                       within massive stars, as they can be essential for revealing neutrino-driven supernova mechanisms and
+                                                       other potential transients of massive star collapse. However, it is challenging to observe directly the
+                                                       last hours of a massive star before explosion, since it is the supernova event that triggers the start of
+                                                       intense observational study. Here we report evidence for a final phase of stellar activity known as a
+                                                       “shell merger”, an intense shell burning in which the O-burning shell swallows its outer C-/Ne-burning
+                                                       shell, deep within the progenitor’s interior moments before the supernova explosion. In the violent
+                                                       convective layer created by the shell merger, Ne, which is abundant in the stellar O-rich layer, is burned
+                                                       as it is pulled inward, and Si, which is synthesized inside, is transported outward. The remnant still
+                                                       preserves some traces of such Ne-rich downflows and Si-rich upflows in the O-rich layer, suggesting that
+                                                       inhomogeneous shell-merger mixing began just hours (≲ 104 s) before its gravitational collapse. Our
+                                                       results provide the first observational evidence that the final stellar burning process rapidly alters the
+                                                       internal structure, leaving a pre-supernova asymmetry. This breaking of spherical symmetry facilitates
+                                                       the explosion of massive stars and influences various supernova and remnant characteristics, including
+                                                       explosion asymmetries and the neutron star’s kick and spin.
+
+
+                                                       Keywords: Massive stars (732) — Stellar structures (1631) — Core-collapse supernovae (304) — X-ray
+                                                                 astronomy (1810) — Supernova remnants (1667) — Supernova dynamics (1664)
+
+                                                                  1. INTRODUCTION                                  far its internal evolution has progressed (e.g., M. Joyce
+                                                 The final stage of a massive star is known to be its              et al. 2020; H. Saio et al. 2023). Our current under-
+                                               most dramatic moment, with the massive Fe core of                   standing of the final stage of stellar evolution is based
+                                               ≈1.5 solar masses (M⊙ ) forming just hours to days be-              almost entirely on numerical simulations, and our ability
+                                               fore its gravitational collapse (e.g., S. E. Woosley et al.         to probe the actual interior conditions of dying stars is
+                                               2002). However there is still no way to observe this mo-            limited to difficult-to-observe signals such as neutrinos
+                                               ment directly. After evolving into a supergiant, the core           (e.g., C. Kato et al. 2015; T. Yoshida et al. 2016).
+                                               evolution of that star accelerates and cannot be distin-              As for a massive star above about 10 M⊙ , Si core/shell
+                                               guished on the Hertzsprung-Russell diagram. Even the                burning and O-shell burning are thought to occur in a
+                                               nearby red supergiant Betelgeuse, which has been well               complex manner in the central region. Here, the O-
+                                               studied for many years, makes it difficult to discuss how           burning shell burns strongly while supporting the outer
+                                                                                                                   part of the forming Fe core, and is crucial in determining
+                                                                                                                   the internal structure of the star before it collapses and
+                                               Email: toshiki@meiji.ac.jp                                          explodes (e.g. G. Bazan & D. Arnett 1994; T. Sukhbold
+2
+
+& S. E. Woosley 2014). An intense O-burning shell is
+predicted to occasionally break through to the outer C-
+/Ne-burning shell, forming one large convective layer
+(Figure 1). Recent multi-dimensional simulations of su-
+pernova progenitors have shown a violent “shell merger”
+event (W. D. Arnett & C. Meakin 2011; B. Müller et al.
+2016; T. Yoshida et al. 2019, 2021; F. Rizzuti et al.
+2024), where the interface between the C-/Ne-burning
+shell (O-/Ne-rich layer) and the O-burning shell (Si-rich
+layer) disappears during evolution and Si is mixed far
+out into the O-/Ne-rich layer. During this process, Ne-
+rich material is inhomogeneously mixed downward into
+a Ne-poor region, where the entrained Ne is burned by
+incorporation into the inner O-burning region and its
+fraction decreases. As a result, a core-collapse super-
+nova undergoing a shell merger is expected to have O-
+rich ejecta with low Ne/O and high Si/O ratios. This
+process generates the large-scale asphericities in the pre-
+supernova interior, promoting the growth of supernova
+asymmetry as seed perturbations (B. Müller et al. 2017;
+A. Burrows et al. 2018; R. Andrassy et al. 2020; R. Bol-
+lig et al. 2021; D. Vartanyan et al. 2022). However, the
+large-scale mixing process with stellar asymmetry has           Figure 1. A sketch of a slice through the interior of a
+not yet been confirmed by observations.                         massive star in the process of a “shell merger”. The shells
+   In this study, we propose to probe pre–supernova inte-       are drawn roughly to scale by mass, but the plumes are
+rior asymmetries by examining the oxygen-rich ejecta of         a coarse representation of the expected complex convective
+supernova remnants. In particular, we target Cassiopeia         “fingers”. An intense O shell burning merges with the outer
+A, one of the most famous asymmetric young remnants             C-/-Ne-burning shell burning, forming a larger convective
+(J. P. Hughes et al. 2000; J. Vink 2004; R. A. Fesen            layer. In the merged layer, the extended convection effi-
+et al. 2006; D. Milisavljevic et al. 2024; I. De Looze et al.   ciently brings Ne into the inner O-burning region (see the
+2024), using deep Chandra ACIS-S spectroscopy to map            orange arrrow), and the amount of Ne is significantly de-
+key abundance ratios (Ne/Mg and Si/Mg) across multi-
+                                                                creased (N. Yadav et al. 2020). Inside such a progenitor,
+ple ejecta knots. By comparing these observational di-
+                                                                Si, which normally reaches up to about the bottom of the
+agnostics to predictions from theoretical models, we seek
+                                                                C-/Ne-burning shell, is transported further than that posi-
+to determine whether the low-mode convective pertur-
+                                                                tion (see the green arrrow). We define the Si mass radius
+bations and compositional inhomogeneities generated in
+the final hours of stellar evolution survive collapse and       Mr (Si=0.05), which is the maximum mass radius with the
+shape remnant morphology.                                       Si fraction greater than 0.05, to visualize the extension of
+                                                                the Si-rich region that is seen when shell mergers occur. In
+    2. OXYGEN-RICH EJECTA IN CASSIOPEIA A:                      typical models that preserve the shell structures, the Si ra-
+     THEIR COMPOSITION AND DISTRIBUTION                         dius is less than 2.5 M⊙ , but models that have experienced
+  The elemental composition of O-rich ejecta in a super-        shell mergers indicate ≳ 3.0 M⊙ (see also Figure 4). If the
+nova, reflecting stellar hydrostatic nucleosynthesis, pro-      shell merger did not perfectly mix the materials within the
+vides unique information about its progenitor interior.         O-rich layer, Ne-rich and Si-rich materials could be observed
+Cassiopeia A is one of the best studied young SNRs with         in the O-rich ejecta of its supernova.
+asymmetrically distributed O-rich ejecta (e.g., R. A. Fe-
+sen et al. 2006; U. Hwang & J. M. Laming 2012). Since           progenitors that experienced shell mergers can repro-
+the 1970s, some observations have indicated that the            duce the low Ne/O ratio well, while the others can not
+remnant has low abundances of Ne and Mg (e.g., R. A.            (see Appendix A). Thus, assuming a shell merger as the
+Chevalier & R. P. Kirshner 1979; J. Vink et al. 1996; U.        origin of the low Ne abundance in the remnant, we dis-
+Hwang & J. M. Laming 2012), which are products in the           cuss the formation process of the peculiar O-rich ejecta
+stellar O-rich layer, but the origin of this peculiar com-      of the remnant by comparing the elemental compositions
+position is still not clear. The Ne/O ratio is about an or-     with those in theoretical models.
+der of magnitude lower than in the usual supernova mod-           In this study, we focus on the asymmetric distribu-
+els, and this trend is consistent with multi-wavelength         tion of O-rich ejecta and their composition. Some sim-
+observations with optical and X-rays (J. Vink et al. 1996;      ulations indicate the presence of a large-scale asymme-
+R. A. Chevalier & R. P. Kirshner 1979). We found that
+                                                                                                                                3
+
+
+
+
+Figure 2. Inhomogeneous elemental distribution in Cassiopeia A observed by Chandra. The difference in the mixing ratio of
+blue and green colors clearly shows the different composition in the O-rich ejecta, where red, green, and blue include emission
+within energy bands of 6.54–6.92 keV (Fe Heα), 1.76-1.94 keV (Si Heα), and 0.60-0.85 keV (O lines), respectively. The ejecta
+highlighted in red and green are products of explosive nucleosynthesis, while the ejecta in blue and emerald green reflect stellar
+nucleosynthesis. The circles in the small panels are O-rich regions used for spectral analysis. The regions of high and low X-ray
+intensity in the Si band are indicated by the magenta and cyan circles, respectively. Bright O-rich structures are excluded from
+the spectral analysis because of pile-up (see text).
+try in the shell-merger convective flow (e.g., N. Yadav               Figure 2 shows a three-color image of Cassiopeia A
+et al. 2020; F. Rizzuti et al. 2024). Such inhomogeneities          obtained by Chandra in 2004, where the Fe-rich, O-rich
+caused by shell mergers could be imprinted in the ex-               and Si-rich emissions are highlighted in red, blue and
+plosion geometry (B. Müller et al. 2017; R. Bollig et al.          green, respectively. Since Fe is synthesized by explosive
+2021) and be observed in this asymmetric remnant (e.g.,             nucleosynthesis (e.g., S. E. Woosley & T. A. Weaver
+J. P. Hughes et al. 2000; D. Milisavljevic & R. A. Fesen            1995), we avoid Fe-rich (red) areas and focus on O-
+2015; B. W. Grefenstette et al. 2014; T. Sato et al. 2021;          and Si-rich areas in the southeast (SE) and northeast
+D. Milisavljevic et al. 2024).                                      (NE) regions. Interestingly, the image shows that the
+                                                                    SE and NE regions are a mixture of O-rich, O-/Si-rich,
+     3. OBSERVATIONS AND DATA ANALYIS                               and Si-rich areas, highlighted in blue, emerald green,
+  Cassiopeia A has been observed several times since                and green, respectively. In particular, O and Si are ex-
+launch with Chandra’s Advanced CCD Imaging Spec-                    pected to coexist in the O-rich layer of massive stars
+trometer (ACIS-S) X-ray imager (e.g., J. P. Hughes et al.           that have undergone a shell merger (Figure A9), but
+2000; U. Hwang et al. 2004; U. Hwang & J. M. Laming                 may remain inhomogeneous in some areas depending
+2012). We used the deepest ACIS-S data targeting Cas-               on mixing conditions up to gravitational collapse (e.g.,
+siopeia A observed in 2004, with a total exposure of                N. Yadav et al. 2020; F. Rizzuti et al. 2024). There-
+about 1 Ms. We reprocessed the event files (from level 1            fore, the different degrees of O and Si coexistence in the
+to level 2) to remove pixel randomization and to correct            image may indicate the inhomogeneity due to its shell
+for charge-coupled device (CCD) charge-transfer ineffi-             merger process. On the other hand, the mixing of el-
+ciences using CIAO version 4.6 and CalDB 4.6.3. The                 ements after an explosion, as well as the propagation
+bad grades were filtered out and good time intervals were           of the blast with Rayleigh-Taylor instabilities through a
+accepted.                                                           reverse shock, can also produce a similar situation (e.g.,
+4
+
+
+
+
+Figure 3. A sequence of four X-ray spectra showing the gradual change of composition among O-rich ejecta regions in Cassiopeia
+A. From left to right, the compositions gradually change from O-/Ne-rich to O-/Si-rich. The solid red line shows the best-fit
+plasma model. The best-fit parameters of these fits are summarized in Table 1. Energy bands with characteristic elemental
+emission lines (O Heα+Lyα+Lyβ+Lyγ, Ne Lyα, Mg Heα and Si Heα) are highlighted in color. The regions (NE-a, NE-c, NE-3
+and SE-2) were selected for easy viewing of the gradual change in elemental composition. The best-fit mass ratios (Ne/O and
+Si/O) are also shown in each panel.
+D. Vartanyan et al. 2025; S. Orlando et al. 2025). To             thesis mix with the oxygen layer, this effect would not
+understand whether this is the result of mixing in the            be observed. This is because the reduction in Ne can-
+progenitor star or mixing after the explosion, it is neces-       not be explained simply by mixing O-/Ne-rich materials
+sary to estimate the composition through detailed spec-           and Si-rich materials. On the other hand, as discussed
+tral analysis. To confirm the elemental compositions of           in Appendix A, the abundance of Ne and Mg is ex-
+O-rich areas where the degree of Si mixing appears to be          tremely low throughout the remnant (J. Vink et al. 1996;
+non-uniform, we extracted X-ray spectra in the 0.5–6.0            U. Hwang & J. M. Laming 2012), supporting the shell
+keV band (Figure 3) from 15 regions defined in Fig-               merger hypothesis. If this shell merger perfectly mixed
+ure 2 and fitted them with an absorbed thermal plasma             the O-rich layer, the O-/Ne-rich ejecta should not be
+model (= phabs × vvpshock) in Xspec using AtomDB                  observed. Thus, even if post-explosion mixing occurred
+version 3.0.9).                                                   in this case, the observed trend in elemental mass ra-
+   We here use small circular regions with radii of 2′′ to        tios cannot be reproduced. As a result, we conclude
+avoid contamination from other areas as much as possi-            that the spectral variations in the O-rich ejecta origi-
+ble. Background spectra were extracted from the blank-            nate from inhomogeneous mixing within the progenitor
+sky region beyond the remnant. The O-rich emission                star. The best-fit parameters are summarized in Table 1
+from Cassiopeia A can be bright enough that signifi-              and the elemental mass ratios derived from the fitting
+cant pile-up of photon events can occur, distorting the           results are summarized in Table A3. We also used a dif-
+spectra. Therefore we took care to select regions that            ferent fitting function that included two thermal plasma
+avoided bright structures with pile-up. Fig. 3 shows four         models with abundances tied between them: phabs ×
+examples of X-ray spectra in the O-rich ejecta. From left         (vvnei + vvnei) (see Table A2 for the best-fit param-
+to right, the elemental composition in the O-rich regions         eters). As we show below, our results are robust with
+gradually changes from Ne-rich (Si-poor) to Si-rich (Ne-          respect to the choice of plasma model in our fits.
+poor) with each mass ratio varying by nearly an order               In our study, we defined the “O-rich” regions using
+of magnitude.                                                     Fig. 2, where the X-ray flux of O emissions is large and
+   The increase in Si accompanying the decrease in Ne             that of Fe is small. We found that all the regions satisfy
+would be difficult to explain the effects of post-explosion       Fe/O ≲ 0.2 (relative to the solar ratio). As seen in
+mixing of O-rich and Si-rich materials. For example, if           Table 1, most of the regions have Fe/O < 0.1, thus we
+a supernova with an O-/Ne-rich layer that has not expe-           confirmed that these are indeed O-rich ejecta. The low
+rienced a shell merger occurs, and Si-rich materials (O           Fe/O ratios also support a small contribution from the
+burning products) created by its explosive nucleosyn-             circumstellar (CSM)/interstellar medium (ISM).
+                                                                                                                             5
+
+Table 1. Best-fit parameters of the spectral fits (single plasma model: phabs×vvpshock) in Fig. 3. The solar abundance
+(elemental number) ratios in E. Anders & N. Grevesse (1989) are used. The errors are 1σ level.
+
+Region                                      NE-a                 NE-c                    NE-3                     SE-2
+NH [1022 cm−2 ]                           1.39+0.01
+                                              −0.02            1.15±0.01               1.10+0.02
+                                                                                           −0.01               1.18±0.01
+kTe [keV]                                 1.84+0.03
+                                              −0.02            1.79+0.03
+                                                                   −0.02               1.78+0.03
+                                                                                           −0.06               1.41±0.01
+(O/H)/(O/H)⊙                               4.9+0.2
+                                              −0.5              6.3+0.3
+                                                                   −0.6                 4.7+0.6
+                                                                                           −0.4                 6.1+0.8
+                                                                                                                   −0.1
+(Ne/H)/(Ne/H)⊙                             3.5+0.1
+                                              −0.3              2.0±0.2                 0.9±0.1                0.89+0.02
+                                                                                                                   −0.03
+(Mg/H)/(Mg/H)⊙                            1.81+0.03
+                                              −0.08            1.63+0.03
+                                                                   −0.04               1.63+0.04
+                                                                                           −0.21               1.70±0.03
+(Si/H)/(Si/H)⊙                           0.51±0.04             1.21±0.03                4.1+0.4
+                                                                                           −0.3                13.8±0.1
+(S/H)/(S/H)⊙                             0.41±0.03             0.94+0.06
+                                                                   −0.05                2.4+0.2
+                                                                                           −0.1                 10.9+0.8
+                                                                                                                    −0.1
+(Ar/H)/(Ar/H)⊙ (=Ca)                       <0.13                0.5±0.3                 3.1±0.4                10.2±0.5
+(Fe/H)/(Fe/H)⊙ (=Ni)                      0.16+0.04
+                                              −0.05              <0.06                 0.29±0.04               0.15±0.01
+ne tlow [109 cm−3 s]                      1.8±1.0               1.0+1.4
+                                                                   −0.6                 1.1+0.7
+                                                                                           −0.6                15.1±0.8
+                  −3
+ne thigh [1010
+                 cm    s]                 7.7+0.2
+                                             −0.1               6.1+0.1
+                                                                   −0.2                3.93+0.08
+                                                                                           −0.07                8.4±0.1
+                  −2
+Redshift z [×10 ]                       −1.552+0.005
+                                              −0.007          −0.669+0.005
+                                                                    −0.002           −0.327±0.001             −1.835+0.007
+                                                                                                                    −0.006
+          −10 R
+Norm [ 10
+       4πD 2
+                ne nH dV cm−5 ]           5.4±0.2               2.9+0.2
+                                                                   −0.1                 2.5+0.2
+                                                                                           −0.1                3.08±0.01
+ 2
+χ /d.o.f                                 364.21/299           364.73/262              419.60/241              436.89/267
+
+ 4. INHOMOGENEOUS SHELL-MERGER MIXING                           ity of the O-rich ejecta should have been synthesized
+       IN THE PROGENITOR OF CASSIOPEIA A                        during hydrostatic nucleosynthesis during stellar evolu-
+  In this section we relate our observational evidence          tion, and its elemental composition is not so sensitive to
+for variation in the elemental composition of the O-rich        explosive nucleosynthesis (e.g., S. E. Woosley & T. A.
+ejecta in Cassiopeia A to the effects of an inhomoge-           Weaver 1995; F.-K. Thielemann et al. 1996). Thus, we
+neous merger of burning shells during the late evolu-           just calculated these mass ratios in the O-rich layer of
+tionary stages of the progenitor star. We avoid using           pre-supernova models with a high oxygen mass fraction
+mass ratios to O in this comparison since O also exists         > 0.4, assuming that the effects of explosive nucleosyn-
+outside the convection layer, which complicates theo-           thesis can be ignored (see the discussions in K. Mat-
+retical predictions, and because the measurement of O           sunaga et al. 2024; T. Sato et al. 2025). To character-
+emission is sensitive to systematic observational effects       ize shell-merger models, we also define the mass radius
+(see Appendix B for more details). Instead we focus our         Mr (Si = 0.05), which is the maximum mass radius with
+attention on the mass ratios of Ne and Si with respect to       the Si fraction greater than 0.05 in a progenitor (see Fig-
+Mg, three species that coexist in the shell-merger con-         ure 1 and Appendix C). In shell-merger models, strong
+vection region. The models we use are one-dimensional           O burning that penetrates and merges with the outer C-
+and cover a large range of individual star models that          /Ne-burning shell creates a larger convective layer and
+have or have not experienced shell mergers.                     carries Si further outward. Therefore, the model with
+  Figure 4 shows the clear negative correlation and             an extended Si-rich region due to shell merger should
+strong variation from region to region of the Ne and            have a larger Mr (Si = 0.05).
+Si mass fractions to Mg in the O-rich ejecta of the rem-           In Figure 4, we found that models with Mr (Si =
+nant. If the shell merger perfectly mixed the materials         0.05) ≳ 3 M⊙ form an isolated group at the lower bot-
+within the O-rich layer, then all of the ejecta should fall     tom of the Ne/Mg–Si/Mg plane, and most of them have
+within the ‘O-/Si-rich Progenitors’ region in the lower         experienced a shell merger. The orange circles seen in
+right of the figure. However, the O-rich ejecta of the          the shell-merger group are stars with ∼15 M⊙ , and be-
+remnant contains O-/Ne-rich materials, which supports           cause the oxygen layer is small in these stars, they can
+an incomplete shell-merger mixing in which some of the          only carry Si up to around the mass radius of ∼3 M⊙
+Ne has survived (see Figure 1). In Figure 4, the col-           (Figure A9). As for typical models with a standard O-
+ored data points show theoretical predictions for the           /Ne-rich layer, the Si radius is significantly smaller, with
+mass ratios. Here, we analyze 1,499 one-dimensional             Mr (Si = 0.05) < 2.5 M⊙ . As a result, two groups ap-
+pre-supernova models (with the standard mass loss) pro-         pear on this plot: ‘O-/Ne-rich Progenitors’ that had
+vided by T. Sukhbold et al. (2018) (see Appendix C              not experienced shell merger and ‘O-/Si-rich Progeni-
+for more details). This comprehensive dataset includes          tors’ that had. The O-rich ejecta of the remnant is dis-
+models that have undergone shell mergers, allowing us           tributed across these two groups, supporting the picture
+to extract the characteristics of this phenomenon during        that the explosion occurred in a state that retained char-
+the final stages of pre-supernova evolution. The major-         acteristics on both sides, or in other words, in a state
+6
+
+
+
+
+Figure 4. Inhomogeneous shell-merger mixing suggested by Si/Mg and Ne/Mg ratios. The remnant retains characteristics
+of stars that underwent a shell merger (O-/Si-rich: lower right of panel) and those that did not (O-/Ne-rich: upper left of
+panel), suggesting that the shell merger did not completely mix the composition in the O-rich layer of the progenitor. The green
+diamonds show the observed mass ratios in fifteen O-rich regions using an absorbed single plasma model: phabs×vvpshock in
+Xspec. The large green diamonds show the results from four regions in Figure 3. The yellow pentagons show the same as the
+large green diamonds, but using different plasma model: phabs×(vvnei+vvnei), which supports that the conclusion remains
+unchanged even when different plasma models are used. The colored data points are derived from 1D pre-supernova models
+in T. Sukhbold et al. (2018), where different symbols indicate different mass ranges. The radius of the Si-rich region in the
+progenitor, Mr (Si=0.05) (see Figure 1), is shown in color. Using a BH–SN separation curve for the w18.0 calibration shown in
+T. Ertl et al. (2016), models that do not explode are identified and shown as colored dots.
+of inhomogeneous shell-merger mixing. The fact that                ify whether the inhomogeneity remains or not. In the
+the shell merger was observed with the inhomogeneity               case of 3D calculations, there are no examples of calcu-
+remaining means that the explosion must occur before               lations being performed from the start of shell merger
+the convection has sufficiently mixed the stellar materi-          to the collapse, thus it is currently unknown to what
+als. T. Sukhbold & S. E. Woosley (2014) found that shell           extent inhomogeneity can be maintained. Because the
+mergers occur hours (∼ 104 s) before the core collapse             convection velocity is faster in 3D simulations than in
+of 15–20 M⊙ stars in their 1D calculations. However,               1D simulations (e.g., N. Yadav et al. 2020; T. Yoshida
+in the case of 1D calculations, it is not possible to ver-         et al. 2021; F. Rizzuti et al. 2024), it may be necessary
+                                                                                                                             7
+
+
+
+
+Figure 5. A comparison of compositional variations in O-rich ejecta within Cassiopeia A and those in a 3D stellar simulation
+that underwent a shell merger (N. Yadav et al. 2020). (a) This image of Cassiopeia A was obtained by subtracting the Si band
+(1.76–1.94 keV) flux from the O band (0.6–0.85 keV) flux, measured by X-rays on a square-root scale. The figure was created
+using only O-rich areas (surface brightness > 1.5 × 10−7 photons s−1 cm−2 ). In this image, areas where O and Si coexist (≈
+O-/Si-rich ejecta) are highlighted in dark orange, while Si-poor areas (≈ O-/Ne-rich ejecta) are highlighted in dark blue. (b)
+Image slice in the x-y plane of a 18.88 M⊙ star model that underwent a shell merger (N. Yadav et al. 2020). The upper and
+lower panels show the mass fraction distributions of Ne and Si, respectively. Globally, the O-rich layer has a composition with
+low Ne and high Si, but clumpy small-scale structures that have avoided mixing remain.
+to consider a shell merger on a timescale shorter than             O-/Si-rich ejecta. Similarly, in Figure 5 (b), small-scale
+104 s in order to explain the remaining inhomogeneity              O-/Ne-rich structures surviving within global O-/Si-rich
+in Cassiopeia A.                                                   structures can be confirmed. Thus, while shell mergers
+   Shell mergers are known to produce global, low mode             may seed the global velocity asymmetries that drive ex-
+flow asymmetries dominated by ℓ ≈ 1–3 modes (N. Ya-                plosion anisotropies, they could also imprint fine-scale
+dav et al. 2020; F. Rizzuti et al. 2024). In contrast, the         compositional irregularities, resulting in the multi-scale
+compositional inhomogeneities observed in the O-rich               asymmetry observed in supernova remnants. In the fu-
+ejecta of Cassiopeia A in this work are of much smaller            ture, it will be necessary to compare the effects of mixing
+spatial extent compared to the global remnant morphol-             during the neutrino-driven explosion (e.g., D. Vartanyan
+ogy. Figure 5 shows a comparison of the spatial distribu-          et al. 2025) and the remnant phase (e.g., S. Orlando
+tions of elements between our observations and the theo-           et al. 2021). The mixing effects during the explosion and
+retical stellar model in N. Yadav et al. (2020). We found          supernova remnant stage should greatly alter the spa-
+that small-scale structures, like those seen in Cassiopeia         tial scale of asymmetric structures in the pre-supernova
+A, can also be seen in 3D stellar models. As in Fig-               stage. However, the post-supernova mixing alone would
+ure 5 (a), O-/Si-rich ejecta (i.e., dark orange structures         not explain the inhomogeneity of the chemical composi-
+in the figure) dominates throughout the entire remnant             tion in the remnant; it requires that the materials were
+field, and shell-merger mixing appears to have homog-              unevenly mixed and burned in the progenitor.
+enized most of the O-rich layers. On the other hand,                 The shell-merger phenomenon has the potential to
+O-rich and Si-poor ejecta (i.e., dark blue structures in           change the fate of a massive star in its final moments.
+the figure) exist in small clumpy shapes adjacent to the           For example, the strong turbulent flows created by the
+8
+
+
+
+
+Figure 6. Pre-supernova internal structure of Cassiopeia A inferred from its neutron star mass and ejecta mass. The vertical
+axis shows the core mass, M4 , enclosed at the point where the entropy in the progenitor exceeds a value of 4 kB baryon−1 , which
+is similar to the neutron star mass after a supernova (T. Ertl et al. 2016; T. Sukhbold et al. 2018). The horizontal axis shows
+the mass of the CO core (the integrated mass up to the outermost oxygen layer) subtracted by M4 , which could be close to the
+total ejecta mass observed in X-rays. These parameters were calculated from the pre-supernova models in T. Sukhbold et al.
+(2018). The grey areas and broken lines in the vertical and horizontal directions are the estimated ejecta mass (≈ 3 ± 1 M⊙ )
+and neutron star mass (≈ 1.65+0.30
+                                −0.25 M⊙ ) from observations (U. Hwang & J. M. Laming 2012; D. G. Yakovlev et al. 2011, ,
+respectively). The color of the data points is the same as Figure 4. Using a BH–SN separation curve for the w18.0 calibration
+shown in T. Ertl et al. (2016), models that do not explode are identified and shown as data points without a black border.
+shell merger can promote the development of a super-                lations with more realistic pre-supernova structures will
+nova shock wave during the explosion (S. M. Couch &                 be able to clarify the effects in more detail. Furthermore,
+C. D. Ott 2013, 2015; B. Müller et al. 2017; A. Burrows            the shell merger is known to affect the formation of the
+& D. Vartanyan 2021; R. Bollig et al. 2021). In simu-               stellar core, which is also dynamically important for the
+lations, the probability of an explosion actually changes           explosion (e.g., T. Sukhbold & S. E. Woosley 2014). In
+depending on whether realistic perturbations are present            the case of Cassiopeia A, the observed ejecta mass of
+or not. Thus, the multi-dimensional stellar activity ob-            ≈3 M⊙ and neutron star mass of ≈1.65 M⊙ (U. Hwang
+served in this study could trigger the actual explosion             & J. M. Laming 2012; D. G. Yakovlev et al. 2011) sug-
+of a star, and future multi-dimensional supernova simu-             gest a progenitor of ∼17–20 M⊙ for the remnant (Fig-
+                                                                                                                        9
+
+ure 6). In this mass range, there is a transition of the      lar, it is possible that the outer layers of the progenitor
+central C burning from the convective to the radiative        of Cassiopeia A were stripped off by binary interaction
+regime (T. Sukhbold & S. E. Woosley 2014; T. Sato et al.      (W. E. Kerzendorf et al. 2019; T. Sato et al. 2020; R. Hi-
+2020). Radiative C-burning cores produce more massive         rai et al. 2020), so the discussion based on the single star
+O-burning cores, resulting in extended final core struc-      model may be insufficient. In addition, it appears that
+tures that are generally much more difficult to blow up.      not only Ne but also Mg has decreased to a considerable
+For example, we found that only ∼35% of the 17–20 M⊙          extent. These observational facts will become important
+progenitors could explode at the Ertl criterion with the      in considering the detailed physics behind them in the
+W18 engine (T. Ertl et al. 2016), and ∼61% of the ex-         future.
+plosive progenitors have experienced shell mergers. The
+mechanism that causes shell mergers is still being dis-                5. SUMMARY AND CONCLUSION
+cussed (C. Collins et al. 2018; E. Laplace et al. 2025) and      We have presented the first direct observational evi-
+needs to be studied in more detail in the future, but the     dence that a violent shell merger occurred in the pro-
+observed properties of the remnant suggest an internal        genitor of Cassiopeia A just hours before core collapse.
+structure of a relatively massive progenitor (≈ 18 M⊙ ),      Deep Chandra ACIS-S spectroscopy of fifteen spatially
+which is typically difficult to explode. On the other         distinct O-rich ejecta regions reveals mass-ratio varia-
+hand, the Ertl criterion does not always align with the       tions (Ne/Mg and Si/Mg) spanning nearly an order of
+results of numerical calculations (T. Wang et al. 2022;       magnitude. These variations trace the incomplete mix-
+A. Burrows et al. 2024). For example, supernova mod-          ing predicted by recent multi-dimensional shell-merger
+els with masses of 17–20 M⊙ in A. Burrows et al. (2024)       models.
+explode more energetically than others. Interestingly,           The coexistence of compact ejecta regions in both the
+previous studies have provided evidence for larger than       ‘O-/Ne-rich’ and ‘O-/Si-rich’ regimes implies that the
+nominal explosion energies in the range (1.5–4)×1051          merger did not fully homogenize the O-rich layer prior
+erg for Cassiopeia A (R. A. Chevalier & J. Oishi 2003;        to collapse, leaving behind multi-scale compositional
+J. Vink 2004; P. A. Young et al. 2006; S. Orlando et al.      inhomogeneities and asymmetric velocity fields. Such
+2016; A. Wongwathanarat et al. 2017; T. Sato et al.           pre-supernova perturbations are expected to seed explo-
+2020).                                                        sion asymmetries and aid shock revival. Future work
+  The incomplete shell-merger mixing creates a pre-           should combine high-precision X-ray spectroscopy (e.g.,
+supernova asymmetry (N. Yadav et al. 2020; F. Rizzuti         Athena, XRISM) with fully three-dimensional progeni-
+et al. 2024) that grows during its gravitational collapse     tor and explosion simulations that resolve shell-merger
+(D. Lai & P. Goldreich 2000; K. Takahashi & S. Yamada         convection and track its inhomogeneity through collapse
+2014) and leads to asymmetric shock propagation (B.           and into the remnant phase. Such efforts will be crucial
+Müller et al. 2017; R. Bollig et al. 2021). This can pro-    to quantify the impact of shell mergers on supernova
+duce a highly asymmetric explosion with a strong neu-         asymmetries, neutron-star kicks, and remnant evolution.
+tron star kick (C. L. Fryer 2004; H.-T. Janka 2017; A.           For a long time in the history of astronomy, it has
+Burrows et al. 2024) as observed in Cassiopeia A (B. W.       been a dream to study the internal structure of stars.
+Grefenstette et al. 2014; T. Sato et al. 2021; S. Katsuda     Through this research, we have gained insight into the
+et al. 2018). The asymmetric ejecta distribution can be       last hours (≲ 104 s) of the interior of a massive star with
+preserved from immediately after the explosion to the         lifetimes of ∼ 106 –107 years. This moment not only has
+present, several hundred years later (S. Orlando et al.       a significant impact on the fate of a star, but also creates
+2016, 2021, 2025). Thus, the inhomogeneity of the ele-        a more asymmetric supernova explosion.
+mental composition within the progenitor could also be
+preserved to the present day. However, a full simula-
+tion of the entire process from the start of shell merger
+to gravitational collapse has not yet been carried out,                       ACKNOWLEDGMENTS
+and we are only just beginning to understand the evo-
+                                                              We are grateful to David Vartanyan for valuable discus-
+lution of supernovae into their remnants (e.g., M. Ono
+                                                              sion. This work was supported by the Japan Society for
+et al. 2020; S. Orlando et al. 2021). To understand the
+                                                              the Promotion of Science (JSPS) KAKENHI grant No.
+details of the shell-merger mixing process and its effect
+                                                              JP23K13128. J.P.H., the George A. and Margaret M.
+on the supernova asymmetry, a future comparison be-
+                                                              Downsbrough Professor of Astrophysics, acknowledges
+tween multi-dimensional simulations (from shell mergers
+                                                              the Downsbrough heirs and the estate of George Atha
+to remnants) and observations is necessary.
+                                                              Downsbrough for their support. His Chandra research
+  Our model comparison is limited to non-rotating sin-
+                                                              on supernova remnants was additionally supported by
+gle stars, but the shell merger phenomenon itself can be
+                                                              SAO award number G01-22058X. We also thank the
+strongly influenced by stellar rotation and binary inter-
+                                                              anonymous referee for comments that helped us improve
+action (E. Laplace et al. 2021; F. Rizzuti et al. 2024).
+                                                              the manuscript.
+Therefore, the comparison between Cassiopeia A and
+the model should be revised in the future. In particu-
+10
+
+
+                                                        APPENDIX
+
+
+
+
+Figure A7. The elemental mass ratios (red data points with error bars) in the O-rich regions in Cassiopeia A. Left: A scatter
+plot between the Si/O and Ne/O mass ratios. The colored data points are derived from the pre-supernova models in T. Sukhbold
+et al. (2018). Right: Same as left figure, but for the Mg/O and Ne/O mass ratios. The cyan diamond and pentagon show the
+results with the previous X-ray and optical observations (J. Vink et al. 1996; R. A. Chevalier & R. P. Kirshner 1979). The gray
+broken line shows the change in the mass ratios inside the model with MZAMS = 18.05 M⊙ , which is halfway through a shell
+merger. The radius of the Si-rich region in the progenitor, Mr (Si=0.05) (see Figure 1), is shown in color. Models that have
+experienced a shell merger indicate ≳ 3.0 M⊙ (see also Figure 4 and Figure A9). The low Ne/O ratio in Cas A can only be
+explained by stars undergoing shell mergers.
+
+
+
+                   A. OBSERVATIONAL SUPPORT FOR THE SHELL MERGER HYPOTHESIS
+  Previous X-ray observations with different observatories have indicated a low Ne/O ratio for Cassiopeia A (J. Vink
+et al. 1996; U. Hwang & J. M. Laming 2012), and this is based on spatially-resolved spectroscopy of the entire
+remnant. The same conclusion is reached by optical observation (R. A. Chevalier & R. P. Kirshner 1979). We compare
+the observed mass ratios with those in theoretical models in Figure A7 (see cyan data points), suggesting that such
+a low Ne/O ratio cannot be explained without shell mergers. Ne, which is the second most abundant element in the
+largest oxygen layer produced during the evolution of massive stars, is difficult to reduce by one order of magnitude
+through explosive nucleosynthesis alone (S. E. Woosley & T. A. Weaver 1995). Thus, we conclude that the shell-merger
+phenomenon is the most reasonable candidate to explain this feature. Although the observed and theoretical values
+in Figure A7 are not in perfect agreement, this could be explained by uncertainties in the use of the O abundance
+(see also Appendix B) and multidimensional effects in stellar evolution. Regarding the latter, each colored data point
+in Figure A7 represents the averaged oxygen layer composition in the 1D pre-supernova models. Our observational
+measurements, on the other hand, show differences in local regions within a real star. We also note that the convective
+mixing process itself differs significantly between 1D and 3D (e.g., T. Yoshida et al. 2019). Therefore, it is possible
+that these comparison targets have different properties, making complete agreement difficult. For a more detailed
+understanding, it will be necessary in the future to compare the results with multidimensional calculations of shell
+mergers that maintain inhomogeneity.
+
+                            B. REGARDING THE USE OF NE/MG AND SI/MG RATIOS
+  Here, we discuss why we used the Ne/Mg and Si/Mg ratios as shown in Fig. 4 for the main discussion in our study.
+The main reason for this is the difficulty of evaluating O abundance in observations and theory. As shown in Fig. A7,
+our measured mass ratios (Ne/O, Si/O, and Mg/O) are systematically lower than those predicted by one-dimensional
+                                                                                                                            11
+
+
+
+
+Figure A8. Comparison of NE-a and SE-2 spectra. The black data points are the observed X-ray spectra, and the red solid line
+is the best-fit model excluding all O emissions. The energy bands where the emission lines of O, Ne, Mg, and Si are prominent
+are highlighted in different colors. The lower panels show the ratios between the model and the data points. In these two
+spectra, the flux of the O emissions is almost the same, making it easy to compare the differences in the line emissions of Ne,
+Mg, and Si. The shape of the O-band residuals differs between the two spectra, which is thought to be due to the different
+contributions of Ne emissions and L-shell emissions from Ar and Ca.
+
+theoretical models. Uncertainties in the O abundance measurements and/or in the model calculations complicate
+direct comparisons between observations and theory. In contrast, the Ne, Mg, and Si are less affected by these issues,
+providing a more robust diagnostic of nucleosynthetic yields.
+   Fig. A8 shows a spectral comparison between regions NE-a and SE-2. The main challenge in measuring O is the
+strong interstellar absorption towards this remnant, which makes continuum determination difficult. When all O lines
+are removed from the model, the residuals shown in the figure become apparent. Since the O emission line intensities
+in NE-a and SE-2 are nearly identical, spectral differences are easily seen. In NE-a, the high abundance of Ne causes
+the low ionization Ne Heα lines to blend into the O band, affecting the fit. In SE-2, although Ne is less abundant, high
+Ar and Ca abundances produce L-shell emissions in this energy band. Also, Fe can produce L shell emission that can
+affect both O and Ne abundance determinations, so it is important to select areas where Fe contribution is low (see
+section 3). Underestimating these contributions would lead to a systematically lower derived O abundance, possibly
+explaining the deviations seen in Fig. A7. If such an effect also affected the Ne, Mg, and Si measurements, it could
+alter our conclusions. To test this, we introduced an additional continuum component in the O band and re-fitted the
+spectrum.
+   We assess this effect using the NE-a spectrum. First, we added a low-temperature bremss component (ke T =0.2
+keV) in Xspec; as expected, the O abundance decreased and the Ne/O ratio increased by ≈20%. We then replaced
+it with a low-temperature apec model (ke T =0.2 keV), obtaining essentially the same result. Thus, increasing the
+continuum contribution in the O band raises the mass ratios relative to O, which may help to account for the trend
+in Fig. A7. However, the 20% change is probably too small to resolve all the discrepancies between the models and
+observations. The multi-dimensional features described below may make comparison with 1D models difficult. Future
+high-precision X-ray spectroscopy and comparisons with multi-dimensional simulations should help to resolve these
+issues. On the other hand, the Ne/Mg and Si/Mg ratios remained unchanged (≲ 6%) within 1σ statistical errors.
+Thus, from an observational standpoint, these ratios are more robust than those relative to O.
+   Multi-dimensional mixing during the supernova and remnant phases further complicates O-based comparisons (see
+also Appendix A). For example, the stellar O–rich layer contains an outer O/C-rich region with much lower Ne and
+Si abundances. Local mixing with this layer would depress Ne/O and Si/O, producing a trend similar to that in
+Fig. A7. Inhomogeneous mixing, which is demonstrated in both explosion and remnant phases (e.g., B. Fryxell et al.
+12
+
+1991; K. Kifonidis et al. 2003; N. J. Hammer et al. 2010; S. Orlando et al. 2016, 2021), thus complicates O-based
+model comparisons. However, Ne, Mg, and Si coexist within the shell-merger convection zone, avoiding this bias.
+Consequently, we conclude that Ne/Mg and Si/Mg ratios represent the least uncertain approach, both observationally
+and theoretically.
+
+                                   C. ANALYSIS OF 1D PROGENITOR MODELS
+  To compare with the observational results, we analyzed the 1D pre-supernova models in T. Sukhbold et al. (2018).
+Fig. A9 shows a comparison of the mass fraction profiles in some pre-supernova models. In our study, we derived the
+Si mass radius Mr (Si=0.05) to visualize the extended O-/Si-rich layer that is seen when shell mergers occur for the
+discussion in the main text. The model mass ratios in Fig. A7 were calculated using the O-rich layer of pre-supernova
+models with a high oxygen mass fraction > 0.4.
+  In Fig. A9, we see the differences between a typical star and a star that has undergone a shell merger. The 15.28
+M⊙ model has a small Mr (Si=0.05) of 1.88 M⊙ , where the Ne abundance is high in the O-rich layer. This model is
+thought to be a standard pre-supernova model, where almost 90% of models in T. Sukhbold et al. (2018) shows such
+a Ne/O rich composition. The 15.32 M⊙ model has a large Mr (Si=0.05) of 3.05 M⊙ , where the Ne-poor and Si-rich
+composition can be seen in the O-rich layer. We classify these models that have a large Si radius and a low Ne/O
+ratio into the models that have undergone a shell merger. As shown in Fig. A7, models with a low Ne/O mass ratio
+of <0.1 and a large Mr (Si=0.05) of ≳ 3.0 M⊙ form a cluster in the scatter plots. These models are thought to have
+experienced a significant Ne depletion by the shell merger. The 18.05 M⊙ model also has a large Mr (Si=0.05) of 3.09
+M⊙ , where the elemental fractions are gradually changing in the O-rich layer. The gradual change in the elemental
+fraction suggests extensive, but not complete, convective mixing of the O-rich layer. The change in mass ratios within
+this O-rich layer is indicated by the gray dashed lines in Fig. A7, where the Mg/O and Ne/O trends follow well those
+in Cassiopeia A, but the Si/O and Ne/O trends do not.
+
+Table A2. Same as Table A2, but for two thermal models: phabs×(nei+nei). The abundances tied between the two vvnei
+components.
+
+Region                                 NE-a                     NE-c                     NE-3                   SE-2
+NH [1022 cm−2 ]                      1.34±0.01                1.21±0.01               1.177+0.007
+                                                                                           −0.003            1.212+0.006
+                                                                                                                  −0.005
+kTe,1 [keV]                           4.6+0.3
+                                         −0.2                   5.9+0.8
+                                                                   −0.5                 3.9+0.3
+                                                                                           −0.2               3.76+0.02
+                                                                                                                  −0.03
+kTe,2 [keV]                          0.95+0.03
+                                         −0.02                 0.88+0.02
+                                                                   −0.01               0.78±0.01              1.30+0.01
+                                                                                                                  −0.02
+(O/H)/(O/H)⊙                          5.6±0.1                  27.7+6.5
+                                                                   −0.7                10.8±0.2                10 (fix)
+(Ne/H)/(Ne/H)⊙                        3.6+0.1
+                                         −0.3                   5.4+0.2
+                                                                   −0.4                1.51+0.03
+                                                                                           −0.07              1.13+0.08
+                                                                                                                  −0.07
+(Mg/H)/(Mg/H)⊙                       1.82+0.02
+                                         −0.11                 4.04+0.76
+                                                                   −0.07               1.95+0.05
+                                                                                           −0.03              2.12+0.05
+                                                                                                                  −0.07
+(Si/H)/(Si/H)⊙                       0.54+0.02
+                                         −0.01                 3.2±0.5                  6.2+0.7
+                                                                                           −0.1                17.5+0.4
+                                                                                                                   −0.2
+(S/H)/(S/H)⊙                         0.55±0.04                 3.2±0.5                  4.6+0.1
+                                                                                           −0.2                14.1+0.3
+                                                                                                                   −0.2
+(Ca/H)/(Ca/H)⊙ (=Ca)                  0.5±0.2                  3.4±0.8                  6.8+0.7
+                                                                                           −0.9                13.7+0.7
+                                                                                                                   −0.6
+(Fe/H)/(Fe/H)⊙ (=Ni)                 0.13±0.03                 0.3±0.1                 0.13+0.03
+                                                                                           −0.02              0.22+0.04
+                                                                                                                  −0.05
+              −3
+         9
+ne t1 [10 cm       s]                 9.7±0.3                  7.8±0.3                  5.6±0.2                9.8+0.8
+                                                                                                                  −0.5
+ne t2 [1010 cm−3 s]                  19.3±0.05                  20±2                    9.2+0.1
+                                                                                           −0.3                6.3+0.2
+                                                                                                                  −0.3
+                    −2
+Redshift z1 [×10         ]         −1.994±0.004              −1.089+0.001
+                                                                   −0.002             −1.43+0.14
+                                                                                           −0.03             −2.39+0.02
+                                                                                                                  −0.01
+Redshift z2 [×10−2 ]                −0.96+0.03
+                                         −0.04               −0.794±0.001            −0.031+0.052
+                                                                                           −0.005           −1.824+0.051
+                                                                                                                  −0.004
+ 2
+χ /d.o.f                            312.66/297                296.72/260              291.96/239             320.67/265
+
+
+
+
+                                                     REFERENCES
+Anders, E., & Grevesse, N. 1989, GeoCoA, 53, 197,                Arnett, W. D., & Meakin, C. 2011, The Astrophysical
+ doi: 10.1016/0016-7037(89)90286-X                                 Journal, 733, 78, doi: 10.1088/0004-637X/733/2/78
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020,
+                                                                 Bazan, G., & Arnett, D. 1994, The Astrophysical Journal
+ Monthly Notices of the Royal Astronomical Society, 491,
+                                                                   Letters, 433, L41, doi: 10.1086/187543
+ 972, doi: 10.1093/mnras/stz2952
+                                                                                                                           13
+
+
+
+
+Figure A9. Mass fraction profiles for characteristic progenitor models in T. Sukhbold et al. (2018). Top: a progenitor model
+with a standard O-/Ne-rich layer. Middle: a progenitor model that has undergone a shell merger, forming a Ne-poor O-/Si-rich
+layer. Bottom: a progenitor model with an extended Si-rich layer, possibly undergoing a shell merger. Vertical dotted lines
+indicate the Si mass radius Mr (Si=0.05), where the Si fraction is 0.05. Stars that have experienced a shell merger indicate a
+larger radius of ≳ 3.0 M⊙ .
+Bollig, R., Yadav, N., Kresse, D., et al. 2021, The               Burrows, A., & Vartanyan, D. 2021, Nature, 589, 29,
+  Astrophysical Journal, 915, 28,                                   doi: 10.1038/s41586-020-03059-w
+  doi: 10.3847/1538-4357/abf82e
+14
+
+                        Table A3. Elemental mass ratios in each O-rich region. The errors are 1σ level.
+
+                  MNe /MO                    MMg /MO                  MSi /MO                 MSi /MMg            MNe /MMg
+                            −1                           −2                     −3                       −1
+NE-a           (1.3+0.1
+                   −0.2 )×10               (2.5+0.1
+                                               −0.3 )×10           (7.7+0.7
+                                                                       −1.0 )×10           (3.1+0.3
+                                                                                               −0.5 )×10            5.1+0.4
+                                                                                                                       −0.9
+                             −2                          −2                     −2                      −1
+NE-b           (4.4+1.1
+                   −0.5 )×10               (1.5+0.2
+                                               −0.1 )×10           (1.1+0.2
+                                                                       −0.1 )×10           (6.9+1.5
+                                                                                               −0.7 )×10            2.9+0.8
+                                                                                                                       −0.4
+                             −2                         −2                      −2                      −1
+NE-c           (5.7+0.6
+                   −0.7 )×10               (1.7+0.1
+                                               −0.2 )×10          (1.4±0.1)×10             (8.1+0.6
+                                                                                               −1.1 )×10            3.2+0.4
+                                                                                                                       −0.5
+                             −2                          −2                     −2
+NE-d           (8.5+1.3
+                   −1.3 )×10              (1.6±0.1)×10             (1.8+0.2
+                                                                       −0.1 )×10               1.1±0.1             5.1±0.8
+NE-e           (9.9−0.5 )×10−2
+                   +2.2
+                                           (2.7+0.6
+                                               −0.1 )×10
+                                                        −2
+                                                                   (2.0+0.4
+                                                                       −0.1 )×10
+                                                                                −2
+                                                                                           (7.7+2.3
+                                                                                               −0.6 )×10
+                                                                                                        −1
+                                                                                                                    3.7+1.1
+                                                                                                                       −0.3
+                             −2                          −2
+NE-f           (3.3+0.3
+                   −0.2 )×10            (1.03±0.05)×10           (1.17±0.05)×10−2              1.1±0.1              3.2+0.2
+                                                                                                                       −0.3
+SE-a           (4.6−0.5 )×10−2
+                   +0.4
+                                           (2.0+0.3
+                                               −0.2 )×10
+                                                        −2
+                                                                   (2.8+0.2
+                                                                       −0.3 )×10
+                                                                                −2
+                                                                                               1.4+0.1
+                                                                                                  −0.2             2.3±0.4
+                              −2                         −3                     −2
+NE-1         (1.05±0.01)×10               (6.6±0.2)×10             (4.3+0.2
+                                                                       −0.1 )×10               6.6+0.3
+                                                                                                  −0.2             1.6±0.1
+                             −2
+NE-2           (2.6+0.1
+                   −0.2 )×10              (1.1±0.1)×10−3           (7.4−0.6 )×10−2
+                                                                       +0.2
+                                                                                               6.3+0.4
+                                                                                                  −0.7              2.2+0.1
+                                                                                                                       −0.2
+                             −2                         −2                      −2
+NE-3          (3.6+0.7
+                  −0.6 ) ×10               (2.3+0.3
+                                               −0.4 )×10           (6.3+1.0
+                                                                       −0.7 )×10               2.7+0.6
+                                                                                                  −0.5             1.6±0.3
+                            −2                          −2
+NE-4          (2.9+0.1
+                  −0.3 )×10              (1.63+0.04
+                                              −0.17 )×10          (1.02−0.09 )×10−1
+                                                                       +0.02
+                                                                                               6.3+0.9
+                                                                                                  −0.2              1.8+0.1
+                                                                                                                       −0.2
+                            −2                          −3                      −2
+SE-1          (2.3+0.9
+                  −0.1 )×10                (9.3+0.9
+                                               −0.4 )×10           (3.8+0.6
+                                                                       −0.1 )×10               4.1+0.7
+                                                                                                  −0.2              2.5+1.0
+                                                                                                                       −0.2
+SE-2          (2.6−0.1 )×10−2
+                  +0.3
+                                           (1.9+0.2
+                                               −0.1 )×10
+                                                        −2
+                                                                  (1.64−0.04 )×10−1
+                                                                       +0.21
+                                                                                               8.8+1.6
+                                                                                                  −0.3              1.4+0.3
+                                                                                                                       −0.1
+                            −2                          −2                      −2
+SE-3          (1.8+1.0
+                  −0.6 ) ×10               (1.1+0.4
+                                               −0.2 )×10           (2.2+0.8
+                                                                       −0.4 )×10               1.9+0.9
+                                                                                                  −0.5              1.6+1.0
+                                                                                                                       −0.6
+                  +0.5      −2                 +0.3     −2             +1.7     −2
+SE-4          (1.8−0.3 )×10                (1.1−0.7 )×10           (6.0−2.0 )×10               5.2+2.1
+                                                                                                  −1.8              1.5+0.6
+                                                                                                                       −0.3
+
+
+Burrows, A., Vartanyan, D., Dolence, J. C., Skinner, M. A.,       Hammer, N. J., Janka, H. T., & Müller, E. 2010, The
+  & Radice, D. 2018, SSRv, 214, 33,                                 Astrophysical Journal, 714, 1371,
+  doi: 10.1007/s11214-017-0450-9                                    doi: 10.1088/0004-637X/714/2/1371
+Burrows, A., Wang, T., & Vartanyan, D. 2024, ApJL, 964,           Hirai, R., Sato, T., Podsiadlowski, P., Vigna-Gómez, A., &
+  L16, doi: 10.3847/2041-8213/ad319e                                Mandel, I. 2020, Monthly Notices of the Royal
+Chevalier, R. A., & Kirshner, R. P. 1979, The Astrophysical         Astronomical Society, 499, 1154,
+                                                                    doi: 10.1093/mnras/staa2898
+  Journal, 233, 154, doi: 10.1086/157377
+                                                                  Hughes, J. P., Rakowski, C. E., Burrows, D. N., & Slane,
+Chevalier, R. A., & Oishi, J. 2003, ApJL, 593, L23,
+                                                                    P. O. 2000, The Astrophysical Journal Letters, 528,
+  doi: 10.1086/377572
+                                                                    L109, doi: 10.1086/312438
+Collins, C., Müller, B., & Heger, A. 2018, Monthly Notices
+                                                                  Hwang, U., & Laming, J. M. 2012, The Astrophysical
+  of the Royal Astronomical Society, 473, 1695,                     Journal, 746, 130, doi: 10.1088/0004-637X/746/2/130
+  doi: 10.1093/mnras/stx2470                                      Hwang, U., Laming, J. M., Badenes, C., et al. 2004, The
+Couch, S. M., & Ott, C. D. 2013, The Astrophysical Journal          Astrophysical Journal l, 615, L117, doi: 10.1086/426186
+  Letters, 778, L7, doi: 10.1088/2041-8205/778/1/L7               Janka, H.-T. 2017, The Astrophysical Journal, 837, 84,
+Couch, S. M., & Ott, C. D. 2015, The Astrophysical                  doi: 10.3847/1538-4357/aa618e
+  Journal, 799, 5, doi: 10.1088/0004-637X/799/1/5                 Joyce, M., Leung, S.-C., Molnár, L., et al. 2020, The
+De Looze, I., Milisavljevic, D., Temim, T., et al. 2024,            Astrophysical Journal, 902, 63,
+  ApJL, 976, L4, doi: 10.3847/2041-8213/ad855d                      doi: 10.3847/1538-4357/abb8db
+Ertl, T., Janka, H. T., Woosley, S. E., Sukhbold, T., &           Kato, C., Delfan Azari, M., Yamada, S., et al. 2015, The
+  Ugliano, M. 2016, The Astrophysical Journal, 818, 124,            Astrophysical Journal, 808, 168,
+                                                                    doi: 10.1088/0004-637X/808/2/168
+  doi: 10.3847/0004-637X/818/2/124
+                                                                  Katsuda, S., Morii, M., Janka, H.-T., et al. 2018, The
+Fesen, R. A., Hammell, M. C., Morse, J., et al. 2006, The
+                                                                    Astrophysical Journal, 856, 18,
+  Astrophysical Journal, 636, 859, doi: 10.1086/498092
+                                                                    doi: 10.3847/1538-4357/aab092
+Fryer, C. L. 2004, The Astrophysical Journal Letters, 601,
+                                                                  Kerzendorf, W. E., Do, T., de Mink, S. E., et al. 2019,
+  L175, doi: 10.1086/382044                                         Astronomy and Astrophysics, 623, A34,
+Fryxell, B., Mueller, E., & Arnett, D. 1991, The                    doi: 10.1051/0004-6361/201732206
+  Astrophysical Journal, 367, 619, doi: 10.1086/169657            Kifonidis, K., Plewa, T., Janka, H. T., & Müller, E. 2003,
+Grefenstette, B. W., Harrison, F. A., Boggs, S. E., et al.          Astronomy & Astrophysics, 408, 621,
+  2014, Nature, 506, 339, doi: 10.1038/nature12997                  doi: 10.1051/0004-6361:20030863
+                                                                                                                        15
+
+Lai, D., & Goldreich, P. 2000, The Astrophysical Journal,      Sukhbold, T., Woosley, S. E., & Heger, A. 2018, The
+  535, 402, doi: 10.1086/308821                                  Astrophysical Journal, 860, 93,
+Laplace, E., Justham, S., Renzo, M., et al. 2021,                doi: 10.3847/1538-4357/aac2da
+  Astronomy and Astrophysics, 656, A58,                        Takahashi, K., & Yamada, S. 2014, The Astrophysical
+  doi: 10.1051/0004-6361/202140506                               Journal, 794, 162, doi: 10.1088/0004-637X/794/2/162
+Laplace, E., Schneider, F. R. N., & Podsiadlowski, P. 2025,    Thielemann, F.-K., Nomoto, K., & Hashimoto, M.-A. 1996,
+  A&A, 695, A71, doi: 10.1051/0004-6361/202451077                The Astrophysical Journal, 460, 408, doi: 10.1086/176980
+Matsunaga, K., Uchida, H., Enokiya, R., et al. 2024, ApJ,      Vartanyan, D., Coleman, M. S. B., & Burrows, A. 2022,
+  970, 4, doi: 10.3847/1538-4357/ad5284                          Monthly Notices of the Royal Astronomical Society, 510,
+Milisavljevic, D., & Fesen, R. A. 2015, Science, 347, 526,       4689, doi: 10.1093/mnras/stab3702
+  doi: 10.1126/science.1261949                                 Vartanyan, D., Tsang, B. T. H., Kasen, D., et al. 2025,
+Milisavljevic, D., Temim, T., De Looze, I., et al. 2024, The     ApJ, 982, 9, doi: 10.3847/1538-4357/adb1e4
+  Astrophysical Journal Letters, 965, L27,                     Vink, J. 2004, NewAR, 48, 61,
+  doi: 10.3847/2041-8213/ad324b                                  doi: 10.1016/j.newar.2003.11.008
+Müller, B., Melson, T., Heger, A., & Janka, H.-T. 2017,       Vink, J., Kaastra, J. S., & Bleeker, J. A. M. 1996,
+  Monthly Notices of the Royal Astronomical Society, 472,        Astronomy and Astrophysics, 307, L41
+  491, doi: 10.1093/mnras/stx1962                              Wang, T., Vartanyan, D., Burrows, A., & Coleman, M.
+Müller, B., Viallet, M., Heger, A., & Janka, H.-T. 2016,        S. B. 2022, Monthly Notices of the Royal Astronomical
+  The Astrophysical Journal, 833, 124,                           Society, 517, 543, doi: 10.1093/mnras/stac2691
+  doi: 10.3847/1538-4357/833/1/124                             Wongwathanarat, A., Janka, H.-T., Müller, E., Pllumbi, E.,
+Ono, M., Nagataki, S., Ferrand, G., et al. 2020, The             & Wanajo, S. 2017, The Astrophysical Journal, 842, 13,
+  Astrophysical Journal, 888, 111,                               doi: 10.3847/1538-4357/aa72de
+  doi: 10.3847/1538-4357/ab5dba                                Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Reviews
+Orlando, S., Miceli, M., Pumo, M. L., & Bocchino, F. 2016,       of Modern Physics, 74, 1015,
+  The Astrophysical Journal, 822, 22,                            doi: 10.1103/RevModPhys.74.1015
+  doi: 10.3847/0004-637X/822/1/22                              Woosley, S. E., & Weaver, T. A. 1995, The The
+Orlando, S., Wongwathanarat, A., Janka, H. T., et al. 2021,      Astrophysical Journal Supplement, 101, 181,
+  Astronomy and Astrophysics, 645, A66,                          doi: 10.1086/192237
+  doi: 10.1051/0004-6361/202039335                             Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+Orlando, S., Janka, H. T., Wongwathanarat, A., et al. 2025,      A. 2020, The Astrophysical Journal, 890, 94,
+  A&A, 696, A108, doi: 10.1051/0004-6361/202553833               doi: 10.3847/1538-4357/ab66bb
+Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, Monthly      Yakovlev, D. G., Ho, W. C. G., Shternin, P. S., Heinke,
+  Notices of the Royal Astronomical Society, 533, 687,           C. O., & Potekhin, A. Y. 2011, Monthly Notices of the
+  doi: 10.1093/mnras/stae1778                                    Royal Astronomical Society, 411, 1977,
+Saio, H., Nandal, D., Meynet, G., & Ekström, S. 2023,           doi: 10.1111/j.1365-2966.2010.17827.x
+  Monthly Notices of the Royal Astronomical Society, 526,      Yoshida, T., Takahashi, K., Umeda, H., & Ishidoshiro, K.
+                                                                 2016, Physical Review D, 93, 123012,
+  2765, doi: 10.1093/mnras/stad2949
+                                                                 doi: 10.1103/PhysRevD.93.123012
+Sato, T., Yoshida, T., Umeda, H., et al. 2020, The
+                                                               Yoshida, T., Takiwaki, T., Aguilera-Dena, D. R., et al.
+  Astrophysical Journal, 893, 49,
+                                                                 2021, Monthly Notices of the Royal Astronomical
+  doi: 10.3847/1538-4357/ab822a
+                                                                 Society, 506, L20, doi: 10.1093/mnrasl/slab067
+Sato, T., Maeda, K., Nagataki, S., et al. 2021, Nature, 592,
+                                                               Yoshida, T., Takiwaki, T., Kotake, K., et al. 2019, The
+  537, doi: 10.1038/s41586-021-03391-9
+                                                                 Astrophysical Journal, 881, 16,
+Sato, T., Matsunaga, K., Sawada, R., et al. 2025, ApJ, 984,
+                                                                 doi: 10.3847/1538-4357/ab2b9d
+  185, doi: 10.3847/1538-4357/adc68d
+                                                               Young, P. A., Fryer, C. L., Hungerford, A., et al. 2006, The
+Sukhbold, T., & Woosley, S. E. 2014, The Astrophysical
+                                                                 Astrophysical Journal, 640, 891, doi: 10.1086/500108
+  Journal, 783, 10, doi: 10.1088/0004-637X/783/1/10
+

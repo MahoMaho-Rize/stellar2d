@@ -1,0 +1,667 @@
+                                              Astronomy & Astrophysics manuscript no. aa56941-25                                                                                 ©ESO 2025
+                                              November 7, 2025
+
+
+                                                                                                         Letter to the Editor
+
+
+                                              The SPAr burning: proton captures powering carbon–oxygen shell
+                                                                 mergers in massive stars
+                                                                                            L. Roberti1, 2, 3, 4, 5 and M. Pignatari2, 3, 6, 5
+
+                                                    1
+                                                      Istituto Nazionale di Fisica Nucleare - Laboratori Nazionali del Sud, Via Santa Sofia 62, Catania, I-95123, Italy
+                                                    2
+                                                      Konkoly Observatory, Research Centre for Astronomy and Earth Sciences, HUN-REN, Konkoly Thege Miklós út 15-17, Budapest,
+                                                      H-1121, Hungary
+                                                    3
+                                                      CSFK HUN-REN, MTA Centre of Excellence, Konkoly Thege Miklós út 15-17, Budapest, H-1121, Hungary
+arXiv:2509.13749v2 [astro-ph.SR] 6 Nov 2025
+
+
+
+
+                                                    4
+                                                      Istituto Nazionale di Astrofisica – Osservatorio Astronomico di Roma, Via Frascati 33, Monte Porzio Catone, I-00040, Italy
+                                                    5
+                                                      NuGrid Collaboration, http://nugridstars.org
+                                                    6
+                                                      University of Bayreuth, BGI, Universitätsstraße 30, 95447 Bayreuth, Germany
+
+                                                   Received August 22, 2025; accepted November 4, 2025
+
+                                                                                                               ABSTRACT
+
+                                                   Context. Carbon-oxygen (C–O) shell mergers in massive stars play a crucial role in both nucleosynthesis and the final stages of stellar
+                                                   evolution. These convective-reactive events significantly alter the internal structure of the star shortly before core collapse.
+                                                   Aims. We investigate how the enhanced production of light particles (especially protons) during a C–O shell merger, relative to
+                                                   classical oxygen shell burning, affects the energy balance and evolution of the convective shell.
+                                                   Methods. We derive the budget for direct and reverse nucleosynthesis flows across all relevant nuclear reactions from stellar evolution
+                                                   models, and we assess the relative energy produced.
+                                                   Results. We find that proton capture reactions on 32,34 S, 31 P, and 38 Ar (SPAr) dominate the nuclear energy production in typical C–O
+                                                   shell mergers as predicted by 1D stellar models. Their combined energy output is approximately 400 times greater than that of C and
+                                                   O fusion under the same conditions.
+                                                   Conclusions. Our results highlight the critical importance of including these proton-capture reactions in simulations of convective-
+                                                   reactive burning. This work suggests that excluding their contribution can lead to inaccurate modeling of the dynamics and nucle-
+                                                   osynthesis in advanced stellar evolutionary phases. Such results will need to be confirmed by new 1D stellar simulations and 3D
+                                                   hydrodynamics models.
+                                                   Key words. stars: massive – stars: evolution – stars: interiors – stars: nucleosynthesis – Galaxy: abundances – supernovae: general
+
+
+
+                                              1. Introduction                                                           CCSN shock, due to the extended radius of the newly formed
+                                                                                                                        mixed region (Roberti et al. 2024c).
+                                              The advanced stages of the evolution of a massive star (M > 8−9                Recent works (Andrassy et al. 2020; Yadav et al. 2020; Riz-
+                                              M⊙ ) are characterized by a complex interplay between nuclear             zuti et al. 2022, 2023, 2024) explored the occurrence of C–O
+                                              burning, neutrino cooling, and formation of convective zones.             shell mergers in 3D hydrodynamical models, using as an initial
+                                              Stars less massive than 25–30 M⊙ can often develop efficient O            condition the structure of the O, Ne, and C shells obtained by a
+                                              burning shells that penetrate the outer C– and Ne–rich layers and         1D model, remapped on a three-dimensional grid. The evolution
+                                              eventually merge in a single extended mixed zone a few days               of the shell interaction is then often followed with the adoption
+                                              or even hours before the core-collapse supernova (CCSN, e.g.,             of a minimal nuclear network including only the main nuclear
+                                              Rauscher et al. 2002; Ritter et al. 2018b; Roberti et al. 2024b,          reactions involving the isotopes 12 C, 20 Ne, and 16 O (see, e.g.,
+                                              2025). This occurrence, known often as C–O shell merger, has              Andrassy et al. 2020; Rizzuti et al. 2022), with the aid of ad-
+                                              important implications both on the nucleosynthesis and on the             ditional boosting factors for the energy generation to accelerate
+                                              structure of the star before and during the CCSN stage.                   the simulation. Rizzuti et al. (2023, 2024) instead employed for
+                                                   The signature of a C–O shell merger in the chemical com-             the first time an explicit 12-isotope nuclear network (n, p, 4 He,
+                                              position of the CCSN ejecta is represented by an enhanced pro-            12
+                                                                                                                           C, 16 O, 20 Ne, 23 Na, 24 Mg, 28 Si, 31 P, 32 S, and 56 Ni), including
+                                              duction of the elements synthesized by the O-burning (Si, S, Ar,          all the nuclear reactions linking these isotopes. All these works
+                                              Ca), as well as some odd-Z elements (P, Cl, K, Sc, Ritter et al.          found quantitative differences with 1D models, especially in the
+                                              2018b; Roberti et al. 2025). Radioactive nuclei as 40 K can be            much higher convective velocity achieved in 3D models and the
+                                              efficiently produced as well (Issa et al. 2025b, and references           natural entrainment of surrounding material from the edges of
+                                              therein). Eventually, due to the efficient activation of photodis-        the convective zones, eventually facilitating the merger to occur
+                                              integrations at the bottom of the O shell (T ∼ 2.5 − 2.8 GK),             (see also Jones et al. 2017).
+                                              the "cold" γ−process can occur and produce the p–nuclei with                   Furthermore, this merger may introduce asymmetries in the
+                                              A > 110 (Ritter et al. 2018b; Roberti, L. et al. 2023; Issa et al.        stellar structure and lead to a significant density drop at the
+                                              2025a). Moreover, this production is mostly preserved by the              Si–O interface, potentially favoring the onset of the CCSN ex-
+
+
+                                                                                                                                                                    Article number, page 1 of 9
+                                                  A&A proofs: manuscript no. aa56941-25
+
+plosion(see, e.g., Couch & Ott 2013; Wang et al. 2022; Boccioli         lead to a large enhancement in the number of protons (around
+et al. 2023; Laplace et al. 2025).                                      60 times more than in the case of O shell burning without C
+    In a C–O shell merger, the simultaneous activation of               and Ne ingestion), a strong increase in α particles (about 30
+12
+   C+12 C, 12 C+16 O, 20 Ne(γ,α)16 O, and 16 O+16 O, leads to a large   times higher), and a significant rise in neutron production (also
+production of the light particles p, α and n. Probabilities of          about 30 times higher). The higher n abundance (of the order of
+charged particle reactions drastically increase compared to the         ∼ 2 × 10−14 in mass fraction), combined with the typical density
+heavy ion fusion reactions, that have to overcome a larger              at the bottom of the O shell, results in a neutron density of about
+Coulomb barrier to occur. These reactions not only influence the        nn ∼ 2 × 1016 cm−3 .
+nucleosynthesis as described above. In this work we will show                The main neutron sources are 16 O(16 O,n)31 S and
+                                                                        16
+that some proton-capture reactions can significantly alter the nu-         O(12 C,n)27 Si. While we do not observe in this model a
+clear energy release in the shell merger, even overpowering the         significant production of heavy elements through neutron
+energy generated by C and O fusions.                                    captures, the availability of neutrons is crucial to increase the
+                                                                        production of some short-lived radioactive nuclei (such as 36 Cl,
+                                                                        40
+                                                                           K, and 41 Ca), which signature can be measured in the Early
+2. Astrophysical conditions                                             Solar System material (e.g., Lugaro et al. 2018). Beyond iron,
+We explore the astrophysical conditions of O shell burning be-          these neutrons could also boost the production of some isotopes
+fore, during, and after the occurrence of a C–O shell merger. We        traditionally considered r-only, such as 70 Zn, 76 Ge, and 80 Se.
+take as an example the 15 M⊙ stellar model at extremely low             This aspect can not be studied in detail here due to the low
+metallicity (Zini ≃ 10−5 Z⊙ ), with an initial equatorial rotation      metallicity of our case of study, but it will need to be explored
+velocity of vini = 600 km s−1 from Roberti et al. (2024b) (see          in detail for stellar models with C–O shell mergers with initial
+Appendix A for more details).                                           metallicity closer to solar (e.g., Ritter et al. 2018a; Roberti, L.
+     Fig. A.1 shows the chemical composition inside the O burn-         et al. 2023).
+ing shell at three different times before the core collapse: during          The large number of protons plays a key role in the synthesis
+the classical O burning in shell (i.e., without any ingestion of        of odd-Z elements and in activating several nuclear processes
+Ne or C rich material, ∆tcoll = 3.47 × 105 s, upper panel); at          that can significantly alter the energy balance within the evolving
+the beginning of the C–O shell merger (∆tcoll = 6.66 × 103 s,           convective shell.
+central panel); and at the end of the C–O shell merger (∆tcoll =
+5.72 × 102 s, lower panel). After silicon is exhausted in the stel-
+                                                                        3. The SPAr burning
+lar core, the core begins its final contraction leading up to core
+collapse. This contraction lasts ∼ 2 days and raises the temper-        During O burning, the O fusion is not the only dominant pro-
+ature at the base of the convective O burning shell from 2.58           cess, but it is accompanied by a large number of charged particle
+to 2.85 GK, allowing the convective zone to extend outward              reactions such as 27 Al(p,γ)28 Si, 31 P(p,α)28 Si, and 28 Si(α,γ)32 S
+into the surrounding Ne, C and O rich layers (upper panel of            (Thielemann & Arnett 1985; Chieffi et al. 1998). These charged
+Fig. A.1). While the bottom of the shell is receding in radius          particles are primarily produced by the 16 O+16 O reactions and
+due to the contraction of the stellar core, the layers above ex-        subsequently captured by the products of Ne burning (24 Mg,
+                                                                        27
+pand due to the efficient convection. Once the outer boundary of           Al) as well as by products of O burning itself (31 P, 28 Si). This
+the convective zone starts mixing in some new Ne, C, and O, a           results in a final chemical composition dominated by 28,30 Si,
+                                                                        32,34
+convective-reactive event is triggered (central panel of Fig. A.1).           S, and 38 Ar. The high temperatures and densities of O burn-
+The ingested nuclei provide fresh fuel, which sustains further          ing favour also the activation of efficient electron captures, β
+expansion of the convective zone and promotes additional in-            decays, and photodisintegrations. In particular, these conditions
+gestion of material from the surrounding layers. The C–O shell          allows the capture reactions to begin approaching an equilib-
+merger freezes once an active Si burning shell forms outside the        rium between their forward and reverse channels. As described
+Fe core, which accelerates the timescale of the final evolutionary      by Chieffi et al. (1998), the degree of equilibrium of a reaction
+stages of the massive star (lower panel of Fig. A.1).                   a + b → c + d can be estimated by the quantity φ = max(f     |fab −fcd |
+                                                                                                                                          ab ,fcd )
+                                                                                                                                                    ,
+     During a C–O shell merger, the nuclear energy that sustains
+                                                                        where fab and fcd are the fluxes1 of the forward and reverse reac-
+the convective-reactive process is concentrated in a narrow re-
+                                                                        tions, respectively. A value of φ ≈ 0 indicates that the process is
+gion near the base of the shell. Within this region, the abun-
+                                                                        close to equilibrium, whereas φ ≈ 1 suggests it is far from equi-
+dances of the O-burning products remain relatively constant, as
+                                                                        librium. It is also worth noting that during O burning, some re-
+their enhanced production is balanced by the outward expansion
+                                                                        actions initially dominated by the forward channel may reverse,
+of the convective zone (see Table A.2). This expansion helps di-
+                                                                        becoming dominated by the reverse reaction as they approach
+luting the newly synthesized material into layers where it is no
+                                                                        small values of φ.
+longer processed, while also supplying fresh fuel to the burn-
+                                                                             The net energy produced by a nuclear reaction per unit time
+ing region. As a result, O burning products end up being largely
+                                                                        and mass (εnuc ) can be estimated as the product of the Q-value of
+overproduced relative to their initial abundance in the entire
+                                                                        the reaction (the energy released, calculated from the mass dif-
+shell.
+                                                                        ference between reactants and products) and the effective reac-
+     Compared to classical O shell burning, the main difference
+                                                                        tion flux, defined as the difference between the fluxes of the for-
+in a C–O shell merger lies in the much larger production of light
+                                                                        ward and reverse reactions. Summing over all reactions provides
+particles (p, n, α). The excess of these light particles is generated
+                                                                        the total εnuc for a given stellar zone, and integrating this quan-
+by: (1) the more efficient O burning itself (with branching ratios
+                                                                        tity over the mass of the convective shell gives the total nuclear
+at these temperatures of roughly 66% for p emission, 21% for α,
+                                                                        energy generated (or absorbed, if negative) per second within the
+and 13% for n); Ne photodissociation (emission of α particles);
+C burning (about 41% for p emission, 51% for α, and 8% for              1
+                                                                           fab = Ya Yb ρ NA ⟨σv⟩ab (and faγ = Ya NA λaγ in the case of a photo-
+n); (4) and hybrid C-O fusion (approximately 54% for p emis-            disintegration), with Yi = Xi /Ai where Xi and Ai are the mass fraction
+sion, 36% for α, and 10% for n). Altogether, these processes            and the atomic weight of the species i, respectively.
+
+Article number, page 2 of 9
+             L. Roberti and M. Pignatari: The SPAr burning: proton captures powering carbon–oxygen shell mergers in massive stars
+
+                                                                              shell φ increases from φ = 1.82 × 10−3 in O shell burning, to
+                                                                              φ = 0.251 and φ = 0.469 at the beginning and at the end of the
+                                                                              merger, respectively. As a result, proton captures on S, P, and
+                                                                              Ar (specifically, 32 S(p,γ)33 Cl, 34 S(p,γ)35 Cl, 31 P(p,α)28 Si, and
+                                                                              38
+                                                                                 Ar(p,γ)39 K) become (1) the most efficient reactions and (2)
+                                                                              the dominant contributors to energy generation throughout the
+                                                                              entire duration of the merger, as soon as the abundance of pro-
+                                                                              tons exceeds a few times 10−9 . Meanwhile, the contributions of
+                                                                              O fusion to the total energy budget at the bottom of the C–O shell
+                                                                              drops to around 0.13-0.14% (see central and lower panels of
+                                                                              Fig. 1). The energy generation due to these proton-capture reac-
+                                                                              tions also dominates the entire integral over the mass, and there-
+                                                                              fore it guides the temporal evolution of the convective-reactive
+                                                                              event. We call this simultaneous activation of nuclear reactions
+                                                                              due to proton captures the SPAr (standing for S, P, and Ar) burn-
+                                                                              ing. For the model considered in our analysis, the SPAr burning
+                                                                              reactions generate about 400 times more energy than the typi-
+                                                                              cal 16 O–16 O fusion channels and ∼ 330 times more energy than
+                                                                              the sum of C, O, and C+O fusion channels (central and lower
+                                                                              panel of Fig. 1). As we mentioned in Sect. 2, the stellar model by
+                                                                              Roberti et al. (2024b) considered for this analysis shows really
+                                                                              similar properties compared to the other 1D models experienc-
+                                                                              ing C–O shell mergers. Therefore, the SPAr burning is a general
+                                                                              feature of C–O shell mergers, and not a result depending on spe-
+                                                                              cific details of the stellar model. We expect its energy boost to
+                                                                              also be present in 3D hydrodynamics simulations of C-–O shell
+                                                                              mergers, because of the generality of the thermodynamical con-
+                                                                              ditions driven by the same initial conditions of O fusion.
+                                                                                   The SPAr burning mainly depends on two ingredients: the
+                                                                              protons, that control the efficiency of the forward proton cap-
+                                                                              ture reactions 32 S(p,γ)33 Cl, 34 S(p,γ)35 Cl, 38 Ar(p,γ)39 K, and
+                                                                              31
+                                                                                 P(p,α)28 Si, and the temperature, that instead controls the ef-
+                                                                              ficiency of the photodisintegrations 33 Cl(γ,p)32 S, 35 Cl(γ,p)34 S,
+                                                                              and 39 K(γ,p)38 Ar. Interestingly, the 31 P(p,α)28 Si reaction ranks
+                                                                              among the most efficient reactions in a merger, exhibiting one
+                                                                              of the highest effective fluxes (see A.4-A.5). Its Q-value, how-
+Fig. 1. The relative contribution of individual effective nuclear reactions
+                                                                              ever, is lower than that of other radiative capture reactions (e.g.,
+(forward minus reverse reaction, see text) to the total nuclear energy        28
+production at the bottom of the O-burning shell during O shell burning           Si(p,γ)33 P), making it a key regulator of the balance between p
+(upper panel), at the beginning of the C–O shell merger (central panel),      and α particles rather than a dominant energy source. Reactants
+and at the end of the C–O shell merger (lower panel). The blue bars rep-      and products have instead a marginal contribution on the SPAr
+resent processes that are dominated by the forward reaction and have a        burning efficiency, as their variation is always contained between
+positive energy contribution, while red bars represent instead processes      a factor of 2-3 (see Table A.2). Note that the SPAr reactions are
+that are dominated by the reverse reaction and have a negative energy         already well known to be relevant during O-burning, particularly
+contribution. The three panels include all the reactions having an abso-      as the amount of 16 O decreases in the convective shell (see, e.g.,
+lute ε/εtot > 10−3 (See also Table A.3-A.4-A.5).                              Thielemann & Arnett 1985; Limongi & Chieffi 2008). The key
+                                                                              difference in a shell undergoing SPAr burning is that the energy
+                                                                              generated by SPAr reactions is orders of magnitude stronger than
+shell. The zones at the highest temperatures, specifically those at           that from O-fusion reactions, due to the reasons discussed above.
+the bottom of the O shell, contribute the most to the total en-
+ergy produced per second (see the dotted-dashed line in central               4. Discussion and conclusions
+and lower panels of Fig. A.1, representing the cumulative εnuc ).
+Therefore, they are representative of the nuclear processes that              In this paper, we demonstrated that the light particles released
+dominate energy generation within the shell. Fig. 1 shows the                 during a C–O shell merger (in particular protons), not only im-
+relative contribution of individual nuclear reactions to the total            pact the nucleosynthesis, but also play a key role in the en-
+nuclear energy production at the bottom of the O-burning shell,               ergy balance of the evolving convective shell. We identified four
+sorted in decreasing order of their absolute value (see also Ta-              crucial nuclear reactions that dominate energy generation once
+ble A.3-A.4-A.5).                                                             the proton abundance becomes sufficiently high: 32 S(p,γ)33 Cl,
+                                                                              34
+    The energy generation and the overall reaction balance are                   S(p,γ)35 Cl, 31 P(p,α)28 Si, and 38 Ar(p,γ)39 K, that we referred
+significantly influenced by the much higher abundance of light                to as the SPAr burning. The nuclear energy released by the SPAr
+particles present during a C–O shell merger. In particular, the               reactions is 400 times greater than that produced by classical O-
+large production of p drives the radiative capture reactions (p, γ)           burning shell conditions. This result is crucial, as neglecting their
+out of equilibrium with their photodisintegration counterparts                contribution (often done to simplify and speed up stellar calcu-
+(γ, p), causing the capture channel to dominate. For example,                 lations) can lead to inaccurate modeling of the final evolutionary
+in the case of the 34 S(p,γ)35 Cl reaction, at the bottom of the              stages of massive stars, potentially altering their CCSN outcome
+                                                                                                                        Article number, page 3 of 9
+                                                    A&A proofs: manuscript no. aa56941-25
+
+(we refer to Farmer et al. 2016, for a complete discussion on how         may represent another promising application for such investiga-
+the network size can affect the pre-supernova structure).                 tions.
+    C–O shell mergers are a convective-reactive events, i.e., the         Acknowledgements. We thank the support from the NKFI via K-project 138031
+ingestion of fresh fuel at the outer boundary of the convective           and the Lendület Program LP2023-10 of the Hungarian Academy of Sciences.
+zone promotes further expansion of the shell and additional fuel          LR and MP acknowledge the support to NuGrid from JINA-CEE (NSF Grant
+ingestion. Therefore, simulating this occurrence requires that the        PHY-1430152) and STFC (through the University of Hull’s Consolidated Grant
+                                                                          ST/R000840/1), and ongoing access to viper, the University of Hull High Per-
+equations governing the evolution of the chemical composition             formance Computing Facility. LR acknowledges the support from the ChETEC-
+to be (1) coupled with the stellar structure equations and mix-           INFRA – Transnational Access Projects 22102724-ST and 23103142-ST and
+ing processes, and (2) include an extended nuclear network that           the PRIN URKA Grant Number prin_2022rjlwhn. This work was supported
+captures the energy feedback from light particle reactions such           by the European Union’s Horizon 2020 research and innovation programme
+as those in the SPAr process. Our analysis suggests that the ad-          (ChETEC-INFRA – Project no. 101008324), and the IReNA network supported
+                                                                          by US NSF AccelNet (Grant No. OISE-1927130). MP also acknowledges the
+ditional energy released by SPAr burning increases the nuclear            support from the ERC Synergy Grant Programme (Geoastronomy, grant agree-
+luminosity, which in turn steepens the radiative gradient. As a           ment number 101166936, Germany) and the ERC Consolidator Grant funding
+result, we expect the convective merged zone to grow, at least            scheme (Project RADIOSTAR, G.A. n. 724560, Hungary). This work benefited
+more rapidly than in models that do not include these reactions.          from interactions and workshops co-organized by The Center for Nuclear as-
+                                                                          trophysics Across Messengers (CeNAM) which is supported by the U.S. De-
+Of course, the actual expansion of the convective zone also de-           partment of Energy, Office of Science, Office of Nuclear Physics, under Award
+pends on other factors, such as neutrino losses and the treatment         Number DE-SC0023128. We thank the two anonymous referees for their valu-
+of convective boundary mixing (e.g., Rizzuti et al. 2023, 2024;           able contribution.
+Brinkman et al. 2024). Therefore, this expectation needs to be
+verified through full stellar evolution calculations. Qualitatively,
+we also expect that 3D models would exhibit a similar behavior,           References
+and that the use of boosting factors on the driving luminosity (as
+discussed by Rizzuti et al. 2022, and references therein) could           Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491, 972
+                                                                          Boccioli, L., Roberti, L., Limongi, M., Mathews, G. J., & Chieffi, A. 2023, The
+partially compensate for the absence of SPAr reactions. Never-                Astrophysical Journal, 949, 17
+theless, this should be confirmed with appropriate hydrodynam-            Brinkman, H. E., den Hartogh, J. W., Doherty, C. L., Pignatari, M., & Lugaro,
+ics simulations.                                                              M. 2021, ApJ, 923, 47
+                                                                          Brinkman, H. E., Doherty, C., Pignatari, M., Pols, O., & Lugaro, M. 2023, ApJ,
+    Uncertainties in reaction rates can significantly impact stel-            951, 110
+lar evolution during the advanced burning stages, as shown by,            Brinkman, H. E., Doherty, C. L., Pols, O. R., et al. 2019, ApJ, 884, 38
+e.g., Fields et al. (2018). Adopting the most up-to-date and ac-          Brinkman, H. E., Roberti, L., Kemp, A., et al. 2024, A&A, 689, A149
+                                                                          Chieffi, A. & Limongi, M. 2013, ApJ, 764, 21
+curate rate estimates is therefore essential for a more accurate          Chieffi, A., Limongi, M., & Straniero, O. 1998, ApJ, 502, 737
+exploration of late stellar evolution. In this work, we adopt the         Couch, S. M. & Ott, C. D. 2013, ApJ, 778, L7
+                                                                          Cyburt, R. H., Amthor, A. M., Ferguson, R., et al. 2010, The Astrophysical Jour-
+stellar model from Roberti et al. (2024b), using SPAr reaction                nal Supplement Series, 189, 240
+rates from Reaclib (Cyburt et al. 2010) and Starlib (Sallaska             Farmer, R., Fields, C. E., Petermann, I., et al. 2016, The Astrophysical Journal
+et al. 2013) nuclear databases. Specifically, in the case of the              Supplement Series, 227, 22
+32                                                                        Fields, C. E., Timmes, F. X., Farmer, R., et al. 2018, ApJS, 234, 19
+   S(p,γ)33 Cl reaction experimental data from Iliadis et al. (2010)      Fuller, G. M., Fowler, W. A., & Newman, M. J. 1982, ApJ, 252, 715
+was adopted. For the 34 S(p,γ)35 Cl reaction, a theoretical rate          Iliadis, C., Longland, R., Champagne, A. E., Coc, A., & Fitzgerald, R. 2010,
+from Cyburt et al. (2010) was used, although the current ver-                 Nucl. Phys. A, 841, 31
+                                                                          Issa, J., Herwig, F., Denissenkov, P., & Pignatari, M. 2025a, arXiv e-prints,
+sion of Reaclib is based on experimental data from Setoodehnia                arXiv:2507.16965
+et al. (2019). The 34 S(p,γ)35 Cl reaction was recently measured          Issa, J., Herwig, F., Mojzsis, S. J., & Pignatari, M. 2025b, arXiv e-prints,
+in inverse kinematics by the DRAGON collaboration (Lovely                     arXiv:2509.19240
+                                                                          Jones, S., Andrassy, R., Sandalski, S., et al. 2017, MNRAS, 465, 2991
+et al. 2021), though it has so far been mostly explored in the con-       Laplace, E., Schneider, F. R. N., & Podsiadlowski, P. 2025, A&A, 695, A71
+text of classical nova nucleosynthesis to explain isotopic anoma-         Limongi, M. & Chieffi, A. 2008, in EAS Publications Series, Vol. 32, EAS Pub-
+lies in pre-solar grains (Ward et al. 2025). The 31 P(p,α)28 Si               lications Series, ed. C. Charbonnel & J. P. Zahn, 233–281
+                                                                          Limongi, M., Roberti, L., Chieffi, A., & Nomoto, K. 2024, ApJS, 270, 29
+rate is based on experimental data from Iliadis et al. (2010),            Limongi, M., Roberti, L., Falla, A., Chieffi, A., & Nomoto, K. 2025, ApJS, 279,
+while the 38 Ar(p,γ)39 K rate remains theoretical and is also taken           41
+from Cyburt et al. (2010). For 32 S(p,γ)33 Cl, 31 P(p,α)28 Si and         Limongi, M. & Chieffi, A. 2018, ApJS, 237, 13
+38                                                                        Lovely, M., Lennarz, A., Connolly, D., et al. 2021, Phys. Rev. C, 103, 055801
+   Ar(p,γ)39 K, no updated experimental data have been published          Lugaro, M., Ott, U., & Kereszturi, Á. 2018, Progress in Particle and Nuclear
+since their inclusion in Starlib. The only update to 31 P(p,α)28 Si           Physics, 102, 1
+in Reaclib is a revision adopting 26% of the recommended me-              Mascali, D., Santonocito, D., Amaducci, S., et al. 2022, Universe, 8, 80
+                                                                          Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E. 2002, ApJ, 576, 323
+dian rate from Iliadis et al. (2010). Incorporating the most recent       Ritter, C., Andrassy, R., Côté, B., et al. 2018a, MNRAS, 474, L1
+experimental results into future simulations will be essential to         Ritter, C., Herwig, F., Jones, S., et al. 2018b, MNRAS, 480, 538
+assess uncertainties and better constrain model predictions.              Rizzuti, F., Hirschi, R., Arnett, W. D., et al. 2023, MNRAS, 523, 2317
+                                                                          Rizzuti, F., Hirschi, R., Georgy, C., et al. 2022, MNRAS, 515, 4013
+    Finally, the conditions of temperature and density in a C–O           Rizzuti, F., Hirschi, R., Varma, V., et al. 2024, MNRAS, 533, 687
+shell merger allows the activation of efficient weak reactions. In        Roberti, L., Limongi, M., & Chieffi, A. 2024a, ApJS, 272, 15
+                                                                          Roberti, L., Limongi, M., & Chieffi, A. 2024b, ApJS, 270, 28
+the stellar model, the most efficient weak reactions are the β+ de-       Roberti, L., Pignatari, M., Brinkman, H. E., et al. 2025, A&A, 698, A216
+cays of 27 Si, 30 P, 31 S, 34 Cl, 37 Ar, 38 K and the electron captures   Roberti, L., Pignatari, M., Fryer, C., & Lugaro, M. 2024c, A&A, 686, L8
+on 32 S and 35 Cl. Most of the unstable nuclei are adjacent to SPAr       Roberti, L., Pignatari, M., Psaltis, A., et al. 2023, A&A, 677, A22
+                                                                          Sallaska, A. L., Iliadis, C., Champange, A. E., et al. 2013, The Astrophysical
+products, together with the two products of the neutron sources               Journal Supplement Series, 207, 18
+16
+   O(16 O,n)31 S and 16 O(12 C,n)27 Si. For these isotopes, the weak      Setoodehnia, K., Kelley, J. H., Marshall, C., Portillo Chaves, F., & Longland, R.
+interactions adopted here are from Fuller et al. (1982). The up-              2019, Phys. Rev. C, 99, 055812
+                                                                          Thielemann, F. K. & Arnett, W. D. 1985, ApJ, 295, 604
+coming PANDORA project (e.g., Mascali et al. 2022) will make              Wang, T., Vartanyan, D., Burrows, A., & Coleman, M. S. B. 2022, MNRAS, 517,
+it possible to measure weak interaction rates (as well as opaci-              543
+ties) directly under plasma conditions, and the C–O shell merger          Ward, L., Iliadis, C., Bose, M., et al. 2025, ApJ, 986, 109
+                                                                          Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger, A. 2020, ApJ, 890, 94
+
+
+Article number, page 4 of 9
+             L. Roberti and M. Pignatari: The SPAr burning: proton captures powering carbon–oxygen shell mergers in massive stars
+
+Table A.1. The nuclear network from n to Zn (see text). Amin and Amax
+are the minimum and maximum atomic weight of each element.
+
+ Element      Z     Amin     Amax     Element      Z     Amin     Amax
+ n             0      1        1      S            16     31       37
+ H             1      1        3      Cl           17     33       38
+ He            2      3        4      Ar           18     35       41
+ Li            3      6        7      K            19     37       44
+ Be            4      7       10      Ca           20     39       49
+ B             5     10       11      Sc           21     41       49
+ C             6     12       14      Ti           22     44       51
+ N             7     13       16      V            23     45       52
+ O             8     14       19      Cr           24     47       55
+ F             9     17       20      Mn           25     49       57
+ Ne           10     19       23      Fe           26     51       61
+ Na           11     21       24      Co           27     53       62
+ Mg           12     23       27      Ni           28     55       65
+ Al           13     25       28      Cu           29     57       66
+ Si           14     27       32      Zn           30     60       71
+ P            15     29       34
+
+
+
+Appendix A: The stellar model
+The model adopted in this work is part of a larger set calculated
+with the FRANEC code (Chieffi & Limongi 2013; Limongi, M.
+& Chieffi, A. 2018), with a nuclear network that includes 524
+isotopes and more than 3000 reactions, fully coupled to the phys-
+ical evolution of the star (the list of nuclear species included in
+the network, up to Zn, is provided in Table A.1). The network               Fig. A.1. Abundances in mass fraction as a function of the internal mass
+is an extension of that adopted in Limongi, M. & Chieffi, A.                coordinate for key nuclear species (see legend). The grey shaded area
+(2018), designed to explore neutron-capture nucleosynthesis in              represents the O convective shell 3.47 × 105 s (upper panel), 6.66 ×
+fast-rotating stars at extremely low metallicity. The choice of this        103 s (central panel) and 5.72 × 102 s (lower panel) before the core-
+network is particularly suited to follow the energy generation in           collapse. Neutron and proton abundances (not shown in the figure) with
+the most advanced stages of the evolution. In particular, the set           other relevant species are provided at these different stages in Table
+of nuclear species involved in the energy generation is fully con-          A.2, at the base of the grey zone. The dotted-dashed red line shows the
+sistent with those adopted in other works addressing this topic,            cumulative integral of the energy per second generated by the nuclear
+such as the 127-isotope network of Farmer et al. (2016), the 204-           reactions from the outer edge to the bottom of the O shell normalized to
+                                                                            its maximum.
+isotope networks of Brinkman et al. (2019, 2021, 2023), and the
+112-isotope network of Limongi et al. (2024). A detailed discus-
+sion of the network selection, the complete list of isotopes, as            the simulations (e.g., Roberti et al. 2025). For instance, massive
+well as the Kippenhahn diagram of the model presented here, can             star models developing C–O shell mergers are obtained at solar
+be found in Section 2 and in Figure 10 of Roberti et al. (2024b).           metallicity also using MESA (Ritter et al. 2018b,a; Roberti, L.
+     Note that the abundances of typical O burning products such            et al. 2023) and KEPLER (Rauscher et al. 2002).
+as 28 Si, 31 P, 32,34 S, 33,35 Cl, 38 Ar, and 39 K, are entirely indepen-       In the following, we present the supplementary material rel-
+dent from both initial stellar metallicity and rotation. This is be-        ative to the chemical composition (Fig. A.1, Table A.2) and to
+cause the nucleosynthesis of these species is predominantly pri-            the most energetic nuclear reactions (Table A.3-A.4-A.5) at the
+mary, driven directly by the O fusion processes and the previous            bottom of the O-shell, for the three different timesteps reported
+burning stages, with a negligible contribution from the pristine            in upper, central, and lower panels of Fig. 1.
+chemical composition. Moreover, rotational instabilities act on
+much longer timescales than that of the O-burning phase itself,
+therefore rotationally induced mixing is no longer effective at
+this stage. Additionally, the key conditions (chemical composi-
+tion, temperature, and density in the O shell) in this model are
+comparable to those in other models with initial masses between
+roughly 12 and 30 M⊙ across different sets (Limongi, M. & Chi-
+effi, A. 2018; Ritter et al. 2018b; Brinkman et al. 2021; Roberti
+et al. 2024a; Limongi et al. 2025). Therefore, the adoption of
+this model is suitable to discuss the general properties of the O
+burning in shell. We also note that structural differences (e.g.,
+the location of the C shell) do not lead to quantitative differences
+in the nuclear reactions occurring at the base of the C–O shell
+merging zone. Notice also that C–O shell mergers can be ob-
+tained at any metallicities and using different stellar codes for
+                                                                                                                        Article number, page 5 of 9
+                                                   A&A proofs: manuscript no. aa56941-25
+
+Table A.2. Stellar conditions and chemical abundances at the bottom of
+the O-burning shell (see text).
+
+                         O-             C-O                 C-O
+                       shell      shell merger (i)    shell merger (f)
+    ∆tcoll (s)       3.47e+04        6.66e+03            5.72e+02
+     T (GK)             2.58            2.85                2.78
+ ρ (106 g cm−3 )        2.14            2.53                2.09
+         p           1.54e-10        9.39e-09            7.21e-09
+         α           8.35e-09        2.86e-07            2.75e-07
+         n           8.24e-16        2.32e-14            1.87e-14
+       12
+          C          2.90e-06        2.01e-05            2.29e-05
+       16
+          O          3.48e-01        2.20e-01            4.11e-01
+      24
+         Mg          1.57e-03        2.47e-04            4.66e-04
+       27
+          Al         2.88e-05        5.65e-06            1.13e-05
+       28
+          Si         3.29e-01        3.30e-01            2.04e-01
+        31
+           P         5.09e-04        6.82e-04            4.54e-04
+        32
+           S         2.22e-01        2.75e-01            2.13e-01
+        34
+           S         1.74e-02        1.06e-02            9.15e-03
+       33
+          Cl         8.89e-11        2.00e-09            9.79e-10
+       35
+          Cl         7.83e-04        1.33e-03            1.08e-03
+      38
+          Ar         2.39e-02        2.32e-02            2.38e-02
+       39
+          K          1.11e-03        3.02e-03            2.90e-03
+
+
+
+
+Article number, page 6 of 9
+            L. Roberti and M. Pignatari: The SPAr burning: proton captures powering carbon–oxygen shell mergers in massive stars
+
+Table A.3. List of the reactions that contribute the most to the energy generation at the bottom of the O-shell relative to the upper panels of
+Fig. A.1-1.
+
+                           Reaction              Q (MeV)        fab − fcd         εi        εi /εtot        φ
+                           16
+                              O(16 O,p)31 P        7.68        4.17e+18       5.13e+13     2.90e-01     1.00e+00
+                           38
+                              Ar(p,γ)39 K          6.38        2.47e+18       2.52e+13     1.42e-01     1.65e-02
+                           16
+                              O(16 O,α)28 Si       9.59       1.36e+18       2.08e+13      1.18e-01     1.00e+00
+                           34
+                              S(p,γ)35 Cl          6.37        2.01e+18       2.04e+13     1.16e-01     1.82e-03
+                           27
+                              Al(p,γ)28 Si        11.58        7.41e+17       1.37e+13     7.77e-02     1.00e+00
+                           28
+                              Si(α,γ)32 S          6.95       1.08e+18       1.20e+13      6.77e-02     3.15e-02
+                           30
+                              P(p,γ)31 S           6.13       -9.39e+17      -9.22e+12     5.21e-02     9.97e-01
+                           29
+                              Si(p,γ)30 P          5.59       -9.43e+17      -8.44e+12     4.77e-02     9.69e-02
+                           28
+                              Si(n,γ)29 Si         8.47       -6.03e+17      -8.18e+12     4.63e-02     2.28e-01
+                           35
+                              Cl(p,γ)36 Ar         8.51        5.88e+17       8.01e+12     4.53e-02     7.21e-02
+                           31
+                              P(p,α)28 Si          1.92        2.46e+18       7.53e+12     4.26e-02     1.00e-02
+                           24
+                              Mg(α,γ)28 Si         9.98        4.43e+17       7.08e+12     4.00e-02     1.00e+00
+                           32
+                              S(n,γ)33 S           8.64        5.03e+17       6.96e+12     3.94e-02     1.29e-01
+                           39
+                              K(p,γ)40 Ca          8.33        4.87e+17       6.49e+12     3.67e-02     1.23e-01
+                           12
+                              C(α,γ)16 O           7.16       -4.63e+17      -5.31e+12     3.00e-02     1.00e+00
+                           36
+                              Ar(n,γ)37 Ar         8.79        3.69e+17       5.19e+12     2.93e-02     4.68e-01
+                           34
+                              S(α,γ)38 Ar          7.21        3.97e+17       4.58e+12     2.59e-02     3.54e-01
+                           33
+                              S(n,α)30 Si          3.49        6.52e+17       3.64e+12     2.06e-02     8.64e-01
+                           35
+                              Cl(p,α)32 S          1.87       -1.12e+18      -3.36e+12     1.90e-02     4.51e-02
+                           32
+                              S(α,γ)36 Ar          6.64        2.73e+17       2.90e+12     1.64e-02     1.14e-01
+                           31
+                              P(p,γ)32 S           8.86        1.96e+17       2.79e+12     1.58e-02     4.12e-02
+                           16
+                              O(16 O,n)31 S        1.50        9.47e+17       2.27e+12     1.29e-02     1.00e+00
+                           30
+                              Si(p,γ)31 P          7.30        1.70e+17       1.98e+12     1.12e-02     1.05e-02
+                           27
+                              Al(p,α)24 Mg         1.60       -7.56e+17      -1.94e+12     1.09e-02     7.56e-02
+                           37
+                              Ar(n,α)34 S          4.63       2.60e+17       1.92e+12      1.09e-02     7.74e-01
+                           12
+                              C(16 O,p)27 Al       5.17        2.13e+17       1.76e+12     9.98e-03     1.00e+00
+                           12
+                              C(16 O,α)24 Mg       6.77       1.44e+17        1.56e+12     8.80e-03     1.00e+00
+                           32
+                              S(n,α)29 Si          1.53       -5.04e+17      -1.23e+12     6.95e-03     2.52e-01
+                           16
+                              O(α,γ)20 Ne          4.73        1.40e+17       1.06e+12     6.01e-03     2.40e-03
+                           39
+                              K(p,α)36 Ar          1.29       -4.25e+17      -8.76e+11     4.95e-03     3.09e-01
+                           27
+                              Al(α,p)30 Si         2.37       1.93e+17       7.31e+11      4.13e-03     1.00e+00
+                           37
+                              Cl(p,γ)38 Ar        10.24        3.87e+16       6.34e+11     3.58e-03     7.18e-01
+                           40
+                              Ca(n,γ)41 Ca         8.36        4.33e+16       5.80e+11     3.28e-03     1.11e-01
+                           37
+                              Cl(p,α)34 S          3.03       1.09e+17        5.29e+11     2.99e-03     5.64e-01
+                           29
+                              Si(α,γ)33 S          7.12       3.42e+16        3.90e+11     2.20e-03     3.49e-01
+                           37
+                              Ar(n,p)37 Cl         1.60        1.48e+17       3.78e+11     2.14e-03     4.82e-01
+                           41
+                              Ca(n,α)38 Ar         5.22        4.20e+16       3.51e+11     1.98e-03     8.56e-01
+                           33
+                              S(n,γ)34 S          11.42        1.89e+16       3.45e+11     1.95e-03     8.78e-01
+                           32
+                              S(p,γ)33 Cl          2.28        9.34e+16       3.40e+11     1.92e-03     1.84e-04
+                           36
+                              Cl(p,γ)37 Ar         8.72        2.37e+16       3.30e+11     1.87e-03     4.44e-01
+                           20
+                              Ne(α,γ)24 Mg         9.32        1.48e+16       2.21e+11     1.25e-03     9.97e-01
+                           33
+                              S(α,γ)37 Ar          6.79        2.02e+16       2.20e+11     1.24e-03     4.59e-01
+                           30
+                              Si(α,γ)34 S          7.92       1.41e+16        1.78e+11     1.01e-03     9.94e-02
+
+
+
+
+                                                                                                                   Article number, page 7 of 9
+                                                   A&A proofs: manuscript no. aa56941-25
+
+Table A.4. List of the reactions that contribute the most to the energy generation at the bottom of the O-shell relative to the central panels of
+Fig. A.1-1.
+
+                              Reaction           Q (MeV)        fab − fcd        εi         εi /εtot        φ
+                              34
+                                 S(p,γ)35 Cl       6.37        1.26e+22      1.29e+17      5.84e-01     2.51e-01
+                              38
+                                 Ar(p,γ)39 K       6.38        2.76e+21      2.82e+16      1.28e-01     2.53e-01
+                              32
+                                 S(p,γ)33 Cl       2.28        3.54e+21      1.29e+16      5.86e-02     9.14e-02
+                              28
+                                 Si(p,γ)29 P       2.75        2.01e+21      8.86e+15      4.02e-02     1.12e-01
+                              31
+                                 P(p,α)28 Si       1.92        2.63e+21      8.07e+15      3.67e-02     8.76e-02
+                              28
+                                 Si(α,γ)32 S       6.95        6.09e+20      6.77e+15      3.08e-02     2.70e-01
+                              35
+                                 Cl(p,γ)36 Ar      8.51        3.31e+20      4.50e+15      2.04e-02     3.36e-01
+                              39
+                                 K(p,γ)40 Ca       8.33        2.68e+20      3.57e+15      1.62e-02     3.30e-01
+                              42
+                                 Ca(p,γ)43 Sc      4.93        3.97e+20      3.13e+15      1.42e-02     1.96e-01
+                              30
+                                 Si(p,γ)31 P       7.30        2.30e+20      2.68e+15      1.22e-02     2.88e-01
+                              16
+                                 O(α,γ)20 Ne       4.73        3.09e+20      2.34e+15      1.06e-02     1.92e-01
+                              31
+                                 P(p,γ)32 S        8.86        1.49e+20      2.12e+15      9.62e-03     3.34e-01
+                              35
+                                 Cl(p,α)32 S       1.87        3.05e+20      9.10e+14      4.14e-03     7.81e-02
+                              46
+                                 Ti(p,γ)47 V       5.17        9.53e+19      7.88e+14      3.58e-03     2.07e-01
+                              36
+                                 Ar(p,γ)37 K       1.86        2.33e+20      6.92e+14      3.14e-03     7.35e-02
+                              32
+                                 S(α,γ)36 Ar       6.64        6.30e+19      6.69e+14      3.04e-03     2.80e-01
+                              32
+                                 S(n,γ)33 S        8.64        4.62e+19      6.39e+14      2.90e-03     3.42e-01
+                              16
+                                 O(p,γ)17 F        0.60        4.55e+20      4.37e+14      1.98e-03     1.63e-02
+                              54
+                                 Fe(p,γ)55 Co      5.06        5.38e+19      4.36e+14      1.98e-03     2.05e-01
+                              29
+                                 Si(p,γ)30 P       5.59        4.67e+19      4.18e+14      1.90e-03     1.98e-01
+                              50
+                                 Cr(p,γ)51 Mn      5.27        4.42e+19      3.73e+14      1.69e-03     2.14e-01
+                              56
+                                 Fe(p,γ)57 Co      6.03        2.99e+19      2.88e+14      1.31e-03     2.44e-01
+                              16
+                                 O(16 O,p)31 P     7.68        2.30e+19      2.83e+14      1.28e-03     1.00e+00
+                              27
+                                 Al(p,γ)28 Si     11.58        1.35e+19      2.50e+14      1.13e-03     9.96e-01
+                              33
+                                 S(p,γ)34 Cl       5.14        2.92e+19      2.40e+14      1.09e-03     2.01e-01
+                              28
+                                 Si(n,γ)29 Si      8.47        1.63e+19      2.21e+14      1.00e-03     2.89e-01
+
+
+
+
+Article number, page 8 of 9
+            L. Roberti and M. Pignatari: The SPAr burning: proton captures powering carbon–oxygen shell mergers in massive stars
+
+Table A.5. List of the reactions that contribute the most to the energy generation at the bottom of the O-shell relative to the lower panels of
+Fig. A.1-1.
+
+                             Reaction            Q (MeV)       fab − fcd        εi        εi /εtot        φ
+                             34
+                                S(p,γ)35 Cl        6.37       8.97e+21      9.15e+16     5.70e-01     4.69e-01
+                             38
+                                Ar(p,γ)39 K        6.38       2.30e+21      2.35e+16     1.46e-01     4.71e-01
+                             32
+                                S(p,γ)33 Cl        2.28       2.72e+21      9.92e+15     6.18e-02     1.93e-01
+                             28
+                                Si(p,γ)29 P        2.75       1.08e+21      4.73e+15     2.95e-02     2.31e-01
+                             16
+                                O(α,γ)20 Ne        4.73       6.10e+20      4.62e+15     2.88e-02     3.73e-01
+                             31
+                                P(p,α)28 Si        1.92       1.48e+21      4.54e+15     2.83e-02     1.81e-01
+                             28
+                                Si(α,γ)32 S        6.95       3.40e+20      3.78e+15     2.35e-02     5.08e-01
+                             42
+                                Ca(p,γ)43 Sc       4.93       3.90e+20      3.08e+15     1.92e-02     3.80e-01
+                             35
+                                Cl(p,γ)36 Ar       8.51       2.09e+20      2.85e+15     1.78e-02     5.88e-01
+                             39
+                                K(p,γ)40 Ca        8.33       1.96e+20      2.61e+15     1.63e-02     5.80e-01
+                             30
+                                Si(p,γ)31 P        7.30       1.30e+20      1.51e+15     9.44e-03     5.31e-01
+                             31
+                                P(p,γ)32 S         8.86       8.03e+19      1.14e+15     7.10e-03     5.97e-01
+                             16
+                                O(p,γ)17 F         0.60       9.38e+20      9.01e+14     5.62e-03     4.11e-02
+                             35
+                                Cl(p,α)32 S        1.87       2.09e+20      6.23e+14     3.88e-03     1.66e-01
+                             36
+                                Ar(p,γ)37 K        1.86       2.05e+20      6.09e+14     3.79e-03     1.58e-01
+                             46
+                                Ti(p,γ)47 V        5.17       7.04e+19      5.82e+14     3.63e-03     3.99e-01
+                             32
+                                S(n,γ)33 S         8.64       3.23e+19      4.46e+14     2.78e-03     5.96e-01
+                             32
+                                S(α,γ)36 Ar        6.64       3.87e+19      4.11e+14     2.56e-03     5.06e-01
+                             29
+                                Si(p,γ)30 P        5.59       3.43e+19      3.07e+14     1.91e-03     3.73e-01
+                             56
+                                Fe(p,γ)57 Co       6.03       2.83e+19      2.73e+14     1.70e-03     4.56e-01
+                             16
+                                O(16 O,p)31 P      7.68       1.82e+19      2.24e+14     1.40e-03     1.00e+00
+                             27
+                                Al(p,γ)28 Si      11.58       1.21e+19      2.24e+14     1.39e-03     1.00e+00
+                             54
+                                Fe(p,γ)55 Co       5.06       2.61e+19      2.12e+14     1.32e-03     3.95e-01
+                             50
+                                Cr(p,γ)51 Mn       5.27       2.43e+19      2.05e+14     1.28e-03     4.09e-01
+                             33
+                                S(p,γ)34 Cl        5.14       2.41e+19      1.99e+14     1.24e-03     3.89e-01
+                             36
+                                Ar(n,γ)37 Ar       8.79       1.29e+19      1.81e+14     1.13e-03     6.65e-01
+                             40
+                                Ca(n,γ)41 Ca       8.36       1.20e+19      1.61e+14     1.00e-03     5.85e-01
+
+
+
+
+                                                                                                                   Article number, page 9 of 9
+

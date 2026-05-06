@@ -1,0 +1,739 @@
+                                               MNRAS 000, 1–10 (0000)                                          Preprint September 27, 2018                Compiled using MNRAS LATEX style file v3.0
+
+
+
+
+                                               Properties of Convective Oxygen and Silicon Burning Shells in
+                                               Supernova Progenitors
+
+                                                Christine Collins1? , Bernhard Müller2,1 †, Alexander Heger2,3,4 ‡
+                                               1 Astrophysics Research Centre, School of Mathematics and Physics, Queen’s University Belfast, Belfast, BT7 1NN, United Kingdom
+                                               2 Monash Centre for Astrophysics, School of Physics and Astronomy, Monash University, Victoria 3800, Australia
+                                               3 School of Physics & Astronomy, University of Minnesota, Minneapolis, MN 55455, U.S.A.
+                                               4 Department of Astronomy, Shanghai Jiao-Tong University, Shanghai 200240, P. R. China.
+arXiv:1709.00236v2 [astro-ph.SR] 20 Sep 2017
+
+
+
+
+                                               September 27, 2018
+
+
+
+                                                                                      ABSTRACT
+                                                                                      Recent three-dimensional simulations have suggested that convective seed perturbations from
+                                                                                      shell burning can play an important role in triggering neutrino-driven supernova explosions.
+                                                                                      Since isolated simulations cannot determine whether this perturbation-aided mechanism is of
+                                                                                      general relevance across the progenitor mass range, we here investigate the pertinent prop-
+                                                                                      erties of convective oxygen and silicon burning shells in a broad range of presupernova
+                                                                                      stellar evolution models. We find that conditions for perturbation-aided explosions are most
+                                                                                      favourable in the extended oxygen shells of progenitors between about 16 and 26 solar masses,
+                                                                                      which exhibit large-scale convective overturn with high convective Mach numbers. Although
+                                                                                      the highest convective Mach numbers of up to 0.3 are reached in the oxygen shells of low-
+                                                                                      mass progenitors, convection is typically dominated by small-scale modes in these shells,
+                                                                                      which implies a more modest role of initial perturbations in the explosion mechanism. Con-
+                                                                                      vective silicon burning rarely provides the high Mach numbers and large-scale perturbations
+                                                                                      required for perturbation-aided explosions. We also find that about 40% of progenitors be-
+                                                                                      tween 16 and 26 solar masses exhibit simultaneous oxygen and neon burning in the same
+                                                                                      convection zone as a result of a shell merger shortly before collapse.
+                                                                                      Key words: supernovae: general – stars: massive – stars: evolution – convection
+
+
+
+                                               1   INTRODUCTION                                                               2010; Rantsiou et al. 2011). Further multi-dimensional instabilities
+                                                                                                                              come into play as the shock propagates through the outer shells of
+                                               It has long been recognised that the explosions of massive stars
+                                                                                                                              the progenitor out to the stellar envelope and give rise to mixing
+                                               as core-collapse supernovae are inherently multi-dimensional phe-
+                                                                                                                              as already recognised in the 1970s (Falk & Arnett 1973; Chevalier
+                                               nomena (for reviews see Janka 2012; Foglizzo et al. 2015): In
+                                                                                                                              1976).
+                                               the modern version of the neutrino-driven explosion mechanism,
+                                               multi-dimensional (multi-D) instabilities like convection (Herant                    Recently, multi-dimensional effects during the final stages of
+                                               et al. 1994; Burrows et al. 1995; Janka & Müller 1996) and the                presupernova evolution have garnered particular interest in super-
+                                               standing accretion shock instability (Blondin et al. 2003; Foglizzo            nova theory. It has been suggested that the asymmetries seeded by
+                                               et al. 2007) play a crucial role in boosting the efficiency of neu-            convective shell burning could play an important role in tipping
+                                               trino heating sufficiently to revive the shock; and for alternative            the scales in favour of shock revival in neutrino-driven explosions
+                                               scenario such as the magnetorotational mechanism, the importance               (Couch & Ott 2013; Müller & Janka 2015) by boosting the violent
+                                               of multi-dimensional effects is even more obvious. The breaking of             non-spherical motions in the gain region behind the shock upon the
+                                               spherical symmetry is also crucial for understanding many features             infall of those shells. Müller & Janka (2015) showed that the phys-
+                                               of the observable transients and the compact and gaseous remnants:             ical mechanism behind “perturbation-aided” explosions involves
+                                               After shock revival, the asymmetries in the explosion determine the            the conversion of the initial convective velocity perturbation into
+                                               kick and spin of the neutron star (Janka & Müller 1994; Burrows &             large density and ram pressure perturbations at the shock during
+                                               Hayes 1996; Fryer 2004; Scheck et al. 2006; Wongwathanarat et al.              the infall, which distort the stalled accretion shock and foster the
+                                                                                                                              development of large buoyant bubbles and fast non-radial flows in
+                                                                                                                              the gain region. They also established qualitatively that the crucial
+                                               ? E-Mail: ccollins22@qub.ac.uk                                                 parameters for this “perturbation-aided mechanism” are the initial
+                                               † E-mail: bernhard.mueller@monash.edu                                          convective Mach number and the angular scale of the convective
+                                               ‡ E-mail: alexander.heger@monash.edu                                           eddies in the progenitor; faster convective flow and larger eddies
+
+                                               c 0000 The Authors
+2      C. Collins et al.
+are more conducive to perturbation-aided explosions. Subsequent            cuss how these are related to variations of stellar structure. We then
+studies have attempted to put these qualitative trends on a more           present tentative estimates for the impact of convective perturba-
+quantitative footing (Müller et al. 2016b; Abdikamalov et al. 2016).      tions on “explodability” across the stellar mass range. We conclude
+      The most direct way to gauge the role of convective pertur-          in Section 6 by discussing the implications of our results for future
+bations in the progenitor in the neutrino-driven mechanism is to           studies of the perturbation-aided explosion mechanism.
+initialise supernova simulations properly by simulating at least the
+last few turnover timescales of shell convection in multiple dimen-
+sions. After a long series of two- and three-dimensional simulations
+of oxygen and silicon shell burning during earlier phases (Arnett          2     INPUT MODELS AND THEORETICAL
+1994; Bazan & Arnett 1994, 1998; Asida & Arnett 2000; Kuhlen                     BACKGROUND
+et al. 2003; Meakin & Arnett 2006, 2007b,a; Arnett & Meakin
+                                                                           2.1    Stellar Evolution Models
+2011; Jones et al. 2017), attempts to evolve convective shells up
+to the onset of collapse in 3D were first made by Couch et al.             We consider a set of 2,353 solar-metallicity non-rotating progeni-
+(2015) for silicon burning in a 15 M star, and for oxygen burning          tor models with zero-age main sequence (ZAMS) masses between
+by Müller et al. (2016b) and Müller (2016) for 18 M and 12.5 M           9.45 M and 35 M that have been computed with the stellar evo-
+progenitors. Follow-up simulations of the collapse and post-bounce         lution code Kepler (Weaver et al. 1978; Heger & Woosley 2010).
+phase of the ensuing supernova with different methodology have             This is an extension of the set of progenitors presented in Müller
+yielded very different results ranging from a small impact on the          et al. (2016a). In these models, at 35 M , the Si core mass becomes
+neutrino heating conditions (Couch et al. 2015) to a large qualita-        comparable to the maximum current lower limit for the maximum
+tive difference in Müller et al. (2017), where the perturbations prove    baryonic neutron star mass (Demorest et al. 2010; Antoniadis et al.
+crucial for triggering shock revival.                                      2016), and peturbation-aided explosions by the neutrino-driven
+      Such a diversity of effect sizes is not unexpected since the shell   mechanism therefore become unlikely. For this reason we do not
+configuration and shell burning rates vary significantly among su-         present more massive progenitors. For high masses, however, mass
+pernova progenitors. This implies that a few isolated multi-D sim-         loss may become important and reduce the core mass, which may
+ulations are not sufficient for determining whether convective seed        affect the final outcome. We assume that the core structure of the
+perturbations generically play a major role in the supernova ex-           star is not much affected by mass loss as long as some hydrogen
+plosion mechanism. In addition to more extensive studies of the            envelope is left. Mass loss in massive stars remains somewhat un-
+perturbation-aided mechanism in 3D, a more systematic investiga-           certain, and is not the topic of this study.
+tion of the relevant parameters of shell convection across a large               The models were calculated using the standard treatment of
+number of progenitors is needed, both to extrapolate the findings          mixing in Kepler, i.e., convective mixing according to mixing-
+of the limited set of 3D studies and to help better target the 3D          length theory in Ledoux-unstable regions, semiconvection accord-
+simulations towards interesting stellar models.                            ing to Weaver et al. (1978), and thermohaline mixing following
+      In this paper, we undertake such a study for the first time.         Heger et al. (2005). These models differ from the compilation by
+Based on the realisation that one-dimensional stellar evolution            Sukhbold & Woosley (2014); Sukhbold et al. (2016) by updated
+models can be used to estimate both the violence of convection and         neutrino physics that shift some of the features of late at evolution
+the geometry of convective eddies even during the very dynamical           in the 15 M . . . 20 M region by 1 M . . . 2 M . For numerical rea-
+phase right before the onset of collapse (Müller et al. 2016b), we        sons, convective regions are bounded by one zone of overshooting
+investigate the systematics of the convective Mach number and the          with an efficiency similar to semiconvection. For the initial com-
+geometry of the innermost active burning shells for a set of 2,353         position, we use the initial (in contrast to present-day) solar abun-
+one-dimensional stellar evolution models (Müller et al. 2016a).           dances of Asplund et al. (2009).
+      With this survey of progenitor models, we can shed light on                Following the extant studies of perturbation-aided explosions
+the following questions concerning the perturbation-aided mech-            from 3D progenitors models (Couch et al. 2015; Müller 2016;
+anism: Are pre-collapse perturbations generically strong enough            Müller et al. 2017), we focus only on convection driven by Si or
+to efficiently aid neutrino-driven shock revival? What mass ranges         O burning. This is motivated by several considerations.
+are particularly promising for perturbation-aided explosion? Are                 The O and Si shell are most likely to provide significant per-
+perturbations in the oxygen or silicon shell more promising for            turbations that can aid neutrino-driven explosions, and there is the-
+achieving shock revival? Are there unexplored scenarios that need          oretical and observational evidence to suggest that shock revival
+to be simulated in 3D because some assumptions of the mixing-              occurs either during the infall of the Si or O shell. Both in multi-D
+length approach in 1D stellar evolution models break down? Nat-            supernova simulations (Suwa et al. 2016; Summa et al. 2016) and
+urally, we cannot answer these questions in a definitive manner by         in parameterised numerical (Ugliano et al. 2012; Ertl et al. 2016)
+merely considering spherically symmetric stellar evolution mod-            and analytic (Müller et al. 2016a), 1D models, shock revival is of-
+els; detailed 3D models of the last episodes of shell burning and          ten associated with the infall of the Si/O shell interface, though
+the subsequent supernova explosion remain indispensable. One of            there is also a number of cases where the explosion is initiated later
+the primary purposes of the present study is to provide guidance           during the accretion of the O shell. Delaying the explosion until
+for such simulations by allowing a more targeted selection of stel-        the Ne or C shell reach the shock could lead to tensions with the
+lar progenitor models according to the properties of the innermost         observed distribution of neutron star masses (Schwab et al. 2010;
+convective shells.                                                         Özel et al. 2012; Özel & Freire 2016). Moreover, the assumption
+      Our paper is structured as follows: In Section 2, we briefly         of a mass cut close to the Si/O interface has been found to lead
+describe the stellar evolution models used in this study and review        to adequate matches of the population-integrated core-collapse su-
+how convective velocities and eddy scales can be estimated from            pernova nucleosynthesis and the solar abundance pattern (Woosley
+1D models. In Section 3, we investigate systematic trends in con-          et al. 2002). We do, however, consider merged O/Ne/C shells in
+vective Mach number and eddy scale in different shells and dis-            which both O and Ne burning are active (Section 3.3.2).
+
+                                                                                                                       MNRAS 000, 1–10 (0000)
+                   Properties of Convective Oxygen and Silicon Burning Shells in Supernova Progenitors                                             3
+      Whether shock revival occurs during the infall of the O shell         in terms of a non-dimensional coefficient α1 , the mixing length
+or the Si shell is less clear, and our study attempts to clarify this       Λmix , and the Brunt-Väisälä frequency ωBV , which, in turn, is given
+further. Simulations as well as supernova nucleosynthesis provide           by
+circumstantial evidence that shock revival generally does not oc-                                      s
+                                                                                                              d ln ρ 1 d ln P
+                                                                                                                              !
+cur in the Si shell. Due to the significant neutron excess, explosive                         ωBV = g               −           .                 (1)
+burning in the Si shell would lead, for example, to higher Ni/Fe                                                dr    Γ dr
+ratios than required for chemical evolution (Arnett 1996) and than
+                                                                            Here g is the local gravitational acceleration, r is the radial coordi-
+observed for most core-collapse supernovae. There are, however,
+                                                                            nate, and ρ, P, and Γ are the density, pressure, and adiabatic index,
+exceptions among the observed core-collapse events that might be
+                                                                            respectively.
+explained by ejection of material from the Si shell (Jerkstrand et al.
+                                                                                 Following Müller et al. (2016b), we set the mixing length to
+2015). The fact that the Si/O shell interface often acts as the trig-
+                                                                            one pressure scale height,
+ger for shock revival in numerical models has already been men-
+tioned, but on the theoretical side there are also examples (Müller                                               P
+                                                                                                          Λmix =      ,                          (2)
+et al. 2012) of explosions that already develop before the infall of                                               ρg
+the shell interface (even though such cases may be problematic be-          and set α1 = 1, which resulted in good agreement with the convec-
+cause of modelling assumptions such as the restriction to axisym-           tive velocities in their 3D simulation of oxygen shell burning.
+metry). Furthermore, the point of shock revival and the “mass cut”                 A potential problem with the MLT estimate arises right be-
+are not strictly associated with each other in multi-D models (Har-         fore the onset of collapse when the convective turnover timescale
+ris et al. 2017; Wanajo et al. 2017), and early shock revival in the        and the contraction timescale become similar and convection can
+Si shell is therefore not necessarily in conflict with nucleosynthetic      no longer adjust to the acceleration of nuclear burning during col-
+constraints.                                                                lapse. Müller et al. (2016b) found, however, that this freeze-out of
+      Whether the pre-collapse perturbations from convective Si or          convection is still captured well by 1D stellar evolution models em-
+O burning are dynamically more important for shock revival is also          ploying time-dependent MLT so that the convective velocities from
+highly relevant for 3D models of the last minutes of shell burn-            our Kepler models remain good first-order estimates up to the onset
+ing. Due to the quasi-equilibrium nature of Si burning (Bodansky            of collapse. For a discussion of possible uncertainties in our predic-
+et al. 1968; Woosley et al. 1973; Hix & Thielemann 1996), rigorous          tions due to the use of time-dependent MLT, we refer the reader to
+3D simulations of convective Si shells are technically more chal-           Section 5.1
+lenging. Although the basic behaviour of Si shell burning may be                   Müller & Janka (2015) showed that the relevant quantity for
+captured qualitatively by small networks (as in Couch et al. 2015),         perturbation-aided explosion is the convective Mach number, Ma =
+correctly treating the gradual shift of abundances from Si and S to         vconv /cs where cs is the sound speed, in the progenitor rather than
+the iron group and the deleptonisation requires large networks. If          the convective velocity. This is because the Mach number roughly
+Si shell burning needs to be taken into account when constructing           reflects the ratio of the advective crossing timescale tcross = r/vconv
+3D supernova progenitor models, this implies a significant increase         and the free-fall timescale tff , which determines the density and
+in computational cost and complexity.                                       ram-pressure perturbations at the shock after collapse. For the sake
+      For these reasons, we consider both convective Si and O shell         of simplicity, we therefore compute cs assuming a constant adia-
+in our progenitors in this study. There are some cases where there          batic index of Γ = 4/3,
+is more than one active convective shell driven by these burning                                                  r
+processes (e.g., when a partially unburnt layer of O below the main                                       vconv     3ρv2conv
+                                                                                                   Ma =         ≈            ,                  (3)
+O layer reignites shortly before collapse due to the contraction of                                        cs          4P
+the core. In these cases, we consider only the shell with the maxi-         which is a very good approximation for the convective burning
+mum convective velocity as the one that is most likely to trigger a         shells in question. Moreover, the relation between the pre-collapse
+perturbation-aided explosion.                                               Mach number and the perturbation is not so tight as to warrant the
+                                                                            use of the exact value of Γ; other approximations limit our analysis
+                                                                            and conclusions much more seriously.
+2.2     Estimating Convective Velocities and Eddy Scales
+We estimate convective velocities and Mach numbers using                    2.2.2   Eddy Scale and Determination of Shell Boundaries
+mixing-length theory (MLT; Biermann 1932; Böhm-Vitense 1958)
+and convective eddy scales based on the geometry of the convec-             3D simulations of advanced shell burning stages show that the size
+tive shells assuming that the largest eddies stretch across the entire      of the largest eddies and the peak of the turbulent energy spec-
+convective zone and are of similar vertical and horizontal extent.          trum are determined by the depth of the convection zone (Arnett
+Simulations of advanced, neutrino-cooled burning stages (Kuhlen             et al. 2009; Müller et al. 2016b), which roughly corresponds to the
+et al. 2003; Arnett et al. 2009; Müller et al. 2016b; Jones et al. 2017)   wavelength of the most unstable mode in the linear regime (Chan-
+suggest that the bulk properties of the 3D velocity field are reason-       drasekhar 1961; Foglizzo et al. 2006). The dominant angular wave
+ably well captured by these simple estimates if the dimensionless           number, `, is therefore given by
+coefficients in the MLT equations are chosen appropriately.                                                  π(r+ + r− )
+                                                                                                        `=               ,                       (4)
+                                                                                                             2(r+ − r− )
+                                                                            where r− and r+ are the radius of the inner and outer boundary of
+2.2.1    Convective Velocity and Mach Number                                a convective zone. For a given convective shell, we determine r−
+The convective velocity vconv in MLT can be expressed by                    and r+ by locating the maximum of vconv within that shell and then
+                                                                            identifying the interval around that point in which vconv exceeds 5%
+                          vconv = α1 Λmix ωBV                               of that maximum value. This procedure was adopted to separate
+
+MNRAS 000, 1–10 (0000)
+4           C. Collins et al.
+
+      0.35                                                                              the shells follow the contraction of the Fe core and become hotter
+                                                                    Si shell            (see, e.g., Figure 6 in Müller et al. 2016b).
+      0.30                                                          O shell                   Clear systematic trends in convective Mach number are evi-
+      0.25                                                                              dent. Convective Mach numbers in the O shell peak in the mass
+                                                                                        range of ∼11.5 M . . . 13 M , where they reach values of up to 0.3,
+      0.20                                                                              and generally decline with progenitor mass. In the vast majority of
+ Ma
+
+
+
+
+                                                                                        progenitors O burning drives strong convection with Mach num-
+      0.15
+                                                                                        bers higher than 0.1. There is, however, a non-negligible fraction
+      0.10                                                                              of progenitors that lack a strong active O shell at collapse and show
+                                                                                        only modest or weak convective activity. This is particularly true of
+      0.05                                                                              the window between 14.5 M and 17.5 M in ZAMS mass. Above
+      0.00
+                                                                                        20 M , outliers with weak convection in the O shell become rare.
+             10        15          20       25                30                   35         Convective Mach numbers in the Si shell are typically signifi-
+                                   MZAMS [M ]                                           cantly smaller and lie mostly in the range Ma = 0.05 . . . 0.1. Ma is
+                                                                                        smaller than 0.1 in 79% of our models (assuming IMF weighting
+                                                                                        with a Salpeter IMF ∝ M −2.35 as in the rest of this paper). In 14%
+Figure 1. Maximum convective Mach number Ma in the Si (black) and O                     of the progenitors, Si shell convection is practically absent with
+(red) shell in all progenitor models at the onset of collapse. Note that there          Ma < 0.01.
+is a trend towards higher Ma in the O shell in the less massive progenitors,
+                                                                                              Thus, O burning generally drives stronger convection with
+and that the convective Mach number in the O shell is generally higher than
+                                                                                        Mach numbers higher by a factor of 2 . . . 3 for the majority of
+in the Si shell.
+                                                                                        models; the convective Mach number in the O shell exceeds that
+                                                                                        in the Si shell in 88% of our models. Exceptions include small win-
+                                                                                        dows around 15.5 M and 18 M . . . 20 M in ZAMS mass, where
+                                                                                        the convective Mach numbers in the Si shell reach up to 0.15 and
+                                                                                        equal or exceed those in the O shell.
+      102
+
+                                                                                        3.2     Shell Geometry
+ `
+
+
+
+
+                                                                                        The predicted dominant angular wave numbers of convection in the
+      101                                                                               Si and O shell are plotted in Figure 2.
+                                                                                              Small angular wave numbers, ` . 5, i.e., thick convective
+                                                                                        shells, that are favourable for perturbation-aided explosions are
+                                                         Si shell
+                                                         O shell                        found predominantly for O shells in progenitors between 15 M
+                                                         Si shell with Ma < 0.01
+                                                                                        and 26 M and a small number of progenitors around 10 M , and
+      100
+             10       15           20       25                30                   35   are rare outside this mass range. It is noteworthy that the O shells
+                                   MZAMS [M ]                                           with high convective Mach numbers in low-mass progenitors are,
+                                                                                        for the most part, rather thin and typically have ` ∼ 10, although
+                                                                                        there is considerable scatter below 15 M .
+Figure 2. Predicted angular wave number ` of the dominant convective                          Active Si shells prone to low-` modes in convection are rare.
+mode in the Si shell (black) and O shell (red) for all pre-supernova mod-               Only 7% of the pre-supernova models have ` 6 5 in the Si shell, and
+els. Si shells with very weak convection (Ma < 0.01 are shown in blue).                 84% have ` > 10. Moreover, the Si shells with ` 6 5 invariably have
+Note that large-scale modes with ` . 5 are largely confined to the O shells
+                                                                                        weak convection with Ma < 0.01. Si shells with strong convection,
+of progenitors in the mass range between 16 M and 26 M .
+                                                                                        i.e., Ma & 0.1, typically have ` ∼ 10. In 80% of the models, we
+                                                                                        expect that Si shell burning is characterised by eddies of smaller
+                                                                                        angular scale than O shell burning at the onset of collapse.
+convective zones that lie directly adjacent to each other, which is
+very often the case for the O and C shells.
+                                                                                        3.3     Structural Reasons for Variations in Shell Properties
+                                                                                        3.3.1    Effect of Core Size and Degree of Shell Depletion for O
+3     RESULTS                                                                                    Shells
+                                                                                        Negative entropy gradients, i.e., entropy inversions, is what drives
+3.1    Systematics of Convective Mach Numbers at Collapse
+                                                                                        the motion in convective regions. Usually, in the stellar interior con-
+The convective Mach numbers in the Si shell and the O shell are                         vection is quite efficient and one would expect almost flat entropy
+shown in Figure 1 for all our progenitor models. We note that we                        gradients inside convection zones. Figure 3 shows the entropy pro-
+find higher values (up to 0.3) than sometimes quoted in the litera-                     file in the O shell for a select set of models. The steep inversions
+ture for Si and O shell burning based on 1D stellar evolution mod-                      toward the bottom of the O shell in the model is what drives the fast
+els. This is partly due to our choice of dimensionless coefficients in                  motions reported here for the collapsing O shells. This is particu-
+Equation (1), which have been calibrated to recent 3D simulations.                      larly apparent for the extreme case of the 17.57 M star.
+Moreover, quoted values of just a few 0.01 for Ma often refer to                              The trends mentioned in Section 3.2 cannot be reduced to a
+earlier stages of shell burning, and there is a considerable increase                   uniform underlying principle of stellar structure. Even the varia-
+in convective velocities in the last few minutes prior to collapse as                   tions in the convective Mach number in the O shell, which exhibit
+
+                                                                                                                                     MNRAS 000, 1–10 (0000)
+                                              Properties of Convective Oxygen and Silicon Burning Shells in Supernova Progenitors                                   5
+                                                                                                plains the prevalence of weak convection in the O shell in the in-
+                                 5.75                                                           terval 15.4 M . . . 17.5 M , but there is also another branch of evo-
+                                                                                                lutionary channels in this range that has slow O shell convection
+                                 5.50
+                                                                                                for a different reason, namely low maximum shell temperatures of
+specific entropy (kB / baryon)
+
+
+
+
+                                 5.25                                                           ∼3 × 109 K that occur in some merged O/Ne/C shells (see Sec-
+                                                                                                tion 3.3.2).
+                                 5.00                                                                It is noteworthy that higher convective Mach numbers in the
+                                                                                                O shell tend to be correlated with lower shell entropies (except for
+                                 4.75
+                                                                                                the case of strongly depleted shells discussed above). The low shell
+                                 4.50                                                           entropies in models with strong convection reflect the fact that O
+                                                                                      12.9 M    burning occurs deeper in the gravitational potential and hence at
+                                 4.25                                                 14.4 M    higher temperatures also earlier on in the life of the O shell. The
+                                                                                      15.4 M
+                                                                                      17.1 M    shell entropy can be understood as a tracer of the conditions that
+                                 4.00
+                                                                                      17.57 M   hold while nuclear energy generation and neutrino cooling still bal-
+                                        1.5      2.0            2.5             3.0     3.5     ance each other. In a one-zone model, the condition of balanced
+                                                    enclosed mass (solar masses)                power (Woosley et al. 1972)
+                                                                                                                               ˙nuc ∼ ˙ν ,                      (5)
+Figure 3. Specific entropy at core collapse for different initial masses. One                   for the nuclear energy generation rate ˙nuc and the neutrino cooling
+can observe a large rise in entropy toward the bottom of the convective oxy-                    rate ˙ν leads to
+gen shell between m = 1.5 M and 1.7 M , except for the 15.4 M model,
+where there is only a tenuous convective shell with weak burning.                                                   ρT α XO2    ∼     Cρ−1 T β                    (6)
+                                                                                                                          ρ     ∝     XO−1 (T (α−β)/2 )           (7)
+
+a relatively clear decreasing trend from 12 M to 25 M in ZAMS                                   if we assume a power-law dependence for ˙nuc and ˙ν with α ∼ 27
+mass, are the result of a complex interplay between the varying                                 for O burning and β ∼ 9 in the regime where neutrino cooling is
+mass and radius of the Si core, the shell entropy and density, and                              dominated by the pair process. If the dominant contribution to the
+different degrees of shell depletion.                                                           entropy comes from photon radiation, the entropy maintained by
+      This is illustrated in Figure 4, which shows the (absolute value                          the shell is
+of the) gravitational potential, Gm/r,1 of the enclosed mass m at the                                                 T3
+                                                                                                                 s∝      ∝ XO T 3−(α−β)/2 ∝ XO T −6 ,             (8)
+base of the O shell at radius r, and the temperature T , entropy s, and                                               ρ
+oxygen mass fraction XO at the base of the shell.
+                                                                                                as long as the condition of balanced power holds. Since one finds
+      Except for the intervals below ∼12.5 M                        and
+                                                                                                kT/mN ∼0.3 Gm/r in the O shell in hydrostatic equilibrium, the cor-
+15.4 M . . . 17.5 M , the convective Mach number correlates
+                                                                                                relation between strong convection and low entropy in O shells is
+visibly with the depth of the gravitational potential at the base
+                                                                                                therefore expected; strong convection and low shell entropy are
+of the O shell and with the shell temperature, which is close to
+                                                                                                a reflection of the same physical reason, i.e., a smaller core size,
+kB T = 0.3 GmmN /r (where kB and mN are the Boltzmann constant
+                                                                                                stronger gravity, and higher temperature in the O shell.
+and the nucleon mass) and tends to be higher for more compact
+Fe-Si cores with smaller mass, higher degeneracy, and smaller
+radius. The key here is that the effective dependence of the core                               3.3.2   Role of Shell Mergers
+radius on the core mass is an inverse one and is relatively steep;
+thus less massive cores generate a deeper potential well than                                   Very few other features in the landscape of convective Mach num-
+more massive ones. Since the O burning rate depends strongly on                                 bers and shell geometries admit a simple explanation. One notable
+temperature (∝ T 25...30 ), this trend towards hotter shells around                             exception concerns the increasing prevalence of thick convective
+smaller cores explains the bulk of the variation in Ma in the                                   O shells above & 15 M . This is related to the increasing preva-
+intervals between 12.3 M and 15.4 M and > 17.5 M in ZAMS                                        lence of mergers of the O, Ne, and C shells in this mass range.
+mass.                                                                                           The tendency towards high O shell entropy in this region makes it
+      The dependence of the O burning rate and the convective                                   relatively likely that the buoyancy jump between the O shell and
+Mach number on temperature is, however, modified by variations in                               depleted or active C/Ne shells shrinks to zero during the lifetime of
+shell entropy and O mass fraction, in particular for ZAMS masses                                the third oxygen shell, which will lead to very massive merged con-
+in the region <12.3 M and 15.4 M . . . 17.5 M . In these mass                                   vection zones (often more than 1 M ), as illustrated in a sequence
+ranges we encounter clusters of progenitors with high temperatures                              of Kippenhahn diagrams in Figure 5 for progenitors of 15.4 M
+in the O shell that only exhibit weak convective activity. This is                              (no merger), 17.1 M , and 17.57 M (merger of O and C burning
+due to the fact that oxygen is close to depletion in these shells                               shells). Depending on the depletion of the C/Ne shell and the time
+already (bottom panel of Figure 4), so that the nuclear burning                                 of the merger, a rather complicated interplay of several burning pro-
+rate (∝ XO2 ) is low despite high shell temperatures. This partly ex-                           cesses within one deep shell can occur. Especially for late shell
+                                                                                                mergers, convective mixing is no longer sufficiently effective to ho-
+                                                                                                mogenise the merged layers into a “pure” O burning shell. Instead,
+1  At the location of the oxygen shell this is a good proxy, typically                          one can have a situation where the Ne produced in the C shell burns
+within 20% . . . 30%, for the actual gravitational potential, |φ(r)| = Gm/r +                   vigorously as it is mixed downwards, while O burning at the base of
+RR
+    Gm(r0 )/(r0 )2 dr0 , where R and M are the radius and total mass of the                     the shell is also active (cp. the composition of the model at collapse
+ r
+stars. Moreover, Gm/r is actually correlated more tightly with shell temper-                    shown in Figure 6). Sometimes the volume-integrated nuclear en-
+ature than φ.                                                                                   ergy generation rate from Ne burning becomes comparable to that
+
+MNRAS 000, 1–10 (0000)
+6                                  C. Collins et al.
+
+                           1.5                                                              4   IMPACT ON THE SUPERNOVA EXPLOSION
+    Gm/r [1018 erg g−1 ]
+
+
+
+
+                                                                                                MECHANISM
+
+                           1.0                                                              Although a comprehensive and accurate quantitative theory for the
+                                                                                            interaction of perturbations in collapsing shells with the stalled ac-
+                                                                                            cretion shock in the supernova core is still not available, numeri-
+                           0.5                                                              cal (Müller & Janka 2015) and analytic Abdikamalov et al. 2016;
+                                                                                            Müller et al. 2016b; Huete, Abdikamalov & Radice, in preparation)
+                                   4                                                        studies have established general trends: Both high Mach numbers
+                T [109 K]
+
+
+
+
+                                                                                            and small angular wave numbers in the convective shell in ques-
+                                                                                            tion are required to boost the prospects for neutrino-driven explo-
+                                   3
+                                                                                            sions. Based on analytic considerations and the numerical parame-
+                                                                                            ter study of Müller & Janka (2015), Müller et al. (2016b) estimated
+                                   2                                                        that infalling perturbations reduce the critical luminosity Lcrit (Bur-
+                                   6                                                        rows & Goshy 1993) required for a neutrino-driven runaway by
+                 s [kb /nucleon]
+
+
+
+
+                                                                                                                   ∆Lcrit           Ma
+                                                                                                                          ∼ 0.47             .                  (9)
+                                   4
+                                                                                                                    Lcrit        `ηacc ηheat
+                                                                                            where ηacc is the efficiency factor for the conversion of accretion
+                                                                                            energy into electron-flavour neutrino luminosity and ηheat is the
+                           100                                                              neutrino heating efficiency (ratio of total neutrino-heating rate and
+                                                                                            electron flavour luminosity). For typical values of ηheat ∼ 0.1 and
+                 10−1
+                                                                                            ηacc ∼ 2, one obtains ∆Lcrit /Lcrit ∼ 2.34 Ma/`. We plot this es-
+XO
+
+
+
+
+                 10−2                                       Convective Mach number          timated reduction of the critical luminosity due to perturbations in
+                                                                                            the Si and O shell in Figure 7. It should be emphasised that this pro-
+                 10−3
+                                                                                            vides only a very rough indicator for the prospects of perturbation-
+                                                       0.00 0.05 0.10 0.15 0.20 0.25 0.30
+                 10−4                                                                       aided explosions across the stellar mass range: The theory behind
+                                       10      15       20      25           30       35    Equation (9) has not yet been validated to such a degree that it could
+                                                        MZAMS [M ]
+                                                                                            be considered as much more than a successful fit formula (Müller
+                                                                                            et al. 2017) that captures trends in extant numerical simulations of
+                                                                                            the perturbation-aided mechanism (Couch & Ott 2013; Couch et al.
+Figure 4. Key properties of convective O shells as a function of ZAMS mass
+                                                                                            2015; Müller et al. 2016b, 2017) within a factor of ∼2.
+MZAMS . From top to bottom: gravitational potential Gm/r of the Si core,
+                                                                                                  Fortunately, variations in ∆Lcrit /Lcrit are nonetheless suffi-
+and temperature, T , specific entropy, s, and O mass fraction XO at the base
+of the O shell. The maximum convective Mach number in the shell is color-                   ciently large to identify systematic differences between the Si and
+coded. Vertical dashed lines denote boundaries between important regimes,                   O shell and trends with progenitor mass.
+such as the emergence of sufficiently high XO for vigorous convection above                       The most significant finding is that O shell burning almost
+12.3 M , and the region of slow O shell convection between 15.4 M , and                     invariably provides more favourable conditions for perturbation-
+17.4 M .                                                                                    aided explosions than Si shell burning as Ma/` is larger in the O
+                                                                                            shell in 91% of our progenitor models. The expected impact of
+                                                                                            perturbations from Si burning on the critical luminosity is small;
+                                                                                            effect sizes of ∼5% are only predicted for small clusters of models
+of O burning in such merged shells, especially if the temperature                           around 16 M and 19 M . Considering that neutrino heating con-
+at the base of the shell is relatively low.2 Progenitors with simul-                        ditions typically do not even get near the threshold for runaway
+taneous O and Ne burning in the same shell at the pre-supernova                             shock expansion in sophisticated neutrino hydrodynamics simula-
+stage are among the ones that exhibit the highest convective Mach                           tions prior to the infall of the O shell (Summa et al. 2016; O’Connor
+numbers and the largest eddy scale. These cases are not rare; they                          & Couch 2015), this makes it doubtful that perturbations from the
+comprise 40% of our progenitor models between 16 M and 26 M .                               Si shell can effectively help trigger shock revival in a larger range of
+     An earlier merger (i.e. much more than a few turnover times                            models. There is an important exception, however: In massive pro-
+before collapse) as in the 17.1 M model can have a a very differ-                           genitors with high mass accretion rates onto the supernova shock,
+ent effect: Here the merged shell has sufficient time to expand due                         the SASI can develop early (Müller et al. 2012; Hanke et al. 2013;
+to the energy release from the rapid burning of C and Ne from the                           Couch & O’Connor 2014; Kuroda et al. 2016), and even a modest
+outer shell and then maintains a relatively low temperature at its                          level of pre-shock perturbations might trigger stronger SASI ac-
+base. As a result, nuclear energy generation (mainly from the burn-                         tivity and explosions before the infall of the O shell. Even in this
+ing of O and Mg) and convection slow down, and the shell also                               scenario, the relatively large wave numbers of the perturbations in
+avoids being fully mixed. Such a structural adjustment process is                           the Si shell remain an obstacle; the perturbations would not provide
+responsible for another part of the cases with low convective Mach                          a strong seed for the unstable SASI modes (` = 1 or ` = 2).
+numbers in the O shell above 15.4 M .                                                             Perturbations from O shell are generally of a more favourable
+                                                                                            amplitude and scale for the perturbation-aided mechanism, but the
+                                                                                            expected effect size on shock revival is not uniformly high across
+                                                                                            the stellar mass range. A large reduction of the critical luminos-
+                                                                                            ity due to perturbations is mostly expected in the range between
+2 Even in these cases O burning still occurs and that Ne is fully depleted at               ∼16 M and ∼26 M with a particularly large effect size around
+the base of the shell, which justifies classifying them as O shells.                        18 M . . . 19 M . There are a few exceptions with high Ma and low
+
+                                                                                                                                           MNRAS 000, 1–10 (0000)
+                     Properties of Convective Oxygen and Silicon Burning Shells in Supernova Progenitors                                                          7
+
+
+
+
+Figure 5. Kippenhahn diagrams of the last 10, 000 yr of the evolution of massive stars, illustrating the transition to a different shell configuration above 16 M .
+Convective regions (hatched) driven by Si, O, Ne, or C burning are indicated explicitly (except for very thin shells) with Roman numerals denoting the various
+shell burning episodes and “(c)” denoting convective core burning. Colours indicate the net energy generation/cooling rate. At low mass, the final O shell
+typically remains separated from the C/Ne shell regardless of whether convective burning in the C/Ne shell remains active until collapse (14.4 M model, top
+left) or shuts off (15.4 M , top right). At higher mass, the O and C/Ne shell often merge (17.1 M , bottom left; 17.57 M , bottom right). Typically, the outer
+shell in the merger is a partially burned C shell with high Ne mass fraction as depicted here. If the merger occurs early (17.1 M ), there is sufficient time to mix
+the merged shells and largely deplete Ne or C so that the convection is only driven by the burning of O and Mg at the bottom. For late mergers (∼10 min for
+17.57 M ), there is insufficient time to thoroughly mix and deplete Ne or C, so that strong O and Ne burning can occur simultaneously in the same convective
+shell at the presupernova stage, though at different locations within that shell.
+
+
+` below 12 M , however, with some particularly large effect sizes                    of Cas A that are apparently unrelated to the asymmetries of the
+for progenitors around 10 M . This suggests that extant studies of                   inner Ni-rich ejecta. The fact that we find that violent large-scale
+the perturbation-aided mechanism based on 3D progenitor models                       convection modes in the O shell start to appear above 16 M , i.e.,
+(Müller 2016; Müller et al. 2017; 18 M ) have already explored                     for relatively high He core mass as suggested for the progenitor
+the most promising region in parameter space, and that the ini-                      of Cas A is in line with that speculation, although simulations are
+tial perturbations in the progenitor may generally play a smaller                    needed to bear out this hypothesis.
+role in the explosion mechanism than the first simulations suggest.
+Moreover, both observations of supernova progenitors (Smartt et al.
+2009; Smartt 2009, 2015) and parameterised models of neutrino-
+driven supernovae (O’Connor & Ott 2011; Ugliano et al. 2012;
+                                                                                     5    UNCERTAINTIES IN SHELL PROPERTIES
+Ertl et al. 2016; Sukhbold et al. 2016; Müller et al. 2016a) indi-
+cate that the fraction of successful explosions drops strongly above                 As our identification of favourable and unfavourable mass ranges
+15 M . . . 18 M . In the face of low explodability, even the strong                  for perturbation-aided explosions triggered during the infall of the
+large-scale perturbations in progenitors up to 26 M may not be                       O or Si shell is based on 1D stellar evolution models, it is subject to
+sufficient to achieve shock revival in many cases.                                   uncertainties due to potential inaccuracies of MLT and the lack of a
+      It is interesting to note that Wongwathanarat et al. (2017) spec-              self-consistent treatment of convective boundary mixing. We argue,
+ulated about the large-scale initial perturbations as a possible ex-                 however, that the most serious uncertainties do not undermine our
+planation for asymmetries (Si- and Mg-rich “jets”) in the remnant                    most important findings.
+
+MNRAS 000, 1–10 (0000)
+8                        C. Collins et al.
+                                                                                                 larger than the pressure scale height. For shells thinner than a pres-
+                   1.0            4           16        24          32
+                                   He            O         Mg          S                         sure scale height, the standard choice for the mixing length in MLT
+                                  12          20        28          36                           remains questionable: Since the local value of the mixing length
+                                     C           Ne        Si          Ar
+                   0.8                                                                           should be limited by the distance to the convective (Böhm & Stückl
+                                                                                                 1967; Stothers & Chin 1997), Λmix should always be bounded by
+mass fraction Xi
+
+
+
+
+                   0.6                                                                           the shell width. Whether MLT becomes inadequate in this regime
+                                                                                                 remains to be tested by simulations, but the qualitative effect of this
+                                                                                                 uncertainty on the systematics of Ma can easily be estimated. Since
+                   0.4                                                                           typical values for the pressure scale height are r/2 . . . r/4 in terms
+                                                                                                 of shell radius r, we expect that standard MLT gives reasonable es-
+                   0.2                                                                           timates for the convective Mach number for shells up to ` ∼ 10.
+                                                                                                 Even for shells with &10, vconv should only be overestimated by a
+                                                                                                 factor ∼ (`/10)1/3 by standard based on the dependence of vconv on
+                   0.0                                                                           the cube root of the dissipation length (vconv ∼ (˙nuc Λmix )1/3 ; Arnett
+                         0               1             2            3              4             et al. 2009; Müller et al. 2016b; Jones et al. 2017). This implies that
+                                                       m [M ]                                    for the majority of O shells and the most violent Si shells, we do
+                                                                                                 not expect a large error in Ma. Moreover, if the convective veloc-
+                                                                                                 ities are smaller than predicted by standard MLT, this would only
+Figure 6. Mass fractions of selected elements at collapse as a function of                       accentuate our main findings, i.e., convective perturbations in the
+mass coordinate in a 17.57 M model with a shell merger about 10 minutes
+                                                                                                 Si shell, or in the O shells of progenitors with ∼15 M , would be
+before collapse. Dashed vertical lines denote the boundaries of the merged
+                                                                                                 even less likely to significantly boost neutrino-driven explosions.
+shell. The outer part of the shell is still Ne-rich, indicating that there is insuf-
+ficient time to homogenise the shell. Ne is burned as it is mixed downwards,                            The MLT predictions may require further study by means of
+and any Ne is consumed before it reaches the inner shell boundary. Towards                       3D simulations in the case of shells with simultaneous O and Ne
+the inner shell boundary, O burning occurs, which is reflected by the steeper                    burning, however. That the aftermath of shell mergers may lead to
+gradient of the O mass fraction in this region.                                                  interesting nucleosynthesis has already been pointed out by Ritter
+                                                                                                 et al. (2017), but the flow dynamics itself also merits attention in
+                                                                                                 its own right since the burning and the convective flow may depend
+                   0.25                                                                          sensitively on how Ne is mixed into the O shell. This is slightly
+                                                                                 Si shell        reminiscent of a regime encountered in simulations of proton in-
+                                                                                 O shell         gestion (Stancliffe et al. 2011; Herwig et al. 2011, 2014) where the
+                   0.20
+                                                                                                 burning of the entrained material can be dynamically relevant and
+                                                                                                 lead to global oscillations and the establishment of a new convec-
+ ∆Lcrit /Lcrit
+
+
+
+
+                   0.15
+                                                                                                 tive boundary (Herwig et al. 2014). Although the situation is some-
+                                                                                                 what different inasmuch as the convective zones with simultane-
+                   0.10                                                                          ous O and Ne burning arise from shells with a vanishing buoyancy
+                                                                                                 jump, a better exploration of these shell mergers is clearly called
+                   0.05                                                                          for.
+                                                                                                        Another potential problem concerns the breakdown of a quasi-
+                   0.00                                                                          stationary balance between nuclear energy generation, buoyant
+                             10          15           20       25           30              35   driving, and turbulent dissipation at the point when the time scale
+                                                      MZAMS [M ]                                 for variations in ˙nuc becomes shorter than the convective turnover
+                                                                                                 time immediately before collapse (Müller et al. 2016b). Müller
+                                                                                                 et al. (2016b) demonstrated, however, that time-dependent MLT
+Figure 7. Estimated reduction ∆Lcrit /Lcrit of the critical luminosity for                       still captures the “freeze-out” of convection before the onset of col-
+neutrino-driven explosions due to infalling perturbations in the Si shell                        lapse rather well, though it can somewhat overestimate the maxi-
+(black) and O shell (red) according to Equation (9). The expected effect of
+                                                                                                 mum convective velocity within a shell. Again, this is unlikely to
+perturbations on shock revival is strongest for perturbations in the O shell
+roughly between 16 M and 26 M , and is typically small for convective
+                                                                                                 affect our central finding of stronger convection in the O shell com-
+perturbations in the Si shell.                                                                   pared to the Si shell: As the contraction of the shells outside the
+                                                                                                 Fe core in the last few seconds before collapse is non-homologous,
+                                                                                                 changes in the temperatures and burning rates of Si shell are gen-
+                                                                                                 erally faster than in the O shell, and Kepler is thus more likely to
+5.1                 Prediction of Convective Velocities
+                                                                                                 overestimate the convective velocities in Si shells where convec-
+One of the problems of the MLT prediction for the convective ve-                                 tion has already undergone freeze-out. By the same token, it is also
+locity (Equation 1) lies in the use of the pressure scale height (or                             unlikely that the ignition of unburnt Si shell can trigger strong con-
+a multiple thereof) as the mixing length Λmix . It has been argued                               vection during collapse. Even though the available energy from the
+(Arnett et al. 2009) that the shell width is a more natural choice                               fusion of unburnt Si during collapse is often sizable (∼1049 erg),
+for Λmix considering that it sets the dominant scale of the con-                                 the collapse time would simply not be sufficient to allow sustained
+vective eddies. Müller et al. (2016b) demonstrated, however, that                               convection to develop and reach the non-linear regime; this would
+the use of the pressure scale height for Λmix is justified for thick                             require convection to grow faster than on a dynamical time-scale
+shells, because the condition of roughly uniform entropy genera-                                 (which is the time-scale of the collapse). Moreover, we verified that
+tion throughout the shell for quasi-stationary convection implies                                the general dependence of Ma on progenitor mass does not change
+that the dissipation length in the turbulent flow cannot be much                                 substantially if we consider the average convective velocity instead
+
+                                                                                                                                                MNRAS 000, 1–10 (0000)
+                   Properties of Convective Oxygen and Silicon Burning Shells in Supernova Progenitors                                           9
+of the maximum convective velocity, which is further evidence that          across the mass range of supernova progenitors and between the O
+the systematic variations in Ma are very robust.                            and Si burning shells.
+                                                                                  The most favourable conditions for perturbation-aided explo-
+                                                                            sions, viz. high convective Mach numbers and large-scale convec-
+5.2    Uncertainties due to Convective Boundary Mixing                      tive modes, are encountered in the O shells of progenitors with
+Compared to the uncertainties due to the use of time-dependent              ZAMS masses between ∼16 M and ∼26 M . An important struc-
+MLT in our stellar evolution models, it is more difficult to estimate       tural reason for this is the high prevalence of mergers between the
+the effect of changes in the progenitor structure due to uncertainties      third O shell and the C or Ne shells above 16 M , which leads to
+in convective boundary mixing. We consider it likely that convec-           the formation of deep and massive O shells prior to collapse. Such
+tive boundary mixing does not change the overall trend towards              mergers often occur shortly before collapse. In 40% of our progeni-
+more massive and extended Fe and Si cores and higher Fe core en-            tors between 16 M and 26 M , the merger is still in progress at the
+tropy in more massive progenitors, which is ultimately responsible          onset of collapse in the sense that Ne is still not completely depleted
+for the decreasing trend in Ma.                                             in the shell and continues to burn while being mixed downward.
+      It is, however, worth pointing out that the systematics in Ma               Although the highest convective Mach numbers of up to ∼0.3
+could imply that shell growth by entrainment is stronger in low-            are found in the O shells of low-mass progenitors around 12 M ,
+mass progenitors and could therefore help to establish wider shells         massive shells prone to global, i.e., low-`, convective modes are
+and larger convective structures in the O shells with the highest con-      not very prevalent in this regime. Based on analytic arguments for
+vective Mach numbers (mostly by entraining material from the C              the effect of perturbations on shock revival (Müller et al. 2016b),
+shell since the upper boundary is generally softer, see Cristini et al.     we expect convective seed asphericities to play a considerably less
+2017). In the relevant regime, the entrainment velocity ventr (i.e.,        important role than above 16 M , although the reduction of the crit-
+the velocity at which the convective boundary moves) is typically           ical luminosity for explosion due to perturbations may still be in the
+assumed to be some power law in terms of the convective veloc-              range of ∼5% . . . 10%.
+ity and the bulk Richardson number Rib (Fernando 1991; Strang &                   Favourable conditions for perturbation-aided explosions are
+Fernando 2001; Meakin & Arnett 2007b; Cristini et al. 2016),                rarely encountered in the Si shell. High convective Mach num-
+                                                                            bers ∼ 0.15 and medium-scale convective modes with ` < 10 are
+                          ventr = Avconv Ri−B
+                                           b ,                      (10)    only found in a small fraction of progenitors, which mostly cluster
+where the coefficients A and B are still subject to debate and may          around ZAMS masses of 16 M and 19 M .
+be somewhat problem-dependent. In the case of a density discon-                   Several conclusions regarding the viability and further inves-
+tinuity with a relative density jump ∆ρ/ρ, Rib can be defined as            tigation of perturbation-aided explosions can be drawn from these
+                                                                            findings. Although supernova simulations based on 3D initial mod-
+                                                                            els have only been carried out for few progenitors (15 M : Couch
+                                    ∆ρ gl
+                            Rib =                                   (11)    et al. 2015, 18 M : Müller 2016; Müller et al. 2017), the calcu-
+                                     ρ v2conv                               lations of Müller (2016) and Müller et al. (2017) have arguably
+in terms of vconv , the local gravitational acceleration g, and the char-   probed the most promising regime for perturbation-aided explo-
+acteristic horizontal length scale of convection l, which we can            sions already, and the role of perturbations in the explosion mech-
+roughly identify with ∆r. With c2s ∝ Gm/r and l ∝ r/`, we find              anism may be more modest than appeared at first glance. Future
+                                                                            simulations should investigate the effect of perturbations in the dis-
+                                                                            tinctively different regime revealed our current study, i.e., violent
+                            Rib ∝ `−1 Ma−2 .                        (12)    convection in thin O shells of low-mass progenitors and, in the case
+In other words, the combination of high `, vconv , and Ma, which is         of Si shell burning, the regions around 16 M and 19 M , although
+found for O shells in progenitors below 15 M is most conducive              it needs to be borne in mind that the pattern of convective Mach
+to shell growth by entrainment. This suggests that the structure of         numbers and eddy scales may be shifted somewhat in other stel-
+progenitors in this mass range could be more seriously affected by          lar evolution codes. Furthermore, our findings provide justification
+convective boundary mixing, and that the O shells in these stars            for neglecting perturbations seeded by convective silicon burning
+may be wider than estimated on the basis of our models. Consid-             in 3D simulations of supernova progenitors by excising the silicon
+ering that Rib varies considerably during the lifetime of shells and        core as in Müller et al. (2016b).
+that the proper definition of quantities like l and δρ/ρ is beset with            Since our study is based on spherically symmetric stellar evo-
+ambiguities (Cristini et al. 2016), we must refrain from investigat-        lution models with a time-dependent MLT treatment of convection,
+ing the behaviour of Rib more systematically at this stage.                 our findings are beset with some uncertainties that will need to be
+                                                                            resolved by future simulations of convective burning and convec-
+                                                                            tive boundary mixing in the final stages of massive stars. Consid-
+                                                                            ering that MLT and general principles of scale selection in con-
+6     CONCLUSIONS
+                                                                            vection are in good agreement with detailed 3D simulations of
+We investigated the properties of convective shells in supernova            convective shell burning (Arnett et al. 2009; Müller 2016), we do
+progenitors at the onset of collapse with a view to the recent sce-         not expect fundamental changes. In particular, the finding that O
+nario of “perturbation-aided” supernova explosions (Couch & Ott             shell burning generally provides more favourable conditions for
+2013; Couch et al. 2015; Müller & Janka 2015; Müller et al. 2017).        perturbation-aided explosions than Si burning is likely to remain
+Our survey of convective shells in a fine grid of 2,355 solar metal-        robust. A more detailed investigation of 3D effects is mostly war-
+licity current single-star progenitor models computed with the stel-        ranted in two regimes, namely for low-mass progenitors with thin
+lar evolution code Kepler (Weaver et al. 1978; Heger & Woosley              oxygen shells, which should be particularly prone to strong entrain-
+2010) as first presented in Müller et al. (2016a) revealed that the        ment because of the high convective Mach numbers, and shells with
+conditions for perturbation-aided explosions are very non-uniform           simultaneous O and Ne burning in massive progenitors, for which
+
+MNRAS 000, 1–10 (0000)
+10       C. Collins et al.
+MLT may not adequately describe the mixing of the merged shells                   Herant M., Benz W., Hix W. R., Fryer C. L., Colgate S. A., 1994, ApJ, 435,
+on dynamical time scales and its interaction with the burning.                        339
+                                                                                  Herwig F., Pignatari M., Woodward P. R., Porter D. H., Rockefeller G.,
+                                                                                      Fryer C. L., Bennett M., Hirschi R., 2011, ApJ, 727, 89
+                                                                                  Herwig F., Woodward P. R., Lin P.-H., Knox M., Fryer C., 2014, ApJ, 792,
+ACKNOWLEDGEMENTS                                                                      L3
+We acknowledge fruitful discussions with R. Hirschi, H.-Th. Janka,                Hix W. R., Thielemann F.-K., 1996, ApJ, 460, 869
+                                                                                  Janka H.-T., 2012, Annual Review of Nuclear and Particle Science, 62, 407
+S. Sim, and S. Woosley. This work was supported by the Aus-
+                                                                                  Janka H.-T., Müller E., 1994, A&A, 290, 496
+tralian Research Council through an ARC Future Fellowships                        Janka H.-T., Müller E., 1996, A&A, 306, 167
+FT160100035 (BM) and Future Fellowship FT120100363 (AH)                           Jerkstrand A., et al., 2015, ApJ, 807, 110
+and by STFC grant ST/P000312/1 (BM). This material is based                       Jones S., Andrassy R., Sandalski S., Davis A., Woodward P., Herwig F.,
+upon work supported by the National Science Foundation under                          2017, MNRAS, 465, 2991
+Grant No. PHY-1430152 (JINA Center for the Evolution of the El-                   Kuhlen M., Woosley W. E., Glatzmaier G. A., 2003, in Turcotte S., Keller
+ements).                                                                              S. C., Cavallo R. M., eds, Astronomical Society of the Pacific Confer-
+                                                                                      ence Series Vol. 293, 3D Stellar Evolution. p. 147
+                                                                                  Kuroda T., Kotake K., Takiwaki T., 2016, ApJ, 829, L14
+                                                                                  Meakin C. A., Arnett D., 2006, ApJ, 637, L53
+References                                                                        Meakin C. A., Arnett D., 2007a, ApJ, 665, 690
+Abdikamalov E., Zhaksylykov A., Radice D., Berdibek S., 2016, MNRAS,              Meakin C. A., Arnett D., 2007b, ApJ, 667, 448
+     461, 3864                                                                    Müller B., 2016, Publ. Astron. Soc. Australia, 33, e048
+Antoniadis J., Tauris T. M., Ozel F., Barr E., Champion D. J., Freire P. C. C.,   Müller B., Janka H.-T., 2015, MNRAS, 448, 2141
+     2016, preprint, (arXiv:1605.01665)                                           Müller B., Janka H.-T., Heger A., 2012, ApJ, 761, 72
+Arnett D., 1994, ApJ, 427, 932                                                    Müller B., Heger A., Liptai D., Cameron J. B., 2016a, MNRAS, 460, 742
+Arnett D., 1996, Supernovae and Nucleosynthesis: An Investigation of the          Müller B., Viallet M., Heger A., Janka H.-T., 2016b, ApJ, 833, 124
+     History of Matter from the Big Bang to the Present. Princeton: Prince-       Müller B., Melson T., Heger A., Janka H.-T., 2017, preprint,
+     ton University Press                                                             (arXiv:1705.00620)
+Arnett W. D., Meakin C., 2011, ApJ, 733, 78                                       O’Connor E., Couch S., 2015, preprint, (arXiv:1511.07443)
+Arnett D., Meakin C., Young P. A., 2009, ApJ, 690, 1715                           O’Connor E., Ott C. D., 2011, ApJ, 730, 70
+Asida S. M., Arnett D., 2000, ApJ, 545, 435                                       Özel F., Freire P., 2016, ARA&A, 54, 401
+Asplund M., Grevesse N., Sauval A. J., Scott P., 2009, ARA&A, 47, 481             Özel F., Psaltis D., Narayan R., Santos Villarreal A., 2012, ApJ, 757, 55
+Bazan G., Arnett D., 1994, ApJ, 433, L41                                          Rantsiou E., Burrows A., Nordhaus J., Almgren A., 2011, ApJ, 732, 57
+Bazan G., Arnett D., 1998, ApJ, 496, 316                                          Ritter C., Andrassy R., Côté B., Herwig F., Woodward P. R., Pignatari M.,
+Biermann L., 1932, Z. Astrophys., 5, 117                                              Jones S., 2017, preprint, (arXiv:1704.05985)
+Blondin J. M., Mezzacappa A., DeMarino C., 2003, ApJ, 584, 971                    Scheck L., Kifonidis K., Janka H.-T., Müller E., 2006, A&A, 457, 963
+Bodansky D., Clayton D. D., Fowler W. A., 1968, ApJS, 16, 299                     Schwab J., Podsiadlowski P., Rappaport S., 2010, ApJ, 719, 722
+Böhm K.-H., Stückl E., 1967, Z. Astrophys., 66, 487                             Smartt S. J., 2009, ARA&A, 47, 63
+Böhm-Vitense E., 1958, Z. Astrophys., 46, 108                                    Smartt S. J., 2015, Publ. Astron. Soc. Australia, 32, 16
+Burrows A., Goshy J., 1993, ApJ, 416, L75+                                        Smartt S. J., Eldridge J. J., Crockett R. M., Maund J. R., 2009, MNRAS,
+Burrows A., Hayes J., 1996, Physical Review Letters, 76, 352                          395, 1409
+Burrows A., Hayes J., Fryxell B. A., 1995, ApJ, 450, 830                          Stancliffe R. J., Dearborn D. S. P., Lattanzio J. C., Heap S. A., Campbell
+Chandrasekhar S., 1961, Hydrodynamic and Hydromagnetic Stability.                     S. W., 2011, ApJ, 742, 121
+     Clarendon, Oxford                                                            Stothers R. B., Chin C.-w., 1997, ApJ, 478, L103
+Chevalier R. A., 1976, ApJ, 207, 872                                              Strang E. J., Fernando H. J. S., 2001, Journal of Fluid Mechanics, 428, 349
+Couch S. M., O’Connor E. P., 2014, ApJ, 785, 123                                  Sukhbold T., Woosley S. E., 2014, ApJ, 783, 10
+Couch S. M., Ott C. D., 2013, ApJ, 778, L7                                        Sukhbold T., Ertl T., Woosley S. E., Brown J. M., Janka H.-T., 2016, ApJ,
+Couch S. M., Chatzopoulos E., Arnett W. D., Timmes F. X., 2015, ApJ, 808,             821, 38
+     L21                                                                          Summa A., Hanke F., Janka H.-T., Melson T., Marek A., Müller B., 2016,
+Cristini A., Meakin C., Hirschi R., Arnett D., Georgy C., Viallet M., 2016,           ApJ, 825, 6
+     Phys. Scr., 91, 034006                                                       Suwa Y., Yamada S., Takiwaki T., Kotake K., 2016, ApJ, 816, 43
+Cristini A., Meakin C., Hirschi R., Arnett D., Georgy C., Viallet M., Walk-       Ugliano M., Janka H.-T., Marek A., Arcones A., 2012, ApJ, 757, 69
+     ington I., 2017, MNRAS, 471, 279                                             Wanajo S., Müller B., Janka H.-T., Heger A., 2017, preprint,
+Demorest P. B., Pennucci T., Ransom S. M., Roberts M. S. E., Hessels                  (arXiv:1701.06786)
+     J. W. T., 2010, Nature, 467, 1081                                            Weaver T. A., Zimmerman G. B., Woosley S. E., 1978, ApJ, 225, 1021
+Ertl T., Janka H.-T., Woosley S. E., Sukhbold T., Ugliano M., 2016, ApJ,          Wongwathanarat A., Janka H., Müller E., 2010, ApJ, 725, L106
+     818, 124                                                                     Wongwathanarat A., Janka H.-T., Müller E., Pllumbi E., Wanajo S., 2017,
+Falk S. W., Arnett W. D., 1973, ApJ, 180, L65                                         ApJ, 842, 13
+Fernando H. J. S., 1991, Annual Review of Fluid Mechanics, 23, 455                Woosley S. E., Arnett W. D., Clayton D. D., 1972, ApJ, 175, 731
+Foglizzo T., Scheck L., Janka H.-T., 2006, ApJ, 652, 1436                         Woosley S. E., Arnett W. D., Clayton D. D., 1973, ApJS, 26, 231
+Foglizzo T., Galletti P., Scheck L., Janka H.-T., 2007, ApJ, 654, 1006            Woosley S. E., Heger A., Weaver T. A., 2002, Rev. Mod. Phys., 74, 1015
+Foglizzo T., et al., 2015, Publ. Astron. Soc. Australia, 32, e009
+Fryer C. L., 2004, ApJ, 601, L175
+Hanke F., Müller B., Wongwathanarat A., Marek A., Janka H.-T., 2013,
+     ApJ, 770, 66
+Harris J. A., Hix W. R., Chertkow M. A., Lee C.-T., Lentz E. J., Messer
+     O. E. B., 2017, ApJ, 843, 2
+Heger A., Woosley S. E., 2010, ApJ, 724, 341
+Heger A., Woosley S. E., Spruit H. C., 2005, ApJ, 626, 350
+
+                                                                                                                                  MNRAS 000, 1–10 (0000)
+

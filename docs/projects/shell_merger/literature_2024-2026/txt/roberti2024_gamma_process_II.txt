@@ -1,0 +1,839 @@
+                                               Astronomy & Astrophysics manuscript no. ms                                                                                          ©ESO 2024
+                                               May 14, 2024
+
+
+                                                                                                          Letter to the Editor
+
+
+                                                     The γ-process nucleosynthesis in core-collapse supernovae
+                                                                                          II. Effect of the explosive recipe
+                                                                             L. Roberti1, 2, 3, 4 , M. Pignatari1, 2, 5, 4 , C. Fryer6 , and M. Lugaro1, 2, 7, 8
+
+                                                     1
+                                                       Konkoly Observatory, Research Centre for Astronomy and Earth Sciences, HUN-REN, Konkoly Thege Miklós út 15-17, H-1121
+                                                       Budapest, Hungary;
+                                                     2
+                                                       CSFK, MTA Centre of Excellence, Budapest, Konkoly Thege Miklós út 15-17, H-1121, Hungary
+                                                     3
+                                                       INAF – Osservatorio Astronomico di Roma Via Frascati 33, I-00040, Monteporzio Catone, Italy
+                                                     4
+arXiv:2405.07783v1 [astro-ph.SR] 13 May 2024
+
+
+
+
+                                                       NuGrid Collaboration, http://nugridstars.org
+                                                     5
+                                                       E. A. Milne Centre for Astrophysics, University of Hull, Hull HU6 7RX, UK
+                                                     6
+                                                       Center for Theoretical Astrophysics, Los Alamos National Laboratory, Los Alamos, NM, 87545 USA
+                                                     7
+                                                       Eötvös Loránd University, Institute of Physics and Astronomy, Budapest 1117, Pázmány Péter sérány 1/A, Hungary
+                                                     8
+                                                       School of Physics and Astronomy, Monash University, VIC 3800, Australia
+
+                                                    Received March 15, 2024; accepted May 7, 2024
+
+                                                                                                                 ABSTRACT
+
+                                                    Context. The γ process in core-collapse supernovae (CCSNe) can produce a number of neutron-deficient stable isotopes heavier than
+                                                    iron (p nuclei). However, current model predictions do not fully reproduce solar abundances, especially for 92,94 Mo and 96,98 Ru.
+                                                    Aims. We investigate the impact of different explosion energies and parametrizations on the nucleosynthesis of p nuclei, by studying
+                                                    stellar models with different initial masses and different CCSN explosions.
+                                                    Methods. We compared the p-nucleus yields obtained using a semi-analytical method to simulate the supernova to those obtained
+                                                    using hydrodynamic models. We explored the effect of varying the explosion parameters on the p–nucleus production in two sets of
+                                                    CCSN models with initial masses of 15, 20, and 25 M⊙ at solar metallicity. We calculated a new set of 24 CCSN models (eight for
+                                                    each stellar progenitor mass) and compared our results with another recently published set of 80 CCSN models that includes a wide
+                                                    range of explosion parameters: explosion energy or initial shock velocity, energy injection time, and mass location of the injection.
+                                                    Results. We find that the total p-nucleus yields are only marginally affected by the CCSN explosion prescriptions if the γ-process
+                                                    production is already efficient in the stellar progenitors due to a C–O shell merger. In most CCSN explosions from progenitors
+                                                    without a C-O shell merger, the γ-process yields increase with the explosion energy by up to an order of magnitude, depending on
+                                                    the progenitor structure and the CCSN prescriptions. The general trend of the p-nucleus production with the explosion energy is
+                                                    more complicated if we look at the production of single p nuclei. The light p-nuclei tend to be the most enhanced with increasing
+                                                    explosion energy. In particular, for the CCSN models where the α-rich freeze-out component is ejected, the yields of the lightest p
+                                                    nuclei (including 92,94 Mo and 96 Ru) increase by up to three orders of magnitude.
+                                                    Conclusions. We provide the first extensive study using different sets of massive stars of the impact of varying CCSN explosion
+                                                    prescriptions on the production of p nuclei. Unlike previous expectations and recent results in the literature, we find that the average
+                                                    production of p nuclei tends to increase with the explosion energy. We also confirm that the pre-explosion production of p nuclei
+                                                    in C-O shell mergers is a robust result, independent of the subsequent explosive nucleosynthesis. More generally, a realistic range
+                                                    of variations in the evolution of stellar progenitors and in the CCSN explosions might boost the CCSN contribution to the galactic
+                                                    chemical evolution of p nuclei.
+                                                    Key words. γ-process nucleosynthesis – explosive nucleosynthesis – massive stars – core-collapse supernovae
+
+
+
+                                               1. Introduction                                                           clear species in compositions of this so-called core-collapse su-
+                                                                                                                         pernova (CCSN) ejecta are the Fe-peak and α elements, mostly
+                                               Massive stars (with initial masses > 8–10 M⊙ ) end their lives            synthesized through (quasi)statistical equilibrium processes in
+                                               with the formation and the collapse of a Fe core. The collapse            the explosion, together with the stellar burning products from
+                                               halts and bounces back as soon as the central infalling material          the hydrostatic evolution of the star (Woosley & Weaver 1995).
+                                               reaches the typical nuclear density. The bounce of the innermost
+                                               regions of the star generates a shock wave that, in some cases, is            Core-collapse supernovae are also one of the production sites
+                                               able to emerge from the Fe core and propagate into the envelope           of the so-called p nuclei via the γ process (Rayet et al. 1995;
+                                               of the star (Burrows & Vartanyan 2021). The shock wave induces            Arnould & Goriely 2003; Pignatari et al. 2016b; Roberti et al.
+                                               local compression and heating, and this causes nucleosynthesis            2023). The ONe-rich layers in massive stars during a CCSN pro-
+                                               to occur within a few seconds rather than the days or even years it       vide the necessary conditions (i.e., high temperatures and abun-
+                                               takes during the pre-supernova evolution. This explosive nucle-           dances of trans-iron seeds) to synthesize the p nuclei via a chain
+                                               osynthesis alters the chemical composition produced during the            of photo-disintegrations (Woosley & Howard 1978). Several dis-
+                                               hydrostatic evolution (see, e.g., Rauscher et al. 2002; Pignatari         crepancies still arise when comparing theoretical model predic-
+                                               et al. 2016a; Limongi & Chieffi 2018). The most abundant nu-              tions to each other and with solar abundances (Roberti et al.
+                                                                                                                                                                    Article number, page 1 of 11
+                                                      A&A proofs: manuscript no. ms
+
+2023). In particular, (i) the production is too low to match the        Table 1. Selected features of the CCSN models calculated using the
+solar abundances; (ii) the isotopic ratios of theoretical yields pro-   SBW approach.
+duced in the same temperature range cannot reproduce the solar
+ratios; and (iii) 92,94 Mo and 96,98 Ru show an even more severe           Mini    Mrem      vshock    Si(c)    Si(i)       O     Ne         C
+underproduction compared to the other p nuclei (Rauscher et al.                               0.2          -        -        -      -         -
+2013; Pignatari et al. 2016b). While additional nucleosynthetic                               0.4          -        -        -   1.64     1.67
+processes and astrophysical phenomena have been invoked to                                     1           -        -    1.64    1.78     1.82
+explain the solar abundances of p nuclei (see Roberti et al. 2023                            1.33          -    1.63     1.68    1.85     1.90
+for a recent overview of the production sites of p nuclei), this            15      1.61       2       1.63     1.68     1.74    1.96     2.03
+remains an open problem. For example, C–O shell mergers in                                     3       1.68     1.75     1.82    2.11     2.20
+the late stage of massive star evolution can play a crucial role                               4       1.72     1.80     1.90    2.24     2.34
+in boosting the final yields of p nuclei, but this does not explain                            5       1.73     1.82     1.91    2.23     2.33
+the underproduction of the Mo and Ru isotopes (Rauscher et al.                                0.2          -        -        -      -         -
+2002; Ritter et al. 2018a).                                                                   0.4          -        -        -      -         -
+    Choplin et al. (2022) show that fast rotation in a 25 M⊙ star at                           1           -        -        -   3.01     3.23
+subsolar metallicity can enhance the efficiency of the γ-process                             1.33          -        -        -   3.32     4.80
+nucleosynthesis, due to a higher production of trans-iron seeds             20      2.73       2           -        -    2.79    4.75     4.80
+via the slow neutron capture nucleosynthesis (the s process). The                              3           -    2.81     3.22    4.75     4.80
+possibility of including such results in models of galactic chem-                              4           -    3.11     3.57    4.75     4.80
+ical evolution needs to be explored as it may modify our current                               5       2.85     3.28     3.76    4.75     4.80
+understanding, that the contribution from previous generations                                0.2          -        -        -      -         -
+of massive stars to the Solar System abundances of p nuclei                                   0.4          -        -        -      -         -
+is negligible (Travaglio et al. 2018). Choplin et al. (2022) also                              1           -        -        -      -         -
+briefly discuss how the different explosion energies affect the                              1.33          -        -        -      -         -
+production of p nuclei for a wide range of energies (0.3 – 100              25      5.71       2           -        -        -      -     6.79
+foe). They conclude that, at least in the specific case of their 25                            3           -        -        -   6.60     6.79
+M⊙ progenitor, the explosion energy has only a marginal impact                                 4           -        -        -   6.60     6.79
+on the total yields of p nuclei because the only effect of increas-                            5           -        -        -   6.60     6.79
+ing the energy is the shift of the γ-process zone outward in mass.
+Nevertheless, a detailed study of the dependence of γ-process           Notes. Mini , Mrem , and vshock are the initial mass of the progenitor, the
+                                                                        remnant mass, and the initial shock velocity, respectively. The last five
+nucleosynthesis, and of the production of p nuclei in general, on       columns indicate the outer mass coordinate corresponding to the zones
+different explosion energies and explosive prescriptions is still       exposed to the different explosive burning stages: complete Si burn-
+missing. With this work we aim to start an exploration in this          ing (T9 > 5, "Si(c)"), incomplete Si burning (5 > T9 > 4, "Si(i)"),
+direction.                                                              explosive O burning (4 > T9 > 3.3, "O"), explosive Ne burning
+    In the first paper of this series (Roberti et al. 2023, hereafter   (3.3 > T9 > 2.1, "Ne"), and explosive C burning (2.1 > T9 > 1.9,
+Paper I), we presented the first step of our study of γ-process nu-     "C"); here, T9 = T(K)/109 K. The symbol "-" means that no zone is ex-
+cleosynthesis in CCSNe. We analyzed and compared the yields             posed to the indicated explosive burning process. All masses are in M⊙
+from five different sets of massive star models from the literature.    units, and the initial shock velocity is in units of 109 cm s−1 .
+In this second work, we discuss the effect of different explosive
+prescriptions on 15, 20, and 25 M⊙ star progenitors. In Sect. 2
+we describe the different explosive prescriptions; Sect. 3 sum-         the explosion energy) can also impact the final remnant mass and
+marizes the conditions that affect the γ-process nucleosynthesis.       can be particularly important in asymmetric explosions (Fryer
+In Sect. 4 we discuss how the different explosion prescriptions         2009; Fryer et al. 2012). Our two supernova prescriptions help
+influence the average overproduction factors for p nuclei, and in       cover the broad uncertainties in the ejecta from supernovae.
+Sect. 5 we discuss and summarize our results.
+                                                                        2.1. Sedov blast-wave (SBW) explosion
+2. Datasets
+                                                                        We simulated a new set of CCSN explosions using the same ap-
+We explored the effect of different supernova prescriptions on          proach and the same three massive star models calculated with
+the γ process and on the p-nucleus yields in the two set of mod-        the MESA code (Paxton et al. 2015, and references therein) by Rit-
+els described below, with initial masses of 15, 20, and 25 M⊙           ter et al. (2018b) at solar metallicity (Z=0.02, based on Grevesse
+and solar metallicity. We considered a broad range of explosion         & Noels 1993). We varied the initial shock velocity within the
+possibilities using different parameters that describe both the ex-     range 2 × 108 cm/s to 5 × 109 cm/s, which correspond to a fac-
+plosion energy and the amount of material that is ejected (versus       tor of 10 below and 2.5 above the Ritter et al. standard super-
+the amount that is incorporated onto the compact object). Multi-        nova explosion setup. We briefly recall here the main features of
+ple parameters are currently required to capture the uncertainties      the explosive prescription. The supernova explosion was mod-
+in the explosive engine. The explosion energy depends on the            eled using a semi-analytical approach, with the prescription for
+growth time of the convection (Fryer et al. 2021, 2022; Bocci-          the remnant mass from Fryer et al. (2012) and the Sedov (1946)
+oli et al. 2023) as well as on the existence of energy sources,         blast wave (SBW) solution for the determination of the peak ve-
+such as continued accretion after the shock is launched (espe-          locity of the shock throughout the stellar structure. The temper-
+cially if there is sufficient angular momentum to form an ac-           ature and the density in each layer of the star after the shock
+cretion disk) or the development of a magnetar (Shankar et al.          were then obtained by imposing a strong shock limit (Chevalier
+2021; Soker 2022). The mass cut also depends on the convective          1989) and the radiation-dominated shock (Eqs. 3–5 of Pignatari
+growth time (Fryer et al. 2022). Fallback (which also depends on        et al. 2016b). After the passage of the shock, the temperature and
+Article number, page 2 of 11
+                                   L. Roberti et al.: The γ-process nucleosynthesis in core-collapse supernovae
+
+the density decrease with time as a consequence of the cooling
+of the shocked material. This temporal evolution was described                                    20 M Ritter progenitor
+using a variant of the adiabatic exponential decay (Hoyle et al.
+1964; Fowler & Hoyle 1964). As in Ritter et al. (2018b), we
+                                                                                     6            Tpeak             vpeak              r3
+set an artificial cap to the maximum velocity of 5 × 109 cm/s to
+                                                                                     5
+
+
+
+
+                                                                                                                                                  vshock / (109 cm/s)
+simulate the deceleration due to viscous forces. We note that in
+this set we kept the remnant mass fixed using the prescription
+from Fryer et al. (2012) and decided to study the effect on the                      4
+γ-process nucleosynthesis of the explosion energy only.
+
+
+
+
+                                                                                T9
+    Both the hydrostatic and explosive nucleosynthesis were cal-                     3
+culated using the same version of the JINA Reaclib database
+used by Ritter et al. (2018b) (V1.1; Cyburt 2011) and with an up-                    2
+dated version of the Multi-zone Post-Processing Network – Par-
+allel (MPPNP) code (Pignatari & Herwig 2012; Pignatari et al.                        1
+2016b; Ritter et al. 2018b, Paper I). Table 1 presents a summary
+of the main features of these models.                                                0     3.0         3.5          4.0          4.5         5.0
+                                                                                              Internal mass coordinate (M )
+2.2. Lawson set (LAW)                                                       Fig. 1. Peak shock temperature (solid red lines) and velocity (solid green
+We further used the CCSN yields from the models of Jones et al.             lines) for different initial explosive conditions in the 20 M⊙ progenitor
+                                                                            from Ritter et al. (2018b). The purple line represents the logarithm of
+(2019), Andrews et al. (2020), and Lawson et al. (2022, hereafter
+                                                                            the quantity ρr3 in the pre-supernova model in arbitrary units. The gray
+LAW) to study how different supernova parameterizations affect              region represents the temperature range for the activation of the γ pro-
+the production of p nuclei. The progenitors were computed with              cess, i.e., between 2 GK and 3.5 GK. Note that the saturation of the
+the 1D Kepler code (Heger & Woosley 2010) using the solar                   shock velocity at ∼ 4.2 M⊙ at the value of 5 × 109 cm s−1 is due to the
+metallicity from Grevesse & Noels (1993), Z=0.02. The explo-                artificial cap imposed for viscous forces (see Sect. 2.1).
+sions were calculated using a 1D hydrodynamic code that mim-
+ics the 3D convection-enhanced supernova engine (Fryer et al.
+2018). Fryer et al. (2018) performed a parametric study of the              therefore, a certain temperature. Consequently, a basic assump-
+explosion energy, compact remnant production, and basic nucle-              tion that has often been made is that the production of p nuclei
+osynthetic yields of CCSNe by varying the power (Einj ), duration           is almost independent of the properties of the explosion, since a
+(tinj ), and extent of the energy injection region (Minj ) in the stellar   different propagation of the shock would, in principle, only shift
+progenitors. On the basis of this structure and evolution, Jones            the location mass of the explosive Ne burning (see Choplin et al.
+et al. (2019), Andrews et al. (2020), and Lawson et al. (2022) cal-         2022, and our Table 1). However, according to the Sedov solu-
+culated the hydrostatic nucleosynthesis using the MPPNP code                tion2 , a local decrease in the quantity ρr3 would facilitate the
+and the explosive nucleosynthesis using the Tracer particle Post-           local propagation of the shock wave and its acceleration (Sedov
+Processing Network – Parallel (TPPNP) code (Jones et al. 2019).             1946; Woosley et al. 2002). The acceleration results in a temper-
+Both the hydrostatic and explosive nucleosynthesis were calcu-              ature increase, which in some cases (especially for high-energy
+lated using version V2.2 of the JINA Reaclib database. These                explosions) can lead to the temperature threshold being exceed
+calculations consist in a set of yields from 80 different explosive         again for the γ process and can increase the extent in mass of
+parametrizations, including 23 explosions of the 15 M⊙ model,               the zone where the p nuclei are produced. Figure 1 shows this
+31 of the 20 M⊙ model, and 26 of the 25 M⊙ model 1 . The Einj               occurrence in the case of a 20 M⊙ model from the SBW set.
+ranged between 3 and 200 foe, Minj between 0.02 and 0.2 M⊙ ,                In the case of the most energetic explosions, the peak temper-
+and tinj between 0.1 and 1 s. They produce explosion energies               ature spends more time in the γ-process area (represented by
+and remnant masses in the interval between 0.34 and 18.4 foe                the gray band in the figure) due to the acceleration of the shock
+and 1.5 and 5.6 M⊙ , respectively.                                          wave where ρr3 decreases. The left panels of Fig. 2 show the
+                                                                            effect of the late acceleration of the shock wave (in the same
+                                                                            model as Fig. 1) on the final abundances of three representative
+3. The γ process and the CCSN explosion                                     p nuclei (92 Mo, 130 Ba, and 196 Hg). The abundance peaks corre-
+The temperature required to produce p nuclei via the γ process              sponding to the p nuclei are progressively more extended in mass
+ranges between 2 and 3.5 GK (see, e.g., Pignatari et al. 2016b),            with increasing initial shock velocity, at least in the models with
+which in CCSNe roughly corresponds to the typical temperature               vshock ≥ 2×109 cm/s. However, in the most energetic explosions,
+of explosive Ne burning (Limongi & Chieffi 2008). Based on this             the abundance of all the p nuclei drops abruptly at ∼ 4.5 M⊙ .
+temperature range, we defined the "hot" γ-process component as              This mass coordinate corresponds to the interface between the
+the light p nuclei that are produced at a temperature near ∼ 3.5            CO and He cores, where the temperature and the density of the
+GK (for example, 74 Se and 102 Pd) and the "cold" γ-process com-            shock sharply decrease. If the temperature is still high enough
+ponent as the intermediate and heavy p nuclei that are produced             for an efficient γ-process nucleosynthesis when the shock wave
+at a temperature near ∼ 2 GK (for example, 130 Ba and 196 Hg).              reaches the CO–He core interface, the production of the cold γ-
+     The main effect of adopting different explosion prescriptions          process components are generally suppressed because the peak
+is to shift the mass coordinate in the structure of the supernova           temperature decrease is too sharp to extend farther into the γ-
+progenitor where the shock wave reaches a certain velocity and,             process region. We observe a qualitatively similar, albeit less in-
+                                                                            tense, behavior in the LAW models (right panels of Fig. 2). In
+1
+  The full datasets of these models can be found                       at   this case, the interplay among the multiple explosion parameters
+https://ccsweb.lanl.gov/astro/nucleosynthesis/
+nucleosynthesis_astro.html                                                  2
+                                                                                From the Sedov solution: Eexp ∝ ρ r5 t−2 → vshock ∝ (ρ r3 )−1 .
+
+                                                                                                                          Article number, page 3 of 11
+                                                                     A&A proofs: manuscript no. ms
+
+                                          92Mo (SBW, 20 M )                                                            92Mo (LAW, 15 M )
+                  10 4                                                            5.5                10 2
+                                                                   Solar                                                                              Solar
+                                                                   0.2×109 cm/s   5.0                10 3                                              0.92 foe
+                  10 5                                             0.4×109 cm/s                                                                        1.34 foe
+                                                                   1.0×109 cm/s   4.5                                                                  2.60 foe
+                                                                   1.3×109 cm/s                      10 4                                              4.79 foe
+                  10 6                                             2.0×109 cm/s   4.0                                                                 10.70 foe
+Mass fraction X
+
+
+
+
+                                                                                   Mass fraction X
+                                                                   3.0×109 cm/s                      10 5
+                                                                   4.0×109 cm/s   3.5
+                  10 7                                             5.0×109 cm/s                      10 6
+
+
+
+
+                                                                                         T9
+                                                                                  3.0
+                                                                                                     10 7
+                  10 8                                                            2.5
+                                                                                                     10 8
+                                                                                  2.0
+                  10 9
+                                                                                  1.5                10 9
+                  10 10                                                                              10 10
+                          3.0   3.5     4.0    4.5   5.0   5.5     6.0    6.5 1.0                            1.6      1.8         2.0           2.2           2.4
+                                      Internal mass coordinate M                                                   Internal mass coordinate M
+                                          130Ba (SBW, 20 M )                                                           130Ba (LAW, 15 M )
+                  10 4                                                            5.5                10 4
+                                                                   Solar                                                                              Solar
+                                                                   0.2×109 cm/s   5.0                                                                  0.92 foe
+                  10 5                                             0.4×109 cm/s                      10 5                                              1.34 foe
+                                                                   1.0×109 cm/s   4.5                                                                  2.60 foe
+                  10 6                                             1.3×109 cm/s                      10 6                                              4.79 foe
+                                                                   2.0×109 cm/s   4.0                                                                 10.70 foe
+Mass fraction X
+
+
+
+
+                                                                                   Mass fraction X
+                  10 7                                             3.0×109 cm/s                      10 7
+                                                                   4.0×109 cm/s   3.5
+                  10 8                                             5.0×109 cm/s                      10 8
+                                                                                         T9
+
+
+
+                                                                                  3.0
+                  10 9                                                            2.5                10 9
+                  10 10                                                           2.0                10 10
+                  10 11                                                           1.5                10 11
+                          3.0   3.5     4.0    4.5   5.0   5.5     6.0    6.5 1.0                            1.6      1.8         2.0           2.2           2.4
+                                      Internal mass coordinate M                                                   Internal mass coordinate M
+                                          196Hg (SBW, 20 M )                                                           196Hg (LAW, 15 M )
+                  10 4                                                            5.5                10 4
+                                                                   Solar                                                                              Solar
+                  10 5                                             0.2×109 cm/s   5.0                10 5                                              0.92 foe
+                                                                   0.4×109 cm/s                                                                        1.34 foe
+                                                                   1.0×109 cm/s   4.5                                                                  2.60 foe
+                  10 6                                             1.3×109 cm/s
+                                                                                                     10 6                                              4.79 foe
+                                                                   2.0×109 cm/s   4.0                                                                 10.70 foe
+                  10 7                                                                               10 7
+Mass fraction X
+
+
+
+
+                                                                                   Mass fraction X
+
+
+
+
+                                                                   3.0×109 cm/s
+                  10 8                                             4.0×109 cm/s   3.5                10 8
+                                                                   5.0×109 cm/s
+                                                                                         T9
+
+
+
+
+                  10 9                                                            3.0                10 9
+                                                                                  2.5
+                  10 10                                                                              10 10
+                                                                                  2.0
+                  10 11                                                                              10 11
+                                                                                  1.5
+                  10 12                                                                              10 12
+                          3.0   3.5     4.0    4.5   5.0   5.5     6.0    6.5 1.0                            1.6      1.8         2.0           2.2           2.4
+                                      Internal mass coordinate M                                                   Internal mass coordinate M
+
+    Fig. 2. Effect of different explosion energies and prescriptions on three representative p–nuclei. Left panels: 92 Mo (upper panel), 130 Ba (central
+    panel), and 196 Hg (lower panel) abundances in mass fractions as a function of the internal mass coordinate (solid lines, left axis) and explosion
+    peak temperature in T9 (dashed lines, right y-axis) in the 20 M⊙ SBW models. Different colors denote different shock velocities. Right panels:
+    Same as the left panels but for a sample of the 15 M⊙ LAW models, without the explosion peak temperature plotted. The horizontal dashed-dotted
+    blue line in each panel represents the solar abundance of the representative isotope in mass fractions taken from Asplund et al. (2009).
+
+
+    often leads to a non-monotonic increase in the γ-process yields                               The choice of mass cut (i.e., the mass coordinates that sep-
+    with the final explosion energy.                                                          arate the ejecta from the remnant mass) plays a relevant role in
+                                                                                              the ejection of p nuclei. A more external mass cut will (partly)
+
+
+    Article number, page 4 of 11
+                                 L. Roberti et al.: The γ-process nucleosynthesis in core-collapse supernovae
+
+lock the ashes of the explosive Ne burning within the remnant;           more than F0 because it encompasses fewer isotopes that con-
+conversely, a deeper mass cut will allow the supernova to fully          tribute the most to F0 . The 15 M⊙ SBW models instead expe-
+eject the γ-process products and, in some cases, to eject some           rience a C-O shell merger before the explosion. As discussed
+material rich in the lightest p nuclei (74 Se, 78 Kr, 84 Sr, 92−94 Mo,   in Paper I, the yields of all the p nuclei heavier than 108 Cd are
+and, possibly, 96−98 Ru) produced by the α-rich freeze-out (see,         almost exclusively dominated by the production obtained in the
+e.g., Woosley et al. 2002; Rauscher et al. 2013; Pignatari et al.        C-O shell mergers, with a negligible contribution from the explo-
+2016b; Lugaro et al. 2016). The upper right panel of Fig. 2 shows        sive nucleosynthesis. Here we confirm this results: we find that,
+the large abundances of the isotope 92 Mo synthesized in the α-          across a wide range of explosion energies, the average overpro-
+rich freeze-out in some of the 15 M⊙ models from the LAW set.            duction is constant and is equal to or higher than that of 16 O (with
+To the contrary, no significant α-rich freeze-out component is           F0 /FO16 ∼ 1, Fγ /FO16 ∼ 2 − 3). Moreover, the most produced p nu-
+ejected in any of the SBW models. We recall that in the SBW              clei do not change with increasing explosion energy, because the
+models the mass cut is independent of the explosion energy be-           dominant contribution is always produced at the typical temper-
+cause it is predetermined by the adopted semi-analytical pre-            ature of the O-burning shell in the pre-supernova stage. In the
+scription, while for LAW models it is the result of the solution         whole explosion velocity range, 130,132 Ba and 144 Sm are the nu-
+of the hydrodynamic equations.                                           clei that contribute to Fγ . We note, however, that neither the more
+    In conclusion, different choices regarding the explosion pre-        energetic explosions nor the C-O shell mergers can fully fill the
+scription can significantly alter the amount of p-nucleus-rich ma-       production gap between the Mo-Ru isotopes and the other p nu-
+terial ejected by the CCSN. We analyze this effect in more detail        clei in the SBW models.
+in the next section.                                                         In LAW models the explosion energy, Eexp , is the hydrody-
+                                                                         namic result of a complex interplay between three initial param-
+                                                                         eters: the amount of injected energy (Einj ) and the duration (tin j )
+4. Discussion: Effect of different explosion                             and mass location (Min j ) of the energy deposition (Sect. 2.2).
+   prescriptions on the production of p nuclei                           Only models with Eexp > 2 foe have an efficient production of
+                                                                         p nuclei (i.e., F0 /FO16 and/or Fγ /FO16 ≥ 1). We note, however,
+We defined the overproduction factor, Fi , of a certain isotope,         that in the 15 M⊙ models the p nucleus production is often dom-
+i, as the ratio between its mass fraction, Xi (which is equal to         inated by the ejection of some α-rich freeze-out material rather
+the total integrated yield divided by the total mass ejected) and        than the γ-process nucleosynthesis. In nine of the 15 M⊙ mod-
+the solar mass fraction, Xi,⊙ , from Asplund et al. (2009). In Pa-       els, in fact, we find values of F0 /FO16 as high as 200, but with
+per I we discussed the use of the average overproduction factor,         Fγ /FO16 ≤ 1, due to the extremely large yields of some light p
+F0 , defined as F0 = ( 35
+                        P
+                          i=1 Fi )/35, as a proxy for the overall p-     nuclei (from 74 Se to 94 Mo) that are produced very close to the
+nucleus production (see, e.g., Arnould & Goriely 2003; Pignatari         mass cut, just below the abundance peak of 56 Ni, as shown in the
+et al. 2013). We also introduced alternative definitions of this         top-right panel of Fig. 2.
+parameter to disentangle the γ process from the other processes              Finally, we find that in LAW models, Fγ receives the most
+that can contribute to the production of p nuclei. In particular,        contribution from intermediate and heavy p nuclei, while in
+we defined Fγ as the average overproduction factor of the three          SBW models it receives the most contribution from the light and
+most produced γ-only nuclei. Since Fγ reflects the dominant γ-           intermediate p nuclei (see Tables A.1, A.2, and A.3). It follows
+process production, we can consider the isotopes contributing to         that the SBW models experience hotter γ-process nucleosyn-
+Fγ as "thermometers" for the γ process and use them to char-             thesis compared to LAW models. This is in qualitative agree-
+acterize the differences between the explosive prescriptions. To         ment with what was already found by Woosley & Weaver (1995)
+approximately estimate the contribution from CCSNe to the so-            and Limongi & Chieffi (2003), who observed that a radiation-
+lar abundances of the p nuclei and to discuss how the p nucleus          dominated technique tends to result in higher peak temperatures
+synthesis changes for different models, we compared F0 and Fγ            than those estimated via a hydrodynamic calculation.
+with the overproduction of 16 O (FO16 ), the most abundant metal
+ejected from massive stars. The F0 , Fγ , and FO16 of each model
+are given in Tables A.1, A.2, and A.3.                                   5. Summary and conclusions
+     Figure 3 shows the F0 /FO16 and Fγ /FO16 ratios in the SBW
+and LAW sets as a function of the initial mass and of their trend        We studied the effect of a wide range of explosion energies and
+with the explosion energy or, equivalently, the initial shock ve-        parameters on the production of p nuclei in CCSNe. We com-
+locity. In the 20 and 25 M⊙ SBW models, we find that that the in-        pared the results obtained from a semi-analytical model (SBW;
+crease in the explosion energy produces, on average, an increase         Pignatari et al. 2016a; Ritter et al. 2018b) with those from a
+within one order of magnitude of the p-nucleus yields relative to        set of hydrodynamic simulations (LAW; Fryer et al. 2018; Law-
+16
+   O, in contrast with Choplin et al. (2022). Almost no p nuclei         son et al. 2022), using two different definitions of the average
+are ejected for low explosion velocities (where the mass cut is          p-nucleus overproduction factors (F0 and Fγ ). As discussed in
+larger than the outer mass coordinate for explosive Ne burning).         Paper I (see also Farmer et al. 2016; Boccioli & Roberti 2024),
+At higher velocities, there is a plateau corresponding to F0 ∼FO16 ,     small differences in the input parameters used by different au-
+caused by the fact that the external zone of γ-process produc-           thors to calculate massive star models with the same initial
+tion coincides with the interface between the CO and He cores,           masses and metallicities (and potentially rotation velocities) can
+which suppresses the cold γ-process component (see the bottom-           lead to very different structures at the time of the collapse. The
+and central-left panels of Fig. 2, which show the representative         propagation of the shock wave and the explosive nucleosynthe-
+cases of 130 Ba and 196 Hg). The production of the hot compo-            sis (and therefore the γ process) are then influenced by these
+nent is instead boosted by the acceleration of the shock wave in         differences. For this reason, finding that the overall production
+the outer region of the C shell, because the temperature is kept         of p nuclei increases with the increase in the explosion power,
+high enough to have a larger γ-process zone (the top-left panel of       regardless of the set and the explosion method used, is a remark-
+Fig. 2 shows the representative case of 92 Mo). The Fγ increases         able result.
+                                                                                                                  Article number, page 5 of 11
+                                                         A&A proofs: manuscript no. ms
+
+
+             101                         SBW                                          103 15 M                       LAW
+                       15 M
+                                                                                      102
+             100                                                                      101
+            10 1                                                                      100
+                                                                                     10 1
+            10 2                                                                     10 2
+                0             1    2           3          4           5                                100                                 101
+             101 20 M                                                                 101 20 M
+             100                                                                      100
+  Fi/FO16
+
+
+
+
+                                                                           Fi/FO16
+            10 1                                                                     10 1
+            10 2                                                                     10 2
+                   0          1    2           3          4           5                          100                   101                       102
+             101 25 M                                                                 101 25 M
+             100                                                                      100
+            10 1                                                                     10 1
+                                                                 F0/FO16                                                                         F0/FO16
+            10 2                                                 F /FO16             10 2                                                        F /FO16
+                   0          1    2           3          4            5                               100                                 101
+                                  vshock(109 cm s 1)                                                              Eexp(foe)
+Fig. 3. F0 /FO16 (blue diamonds) and Fγ /FO16 (green diamonds) in the SBW models as a function of the initial shock velocity (left panels) and in the
+LAW models as a function of the explosion energy (right panels). The dotted lines represent Fi =FO16 , and the shaded gray area represents a factor
+of 2 above and below the dotted line.
+
+
+    In the case of SBW models that do not experience a C-O shell              massive stars show some features that are impossible to repro-
+merger (the 20 and 25 M⊙ models), the increase in the explo-                  duce in 1D codes. Rizzuti et al. (2022) show that a significant
+sion energy produces an increase within one order of magnitude                entrainment is found in convective Ne-shell burning, confirm-
+of the p-nucleus yields. Conversely, the p-nucleus yields from                ing that the burning stages that lead to the collapse and to the
+the model that experiences a C-O shell merger during the pre-                 explosion are still poorly constrained by 1D models. Moreover,
+supernova stage (15 M⊙ ) are not significantly affected by the ex-            most 3D CCSN simulations show that the dynamics of the inner-
+plosion because the pre-supernova production survives and dom-                most layers of the ejecta is strongly aspherical, with the forma-
+inates over the explosive nucleosynthesis for the wide range of               tion of structures such as bubbles, plumes, and bullets that may
+explosion velocities we have explored. In any case, neither the               even exceed the speed of the outer material and escape the fall-
+increase in the explosion energy nor the occurrence of C-O shell              back (Wongwathanarat et al. 2015; Burrows & Vartanyan 2021).
+mergers resolve the problem of the γ-process underproduction                  Asymmetries in the explosion may eventually affect the spatial
+of Mo and Ru isotopes.                                                        distribution of the free electron fraction, Ye , near the Fe core and,
+    In the LAW models there is no monotonic trend with ex-                    in turn, the production of the lightest p nuclei (up to Pd) via α-
+plosion energy, but there is an overall increase in the p-nucleus             rich freeze-out or the νp process (Hoffman et al. 1996; Arcones
+production in the case of more energetic supernovae. The ejec-                & Thielemann 2013). A further exploration of the production
+tion of some α-rich freeze-out material, in the case of the ex-               of nuclei in multidimensional simulations will be needed in the
+plosions above 2 foe in the 15 M⊙ models, increases the Mo-Ru                 future to confirm these predictions.
+overproduction relative to 16 O by up to two orders of magni-                 Acknowledgements. We thank the support from the NKFI via K-project 138031
+tude. Recently, Sasaki et al. (2022) suggested that high-energy               and the Lendület Program LP2023-10 of the Hungarian Academy of Sciences.
+hypernovae (Eexp ≥ 10 foe) could also provide the right con-                  LR and MP acknowledge the support to NuGrid from JINA-CEE (NSF Grant
+                                                                              PHY-1430152) and STFC (through the University of Hull’s Consolidated Grant
+ditions for an efficient νp process (Fröhlich et al. 2006), which             ST/R000840/1), and ongoing access to viper, the University of Hull High Per-
+may resolve the problem with Mo-Ru isotopes. In any case, high-               formance Computing Facility. LR acknowledges the support from the ChETEC-
+energy supernovae could represent the key to resolving the long-              INFRA – Transnational Access Projects 22102724-ST and 23103142-ST. This
+pending problem about the underproduction of 92,94 Mo and 96 Ru,              work was supported by the European Union’s Horizon 2020 research and inno-
+                                                                              vation programme (ChETEC-INFRA – Project no. 101008324), and the IReNA
+although not via the γ process alone. We further note that the                network supported by US NSF AccelNet (Grant No. OISE-1927130). ML was
+models included in our analysis did not consider neutrino wind                also supported by the NKFIH excellence grant TKP2021-NKTA-64.
+nucleosynthesis, and therefore we are not able to estimate the
+impact at different explosion energies of the νp process nor the
+neutrino spallation contribution, which is crucial for the produc-
+tion of the p-nucleus 138 La and 180 Ta (see Cumming & Alburger               References
+1985; Goriely, S. & Siess, L. 2001, and the detailed description              Andrews, S., Fryer, C., Even, W., Jones, S., & Pignatari, M. 2020, ApJ, 890, 35
+in Paper I).                                                                  Arcones, A. & Thielemann, F. K. 2013, Journal of Physics G Nuclear Physics,
+                                                                                40, 013201
+    Finally, we stress that with this work we explored only a por-            Arnould, M. & Goriely, S. 2003, Phys. Rep., 384, 1
+tion of the wide parameter space that determines the production               Asplund, M., Grevesse, N., Sauval, A. J., & Scott, P. 2009, ARA&A, 47, 481
+                                                                              Boccioli, L. & Roberti, L. 2024, Universe, 10, 148
+of p nuclei. For instance, more recent and sophisticated mul-                 Boccioli, L., Roberti, L., Limongi, M., Mathews, G. J., & Chieffi, A. 2023, The
+tidimensional simulations of the final stages and explosion of                  Astrophysical Journal, 949, 17
+
+Article number, page 6 of 11
+                                        L. Roberti et al.: The γ-process nucleosynthesis in core-collapse supernovae
+
+Burrows, A. & Vartanyan, D. 2021, Nature, 589, 29
+Chevalier, R. A. 1989, ApJ, 346, 847
+Choplin, A., Goriely, S., Hirschi, R., Tominaga, N., & Meynet, G. 2022, A&A,
+   661, A86
+Cumming, J. B. & Alburger, D. E. 1985, Phys. Rev. C, 31, 1494
+Cyburt, R. 2011, in APS Division of Nuclear Physics Meeting Abstracts, 7
+Farmer, R., Fields, C. E., Petermann, I., et al. 2016, The Astrophysical Journal
+   Supplement Series, 227, 22
+Fowler, W. A. & Hoyle, F. 1964, ApJS, 9, 201
+Fröhlich, C., Hix, W. R., Martínez-Pinedo, G., et al. 2006, New A Rev., 50, 496
+Fryer, C. L. 2009, ApJ, 699, 409
+Fryer, C. L., Andrews, S., Even, W., Heger, A., & Safi-Harb, S. 2018, The As-
+   trophysical Journal, 856, 63
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012, ApJ, 749, 91
+Fryer, C. L., Karpov, P., & Livescu, D. 2021, Astronomy Reports, 65, 937
+Fryer, C. L., Olejak, A., & Belczynski, K. 2022, ApJ, 931, 94
+Goriely, S. & Siess, L. 2001, A&A, 378, L25
+Grevesse, N. & Noels, A. 1993, in Origin and Evolution of the Elements, ed.
+   N. Prantzos, E. Vangioni-Flam, & M. Casse, 15–25
+Heger, A. & Woosley, S. E. 2010, The Astrophysical Journal, 724, 341
+Hoffman, R. D., Woosley, S. E., Fuller, G. M., & Meyer, B. S. 1996, ApJ, 460,
+   478
+Hoyle, F., Fowler, W. A., Burbidge, G. R., & Burbidge, E. M. 1964, ApJ, 139,
+   909
+Jones, S., Röpke, F. K., Fryer, C., et al. 2019, A&A, 622, A74
+Lawson, T. V., Pignatari, M., Stancliffe, R. J., et al. 2022, Monthly Notices of the
+   Royal Astronomical Society, 511, 886
+Limongi & Chieffi. 2018, ApJS, 237, 13
+Limongi, M. & Chieffi, A. 2003, ApJ, 592, 404
+Limongi, M. & Chieffi, A. 2008, in EAS Publications Series, Vol. 32, EAS Pub-
+   lications Series, ed. C. Charbonnel & J. P. Zahn, 233–281
+Lugaro, M., Pignatari, M., Ott, U., et al. 2016, Proceedings of the National
+   Academy of Science, 113, 907
+Paxton, B., Marchant, P., Schwab, J., et al. 2015, ApJs, 220, 15
+Pignatari, M., Göbel, K., Reifarth, R., & Travaglio, C. 2016a, International Jour-
+   nal of Modern Physics E, 25, 1630003
+Pignatari, M. & Herwig, F. 2012, Nuclear Physics News, 22, 18
+Pignatari, M., Herwig, F., Hirschi, R., et al. 2016b, ApJS, 225, 24
+Pignatari, M., Hirschi, R., Wiescher, M., et al. 2013, ApJ, 762, 31
+Rauscher, T., Dauphas, N., Dillmann, I., et al. 2013, Reports on Progress in
+   Physics, 76, 066201
+Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E. 2002, ApJ, 576, 323
+Rayet, M., Arnould, M., Hashimoto, M., Prantzos, N., & Nomoto, K. 1995,
+   A&A, 298, 517
+Ritter, C., Andrassy, R., Côté, B., et al. 2018a, MNRAS, 474, L1
+Ritter, C., Herwig, F., Jones, S., et al. 2018b, MNRAS, 480, 538
+Rizzuti, F., Hirschi, R., Georgy, C., et al. 2022, MNRAS, 515, 4013
+Roberti, Pignatari, M., Psaltis, A., et al. 2023, A&A, 677, A22
+Sasaki, H., Yamazaki, Y., Kajino, T., et al. 2022, ApJ, 924, 29
+Sedov, L. I. 1946, Applied Mathematics and Mechanics, 10, 241
+Shankar, S., Mösta, P., Barnes, J., Duffell, P. C., & Kasen, D. 2021, MNRAS,
+   508, 5390
+Soker, N. 2022, ApJ, 935, 108
+Travaglio, C., Rauscher, T., Heger, A., Pignatari, M., & West, C. 2018, ApJ, 854,
+   18
+Wongwathanarat, A., Müller, E., & Janka, H.-T. 2015, A&A, 577, A48
+Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Rev. Mod. Phys., 74, 1015
+Woosley, S. E. & Howard, W. M. 1978, ApJS, 36, 285
+Woosley, S. E. & Weaver, T. A. 1995, APJS, 101, 181
+
+
+
+
+                                                                                                                       Article number, page 7 of 11
+                                                          A&A proofs: manuscript no. ms
+
+Appendix A: Tables of average overproduction
+  factors
+Here we present the different average overproduction factors for
+all the models analyzed in this work. In particular: 15 M⊙ models
+in Table A.1; 20 M⊙ in Table A.2; and 25 M⊙ in Table A.3. We
+repeat below the different definitions for F0 , F0 I,II,III , and Fγ (see
+also Table 2 of Roberti et al. 2023). In the case of LAW, we use
+the same model names as in the online tables (Sect. 2.2). In the
+case of SBW, the name of each model is composed of the mass
+in solar masses (M), followed by the absolute metallicity (Z) and
+the velocity in cm/s (V). The column "Eexp or vshock " contains the
+final explosion energy in foe (1051 erg) in the case of the LAW
+models, or the initial shock velocity in 109 cm s−1 in the case of
+the SBW models.
+
+ – F0 : no p nuclei are excluded.
+ – F0 I : the excluded p nuclei are 74 Se, 78 Kr, 84 Sr, 92,94 Mo,
+   96,98
+          Ru, 108 Cd, 113 In, 115 Sn, 138 La, 152 Gd, 164 Er, and 180 Ta.
+ – F0 II : the excluded p nuclei are 74 Se, 78 Kr, 84 Sr, 92,94 Mo, and
+   96,98
+          Ru.
+ – F0 III : the excluded p nuclei are 108 Cd, 113 In, 115 Sn, 138 La,
+   152
+       Gd, 164 Er, and 180 Ta.
+ – Fγ : all p nuclei are excluded except for the three most pro-
+   duced γ-only nuclei, which are listed in the last column.
+
+
+
+
+Article number, page 8 of 11
+                                L. Roberti et al.: The γ-process nucleosynthesis in core-collapse supernovae
+
+Table A.1. Average overproduction factors in the 15 M⊙ models.
+
+ Model                       Eexp or vshock     FO16         F0        FI0             FII0         FIII
+                                                                                                     0            Fγ             Fγ isotopes
+                                                                  LAW
+                                                                                                                           190
+ M15s_f1_216M1.3aal              2.63         1.21e+01   1.87e+03   4.70e+00        4.47e+00     2.34e+03      8.37e+00       Pt, 130 Ba, 158 Dy
+                                                                                                                           158
+ M15s_f1_216M1.3abl              4.79         1.19e+01   2.07e+03   5.41e+00        5.01e+00     2.59e+03      9.98e+00       Dy, 190 Pt, 196 Hg
+                                                                                                                          184
+ M15s_f1_216M1.3bdl              1.69         1.22e+01   2.64e+03 3.44e+00          3.61e+00     3.30e+03      5.68e+00       Os, 130 Ba, 158 Dy
+                                                                                                                          130
+ M15s_f1_216M1.3bel              10.70        1.23e+01   1.57e+03 4.01e+00          3.94e+00     1.96e+03      6.59e+00       Ba, 158 Dy, 190 Pt
+                                                                                                                          158
+ M15s_f1_216M1.3bfl               0.89        1.20e+01   3.55e+00   3.91e+00        3.85e+00     3.52e+00      6.90e+00       Dy, 190 Pt, 130 Ba
+                                                                                                                          190
+ M15s_f1_216M1.3bgl               0.92        1.26e+01   4.13e+00   4.87e+00        4.72e+00     4.10e+00      9.56e+00       Pt, 196 Hg, 158 Dy
+                                                                                                                          190
+ M15s_f1_216M1.3bhl               0.74        1.26e+01   4.39e+00 5.31e+00          5.04e+00     4.44e+00      1.11e+01       Pt, 196 Hg, 158 Dy
+                                                                                                                          158
+ M15s_f1_216M1.3bil               0.82        1.12e+01   3.59e+00 3.98e+00          3.84e+00     3.64e+00      6.76e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          130
+ M15s_f1_216M1.3bjl               0.52        1.08e+01   3.59e+00   4.05e+00        3.83e+00     3.69e+00      7.00e+00       Ba, 190 Pt, 158 Dy
+                                                                                                                          158
+ M15s_f1_216M1.3bkl               0.30        1.05e+01   3.66e+00   4.12e+00        3.87e+00     3.79e+00      7.68e+00       Dy, 190 Pt, 130 Ba
+                                                                                                                          158
+ M15s_f1_216M1.3sl                1.34        1.26e+01   3.31e+00   3.51e+00        3.69e+00     3.09e+00      5.79e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          130
+ M15s_f1_216M1.3tl                0.82        1.28e+01   3.32e+00   3.48e+00        3.69e+00     3.07e+00      5.73e+00       Ba, 158 Dy, 190 Pt
+                                                                                                                          158
+ M15s_f1_216M1.3vl                0.34        1.25e+01   3.27e+00   3.41e+00        3.68e+00     2.96e+00      5.75e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_f1_216M1.3xl                0.54        1.28e+01   3.31e+00   3.45e+00        3.69e+00     3.04e+00      5.79e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_f1_216M1.3yl                2.47        1.22e+01   3.53e+00   3.87e+00        3.90e+00     3.42e+00      6.70e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_f1_216M1.3zl                2.47        1.16e+01   2.14e+03   3.78e+00        3.75e+00     2.68e+03      6.52e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_t1                          2.06        1.22e+01   6.16e+02   3.49e+00        3.63e+00     7.69e+02      5.96e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_t2                         1.94         1.23e+01   3.38e+00 3.50e+00          3.64e+00     3.21e+00      5.98e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_t3                         1.90         1.23e+01   3.38e+00 3.51e+00          3.65e+00     3.21e+00      6.01e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_t5                         1.86         1.23e+01   3.37e+00 3.52e+00          3.66e+00     3.20e+00      6.06e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_t6                         2.24         1.22e+01   1.86e+03 3.50e+00          3.64e+00     2.32e+03      5.98e+00       Dy, 130 Ba, 190 Pt
+                                                                                                                          158
+ M15s_t8                         2.60         1.21e+01   2.43e+03 3.42e+00          3.56e+00     3.04e+03      5.96e+00       Dy, 130 Ba, 184 Os
+                                                                                                                          190
+ M15s_t9                         3.43         1.21e+01   1.97e+03   4.99e+00        4.75e+00     2.47e+03      9.99e+00       Pt, 158 Dy, 196 Hg
+                                                                  SBW
+                                                                                                                          132
+ M15.0Z2.0e-02.V2.0e08a          0.40         1.49E+01   1.51E+01 1.82E+01         1.49E+01      1.76E+01      4.44E+01       Ba, 130 Ba, 144 Sm
+                                                                                                                          132
+ M15.0Z2.0e-02.V4.0e08a          0.80         1.49E+01   1.51E+01 1.82E+01         1.49E+01      1.76E+01      4.44E+01       Ba, 130 Ba, 144 Sm
+                                                                                                                          132
+ M15.0Z2.0e-02.V1.0e09a          1.00         1.47E+01   1.51E+01 1.75E+01         1.42E+01      1.77E+01      4.20E+01       Ba, 130 Ba, 144 Sm
+                                                                                                                          132
+ M15.0Z2.0e-02.V1.3e09a          1.33         1.44E+01   1.48E+01 1.69E+01         1.38E+01      1.74E+01      4.02E+01       Ba, 130 Ba, 144 Sm
+                                                                                                                          132
+ M15.0Z2.0e-02.V2.0e09a          2.00         1.38E+01   1.43E+01 1.60E+01         1.31E+01      1.68E+01      3.71E+01       Ba, 130 Ba, 144 Sm
+                                                                                                                          132
+ M15.0Z2.0e-02.V3.0e09a          3.00         1.31E+01   1.38E+01 1.46E+01         1.21E+01      1.61E+01      3.26E+01       Ba, 130 Ba, 144 Sm
+                                                                                                                          132
+ M15.0Z2.0e-02.V4.0e09a          4.00         1.24E+01   1.34E+01 1.37E+01         1.16E+01      1.54E+01      2.96E+01       Ba, 130 Ba, 144 Sm
+                                                                                                                          132
+ M15.0Z2.0e-02.V5.0e09a          5.00         1.23E+01   1.32E+01 1.36E+01         1.15E+01      1.52E+01      2.94E+01       Ba, 130 Ba, 144 Sm
+
+Notes. a These models experience a C–O shell merger.
+
+
+
+
+                                                                                                                 Article number, page 9 of 11
+                                                            A&A proofs: manuscript no. ms
+
+Table A.2. Average overproduction factors in the 20 M⊙ models.
+
+ Model                          Eexp or vshock     FO16           F0         FI0            FII0     FIII
+                                                                                                      0          Fγ            Fγ isotopes
+                                                                        LAW
+                                                                                                                         158
+ M20s_f1_240M1.47al                 2.85         2.53e+01      3.38e+00 1.26e+00       3.61e+00    1.56e+00   1.80e+00       Dy, 114 Sn, 180 W
+                                                                                                                         158
+ M20s_f1_240M1.47bl                 5.03         2.50e+01      4.52e+00   3.13e+00     5.09e+00    2.91e+00   5.73e+00       Dy, 184 Os, 196 Hg
+                                                                                                                         130
+ M20s_f1_240M1.47cl                 8.86         2.47e+01      6.30e+00   4.89e+00     6.29e+00    5.26e+00   8.89e+00       Ba, 132 Ba, 158 Dy
+                                                                                                                         158
+ M20s_f1_240M1.47dl                 1.65         2.57e+01      3.56e+00 1.17e+00       3.51e+00    1.83e+00   1.70e+00       Dy, 114 Sn, 180 W
+                                                                                                                         114
+ M20s_f1_240M1.47el                  1.00        2.36e+01      2.75e+00   8.92e-01     3.20e+00    9.03e-01   1.40e+00       Sn, 158 Dy, 180 W
+                                                                                                                         114
+ M20s_f1_240M1.47fl                  0.84        2.16e+01      2.52e+00   9.07e-01     2.92e+00    9.19e-01   1.38e+00       Sn, 158 Dy, 180 W
+                                                                                                                         114
+ M20s_f1_240M1.47gl                  0.75        2.05e+01      2.41e+00   9.14e-01     2.77e+00    9.28e-01   1.38e+00       Sn, 158 Dy, 180 W
+                                                                                                                         158
+ M20s_f1_240M1.47hl                  2.76        2.53e+01      3.38e+00   1.27e+00     3.64e+00    1.54e+00   1.82e+00       Dy, 114 Sn, 180 W
+                                                                                                                          114
+ M20s_f1_240M1.47redal             124.00        2.61e+01      3.91e+00   1.09e+00     3.45e+00    2.26e+00   1.57e+00        Sn, 102 Pd, 180 W
+                                                                                                                         158
+ M20s_f1_240M1.47redbl              64.50        1.49e+01      1.79e+00   9.55e-01     1.98e+00    9.75e-01   1.35e+00       Dy, 114 Sn, 102 Pd
+                                                                                                                         114
+ M20s_f1_240M1.47redcl               5.90        2.26e+01      2.63e+00   8.98e-01     3.05e+00    9.10e-01   1.39e+00       Sn, 158 Dy, 180 W
+                                                                                                                         158
+ M20s_f1_240M1.47reddl              18.10        1.42e+01      1.71e+00   9.61e-01     1.88e+00    9.81e-01   1.35e+00       Dy, 114 Sn, 102 Pd
+                                                                                                                         114
+ M20s_f1_240M1.47redel              78.90        1.82e+01      2.15e+00   9.29e-01     2.44e+00    9.46e-01   1.35e+00       Sn, 158 Dy, 180 W
+                                                                                                                         114
+ M20s_f1_240M1.47redfl              88.40        2.56e+01      3.52e+00   9.78e-01     3.38e+00    1.75e+00   1.49e+00       Sn, 102 Pd, 158 Dy
+                                                                                                                         114
+ M20s_f1_240M1.47redgl               4.30        2.56e+01      3.52e+00   9.79e-01     3.38e+00    1.75e+00   1.49e+00       Sn, 102 Pd, 158 Dy
+                                                                                                                         158
+ M20s_f1_300M1.56al                  4.15        2.52e+01      4.53e+00   3.14e+00     5.12e+00    2.91e+00   6.00e+00       Dy, 184 Os, 196 Hg
+                                                                                                                         158
+ M20s_f1_300M1.56bl                  2.43        2.55e+01      3.40e+00   1.27e+00     3.64e+00    1.56e+00   1.83e+00       Dy, 114 Sn, 180 W
+                                                                                                                         158
+ M20s_f1_300M1.56cl                  1.39        2.56e+01      3.48e+00   1.17e+00     3.53e+00    1.69e+00   1.69e+00       Dy, 114 Sn, 180 W
+                                                                                                                         114
+ M20s_f1_300M1.56dl                  0.81        2.10e+01      2.46e+00   9.11e-01     2.83e+00    9.24e-01   1.38e+00       Sn, 158 Dy, 180 W
+                                                                                                                         114
+ M20s_f1_300M1.56el                  0.65        1.84e+01      2.17e+00   9.30e-01     2.46e+00    9.46e-01   1.36e+00       Sn, 158 Dy, 180 W
+                                                                                                                         130
+ M20s_f1_300M1.56gl                  4.33        2.53e+01      4.93e+00   3.70e+00     5.55e+00    3.38e+00   7.01e+00       Ba, 158 Dy, 132 Ba
+                                                                                                                         158
+ M20s_f1_300M1.56hl                  2.60        2.56e+01      3.42e+00 1.29e+00       3.69e+00    1.55e+00   1.83e+00       Dy, 114 Sn, 180 W
+                                                                                                                         158
+ M20s_f1_300M1.56il                  1.52        2.55e+01      3.39e+00   1.18e+00     3.55e+00    1.57e+00   1.75e+00       Dy, 114 Sn, 180 W
+                                                                                                                         114
+ M20s_f1_300M1.56jl                  1.19        2.41e+01      2.80e+00   8.88e-01     3.27e+00    8.98e-01   1.40e+00       Sn, 158 Dy, 180 W
+                                                                                                                         114
+ M20s_f1_300M1.56kl                  1.04        2.27e+01      2.65e+00   8.98e-01     3.08e+00    9.10e-01   1.39e+00       Sn, 158 Dy, 180 W
+                                                                                                                         114
+ M20s_f1_300M1.56ll                  0.78        1.98e+01      2.33e+00   9.20e-01     2.67e+00    9.34e-01   1.37e+00       Sn, 158 Dy, 180 W
+                                                                                                                         158
+ M20s_f1_300M1.56t2al                2.50        2.56e+01      3.31e+00   1.32e+00     3.53e+00    1.59e+00   1.88e+00       Dy, 114 Sn, 180 W
+                                                                                                                         114
+ M20s_f1_300M1.56t2bl                1.47        2.44e+01      2.79e+00   8.88e-01     3.25e+00    8.97e-01   1.41e+00       Sn, 158 Dy, 180 W
+                                                                                                                         114
+ M20s_f1_300M1.56t2cl                0.85        2.16e+01      2.53e+00   9.07e-01     2.92e+00    9.19e-01   1.38e+00       Sn, 158 Dy, 180 W
+                                                                                                                         158
+ M20s_f1_300M1.56t2dl                0.53        1.52e+01      1.82e+00   9.53e-01     2.02e+00    9.72e-01   1.35e+00       Dy, 114 Sn, 102 Pd
+                                                                                                                         158
+ M20s_f1_300M1.56t2el                4.00        1.52e+01      1.82e+00   9.53e-01     2.02e+00    9.72e-01   1.35e+00       Dy, 114 Sn, 102 Pd
+                                                                        SBW
+                                                                                                                         114
+ M20.0Z2.0e-02.V2.0e08              0.40         1.81E+01      1.31E+00 9.17E-01       1.40E+00    9.25E-01   1.47E+00       Sn, 158 Dy, 102 Pd
+                                                                                                                         114
+ M20.0Z2.0e-02.V4.0e08              0.80         1.78E+01      1.23E+00 8.92E-01       1.31E+00    8.97E-01   1.38E+00       Sn, 158 Dy, 168 Yb
+                                                                                                                          184
+ M20.0Z2.0e-02.V1.0e09              1.00         1.80E+01      2.07E+00 1.68E+00       2.37E+00    1.48E+00   4.44E+00        Os, 180 W, 190 Pt
+                                                                                                                         130
+ M20.0Z2.0e-02.V1.3e09              1.33         1.86E+01      7.07E+00 9.27E+00       8.35E+00    7.44E+00   2.05E+01       Ba, 158 Dy, 196 Hg
+                                                                                                                         130
+ M20.0Z2.0e-02.V2.0e09              2.00         1.94E+01      1.40E+01 1.31E+01       1.15E+01    1.59E+01   2.48E+01       Ba, 158 Dy, 196 Hg
+                                                                                                                          184
+ M20.0Z2.0e-02.V3.0e09              3.00         1.77E+01      1.99E+01 2.22E+01       1.78E+01    2.37E+01   4.76E+01        Os, 190 Pt, 196 Hg
+                                                                                                                         130
+ M20.0Z2.0e-02.V4.0e09              4.00         1.46E+01      1.75E+01 1.58E+01       1.30E+01    2.07E+01   5.04E+01       Ba, 144 Sm, 124 Xe
+                                                                                                                         102
+ M20.0Z2.0e-02.V5.0e09              5.00         1.29E+01      1.46E+01 8.47E+00       7.12E+00    1.75E+01   2.18E+01       Pd, 130 Ba, 106 Cd
+
+
+
+
+Article number, page 10 of 11
+                                 L. Roberti et al.: The γ-process nucleosynthesis in core-collapse supernovae
+
+Table A.3. Average overproduction factors in the 25 M⊙ models.
+
+ Model                     Eexp or vshock     FO16          F0           FI0          FII0         FIII
+                                                                                                    0             Fγ             Fγ isotopes
+                                                                    LAW
+                                                                                                                           130
+ M25s_f1_280M1.83al           4.73          4.98e+01    1.34e+01     9.46e+00     1.38e+01     1.01e+01         1.88e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           184
+ M25s_f1_280M1.83bl           6.17          5.01e+01    1.50e+01     1.11e+01     1.53e+01     1.18e+01         2.24e+01       Os, 130 Ba, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83cl           14.80         5.13e+01    3.88e+01     4.85e+01     4.28e+01     4.21e+01         1.04e+02       Ba, 158 Dy, 132 Ba
+                                                                                                                           184
+ M25s_f1_280M1.83dl            7.42         5.00e+01    1.54e+01     1.16e+01     1.57e+01     1.22e+01         2.37e+01       Os, 130 Ba, 158 Dy
+                                                                                                                           180
+ M25s_f1_280M1.83el            1.57         4.62e+01    4.48e+00     7.99e-01     5.43e+00     7.70e-01         2.30e+00       W, 114 Sn, 158 Dy
+                                                                                                                           180
+ M25s_f1_280M1.83fl            0.99         3.57e+01    1.21e+00     8.37e-01     1.31e+00     8.27e-01         2.01e+00       W, 114 Sn, 158 Dy
+                                                                                                                           180
+ M25s_f1_280M1.83hl            0.74         2.89e+01    1.22e+00     8.47e-01     1.31e+00     8.53e-01         1.72e+00       W, 158 Dy, 114 Sn
+                                                                                                                           130
+ M25s_f1_280M1.83ll            8.40         5.46e+01    2.45e+01     2.62e+01     2.56e+01     2.46e+01         4.99e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83ml            9.73         5.45e+01    2.44e+01     2.61e+01     2.56e+01     2.45e+01         4.97e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83nl           18.40         5.44e+01    2.46e+01     2.65e+01     2.59e+01     2.48e+01         5.08e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83ral           4.72         5.42e+01    2.25e+01     2.64e+01     2.54e+01     2.25e+01         5.09e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rbl           2.53         5.42e+01    2.24e+01     2.64e+01     2.54e+01     2.25e+01         5.09e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rcl           3.30         5.42e+01    2.25e+01     2.64e+01     2.54e+01     2.25e+01         5.09e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rdl           7.08         5.42e+01    2.25e+01     2.64e+01     2.54e+01     2.25e+01         5.09e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rel           2.64         5.42e+01    2.24e+01     2.64e+01     2.53e+01     2.25e+01         5.09e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rfl           2.52         5.42e+01    2.24e+01     2.64e+01     2.53e+01     2.25e+01         5.09e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rgl           2.78         5.42e+01    2.24e+01     2.64e+01     2.53e+01     2.25e+01         5.09e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           180
+ M25s_f1_280M1.83rhl           0.75         2.70e+01    1.16e+00     8.22e-01     1.23e+00     8.32e-01         1.55e+00       W, 158 Dy, 114 Sn
+                                                                                                                           130
+ M25s_f1_280M1.83ril           3.07         5.14e+01    2.17e+01     2.55e+01     2.44e+01     2.18e+01         4.91e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rjl           1.92         5.15e+01    2.17e+01     2.55e+01     2.44e+01     2.18e+01         4.92e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           180
+ M25s_f1_280M1.83rnl           0.89         3.81e+01    1.21e+00     8.35e-01     1.32e+00     8.19e-01         2.11e+00       W, 114 Sn, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rol           0.92         5.18e+01    1.48e+01     1.50e+01     1.62e+01     1.36e+01         3.10e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rpl           0.96         5.18e+01    1.49e+01     1.50e+01     1.62e+01     1.36e+01         3.10e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rql           1.04         5.18e+01    1.49e+01     1.50e+01     1.63e+01     1.36e+01         3.10e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rrl           1.20         5.18e+01    1.49e+01     1.50e+01     1.62e+01     1.36e+01         3.10e+01       Ba, 184 Os, 158 Dy
+                                                                                                                           130
+ M25s_f1_280M1.83rsl           1.52         5.18e+01    1.49e+01     1.50e+01     1.62e+01     1.36e+01         3.10e+01       Ba, 184 Os, 158 Dy
+                                                                    SBW
+                                                                                                                           114
+ M25Z2.0e-02.V2.0e08           0.40         2.00E+01    2.07E+00     7.52E-01     2.36E+00     7.87E-01     1.10E+00           Sn, 158 Dy, 112 Sn
+                                                                                                                           114
+ M25Z2.0e-02.V4.0e08           0.80         1.96E+01    1.96E+00     7.19E-01     2.24E+00     7.45E-01     9.99E-01           Sn, 158 Dy, 102 Pd
+                                                                                                                           114
+ M25Z2.0e-02.V1.0e09           1.00         1.93E+01    1.83E+00     6.77E-01     2.10E+00     6.92E-01     8.72E-01           Sn, 158 Dy, 168 Yb
+                                                                                                                           114
+ M25Z2.0e-02.V1.3e09           1.33         1.93E+01    1.83E+00     6.78E-01     2.11E+00     6.92E-01     8.72E-01           Sn, 158 Dy, 168 Yb
+                                                                                                                           114
+ M25Z2.0e-02.V2.0e09           2.00         1.94E+01    1.75E+00     6.78E-01     2.00E+00     6.92E-01     8.72E-01           Sn, 158 Dy, 168 Yb
+                                                                                                                            180
+ M25Z2.0e-02.V3.0e09           3.00         2.00E+01    3.79E+00     2.26E+00     4.56E+00     1.88E+00     1.11E+01            W, 184 Os, 174 Hf
+                                                                                                                           158
+ M25Z2.0e-02.V4.0e09           4.00         2.12E+01    2.07E+01     3.15E+01     2.55E+01     2.40E+01     9.73E+01           Dy, 132 Ba, 196 Hg
+                                                                                                                           130
+ M25Z2.0e-02.V5.0e09           5.00         2.13E+01    1.94E+01     2.85E+01     2.26E+01     2.29E+01     7.16E+01           Ba, 144 Sm, 132 Ba
+
+
+
+
+                                                                                                                   Article number, page 11 of 11
+

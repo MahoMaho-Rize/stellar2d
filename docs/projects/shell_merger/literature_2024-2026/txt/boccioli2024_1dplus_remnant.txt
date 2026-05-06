@@ -1,0 +1,1603 @@
+                                                    Remnant masses from 1D+ core-collapse supernovae simulations: bimodal neutron star mass
+                                                                       distribution and black holes in the low-mass gap
+                                                                                                                 Luca Boccioli∗
+                                                                                 Department of Physics, University of California, Berkeley, CA 94720, USA
+
+                                                                                                               Giacomo Fragione
+                                                      Center for Interdisciplinary Exploration and Research in Astrophysics (CIERA), 1800 Sherman, Evanston, IL 60201, USA and
+                                                                        Department of Physics & Astronomy, Northwestern University, Evanston, IL 60208, USA
+                                                                                                      (Dated: December 30, 2024)
+                                                                  The explosion of core-collapse supernovae (CCSNe) is an extremely challenging problem, and there are still
+                                                               large uncertainties regarding which stars lead to successful explosions that leave behind a neutron star, and which
+arXiv:2404.05927v3 [astro-ph.HE] 27 Dec 2024
+
+
+
+
+                                                               ones will form a black hole instead. In this paper, we simulate 341 progenitors at three different metallicities
+                                                               using spherically symmetric simulations that include neutrino-driven convection via a mixing-length theory. We
+                                                               use these simulations to improve previously derived explosion criteria based on the density and entropy profiles
+                                                               of the pre-supernova progenitor. We also provide numerical fits to calculate the final mass of neutron stars based
+                                                               on either compactness, the location of the Si/Si-O interface, or the Chandrasekhar mass. The neutron star birth
+                                                               mass distribution derived from our 1D+ simulations is bimodal, contrary to what the most popular 1D CCSN
+                                                               simulations have shown so far. We compare the theoretically derived neutron star mass distributions with the
+                                                               observed ones and discuss potential implications for population synthesis studies. We also analyze the black
+                                                               hole mass distribution predicted by our simulations. To be consistent with current models of matter ejection
+                                                               in failed SNe, a large fraction of the envelope must be expelled, leading to small black holes in the low-mass
+                                                               gap. One black hole in this mass region has recently been observed in the GW230529 event by the LIGO-Virgo-
+                                                               KAGRA collaboration. Our results naturally agree with this detection, which the most popular prescriptions for
+                                                               explodability and remnant masses are not able to reproduce. In general, we find that the explosion outcome and
+                                                               mass of the remnant strongly depend on the pre-collapse structure of the progenitor. However, their dependence
+                                                               on the initial mass of the star and the mass of the CO core is highly uncertain and non-linear.
+                                                               Keywords: supernovae – supernova remnants – neutron stars – black holes
+
+
+                                                                       I.   INTRODUCTION                                        The goal of this paper is to study the explodability and
+                                                                                                                             remnant mass distribution of a wide range of progenitors with
+                                                  Core-collapse supernovae (CCSNe) are an extremely com-                     different ZAMS masses and metallicities.
+                                               plex phenomenon, for which more and more sophisticated                           Neutron stars (NSs) and black holes (BHs) are the two possi-
+                                               models have been developed in the last several decades [1–                    ble remnants left behind after the successful (or failed) explo-
+                                               8]. The last ten years have produced a large number of                        sion of a supernova. Studying their formation and population
+                                               self-consistent exploding simulations in three dimensions from                can help understand several phenomena, ranging from gamma-
+                                               many different groups [9–19]. This has significantly improved                 ray bursts (GRBs), binary mergers, exotic accretion scenarios,
+                                               our understanding of the relevant physical processes that occur               and many others. It is therefore important to have reliable
+                                               during the post-bounce and explosion phases. In particular, of                models that can predict the birth-mass distribution of NSs and
+                                               crucial importance for the explosion are the Standing Accre-                  BHs.
+                                               tion Shock Instability (SASI) [20–23] and, to an ever greater                    However, mass and radius measurements of NSs are quite
+                                               extent, neutrino-driven turbulent convection [24–27]. How-                    challenging. The vast majority of existing measurements are
+                                               ever, multi-dimensional simulations are still too computation-                performed on millisecond pulsars, which are believed to have
+                                               ally expensive to explore the parameter space of supernovae                   experienced some degree of mass accretion from a companion
+                                               (SNe) efficiently.                                                            and are therefore not representative of the birth-mass distri-
+                                                  One of the most important problems in CCSNe concerns                       bution. Another challenge that theoretical predictions have to
+                                               the explodability as a function of Zero Age Main Sequence                     face is that most stellar models simulate isolated single stars,
+                                               (ZAMS) mass, as well as the resulting explosion properties                    whereas most massive stars experience significant binary in-
+                                               such as remnant masses, nucleosynthesis yields, light curves,                 teractions throughout their lives.
+                                               explosion energies etc. . . . The only viable options to inves-                  The case of BHs is even more uncertain, both from a the-
+                                               tigate a wide range of ZAMS masses and metallicities are                      oretical and observational standpoint. The best constraints
+                                               currently spherically symmetric simulations (but see [28] for a               on their mass are given by the measurements of the LIGO-
+                                               recent large suite of 2D models), semi-analytical prescriptions,              Virgo-KAGRA (LVK) collaboration [29]. However, the low
+                                               or a combination of both.                                                     end of their mass distribution, which can be extremely useful
+                                                                                                                             to constrain which massive stars give birth to black holes, is
+                                                                                                                             affected by large uncertainties. There are a few objects that
+                                                                                                                             could fall in this low-mass range between 2 𝑀⊙ and 3 𝑀⊙ ,
+                                               ∗ Electronic address: lbocciol@berkeley.edu                                   and classifying them as high-mass NSs or low-mass BHs is
+                                                                                                                                  2
+
+quite challenging, not to mention the uncertainties regarding                              A.   Previous models
+their formation channel. However, a 2.5-4.5 𝑀⊙ object, which
+is most likely the first stellar-mass black hole ever observed,         The simplest way to achieve an explosion is to use the so-
+has recently been detected by the LVK collaboration [30], and        called piston [44] or bomb models [45]. The former use a
+this is the first step to putting more stringent constraints on      moving inner boundary at some mass coordinate Mpiston , mim-
+the low-end of black hole masses. Predicting the final mass          icking the expansion of the shock. The latter inject a certain
+of a black hole is also a theoretical challenge, since even in       amount of thermal energy at some mass coordinate Mbomb for
+failed SN events weak shocks can form, and eject a fraction          a few seconds, which revives the shock and launches the ex-
+of the envelope [31–36]. However, the precise mechanisms             plosion. In both cases the models are calibrated to reproduce
+responsible for this, and the amount of matter ejected, are still    a certain explosion energy and the amount of Nichel ejected,
+uncertain.                                                           based on observational constraints.
+   In the past, there have been several studies aimed at studying       Later models employed more sophisticated numerical se-
+the remnant mass distributions, based on different 1D simula-        tups, but based on the same core idea. The most well-known
+tions as well as semi-analytical models [37–42]. For the birth-      example is the model of [46], where a hydrodynamic simu-
+mass distribution of NSs, all of these studies predict a large       lation collapses the star, and then the inner core is manually
+peak at ∼ 1.2 − 1.4 𝑀⊙ , whose existence has been shown by           excised and replaced with a contracting inner boundary emit-
+countless works and observations. More interesting is instead        ting some neutrino luminosity 𝐿 𝜈,𝑐 according to a simplified,
+the presence (or absence) of another small peak at ∼ 1.7 − 1.8       semi-analytical proto-neutron star (PNS) cooling model. The
+𝑀⊙ , which is where most of the disagreement among the pre-          time evolution of the inner boundary is chosen to reproduce
+viously mentioned studies rises. The discrepancy concerning          explosion energy and Nichel mass of SN 1987A [47]. This
+the birth-mass distribution of BHs is even larger, and different     is the model used by [48], [49], and later [39], who derived
+studies use different prescriptions to decide what fraction of       explodabilities and remnant masses for a number of stars at
+the star will contribute to the final mass of the black hole.        solar metallicity.
+                                                                        Another popular semi-analytical model is the one by [38],
+  In this paper, we present a simple recipe to determine the         who assume the explosion to happen in three steps: collapse
+explodability and compute NS and BH masses based on the              and bounce, convective engine, and eventual post-explosion
+density and entropy profiles of the pre-SN progenitor.               fallback. The second phase is particularly important and is the
+   In Section II we present an overview of some of the previ-        fundamental reason why self-consistent spherically symmet-
+ously derived explosion models, and then we briefly describe         ric simulations do not show any explosions (except for very
+the method used in this work to simulate the explosion of 341        rare cases of low-mass, low-compactness stars) whereas their
+pre-SN models. These simulations are an extension to a larger        multi-dimensional counterparts do [6, 24, 25, 50]. Therefore,
+ZAMS mass range and lower metallicity of the previously sim-         [38] use a semi-analytical prescription for the convective ve-
+ulated models of [43] (hereafter BR23). In Section III we also       locity (later revised in [42]) that adds the necessary energy
+generalize the explodability criterion already derived by BR23       to achieve an explosion. A similar approach has also been
+in light of the larger set of simulations performed in the present   developed by [51] and [41].
+study. The main results of this paper are presented in Section          Another method adopted in the past is to simulate the
+IV, where we provide theoretical mass distributions of NSs           collapse and post-bounce phases with self-consistent, state-
+and BHs, and compare them to the most recent observations.           of-the-art spherically symmetric simulations. As mentioned
+Finally, in Section V we summarize the main findings of this         above, however, simulations in spherical symmetry do not
+paper and comment on future research directions.                     show any explosions. In these simulations, the energy de-
+                                                                     posited by neutrinos in the gain region (i.e. the region with
+                                                                     positive net neutrino heating) is not enough to successfully
+                                                                     launch an explosion, since convection is not present. To over-
+                                                                     come this, one option is to artificially increase the neutrino
+                                                                     heating in the gain region by some factor 𝑓heat . This was, for
+               II.   THE EXPLOSION MODEL                             example, the method adopted by [52], who also employed a
+                                                                     simple prescription to model neutrino emission and absorp-
+                                                                     tion. They noticed that progenitors with larger compactness
+   Simulating the explosion of CCSNe is an impressively tough        needed a larger value of 𝑓heat to explode, and therefore con-
+feat. Only in the last couple of decades have simulations            cluded that progenitors above a certain compactness 𝜉2.5 would
+started showing reliable, robust explosions. However, these          not explode, where:
+typically occur in high-fidelity multidimensional simulations
+that require millions of CPU hours. To date, only one study                         𝜉M =
+                                                                                                   𝑀/𝑀⊙
+                                                                                                                ,                (1)
+employing 100 2D simulations has been performed [28], due                                  𝑅(𝑀bary = 𝑀)/1000 km
+to their very high computational cost. The overwhelming
+majority of studies are performed using either semi-analytical       and 𝑅(𝑀bary = 𝑀) is the radial coordinate that encloses a mass
+models or spherically symmetric, 1D simulations, which are           𝑀. [52] used 𝜉2.5 at the time of bounce. In the remainder of
+still extremely useful and widely used.                              the paper, however, we will refer to the pre-SN compactness
+                                                                                                                                             3
+
+values, i.e. at the very beginning of the collapse phase, unless         where 𝑒 tot = 𝑒 + 𝑣 2turb , 𝑃turb = 𝜌𝑣 2turb , 𝑣 turb is the turbulent
+stated otherwise.                                                        (i.e. convective) velocity, and 𝐷 is a diffusion coefficient.
+   Another option, which is a bit more sophisticated, is to take         Notice that 𝑒 includes the contributions from both internal and
+some energy from the heavy-lepton neutrinos, which would                 kinetic energy. The most important quantities in the model
+otherwise not interact with matter outside of the PNS, and               are the mixing length Λmix , and the Brunt-Väisälä frequency
+deposit it into the gain region. [53] devised this method and            𝜔2BV :
+applied it to simulations with a bit more sophisticated neutrino
+transport. They calibrated their energy deposition in such                                           𝑃
+                                                                                       Λmix = 𝛼MLT ,                                       (3)
+a way that progenitors with larger compactness experience                                       
+                                                                                                    𝜌𝑔
+                                                                                                                        
+less energy deposition, which was done specifically to prevent                                    1 𝜕 𝜌(1 + 𝜖)   1 𝜕𝑃
+high-compactness progenitors from exploding.                                           𝜔2BV = 𝑔                − 2        ,                (4)
+                                                                                                  𝜌     𝜕𝑟      𝜌𝑐 𝑠 𝜕𝑟
+   The fundamental idea of all of the models described above is
+the same: the explosion must be triggered by depositing energy           where 𝑃 is the pressure, 𝜌 is the density, and 𝑔 is the local
+behind the shock. The first piston and bomb models simply                gravitational acceleration. Notice that all of the above equa-
+added this energy by hand into the model. The model from                 tions assume Newtonian gravity for simplicity. However, the
+[46] was devised to take this energy from a physical source,             model used in this paper includes general relativistic effects,
+which in their case was neutrinos. The models of [38] and                which can be very important, especially for 𝜔BV . More details
+[54] have the advantage of being relatively simple and include           on these equations and how they were derived can be found in
+convective energy, which would otherwise be absent from 1D               [59], [60], and [56].
+models. However, they heavily rely on semi-analytical pre-                  The simulations presented in this paper were all run with
+scriptions. The models of [52] and [53] also take this extra             GR1D1 [59, 61, 62]. Since the original code was modified
+energy from neutrinos, but they follow the evolution of the              with the addition of neutrino-driven convention, an inherently
+PNS self-consistently and, in the case of [53], employ a robust          multidimensional effect, we will refer to the code and the
+treatment of neutrino transport [55]. In conclusion, all of these        resulting 1D simulations as GR1D+ and 1D+, respectively.
+different methods introduce the extra energy into their model               Convection is more efficient for larger values of 𝛼MLT , and
+using a prescription that is: (i) extremely simple but derived           therefore the shock is revived to larger radii. The procedure
+from a physical mechanism like convection [38, 54]: (ii) more            for calibrating 𝛼MLT is described at length in [43, 59, 63].
+sophisticated but the energy is arbitrarily transferred from neu-        To summarize it, one compares the GR1D+ simulations to 3D
+trinos to matter without following an accurate physical model            simulations of the same initial progenitor. More specifically,
+[46, 52, 53].                                                            one can compare the time evolution of the shock radius and,
+                                                                         more importantly, the energy generated by neutrino-driven
+                                                                         convection in the gain region. Then one can select the value
+                                                                         of 𝛼MLT for which these quantities best match the 3D results.
+     B.   1D+ model including neutrino-driven convection                 This value lies in the best-fit range 1.5 ⩽ 𝛼MLT ⩽ 1.52. As
+                                                                         discussed in BR23, we select a value of 𝛼MLT = 1.51, which
+   In this paper, we will take a different approach, and use self-       we will use for the remainder of this paper.
+consistent simulations that include the effects of convection               As shown by [59], the calibration is somewhat dependent on
+through STIR, a parametric model for convection developed                spatial and neutrino energy resolution. Therefore, to avoid re-
+by [56]. The advantage of this model is that it is derived from          calibrating, we utilize the same numerical setup used in BR23.
+the Reynolds decomposition of the Euler equations, where the             For this study, we simulated 3 sets of pre-SN progenitors:
+closure adopted is chosen using a mixing-length theory (MLT)                1. the “Zero Metallicity” set: 30 progenitors at zero metal-
+approach. Therefore, the extra energy in the model is calcu-                   licity from [64] in the mass range 11 𝑀⊙ ⩽ 𝑀 ⩽ 40 𝑀⊙ ;
+lated starting from a physically consistent model. It should be
+noted that the form of the ensuing equations is not explicitly              2. the “Low Metallicity” set: 111 progenitors at a metal-
+energy-conserving [57]. However, this is a minor drawback                      licity 𝑧 = 10−4 𝑧 ⊙ from [64] in the mass range 11 𝑀⊙ ⩽
+considering that, in all of the models described above, a cer-                 𝑀 ⩽ 75 𝑀⊙ ;
+tain amount of energy has to be somehow injected (in some
+cases crudely) into the model. Moreover, one could argue                    3. the “Solar Metallicity” set: 200 progenitors at solar
+that STIR still effectively conserves energy if one accounts                   metallicity 𝑧 = 𝑧 ⊙ from [49] in the mass range 9 𝑀⊙ ⩽
+for the free energy associated with the convectively unstable                  𝑀 ⩽ 120 𝑀⊙ .
+thermodynamic gradients [57, 58]. The equation describing                For the simulations at solar metallicity, we used the existing
+the evolution of the total energy can be derived by combining            simulations from BR23 in the mass range 12 𝑀⊙ ⩽ 𝑀 ⩽
+equations 27 and 29 from [56]:                                           28 𝑀⊙ . All of the simulations presented in this paper were
+   𝜕 𝜌𝑒 tot 1 𝜕 2
+           + 2     [𝑟 𝑣 𝑟 (𝜌𝑒 tot + 𝑃 + 𝑃turb ) − 𝑟 2 𝜌𝐷∇𝑒 tot ]
+     𝜕𝑡      𝑟 𝜕𝑟                                                  (2)
+                                      𝜕𝑣 𝑟                               1 The code is publicly available at https://github.com/evanoconnor/
+           = −𝜌𝑣 𝑟 𝑔 + 𝑄 𝜈 − 𝜌𝑣 2turb      + 𝜌𝑣 turb 𝜔2BV Λmix .           GR1D
+                                      𝜕𝑟
+                                                                                                                                    4
+
+run for more than 2 seconds in case of explosion, long af-          of Figure 1. For example, for the solar metallicity set there is
+ter the shock has left the computational domain. For the            an island of failed SNe between 12 𝑀⊙ and 15 𝑀⊙ , around
+non-exploding ones, we only ran the simulation far enough to        18 𝑀⊙ , 21 𝑀⊙ , 28 𝑀⊙ , and above 100 𝑀⊙ . The location of
+observe the shock fallback. All simulations were run using 18       these “islands of explodability" is however a debated topic. For
+neutrino energy groups, and adopting the SFHo equation of           example, [48] derived an explosion criterion using simulations
+state (EOS) for nuclear matter at high density [65, 66]. More       where the explosion was artificially triggered. Using their
+details on the simulation setup are given in BR23.                  method for the same solar metallicity set presented here, they
+                                                                    showed that most stars explode except for the mass ranges
+                                                                    22 𝑀⊙ ≲ 𝑀 ≲ 25 𝑀⊙ and 28 𝑀⊙ ≲ 𝑀 ≲ 50 𝑀⊙ .
+       III.   EXPLODABILITY OF MASSIVE STARS                            Other studies, which employed either 2D simulations [28] or
+                                                                    1D+ simulations like the ones presented here [43, 56], showed
+   The problem of predicting the explosion outcome of super-        instead that stars in the mass ranges 22 𝑀⊙ ≲ 𝑀 ≲ 25 𝑀⊙
+novae based on pre-SN properties is of great theoretical and        and 28 𝑀⊙ ≲ 𝑀 ≲ 50 𝑀⊙ explode, whereas stars in the
+practical interest. From a theoretical point of view, it can in-    mass range 12 𝑀⊙ ≲ 𝑀 ≲ 15 𝑀⊙ yield failed explosions.
+form as to what the cause of the explosion is, and provide a        The results of all three studies are in excellent agreement with
+causal connection between pre-SN properties and the explo-          each other and, more importantly, with a suite of a dozen 3D
+sion dynamics. From a practical point of view, knowing which        simulations from [17]. In those 3D simulations, the range
+stars explode and which ones do not can help guide popula-          22 𝑀⊙ ≲ 𝑀 ≲ 25 𝑀⊙ was not covered (only one 25 𝑀⊙ star,
+tion synthesis and galactic chemical evolution simulations in       from a slightly different progenitor set, was simulated), but no
+determining explosion outcome and remnant properties of a           stars in the range 12 𝑀⊙ ≲ 𝑀 ≲ 15 𝑀⊙ yielded explosions,
+star based on its thermodynamic structure.                          whereas all of the others did, in agreement with the three
+   Most population synthesis codes [67–74], however, only           studies mentioned above.
+carry information about the Carbon-Oxygen (CO) core of mas-             An important caveat to this discussion is that the ZAMS
+sive stars. As shown by recent population studies of core-          mass ranges quoted here are only valid for the specific sets of
+collapse supernovae, the explosion outcome is sensitive to the      stellar evolution calculations used to produce the pre-SN pro-
+structure of the Silicon and Oxygen shell formed after the          genitors. As shown in BR23, the stellar evolution code (and
+end of silicon burning. The dependence of the pre-collapse          the assumptions and approximations used in the stellar evolu-
+thermodynamic profiles on the ZAMS mass of the star and             tion calculations) can modify the explodability as a function
+the mass of the CO core is affected by several uncertainties,       of ZAMS mass quite significantly [43, 78]. Therefore, one
+varies among different codes [75], and can be highly non-           should be cautious when referring to the CCSN outcome of
+linear. Therefore, reliable predictions for the explodability in    specific ZAMS masses and metallicities, since the evolution of
+population synthesis codes can only be done if the structure        those stars is quite uncertain. As we will show in the remainder
+of the pre-collapse star is computed. This is currently beyond      of this paper, what matters for the outcome of a CCSN are the
+most codes’ capabilities, but promising efforts towards hav-        thermodynamic profiles of that star at the end of its life. There-
+ing access to the full thermodynamic structure of the star are      fore, one can say with (relative) certainty whether a specific
+underway [76].                                                      pre-SN density profile will lead to an explosion. However,
+   In this paper, we provide remnant masses and explosion           what initial ZAMS mass and metallicity produce that density
+outcome predictions based on the final pre-SN structure of the      profile is more ambiguous, due to the large uncertainties that
+star. These predictions could eventually be expressed in terms      affect the numerical evolution of massive stars.
+of properties of the CO core using a procedure similar to what          In BR23, an explodability criterion was derived which pre-
+was done in [77], but that goes beyond the scope of this paper      dicts whether a given star explodes based on the thermody-
+and is left for future work.                                        namic structure of the pre-SN progenitor. Here, we briefly
+                                                                    summarize their criterion, and then illustrate how we extended
+                                                                    it in light of the wider range of ZAMS masses range analyzed
+              A.   The explosion criterion of BR23                  in this paper and, more importantly, in light of the two addi-
+                                                                    tional progenitors sets at zero and low metallicity. The BR23
+   The explodability of massive stars has been a highly debated     criterion states that:
+topic in the past few years. Historically, it was believed that
+stars less massive than ∼ 20 𝑀⊙ would explode in a supernova           1. if e
+                                                                             𝑡 accr > 0.4 s, the star will not explode;
+and form a neutron star. Stars more massive than ∼ 20 𝑀⊙
+would instead lead to failed supernovae and form a black hole.                                                          2      2
+Recently, this has been challenged by several studies [28, 43,         2. if e
+                                                                             𝑡 accr < 0.4 s, the star will explode if 𝛿𝜌Si/O /𝜌Si/O >
+48, 49, 51, 56]. It is now well accepted that the general picture         0.08.
+is quite different. The explodability as a function of Zero Age
+Main Sequence (ZAMS) mass is non-monotonic. Therefore,              Here, 𝜌Si/O is the density of the pre-SN progenitor at which
+there are “islands of explodability” in certain mass ranges, and    the Si/O interface is located (see Section 5.2 of BR23), 𝛿𝜌Si/O
+failed SN in others. The explodability as a function of ZAMS        is the magnitude of the density drop at that interface, and e
+                                                                                                                                𝑡 accr
+mass according to our simulations is shown in the upper panels      is the time after bounce when the Si/O interface is accreted
+                                                                                                                                     5
+
+through the shock:                                                                        Zero             Low               Solar
+                                                                                        Metallicity      Metallicity       Metallicity
+                                       √︂
+                                             𝜋                           BR23
+              𝑡 accr = 𝐶𝑡ff − 𝑡0 = 𝐶
+              e                                   − 𝑡0 .        (5)
+                                            4𝐺 𝜌¯
+                                                                          FP               6.7%             17.1%            8.0%
+                                                                          FN              23.3%             10.8%            1.5%
+The coefficients 𝐶 and 𝑡 0 were derived by fitting this equation
+to the actual time of accretion of the Si/Si-O interface found         This work
+in the simulations. The values found by BR23 for KEPLER                   FP               3.3%             4.5%             8.0%
+progenitors were 𝐶 = 0.78 and 𝑡0 = 0.13 s. Since the progen-              FN               0.0%             2.7%             0.0%
+itors at zero and low metallicity of [64] were also computed
+with the KEPLER code, we don’t expect these coefficients to
+                                                                         TABLE I: False positives (FP) and false negatives (FN)
+significantly change once we add these progenitors to the fit.
+                                                                       produced by the criterion of BR23 versus the one derived in
+As expected, once we add the new simulations performed at
+                                                                      this work when compared to the results of the simulations for
+lower metallicities and the ones at solar metallicity for 𝑀 < 12
+                                                                       the zero, low, and solar metallicity sets described in section
+𝑀⊙ and 𝑀 > 28 𝑀⊙ , we obtain the same value of 𝑡 0 = 0.13 s
+                                                                                                   II B.
+and a slightly lower value of 𝐶 = 0.76. For consistency with
+previous work, we chose to adopt 𝐶 = 0.78, but we verified
+that both values of 𝐶 lead to the same results.
+   The Si/O interface is particularly relevant for the explosion      It should be stressed that the simulations presented in this
+because the entropy jump, and therefore the density drop, is          paper are conducted in spherical symmetry, and therefore no
+very pronounced, which causes the ram pressure of the in-             fallback is present after the explosion sets in. All of the suc-
+falling material to decrease significantly. It is also important      cessful explosions leave behind a neutron star, with only one
+to point out that, even though we refer to it as a Si/O interface     exception described in Section IV A. However, 3D simulations
+for simplicity, in most cases, the largest entropy jump (i.e. den-    of high compactness progenitors [80, 81], show that, in some
+sity drop) is located inside the silicon shell, where a pocket of     cases, despite an explosion develops, late-time fallback can
+oxygen has formed (e.g. see left panel of Figure 4 from BR23).        accrete enough mass on the central object to produce a small
+Therefore, a more appropriate definition would be the Si/Si-O         black hole. The amount of late-time fallback is highly uncer-
+interface. For conciseness purposes, and since it has largely         tain since long-term simulations that follow the shock until it
+been referred to as Si/O interface in the SN literature, we adopt     breaks out of the envelope are computationally extremely chal-
+the latter in all subscripts hereafter. However, it is important      lenging. Only a few of these simulations have been performed
+to note that this could be a misleading naming convention.            [82–85], and all of them are for relatively low mass (up to
+   The addition of progenitors at low and zero metallicities          20 𝑀⊙ ), low-compactness progenitors. Only more simplistic,
+(in particular the ones with masses 𝑀 > 30 𝑀⊙ ) required a            semi-analytical prescriptions have been used so far to model
+slight change in the explodability criterion. Those progenitors,      late-time fallback to investigate whether small-mass BHs can
+compared to the ones analyzed in BR23, have very large com-           be produced in the explosion of high-mass, high-compactness
+pactnesses and are more likely to explode. This suggests that         progenitors, both in 1D [86] and 3D [87].
+a more nuanced criterion, which also considers compactness,
+should be used. A detailed analysis of the role of compactness
+is currently underway [79], but for the purposes of this article,          IV.     REMNANT MASSES FROM SIMULATIONS
+a simple phenomenological criterion can instead be used:
+                                                                         In this section, we analyze the properties of the CCSN rem-
+   1. if 𝜉2.0 > 0.5, the star will explode;                           nants obtained from simulations. Moreover, we present a
+                                                                      recipe to predict the masses of both NSs and BHs, based on
+   2. if 𝜉2.0 < 0.5 and e
+                        𝑡 accr > 0.3 s, the star will not explode;    the pre-SN properties of the progenitor stars.
+   3. if 𝜉2.0 < 0.5 and e
+                        𝑡 accr < 0.3 s, the star will explode if
+         2
+      𝛿𝜌Si/O    2
+             /𝜌Si/O > 0.08.
+                                                                                            A.    Neutron Stars
+This simple criterion significantly improves the prediction rate
+compared to the one by BR23, as shown in Figure 1 and Table              As mentioned above, our simulations were run in spherical
+I. It also suggests that compactness might play an important          symmetry, and therefore no fallback is present. Once the ex-
+role in determining the explosion.                                    plosion sets in, the accretion stops, and the baryonic mass of
+   Finally, it should be noted that the explosion outcome of          the PNS will remain constant until the end of the simulation.
+high-compactness progenitors is still a topic of debate. Tradi-       By solving the TOV equation for the given EOS, it is straight-
+tionally, high-compactness, very high-mass stars were consid-         forward to convert the baryonic mass into the gravitational
+ered to lead to failed SN and form black holes, as discussed in       mass of the cold NS. This is the NS mass MNS that we will
+Section II. Even 3D simulations have yet to agree on whether          refer to hereafter.
+a supernova can be produced by these high-compactness pro-               All of the simulations that successfully produce an explosion
+genitors, and what the remnant of these events will be [80, 81].      leave behind a NS, with the only exception of the 75 𝑀⊙ pro-
+                                                                                                                                      6
+
+
+
+                        = successful explosion                   Zero Metallicity                              = failed explosion
+
+      GR1D+
+
+    Prediction
+     (BR23)
+
+    Prediction
+    (this work)
+
+                  9       12        15           18   20   22        25        28    30     35     40     60      80     100    120
+                                                                 Low Metallicity
+      GR1D+
+
+    Prediction
+     (BR23)
+
+    Prediction
+    (this work)
+
+                  9       12        15           18   20   22        25        28    30     35     40     60      80     100    120
+                                                                Solar Metallicity
+      GR1D+
+
+    Prediction
+     (BR23)
+
+    Prediction
+    (this work)
+
+                  9       12        15           18   20   22        25        28    30     35     40     60      80     100    120
+                                                                 ZAMS mass [M ]
+
+
+
+
+  FIG. 1: The upper, middle, and lower panels show the outcome of the 1D+ simulations for zero, low, and solar metallicity
+    simulations described in the text. The low metallicity refers to 𝑧 = 10−4 𝑧 ⊙ . In this work, a successful shock revival is
+ considered a successful explosion. The first line of each panel shows the outcome of the simulations carried out with GR1D+.
+The second line shows the predicted outcome according to the criterion of BR23. The third line refers to the predicted outcome
+   according to the criterion described in section III. Grey areas indicate that no pre-SN progenitor at that ZAMS mass was
+                                     available, and therefore no simulation was performed.
+
+
+genitor from the low metallicity set. This particular progenitor      unbind a larger fraction of the envelope compared to cases
+has the largest compactness (𝜉2.0 = 0.99) of all progenitors          where BH formation occurs without any shock revival at all
+and shows a successful shock revival occurs at around 0.2 s.          (discussed in the next Section). Rather than handling the fall-
+However, due to its large compactness, its PNS baryonic mass          back for this one progenitor ad hoc, we prefer excluding it from
+is very large, i.e. 𝑀PNS = 2.57 𝑀⊙ . This causes the simulation       the analysis altogether for consistency. Moreover, this one 75
+to stop at ∼ 0.4 s, since the PNS is collapsing to a BH. Indeed, a    𝑀⊙ progenitor would be greatly disfavored by the initial mass
+baryonic mass of 2.57 𝑀⊙ would correspond to a gravitational          function (IMF), and therefore excluding it will not appreciably
+mass of roughly 2.13 𝑀⊙ , which is larger than the maximum            affect our results and conclusions.
+mass of a cold NS allowed by the SFHo EOS, which is ∼ 2.05
+𝑀⊙ . We decided to exclude this progenitor from our analysis             Generally speaking, the more compact the star (i.e. the
+since it is unclear whether the initial shock expansion would         shallower the density profile is), the larger the mass of the neu-
+continue after BH formation. Neutrino emission will shut off,         tron star will be since the mass accretion during the stalling
+and this has often been shown to cause the shock to fall back         phase will be larger. This intuitively suggests that the neutron
+without being able to break out of the star. On the other hand,       star’s mass is tightly correlated with the compactness of the
+a weak shock might still be launched [31–35], which would             star. The latter is (mostly) the consequence of convective phe-
+                                                                      nomena occurring during the post-main sequence evolution.
+                                                                                                                                      7
+
+                                                                   by several 3D simulations [11, 16, 24, 90], the explosion sets
+                               5                                   in relatively quickly after this layer is accreted, and therefore
+                                                                   one expects a correlation between the mass coordinate of this
+  Probability Density [M −1]
+
+                               4                                   layer and the final mass of the remnant. Contrary to previous
+                                                                   studies, we do not use M4 , but rather we consider the exact
+                               3                                   mass location of the Si/Si-O interface MSi/O , i.e. the enclosed
+                                                                   mass below the density 𝜌Si/O , since it gives a much better
+                                                                   correlation with MNS . The location of the Si/Si-O interface is
+                               2                                   calculated according to the definition of BR23.
+                                                                      This correlation is shown in the first of the two rightmost
+                               1                                   panels of Figure 4. It is worth pointing out that the outliers all
+                                                                   lie in the upper left region of the plots, because the deviation
+                               0                                   from the trend is caused by the fact that the explosion for those
+                                1.2   1.4     1.6      1.8   2.0   progenitors sets in much later compared to when the Si/Si-O
+                                            MCh [M ]               interface is accreted through the shock, and therefore more
+                                                                   mass is accreted onto the central PNS. As expected from the
+                                                                   discussion above, the NS mass 𝑀NS is also highly dependent on
+FIG. 2: Chandrasekhar mass calculated using eq. (6) for all
+                                                                   the Chandrasekhar mass 𝑀Ch of the pre-supernova star. This
+   metallicities combined, weighted by an IMF with an
+                                                                   is shown in the second of the two rightmost panels of Figure 4.
+                    exponent of −2.35.
+                                                                   The correlation between 𝑀NS and 𝑀Ch is quite good, although
+                                                                   some clear outliers can be seen at low metallicity (the 50, 55,
+                                                                   and 60 𝑀⊙ progenitors), as well as a few at solar metallicity
+Intuitively, one can also expect the remnant mass to be tightly
+                                                                   for 𝑀Ch < 1.4𝑀⊙ .
+correlated with the mass of the iron core. More specifically,
+the mass of the iron core is a lower bound for the final mass         The tightest correlation can be seen between MNS and com-
+of the remnant, since the Fe-peak elements present inside the      pactness calculated at different mass coordinates: 𝜉1.5 , 𝜉1.75 ,
+core cannot be ejected. If they were, we would observe a           𝜉2.0 , and 𝜉2.25 (left 4 panels of Figure 4). The choice to pick
+much higher abundance of such elements [88], which we do           these four different compactnesses can be understood by ana-
+not. A more accurate predictor of the final remnant mass could     lyzing Figure 3. The correlation between MNS and 𝜉1.5 is very
+however be the Chandrasekhar mass, which is generally con-         good at low values of 𝜉1.5 , and then gets progressively worse
+sidered to be ∼ 1.4𝑀⊙ . However, as described in [37], this        at larger values. This is not surprising since, for NSs with
+value can vary depending on the electron fraction and entropy      MNS ≳ 1.36 𝑀⊙ (corresponding to a baryonic mass of 1.5
+in the core:                                                       𝑀⊙ ), what determines the mass of the remnant is not only the
+                  "                                                accretion of the layers within an enclosed mass of 1.5 𝑀⊙ , but
+                             2#          "           2#
+                                                                   also the accretion of layers outside that mass shell. Therefore,
+                                              
+                          𝑠𝑒                      𝑠
+                                 = 5.38𝑌𝑒2 1 +
+                                                    𝑒
+    𝑀Ch = 𝑀Ch,0 1 +                                       , (6)    even if the density profile up to an enclosed mass of 1.5 𝑀⊙ is
+                         𝜋𝑌𝑒                     𝜋𝑌𝑒
+                                                                   very similar, if the density outside this layer is different then
+where 𝑠𝑒 and 𝑌𝑒 are the electron entropy per baryon and elec-      the resulting mass of the remnant will be different. This ex-
+tron fraction in the core, respectively. Typically, the Chan-      plains why MNS diverges as a function of 𝜉1.5 once MNS goes
+drasekhar mass is evaluated at the pre-collapse stage, which       above ∼ 1.36 𝑀⊙ . A similar argument holds for 𝜉1.75 and 𝜉2.0 ,
+we consider to be the time when the velocity drops below           for which the steepening of the trend occurs at values of MNS
+1000 km/s inside the core. It can be shown that the entropy        above ∼ 1.56 𝑀⊙ and ∼ 1.75 𝑀⊙ , respectively, and it is not
+in the core 𝑠𝑒 is mostly determined by the details of Carbon       as pronounced as it is for 𝜉1.5 . Finally, if one looks at MNS as
+burning [89]. Above a certain mass, central C-burning occurs       a function of 𝜉2.25 , the trend is linear at large masses, without
+in radiative rather than convective equilibrium, which changes     any steepening. This is again not surprising since a baryonic
+the subsequent stages of evolution and, essentially, completely    mass of 2.25 𝑀⊙ corresponds to a NS with a gravitational mass
+bypasses the neutrino-cooling phase [89], which is responsible     of roughly 1.94 𝑀⊙ , which is very close to the maximum NS
+for decreasing the central entropy of the core. This eventually    mass of 2.05 𝑀⊙ . Therefore, only the density profile inside an
+leads to an abrupt increase of iron core mass, central entropy,    enclosed mass of 2.25 𝑀⊙ dictates the final mass of the NS.
+and compactness above a certain mass. As [37] pointed out,            It is also interesting to notice that there is a clear correlation
+this would naturally lead to a bimodal neutron star mass distri-   between MNS and 𝜉1.5 at small values of compactness. How-
+bution. This is illustrated in Figure 2, and we will come back     ever, for 𝜉1.75 , 𝜉2.0 , and 𝜉2.25 , the stars with the smallest com-
+to it later in the section.                                        pactness show essentially a divergence in MNS . The reason is
+   In the literature, another quantity that has been shown to      very similar to the divergence (or steepening) that happens at
+correlate with the mass of the neutron star is M4 , i.e. the       large values of compactness. For these low-compactness stars,
+mass coordinate of the layer where the specific entropy per        the final NS mass is dictated by the accretion history of the
+baryon of the pre-SN progenitor rises above 4 [48, 49, 77].        inner ∼ 1.2 − 1.5 𝑀⊙ . However, these stars have very shallow
+This layer almost always coincides with (or is very close to)      density profiles, and therefore very extended envelopes, which
+the Si/Si-O interface. As showed by BR23 and [28], as well as      makes their compactnesses 𝜉1.75 , 𝜉2.0 , and 𝜉2.25 extremely
+                                                                                                                                                                          8
+
+
+
+              2.0         Zero Metallicity
+                          Low Metallicity
+                          Solar Metallicity
+              1.8
+   MNS (M )
+
+
+
+
+              1.6
+
+
+              1.4
+
+
+              1.2
+                    0.0   0.2   0.4      0.6   0.8   1.0 0.0   0.2   0.4      0.6   0.8   1.0 0.0   0.2   0.4      0.6   0.8   1.0 0.0   0.2   0.4      0.6   0.8   1.0
+                                      ξ1.5                                 ξ1.75                                ξ2.0                                 ξ2.25
+
+
+  FIG. 3: Gravitational mass of the NS as a function of compactness of the pre-SN progenitor, as defined by eq. (1). The grey
+  crosses indicate the points where the dependence of MNS on compactness steepens. Specifically, the abscissa of each cross is
+located at 𝜉1.5 = 0.6, 𝜉1.75 = 0.6, and 𝜉2.0 = 0.6 (see the fit in Eq. (7)). The ordinate of each cross is instead located at 1.36 𝑀⊙ ,
+     1.56 𝑀⊙ , and 1.75 𝑀⊙ , i.e. the gravitational mass corresponding to a baryonic mass of 1.5 𝑀⊙ , 1.75 𝑀⊙ , and 2.0 𝑀⊙ ,
+ respectively. The fact that the crosses lie along the data points shows that our choice of 𝜉1.5 = 0.6, 𝜉1.75 = 0.6, and 𝜉2.0 = 0.6 is
+   consistent with the idea that Nss with baryonic masses above 1.5 𝑀⊙ , 1.75 𝑀⊙ , and 2.0 𝑀⊙ , cannot be described using 𝜉1.5 ,
+                                𝜉1.75 , and 𝜉2.0 , which is why the curve steepens above that threshold.
+
+
+small. Their interior structure could however be quite dif-                                     The same functional form with x=MCh is used to fit MNS as
+ferent, as demonstrated by their different values of 𝜉1.5 , which                            a function of the Chandrasekhar mass. This will be referred to
+explains why they have very different MNS despite having very                                as 𝑀Ch -fit hereafter. The best-fit values for the parameters are
+similar (practically zero) 𝜉1.75 , 𝜉2.0 , and 𝜉2.25 . This effect can                        𝐴 = 1.928 𝑀⊙ , 𝑥 𝑏 = 1.790 𝑀⊙ , 𝛼1 = −1.194, 𝛼2 = −0.163,
+also be seen, to a less dramatic extent, in the steepening of                                and Δ = 0.027.
+MNS as a function of 𝜉2.25 for compactnesses below ∼ 0.4.                                       It is interesting to note that the outliers are roughly the same
+   To summarize, there is a clear correlation between 𝑀Si/O                                  progenitors for all of the fits, although as can be seen from Fig-
+and MNS , and an even better one between compactness and                                     ure 4, that is not always the case. Due to the large differences
+MNS . In particular, the final NS mass seems to be best pre-                                 compared to the bulk of all of the other progenitors, the 45,
+dicted by the compactness calculated at an enclosed mass that                                50, and 55 𝑀⊙ progenitors of the low metallicity set have been
+is not too much smaller, nor larger, than the final NS mass.                                 excluded from the MCh -fit. Indeed, their MNS is equal to their
+Therefore, we find that a very simple fit, which is at the same                              MCh , whereas for all of the other progenitors the NS mass is
+time very accurate, is the following:                                                        always larger than MCh . Because of the steep dependence of
+                                                                                             MNS on MSi/O and MCh , the NS masses for progenitors similar
+     
+      0.191 × 𝜉1.5 + 1.242                          𝜉1.5 < 0.6 ;                            to the 17.2 𝑀⊙ and 19.5 𝑀⊙ progenitors are significantly un-
+     
+       0.578 × 𝜉1.75 + 1.237                         𝜉1.5 ≥ 0.6 , 𝜉1.75 < 0.6 ;
+     
+     
+     
+     
+     
+                                                                                            derestimated by the fit. However, the dependence of MNS on
+𝑀NS = 0.914 × 𝜉2.0 + 1.262                           𝜉1.5 ≥ 0.6 , 𝜉1.75 ≥ 0.6 ,              the different compactnesses is not as steep, and therefore the
+     
+     
+                                                    𝜉2.0 < 0.6 ;                            underestimation is not as dramatic. This will be shown more
+                                                                                             clearly in the next section.
+     
+     
+     
+      0.665 × 𝜉
+                2.25 + 1.514                        𝜉2.0 ≥ 0.6 .
+                                                               (7)
+This is shown in the left 4 panels of Figure 4, and will be
+referred to as 𝜉-fit hereafter.                                                                      B.   Theoretical Neutron Star Mass Distributions
+   Similarly, we fit a broken power-law to MNS as a function of
+MSi/O using the python package Astropy [91]. The functional                                      The observed population of Neutron Star is known to have a
+form is the following:                                                                       large peak around ∼ 1.4 𝑀⊙ , and there is strong evidence for a
+                   − 𝛼1 ( "         1/Δ # ) ( 𝛼1 − 𝛼2 )Δ                                 second peak (or at least an extended tail) at around ∼ 1.9 𝑀⊙ , as
+                    𝑥         1       𝑥                                                      shown by [92]. This is based on the observation of hundreds
+       𝑓 (𝑥) = 𝐴                1+                           , (8)
+                   𝑥𝑏         2      𝑥𝑏                                                      of millisecond pulsars found in our Galaxy. Some of these
+                                                                                             are known to have experienced accretion from a companion
+where x=MSi/O and 𝑓 (𝑥) = MNS . This will be referred to as                                  star, which increased their mass compared to when they were
+𝑀Si/O -fit hereafter. The best-fit values for the parameters are                             formed. Therefore, one should compare the stars simulated in
+𝐴 = 1.934 𝑀⊙ , 𝑥 𝑏 = 2.245 𝑀⊙ , 𝛼1 = −0.938, 𝛼2 = 0.163,                                     this work only to single-star systems or binary systems with
+and Δ = 0.085.                                                                               little to no mass transfer [40]. One category of objects that
+                                                                                                                                                                                                                                 9
+
+
+             2.0            Zero Metallicity
+                                                                                                                                     40.0
+                                                                                                                                     40.0
+                                                                                                                                       60.0
+                                                                                                                                                                  40.0
+                                                                                                                                                                  40.0         60.0
+                                                                                                                                                                                                                         40.0
+                                                                                                                                                                                                                         40.0
+                                                                                                                                                                                                                          60.0
+
+                            Low Metallicity                                                                                   45.0                                                    45.0                           45.0
+                            Solar Metallicity                                                                       55.0                                                55.0                                      55.0
+                                                                                                                       50.0                                      50.0                                           50.0
+             1.8
+  MNS (M )
+
+
+
+
+                                                                                                                                              MNS (M )
+                                                                           24.2                                                                                  24.2                                  24.2
+
+
+
+             1.6
+                                                              17.2                                                                                        17.2                                17.2
+                                                      19.5                                                                                               19.5                                19.5
+
+
+
+             1.4
+
+
+
+                   0.0      0.2          0.4    0.2          0.4     0.6   0.4           0.5      0.6     0.5       0.6         0.7                               2          3                       1.5                 2.0
+                                  ξ1.5                       ξ1.75                ξ2.0                          ξ2.25                                             MSi/O (M )                         MCh (M )
+
+
+ FIG. 4: The four leftmost panels show the correlation between different compactnesses and the gravitational mass of the NS.
+ Each dot represents a different simulation for progenitors with zero (yellow), low (green), and zero (purple) metallicities. The
+black solid lines show the fit described in eq. (7). The penultimate (last) panel shows the correlation between 𝑀Si/O (𝑀Ch ) and
+the gravitational mass of the NS The ZAMS mass. The solid lines in the two rightmost panels represent the broken power-law
+               fits (eq. (8) described in the text. The ZAMS mass of the "outliers" is also shown as an annotation.
+
+
+satisfies this requirement is slow-spinning pulsars, whose low                                          simulations. Moreover, one can establish which stars explode
+spin indicates very little mass accretion [93]. Another category                                        as predicted by our explodability criterion described in Section
+of objects is double neutron star (DNS) systems, where two                                              III, and then calculate the NS mass based on the 𝜉-fit, MSi/O -
+neutron stars orbit each other. In this case, however, it is less                                       fit, and MCh -fit described in this Section. Therefore, this leads
+clear how close they are to their birth masses [94, 95], since                                          to four sets of NS masses: (i) the one calculated directly from
+some of these systems are expected to have experienced some                                             GR1D+ simulations; (ii) the one predicted by our explodability
+degree of accretion. At the same time, they tend to have very                                           criterion and the 𝜉-fit; (iii) the one predicted by our explod-
+low masses, as well as a very narrow mass distribution (as                                              ability criterion and the MSi/O -fit; (iv) the one predicted by
+explained below), which suggests a very clear evolutionary                                              our explodability criterion and the MCh -fit. The advantage of
+path.                                                                                                   calculating NS masses from (ii), (iii), and (iv) is that they only
+   This leaves us with three observed NS mass distributions.                                            depend on the density, entropy, and electron fraction profiles of
+The probability density function (PDF) of slow-spinning pul-                                            the pre-SN progenitor, without the need to perform any CCSN
+sars and double neutron stars is described by a simple Gaus-                                            simulations. These four sets of NS masses can then be used
+sian:                                                                                                   to compute NS mass distributions (see Figure 5) by weighting
+                                                                                                        them with the IMF.
+                                        (𝑀NS − 𝜇) 2
+                                                   
+                            1
+             𝑃(𝑀NS ) = √ exp −                        ,       (9)                                           From observations we expect the NS mass distribution to
+                         𝜎 2𝜋               2𝜎                                                          be either Gaussian (Eq. (9)) or bimodal (Eq. (10)). There-
+                                                                                                        fore, we fit both distributions to the data and then compare
+where 𝜇 = 1.49 𝑀⊙ and 𝜎 = 0.19 𝑀⊙ for slow pulsars (dashed
+                                                                                                        them to determine which one best fits the data. All the fits
+black line in Figure 5) and 𝜇 = 1.33 𝑀⊙ and 𝜎 = 0.09 𝑀⊙
+                                                                                                        were performed with the "fit" method from the python module
+for double neutron stars (dotted black line in Figure 5). The
+                                                                                                        statsmodels [97]. To perform the fit, we generated 20,000
+bimodal distribution of millisecond pulsars from [92] (solid
+                                                                                                        synthetic samples based on the theoretical NS masses weighted
+black line in Figure 5) is a combination of two Gaussians in
+                                                                                                        with the IMF, for each of the four sets of NS masses described
+the form of Eq. (9) weighted by a relative ratio 𝑟:
+                                                                                                        above. The best-fit bimodal and Gaussian distributions are
+                         𝑃(𝑀NS ) = (1 − 𝑟) G(𝜇1 , 𝜎1 ) + 𝑟 G(𝜇2 , 𝜎2 ),                    (10)         shown in Figure 5, and the best-fit parameters are summarized
+                                                                                                        in Table II. Finally, in Table III we show the value of the max-
+where 𝜇1 = 1.393 𝑀⊙ , 𝜎1 = 0.064 𝑀⊙ , 𝜇2 = 1.807 𝑀⊙ , 𝜎2 =                                              imum log-likelihood, as well as the value of the KS test and
+0.177 𝑀⊙ , and 𝑟 = 0.425. The distribution of slow-spinning                                             the corresponding p-value for all of the fits. As can be easily
+NS has been derived for a relatively small population of only                                           concluded by looking at the histograms, the bimodal distribu-
+∼ 12 objects, whereas the population of DNS has roughly twice                                           tion fits the data much better, as confirmed by the much larger
+as many objects and the population of millisecond pulsars is                                            log-likelihood, for all metallicities.
+quite large, counting > 100 objects.                                                                        We also performed a KS test to investigate whether the fitted
+   To compute mass distributions from the simulations, we as-                                           distribution is compatible with the data. The detailed proce-
+sume a Salpeter IMF (initial mass function) with an exponent                                            dure is reported in Appendix A. With the null hypothesis being
+𝛼 = −2.35 [96], independent of metallicity. The NS masses                                               that the data was drawn from the fitted distribution, a p-value
+are then calculated by converting the baryonic mass of the                                              above 0.05 indicates that the null hypothesis cannot be rejected.
+PNS at the end of the simulation to the corresponding gravi-                                            A value below 0.05 indicates that the null hypothesis can be
+tational mass of a cold NS by solving the TOV equation. This                                            rejected with 95 % confidence. Unsurprisingly, the bimodal fit
+provides an empirical NS mass distribution directly from the                                            always has a p-value > 0.05, with only a few exceptions. More
+                                                                                                                                                                                                                                10
+
+
+
+                                 4               Zero Metallicity                   Zero Metallicity                                     4               Low Metallicity                     Low Metallicity
+                                                 Bimodal                            Gaussian                                                             Bimodal                             Gaussian
+   Probability Density [M −1 ]
+
+
+
+
+                                                                                                           Probability Density [M −1 ]
+                                 3                                                                                                       3
+
+
+                                 2                                                                                                       2
+
+
+                                 1                                                                                                       1
+                                                                                                                                                                                                                     ms Pulsars
+                                                                                                                                                                                                                     Slow Pulsars
+                                 0                                                                                                       0                                                                           Double NSs
+                                     1.25       1.50      1.75   2.00   1.25       1.50      1.75   2.00                                     1.25       1.50      1.75   2.00    1.25       1.50      1.75   2.00    GR1D+
+                                            Gravitational Mass [M ]            Gravitational Mass [M ]                                              Gravitational Mass [M ]             Gravitational Mass [M ]      ξ-fit
+                                                                                                                                                                                                                     MSi/O -fit
+                                                                                                                                                                                                                     MCh -fit
+                                 5
+                                                 Solar Metallicity                  Solar Metallicity                                    4              Combined Metallicities              Combined Metallicities
+                                                 Bimodal                            Gaussian                                                            Bimodal                             Gaussian
+   Probability Density [M −1 ]
+
+
+
+
+                                                                                                           Probability Density [M −1 ]
+                                 4
+                                                                                                                                         3
+                                 3
+
+                                                                                                                                         2
+                                 2
+
+
+                                 1                                                                                                       1
+
+
+                                 0                                                                                                       0
+                                     1.25       1.50      1.75   2.00   1.25       1.50      1.75   2.00                                     1.25       1.50      1.75   2.00    1.25       1.50      1.75   2.00
+                                            Gravitational Mass [M ]            Gravitational Mass [M ]                                              Gravitational Mass [M ]             Gravitational Mass [M ]
+
+
+
+
+    FIG. 5: Comparison between theoretical (in colors) and observed (in black) gravitational mass distributions of NSs. The
+   shaded regions show the histograms of the raw data, and the solid colored lines show the fitted distributions for NS masses
+calculated from simulations (in red, set (ii) in section IV B), from the 𝜉-fit (in orange, set (ii) in section IV B), from the 𝑀Si/O -fit
+    (in blue, set (iii) in section IV B), and from the 𝑀Ch -fit (in green, set (iv) in section IV B). The solid black line shows the
+  distribution of millisecond pulsars from [92], and the dashed and dotted black lines show the distribution of double NSs and
+                                                 slow pulsars, respectively, from [93].
+
+
+interestingly, the Gaussian distribution is compatible with the                                                                                 locations of the distribution from [92], but qualitatively very
+data for the zero and low metallicity sets, whereas it is not for                                                                               similar.
+solar metallicities and for all metallicities combined.                                                                                            Usually, as mentioned above, a possible explanation of the
+  However, one should carefully interpret these results. As                                                                                     bimodal nature (or extended tail) of the observed population of
+explained in appendix A, the result of the KS test generally                                                                                    ms pulsars is that the NS birth-mass distribution is a Gaussian
+depends on the number of samples used for the test, and the                                                                                     centered at around 1.4 𝑀⊙ . Then, some NSs will accrete matter
+more one generates, the smaller the result of the KS test.                                                                                      via binary interactions, hence giving rise to the second peak
+In other words, the p-value depends on the number of bins                                                                                       (or extended tail) seen by [92]. However, nothing prevents
+chosen when binning the data. The fewer bins one has, the                                                                                       the birth-mass distribution itself from being bimodal (Özel,
+higher the p-value will be, since with less information one                                                                                     private communication), as seen in our simulations. Moreover,
+cannot constrain the empirical distribution. The KS test results                                                                                a bimodal birth-mass distribution means that producing pulsars
+reported in Table III were obtained by choosing a number                                                                                        with large masses does not necessarily require accreting a
+of bins that is half of the total number of data points. The                                                                                    significant amount of mass.
+dependence of the KS test on the number of bins is shown in                                                                                        The birth-mass distribution we find has a wider low-mass
+Appendix A.                                                                                                                                     peak and a narrower high-mass peak compared to [92]. In
+   This naturally brings us to compare our theoretical results                                                                                  this scenario, both low-mass and high-mass NSs could ac-
+with the observed distributions. We will focus on the com-                                                                                      crete mass via binary interactions, which could give rise to a
+parison between the observed distributions and the theoretical                                                                                  widening of the peak at high masses and, potentially, also to a
+result for all metallicities combined. Firstly, the 𝜉-fit, the                                                                                  narrowing of the peak at low masses.
+MSi/O -fit, and the MCh -fit reproduce the distribution from the                                                                                   It is also instructive to discuss the Gaussian fit to the dis-
+GR1D+ simulations quite well, with the 𝜉-fit being better at                                                                                    tribution even though a KS test can already conclude that our
+predicting the variance of the two peaks, which is not surpris-                                                                                 theoretical NSs cannot be drawn from Gaussian, as discussed
+ing considering the outliers at solar metallicities seen in the                                                                                 above. As can be seen in the last panel of Figure 5, the Gaussian
+MSi/O -fit and MCh -fit in Figure 4, which are responsible for                                                                                  fits for all four theoretical distributions are in extremely good
+widening the distribution (see also the third panel of Figure                                                                                   agreement with the distribution of slow pulsars. As mentioned
+5). All four theoretical distributions have peaks at the same lo-                                                                               above, this distribution has been derived from a small sample
+cations, which are systematically slightly larger than the peak                                                                                 of pulsars, and therefore a bimodal nature of the underlying
+                                                                                                                                      11
+
+                          Gaussian Fit                              it. Nonetheless, it shows that robust conclusions about the
+                                                                    bimodality (or lack thereof) of the birth-mass distribution of
+    𝜇             Zero          Low          Solar          All     NSs cannot be made without larger samples of observed slow
+ GR1D+            1.54          1.59          1.47         1.51     pulsars.
+  𝜉-fit           1.56          1.59          1.47         1.51        As can be seen by looking at the distribution of double NSs,
+MSi/O -fit        1.56          1.61          1.46         1.50     our results seem to be underproducing low-mass NSs. This
+MCh -fit          1.54          1.60          1.45         1.49     could have a few different explanations. Firstly, the narrow
+    𝜎             Zero          Low          Solar          All     peak of the observed distribution suggests a preferred evolu-
+ GR1D+            0.23          0.21          0.18         0.20     tion channel of these stars, and therefore it should be most
+  𝜉-fit           0.23          0.20          0.17         0.19     likely combined with other observations (like slow pulsars, for
+MSi/O -fit        0.23          0.19          0.17         0.19     example), to properly derive a birth-mass distribution, which
+MCh -fit          0.25          0.19          0.18         0.20     could shift the peak to larger masses. Secondly, our simulated
+                                                                    progenitors are stars that developed an iron core with masses
+                          Bimodal Fit                               of 9 𝑀⊙ and above in the solar metallicity set, and 11 𝑀⊙ and
+    𝜇1            Zero          Low          Solar          All     above in the zero and low metallicity sets. However, electron-
+                                                                    capture supernovae at around 8-10 𝑀⊙ are responsible for pro-
+ GR1D+            1.42          1.45          1.42         1.43     ducing the lowest mass NSs and will be very much favored by
+  𝜉-fit           1.43          1.46          1.42         1.43
+                                                                    the IMF. Therefore, the theoretical distributions derived here
+MSi/O -fit        1.44          1.47          1.37         1.42
+MCh -fit          1.42          1.46          1.36         1.41     likely exclude a large number of low-mass NSs which could
+                                                                    explain the population represented by double NSs. Moreover,
+   𝜎1             Zero          Low          Solar          All     this would be compatible with the fact that the vast majority
+ GR1D+            0.11          0.11          0.11         0.11     of binaries are composed by two relatively small massive stars
+  𝜉-fit           0.11          0.10          0.11         0.11     (find reference).
+MSi/O -fit        0.12         0.094         0.062         0.10        As mentioned above, when combining all of the metallici-
+MCh -fit          0.15         0.092         0.089         0.12     ties, the 𝜉-fit, the MSi/O -fit, and the MCh -fit correctly reproduce
+    𝜇2            Zero          Low          Solar          All     the results from the simulations. However, unsurprisingly, at
+ GR1D+            1.89          1.83          1.84         1.84     solar metallicity the MSi/O -fit and MCh -fit grossly misrepre-
+  𝜉-fit           1.88          1.83          1.84         1.84     sents the distribution obtained from simulations. This could
+MSi/O -fit        1.90          1.83          1.64         1.83     have been intuitively concluded by noticing the large deviation
+MCh -fit          1.88          1.81          1.66         1.82     in the NS masses predicted by both fits compared to the results
+                                                                    of the simulations for some solar-metallicity progenitors (see
+   𝜎2             Zero          Low          Solar          All
+                                                                    Figure 4). Therefore, we recommend using the 𝜉-fit rather
+ GR1D+            0.071        0.073         0.041         0.062    than one based on MSi/O or MCh since it is less susceptible
+  𝜉-fit           0.062        0.066         0.032         0.057    to progenitors exploding long after the accretion of the Si/Si-
+MSi/O -fit        0.060        0.071          0.16         0.072    O interface. As discussed in the previous section, the stars
+MCh -fit          0.077        0.078          0.15         0.071
+                                                                    whose MNS is poorly reproduced by the 𝑀Si/O -fit and 𝑀Ch -fit,
+    𝑟             Zero          Low          Solar          All     explode much later than the accretion of the Si/Si-O interface,
+ GR1D+            0.25          0.37          0.12         0.20     and therefore both fits systematically underestimate the mass
+  𝜉-fit           0.27          0.36          0.10         0.19     of the final compact object. A detailed study of what causes
+MSi/O -fit        0.25          0.36          0.33         0.19     the explosion of these stars to be so different is beyond the
+MCh -fit          0.27          0.37          0.29         0.19     scope of this paper and is currently underway [98].
+                                                                       To summarize, our simulations show a clear bimodal dis-
+TABLE II: Best-fit parameters for the Gaussian and bimodal          tribution across all metallicities. The bimodal nature of the
+ fits for the four sets of theoretical NS masses described in       Chandrasekhar mass distribution shown in Figure 2 naturally
+                          section IV B                              translates into a bimodal NS birth-mass distribution, as had
+                                                                    been already recognized by [37]. The difference with previous
+                                                                    work [48, 51, 99] is that the stars with larger Chandrasekhar
+                                                                    masses do not successfully explode according to those studies.
+distribution cannot be excluded. Moreover, the agreement            However, with our parametric model for 𝜈-driven convection,
+between the theoretical Gaussian fits and the observed distri-      we expect them to explode and therefore make up the second
+bution suggests that, if the underlying distribution was indeed     peak of the birth mass distribution. The large discrepancy in
+bimodal, a Gaussian fit would produce exactly the distribution      the explodability predicted by our model and the studies men-
+that has been observed. In other words, if we assume that the       tioned above is illustrated in Figure 8, and discussed in more
+true birth-mass distribution is equal to the bimodal distribution   detail at the end of the section IV C The comparison with ob-
+we find in the simulations, a small sample of objects would         servations showed that a bimodal NS birth-mass distribution
+be indeed distributed according to the observed distribution        would indeed be possible, and would also naturally explain the
+of slow pulsars. We want to stress that this is a specula-          high-mass NSs without needing to accrete a large amount of
+tive conclusion since no robust statistical argument supports       mass. The best predictor for the final NS mass is the com-
+                                                                                                                                  12
+
+                          Gaussian Fit                                                     C.   Black Holes
+
+  MLL            Zero        Low          Solar           All
+                                                                       The origin of black holes as a consequence of stellar collapse
+ GR1D+          1163         3277         6334           4098      is highly uncertain. The detection of a failed SN is particularly
+  𝜉-fit         1349         3594         7626           4881      challenging since the disappearance of a star can oftentimes
+MSi/O -fit      1117         4365         7256           4996      be compatible with obscuration due to dust. Therefore, the
+MCh -fit        -455         4628         6457           4180
+                                                                   same event could be interpreted as a failed SN or a sudden
+ KS-test         Zero        Low          Solar           All      obscuration of the source due to a dusty environment caused
+ GR1D+           0.31        0.20         0.20           0.16      by some ejection event [100, 101]. Nonetheless, it is possible
+  𝜉-fit          0.30        0.21         0.18           0.17      to set some constraints to the fraction of failed SNe 𝑓fSNe , i.e.
+MSi/O -fit       0.30        0.20         0.21           0.17       𝑓fSNe = 0.16+0.23
+                                                                                   −0.12 according to [102] and 𝑓fSNe < 0.23 for
+MCh -fit         0.28        0.21         0.18           0.15      sources with absolute magnitudes > −14 according to [100].
+ p-value         Zero        Low          Solar           All          In this study, we compute the fraction of failed SNe by as-
+                                                                   suming that stars with ZAMS masses around 8 𝑀⊙ (which
+ GR1D+           0.17       0.074        0.0057         0.0034     we did not include in our simulations due to the lack of avail-
+  𝜉-fit          0.19       0.055        0.0084        0.00092
+                                                                   able stellar evolution models) lead to successful supernovae,
+MSi/O -fit       0.19       0.072        0.00082       0.00082
+MCh -fit         0.26       0.057        0.0079         0.0046     regardless of metallicity. The fate of stars around this mass,
+                                                                   that can end their life either as a White Dwarf (WD) or as
+                          Bimodal Fit                              a NS, is quite uncertain. Typically, these progenitors are
+                                                                   not very well studied [103], in part due to their complexity
+  MLL            Zero        Low          Solar           All
+                                                                   and the large uncertainties that affect their evolution. More-
+ GR1D+          6645         7095         10352          8185      over, simulating the neutrino-driven mechanism as well as the
+  𝜉-fit         7920         8272         11889          9378      initial flame propagation is very challenging, although some
+MSi/O -fit      6141         8527         12663          9188      multi-dimensional simulations have very recently started to
+MCh -fit        2384         8245          9309          7170      explore this [84, 104, 105]. The lowest mass stars that will
+ KS-test         Zero        Low          Solar           All      lead to electron-capture supernovae, and therefore produce a
+ GR1D+           0.27        0.16         0.14           0.11      NS rather than a WD, are believed to be around 8-8.5 𝑀⊙
+  𝜉-fit          0.27        0.15         0.14           0.12      [103], and the fraction of failed SNe can vary by a few percent
+MSi/O -fit       0.28        0.16         0.11           0.11      depending on where this lower boundary is. The fraction of
+MCh -fit         0.26        0.16         0.18           0.12      failed SNe from our simulations is shown in Figure 6. Notice
+                                                                   that the fraction of failed SNe is extremely sensitive to the fate
+ p-value         Zero        Low          Solar           All
+                                                                   of stars on the lower end of the mass range. Therefore, for
+ GR1D+           0.30        0.24         0.082           0.12     the zero and low metallicity progenitors, we assume that all
+  𝜉-fit          0.31        0.27         0.056          0.041     progenitors between 8 𝑀⊙ and 11 𝑀⊙ explode. However, in
+MSi/O -fit       0.27        0.24          0.24          0.071     the solar metallicity set, we found that the 10.75 𝑀⊙ progeni-
+MCh -fit         0.32        0.24        0.0086          0.051
+                                                                   tor does not explode, which is surprising considering that all
+                                                                   of the low-mass progenitors should most likely explode, and
+TABLE III: Properties of the best-fit distributions for the four   it could be due to stochastic fluctuations and/or to the large
+ sets of theoretical NS masses described in section IV B. The      uncertainties affecting stellar evolution. This alone affects the
+     MLL is the Maximum Log-Likelihood of the best-fit             explosion fraction tremendously, as shown in Figure 6. If
+          distribution. The KS-test is the value of the            one assumes that this progenitor explodes, and the lower end
+ Kolmogorov-Smirnov test, and the p-value is the probability       of electron-capture SNe is located at ∼ 8 𝑀⊙ , the fraction
+   of rejecting the null hypothesis that the raw data are not      of failed SNe found in our simulations is consistent with all
+drawn from the fitted distribution. To perform the KS test, we     current constraints.
+ binned the NS masses by choosing a number of equal-width              Another uncertainty regarding stellar-mass black holes in-
+bins equal to half of the total number of NS masses in each of     volves their birth masses, which heavily depend on the amount
+    the four sets of theoretical NS masses. A more detailed        of fallback experienced by the central compact object. In other
+     description of the procedure is given in appendix A.          words, the black hole mass distribution depends on what frac-
+                                                                   tion of the outer envelope will be ejected, and what fraction
+                                                                   will be accreted onto the central compact object. The ejection
+                                                                   of the outer envelope can be a consequence of several different
+pactness of the progenitor right before collapse. Therefore,       mechanisms [31–36], and the fraction of the envelope that will
+without needing to perform any CCSN simulation, using the          be ejected will likely vary among different progenitors. For
+explodability criterion described in Section III and the 𝜉-fit     simplicity, we adopt a common approach often found in the
+from Eq. (7) one can predict the outcome of the supernova          literature [38, 42, 77, 99], where we assume that a fraction 𝑓ej
+and the mass of the remnant. For the cases in which the ex-        of the hydrogen envelope will be ejected, and use the same
+plosion is not successful, a BH will be formed, as discussed in    value for all progenitors.
+the next section.                                                      Similarly to what was done for NSs in Section IV A, we
+                                                                                                                                                          13
+
+
+                               40
+                                                                                       to describe the mass distribution. However, instead of using
+                                                                                       𝑚 min = 6.8𝑀⊙ as the lower end of the BH mass distribution,
+                               35                                                      we use the recently-derived value of 𝑚 min = 3.6𝑀⊙ .
+                                                                                          The observed BH mass distribution we adopted is the fol-
+  Fraction of failed SNe [%]
+
+
+
+                               30
+                                                                                       lowing [107] :
+                               25
+                                                                                                       𝑃(𝑀BH ) ∝ 𝑆(𝑚|𝑚 min , 𝛿 𝑚 )𝑚 − 𝛼 ,             (12)
+                               20
+                                                                                       where 𝑚 min = 3.6 𝑀⊙ , 𝛿𝑚 = 3 𝑀⊙ , 𝛼 = 7.1, and
+                               15                                                      𝑆(𝑚|𝑚 min , 𝛿 𝑚 ) is a smoothing function defined as:
+                               10                                                                            
+                                                                                                              0                          (𝑚 < 𝑚 min )
+                                                                                                             
+                                5
+                                                                                                             
+                                                                                                             
+                                                                                                                  1
+                                                                                       𝑆(𝑚|𝑚 min , 𝛿 𝑚 ) =          ′) + 1
+                                                                                                                             (𝑚 min ⩽ 𝑚 < 𝑚 min + 𝛿 𝑚 )
+                                                                                                             
+                                                                                                              𝑓 (𝑚
+                                0                                                                            
+                                  Zero                  Low               Solar
+                                                                                                             1
+                                                                                                                                    (𝑚 ⩾ 𝑚 min + 𝛿 𝑚 ),
+                                Metallicity           Metallicity       Metallicity                                                                   (13)
+                                                                                       with 𝑚 ′ = 𝑚 − 𝑚 min and
+  FIG. 6: Fraction of failed SNe for the three different sets of                                                     𝛿𝑚
+                                                                                                                        
+                                                                                                                            𝛿𝑚
+                                                                                                                                  
+                                                                                                               ′
+     metallicities. The horizontal black line and grey shaded                                           𝑓 (𝑚 ) = exp    +           .                 (14)
+                                                                                                                     𝑚 ′ 𝑚 ′ − 𝛿𝑚
+region are the fraction of failed SNe inferred by [102] and its
+  90 % confidence interval, respectively. The horizontal blue                          This is shown as a dotted dashed black line in Figure 7.
+  line shows the most stringent upper limit (i.e. sources with                             Similarly to what was done in the previous section, we con-
+    absolute magnitudes < -14) from [100]. The filled circles                          sider two possible shapes for our simulated data: a Gaussian
+  show the fraction of failed SNe calculated directly from our                         and a truncated power law (PL) in the form of Eq. 12, where
+simulations, with the assumption that stars between 8 𝑀⊙ and                           we allow both 𝛼 and mmin to vary, and we keep 𝛿 𝑚 = 3 𝑀⊙
+ the smallest ZAMS mass in each set (i.e. 11 𝑀⊙ for the zero                           since it is simply a smoothing parameter. For the remainder
+   and low metallicity sets, and 9 𝑀⊙ for the solar metallicity                        of this section, we exclude the 100 𝑀⊙ and 120 𝑀⊙ progen-
+    set) successfully explode. The empty circle is instead the                         itors at solar metallicity from part of the analysis. These are
+fraction of failed SNe assuming that the 10.75 𝑀⊙ progenitor                           Wolf-Rayet stars that have lost all of their hydrogen envelopes
+in the solar metallicity set successfully explodes, although in                        and have pre-SN masses around ∼ 6 𝑀⊙ , much smaller than
+                      our simulations it fails.                                        any of the other stars. Since they lost all of their hydrogen
+                                                                                       envelope, according to equation (11) they will produce BHs of
+                                                                                       ∼ 6𝑀⊙ , regardless of 𝑓ej . Therefore, we only include them in
+present two different sets of theoretical BH masses: (i) the                           the analysis of BH masses corresponding to 𝑓ej ⩾ 0.5. Other-
+one calculated directly from GR1D+ simulations; (ii) the one                           wise, they would form BHs more than 1 𝑀⊙ smaller compared
+predicted by the explodability criterion presented in Section                          to the other stars, which would significantly impact the fit, de-
+III. Once established which stars will produce a failed SN based                       spite these stars having an extremely low contribution to the
+on (i) and (ii), the BH mass 𝑀BH is computed by subtracting                            full population due to the very small IMF at such high ZAMS
+the ejected mass from the total pre-supernova mass 𝑀presn :                            masses. For 𝑓ej ⩾ 0.5 many of the other stars will produce
+                                                                                       BHs with masses comparable to or lower than 6𝑀⊙ , and we
+                                              𝑀BH = 𝑀presn − 𝑓ej 𝑀H ,           (11)   can include these two progenitors in the analysis since they do
+                                                                                       not skew the fit at low masses anymore.
+where 𝑀H is the mass of the hydrogen envelope and 𝑓ej is the                               After calculating the BH masses according to procedures
+fraction of the hydrogen envelope that has been ejected.                               (i) and (ii) outlined above, we generate 20,000 synthetic black
+   The LVK collaboration has significantly improved our un-                            holes by weighting each BH mass with a Salpeter IMF with
+derstanding of the mass distribution of BHs. In particular, the                        an exponent 𝛼 = −2.35. Then, using the "fit" method from
+recently announced event GW230529 completely revolution-                               the python module statsmodels [97] we compute the best-
+ized what we know about stellar mass black holes (i.e. BHs                             fit distribution by maximizing the log-likelihood. The best-fit
+formed in CCSNe). The more massive companion in this bi-                               truncated PL and Gaussian distributions are shown in Figure
+nary merger event is an object with mass 3.6+0.8
+                                              −1.2 𝑀 ⊙ at > 90%                        7 for different values of 𝑓ej and for each of the metallicities, as
+confidence level, with a probability > 90 % that this object                           well as for all of the metallicities combined. For simplicity, we
+is indeed a BH and not a very massive NS. This is a much                               only analyze the distribution of BHs for all of the metallicities
+higher confidence compared to GW190814 [106], in which                                 combined due to the small samples of BHs produced at each
+the 2.6 𝑀⊙ cannot be clearly classified as a high-mass NS or                           given metallicity: 45, 32, and 7 for the solar, low, and zero
+a low-mass BH. Therefore, one can conclude that GW230529                               metallicity sets, respectively. Therefore, for the remainder of
+shows the existence of stellar black holes in the low-mass gap.                        this section, we always refer to the full set of the combined
+Given the very recent announcement of this event and the                               metallicities, unless stated otherwise.
+large uncertainty in the mass of the larger object, we decided                             The best-fit parameters are summarized in Table IV for both
+to use the truncated power law previously derived by [107]                             the BH masses calculated from simulations (i.e., procedure (i)
+                                                                                                                                                                                                                                         14
+
+                                                                                       LIGO (2021)          GR1D+                                     pre-SN prediction
+
+                                1.0                                                                                                          0.8
+                                               Zero Metallicity                   Zero Metallicity                                                              Low Metallicity                      Low Metallicity             1.0
+                                               Truncated PL                       Gaussian                                                                      Truncated PL                         Gaussian
+  Probability Density [M −1 ]
+
+
+
+
+                                                                                                               Probability Density [M −1 ]
+                                0.8
+                                                                                                                                             0.6                                                                                 0.9
+
+                                0.6
+                                                                                                                                                                                                                                 0.8
+                                                                                                                                             0.4
+                                0.4
+                                                                                                                                                                                                                                 0.7
+                                                                                                                                             0.2
+                                0.2
+                                                                                                                                                                                                                                 0.6
+                                0.0                                                                                                          0.0
+                                      5            10         15    20   5            10         15    20                                              5            10         15      20   5            10         15      20
+
+
+
+
+                                                                                                                                                                                                                                       fej
+                                          Gravitational Mass [M ]            Gravitational Mass [M ]                                                       Gravitational Mass [M ]              Gravitational Mass [M ]          0.5
+
+                                                                                                                                             0.5
+                                               Solar Metallicity                  Solar Metallicity                                                           Combined Metallicities               Combined Metallicities        0.4
+                                0.8            Truncated PL                       Gaussian                                                                    Truncated PL                         Gaussian
+  Probability Density [M −1 ]
+
+
+
+
+                                                                                                               Probability Density [M −1 ]
+                                                                                                                                             0.4
+                                                                                                                                                                                                                                 0.3
+                                0.6
+                                                                                                                                             0.3
+                                                                                                                                                                                                                                 0.2
+                                0.4
+                                                                                                                                             0.2
+                                                                                                                                                                                                                                 0.1
+                                0.2                                                                                                          0.1
+                                                                                                                                                                                                                                 0.0
+                                0.0                                                                                                          0.0
+                                      5            10         15    20   5            10         15    20                                              5            10         15      20   5            10         15      20
+                                          Gravitational Mass [M ]            Gravitational Mass [M ]                                                       Gravitational Mass [M ]              Gravitational Mass [M ]
+
+
+
+
+ FIG. 7: Comparison between theoretical (in colors) and observed (in black) gravitational mass distributions of NSs. Different
+colors correspond to theoretical distributions calculated assuming that different fractions 𝑓ej of the hydrogen envelope have been
+  ejected (see eq. (11)). Solid lines correspond to theoretical distributions derived directly from simulations (set (i) in section
+ IV C), dashed lines correspond to theoretical distributions derived using the explodability criterion from section III (set (i) in
+  section IV C). The dotted-dashed line shows the observed distribution inferred by the LVK collaboration, including the most
+                                                recent GW230529 obsrvation [30].
+
+
+described above, labeled as GR1D+) and the ones derived from                                                                                       compared to previous studies. This is a direct consequence of
+our explodability criterion (i.e., procedure (ii) described above,                                                                                 the completely different explodability pattern compared to pre-
+labeled as pre-SN criterion). Table V shows the value of the                                                                                       vious studies. As an example, Figure 8 shows the difference
+maximum log-likelihood, as well as the value of the KS test                                                                                        between the outcomes of the simulations carried out in this
+and the corresponding p-value for all of the fits. The p-value                                                                                     work versus the ones from [49]. The pre-SN progenitors sim-
+for the truncated PL is always > 0.05, whereas the Gaussian                                                                                        ulated in the two studies are exactly the same, but in our case,
+distribution has a p-value consistently lower than 0.01. There-                                                                                    the explosion is achieved using the STIR, a physically moti-
+fore, we conclude that a truncated PL is best to describe the                                                                                      vated 1D+ model calibrated on multi-dimensional simulations,
+data. This is not at all surprising since the pre-supernova mass                                                                                   described in section II B. Instead, [49] used an ad-hoc prescrip-
+grows approximately linearly with ZAMS mass, and there-                                                                                            tion to manually change the neutrino luminosity emitted from
+fore the low-end of the BH mass distribution will be truncated                                                                                     the PNS calibrated on observed properties of supernovae [46].
+by construction, and then the power-law behavior is a conse-                                                                                       The other studies mentioned above [38, 51, 99] tend to have
+quence of the power-law distributed weights from the IMF.                                                                                          explodabilities that overall resemble [49]. On the other hand,
+   A value of 𝑓ej ≳ 0.8 provides the closest distribution to what                                                                                  1D+ simulations from [56] and 2D simulations from [28] re-
+has been observed by LIGO. However, as mentioned above,                                                                                            semble the explodability pattern obtained by our simulations.
+the uncertainty in the masses of GW230529 is quite large, due                                                                                      For a more detailed discussion of these differences, we refer
+to the low signal-to-noise ratio caused by the low amplitude of                                                                                    the reader to the discussion given in BR23.
+the gravitational waves from this event and the fact that only                                                                                        As can be seen by the strikingly different explodability pat-
+LIGO Livingston was online at the time.                                                                                                            tern in Figure 8, our simulations produce black holes for ZAMS
+   Previous studies on the remnant mass distributions have                                                                                         masses 12 𝑀⊙ < 𝑀ZAMS < 15 𝑀⊙ , and do not produce black
+derived different values for 𝑓ej . For example, [99] adopt 𝑓ej =                                                                                   holes for ZAMS masses 22 𝑀⊙ < 𝑀ZAMS < 25 𝑀⊙ , whereas
+1, and in some cases argue for the He-shell to be ejected as                                                                                       [49] predict the exact opposite. Therefore, the black holes
+well, whereas [39] find 𝑓ej = 0.9. Other studies [38, 41] use                                                                                      obtained in this work are much smaller. Hydrodynamic simu-
+different prescriptions where 𝑓ej might be different for different                                                                                 lations [31–36] seem to consistently indicate that the hydrogen
+progenitors and, in some cases, a fraction of the He-shell could                                                                                   envelope is most likely ejected in the vast majority of cases,
+also be ejected.                                                                                                                                   which would suggest 𝑓ej ∼ 1.0. According to our simulations,
+   Broadly speaking, our simulations produce lower-mass BHs                                                                                        this would correspond to a minimum BH mass of ∼ 2.6 𝑀⊙ ,
+                                                                                                                                                                            15
+
+            = successful explosion                                                  = failed explosion
+                                                                                                            ues of 𝑓ej > 0.8 are plausible. The difference between the BH
+GR1D+                                                                                                       masses derived using the explodability found directly from the
+                                                                                                            simulation and the BH masses derived assuming the explod-
+ S16
+                                                                                                            ability predicted by the criterion described in section III is very
+        9    12         15           18   20   22       25      28   30   35   40   60     80     100 120   small. Therefore, one can robustly predict the outcome of the
+                                                    ZAMS mass (M )
+                                                                                                            supernova and the mass of the resulting BH (after choosing the
+ FIG. 8: Comparison between the explodability found using                                                   value of 𝑓ej ) simply based on the pre-SN density and entropy
+  GR1D+ simulations (upper panel) versus the explodability                                                  profiles.
+  found by [49]. The initial pre-SN progenitors are, in both
+cases, the ones used in [49]. Notice that the upper panel is the
+same upper panel of the Solar Metallicity set shown in Figure                                                           V.   SUMMARY AND CONCLUSIONS
+                               1.
+                                                                                                               In this paper, we have analyzed the remnant masses of 341
+                                                                                                            1D+ simulations for progenitors spanning a wide range of
+which corresponds to the mass of the smaller object in the                                                  ZAMS masses and metallicities. The explodability of CCSNe
+merger event GW190814 [106]. Therefore, this would imply                                                    remains a challenging problem, affected by uncertainties in
+a continuous transition between NSs and BHs, i.e. no "low-                                                  the supernova engine itself as well as by uncertainties in the
+mass gap" between NSs and BHs, which is what the most                                                       stellar evolution [78]. We showed that 1D+ simulations [43,
+recent LVK results [30] show.                                                                               56] predict a very different explodability pattern compared
+    As was also mentioned in section IV A, different stellar evo-                                           to previous 1D studies [38, 48, 51, 99]. However, they are
+lution codes predict different pre-supernova structures and,                                                consistent with the most recent 2D and 3D simulations [17, 28],
+as a consequence, different BH and NS mass distributions.                                                   due to the physically consistent (although parametric) model
+In particular, as shown in BR23, for the stellar evolution                                                  for 𝜈-driven convection implemented.
+code FRANEC [75] our simulations show that black holes                                                         We provide a robust criterion to predict the explodability
+are formed at around 13 − 14 𝑀⊙ and in the region between 20                                                of CCSNe based on the pre-SN density and entropy profiles.
+𝑀⊙ and 24 𝑀⊙ , which would modify the resulting BH and NS                                                   This criterion is a modification of the one derived by BR23, to
+mass distributions. An investigation of how different stellar                                               account for the exploding high-compactness progenitors at low
+evolution codes and prescriptions affect the mass distributions                                             and zero metallicity which, according to the simpler criterion
+of compact remnants is beyond the scope of this work and is                                                 of BR23, are predicted to produce a failed SN.
+left for future work.                                                                                          The masses of neutron stars produced by the explosion of
+    Finally, it should be stressed that some of the most common                                             CCSNe are highly dependent on the pre-SN structure of the
+prescriptions used for population synthesis calculations, such                                              massive star in question. In particular, there is a positive corre-
+as [38] and [77], do not predict any black holes in the low-                                                lation between the Chandrasekhar mass and the gravitational
+mass gap. Our model, instead, naturally explains the presence                                               mass of the final, cold neutron star. Generally, the Chan-
+of low-mass black holes for values of 𝑓ej close to 1, which is                                              drasekhar mass is always slightly smaller than the mass of the
+what the most recent, although still uncertain, theory seems to                                             neutron star. The dependence of the Chandrasekhar mass 𝑀Ch
+indicate. It is worth pointing out that another possible chan-                                              on the ZAMS mass of the star is nontrivial, and affected by sev-
+nel for creating low-mass black holes is if a high-compactness                                              eral uncertainties. Broadly speaking, one expects stars above
+progenitor would initially launch an explosion and then later                                               a certain ZAMS mass to burn Carbon in radiative equilibrium,
+form a black hole due to late-time fallback. This has been                                                  rather than in convective equilibrium. This eventually causes
+recently seen by [81], where an explosion of a 40 𝑀⊙ progen-                                                the star to completely bypass the neutrino cooling phase in the
+itor yielded a successful explosion followed by the formation                                               latest stages its life. This prevents the central entropy from
+of a ∼ 2.63 𝑀⊙ black hole. This is still a relatively unex-                                                 decreasing, and therefore one naturally expects a bimodal dis-
+plored phenomenon, due to its complexity and computational                                                  tribution of 𝑀Ch . This would therefore translate into a bimodal
+demand, and it is therefore unclear if black holes with masses                                              distribution of NS masses [37]. However, most previous 1D
+∼ 3 − 5 𝑀⊙ could be produced that way. For now, as we have                                                  studies found that the stars that burn Carbon in radiative equi-
+shown, the black hole formation channel presented in this work                                              librium do not successfully explode, but instead lead to the
+can naturally explain a plethora of black holes at low masses.                                              formation of a black hole. Therefore, most of those studies
+    To summarize, the remnant masses predicted by our simu-                                                 found a single-peaked NS mass distribution. Our 1D+ simu-
+lations are in excellent agreement with the most recent LVK                                                 lations, however, find that these stars (e.g. stars with ZAMS
+results [30], which seem to indicate that there is no mass gap,                                             masses 22 𝑀⊙ ≲ 𝑀 ≲ 25 𝑀⊙ at solar metallicity, according to
+and therefore there is a smooth transition between NSs and                                                  the KEPLER stellar evolution code [49]) successfully explode,
+BHs. To obtain such low-mass stellar black holes, values of                                                 in agreement with 2D and 3D simulations.
+ 𝑓ej > 0.8 are required, which is what the current models of                                                   In light of this novel result, we analyzed the remnant masses
+failed SNe suggest. Given the large uncertainty in the masses                                               from our 1D+ simulations and derived four theoretical dis-
+of GW230529, the exact location of the low-mass cutoff for                                                  tributions. The first is calculated directly from the GR1D+
+stellar black holes is still not well constrained, and could be                                             simulations. The remaining three are calculated using the ex-
+anywhere within the range 2.5 − 4.5 𝑀⊙ , and therefore all val-                                             plodability criterion described in section III, and three different
+                                                                                                                                       16
+
+                                                             Gaussian Fit
+
+                                                                    𝜇
+         𝑓ej              0.0        0.1        0.2         0.3          0.4       0.5       0.6       0.7       0.8       0.9       1.0
+       GR1D+             13.50      12.55      11.60      10.69          9.78      8.85      7.91      7.00      6.08      5.16      4.23
+  pre-SN criterion       13.49      12.55      11.60      10.70          9.75      8.79      7.90      6.94      6.02      5.09      4.16
+                                                                    𝜎
+         𝑓ej              0.0        0.1        0.2         0.3          0.4       0.5       0.6       0.7       0.8       0.9       1.0
+       GR1D+             2.92        2.65       2.49       2.34          2.20      2.03      1.86      1.72      1.61      1.46      1.35
+  pre-SN criterion       2.95        2.79       2.59       2.40          2.23      2.00      1.91      1.69      1.55      1.41      1.28
+
+                                                           Truncated PL Fit
+
+                                                                  mmin
+         𝑓ej              0.0        0.1        0.2         0.3          0.4       0.5       0.6       0.7       0.8       0.9       1.0
+       GR1D+             9.58        8.80       8.04       7.32          6.63      5.81      5.22      4.44      3.65      2.87      2.09
+  pre-SN criterion       9.90        9.12       8.34       7.56          6.78      5.98      5.22      4.44      3.65      2.87      2.09
+                                                                    𝛼
+         𝑓ej              0.0        0.1        0.2         0.3          0.4       0.5       0.6       0.7       0.8       0.9       1.0
+       GR1D+             6.11        6.09       6.01       6.08          6.21      5.88      6.57      6.29      6.10      5.76      5.33
+  pre-SN criterion       7.52        7.42       7.63       7.20          7.01      6.68      6.74      6.47      6.21      5.80      5.42
+
+    TABLE IV: Best-fit parameters for the Gaussian and truncated power-law fits for the two sets of theoretical BH masses
+                                   described in section IV C, for different values of 𝑓ej .
+
+
+fits to compute the neutron star gravitational mass based on             cant impact on binary population synthesis calculations, since
+compactness, 𝑀Si/O , and 𝑀Ch . In all cases, we found a robust           many more black holes (although with a smaller mass) com-
+second peak at ∼ 1.8 𝑀⊙ , compatible with the observed pop-              pared to predictions of previous 1D studies will be produced,
+ulation of ms pulsars from [92]. This could potentially have a           since stars with ZAMS masses 12 𝑀⊙ ≲ 𝑀 ≲ 15 𝑀⊙ are
+significant impact on binary population synthesis calculations,          more favored by the IMF. However, it is important to stress
+since one would be able to produce very massive neutron stars            that the fraction of failed SNe is still compatible with the most
+directly from a SN, without the need to accrete large amounts            recent (and more stringent) observational data, even though
+of matter via binary interactions.                                       these 1D+ simulations produce black holes for stars that are
+                                                                         favored by the IMF.
+   When compared to previous 1D simulations, our GR1D+
+simulations also produce lower mass black holes (e.g. for stars
+with ZAMS masses 12 𝑀⊙ ≲ 𝑀 ≲ 15 𝑀⊙ at solar metallicity,
+according to the KEPLER stellar evolution code [49]). We
+                                                                            In conclusion, the explosion properties of CCSNe are still
+derived black hole mass distributions directly from our simu-
+                                                                         affected by several uncertainties, and the explodability of CC-
+lations and also using the explodability criterion described in
+                                                                         SNe is still a highly debated topic. More sophisticated 3D
+section III. Given the very high accuracy of our explodabil-
+                                                                         (and, although less reliable, 2D) simulations are required to
+ity criterion, the two theoretical distributions are in excellent
+                                                                         shed more light on this complicated phenomenon. With that in
+agreement. In all cases, a truncated power-law fits the data
+                                                                         mind, we have presented 1D+ simulations that are in very good
+much better than a Gaussian. This is not surprising and is
+                                                                         agreement with the most recent sets of 2D and 3D simulations.
+simply due to the linear dependence of the BH mass on the
+                                                                         We used these simulations to derive a simple explodability cri-
+ZAMS mass, and the power-law behavior of the IMF.
+                                                                         terion that generalizes the one derived by BR23. Moreover, we
+   We then compared these results with the BH mass distribu-             derived simple fits to calculate the remnant masses of neutron
+tion observed by the LVK collaboration, in light of the very             stars and black holes solely based on the pre-SN structure of
+recent event GW230529 [30]. A black hole in the so-called                massive stars, regardless of metallicity. The two main find-
+"low-mass gap" was observed, which is naturally explained by             ings of this paper are the bimodal nature of NS birth mass
+our simulations if one assumes that more than 80 % (and up               distribution, as well as the presence of many black holes in the
+to 100 %) of the hydrogen envelope is expelled. Indeed, there            low-mass gap. Both of these hypotheses are completely viable,
+is a general consensus [31–36] that most (if not the entirety)           and future observations will be able to put better constraints
+of the hydrogen envelope will be ejected, which corresponds              on both of them, with the latter being already confirmed by the
+to the range of 𝑓ej that we found. This can have a signifi-              most recent results [30] of the LVK collaboration.
+                                                                                                                                                17
+
+                                                                  Gaussian Fit
+
+                                                                     MLL
+         𝑓ej             0.0        0.1        0.2        0.3           0.4         0.5        0.6        0.7        0.8       0.9        1.0
+       GR1D+           -49779     -47885     -46634     -45407       -44104       -42566     -40779     -39265     -37904    -35943     -34347
+  pre-SN criterion     -49982     -48866     -47383     -45923       -44388       -42269     -41343     -38921     -37127    -35186     -33267
+                                                                    KS test
+         𝑓ej             0.0        0.1        0.2        0.3           0.4         0.5        0.6        0.7        0.8       0.9        1.0
+       GR1D+             0.22       0.22      0.23       0.23          0.23         0.23      0.23       0.23       0.23       0.25       0.30
+  pre-SN criterion       0.26       0.26      0.26       0.26          0.26         0.26      0.27       0.27       0.27       0.28       0.33
+                                                                    p-value
+         𝑓ej             0.0        0.1        0.2        0.3           0.4         0.5        0.6        0.7        0.8       0.9        1.0
+       GR1D+            0.024      0.020      0.018      0.017         0.016       0.016      0.014      0.015     0.016     0.0057     0.00056
+  pre-SN criterion      0.015      0.015      0.017      0.017         0.016       0.012      0.011     0.0092     0.010     0.0072     0.00059
+
+                                                                Truncated PL Fit
+
+                                                                     M                                                                       LL
+         𝑓ej             0.0        0.1        0.2        0.3           0.4         0.5        0.6        0.7        0.8       0.9        1.0
+       GR1D+           -40715     -39580     -38495     -37280       -36133       -35107     -34080     -32807     -31657    -30653     -30545
+  pre-SN criterion     -38311     -37400     -36385     -35367       -34307       -33266     -31796     -30755     -29854    -29301     -29055
+                                                                    KS test
+         𝑓ej             0.0        0.1        0.2        0.3           0.4         0.5        0.6        0.7        0.8       0.9        1.0
+       GR1D+             0.15       0.16      0.15       0.15          0.15         0.16      0.15       0.15       0.15       0.16       0.16
+  pre-SN criterion       0.19       0.18      0.19       0.18          0.18         0.19      0.19       0.20       0.20       0.20       0.21
+                                                                    p-value
+         𝑓ej             0.0        0.1        0.2        0.3           0.4         0.5        0.6        0.7        0.8       0.9        1.0
+       GR1D+             0.25       0.21      0.22       0.22          0.24         0.19      0.21       0.23       0.22       0.19       0.16
+  pre-SN criterion       0.16       0.18      0.17       0.18          0.18         0.13      0.13       0.12       0.12       0.11      0.084
+
+    TABLE V: Properties of the best-fit distributions for the two sets of theoretical BH masses described in section IV C, for
+  different values of 𝑓ej . The MLL is the Maximum Log-Likelihood of the best-fit distribution. The KS-test is the value of the
+  Kolmogorov-Smirnov test, and the p-value is the probability of rejecting the null hypothesis that the raw data are not drawn
+from the fitted distribution. To perform the KS test, we binned the BH masses by choosing a number of equal-width bins equal
+ to half of the total number of BH masses in each of the two sets of theoretical BH masses. A more detailed description of the
+                                               procedure is given in appendix B.
+
+
+                       Acknowledgements                                       ity and support. L.B. was supported by the U.S. Department
+                                                                              of Energy under Grant No. DE-SC0004658.
+   L.B. would like to thank David Vartanyan and Feryal Özel
+for fruitful discussions, and the N3AS center for their hospital-
+
+
+
+
+  [1] S. A. Colgate and R. H. White, ApJ 143, 626 (1966).                       [7] H. T. Janka and E. Mueller, A&A 306, 167 (1996).
+  [2] W. D. Arnett, Canadian Journal of Physics 44, 2553 (1966).                [8] C. L. Fryer and M. S. Warren, ApJ 574, L65 (2002), astro-
+  [3] H. A. Bethe and J. R. Wilson, ApJ 295, 14 (1985).                             ph/0206017.
+  [4] S. W. Bruenn, ApJS 58, 771 (1985).                                        [9] B. Müller, H.-T. Janka, and A. Marek, ApJ 756, 84 (2012),
+  [5] D. S. Miller, J. R. Wilson, and R. W. Mayle, ApJ 415, 278                     1202.0815.
+      (1993).                                                                  [10] T. Takiwaki, K. Kotake, and Y. Suwa, ApJ 749, 98 (2012),
+  [6] M. Herant, W. Benz, W. R. Hix, C. L. Fryer, and S. A. Colgate,                1108.3989.
+      ApJ 435, 339 (1994), astro-ph/9404024.                                   [11] E. J. Lentz, S. W. Bruenn, W. R. Hix, A. Mezzacappa, O. E. B.
+                                                                                                                                         18
+
+     Messer, E. Endeve, J. M. Blondin, J. A. Harris, P. Marronetti,    [41] I. Mandel and B. Müller, MNRAS 499, 3214 (2020),
+     and K. N. Yakunin, ApJ 807, L31 (2015), 1505.05110.                    2006.08360.
+[12] H.-T. Janka, T. Melson, and A. Summa, Annual Review of            [42] C. L. Fryer, A. Olejak, and K. Belczynski, ApJ 931, 94 (2022),
+     Nuclear and Particle Science 66, 341 (2016), 1602.05576.               2204.13025.
+[13] S. W. Bruenn, E. J. Lentz, W. R. Hix, A. Mezzacappa, J. A. Har-   [43] L. Boccioli, L. Roberti, M. Limongi, G. J. Mathews, and
+     ris, O. E. B. Messer, E. Endeve, J. M. Blondin, M. A. Chertkow,        A. Chieffi, ApJ 949, 17 (2023), 2207.08361.
+     E. J. Lingerfelt, et al., ApJ 818, 123 (2016), 1409.5779.         [44] S. E. Woosley and T. A. Weaver, ApJS 101, 181 (1995).
+[14] T. Takiwaki, K. Kotake, and Y. Suwa, MNRAS 461, L112              [45] S. I. Blinnikov and O. S. Bartunov, A&A 273, 106 (1993).
+     (2016), 1602.06759.                                               [46] M. Ugliano, H.-T. Janka, A. Marek, and A. Arcones, ApJ 757,
+[15] E. P. O’Connor and S. M. Couch, ApJ 854, 63 (2018),                    69 (2012), 1205.3657.
+     1511.07443.                                                       [47] G. Sonneborn, B. Altner, and R. P. Kirshner, ApJ 323, L35
+[16] B. Müller, T. M. Tauris, A. Heger, P. Banerjee, Y.-Z. Qian,            (1987).
+     J. Powell, C. Chan, D. W. Gay, and N. Langer, MNRAS 484,          [48] T. Ertl, H. T. Janka, S. E. Woosley, T. Sukhbold, and
+     3307 (2019), 1811.05483.                                               M. Ugliano, ApJ 818, 124 (2016), 1503.07522.
+[17] A. Burrows, D. Radice, D. Vartanyan, H. Nagakura, M. A.           [49] T. Sukhbold, T. Ertl, S. E. Woosley, J. M. Brown, and H. T.
+     Skinner, and J. C. Dolence, MNRAS 491, 2715 (2020),                    Janka, ApJ 821, 38 (2016), 1510.04643.
+     1909.04152.                                                       [50] D. Radice, A. Perego, F. Zappa, and S. Bernuzzi, ApJ 852,
+[18] M. Bugli, J. Guilet, and M. Obergaulinger, MNRAS 507, 443              L29 (2018), 1711.03647.
+     (2021), 2105.00665.                                               [51] B. Müller, A. Heger, D. Liptai, and J. B. Cameron, MNRAS
+[19] K. Nakamura, T. Takiwaki, and K. Kotake, MNRAS 514, 3941               460, 742 (2016), 1602.05956.
+     (2022), 2202.06295.                                               [52] E. O’Connor and C. D. Ott, ApJ 730, 70 (2011), 1010.5550.
+[20] T. Foglizzo, L. Scheck, and H. T. Janka, ApJ 652, 1436 (2006),    [53] A. Perego, M. Hempel, C. Fröhlich, K. Ebinger, M. Eichler,
+     astro-ph/0507636.                                                      J. Casanova, M. Liebendörfer, and F. K. Thielemann, ApJ 806,
+[21] R. Fernández, MNRAS 452, 2071 (2015), 1504.07996.                      275 (2015), 1501.02845.
+[22] F. Hanke, A. Marek, B. Müller, and H.-T. Janka, ApJ 755, 138      [54] B. Müller, M. Viallet, A. Heger, and H.-T. Janka, ApJ 833, 124
+     (2012), 1108.4355.                                                     (2016), 1605.01393.
+[23] A. Marek and H. T. Janka, ApJ 694, 664 (2009), 0708.3372.         [55] M. Liebendörfer, S. C. Whitehouse, and T. Fischer, ApJ 698,
+[24] S. M. Couch and C. D. Ott, ApJ 799, 5 (2015), 1408.1399.               1174 (2009), 0711.2929.
+[25] D. Radice, C. D. Ott, E. Abdikamalov, S. M. Couch, R. Haas,       [56] S. M. Couch, M. L. Warren, and E. P. O’Connor, ApJ 890, 127
+     and E. Schnetter, ApJ 820, 76 (2016), 1510.05022.                      (2020), 1902.01340.
+[26] D. Radice, E. Abdikamalov, C. D. Ott, P. Mösta, S. M. Couch,      [57] B. Müller, MNRAS 487, 5304 (2019), 1902.04270.
+     and L. F. Roberts, Journal of Physics G Nuclear Physics 45,       [58] Q. A. Mabanta, J. W. Murphy, and J. C. Dolence, ApJ 887, 43
+     053003 (2018), 1710.01282.                                             (2019), 1901.11234.
+[27] J. W. Murphy, J. C. Dolence, and A. Burrows, ApJ 771, 52          [59] L. Boccioli, G. J. Mathews, and E. P. O’Connor, ApJ 912, 29
+     (2013), 1205.3491.                                                     (2021), 2102.06767.
+[28] T. Wang, D. Vartanyan, A. Burrows, and M. S. B. Coleman,          [60] Q. A. Mabanta and J. W. Murphy, ApJ 856, 22 (2018),
+     MNRAS 517, 543 (2022), 2207.02231.                                     1706.00072.
+[29] B. P. Abbott, R. Abbott, T. D. Abbott, M. R. Abernathy, F. Ac-    [61] E. O’Connor and C. D. Ott, Classical and Quantum Gravity
+     ernese, K. Ackley, C. Adams, T. Adams, P. Addesso, R. X.               27, 114103 (2010), 0912.2393.
+     Adhikari, et al., Living Reviews in Relativity 21, 3 (2018),      [62] E. O’Connor, ApJS 219, 24 (2015), 1411.7058.
+     1304.0670.                                                        [63] L. Boccioli, G. J. Mathews, I.-S. Suh, and E. P. O’Connor, ApJ
+[30] The LIGO Scientific Collaboration, the Virgo Collabo-                  926, 147 (2022), 2110.05544.
+     ration, and the KAGRA Collaboration, arXiv e-prints               [64] S. E. Woosley, A. Heger, and T. A. Weaver, Reviews of Modern
+     arXiv:2404.04248 (2024), 2404.04248.                                   Physics 74, 1015 (2002).
+[31] E. Lovegrove and S. E. Woosley, ApJ 769, 109 (2013),              [65] M. Hempel and J. Schaffner-Bielich, Nucl. Phys. A 837, 210
+     1303.5055.                                                             (2010), 0911.4073.
+[32] E. Lovegrove, S. E. Woosley, and W. Zhang, ApJ 845, 103           [66] A. W. Steiner, M. Hempel, and T. Fischer, ApJ 774, 17 (2013),
+     (2017), 1706.02440.                                                    1207.2184.
+[33] R. Fernández, E. Quataert, K. Kashiyama, and E. R. Coughlin,      [67] G. Iorio, M. Mapelli, G. Costa, M. Spera, G. J. Esco-
+     MNRAS 476, 2366 (2018), 1710.01735.                                    bar, C. Sgalletta, A. A. Trani, E. Korb, F. Santoliquido,
+[34] M. Ivanov and R. Fernández, ApJ 911, 6 (2021), 2101.02712.             M. Dall’Amico, et al., MNRAS 524, 426 (2023), 2211.11774.
+[35] A. S. Schneider and E. O’Connor, arXiv e-prints                   [68] J. Riley, P. Agrawal, J. W. Barrett, K. N. K. Boyett, F. S.
+     arXiv:2209.15064 (2022), 2209.15064.                                   Broekgaarden, D. Chattopadhyay, S. M. Gaebel, F. Gittins,
+[36] A. Antoni and E. Quataert, MNRAS 525, 1229 (2023),                     R. Hirai, G. Howitt, et al., ApJS 258, 34 (2022), 2109.10352.
+     2301.05237.                                                       [69] K. Breivik, S. Coughlin, M. Zevin, C. L. Rodriguez, K. Kre-
+[37] F. X. Timmes, S. E. Woosley, and T. A. Weaver, ApJ 457, 834            mer, C. S. Ye, J. J. Andrews, M. Kurkowski, M. C. Digman,
+     (1996), astro-ph/9510136.                                              S. L. Larson, et al., ApJ 898, 71 (2020), 1911.00903.
+[38] C. L. Fryer, K. Belczynski, G. Wiktorowicz, M. Dominik,           [70] J. J. Eldridge, E. R. Stanway, L. Xiao, L. A. S. McClelland,
+     V. Kalogera, and D. E. Holz, ApJ 749, 91 (2012), 1110.1726.            G. Taylor, M. Ng, S. M. L. Greis, and J. C. Bray, PASA 34,
+[39] C. A. Raithel, T. Sukhbold, and F. Özel, ApJ 856, 35 (2018),           e058 (2017), 1710.02154.
+     1712.00021.                                                       [71] R. G. Izzard, C. A. Tout, A. I. Karakas, and O. R. Pols, MNRAS
+[40] M. M. Meskhi, N. E. Wolfe, Z. Dai, C. Fröhlich, J. M.                  350, 407 (2004), astro-ph/0402403.
+     Miller, R. K. W. Wong, and R. Vilalta, ApJ 932, L3 (2022),        [72] A. W. H. Kamlah, A. Leveque, R. Spurzem, M. Arca Sedda,
+     2111.01815.                                                            A. Askar, S. Banerjee, P. Berczik, M. Giersz, J. Hurley, D. Bel-
+                                                                                                                                           19
+
+      loni, et al., MNRAS 511, 4060 (2022), 2105.08067.                       T. Jayasinghe, C. T. Garling, S. M. Adams, and J. Gerke,
+ [73] N. Mennekens and D. Vanbeveren, A&A 564, A134 (2014),                   MNRAS 508, 516 (2021), 2104.03318.
+      1307.0959.                                                        [103] M. Limongi, L. Roberti, A. Chieffi, and K. Nomoto, ApJS 270,
+ [74] K. Belczynski, V. Kalogera, F. A. Rasio, R. E. Taam, A. Zezas,          29 (2024), 2312.00107.
+      T. Bulik, T. J. Maccarone, and N. Ivanova, ApJS 174, 223          [104] S. Zha, E. P. O’Connor, S. M. Couch, S.-C. Leung, and
+      (2008), astro-ph/0511811.                                               K. Nomoto, MNRAS 513, 1317 (2022), 2112.15257.
+ [75] A. Chieffi and M. Limongi, ApJ 890, 43 (2020), 1911.08988.        [105] S. Jones, F. K. Röpke, R. Pakmor, I. R. Seitenzahl, S. T.
+ [76] T. Fragos, J. J. Andrews, S. S. Bavera, C. P. L. Berry,                 Ohlmann, and P. V. F. Edelmann, A&A 593, A72 (2016),
+      S. Coughlin, A. Dotter, P. Giri, V. Kalogera, A. Katsaggelos,           1602.05771.
+      K. Kovlakas, et al., ApJS 264, 45 (2023), 2202.05892.             [106] R. Abbott, T. D. Abbott, S. Abraham, F. Acernese, K. Ackley,
+ [77] R. A. Patton and T. Sukhbold, MNRAS 499, 2803 (2020),                   C. Adams, R. X. Adhikari, V. B. Adya, C. Affeldt, M. Agathos,
+      2005.03055.                                                             et al., ApJ 896, L44 (2020), 2006.12611.
+ [78] L. Boccioli and L. Roberti, Universe 10 (2024), ISSN 2218-        [107] R. Abbott, T. D. Abbott, S. Abraham, F. Acernese, K. Ackley,
+      1997, URL https://www.mdpi.com/2218-1997/10/3/                          A. Adams, C. Adams, R. X. Adhikari, V. B. Adya, C. Affeldt,
+      148.                                                                    et al., ApJ 913, L7 (2021), 2010.14533.
+ [79] L. Boccioli, in prep (2024).
+ [80] C. Chan, B. Müller, A. Heger, R. Pakmor, and V. Springel,
+      ApJ 852, L19 (2018), 1710.00838.                                           Appendix A: Fitting procedure for NS masses
+ [81] A. Burrows, D. Vartanyan, and T. Wang, ApJ 957, 68 (2023),
+      2308.05798.
+ [82] A. Wongwathanarat, E. Müller, and H. T. Janka, A&A 577,              The fitting procedure to derive NS mass distributions is as
+      A48 (2015), 1409.5431.                                            follows:
+ [83] B. Müller, D. W. Gay, A. Heger, T. M. Tauris, and S. A. Sim,
+      MNRAS 479, 3675 (2018), 1803.03388.                                   • select the successful explosions directly from the simu-
+ [84] G. Stockinger, H. T. Janka, D. Kresse, T. Melson, T. Ertl,              lations (set (i) in section IV B) or by using the explod-
+      M. Gabler, A. Gessner, A. Wongwathanarat, A. Tolstov, S. C.             ability criterion described in section III (sets (ii), (iii),
+      Leung, et al., MNRAS 496, 2039 (2020), 2005.02420.                      and (iv) in section IV B);
+ [85] M. A. Sandoval, W. R. Hix, O. E. B. Messer, E. J. Lentz, and
+      J. A. Harris, ApJ 921, 113 (2021), 2106.01389.                        • calculate the NS mass by converting the final baryonic
+ [86] T. Liu, Y.-F. Wei, L. Xue, and M.-Y. Sun, ApJ 908, 106 (2021),          mass of the PNS to gravitational mass (set (i) in section
+      2011.14361.                                                             IV B) or by using the 𝜉-fit, 𝑀Si/O -fit, or 𝑀Ch -fit (sets (ii),
+ [87] A. Vigna-Gómez, S. L. Schrøder, E. Ramirez-Ruiz, D. R.                  (iii), and (iv), in section IV B) described in equations (7)
+      Aguilera-Dena, A. Batta, N. Langer, and R. Willcox, ApJ 920,            and (8);
+      L17 (2021), 2106.12381.
+ [88] T. A. Weaver, G. B. Zimmerman, and S. E. Woosley, ApJ 225,            • generate 20000 synthetic observations by randomly
+      1021 (1978).                                                                                                         −2.35 ;
+                                                                              sampling the NS masses weighted by an IMF ∝ 𝑀ZAMS
+ [89] T. Sukhbold and S. Adams, MNRAS 492, 2578 (2020),
+      1905.00474.                                                           • perform a ML fit using the python module
+ [90] D. Vartanyan, E. Laplace, M. Renzo, Y. Götberg, A. Burrows,             statsmodels [97].
+      and S. E. de Mink, ApJ 916, L5 (2021), 2104.03317.
+ [91] Astropy Collaboration, A. M. Price-Whelan, P. L. Lim, N. Earl,    Notice that, instead of using the final baryonic mass of the PNS
+      N. Starkman, L. Bradley, D. L. Shupe, A. A. Patil, L. Corrales,   as a proxy for the final mass of the cold NS, one could also
+      C. E. Brasseur, et al., ApJ 935, 167 (2022), 2206.14220.          define a mass cut 𝑀cut , as done for example in [53]. Below
+ [92] J. Antoniadis, T. M. Tauris, F. Ozel, E. Barr, D. J. Champion,    𝑀cut , matter will accrete onto the compact object, and above
+      and P. C. C. Freire, arXiv e-prints arXiv:1605.01665 (2016),      𝑀cut matter will instead be ejected. However, the mass cut is
+      1605.01665.
+                                                                        located extremely close (in mass) to the PNS, and we did not
+ [93] F. Özel and P. Freire, ARA&A 54, 401 (2016), 1603.02698.
+ [94] F. Özel, D. Psaltis, R. Narayan, and A. Santos Villarreal, ApJ    find any appreciable differences in the remnant mass defined
+      757, 55 (2012), 1201.1006.                                        in these two different ways.
+ [95] B. Kiziltan, A. Kottas, M. D. Yoreo, and S. E. Thorsett,             To perform the KS test to assess the goodness-of-fit, one
+      ApJ 778, 66 (2013), URL https://dx.doi.org/10.1088/               has to first bin the data. The results reported in table III
+      0004-637X/778/1/66.                                               were derived assuming a number of bins equal to half of the
+ [96] E. E. Salpeter, ApJ 121, 161 (1955).                              total number of successful simulations. For completeness, we
+ [97] S. Seabold and J. Perktold, in 9th Python in Science Conference   show in Figure 9 how the p-value for the KS test changes
+      (2010).                                                           as a function of the number of equal-width bins chosen. As
+ [98] L. Boccioli, in prep (2024).                                      one would intuitively expect, with only a few bins the KS test
+ [99] K. Ebinger, S. Curtis, S. Ghosh, C. Fröhlich, M. Hempel,
+                                                                        cannot reject the null hypothesis.
+      A. Perego, M. Liebendörfer, and F.-K. Thielemann, ApJ 888,
+      91 (2020), 1910.08958.                                               Due to the potential ambiguity of the KS test in this scenario,
+[100] R. A. Byrne and M. Fraser, MNRAS 514, 1188 (2022),                we also computed the Kullback–Leibler (KL) divergence be-
+      2201.12187.                                                       tween the fitted distribution and the actual distribution of the
+[101] C. S. Kochanek, arXiv e-prints arXiv:2305.11936 (2023),           data. This metric essentially determines how "close" two dis-
+      2305.11936.                                                       tributions are. Similarly to the KS test, we first need to bin
+[102] J. M. M. Neustadt, C. S. Kochanek, K. Z. Stanek, C. Basinger,     the data to perform the comparison, and we show in Figure
+                                                                                                                                                            20
+
+
+
+                                    Zero Metallicity         Low Metallicity              Solar Metallicity           Combined Metallicities
+          p-value KS test   0.10    Bimodal fit
+                                    Gaussian fit
+                                                                                                                                               GR1D+
+                            0.05
+
+
+                            0.00
+          p-value KS test
+
+
+
+
+                            0.10
+
+                                                                                                                                               ξ-fit
+                            0.05
+
+
+                            0.00
+          p-value KS test
+
+
+
+
+                            0.10
+
+                                                                                                                                               MSi/O -fit
+                            0.05
+
+
+                            0.00
+          p-value KS test
+
+
+
+
+                            0.10
+
+                                                                                                                                               MCh -fit
+                            0.05
+
+
+                            0.00
+                                0      10           20   0   25      50        75 0        50     100         150 0        100       200
+                                     Number of bins          Number of bins                Number of bins                 Number of bins
+
+
+
+
+ FIG. 9: Probability of rejecting the null hypothesis (p-value) for the Kolmogorov–Smirnov test as a function of the number of
+equal-width bins used to bin the data. The KS test has been performed between the four fitted distributions described in section
+   IV B (i.e. the four rows in the plot) and the raw data, for different metallicities and all metallicities combined (i.e. the four
+ columns in the plot). Values below 0.05 indicate that the data is not distributed according to the fitted distribution. Red-filled
+  circles represent the p-value calculated assuming a bimodal theoretical distribution; black-filled circles represent the p-value
+  calculated assuming a Gaussian theoretical distribution. Red (black) crosses indicate the values reported in Table III for the
+                                                      bimodal (Gaussian) fit.
+
+
+10 that, regardless of this choice, the bimodal distribution is                             hydrogen envelope (eq. (11);
+always a closer representation of the data.
+                                                                                          • generate 20000 synthetic observations by randomly
+                                                                                                                                         −2.35 ;
+                                                                                            sampling the BH masses weighted by an IMF ∝ 𝑀ZAMS
+        Appendix B: Fitting procedure for BH masses
+                                                                                           • perform a ML fit using the python module
+                                                                                             statsmodels [97].
+   The fitting procedure to derive BH mass distributions is as                        In this approach, 𝑓ej is essentially almost a free parameter,
+follows:                                                                              although some theoretical studies suggest values closer to 1 as
+    • select the successful explosions directly from the sim-                         more plausible [31–36].
+      ulations (set (i) in section IV C) or by using the ex-                             Due to the small samples of data compared to the case of
+      plodability criterion described in section III (set (ii) in                     NSs, we only show the results of the KS test and KL divergence
+      section IV B);                                                                  for the combined metallicities case, for different values of 𝑓ej
+                                                                                      in Figures 11 and 12. The procedure is the same followed in
+    • calculate the BH mass by ejecting a fraction 𝑓ej of the                         the case of NSs.
+                                                                                                                                                      21
+
+
+
+                                  Zero Metallicity         Low Metallicity          Solar Metallicity           Combined Metallicities
+                           0.6    Bimodal fit
+           KL divergence          Gaussian fit
+                           0.4                                                                                                           GR1D+
+
+                           0.2
+
+                           0.0
+                           0.6
+           KL divergence
+
+
+
+
+                           0.4                                                                                                           ξ-fit
+
+                           0.2
+
+                           0.0
+                           0.6
+           KL divergence
+
+
+
+
+                           0.4                                                                                                           MSi/O -fit
+
+                           0.2
+
+                           0.0
+                           0.6
+           KL divergence
+
+
+
+
+                           0.4                                                                                                           MCh -fit
+
+                           0.2
+
+                           0.0
+                              0      10           20   0   25      50        75 0    50     100         150 0        100       200
+                                   Number of bins          Number of bins            Number of bins                 Number of bins
+
+
+
+
+  FIG. 10: Kullback–Leibler divergence computed between the four fitted distributions described in section IV B (i.e. the four
+rows in the plot) and the raw data as a function of the number of equal-width bins used to bin the data, for different metallicities
+   and all metallicities combined (i.e. the four columns in the plot). Red-filled circles represent the KL divergence calculated
+between a bimodal theoretical distribution and the raw data; black-filled circles represent the KL divergence calculated between
+                                        a Gaussian theoretical distribution and the raw data
+                                                                                                                                     22
+
+
+
+
+                     0.3                 fej = 0.0                 fej = 0.1                 fej = 0.2
+                                                                                                              GR1D+
+                                                                                                              pre-SN preciction
+           p-value
+
+                     0.2
+                                                                                                              Truncated PL
+                                                                                                              Gaussian
+                     0.1
+
+
+                     0.0
+                     0.3                 fej = 0.3                 fej = 0.4                 fej = 0.5                   fej = 0.6
+           p-value
+
+
+
+
+                     0.2
+
+
+                     0.1
+
+
+                     0.0
+                     0.3                 fej = 0.7                 fej = 0.8                 fej = 0.9                   fej = 1.0
+           p-value
+
+
+
+
+                     0.2
+
+
+                     0.1
+
+
+                     0.0
+                           0   25     50       75    0   25     50       75    0   25     50       75    0   25     50        75
+                                Number of bins            Number of bins            Number of bins
+
+
+
+
+FIG. 11: Probability of rejecting the null hypothesis (p-value) for the Kolmogorov–Smirnov test as a function of the number of
+equal-width bins used to bin the data. The KS test has been performed between the two fitted distributions described in section
+IV C (shown as filled or empty circles) and the raw data for different values of 𝑓ej . Values below 0.05 indicate that the data is not
+   distributed according to the fitted distribution. Red circles represent the p-value calculated assuming a bimodal theoretical
+   distribution; black circles represent the p-value calculated assuming a Gaussian theoretical distribution. Crosses and plus
+  symbols indicate the values reported in Table V for fit performed using the explodability obtained in the simulations and the
+               explodability predicted by the pre-SN explodability criterion described in section III, respectively.
+                                                                                                                                           23
+
+
+
+
+           KL divergence   0.6                 fej = 0.0                 fej = 0.1                 fej = 0.2
+                                                                                                                    GR1D+
+                                                                                                                    pre-SN preciction
+                           0.4
+                                                                                                                    Truncated PL
+                                                                                                                    Gaussian
+                           0.2
+
+
+                           0.0
+                           0.6                 fej = 0.3                 fej = 0.4                 fej = 0.5                   fej = 0.6
+           KL divergence
+
+
+
+
+                           0.4
+
+
+                           0.2
+
+
+                           0.0
+                           0.6                 fej = 0.7                 fej = 0.8                 fej = 0.9                   fej = 1.0
+           KL divergence
+
+
+
+
+                           0.4
+
+
+                           0.2
+
+
+                           0.0
+                                 0   25     50       75    0   25     50       75    0   25     50       75    0   25     50        75
+                                      Number of bins            Number of bins            Number of bins
+
+
+
+
+FIG. 12: Kullback–Leibler divergence computed between the two fitted distributions described in section IV B (shown as filled
+ or empty circles) and the raw data as a function of the number of equal-width bins used to bin the data, for different values of
+   𝑓ej . Red circles represent the KL divergence calculated between a bimodal theoretical distribution and the raw data; black
+           circles represent the KL divergence calculated between a Gaussian theoretical distribution and the raw data.
+

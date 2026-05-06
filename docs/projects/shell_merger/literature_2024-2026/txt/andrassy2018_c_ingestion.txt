@@ -1,0 +1,1759 @@
+                                               MNRAS 000, 1–20 (2018)                          Preprint 22 October 2019                Compiled using MNRAS LATEX style file v3.0
+
+
+
+
+                                               3D hydrodynamic simulations of C ingestion into a
+                                               convective O shell
+
+                                                R. Andrassy,1,2,3? F. Herwig,1,2 P. Woodward,4,2 C. Ritter1,2
+                                               1 Department of Physics & Astronomy, University of Victoria, PO Box 1700 STN CSC, Victoria, BC, V8W 2Y2, Canada
+                                               2 Joint Institute for Nuclear Astrophysics, Center for the Evolution of the Elements, Michigan State University,
+
+                                               640 South Shaw Lane, East Lansing, MI 48824, USA
+                                               3 Heidelberg Institute for Theoretical Studies, Schloss-Wolfsbrunnenweg 35, 69118 Heidelberg, Germany
+                                               4 LCSE and Department of Astronomy, University of Minnesota, Minneapolis, MN 55455, USA
+arXiv:1808.04014v2 [astro-ph.SR] 21 Oct 2019
+
+
+
+
+                                               Accepted XXX. Received YYY; in original form ZZZ
+
+
+
+                                                                                 ABSTRACT
+                                                                                 Interactions between convective shells in evolved massive stars have been linked to
+                                                                                 supernova impostors, to the production of the odd-Z elements Cl, K, and Sc, and they
+                                                                                 might also help generate the large-scale asphericities that are known to facilitate shock
+                                                                                 revival in supernova explosion models. We investigate the process of ingestion of C-
+                                                                                 shell material into a convective O-burning shell, including the hydrodynamic feedback
+                                                                                 from the nuclear burning of the ingested material. Our 3D hydrodynamic simulations
+                                                                                 span almost 3 dex in the total luminosity Ltot . All but one of the simulations reach a
+                                                                                 quasi-stationary state with the entrainment rate and convective velocity proportional
+                                                                                              1/3
+                                                                                 to Ltot and Ltot , respectively. Carbon burning provides 14 – 33% of the total luminosity,
+                                                                                 depending on the set of reactions considered. Equivalent simulations done on 7683
+                                                                                 and 11523 grids are in excellent quantitative agreement. The flow is dominated by a
+                                                                                 few large-scale convective cells. An instability leading to large-scale oscillations with
+                                                                                 Mach numbers in excess of 0.2 develops in an experimental run with the energy yield
+                                                                                 from C burning increased by a factor of 10. This run represents most closely the
+                                                                                 conditions expected in a violent O-C shell merger, which is a potential production
+                                                                                 site for odd-Z elements such as K and Sc and which may seed asymmetries in the
+                                                                                 supernova progenitor. 1D simulations may underestimate the energy generation from
+                                                                                 the burning of ingested material by as much as a factor two owing to their missing
+                                                                                 the effect of clumpiness of entrained material on the nuclear reaction rate.
+                                                                                 Key words: stars: massive, evolution, interiors – physical data and processes: hy-
+                                                                                 drodynamics, convection, turbulence
+
+
+
+                                               1    INTRODUCTION                                                         Smith & Arnett (2014) suggest that hydrodynamic in-
+                                                                                                                    stabilities in evolved massive stars could be responsible for
+                                               Stellar evolution models show that evolved massive stars
+                                                                                                                    the eruptive mass loss events preceding type IIn supernovae
+                                               contain complex structures of nuclear burning shells deep
+                                                                                                                    (SN impostors, see also Smith et al. 2011b; Ofek et al. 2014;
+                                               in their cores, where most of the nuclear and binding en-
+                                                                                                                    Arcavi et al. 2017), which comprise 6–12% of all core-collapse
+                                               ergy is concentrated (e.g. Woosley et al. 2002; Davis et al.
+                                                                                                                    supernovae (Smith et al. 2011a). Such an instability, if it oc-
+                                               2018). Energetic nuclear burning of different nuclear fuels
+                                                                                                                    curs deep in the core and shortly before the ultimate core col-
+                                               (the most important being C, Ne, O, Si) often drives con-
+                                                                                                                    lapse, could also provide the large-scale and large-amplitude
+                                               vective shells. The convective flows may entrain fresh fuel
+                                                                                                                    seed perturbations that facilitate shock revival in multidi-
+                                               from layers above the shell, which burns and invigorates the
+                                                                                                                    mensional supernova explosion models (Couch & Ott 2013,
+                                               convection. Under certain conditions, this positive feedback
+                                                                                                                    2015; Müller & Janka 2015; Müller et al. 2017). The insta-
+                                               may result in a fuel ingestion runaway so rapid and violent
+                                                                                                                    bility would likely involve chemical mixing between nuclear
+                                               that standard assumptions of 1D stellar evolution theory
+                                                                                                                    burning shells in the core with some impact on element pro-
+                                               break down (Herwig et al. 2014).
+                                                                                                                    duction in the star.
+                                                                                                                        Ritter et al. (2018a), inspired by a merger of convective
+                                                                                                                    C- and O-burning shells in their stellar evolution model of
+                                               ?   E-mail: andrassy@uvic.ca                                         a 15 M star, investigate the unusual nucleosynthesis that
+
+                                               © 2018 The Authors
+2     R. Andrassy et al.
+occurs when a large amount of C-shell material is rapidly
+                                                                           8
+brought into the hot O-shell environment. They conclude, in                                                                    1014
+agreement with earlier reports by Rauscher et al. (2002) and               7
+                                                                                                                               1012
+
+
+
+
+                                                                                                                                      1 1)
+Tur et al. (2007), that the odd-Z elements P, Cl, K, and Sc,
+                                                                           6
+which are underproduced in current galactic chemical evolu-
+                                                                           5                                                   1010
+
+
+
+
+                                                                    (M )
+tion models, can be synthesised this way. Similarly, Clarkson
+et al. (2018) find a highly energetic H-He convective shell in-
+                                                                           4                                                   108
+
+
+
+
+                                                                                                                                      |(
+teraction event in their model of a 45 M Pop III star when
+the gap between convective H and He shells closes. Their                   3                                                   106
+single-zone calculations of the resulting i-process nucleosyn-
+                                                                           2                                                   104
+thesis can reproduce certain intermediate-mass-element fea-
+                                                                                                                               102
+
+
+
+
+                                                                                                                                      |
+tures in the abundance distribution of the most Fe-poor                    1
+CEMP-no (C-enhanced metal poor) stars observed to date.                    0                                                   100
+However, all of these implications for stellar nucleosynthesis              0.0     0.5   1.0      1.5     2.0     2.5   3.0
+                                                                                                10(t ) (   )
+should be considered qualitative, because they depend on                                            *
+rather uncertain 1D models of rapidly evolving convective-
+reactive flows, which are inherently three-dimensional.
+      2D simulations of the violent shell burning that occurs
+in supernova progenitors shortly before core collapse had be-      Figure 1. Kippenhahn diagram showing the core structure of the
+come feasible in the 1990s as demonstrated by Arnett (1994).       25 M MESA model as a function of time until core collapse. Shades
+Bazan & Arnett (1994, 1998), and Arnett & Meakin (2011)            of blue show the energy generation rate and grey regions are con-
+                                                                   vective. The light-blue dashed and turquoise dot-dashed lines are
+further improved the methodology and ultimately included
+                                                                   the boundaries of the He- and C-free cores, respectively. The red
+in their (still 2D) simulations everything from the upper
+                                                                   vertical line indicates the model that was used to construct the
+parts of the Si core to the H envelope. They reported on con-      initial condition of the 3D simulations. The solid portion of that
+vection dominated by large-scale structures, significant devi-     line marks the radial extent of the 3D model.
+ations from spherical symmetry as well as hot-spot burning
+of convectively entrained 12 C just minutes before core col-
+lapse. More recently, 3D simulations have been constructed         the MESA code (Paxton et al. 2011, 2013, 2015). The stellar
+(Meakin & Arnett 2007a; Couch & Ott 2015; Jones et al.             model’s initial metallicity is Z = 0.02. Rotation is not con-
+2017; Müller et al. 2017; Mocák et al. 2018), showing that       sidered and the Schwarzschild criterion is used to delineate
+2D simulations significantly overestimate the amplitude of         convective regions. Mixing of chemical species at convective
+convective motions (Meakin & Arnett 2006).                         boundaries is modelled using a diffusion coefficient decay-
+      Jones et al. (2017, J17 hereafter) presented a set of ide-   ing exponentially with an e-folding length 12 fCBM Hp , where
+alised 3D hydrodynamic simulations constructed to closely           fCBM = 0.022 is used for all convective boundaries before
+resemble a convective O-burning shell in their 1D model of         core C ignition except the bottom boundaries of burning
+a 25 M star. They derive a mass entrainment rate at the            shells where fCBM = 0.005 is set and fCBM = 0.002 is used
+upper convective boundary of 5.4 × 10−7 M s−1 for the lu-          for all convective boundaries after core C ignition.
+minosity of the 1D model. It would only take ∼6 days —                  We focus on the first shell O-burning phase that spans
+less than the lifetime of the O shell — for the O-shell con-       approximately from 21 to 4 days before core collapse (Fig. 1).
+vection to reach the bottom of a neighbouring convective           With the start of shell O burning, a convection zone appears
+C-burning shell at this rate. Some material from the C shell       and grows in size until its mass reaches 0.66 M . The out-
+could thus be entrained into the hot O-shell environment           ward propagation of the upper convective boundary slows
+or the two shells might even merge, as suggested by the            down at this point and further growth is limited to an addi-
+nuclear astrophysics results of Ritter et al. (2018a). As a        tional 0.08 M over 7 days, after which convection recedes.
+first essential step towards a full merger simulation, we con-     At the point of the shell’s maximum extent there is 0.18 M
+struct a set of 3D hydrodynamic simulations to investigate         of stable material separating the O shell from the C shell and
+the dynamics of C entrainment from a stable layer into a           there is no mixing between the two in the stellar evolution
+convective O-burning shell. We intend to answer questions          model.
+like: How strong is the feedback from C burning on the flow
+in the shell? How does it depend on the O-luminosity of the
+shell? Is the entrainment process stable? Does it ever lead        2.2     3D PPMstar simulations
+to a fuel ingestion runaway such as that described by Her-
+wig et al. (2014)? How is the luminosity–entrainment rate          2.2.1       PPMstar code
+relation measured by J17 affected by C burning?                    We use the PPMstar code of Woodward et al. (2015). It
+                                                                   is an explicit Cartesian-grid-based code for 3D hydrody-
+                                                                   namics built around the Piecewise-Parabolic Method (PPM;
+                                                                   Woodward & Colella 1981, 1984; Colella & Woodward 1984;
+2     METHODS                                                      Woodward 1986, 2007). The code advects the fractional vol-
+                                                                   ume FV of the lighter fluid in a two-fluid scheme using the
+2.1    1D stellar-evolution model
+                                                                   Piecewise-Parabolic Boltzmann method (PPB; Woodward
+The 3D simulations described in this work are based on the         1986; Woodward et al. 2015). In 1D, PPB is formally fifth-
+1D evolution model of a 25 M star computed by J17 using            order accurate, and in our 3D flows, despite our use of di-
+
+                                                                                                                 MNRAS 000, 1–20 (2018)
+                                                                           C ingestion into a convective O shell              3
+rectional splitting, it delivers greatly improved accuracy over     • Spherical averages over the full solid angle, which we
+PPM advection. The benefits of PPB advection can be seen          use to study global properties of the flow, mass transport,
+in the 2D code comparison in Joggerst et al. (2014) and           or burning rates.
+in the 3D code comparison on a Rayleigh-Taylor problem
+                                                                  All of this output is computed on-the-fly and written to
+in Ramaprabhu et al. (2012). PPB achieves its greater ac-
+                                                                  disk at regular time intervals without ever interrupting the
+curacy in part by updating 10 lower-order moments of the
+                                                                  hydrodynamic simulation.
+distribution of FV within each cell. With this additional in-
+formation to work with, it should not be surprising that we
+usually find its results to be as good or better than PPM         2.2.2    3D simulation setup
+advection run on a grid with twice the number of grid cells
+in each dimension. Also, this additional, subcell information     The initial stratification of our simulations is the same as
+updated by PPB allows us to describe sharp transitions on         the one used by J17 and is composed of three polytropes
+the grid from a state with no tracked fluid, FV = 0, to only      that approximate the stratification of the MESA model. The
+tracked fluid, FV = 1, without resorting to the discontinuity     bottom and top polytropes are stable against convection and
+detection and steepening methods of PPM advection. The            the middle one is adiabatic. The polytropic stratification is
+result is that thin transitions can be advected with minimal      close to that of the MESA model throughout the volume in-
+diffusion and also without the changes in the algorithmic         cluded in the 3D simulation, see Fig. 4 of J17, and little
+description that can give rise to small glitches with PPM         could be gained by modelling the stratification in more de-
+advection that can be subsequently amplified at physically        tail given the differences in the equation of state described
+unstable interfaces. This feature can be observed in the 3D       below. The polytropic model is also resolved on the 3D com-
+test problem motivated by inertial confinement fusion that        putational grid by construction, which is not true about the
+is discussed in Woodward et al. (2012). We also note that         MESA model. The stratification changes significantly on the
+our stellar convection flows involve Mach numbers of the          simulation time scale when we drive the convection strongly
+order of 10−2 . It is therefore especially important that the     (see Sect. 3.3), but the change is negligible when the driving
+PPM scheme involves interpolated estimates of the values          luminosity is close to that of the MESA model. The C shell
+of variables at cell edges that are derived from cubic poly-      and outer layers of the star as well as the inner core are not
+nomials. This feature makes PPM well behaved when the             included. We impose boundary conditions at radii of 3.5 Mm
+scheme is applied at low Mach numbers, and hence low flow         and 9.2 Mm such that the flow remains confined between the
+Courant numbers, when these edge values play an especially        two spherical walls and material fluxes through them van-
+important role.                                                   ish. The boundaries are rough on small scales because of the
+                                                                  Cartesian geometry of the computational grid. This effect is
+     The time step is fixed and corresponds to CFL = 0.75
+                                                                  not expected to influence our results, because we restrict the
+at t = 0. We impose constraints where FV approaches the
+                                                                  time interval of our analysis such that the convective bound-
+special values of zero and unity. We do not constrain nuclear
+                                                                  ary does not get too close to the outer boundary condition.1
+burning rates with the exception of not burning more mass
+                                                                       We use the equation of state of an ideal monatomic gas
+than is available in the computation cell and not burning
+                                                                  in our simulations. This is a surprisingly good approximation
+trivial amounts of material. The reader is referred to Wood-
+                                                                  owing to the high temperature typical of O-shell convection.
+ward (2007) and Woodward et al. (2015) for further details
+                                                                  Despite high density, degeneracy pressure is limited to 3–6%
+of the overall scheme and of the approximate Riemann solver
+                                                                  of the total pressure in the shell. Its contribution increases
+implemented in PPMstar. The code was designed with strong
+                                                                  to ∼ 20% in the stable layer below the shell, which we only
+emphasis on parallel efficiency and it has performed past
+                                                                  use as a buffer zone that forces the convective flows to turn
+simulations of shell convection on up to 440,000 CPU cores
+                                                                  around. Our two-fluid models (see below) also cannot in-
+on the NCSA Blue Waters computer (Woodward et al. 2015,
+                                                                  clude the composition step at the bottom of the shell, so we
+2018; Herwig et al. 2014).
+                                                                  refrain from any attempts to quantify mixing at the shell’s
+     The version of PPMstar used in this work has four data
+                                                                  lower boundary in this work. Radiation pressure does not
+output channels, all of which we use in this work:
+                                                                  exceed 25% of the total pressure in the shell. A new version
+                                                                  of the PPMstar code, which includes radiation pressure, is
+   • Full-resolution 3D data cubes. Variable-dependent non-
+                                                                  already being tested and we intend to quantify the influ-
+linear transforms are applied to compress the data to a sin-
+                                                                  ence of radiation pressure on stellar convection in a future
+gle byte per voxel, which is sufficient for flow visualisation
+                                                                  publication. The initial stratification of the PPMstar runs is
+purposes. The fractional volume variable is saved at twice
+                                                                  compared with that of the MESA model in Fig. 4 of J17.
+the original grid resolution to make use of the PPB subcell
+                                                                       The upper stable layer is initially filled with fluid FC
+information.
+                                                                  and the rest is fluid FO . There is a 0.25 Mm thick smooth
+   • 3D data cubes downsampled by averaging blocks of 43
+                                                                  transition in the fractional volume FV of fluid FC centred at
+grid cells, which decreases spatial resolution by a factor of
+                                                                  the radius of 8.08 Mm such that FV = 0 below the transi-
+4 and the amount of data by a factor of 43 = 64. Variable-
+                                                                  tion layer and FV = 1 above it (see Fig. 20 of J17). Each of
+dependent non-linear transforms are applied to further com-
+                                                                  the two fluids corresponds to a mixture of chemical elements.
+press the data to two bytes per voxel, which is sufficient for
+                                                                  The individual abundances of these elements are not evolved
+both flow visualisation and data analysis.
+                                                                  in time and only those that enter our simplified reaction net-
+   • Spherical averages measured in 80 radial, space-filling
+                                                                  work (see Sect. 2.2.4) need to be known. The concentration
+tetrahedra, which we call buckets (see Fig. 17 of J17 for their
+exact distribution). The buckets are ideal for rapid analysis
+of time series whenever angular resolution is not critical.       1   Run I11 is an exception, see Sect. 3.6.
+
+MNRAS 000, 1–20 (2018)
+4                 R. Andrassy et al.
+                                                                               versions of runs I13 and I4, respectively, done on a 11523 grid
+                  8 1e18                                        0.120          to estimate any resolution dependence. We experimentally
+                  7                  O burning                                 turned C burning off in run I12 and enhanced the energy
+                                     volume heating (J17)       0.115          release from C burning by the factor fCC = 10 in run I11,
+                  6                  A=p/                                      which are otherwise like runs I4 and I5, respectively. All the
+ / erg cm 3 s 1
+
+
+
+
+                  5                                             0.110          runs mentioned so far use the same C-burning reaction net-
+                                                                               work Net 1 (see the next section). We investigate how our
+
+
+
+
+                                                                        A=p/
+                  4                                             0.105          results depend on the assumptions about C-burning reac-
+                  3                                                            tions using runs I16 and I17, which are like runs I4 and I13,
+                                                                0.100          respectively, but they use an alternative reaction network
+                  2                                                            Net 2. We also use for the analysis runs D1, D2, D5, D6,
+                  1                                             0.095          D8, D9, and D10 of J17, in which convection is driven by a
+                                                                               volume heating term and the burning of the entrained ma-
+                  0                                             0.090          terial is not considered. Finally, we have added run D23 to
+                       4         5         6        7       8
+                                                                               extend the D-series of runs towards even lower luminosities.
+                                        r / Mm
+Figure 2. Comparison of the distribution of the heating rate per               2.2.4   Reaction network
+unit volume as given by the O-burning prescription used in this
+work with that given by the volume heating prescription of J17.                Convection in the shell is driven by O burning, which we
+Both distributions are normalised to give the same luminosity                  compute using Eq. 18.75 of Kippenhahn et al. (2012), ne-
+of 1011 L . The flat part of the entropy profile A = p/ργ is the               glecting electron screening. We do not model the slow change
+convection zone.                                                               in the O mass fraction due to this burning process. The
+                                                                               temperature is slightly overestimated in the shell because of
+                                                                               our neglect of radiation pressure in the equation of state.
+of 16 O in fluid FO , X16 = 0.382, is taken from the MESA model                We correct the temperature profile before computing energy
+directly. The stable layer above the O shell (fluid FC ) is for                generation rates using the transformation
+the purposes of our experiment assumed to be rich in 12 C
+with the mass fraction X12 = 0.13. This concentration is 5                     ϑ = 1.022 T90.64,                                            (1)
+times larger than that in the C shell of the MESA model. We
+do this to speed up the simulations’ transition to a quasi-                    where T9 is the temperature in units of 109 K and the nu-
+stationary state. Despite this increase in X12 , we use the                    merical coefficients were adjusted until a close fit to the tem-
+same mean molecular weights as J17 (µ1 = 1.802 for FC and                      perature profile of the MESA model was obtained. In order to
+µ2 = 1.848 for FO ) to allow direct comparison of entrain-                     model the drop in T9 and X16 at the bottom of the O shell
+ment rates. The radial profile of the squared Brunt-Väisälä                 seen in the MESA model, we further modify the temperature
+frequency N 2 in this transition layer closely resembles that                  profile using either the transformation
+of the MESA model, see Fig. 6 of J17.                                               1
+      J17 used a volume heating term to drive convection. We                   Θ=     {1 − tanh[200(ϑ − 2.24)]} ϑ,                          (2)
+                                                                                    2
+have implemented an O-burning prescription in the code (see
+                                                                               or the transformation
+Sect. 2.2.4) and introduced a parameter ( fOO in Table 1)
+                                                                                    1
+to scale the heat output and reach different driving lumi-                     Θ = {1.01 − 0.99 tanh[0.07(ρ3 − 1845)]} ϑ,                   (3)
+nosities without having to change the initial stratification.                       2
+Figure 2 shows that the heating rate distribution is more                      where ρ3 is the density in units of 103 g cm−3 . Equation 2 is
+concentrated to the bottom of the shell in our simulations                     used in low- and medium-luminosity runs I2, I4, I5, I12, I15,
+than in those of J17. Neutrino cooling balances all of the                     and I16, but the shallowness of the temperature profile in
+shell’s luminosity in the MESA model. We do not consider                       the lower stable layer makes Θ too sensitive to the relatively
+this effect and estimate its influence on the mass entrain-                    large changes in the stratification we see in high-luminosity
+ment rate at the end of Sect. 3.2. However, our O-burning                      runs. Equation 3 is much less sensitive to such changes.2 We
+prescription with fOO = 1 (run I2, see Table 1) provides a                     use it in runs I11, I13, I14, and I17.
+driving luminosity LOO = 4.27 × 1010 L , which is compara-                          There would be a large number of nuclear reactions in-
+ble to the maximum luminosity L = 5.2 × 1010 L reached                         volved in the burning of the ingested material in an actual
+in the O shell of the MESA model when both nuclear heating                     star. However, the purpose of this study is not to replicate in
+and neutrino cooling are considered.                                           detail a shell interaction found in a particular stellar evolu-
+                                                                               tion model. Instead, we aim to study the general behaviour
+                                                                               of the ingestion process when the burning of the ingested
+2.2.3              Simulations
+                                                                               material feeds back onto the convective flow. We use two
+Simulations presented in this work are listed in Table 1 along
+with some of their global properties. We investigate the lu-                   2  Equation 3 also makes sure that Θ never drops to zero, which
+minosity dependence of C ingestion in the series of runs I2                    would cause numerical problems in the energy generation module
+(O-luminosity enhancement factor fOO = 1), I4 ( fOO = 2.7),                    if a negligible but non-zero amount of the C-rich fluid got below
+I5 ( fOO = 13.5), and I13 ( fOO = 67.5) done on a 7683 grid                    the convection zone and the energy generation rate calculation
+(see Table 1). C burning was only turned on at t = 74 min                      was executed. This sometimes happens when convection becomes
+in run I2 by mistake. Runs I14 and I15 are higher-resolution                   too vigorous.
+
+                                                                                                                     MNRAS 000, 1–20 (2018)
+                                        id     grid     tsim    nuc. net.   fOO     fCC   fCO      LOO         LCC         LCO         Ltot         MÛ e       vrms      τconv     Ma
+                                                       [min]                                       [L ]        [L ]        [L ]        [L ]      [M s−1 ]    [km s−1 ]   [min]
+
+
+
+
+MNRAS 000, 1–20 (2018)
+                                        D1     7683     55.2       —         —      —      —        —           —           —        1.18 (11)   1.15 (−6)     38.0      3.46    9.40 (−3)
+                                        D2    15363     27.3       —         —      —      —        —           —           —        1.18 (11)   1.33 (−6)     39.1      3.37    9.70 (−3)
+                                        D5     7683     37.2       —         —      —      —        —           —           —        5.91 (11)   8.07 (−6)     66.7      2.05    1.65 (−2)
+                                        D6     7683     41.3       —         —      —      —        —           —           —        1.18 (12)   1.68 (−5)     85.8      1.65    2.13 (−2)
+                                        D8     7683     36.2       —         —      —      —        —           —           —        2.95 (11)   3.60 (−6)     52.2      2.58    1.29 (−2)
+                                        D9     7683     43.5       —         —      —      —        —           —           —        2.95 (12)   3.83 (−5)     118       1.27    2.92 (−2)
+                                       D10     7683     43.7       —         —      —      —        —           —           —        5.91 (12)   7.94 (−5)     149       1.03    3.71 (−2)
+                                       D23     7683     53.4       —         —      —      —        —           —           —        2.95 (10)   9.50 (−8)     21.0      6.14    5.17 (−3)
+                                        I2     7683     242      Net 1       1      1      —     4.27 (10)   8.30 (9)       —        5.10 (10)   3.14 (−7)     27.9      4.74    6.85 (−3)
+                                        I4     7683     76.3     Net 1      2.7     1      —     1.16 (11)   2.84 (10)      —        1.45 (11)   1.09 (−6)     40.3      3.34    9.89 (−3)
+                                        I5     7683     39.5     Net 1      13.5    1      —     5.79 (11)   2.54 (11)      —        8.33 (11)   9.66 (−6)     117       1.94    1.78 (−2)
+                                       I11     7683     13.5     Net 1      13.5    10     —     8.05 (11)   1.32 (13)      —        1.40 (13)   2.24 (−4)     181       0.82    4.46 (−2)
+                                       I12     7683     46.9     Net 1      2.7     —      —     1.16 (11)      —           —        1.16 (11)   7.53 (−7)     35.3      3.73    8.67 (−3)
+                                       I13     7683     23.1     Net 1      67.5    1      —     5.10 (12)   2.54 (12)      —        7.63 (12)   1.07 (−4)     147       1.02    3.63 (−2)
+                                       I14    11523     22.4     Net 1      67.5    1      —     6.26 (12)   2.87 (12)      —        9.13 (12)   1.18 (−4)     163       0.95    4.01 (−2)
+                                       I15    11523     58.3     Net 1      2.7     1      —     1.16 (11)   3.37 (10)      —        1.50 (11)   1.37 (−6)     41.6      3.23    1.03 (−2)
+                                       I16     7683     73.8     Net 2      2.7     1      1     1.16 (11)   2.25 (9)    2.10 (10)   1.39 (11)   9.73 (−7)     39.3      3.41    9.66 (−3)
+                                       I17     7683     27.8     Net 2      67.5    1      1     4.49 (12)   3.97 (11)   3.59 (11)   5.25 (12)   6.30 (−5)     139       1.06    3.44 (−2)
+
+
+
+                         Table 1: Properties of the 3D PPMstar simulations presented in this work. The first three columns give the run identification code, grid resolution, and the total length
+                         of the simulation. If C burning is included the “nuc. net.” column gives which nuclear network was used. Energy output from nuclear reactions is scaled by factors fOO
+                         (16 O+16 O), fCC (12 C+12 C), and fCO (12 C+16 O) and the resulting contributions to the total luminosity Ltot are LOO , LCC , and LCO . The last four columns give the
+                         entrainment rate MÛ e , rms convective velocity vrms , overturning time scale τconv and a mass-weighted Mach number in the convection zone. The values of LOO , LCC , LCO ,
+                         Ltot , MÛ e , vrms , τconv , and Ma correspond to averages over a time window several convective overturns long, which was the same for all variables but varied from run to run.
+                                                                                                                                                                                                             C ingestion into a convective O shell
+
+
+
+
+                         All runs of the D series except for D23 were already presented by J17.
+                                                                                                                                                                                                             5
+6     R. Andrassy et al.
+simple reaction networks based on our earlier 1D calcula-          3     RESULTS
+tions with a large network (Ritter et al. 2018a):
+
+   • Net 1: 12 C(12 C, α)20 Ne followed by 16 O(α, γ)20 Ne. The    3.1    C entrainment and burning
+rate of the former reaction is computed from the rate of
+12 C+12 C given by Caughlan & Fowler (1988) with the               The flow field in our simulations is dominated by a few large-
+neutron and proton branches subtracted according to the            scale convection cells (Fig. 3). They cause shear flows as they
+branching ratios used by Dayras et al. (1977) and Pignatari        turn over at the upper convective boundary, but, as Wood-
+et al. (2013). The α particle is assumed to be immediately         ward et al. (2015) and J17 describe in detail, entrainment
+captured in the latter reaction. The Q values of the two re-       does not occur where the shear is the strongest. It rather
+actions, 4.62 MeV and 4.73 MeV, respectively, are summed.          occurs at places where two neighbouring flows sliding along
+   • Net 2: All channels (n, p, γ) of 12 C+12 C and 12 C+16 O.     the boundary collide and are forced back into the convection
+The rates are taken from Caughlan & Fowler (1988) and the          zone by the global flow topology, dragging slivers of fluid FC
+Q values are 3.19 MeV and 5.26 MeV, respectively. The sub-         along.
+sequent reactions induced by the released neutrons and pro-             According to our assumption, the concentration of 12 C
+tons are not considered for simplicity as many temperature-        in fluid FC is five times higher than that in the stellar evolu-
+dependent reaction paths are possible.                             tion model (see Sect. 2.2.2), so we can see some energy gen-
+                                                                   eration due to 12 C+12 C reactions in the upper stable layer
+    The rate of the 12 C+12 C reaction scales with the square      in Fig. 3, but the burning is not strong enough to establish a
+ 2 of the concentration of 12 C and it is thus important when
+X12                                                                new convection zone on the time scales considered. 12 C+16 O
+the concentration is high (i.e. when the entrainment rate is       reactions do not contribute in the stable layer, because we
+high). On the other hand, the 12 C+16 O reaction becomes           only compute reactions involving 12 C from fluid FC and 16 O
+important at low concentrations (i.e. low entrainment rates)       from fluid FO and there is no fluid FO in the upper stable
+owing to the reaction’s being linear in X12 . Having two re-       layer. The concentration of FC drops by orders of magni-
+action networks allows the reader to judge how different the       tude at the upper boundary as the mixing process reduces
+outcome is when the entrained material only reacts with it-        the buoyancy of the fluid mixture to make it possible for
+self (Net 1) compared to a situation in which reactions with       convection to pull it to the bottom of the convection zone.
+the other fluid are also possible (Net 2). Additionally, we        Therefore, C-burning reactions are virtually absent in the
+used the PPN (Pignatari et al. 2016; Ritter et al. 2018b)          upper half of the convection zone and they are only rekin-
+code to confirm that our neglect of electron screening is jus-     dled at the bottom owing to an increase in temperature.
+tified, because it is a 10-20% effect for the range of densities        Because the 12 C+12 C reaction rate depends on the
+and temperatures relevant to the O shell problem.                  square of the concentration X12 of 12 C, the burning time
+      Our implementation of nuclear burning in the two-fluid       scale in runs with a significant contribution from the
+approximation is as follows. The fractional volumes FV of          12 C+12 C reaction becomes shorter when the driving lumi-
+fluid FC and 1 − FV of fluid FO are first converted into molar     nosity and hence also the mass entrainment rate is increased.
+fractions YC and YO of the 12 C and 16 O reactants, taking into    The burning time scale is a few times longer than the con-
+account that only the fractions fC = 0.187 and fO = 0.540 of       vective overturning time scale in the low-luminosity run I2
+all nuclei in each of the two fluids represent the reactants.3     ( fOO = 1), which results in a rather flat fractional volume
+This reflects our mental picture that each of the fluids has       profile of the entrained C-rich fluid, see Fig. 4. On the other
+some internal composition, which is not evolved. A change          hand, there is a significant fractional volume gradient in the
+dYC in the molar fraction YC of 12 C is then computed us-          convection zone of the high-luminosity run I13 ( fOO = 67.5),
+ing the equations of nuclear burning (see e.g. Chapter 18          in which the two time scales are comparable. This gradi-
+of Kippenhahn et al. 2012) with the rates described above.         ent causes the C-burning layer to be more extended in run
+Whenever a molar fraction dYC of 12 C nuclei needs to be           I13 than in run I2 (Fig. 4). The burning time scale for the
+removed from fluid FC , we are forced to remove the molar          12 C+16 O reaction is independent of X .
+                                                                                                            12
+fraction dYC / fC of fluid FC , because the internal composition
+                                                                        Figure 3 also shows that there is a lot of large scale
+of this fluid cannot change in our two-fluid model. The burn-
+                                                                   structure in the distribution of the entrained material. We
+ing process also cannot change the total density of the two-
+                                                                   show in Sect. 3.5 that these inhomogeneities are the main
+fluid mixture, so the amount of fluid FC burnt is replaced by
+                                                                   cause of the asymmetric distribution of the burning rate
+an equivalent amount of fluid FO . While this qualitatively
+                                                                   (Fig. 3) with temperature fluctuations playing a secondary
+captures the increase in the mean molecular weight µ upon
+                                                                   role. The asymmetry is the most pronounced at the upper
+nuclear fusion, we would need to introduce more fluids into
+                                                                   end of the luminosity range considered.
+the model to make the change in µ quantitatively correct.
+The heat released from the nuclear reactions is added af-               All runs, with the exception of run I11, reach a quasi-
+ter every 1D pass to maximise the temporal accuracy of the         stationary state in which there is a close balance between
+numerical scheme.                                                  mass entrainment and burning and the concentration of fluid
+                                                                   FC in the convection zone stays approximately constant.
+                                                                   Some selected properties of our simulations are summarised
+                                                                   in Table 1. The following three sections present the detailed
+                                                                   evolution of the simulations in terms of the entrainment rate,
+3 We make use of the fact that the fractional volume of fluid F
+                                                               C
+                                                                   luminosity, and velocity field. We analyse 3D fluctuations of
+entrained into the O shell is small, so we only need to consider   the most relevant quantities in Sect. 3.5 and, finally, we dis-
+16 O nuclei present in the dominant fluid F .                      cuss the unstable run I11 in Sect. 3.6.
+                                           O
+
+
+                                                                                                        MNRAS 000, 1–20 (2018)
+                                                                                C ingestion into a convective O shell                    7
+
+  I2, 148 min                                                          I2, 148 min
+
+
+
+
+  I13, 11 min                                                          I13, 11 min
+
+
+
+
+             8     7    6    5       4      3   2   1   0                         12     13       14       15      16        17   18
+                                 log10 FV                                                     log10    +    / erg cm 3 s 1
+
+
+
+
+Figure 3. Renderings showing a thin slice through the computational box in terms of the fractional volume FV of fluid FC (left panels)
+and energy generation rate from the 12 C+12 C reaction (right panels) in runs I2 ( fOO = 1) and I13 ( fOO = 67.5). The two runs differ by a
+factor of ∼170 in the total luminosity at the points in time corresponding to the renderings. The energy generation rates were computed
+by post-processing data downsampled from 7683 to 1923 , in which all 3D fluctuations except those in FV were neglected, see Sect. 3.5.
+The white dashed circles correspond to the outer boundary condition.
+
+
+
+
+MNRAS 000, 1–20 (2018)
+8        R. Andrassy et al.
+                                                                                  the run, which is likely caused by the steepening of the en-
+                                                                                  tropy gradient at the upper convective boundary due to the
+         10 2                                                       10 2          energy release from C burning at the bottom of the upper
+                                                   I2, O16+O16                    stable layer (see Sect. 3.1). This effect is negligible in run I13
+                                                   I2, C12+C12                    (Fig. 5), which is 12× shorter than I2 but, owing to the strong
+                                                   I2, FV                         driving of convection, it reaches an entrainment rate so high
+         10 3
+
+
+
+
+                                                                           FV
+    /L
+
+
+
+
+                                                   I13, O16+O16                   that all of the upper stable layer is ultimately entrained
+                                                   I13, C12+C12     10 3          within the simulated time. The quasi-stationary entrainment
+                                                   I13, FV                        rate is MÛ e = 1.07 × 10−4 M s−1 in I13. In light of the linear
+         10 4                                                                     dependence of the entrainment rate on the total luminos-
+                                                                                  ity discussed in the next paragraph, it is surprising that
+                                                                                  the entrainment rate is essentially constant while the total
+            3.5   4.0   4.5   5.0    5.5     6.0    6.5   7.0     7.5             luminosity more than doubles between 5 and 14 min of sim-
+                                    r / Mm                                        ulation time, see Fig. 7. This might be due to the following
+                                                                                  opposing effect: as the convective boundary moves further
+                                                                                  into the stable layer, the entropy jump across the boundary
+Figure 4. Comparison of the energy generation rates per unit                      increases, which hinders mass entrainment. The entrainment
+volume in the low-luminosity run I2 ( fOO = 1) with those in the                  rate only starts to increase at t ≈ 14 min when the convec-
+high-luminosity run I13 ( fOO = 67.5). The energy generation rate                 tive boundary has reached the radius of 8.6 Mm (starting
+ε is normalised by the total luminosity Ltot and the radial profiles              from 8.0 Mm at t = 0) and half of the upper stable layer (in
+of the fractional volume FV of the entrained fluid are shown for                  terms of radius) has been engulfed by the convection. The
+comparison. The radial profiles correspond to 148 min in I2 and to                scale height Hv,ub of the velocity profile starts increasing
+11 min in I13 with time averaging over two convective overturning
+                                                                                  at that point. We see the same effect in similarly luminous
+time scales applied around these points in time in both cases.
+                                                                                  runs I14 ( fOO = 67.5, Net 1), I17 ( fOO = 67.5, Net 2), and
+                                                                                  also in run D10 that does not include C burning, although
+3.2       Entrainment rate                                                        it only occurs when the boundary has reached 8.75 Mm in
+                                                                                  D10. A likely explanation is that the outer boundary con-
+The mass Me (t) of the C-rich fluid FC entrained into the                         dition at 9.2 Mm starts to influence the flows at the top of
+convection zone by time t is the sum                                              the convection zone when the upper stable layer has become
+                                                                                  too thin. The last three minutes of run I13 are not shown
+Me (t) = Mp (t) + Mb (t)                                                    (4)
+                                                                                  in Fig. 5, because velocity amplitudes in the upper stable
+of the mass Mp (t) of FC present in the convection zone at                        layer become so large in that time interval that the velocity-
+time t and the mass Mb (t) of FC burnt in the convection                          gradient-based method of locating the convective boundary
+zone by time t.                                                                   becomes unusable. We also exclude from the entrainment
+      To compute Mp (t), we employ the method of J17. We                          analysis the last few minutes of runs I14, I17, and D10 for
+first determine the radius rub (t) of the upper boundary of the                   the same reason.
+convection zone as defined by the position of the steepest                             The I-series runs with either C-burning network con-
+decline in the spherically-averaged rms tangential velocity                       firm the linear relation between the entrainment rate and
+v⊥ , and the radius rtop (t) = rub (t) − Hv,ub (t), where Hv,ub (t) =             the total luminosity established by the D-series runs of J17,
+v⊥ |∂v⊥ /∂r | −1 is the scale height of v⊥ to be evaluated at                     see Fig. 6. Run I11 is close to the scaling relation despite
+rub (t). Mp (t) is then the volume integral of the density of                     its unstable nature (see Sect. 3.6 for details). That the en-
+fluid FC inside the radius rtop (t).4                                             trainment rates in low-luminosity runs fall below the linear
+      The burnt mass Mb (t) is given by a volume and time                         trend is likely caused by the limited length of our simula-
+integral of the mass burning rate in the convection zone,                         tions. One would ideally want to run a simulation of convec-
+which is computed from reaction rates in a way analogous to                       tive boundary mixing at least until all of the initial transi-
+the luminosity computation described in Sect. 3.3. Since the                      tion layer between the two fluids has been entrained and a
+burning is concentrated to the lower part of the convection                       new boundary has been formed, consistent with the proper-
+zone, we simply integrate up to the radius of 7.5 Mm, which                       ties of the convective flows and of the entrainment process.
+is slightly below the initial location of the upper boundary                      However, this is very expensive to achieve even on a 7683
+of the convection zone.                                                           grid when the luminosity is low. The initial transition layer
+      Figure 5 shows the entrained mass Me (t) for runs I2                        at the upper boundary contains 2.7 × 10−2 M of fluid FC ,
+( fOO = 1) and I13 ( fOO = 67.5), which are the least                             but only 3.3 × 10−3 M was entrained in the low-luminosity
+and most luminous of the 7683 I-series runs with quasi-                           run I2 (5.1 × 1010 L , see Fig. 5), which involved 3.8 × 106
+stationary C burning, respectively. In run I2, Mp (t) steadily                    time steps. The entrainment rate may depend on the as-
+increases until C burning is turned on at t = 74 min (see                         sumed structure of the transition layer in such cases. On
+Sect. 2.2.3), after which it takes 3–5 convective overturns                       the other hand, most of the initial transition layer was en-
+to reach a quasi-stationary state with an entrainment rate                        trained in runs D5 (5.9 × 1011 L , see Fig. A1 of J17) and
+of MÛ e = 3.14 × 10−7 M s−1 . MÛ e decreases again very late in                   I5 (8.3 × 1011 L , see Fig. B.1) and the layer was completely
+                                                                                  engulfed by convection in all runs with Ltot ≥ 1012 L .
+                                                                                       Some fraction of the entrainment rates reported here is
+4 The amount of fluid FC getting below the convection zone is                     a consequence of the gradual increase in the mean entropy
+negligible.                                                                       of the convection zone, which results from our neglect of
+
+                                                                                                                         MNRAS 000, 1–20 (2018)
+                                                                                         C ingestion into a convective O shell                  9
+
+                      1e 3                  I2                                     1.2 1e 1
+                                                                                                               I13
+                3.5                           7        1                                                         4           1
+                                = 3. 14 × 10 M s                                   1.0               = 1. 07 × 10 M s
+                3.0          present                                                              present
+                2.5          burnt                                                 0.8            burnt
+                2.0          total                                                                total
+M /M
+
+
+
+
+                                                                           M /M
+                                                                                   0.6
+                1.5
+                                                                                   0.4
+                1.0
+                0.5                                                                0.2
+                0.0                                                                0.0
+                        50         100        150          200       250                 4    6      8   10     12      14       16   18   20
+                                         t / min                                                              t / min
+Figure 5. Total mass of fluid FC that has been entrained into the convection zone is the sum of the mass of FC currently present in the
+convection zone and the mass of FC that has been burnt in the convection zone. The rate at which the total mass of FC in the convection
+zone increases with time is the entrainment rate M   Û e . In each panel, a linear fit to Me (t) is computed in the time interval where the black
+fitting line is solid; the dotted parts are to guide the eye. The deviations from the fitting line are discussed in Sect. 3.2. The luminosity
+driving convection is ∼150× higher in run I13 (( fOO = 67.5), right panel) as compared with I2 (( fOO = 1), left panel), see Table 1.
+
+
+                                                                             The slope (∂ A/∂m)stab = 1.4 × 10−1 M−1 fits well the stable
+                3.5     1. 36 × 10 6 (L / 1011)                              stratification above the convection zone at t = 0. As the en-
+                4.0     D series, 7683                                       tropy in the convection zone increases, stable material is ren-
+                        D series, 15363                                      dered unstable at the rate MÛ A = (∂ A/∂t)conv / (∂ A/∂m)stab =
+    / M s 1])
+
+
+
+
+                4.5                                                          5.2 × 10−5 M s−1 , which accounts for 49% of the entrain-
+                5.0                                                          ment rate in this run. This fraction should not depend on
+                                                                             the driving luminosity Ltot , because both (∂ A/∂t)conv and MÛ e
+                5.5                                                          scale in proportion to Ltot . The estimate just presented ex-
+                                                I series, 7683, Net 1
+                6.0                                                          cludes the effect of neutrino cooling on convective velocity.
+    log10(
+
+
+
+
+                                                I series, 7683, Net 2
+                                                                             Meakin & Arnett (2007b) include neutrino cooling in their
+                6.5                             I series, 11523, Net 1
+                                                                             3D simulation of a similar O shell and the radial velocity in
+                                                I11, 7683, Net 1
+                7.0                             I12, 7683, no C burning
+                                                                             their simulation is indeed lower than what our scaling law
+                                                                             predicts (see Fig. 13 of J17). Nevertheless, their mass en-
+                7.5                                                          trainment rate is in very good agreement with our scaling
+                  10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5
+                                                                             law (see Fig. 19 of J17) despite some differences in the initial
+                                    log10(L / L )                            stratification.
+
+
+Figure 6. Dependence of the entrainment rate on the total lumi-              3.3     Luminosity evolution
+nosity Ltot integrated over the convection zone. A linear scaling
+                                                                             We calculate the global burning rates using spherically-
+law essentially identical to the one given in J17 is shown for com-
+                                                                             averaged profiles of density, temperature, and fractional vol-
+parison. The last 2.2 min of run I11 are used when the instability
+described in Sect. 3.6 has fully developed.                                  ume of fluid FC in a post-processing step. The spherically-
+                                                                             averaged rate of the 12 C+12 C reaction scales with hX12  2 i =
+
+                                                                             hX12 i + σ12 , where σ12 is the standard deviation of the dis-
+                                                                                   2    2          2
+neutrino cooling. The rate of convective boundary migra-                     tribution of X12 and the distribution is taken over the full
+tion due to this effect is proportional to the rate of change                solid angle at a constant radius. We first compute the rate
+of entropy A = p/ργ in the convection zone and inversely                     of 12 C+12 C using hX12 i 2 and then multiply the result by the
+proportional to the slope of A(m) in the relevant part of the                factor ξ = 1 + σ12
+                                                                                              2 /hX i 2 , where σ is computed from the
+                                                                                                   12             12
+stable layer, where m is the enclosed mass coordinate. During                standard deviation of the fractional volume of fluid FC . In
+the time interval in which we determined the entrainment                     this way, we take into account the presence of 12 C clumps in
+rate MÛ e = 1.07 × 10−4 M s−1 in run I13 (see Fig. 5), we                    the convection zone, which increases the resulting luminos-
+measure (∂ A/∂t)conv = 7.3 × 10−6 s−1 in the convection zone5 .              ity by a factor ranging from ∼1.2 in the least luminous runs
+                                                                             to ∼2 in the most luminous ones compared to the luminosity
+5 This value changes by about a factor of two reflecting the lu-
+minosity increase during the time interval considered. We use the            to (∂A/∂t)conv from mass entrainment is small and essentially the
+mean value in this estimate and remind the reader that M   Û e does          whole rate can be explained by energy generation in the convec-
+not change in the same time interval, see Fig. 5. The contribution           tion zone.
+
+MNRAS 000, 1–20 (2018)
+10     R. Andrassy et al.
+calculated using the spherical average hX12 i only. The pres-      confirms that LC /Ltot reaches comparable values in runs I4,
+ence of clumps is a 3D effect and as such it is neglected in       I15, and I16 (Ltot ∼ 1.5 × 1011 L ).
+1D stellar evolution calculations. The non-linear scaling of            An interesting feature of all of the I-series runs with
+the 16 O+16 O reaction with the mass fraction X16 of 16 O is       Ltot & 3 × 1012 L is that their luminosity significantly in-
+inconsequential as the fractional volume of fluid FO deep in       creases in time. This is due to the gradual heating up
+the convection zone is essentially unity at all times.             of the convection zone (by ∼10%) combined with the nu-
+     The average luminosities are computed for the time in-        clear reactions’ high temperature sensitivity: quantified as
+tervals during which the entrainment rates were measured           ∂ log ε/∂ log T, the typical sensitivities at the bottom of the
+(see Figs. 5, B.1, and B.2), and they are summarized in Ta-        convection zone are 32 for 16 O+16 O, 19 for 12 C+12 C, and
+ble 1. The time evolution of the luminosity contributions          25 for 12 C+16 O.
+from O and C burning is shown in Fig. 7 for four char-
+acteristic cases. In the low-luminosity ( fOO = 2.7) run I4,       3.4   Velocity field
+the O-burning luminosity first decreases during the initial
+adjustment of the stratification and then it levels off. The       To construct the initial condition, we map a 1D hydrostatic
+C-burning luminosity (12 C+12 C) increases until an equilib-       stratification onto a 3D Cartesian grid and set all velocity
+rium is achieved between the rates of entrainment and burn-        components to zero. The convective flow is driven by the
+ing with C burning providing ∼20% of the total luminosity.         heat released from O burning at the bottom of the shell. An
+The I16 case has the same O luminosity but it employs the          initial transient flow carrying an imprint of the computa-
+C-burning network Net 2, which includes the 12 C+16 O re-          tional grid disintegrates rapidly and the flow becomes fully
+action as well. This reaction dominates C burning when the         turbulent after a few convective overturns as described in de-
+concentration of 12 C in the convection zone is low as is the      tail by Woodward et al. (2015) and Jones et al. (2017). This
+case in the low-luminosity runs I4 and I16. The contribution       effect can also be seen in the radial velocity spectra shown in
+of C burning to the total luminosity is ∼17% in I16.               Figs. 9 and 11, in which an initially regular pattern of modes
+     Carbon burning is responsible for ∼33% of the total lu-       quickly disappears and is replaced by a turbulent spectrum.
+minosity in the more luminous run I13 ( fOO = 67.5, Net 1),             It is difficult to quantify the degree of turbulence in
+but this fraction drops to ∼14% when the reaction 12 C+16 O        our simulations in terms of a Reynolds number, because the
+is included in the otherwise similar run I17 ( fOO = 67.5,         PPM advection scheme does not include any explicit viscous
+Net 2), see Fig. 7. The reactions 12 C+12 C and 12 C+16 O          term and its implicit viscosity depends strongly on the ratio
+are equally important in I17.                                      λ/∆x of the wavelength λ of interest in the velocity field and
+                                                                   the grid cell width ∆x. Porter & Woodward (1994) measure
+      The luminosity LC from the C-burning reactions makes         the dissipation properties of PPM and derive the Reynolds
+up an increasingly larger fraction of the total luminosity         number
+Ltot as Ltot increases from run to run when burning net-
+                                                                             4π 2 λ 3
+                                                                                   
+work Net 1 is used, see Fig. 8. When 11523 runs were per-
+                                                                   Remax =                                                     (5)
+formed the LC /Ltot fractions agree with the corresponding                    As ∆x
+7683 runs. Because we start our analysis when a quasi-                  associated with structures on the wavelength λ,
+stationary state has been reached (with the exception of the       where the coefficient As depends on the Courant num-
+unstable run I11), LC is close to qX12 MÛ e , where q is the en-   ber Ca = v∆t/∆x. For run I4 ( fOO = 2.7) we have a typ-
+ergy released per unit mass of 12 C burnt and X12 = 0.13           ical rms convective velocity v = 40 km s−1 and time step
+the mass fraction of 12 C in the entrained material (see           ∆t = 3.8 × 10−3 s, which gives Ca = 6.0 × 10−3 for the advec-
+Sect. 2.2.2). We can then write LC /Ltot = qX12 MÛ e /Ltot with    tion of a typical fluid parcel. We estimate As = 47 for this
+MÛ e /Ltot = 1.36 × 10−17 M s−1 L−1 for all runs that follow the   value of Ca based on Table 1 of Porter & Woodward (1994).
+linear scaling relation shown in Fig. 6. The 12 C+12 C reac-       The relevant length scale λ in our O shell is the depth of
+tion as implemented in Net 1 has qCC1 = 0.390 MeV amu−1            the shell, which is 4.0 Mm or 157 computational cell widths
+(see Sect. 2.2.4), which implies LC /Ltot = 34.5%. This frac-      on the 7683 grid. Equation 5 then gives Remax = 3.2 × 106 .
+tion is close to the measured values for runs I13 (33.3%), I14     For the 15363 grid (run D2), the Reynolds number would
+(31.4%), and I5 (30.5%), which closely follow the entrain-         be (1536/768)3 = 8 times larger: Remax = 2.6 × 107 . These
+ment rate scaling. Runs with Ltot . 3 × 1011 L fall below          large values, although still many orders of magnitude smaller
+the scaling relation in Fig. 6, which decreases MÛ e /Ltot and,    than what one would expect for the stellar interior, reflect
+consequently, also LC /Ltot for these runs.                        the low effective viscosity of the PPM scheme on the largest
+     As implemented in Net 2, the yields of 12 C+12 C and          flow scales. Sytine et al. (2000) show that the spectrum of
+                         CC2 = 0.133 MeV g        CO =
+12 C+16 O reactions are q                 −1 and q                 3D PPM turbulence is almost indistinguishable from the ex-
+            −1
+0.438 MeV g . The luminosities LCC and LCO due to the              pected Kolmogorov scaling for structures with a wavelength
+two reactions are almost equal in run I17 ( fOO = 67.5).           of 32 grid cells or more, which is 1/5 of the depth of our
+The average yield, q = 0.199 MeV amu−1 , is almost 2× lower        convective shell on the 7683 grid. Strong dissipation sets in
+than that in the otherwise similar run I13 ( fOO = 67.5,           for wavelengths smaller than about 6 grid cells or 4% of the
+Net 1), which explains the low value of LC /Ltot in I17 as         shell’s depth.
+compared with I13 (see Fig. 8). Although C burning in run               Figure 10 shows that the velocity field is dominated
+I16 ( fOO = 2.7, Net 2) is dominated by the 12 C+16 O reac-        by large-scale updraughts and downdraughts with com-
+tion, the average yield q = 0.358 MeV amu−1 is comparable          plex small-scale turbulent structure in the state of quasi-
+with qCC1 = 0.390 MeV amu−1 of 12 C+12 C (Net 1) used in           stationary convection. The velocity distribution changes ran-
+the otherwise similar runs I4 and I15 ( fOO = 2.7). Figure 8       domly in time and no particular direction in space is pre-
+
+                                                                                                        MNRAS 000, 1–20 (2018)
+                                                                                  C ingestion into a convective O shell                          11
+
+                                         I4                                                                   I16
+          1.6 1e11                                                              1.6 1e11
+          1.4                                                                   1.4
+          1.2                                                                   1.2
+          1.0                                                                   1.0                                                   total
+                                                           total
+                                                                                                                                      C12+C12
+          0.8                                              C12+C12              0.8
+    L/L
+
+
+
+
+                                                                          L/L
+                                                                                                                                      C12+O16
+          0.6                                              O16+O16              0.6                                                   O16+O16
+          0.4                                                                   0.4
+          0.2                                                                   0.2
+          0.0                                                                   0.0
+              0    10    20   30        40       50   60        70   80             0    10       20    30     40      50        60     70      80
+                                   t / min                                                                   t / min
+                                      I13
+          1014                                                                                                 I17
+                        total                                                   1014
+                        C12+C12                                                               total
+                        O16+O16                                                               C12+C12
+          1013                                                                                C12+O16
+                                                                                1013          O16+O16
+    L/L
+
+
+
+
+                                                                          L/L
+
+
+
+
+          1012                                                                  1012
+
+
+          1011                                                                  1011
+                 0       5        10             15        20        25                0      5        10       15          20         25       30
+                                       t / min                                                               t / min
+
+Figure 7. Time dependence of the contributions to the total luminosity integrated over the convection zone. The left two panels show
+runs I4 ( fOO = 2.7) and I13 ( fOO = 67.5) with the burning network Net1 (12 C+12 C) and the two panels on the right shown runs I16
+( fOO = 2.7) and I17 ( fOO = 67.5), which use Net2 (12 C+12 C and 12 C+16 O, see Sect. 2.2.4 for details).
+
+
+
+ferred, as expected of convection in the absence of rotation               a large portion of the upper stable layer has been entrained
+and magnetic field. The large-scale flow pattern remains es-               and the upper boundary of the convection zone approaches
+sentially the same when grid resolution is increased from                  the outer boundary condition.
+7683 to 11523 .                                                                 We observe a weak but noteworthy effect in low-
+     Several low-order modes, including an l = 2 mode, make                luminosity runs I2 ( fOO = 1, Net 1), I4 ( fOO = 2.7, Net 1),
+approximately equal contributions to the velocity field in                 I12 ( fOO = 2.7, no C burning), I15 ( fOO = 2.7, Net 1), and
+most of our intermediate- and high-luminosity runs, see runs               I16 ( fOO = 2.7, Net 2). The large-scale flows keep changing
+I5 ( fOO = 13.5, Net 1) and I13 ( fOO = 67.5, Net 1) in                    their distribution for ∼10 – 15 overturning time scales, af-
+Fig. C.1 and I14 ( fOO = 67.5, Net 1) in Fig. 9. The high-                 ter which they start to converge towards the l = 3 mode
+luminosity run I17 ( fOO = 67.5, Net 2) is an exception dis-               of order m = −2 with large-scale updraughts and down-
+cussed below. A strong dipolar component (l = 1), which                    draughts aligned with the diagonals of the simulation cube.
+one would not expect in stationary convection in a shell                   The flow remains highly turbulent and it is sometimes dif-
+with an inner radius as large as one half of its outer ra-                 ficult to recognise this pattern by eye, but it can neverthe-
+dius, only appears towards the end of run I11, which shows                 less be identified using spherical harmonic analysis (Fig. 11)
+a very asymmetric instability (see Sect. 3.6) reminiscent of               and visualised by applying a low-pass filter to the velocity
+the GOSH phenomenon (Herwig et al. 2014). A contribu-                      distribution (Fig. 12). It is suspicious that the grid aligned
+tion from an l = 1 mode is present in the high-luminosity                  pattern first appears at t ≈ 80 min in I2, because we turned
+runs I13 and I14, but it is small and it only develops when                on C burning in that run at t = 74 min, see Sect. 2.2.3. How-
+                                                                           ever, we see the same pattern in runs I4, I15, and I16 that
+                                                                           had C burning on from t = 0 and even in run I12 that had
+7 See also an animated version of this map and of similar maps             C burning turned off throughout. It is possible that the ge-
+from other runs at the URL given in Sect. 4.                               ometry of our shell slightly prefers convection cells about as
+
+MNRAS 000, 1–20 (2018)
+12          R. Andrassy et al.
+                                                                                                                            I2: power spectrum of v at r = 6.0 Mm               100
+           1.0                                                                                               16
+                         I series, 7683, Net 1                                                               14
+                         I series, 7683, Net 2                                                               12
+
+
+
+
+                                                                                                                                                                                       relative power
+           0.8           I series, 11523, Net 1                                                              10
+                         I11, 7683, Net 1                                                                     8                                                                 10 1
+
+
+
+
+                                                                                                       l
+           0.6                                                                                                6
+ L /L
+
+
+
+
+                                                                                                              4
+                                                                                                              2
+           0.4                                                                                                                                                                  10 2
+                                                                                                                  0   20     40     60    80    100   120    140    160
+                                                                                                                                           t / min
+           0.2
+                                                                                                             Figure 11. As Fig. 9 but run I2 ( fOO = 67.5) is shown.
+           0.0
+             10.0       10.5     11.0      11.5      12.0       12.5   13.0     13.5
+                                        log10(L / L )                                                  I2                                                                  t = 164.9 min
+
+
+Figure 8. Dependence on the total luminosity of the fraction
+LC /Ltot , where LC is the luminosity from C-burning reactions and
+Ltot the total luminosity, both integrated over the convection zone.
+The last 2.2 min of run I11 are used when the instability described
+in Sect. 3.6 has fully developed.
+
+
+                       I14: power spectrum of v at r = 6.0 Mm                 100
+      16
+      14
+      12
+                                                                                     relative power
+
+
+
+
+      10
+       8                                                                      10 1
+ l
+
+
+
+
+       6
+       4
+       2
+                                                                              10 2
+                         5            10             15           20
+                                        t / min
+
+
+Figure 9. Spherical harmonic power spectrum of the radial ve-
+locity component vr at r = 6 Mm in run I14 ( fOO = 67.5) shown as
+a function of time.
+                                                                                                            60         40            20          0           20           40             60
+I14                                                                    t = 11.5 min
+                                                                                                                                  v (r = 6.0 Mm) / km s 1
+
+                                                                                                      Figure 12. Distribution of the radial velocity vr at r = 6 Mm and
+                                                                                                      t = 164.9 min in run I2 ( fOO = 67.5, see also Fig. 11). The top panel
+                                                                                                      only shows spherical harmonic components of degree l ≤ 4 based
+                                                                                                      on averages in 80 triangular patches covering the sphere (“buck-
+                                                                                                      ets”, see Sect. 2.2.1). This pattern, close to the spherical harmonic
+                                                                                                      mode of degree l = 3 and order m = −2 and clearly aligned with
+                                                                                                      the corners of the simulation cube (dashed lines), occurs when the
+                                                                                                      driving of convection is very weak.7 Smaller scales in the velocity
+                                                                                                      field can be seen in the bottom panel, which is based on a full 3D
+                                                                                                      data cube downsampled from the run’s resolution 7683 to 1923 .
+  400            300     200       100           0        100    200    300          400              The equal-area Mollweide projection is used in both maps.
+                               v (r = 6.0 Mm) / km s 1
+                                                                                                      large as those of an l = 3 mode and, if the convection is
+Figure 10. Typical distribution of the radial velocity vr at r =
+                                                                                                      weakly driven, these cells align themselves with the l = 3
+6 Mm. Run I14 ( fOO = 67.5) is shown in the equal-area Mollweide                                      mode that is slightly preferred by our Cartesian grid. We
+projection at t = 11.5 min. The rendering is based on a full 3D                                       are currently investigating such subtle effects that occur in
+data cube downsampled from the run’s resolution 11523 to 2883 .                                       slow flows using a new version of the PPMstar code, which
+                                                                                                      solves for fluctuations around a base state. Our preliminary
+
+                                                                                                                                                         MNRAS 000, 1–20 (2018)
+                                                                                   C ingestion into a convective O shell            13
+results indicate that this formulation offers advantages for                        50
+problems involving weakly driven convection.
+      Since the grid-alignment occurs in the phase of quasi-
+stationary convection, one might suspect that this effect                           40
+could somehow influence the entrainment rate, which we
+measure in this phase, and it could possibly explain why
+
+
+
+
+                                                                      v / km s 1
+                                                                                    30
+the entrainment rates are lower than what our scaling law
+predicts at low luminosities, see Sect. 3.2 and Fig. 6. How-
+ever, we find that the entrainment rate slightly increases in                       20                     D1
+the early evolution towards the quasi-stationary state in all                                              I4
+of the relevant runs, see run I2 ( fOO = 1, Net 1) in Fig. 5,                                              v
+I4 ( fOO = 2.7, Net 1) in Fig. B.1, and runs I15 ( fOO = 2.7,                       10                     vr
+Net 1) and I16 ( fOO = 2.7, Net 2) in Fig. B.2. Therefore, if                                              v
+the grid-alignment effect has any influence on the entrain-                          0
+ment rate, it most likely causes a slight increase and not a                             4         5   6         7    8         9
+decrease.                                                                                              r / Mm
+      Our choice of the C-burning network (Net 1 vs Net 2)
+does not influence the velocity distribution at the low lu-
+minosity of runs I4 ( fOO = 2.7, Net 1) and I16 ( fOO = 2.7,       Figure 13. Total (v), radial (vr ), and tangential (v⊥ ) rms veloc-
+Net 2). Velocity spectra from these two runs are essentially       ities in run I4 ( fOO = 2.7) as compared with run D1 of J17.
+the same, see Fig. C.1. This is not the case for the pair
+of high-luminosity runs I13 ( fOO = 67.5, Net 1) and I17
+( fOO = 67.5, Net 2). I13 switches between modes l = 2, 3, 4 at                    180
+random whereas I17 is dominated by an l = 3 mode through-                          160
+out most of it evolution. Convection cells in this pattern,
+however, keep moving around the sphere unlike those in the                         140
+low-luminosity runs mentioned above. We do not know the                            120
+                                                                   v / km s 1
+
+
+
+
+cause of this effect.
+      The fact that we use a realistic O-burning prescription                      100
+and include the burning of the entrained material in our                            80
+simulations as opposed to the simulations presented by J17                                                 D10
+makes surprisingly little difference for time-averaged veloc-
+                                                                                    60                     I13
+ity profiles. Figure 13 compares the low-luminosity run I4                          40                     v
+( fOO = 2.7) with the similar run D1 of J17. The only dif-                                                 vr
+                                                                                    20                     v
+ference can be seen at the transition from the lower stable
+layer into the convection zone, which is located deeper and is                       0
+more abrupt in I4 than in D1. This is qualitatively compat-
+                                                                                         4         5   6         7    8         9
+ible with the heating rate distribution’s being more concen-                                           r / Mm
+trated to the bottom of the convection zone in the I series
+of runs, see Figs. 2 and 4. We can see the same effect in the
+                                                                   Figure 14. As Fig. 13, but runs I13 ( fOO = 67.5) and D10 are
+comparison between the high-luminosity runs D10 and I13
+                                                                   shown.
+( fOO = 67.5) in Fig. 14.
+                                                          1/3
+      Convective velocity is expected to scale with Ltot on
+theoretical grounds (Biermann 1932; Porter & Woodward              have used averages measured in 80 different directions (“
+2000; Müller & Janka 2015, J17), where Ltot is the total lu-      buckets”, see Sect. 2.2.1 for details).
+minosity driving convection. We calculate the rms velocity              Figure 16 compares the low-luminosity run I2 ( fOO = 1)
+vrms = (2Ek,cz /Mcz )1/2 , where Ek,cz and Mcz are the total ki-   with the high-luminosity run I13 ( fOO = 67.5) in terms of
+                                                                   the relative rms fluctuations Xrms  0 (r)/X(r), where X is the
+netic energy and mass of the convection zone, respectively.
+We average vrms over the time interval during which the            quantity of interest, X(r) the spherical average of X at the
+entrainment rate is measured, see Figs. 5, B.1, and B.2. Fig-      radius of r, and
+ure 15 shows that all runs, including the unstable run I11                    v
+                                                                              u
+                                                                              t    N
+(see Sect. 3.6 for details), closely follow the expected scaling     0          1 Õ
+                                                                   Xrms (r) =        [Xi (r) − X(r)]2,                        (6)
+law and only the least luminous run D23 starts to deviate                       N
+                                                                                             i=1
+from it (by ∼16%).
+                                                                   defines the absolute rms fluctuations, where N = 80 is the
+                                                                   total number of buckets. Fluctuations in the density ρ, pres-
+                                                                   sure p, and temperature T are the same within a factor
+3.5   Fluctuations
+                                                                   of a few in the convection zone and they increase with in-
+The 3D, time-dependent nature of the flow gives rise to a          creasing luminosity. Pressure fluctuations are much smaller
+whole spectrum of fluctuations. Their magnitude depends            than density fluctuations in the stable layers as expected for
+on the total luminosity, which both determines and depends         buoyancy-driven internal waves.
+on the entrainment rate. To quantify these fluctuations, we             Density fluctuations in the convection zone are close to
+
+MNRAS 000, 1–20 (2018)
+14                      R. Andrassy et al.
+
+                       2.4
+                                 37.7 (L / 1011)1/3
+                       2.2       D series, 7683
+ log10(v / km s 1])
+
+
+
+
+                                 D series, 15363
+                       2.0
+
+                       1.8
+                                                               I series, 7683, Net 1
+                       1.6                                     I series, 7683, Net 2
+                                                               I series, 11523, Net 1
+                       1.4                                     I11, 7683, Net 1
+                                                               I12, 7683, no C burning
+                       1.2
+                         10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5
+                                               log10(L / L )
+
+Figure 15. Dependence of the rms convective velocity vrms on
+the total luminosity Ltot integrated over the convection zone. The
+                                1/3
+expected scaling law vrms ∝ Ltot is shown for comparison. The
+last 2.2 min of run I11 are used when the instability described in
+Sect. 3.6 has fully developed.
+                                                                                                   0.006       0.003         0.000          0.003          0.006
+                                                                                                                       (Θ     Θ )/ Θ
+                      101
+                                                                                    I2
+                      100                                                           I13        Figure 17. Relative fluctuations in the corrected temperature Θ
+                                                                                    FV         (see Eq. 3 and Sect. 2.2.4) with respect to the spherical average
+                      10 1                                                                     hΘi at t = 21.3 min in run I14 ( fOO = 2.7). The fluctuations are
+                                                                                    p          averaged over an XZ slice 1 Mm thick (5% of the simulation box
+                      10 2                                                          T          width). The rendering is based on data downsampled from 11523
+   /X
+
+
+
+
+                                                                                               to 2883 that were further subject to a lossy compression algorithm
+                      10 3                                                                     (see Sect. 2.2.1 for details). Numerical noise from the compression
+   X
+
+
+
+
+                                                                                               step dominates the outer portion of the rendering.
+                      10 4
+
+                      10 5                                                                     is inversely proportional to Ma (c.f. Fig. 16). Both convec-
+                                                                                               tive boundaries in our simulations are characterised by ap-
+                      10 6                                                                     proximately the same ratio g/N ≈ 4500 km s−1 . Substituting
+                             3   4         5          6    7          8         9         10
+                                                                                               vrms from Table 1 for vconv , we get that the contribution to
+                                                      r / Mm                                   ρ0 /ρ from the term vconv N/g = vconv /(g/N) in the expression
+                                                                                               above is ≈ 6 × 10−3 in I2 and ≈ 3 × 10−2 in I13. These val-
+                                                                                               ues are significantly larger than our measurements shown in
+Figure 16. Relative large-scale rms fluctuations of the fractional                             Fig. 16, which implies that the order-of-magnitude expres-
+volume FV of fluid FC , density ρ, pressure p, and temperature
+                                                                                               sion vconv N/g overestimates the actual fluctuations on the
+T as determined from 80 radial buckets that together cover the
+                                                                                               bucket-to-bucket scale.8
+full solid angle (see Sect. 2.2.1 for details). Runs I2 ( fOO = 1,
+Net 1) and I13 ( fOO = 67.5, Net 1) are shown at t = 134.9 min and                                  We plot the uncorrected temperature T in Fig. 16, al-
+t = 9.32 min, respectively, when I13 is ∼150 times more luminous                               though nuclear reaction rates are computed using the cor-
+than I2.                                                                                       rected temperature Θ (Eqs. 2 and 3). Figure 17 shows rel-
+                                                                                               ative fluctuations in Θ close to the end of run I14 (one of
+                                                                                               the most luminous, fOO = 67.5). They are smaller than 1%,
+Ma2 in both I2 and I13 (see Table 1 for the Ma values). The                                    which limits their possible influence on the C-burning rates
+contrast in magnitude between the density and tempera-                                         to . 20% even at the upper end of the luminosity range
+ture fluctuations at the convective boundaries and those in                                    considered (see Sect. 3.3 for the reactions’ temperature sen-
+the convection zone becomes larger with decreasing luminos-                                    sitivities). For this reason, we did not include them in Fig. 3.
+ity and Mach number. Meakin & Arnett (2007a) estimate                                               Fluctuations in the fractional volume FV of fluid FC are
+the magnitude of density fluctuations in a convection zone                                     large in all of our runs, including the least luminous ones (see
+and at its boundaries as ρ0 /ρ ∼ Ma2 + vconv N/g, where Ma                                     Fig. 16 and also Fig. 3). They slightly increase with increas-
+is the convective Mach number, vconv the convective veloc-
+ity, N the local Brunt-Väisälä frequency, and g the gravi-
+tational acceleration. The vconv N/g term is proportional to                                   8 We have sub-bucket-scale rms information for the fractional
+Ma, so the relative magnitude of density fluctuations in the                                   volume only, but it is not included in Fig. 16 for consistency with
+stable layers as compared to those in the convection zone                                      the other variables shown.
+
+                                                                                                                                      MNRAS 000, 1–20 (2018)
+                                                                                   C ingestion into a convective O shell                                              15
+
+       2.0                                                                                                                       I11
+                                                                                                          total
+       1.5                                                                                                C12+C12
+                                                                                   1013                   O16+O16
+/ FV
+
+
+
+
+       1.0
+
+
+
+
+                                                                          L/L
+ ,
+
+
+
+
+                                                                                   1012
+FV
+
+
+
+
+       0.5
+                                                 I4          I13                   1011
+                r0 = 4.50 Mm                     I16         I17
+       0.0                                                                                0           2        4             6         8    10   12          14
+          0.0         0.2      0.4         0.6         0.8         1.0
+                                                                                                                             t / min
+                                     t/t
+
+Figure 18. Time evolution of the relative rms fluctuations in the        Figure 19. Contributions to the total luminosity integrated over
+fractional volume FV of fluid FC at the radius of r0 = 4.5 Mm in         the convection zone in run I11 ( fOO = 13.5, fCC = 10).
+runs I4 ( fOO = 2.7, Net 1), I13 ( fOO = 67.5, Net 1), I16 ( fOO =
+2.7, Net 2), and I17 ( fOO = 67.5, Net 2). All spatial scales are
+considered here as opposed to Fig. 16. Simulation time on the                                     I11: power spectrum of v at r = 6.0 Mm              100
+abscissa is normalised for clarity.                                           16
+                                                                              14
+                                                                              12
+
+
+
+
+                                                                                                                                                             relative power
+ing luminosity, although much less than the fluctuations in                   10
+ρ, p, and T do, and they create large-scale asymmetries in                     8                                                                      10 1
+                                                                          l
+
+
+
+
+the energy generation rate as shown in Fig. 3. The FV fluc-                    6
+tuations in runs I16 ( fOO = 2.7) and I17 ( fOO = 67.5), which                 4
+use the C-burning network Net 2, are larger than those in                      2
+a similar pair of runs I4 ( fOO = 2.7) and I13 ( fOO = 67.5), in                              2           4        6         8         10   12
+                                                                                                                                                      10 2
+which Net 1 is used, see Fig. 18. This is likely a consequence                                                     t / min
+of the fact that a certain concentration X12 of 12 C has to first
+build up in the convection zone to make the time scale of
+the 12 C+12 C reactions (∝ X12 −1 ) considered in Net 1 short            Figure 20. Time evolution of the spherical harmonic power spec-
+                                                                         trum of the radial velocity vr at the radius of 6 Mm in run I11
+enough to balance the rate of mass entrainment whereas the
+                                                                         ( fOO = 13.5, fCC = 10). Spectral power is normalised by its maxi-
+C-burning time scale is independent of X12 for the 12 C+16 O             mum value.
+reactions that are also included in Net 2. 12 C+16 O reac-
+tions are responsible for ∼50% of the C-burning luminosity
+in run I17 and they dominate C burning in run I16, see                   the current series of runs, we have carried out a variation
+Sect. 3.3. The FV fluctuations as quantified in Fig. 18 are              of the medium-luminosity run I5 ( fOO = 13.5) which has an
+slightly larger than those in Fig. 16 (compare run I13 shown             entrainment rate of ∼10−5 M s−1 . In order to mimic the en-
+in both), because all spatial scales are considered (i.e. the            ergy feedback encountered in a situation closer to a complete
+index i in Eq. 6 runs over computational grid cells instead              merger, we increase the energy yield of C burning by the fac-
+of the buckets) in Fig. 18 as opposed to Fig. 16.                        tor fCC = 10 in run I11. Even taking into account that we
+                                                                         increased the amount of C in the ingested material by a fac-
+                                                                         tor of five compared to the stellar model value (Sect. 2.2.2),
+3.6    Instability in a case with strong feedback as in
+                                                                         the resulting entrainment rate (see below), which sets the
+       O-C shell merger conditions
+                                                                         strength of the energy feedback, stays well below the above
+Depending on the entropy difference between a pair of inter-             mentioned upper limit. The degree of asymmetric perturba-
+acting O- and C-burning convective shells, the rate of mass              tions reported in this section for run I11 may therefore be
+entrainment into the O shell and the corresponding feedback              considered as a lower limit for the case of a complete O-C
+from C-burning could be even larger than in the simulations              shell merger.
+discussed so far. In terms of the nucleosynthetic signature                   Figure 19 shows that the C-burning luminosity
+of the O-C shell merger, Ritter et al. (2018a) show that the             (12 C+12 C) starts rapidly increasing soon after the onset of
+production of odd-Z elements increases with increasing en-               entrainment in I11. C burning quickly becomes the dominant
+trainment rate and mixing efficiency, and they suggest that              source of energy and exponential growth ensues. Strong,
+the largest enhancements could be reached in a case in which             large-scale oscillations akin to the GOSH phenomenon de-
+the O and C shells merge completely on the dynamical time                scribed by Herwig et al. (2014) develop after t ≈ 11 min. In
+scale. An entrainment rate of ∼1 M s−1 could be reached                  terms of spherical harmonics, modes with l = 1 to l = 4 are
+assuming near-sonic mass exchange, which we consider an                  dominant (see Fig. 20) and the upper convective boundary
+upper limit. To explore this regime within the framework of              gets significantly deformed (see Fig. 21). The oscillations can
+
+MNRAS 000, 1–20 (2018)
+16     R. Andrassy et al.
+                                                                  dius. We have compared this method with that described
+                                                                  in Sect. 3.2 in the time interval from 6.2 min to 9.3 min, in
+                                                                  which both methods are applicable. Our standard method
+                                                                  yields MÛ e = 3.07×10−5 M s−1 in this time interval. With the
+                                                                  new method, we obtain MÛ e = 3.61 × 10−5 M s−1 , i.e. a value
+                                                                  only 18% larger. The new method allows us the measure the
+                                                                  ultimate entrainment rate achieved in the last two minutes
+                                                                  of run I11: MÛ e = 2.24 × 10−4 M s−1 , see Fig. 23.
+                                                                        This entrainment rate is similar to the 1D nucleosyn-
+                                                                  thesis run Sm4 of Ritter et al. (2018a) that produces only
+                                                                  modest enhancements of odd-Z elements. It is also similar
+                                                                  to our high-luminosity runs I13 and I14 ( fOO = 67.5, no
+                                                                  C-burning enhancement), which do not show the runaway
+                                                                  effect observed in I11. Although mass entrainment and the
+                                                                  subsequent nuclear burning are not spherically symmetric
+                                                                  in any of our 3D runs, the use of a 1D mixing prescription
+                                                                  for nucleosynthesis post-processing seems more justified in
+                                                                  quasi-stationary cases like I13 or I14 than in the unstable
+                                                                  case I11.
+                                                                        Although run I11 reaches a luminosity similar to that of
+                                                                  runs I13, I14, and I17 (compare Fig. 19 with Figs. 7 and A.1),
+                                                                  it differs from them qualitatively. Convection in the latter
+            8    7    6   5       4      3   2   1   0            three runs is quasi-stationary and predominantly driven by
+                              log10 FV                            O burning with O luminosity increasing on the time scale of
+                                                                  many convective overturns, following the heating up of the
+                                                                  convection zone. The rates of change of the luminosity and
+Figure 21. Rendering of the fractional volume of fluid FC in a    entrainment rate are so rapid in I11 that this run cannot be
+thin slice through the computational box at t = 12.6 min in run   considered quasi-stationary. Figure 23 also shows that Me (t)
+I11 ( fOO = 13.5, fCC = 10).                                      in I11, unlike any in other run, is dominated by the entrained
+                                                                  fluid’s piling up in the convection zone. The total mass of
+                                                                  fluid FC entrained by the end of run I11 corresponds to only
+also be seen in Fig. 22, which shows at four points in time the   about 1/3 of the upper stable layer’s initial mass whereas all of
+Mach numbers Mar and Ma⊥ corresponding to motions in the          that layer gets ultimately entrained in runs I13, I14, and I17.
+radial and tangential direction, respectively, and the relative   The contribution of the temperature increase to the increase
+density fluctuations (ρ − hρi)/hρi. High values of Mar and        in the burning rates is rather limited in I11 as evidenced by
+Ma⊥ , reaching ∼0.3 locally, are concentrated to one half of      the small (. 50%) increase in the oxygen luminosity (see
+the renderings at t = 10.9 min and at t = 12.0 min. The den-      Fig. 19), which is a sensitive temperature indicator.
+sity fluctuations follow the same pattern. They reach values            The behaviour of run I11 can be motivated as follows.
+up to ∼15% in some parts of the upper boundary due to the         The linearity of the dependence of the entrainment rate
+boundary’s large-scale deformation, but they also approach        MÛ e on the total luminosity Ltot (see Fig. 6 and Sect. 3.2)
+5 – 10% in the bulk of the convection zone at t = 12.0 min.       suggests that the amount of energy needed to entrain a
+The Courant number exceeds unity at some point in the sim-        constant amount of mass is constant. The scaling rela-
+ulation volume at t = 13.5 min and the simulation is stopped.     tion gives MÛ e,0 = 1.44 × 10−6 M s−1 at L0 = 1011 L , so
+Figure 22 also shows that although the convective boundary        Γ = L0 / MÛ e,0 = 1.34 × 1017 erg g−1 , which can also be ex-
+is well separated from the outer spherical wall boundary con-     pressed as Γ = 0.139 MeV amu−1 . Only the mass fraction
+dition during the initial growth of the instability, some parts   XC12 = 0.13 of 12 C in the entrained fluid represents burnable
+of the flow reach the outer wall by t = 12 min and are likely     fuel, so ΓC12 = Γ/X12 = 1.07 MeV amu−1 is the amount of en-
+to be influenced by its presence at the end of the run. This      ergy needed to entrain one atomic mass unit of 12 C into the
+results from this run’s being more violent than anticipated.      convection zone. Nuclear network Net 1 releases 9.35 MeV
+     Our standard method of determining the entrainment           from every single 12 C+12 C reaction (24 amu of 12 C), which is
+rate is not applicable to cases of very violent convection as-    qCC = 0.390 Mev amu−1 . Since qCC < ΓC12 , the burning of the
+sociated with strong motions in the upper stable layer as         entrained material normally produces less energy than what
+mentioned in Sect. 3.2. In order to characterise the entrain-     was needed to entrain it.9 We have, however, increased the
+ment process throughout run I11, we have slightly modified        energy release from Net 1 by the factor fCC = 10 in run I11,
+this method. Instead of using the average velocity profile to     so fCC qCC = 3.90 MeV amu−1 > ΓC12 holds for the amount
+define the upper boundary of the convection zone, we use          of energy produced per unit mass of fuel burnt in this run.
+the bucket data (see Sect. 2.2.1) to measure the radius of        More energy is produced from the burning of the entrained
+the boundary using fractional volume profiles of fluid FC         material than what was needed to entrain it. This closes
+in 80 different directions. We define the radius of the up-
+per boundary in each individual bucket as the largest ra-
+dius inside that the fractional volume does not exceed 12
+and we integrate the amount of fluid FC inside that ra-           9   This also holds for nuclear network Net 2.
+
+                                                                                                         MNRAS 000, 1–20 (2018)
+                                                                         C ingestion into a convective O shell                     17
+       I11                            10.1 min    I11                         10.1 min    I11                          10.1 min
+
+
+
+
+       I11                            10.9 min    I11                         10.9 min    I11                          10.9 min
+
+
+
+
+       I11                            12.0 min    I11                         12.0 min    I11                          12.0 min
+
+
+
+
+       I11                            13.0 min    I11                         13.0 min    I11                          13.0 min
+
+
+
+
+      0.00    0.05     0.10    0.15        0.20   0.00   0.05   0.10   0.15        0.20   0.10   0.05   0.00    0.05        0.10
+                       Ma                                       Ma                                  (      )/
+
+Figure 22. Time evolution of the Mach numbers Mar and Ma⊥ corresponding to motions in the radial and tangential direction, respec-
+tively, and of the relative density fluctuations (ρ − hρi)/ hρi in the last three minutes of run I11 ( fOO = 67.5, fCC = 10).
+
+
+
+
+MNRAS 000, 1–20 (2018)
+18          R. Andrassy et al.
+                                                                  out to be equally important when the luminosity is high
+                                   I11
+        6 1e 2                                                    (∼1013 L ) and they strongly dominate when the luminos-
+                     = 2. 24 × 10 4 M s 1                         ity is low (. 1011 L ). The contribution of C burning to
+        5         present                                         the total luminosity is only ∼15% almost independently of
+                                                                  the luminosity when the network includes both 12 C+12 C
+                  burnt
+        4                                                         and 12 C+16 O reactions. Because we assumed the concen-
+                  total
+                                                                  tration of 12 C in the fluid above the convection zone to be
+ M /M
+
+
+
+
+        3                                                         five times higher than that in the C shell of the particu-
+                                                                  lar MESA model that we started with, the feedback from C
+        2                                                         burning would likely be smaller still without that increase.
+                                                                  This is the case in the simulations of Mocák et al. (2018),
+        1                                                         in which the concentration of 12 C above their O shell ranges
+                                                                  from ∼10−5 to ∼10−4 .
+        0
+            4       6         8             10   12       14           The velocity field is dominated by spherical harmonic
+                                  t / min                         modes l = 2, 3, 4, i.e. there are only a few large convective
+                                                                  cells that start the turbulent cascade. The dominance of such
+                                                                  global modes has been previously observed in simulations
+Figure 23. Like Fig. 5, but run I11 ( fOO = 67.5, fCC = 10) is
+                                                                  providing a full-solid-angle view of convection in similar en-
+shown.                                                            vironments, e.g. Bazan & Arnett (1994); Porter et al. (2000);
+                                                                  Gilet et al. (2013); Jones et al. (2017); Müller et al. (2017).
+                                                                  Mass entrainment occurs where these large-scale flows run
+a positive feedback loop that can explain the exponential         into one another while turning over at the upper convective
+growth seen in Figs. 19 and 23.                                   boundary and they start pulling slivers of the C-rich fluid
+     The main caveat of this hypothesis is that the entrain-      downwards. Full-sphere simulations are therefore necessary
+ment rate is rather slow to respond to changes in the total       to correctly quantify this process. The rms convective ve-
+luminosity in other high-luminosity runs, see Sect. 3.2. The                             1/3
+                                                                  locity scales with Ltot as expected and the magnitude of
+ε mechanism (see e.g. Kippenhahn et al. 2012) operating in        velocity at any given total luminosity Ltot agrees with sim-
+the C-burning layer atop the convection zone may also con-        ulations of J17 who did not include O and C burning but
+tribute to the development of large-amplitude oscillations        instead used time-independent volume heating to drive con-
+at the upper boundary, but the stability analysis involved        vection in the shell.
+in quantifying this contribution is beyond the scope of this
+paper.                                                                 Large-scale asymmetries in the distribution of the en-
+                                                                  trained C-rich material cause significant deviations of the
+                                                                  burning rate from spherical symmetry. The quadratic de-
+                                                                  pendence of the 12 C+12 C reaction rate on the mass frac-
+4    SUMMARY AND CONCLUSIONS
+                                                                  tion of 12 C enhances the C luminosity by up to a factor
+We have employed 3D hydrodynamic simulations to inves-            of two compared with an estimate based on spherical aver-
+tigate the dynamic feedback from the burning of a C-rich          ages when this reaction dominates C burning. On the other
+material ingested from a stably-stratified layer into a con-      hand, fluctuations in the density, pressure, and temperature
+vective O-burning shell in a model of an evolved massive          are smaller than 1% in the convection zone proper. The only
+star. All but one of the simulations reach a quasi-stationary     exception is run I11, in which we experimentally increased
+state, in which the rates of mass entrainment and burning         the energy release from our simple C-burning network by a
+are in a close balance. Most of our runs use a 7683 Cartesian     factor of ten to explore the regime closer to a full, dynamic-
+grid, but two runs using a 11523 grid are in excellent quan-      time-scale merger of the O and C shells. An exponentially-
+titative agreement with their 7683 counterparts (Figs. 6, 8,      growing instability starts immediately after the onset of C
+and 15). This result provides further support for our previ-      entrainment in I11 and density fluctuations reach ∼5% in
+ously established convergence upon grid refinement for the        the convection zone when a dipolar oscillation has devel-
+same setup (J17) as well as for other simulations performed       oped in the flow field with a Mach number locally exceeding
+using the PPMstar code (Woodward et al. 2015).                    0.2. Fluctuations of such magnitude are known to facilitate
+     The entrainment rate MÛ e is proportional to the total       shock revival in supernova explosion simulations (Couch &
+luminosity, which in our suite of simulations spans almost        Ott 2013, 2015; Müller & Janka 2015; Müller et al. 2017). If
+three orders of magnitude (from 3 × 1010 L to ∼1013 L ),          such an instability occurs well before core collapse it might
+although MÛ e starts to deviate from that scaling in the lowest   power a SN impostor event assuming that there is a physi-
+third of the luminosity range. We suggest that these devi-        cal mechanism capable of transporting a significant fraction
+ations might be caused by the low-luminosity simulations’         of the kinetic energy contained in the O shell (∼3 × 1047 erg
+being too short for convection to erode the initial transition    for vrms ∼ 200 km s−1 ) to the star’s extended envelope. The
+layer between the two fluids and to form a new boundary           entrainment rate reached in the instability, 2 × 10−4 M s−1 ,
+consistent with the properties of the convection and of the       is close to what is needed to obtain significant production
+entrainment process.                                              of the odd-Z elements Cl, K, and Sc according to the nu-
+     Carbon burning contributes between 16% and 33% of            cleosynthesis calculations of Ritter et al. (2018a). Still, the
+the total luminosity in the quasi-stationary state when only      energy feedback from C ingestion in case I11 is smaller than
+12 C+12 C reactions are considered. 12 C+16 O reactions turn      the energy feedback expected due to the maximum entrain-
+
+                                                                                                       MNRAS 000, 1–20 (2018)
+                                                                      C ingestion into a convective O shell                    19
+ment rate that may be encountered in a full, dynamic O-C        Colella P., Woodward P. R., 1984, Journal of Computational
+shell merger.                                                       Physics, 54, 174
+      We show in Sect. 3.6 that the instability in run I11      Couch S. M., Ott C. D., 2013, ApJ, 778, L7
+could have been caused by the fact that more energy was         Couch S. M., Ott C. D., 2015, ApJ, 799, 5
+released from the burning of one unit of entrained mass in      Davis A., Jones S., Herwig F., 2018, MNRAS, 484, 3921
+                                                                Dayras R., Switkowski Z. E., Woosley S. E., 1977, Nuclear Physics
+I11 than what was needed to entrain that mass. Although
+                                                                    A, 279, 70
+this is a direct consequence of our having increased the en-    Gilet C., Almgren A. S., Bell J. B., Nonaka A., Woosley S. E.,
+ergy release from C burning in this run, there are a number         Zingale M., 2013, ApJ, 773, 137
+of energy producing reactions that our simple nuclear net-      Herwig F., Woodward P. R., Lin P.-H., Knox M., Fryer C., 2014,
+work does not include, e.g. those caused by the products of         ApJ, 792, L3
+C burning or by the burning of 20 Ne that is abundant in the    Joggerst C. C., et al., 2014, Journal of Computational Physics,
+C shell. Our energy argument suggests that the instability          275, 154
+would also occur with less feedback from the burning if the     Jones S., Andrassy R., Sandalski S., Davis A., Woodward P., Her-
+entrainment rate was larger at the same luminosity, which           wig F., 2017, MNRAS, 465, 2991
+would likely happen if we considered an O shell with a softer   Kippenhahn R., Weigert A., Weiss A., 2012, Stellar Structure and
+                                                                    Evolution. Springer, doi:10.1007/978-3-642-30304-3
+upper boundary. Finally, interaction between the convective
+                                                                Meakin C. A., Arnett D., 2006, ApJ, 637, L53
+flows in merging O and C shells (the latter not considered
+                                                                Meakin C. A., Arnett D., 2007a, ApJ, 665, 690
+in this work) could contribute to the development of insta-     Meakin C. A., Arnett W. D., 2007b, ApJ, 667, 448
+bilities at the interface as well.                              Mocák M., Meakin C., Campbell S. W., Arnett W. D., 2018,
+      Animated visualisations of some of the simulations pre-       MNRAS, 481, 2918
+sented in this work are available on Zenodo.org10 and on        Müller B., Janka H.-T., 2015, MNRAS, 448, 2141
+YouTube11 . Readers interested in analysing the 3D data sets    Müller B., Melson T., Heger A., Janka H.-T., 2017, MNRAS, 472,
+presented in this paper are encouraged to contact the au-           491
+thors who can provide JupyterHub data exploration access        Ofek E. O., et al., 2014, ApJ, 789, 104
+via the Astrohub12 platform.                                    Paxton B., Bildsten L., Dotter A., Herwig F., Lesaffre P., Timmes
+                                                                    F., 2011, ApJS, 192, 3
+                                                                Paxton B., et al., 2013, ApJS, 208, 4
+                                                                Paxton B., et al., 2015, ApJS, 220, 15
+ACKNOWLEDGEMENTS                                                Pignatari M., et al., 2013, ApJ, 762, 31
+                                                                Pignatari M., et al., 2016, ASTROPHYS J SUPPL S, 225, 24
+RA, who completed most of this work as a CITA na-
+                                                                Porter D. H., Woodward P. R., 1994, ApJS, 93, 309
+tional fellow, acknowledges support from the Canadian In-       Porter D. H., Woodward P. R., 2000, ApJS, 127, 159
+stitute for Theoretical Astrophysics and from the Klaus         Porter D. H., Woodward P. R., Jacobs M. L., 2000, in Buchler
+Tschira Stiftung. PRW acknowledges NSF grants 1413548               J. R., Kandrup H., eds, Annals of the New York Academy of
+and 1515792. FH acknowledges support from a NSERC                   Sciences Vol. 898, Astrophysical Turbulence and Convection.
+Discovery grant. This research was conducted as part of             p. 1, doi:10.1111/j.1749-6632.2000.tb06160.x
+the JINA Center for the Evolution of the Elements (NSF          Ramaprabhu P., Dimonte G., Woodward P. R., Fryer C., Rocke-
+grant PHY-1430152). NCSA’s Blue Waters and Compute                  feller G., Muthuraman K., Lin P. H., Jayaraj J., 2012, Physics
+Canada/WestGrid provided the computing and data pro-                of Fluids, 24, 074107
+cessing resources for this project. We thank two anony-         Rauscher T., Heger A., Hoffman R. D., Woosley S. E., 2002, ApJ,
+                                                                    576, 323
+mous referees for their comments, which improved the qual-
+                                                                Ritter C., Andrassy R., Côté B., Herwig F., Woodward P. R.,
+ity of this paper. This work benefited from the use of a
+                                                                    Pignatari M., Jones S., 2018a, MNRAS, 474, L1
+large amount of free software, most importantly the MESA        Ritter C., Herwig F., Jones S., Pignatari M., Fryer C., Hirschi R.,
+stellar-evolution code, IPython/Jupyter notebooks, Python           2018b, MNRAS, 480, 538
+libraries matplotlib and pyshtools, the FFmpeg software         Smith N., Arnett W. D., 2014, ApJ, 785, 82
+suite, Subversion revision control system, or the LaTeX doc-    Smith N., Li W., Filippenko A. V., Chornock R., 2011a, MNRAS,
+ument preparation system.                                           412, 1522
+                                                                Smith N., Li W., Silverman J. M., Ganeshalingam M., Filippenko
+                                                                    A. V., 2011b, MNRAS, 415, 773
+                                                                Sytine I. V., Porter D. H., Woodward P. R., Hodson S. W., Win-
+REFERENCES                                                          kler K.-H., 2000, Journal of Computational Physics, 158, 225
+Arcavi I., et al., 2017, Nature, 551, 210                       Tur C., Heger A., Austin S. M., 2007, ApJ, 671, 821
+Arnett D., 1994, ApJ, 427, 932                                  Woodward P. R., 1986, in Winkler K.-H. A., Norman M. L., eds,
+Arnett W. D., Meakin C., 2011, ApJ, 733, 78                         NATO Advanced Science Institutes (ASI) Series C Vol. 188,
+Bazan G., Arnett D., 1994, ApJ, 433, L41                            NATO Advanced Science Institutes (ASI) Series C. p. 245
+Bazan G., Arnett D., 1998, ApJ, 496, 316                        Woodward P. R., 2007, in Grinstein F. F., Margolin L. G., Rider
+Biermann L., 1932, Z. Astrophys., 5, 117                            W. J., eds, , Implicit Large Eddy Simulation, Computing Tur-
+Caughlan G. R., Fowler W. A., 1988, Atomic Data and Nuclear         bulent Fluid Dynamics. Cambridge University Press, Cam-
+    Data Tables, 40, 283                                            bridge, p. 130
+Clarkson O., Herwig F., Pignatari M., 2018, MNRAS, 474, L37     Woodward P., Colella P., 1981, in W. C. Reynolds and R. W.
+                                                                    MacCormack ed., , Lecture Notes in Physics. Springer Verlag,
+                                                                    Berlin, pp 434–441
+10 https://zenodo.org/record/2592134                            Woodward P., Colella P., 1984, Journal of Computational Physics,
+11 https://goo.gl/8B7w29                                            54, 115
+12 https://astrohub.uvic.ca                                     Woodward P. R., et al., 2012, in Proc. NECDC2012. Liver-
+
+MNRAS 000, 1–20 (2018)
+20     R. Andrassy et al.
+  more, Ca., LA-UR-13-20949; also available at www.lcse.umn.
+  edu/NECDC2012 or at http://permalink.lanl.gov/object/
+  tr?what=info:lanl-repo/lareport/LA-UR-13-20949
+Woodward P. R., Herwig F., Lin P.-H., 2015, ApJ, 798, 49
+Woodward P. R., Herwig F., Wetherbee T., 2018, Simulating Stel-
+  lar Hydrodynamics at Extreme Scale, Computing in Science
+  & Engineering, 20, 8; special issue on the theme of the Na-
+  tional Strategic Computing Initiative. https://ieeexplore.
+  ieee.org/document/8452054. Preprint also available at www.
+  lcse.umn.edu/CiSE2018, doi:10.1109/MCSE.2018.05329811
+Woosley S. E., Heger A., Weaver T. A., 2002, Reviews of Modern
+  Physics, 74, 1015
+
+
+
+APPENDIX A: LUMINOSITY CURVES
+APPENDIX B: ENTRAINMENT RATE
+MEASUREMENTS
+APPENDIX C: VELOCITY POWER SPECTRA
+
+
+This paper has been typeset from a TEX/LATEX file prepared by
+the author.
+
+
+
+
+                                                                  MNRAS 000, 1–20 (2018)
+                                                                                            C ingestion into a convective O shell                           21
+
+                                             I2                                                                            I5
+                     6 1e10                                                       1.2
+                                                                                         1e12
+                                                                                                    total
+                     5                                                            1.0               C12+C12
+                                                                                                    O16+O16
+                     4                                                            0.8
+                                                           total
+                     3                                     C12+C12
+               L/L
+
+
+
+
+                                                                            L/L
+                                                                                  0.6
+                                                           O16+O16
+                     2                                                            0.4
+                     1                                                            0.2
+                     0                                                            0.0
+                         0      50    100          150     200       250                0       5         10   15         20       25   30        35   40
+                                        t / min                                                                      t / min
+
+                                             I12                                                                          I14
+                     1.6 1e11                                                     1014
+                     1.4                                    O16+O16                                  total
+                                                                                                     C12+C12
+                     1.2                                                                             O16+O16
+                     1.0
+                     0.8                                                          1013
+               L/L
+
+
+
+
+                                                                            L/L
+
+                     0.6
+                     0.4
+                     0.2
+                     0.0                                                          1012
+                         0       10    20             30    40        50                 0            5             10             15        20        25
+                                            t / min                                                                      t / min
+
+                                                                            I15
+                                                   1.6 1e11
+                                                   1.4
+                                                   1.2
+                                                   1.0                                              total
+                                                   0.8                                              C12+C12
+                                             L/L
+
+
+
+
+                                                   0.6                                              O16+O16
+                                                   0.4
+                                                   0.2
+                                                   0.0
+                                                       0    10    20         30          40          50        60
+                                                                           t / min
+Figure A.1. As Fig. 7, but runs I2 ( fOO = 1, Net 1), I5 ( fOO = 13.5, Net 1), I12 ( fOO = 2.7, no C burning), I14 ( fOO = 67.5, Net 1), and
+I15 ( fOO = 2.7, Net 1) are shown.
+
+
+
+
+MNRAS 000, 1–20 (2018)
+22       R. Andrassy et al.
+
+              1e 3                        I4                                            1e 2                   I5
+        4.0                                6          1                                                         6           1
+                           = 1. 09 × 10 M s                                       2.0              = 9. 66 × 10 M s
+        3.5
+                        present                                                                 present
+        3.0             burnt                                                     1.5           burnt
+        2.5             total                                                                   total
+M /M
+
+
+
+
+                                                                           M /M
+        2.0                                                                       1.0
+        1.5
+        1.0                                                                       0.5
+        0.5
+        0.0                                                                       0.0
+           10       20     30        40         50        60    70    80                5   10     15    20         25          30    35   40
+                                     t / min                                                                 t / min
+
+        2.0 1e 3
+                                          I12
+                                                                                  1.2 1e 1
+                                                                                                              I14
+                                                                                                                4           1
+                                                                                  1.0              = 1. 18 × 10 M s
+        1.5                                                                                     present
+                                                                                  0.8           burnt
+                                                                                                total
+                                                                           M /M
+
+
+
+                                                                                  0.6
+ M /M
+
+
+
+
+        1.0
+                                               = 7. 53 × 10 7 M s 1               0.4
+        0.5                                 present
+                                            burnt                                 0.2
+                                            total
+        0.0                                                                       0.0
+           10      15     20    25        30     35        40   45    50                4   6      8    10     12      14        16   18   20
+                                     t / min                                                                 t / min
+Figure B.1. As Fig. 5, but runs I4 ( fOO = 2.7, Net 1), I5 ( fOO = 13.5, Net 1), I12 ( fOO = 2.7, no C burning), and I14 ( fOO = 67.5, Net 1)
+are shown.
+
+
+
+
+                                                                                                                    MNRAS 000, 1–20 (2018)
+                                                                                C ingestion into a convective O shell                23
+
+          1e 3                      I15                                       4.0 1e 3
+                                                                                                         I16
+       4.0                            6         1                                          = 9. 73 × 10 7 M s 1
+       3.5            = 1. 37 × 10 M s                                        3.5
+                   present                                                              present
+                                                                              3.0
+       3.0         burnt                                                                burnt
+       2.5         total                                                      2.5       total
+M /M
+
+
+
+
+                                                                      M /M
+       2.0                                                                    2.0
+       1.5                                                                    1.5
+       1.0                                                                    1.0
+       0.5                                                                    0.5
+       0.0                                                                    0.0
+          10        20        30           40       50         60                10    20     30       40   50       60      70     80
+                                 t / min                                                               t / min
+                                                                     I17
+                                          8 1e 2
+                                          7           = 6. 30 × 10 5 M s 1
+                                                   present
+                                          6        burnt
+                                          5        total
+                                   M /M
+
+
+
+
+                                          4
+                                          3
+                                          2
+                                          1
+                                          0
+                                            4    6       8      10 12 14             16    18     20
+                                                                    t / min
+        Figure B.2. As Fig. 5, but runs I15 ( fOO = 2.7, Net 1), I16 ( fOO = 2.7, Net 2), and I17 ( fOO = 67.5, Net 2) are shown.
+
+
+
+
+MNRAS 000, 1–20 (2018)
+24            R. Andrassy et al.
+                       I4: power spectrum of v at r = 6.0 Mm                                 100
+                                                                                                                                             I5: power spectrum of v at r = 6.0 Mm                                        100
+     16                                                                                                                       16
+     14                                                                                                                       14
+     12                                                                                                                       12
+
+
+
+
+                                                                                                    relative power
+
+
+
+
+                                                                                                                                                                                                                                 relative power
+     10                                                                                                                       10
+      8                                                                                      10 1                              8                                                                                          10 1
+ l
+
+
+
+
+                                                                                                                          l
+      6                                                                                                                        6
+      4                                                                                                                        4
+      2                                                                                                                        2
+                                                                                             10 2                                                                                                                         10 2
+          0      10             20        30       40         50    60         70                                                       5            10    15                  20          25        30         35
+                                                t / min                                                                                                           t / min
+
+
+                      I12: power spectrum of v at r = 6.0 Mm                                 100
+                                                                                                                                             I13: power spectrum of v at r = 6.0 Mm                                       100
+     16                                                                                                                       16
+     14                                                                                                                       14
+     12                                                                                                                       12
+                                                                                                    relative power
+
+
+
+
+                                                                                                                                                                                                                                 relative power
+     10                                                                                                                       10
+      8                                                                                      10 1                              8                                                                                          10 1
+ l
+
+
+
+
+                                                                                                                          l
+      6                                                                                                                        6
+      4                                                                                                                        4
+      2                                                                                                                        2
+                                                                                             10 2                                                                                                                         10 2
+                           10              20             30             40                                                                      5              10                         15                  20
+                                                t / min                                                                                                           t / min
+
+
+                      I15: power spectrum of v at r = 6.0 Mm                                 100
+                                                                                                                                             I16: power spectrum of v at r = 6.0 Mm                                       100
+     16                                                                                                                       16
+     14                                                                                                                       14
+     12                                                                                                                       12
+                                                                                                    relative power
+
+
+
+
+                                                                                                                                                                                                                                 relative power
+     10                                                                                                                       10
+      8                                                                                      10 1                              8                                                                                          10 1
+ l
+
+
+
+
+                                                                                                                          l
+
+
+
+
+      6                                                                                                                        6
+      4                                                                                                                        4
+      2                                                                                                                        2
+                                                                                             10 2                                                                                                                         10 2
+                      10             20            30          40        50                                                             10            20    30                        40        50        60         70
+                                                t / min                                                                                                           t / min
+
+
+                                                                              I17: power spectrum of v at r = 6.0 Mm                                       100
+                                                              16
+                                                              14
+                                                              12
+                                                                                                                                                                     relative power
+
+
+
+
+                                                              10
+                                                               8                                                                                           10 1
+                                                          l
+
+
+
+
+                                                               6
+                                                               4
+                                                               2
+                                                                                                                                                           10 2
+                                                                              5         10                           15            20       25
+                                                                                                   t / min
+Figure C.1. As Fig. 9, but runs I4 ( fOO = 2.7, Net 1), I5 ( fOO = 13.5, Net 1), I12 ( fOO = 2.7, no C burning), I13 ( fOO = 67.5, Net 1), I15
+( fOO = 2.7, Net 1), I16 ( fOO = 2.7, Net 2), and I17 ( fOO = 67.5, Net 2) are shown.
+
+
+
+
+                                                                                                                                                                                                     MNRAS 000, 1–20 (2018)
+

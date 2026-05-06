@@ -1,0 +1,1725 @@
+                                               Astronomy & Astrophysics manuscript no. ccpaper                                                                                        ©ESO 2022
+                                               January 27, 2022
+
+
+
+
+                                                         Dynamics in a stellar convective layer and at its boundary:
+                                                              Comparison of five 3D hydrodynamics codes
+                                                   R. Andrassy1 , J. Higl1 , H. Mao2 , M. Mocák3 , D. G. Vlaykov4 , W. D. Arnett5 , I. Baraffe4, 6 , S. W. Campbell7, 8 ,
+                                                T. Constantino4 , P. V. F. Edelmann9 , T. Goffrey10 , T. Guillet4 , F. Herwig11, 12 , R. Hirschi3, 13 , L. Horst1 , G. Leidi1, 14 ,
+                                                                      C. Meakin5, 15 , J. Pratt16 , F. Rizzuti3 , F. K. Röpke1, 17 , and P. Woodward2, 12
+
+                                                     1
+                                                        Heidelberger Institut für Theoretische Studien, Schloss-Wolfsbrunnenweg 35, D-69118 Heidelberg, Germany
+                                                        e-mail: robert.andrassy@h-its.org
+                                                      2
+                                                        LCSE and Department of Astronomy, University of Minnesota, Minneapolis, MN 55455, USA
+                                                      3
+                                                        Astrophysics Group, Keele University, Keele, Staffordshire ST5 5BG, UK
+arXiv:2111.01165v2 [astro-ph.SR] 26 Jan 2022
+
+
+
+
+                                                      4
+                                                        Physics and Astronomy, University of Exeter, Exeter, EX4 4QL, United Kingdom
+                                                      5
+                                                        Steward Observatory, University of Arizona, 933 N. Cherry Avenue, Tucson AZ 85721, USA
+                                                      6
+                                                        École Normale Supérieure, Lyon, CRAL (UMR CNRS 5574), Université de Lyon, France
+                                                      7
+                                                        School of Physics and Astronomy, Monash University, Victoria 3800, Australia
+                                                      8
+                                                        ARC Centre of Excellence for All Sky Astrophysics in Three Dimensions (ASTRO-3D), Australia
+                                                      9
+                                                        X Computational Physics (XCP) Division and Center for Theoretical Astrophysics (CTA), Los Alamos National Laboratory, Los
+                                                        Alamos, NM 87545, USA
+                                                     10
+                                                        Centre for Fusion, Space and Astrophysics, Department of Physics, University of Warwick, Coventry, CV4 7AL, UK
+                                                     11
+                                                        Department of Physics and Astronomy, University of Victoria, Victoria, BC, V8W 2Y2, Canada
+                                                     12
+                                                        Joint Institute for Nuclear Astrophysics – Center for the Evolution of the Elements, USA
+                                                     13
+                                                        Kavli Institute for the Physics and Mathematics of the Universe (WPI), University of Tokyo, 5-1-5 Kashiwanoha, Kashiwa 277-
+                                                        8583, Japan
+                                                     14
+                                                        Zentrum für Astronomie der Universität Heidelberg, Astronomisches Rechen-Institut, Mönchhofstr. 12-14, D-69120 Heidelberg,
+                                                        Germany
+                                                     15
+                                                        Pasadena Consulting Group, 1075 N Mar Vista Ave, Pasadena, CA 91104 USA
+                                                     16
+                                                        Department of Physics and Astronomy, Georgia State University, Atlanta GA 30303, USA
+                                                     17
+                                                        Zentrum für Astronomie der Universität Heidelberg, Institut für Theoretische Astrophysik, Philosophenweg 12, D-69120 Heidel-
+                                                        berg, Germany
+                                                    Received; accepted
+
+                                                                                                                  ABSTRACT
+
+                                                    Our ability to predict the structure and evolution of stars is in part limited by complex, 3D hydrodynamic processes such as convec-
+                                                    tive boundary mixing. Hydrodynamic simulations help us understand the dynamics of stellar convection and convective boundaries.
+                                                    However, the codes used to compute such simulations are usually tested on extremely simple problems and the reliability and repro-
+                                                    ducibility of their predictions for turbulent flows is unclear. We define a test problem involving turbulent convection in a plane-parallel
+                                                    box, which leads to mass entrainment from, and internal-wave generation in, a stably stratified layer. We compare the outputs from
+                                                    the codes FLASH, MUSIC, PPMSTAR, PROMPI, and SLH, which have been widely employed to study hydrodynamic problems in stellar
+                                                    interiors. The convection is dominated by the largest scales that fit into the simulation box. All time-averaged profiles of velocity
+                                                    components, fluctuation amplitudes, and fluxes of enthalpy and kinetic energy are within . 3σ of the mean of all simulations on a
+                                                    given grid (1283 and 2563 grid cells), where σ describes the statistical variation due to the flow’s time dependence. They also agree
+                                                    well with a 5123 reference run. The 1283 and 2563 simulations agree within 9% and 4%, respectively, on the total mass entrained
+                                                    into the convective layer. The entrainment rate appears to be set by the amount of energy that can be converted to work in our setup
+                                                    and details of the small-scale flows in the boundary layer seem to be largely irrelevant. Our results lend credence to hydrodynamic
+                                                    simulations of flows in stellar interiors. We provide in electronic form all outputs of our simulations as well as all information needed
+                                                    to reproduce or extend our study.
+                                                    Key words. hydrodynamics – convection – turbulence – stars: interiors – methods: numerical
+
+
+
+                                               1. Introduction                                                             pressure, although significant compression and expansion still
+                                                                                                                           occur when fluid packets are displaced radially in the strong,
+                                               Convection is the most important mixing process in stars. Due               nearly hydrostatic pressure stratification. The spatial scales in-
+                                               to the high density and opacity deep in the stellar interior, the           volved are so large that molecular viscosity is negligible and the
+                                               convection is almost adiabatic and Mach numbers are typically               flow is highly turbulent. The main effect of convection on the
+                                               M < 0.05 in late evolutionary phases of massive stars and                   structure and evolution of stars is the transport of species, en-
+                                               10−4 . M . 10−3 in early phases, such as core convection dur-               ergy, and angular momentum. The mixing of chemical species
+                                               ing H and He burning. Such slow flows are nearly incompress-                has important implications for the generation of nuclear energy,
+                                               ible in the sense that ram pressure is much smaller than thermal
+                                                                                                                                                                       Article number, page 1 of 20
+                                                  A&A proofs: manuscript no. ccpaper
+
+origin of elements, stellar lifetimes, or the observable properties   sequence (Meakin & Arnett 2007, Gilet et al. 2013, Scott et al.
+of stars and stellar populations. The physics of convection is key    2021). It is not clear whether this is because the simulations’ pa-
+to determining the endpoints of stellar evolution which in turn       rameters are too far from the stellar regime, or it is due to some
+give rise to some of the most energetic events in the Universe,       physics not being included in the simulations, or it is a sign of
+such as supernova explosions and compact-object mergers.              numerical problems.
+     Despite its importance, the treatment of convective mix-              Simulations of convection on the main sequence have be-
+ing and energy transport is still very rudimentary in stellar-        come even more attractive with the recent boom in asteroseis-
+evolution models. This is because the long thermal and nuclear        mology. The generation of waves by convection and their prop-
+timescales of stellar evolution make 1D, time-averaged models         agation through the rest of the star can be observed in 2D and
+the only practical approach. The mixing-length theory (MLT;           3D simulations directly, although most codes require an artificial
+Prandtl 1925, Böhm-Vitense 1958) is the most common para-             increase in the energy generation rate to speed up the flow. The
+metric description of convection in stellar-evolution codes. The      resulting wave spectra can, in principle, be compared with obser-
+MLT’s main parameter, the mixing length α, is usually calibrated      vations of real stars. However, some groups obtain spectra with
+such that the code reproduces current properties of the Sun and       many strong resonance lines (Lecoanet et al. 2021) whereas oth-
+α is then assumed to be the same in all convective layers in          ers get featureless, continuous spectra (Alvan et al. 2014, Edel-
+all stars. Three-dimensional hydrodynamic simulations of near-        mann et al. 2019, Horst et al. 2020). Again, it is unclear whether
+surface convection show that α varies across the Hertzsprung-         the difference can be tracked down to physical assumptions or
+Russel diagram (Trampedach et al. 2014, Magic et al. 2015,            they are of numerical origin.
+Sonoi et al. 2019). Trampedach et al. (2014) and Jørgensen et al.          Probably all major hydrodynamics codes used in the field
+(2018) illustrate how such realistic 3D models can be used to         have passed a series of tests using problems with known so-
+replace the MLT in near-surface layers in stellar-evolution cal-      lutions such as shock tubes or various instabilities during their
+culations. Deep in the stellar interior, which is the main focus      initial growth. However, the stellar hydrodynamic cases that we
+of our work, convection is so efficient that the stratification be-   are interested in are much more complex and exact solutions
+comes isentropic almost independently of α. The MLT is then           do not exist. Instead, code verification is done by comparing
+used to get an estimate of mixing speed, which is important for       solutions obtained with different codes. Such exercises have a
+the stratification of species when the timescale of some nuclear      long tradition in computational dynamics (Joggerst et al. 2014,
+reaction(s) becomes comparable to or shorter than the mixing          Ramaprabhu et al. 2012, Dimonte et al. 2004) and also in astro-
+timescale across the convective layer. Nevertheless, the stellar      physics (Doherty et al. 2010, Beeck et al. 2012, McNally et al.
+model remains 1D, and the mixing is usually described as a dif-       2012, Kim et al. 2014, 2016, Lecoanet et al. 2016, Christensen-
+fusive process, although alternative approaches are being devel-      Dalsgaard et al. 2020, Silva Aguirre et al. 2020, Fleck et al.
+oped (e.g. Stephens et al. 2021).                                     2021). Nonetheless, a test problem focused on the dynamics of
+     The MLT is a local theory and as such it cannot describe         convection and mixing processes in stellar interiors has been
+any mixing caused by the non-local nature of convection and           missing in the literature.
+reaching beyond the formal convective boundary. Traditionally              We constructed a complex test problem as detailed in
+known as ‘convective overshooting’, this mixing may involve a         Sect. 2.2. It involves stratified, turbulent convection, and CBM as
+number of distinct physical processes and it is better described      well as the generation and propagation of internal gravity waves
+by the more general term ‘convective boundary mixing’ (CBM;           in a plane-parallel box. The presence of turbulence makes this
+Denissenkov et al. 2013). CBM enlarges stellar convection zones       problem fundamentally different from classical test cases such
+and it is required to explain a large number of observations such     as shock tubes. Even if the initial and boundary conditions are
+as the position of the turn-off point in open clusters (Rosvick       given, the chaotic nature of the flow leads to rapid amplifica-
+& Vandenberg 1998), the width of the main sequence in the             tion of small perturbations in numerical simulations as well as in
+Hertzsprung-Russell diagram (Castro et al. 2014), properties of       real flows. Nevertheless, many space- and time-averaged quan-
+double-lined eclipsing binaries (Claret & Torres 2019, and ref-       tities are expected to converge upon grid refinement in a statisti-
+erences therein), or asteroseismic observations of massive stars      cal way, for instance velocity profiles, spectra, fluxes, or the cu-
+(Aerts 2021, and references therein). In calculations of stellar      mulative amount of CBM.1 The statistical variation left in these
+evolution, CBM is added in the form of a simplistic model,            averages descreases as the length of the averaging time inter-
+such as instantaneous overshooting (Maeder 1976, Ekström et al.       val is increased. However, our test problem, designed to be as
+2012), a diffusive model (Herwig 2000, Battino et al. 2016,           close as possible to real science cases, involves continuous heat-
+Baraffe et al. 2017), or an entrainment model (Staritsin 2013,        ing and mass entrainment. The resulting secular evolution limits
+Scott et al. 2021). Each of these formulations has at least one       the extent of time averaging applicable and we must estimate
+free parameter, which is usually calibrated by comparison with        the magnitude of statistical variation when comparing results of
+observations. However, there is no reason to expect that the same     such simulations. Still, we believe that our test problem can be
+parameter(s) should apply across different convection zones in        used to compare codes with accuracy appropriate to the current
+different stars at different stages of evolution.                     state of the field.
+     Multiple research groups have started to use 2D and 3D hy-            We ran simulations using the codes FLASH, MUSIC, PPMSTAR,
+drodynamic codes to simulate stellar convection and CBM in or-        PROMPI, and SLH, which have been widely used to study hydro-
+der to calibrate free parameters of the CBM models mentioned          dynamic problems in stellar interiors and are briefly described
+above, for example, Meakin & Arnett (2007), Jones et al. (2017),      in Sect. 2.3. The simulations are compared in a number of met-
+Pratt et al. (2017), Cristini et al. (2019), Denissenkov et al.       rics: velocity amplitudes, profiles, and spectra (Sect. 3.1), prop-
+(2019), and Horst et al. (2021). Although the growth rates of         erties of the convective boundary and the mass entrainment rate
+convective layers in such simulations seem to be reasonable for       (Sect. 3.2), the amplitudes of fluctuations, and energy fluxes
+late stages of stellar evolution (Meakin & Arnett 2007, Wood-
+ward et al. 2015, Jones et al. 2017, Mocák et al. 2018), they are      1
+                                                                         Vorticity is a good example of a quantity that diverges upon grid
+much too high to be compatible with observations on the main-         refinement in simulations of inviscid turbulence.
+
+Article number, page 2 of 20
+                                         R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+(Sect. 3.3). Finally, we summarise our results in Sect. 4. Our              Table 1. Basic problem units (upper section), derived units (middle sec-
+selection of codes for this study is based on collaborative ties            tion), and adopted values of physical constants (lower section).
+and availability of resources and it is far from being unbiased
+or complete. In particular, our study does not include any finite-                 Quantity                               Unit
+difference and spectral schemes. However, we provide our test                      density                                1.820940 × 106          g cm−3
+setup as well as all data-analysis scripts in electronic form for                  length                                 4.000000 × 108          cm
+anyone interested in extending this study, see Appendix A.
+                                                                                   temperature                            3.401423 × 109          K
+                                                                                   velocity                               5.050342 × 108          cm s−1
+2. Methods                                                                         acceleration                           6.376489 × 108          cm s−2
+                                                                                   energy                                 2.972468 × 1049         erg
+2.1. Motivation of the oxygen shell test problem
+                                                                                   luminosity                             3.752995 × 1049         erg s−1
+In this study, we aim to define a problem that involves turbulent                  mass                                   1.165402 × 1032         g
+convection and CBM while being simple enough to be accessi-                        pressure                               4.644481 × 1023         dyn cm−2
+ble to as many codes as possible. We define our test problem to                    time                                   7.920256 × 10−1         s
+be similar to the simulations of Jones et al. (2017) and Andrassy                  volume                                 6.400000 × 1025         cm3
+et al. (2020) of shell oxygen burning in a massive star. The strat-
+ification of the underlying stellar model is compared with that of                 atomic mass unit                       1.660539 × 10−24        g
+our test problem (specified in Sect. 2.2) in Fig. 1. Although the                  Boltzmann constant                     1.380649 × 10−16        erg K−1
+oxygen shell is spherical, we use plane-parallel geometry both                     gas constant                           8.314463 × 107          erg g−1 K−1
+for simplicity and to reduce computational costs. The lower half                   gravitational constant                 6.674300 × 10−8         dyn cm2 g−2
+of the simulation domain is initially isentropic and the upper half
+is stably stratified and approximately follows the density strati-
+fication of the stellar model. Because we intend to study the dy-                                                                                              1.85
+namics of a single convective boundary in isolation, we do not
+include the convective carbon-burning shell, the bottom of which                                                                                               1.84
+corresponds to the discontinuity at r ≈ 2.35 in the stellar model.                      100
+     To further simplify the problem, we follow Jones et al.                                                                                                   1.83
+(2017) and Andrassy et al. (2020) and use the ideal-gas equation
+                                                                             p, ρ, A
+
+
+
+
+of state, neglect neutrino cooling, and replace nuclear reactions
+
+
+
+
+                                                                                                                                                                      µ
+                                                                                       10−1                                                                    1.82
+with a constant and easy-to-resolve heating profile. Compared
+with the original stellar model, the total luminosity driving con-                                     p
+vection is 22.5 times larger and the convective layer contains,                                        ρ                                                       1.81
+due to its different geometry, 5.4 times less mass. The resulting                                      A
+                                                                                       10−2
+rms Mach number of the convective flow is then ≈ 0.04, mak-                                            µ
+                                                                                                                                                               1.80
+ing the problem well accessible to explicit and implicit codes                                1.00   1.25   1.50   1.75     2.00   2.25   2.50   2.75   3.00
+as well as to codes using low-Mach approximations. Molecular                                                                r, y
+viscosity, thermal conduction, and radiative diffusivity are not
+considered.
+                                                                            Fig. 1. Initial stratification in the problem units (Table 1) of the pressure
+     We adopt the speed of sound, density, and temperature at the           p, density ρ, pseudo-entropy A = p/ργ , and mean molecular weight µ
+bottom of the convective layer as units of velocity, density, and           in the stellar model (thin lines) and in the test problem (thick lines). The
+temperature, respectively, and we take the approximate depth of             discontinuity visible in the stellar model at r ≈ 2.35 is the bottom of the
+the convective layer to be the unit of length.2 The numerical val-          carbon-burning shell, which is not included in our test problem.
+ues of these units as well as those of other units derived from
+them are summarised in Table 1. The dimensionless problem is
+specified in detail in the following section.                               the lower and upper boundaries of the simulation domain using
+                                                                            the factor
+2.2. Problem specification
+                                                                                     1 n       h          io
+The initial hydrostatic stratification, shown in Fig. 1, is computed                                     1                                           1
+                                                                                       2 1 + sin 16π y − 32                         for 1 ≤ y < 1 + 16
+                                                                                     
+                                                                                     
+                                                                                                               ,                                      ,
+using the following profile of gravitational acceleration:                           
+                                                                                     
+                                                                                     
+                                                                                                                                           1            1
+                                                                            fg (y) = 
+                                                                                     1,                                            for 1 + 16 ≤ y ≤ 3 − 16 ,
+                                                                                     
+                                                                                     
+                                                                                        n      h          io
+g(y) = g0 fg (y) y−5/4 ,                                             (1)             
+                                                                                      1 1 + sin 16π y − 1                                  1
+                                                                                                2               ,          32       for 3 − 16 < y ≤ 3,
+where g0 = 1.414870 is the gravitational acceleration at the bot-                                                                                                     (2)
+tom of the oxygen-burning shell in the stellar model. The vertical
+coordinate y runs from 1 to 3, which in principle allows the same
+stratification to be used in spherical coordinates simply by set-           which forces density and pressure to become constant close to
+ting the radius r = y. This profile is similar to the stellar one and       the boundaries and thus makes possible the use of a simple re-
+the reduction in gravity with height helps prevent a too-fast de-           flective boundary condition there. The computational domain
+crease in the pressure scale height. We ‘turn off’ gravity close to         contains a mixture of two monatomic ideal gases with γ = 5/3
+                                                                            and mean molecular weights of µ0 = 1.848 and µ1 = 1.802. Ini-
+ 2
+   The convective shell’s bottom radius happens to be close to its radial   tially, the convective layer is filled with the µ0 fluid and the stable
+extent in the stellar model.                                                layer with the µ1 fluid. There is a smooth transition between the
+                                                                                                                                     Article number, page 3 of 20
+                                                  A&A proofs: manuscript no. ccpaper
+
+two layers and the fractional volume η1 of the µ1 fluid varies as     where V is the velocity vector, I the unit tensor, g the gravita-
+                                             1
+                                                                      tional acceleration vector pointed towards the negative y axis,
+         
+         
+          0,                 for 1 ≤ y < 2 − 16 ,                    and E = e + 21 kVk2 the specific total energy, which includes the
+         
+         
+         
+         1                         1             1                 specific internal energy e and the specific kinetic energy 12 kVk2 .
+η1 (y) = 
+          2 1 + sin
+                     (8πy) , for 2 − 16 ≤ y ≤ 2 + 16  ,        (3)
+         
+         
+                                                                     Some of our codes, as indicated in Table 2, include the specific
+         
+         1,                  for 2 + 1 < y < 3.
+                                      16                              potential energy Φ in the total energy EΦ = E + Φ and, instead
+                                                                      of evolving Eq. 9, they evolve the equivalent equation
+The mixture is assumed to be in local pressure and thermal equi-
+librium everywhere and the stratification follows the piecewise-      ∂(ρEΦ )
+polytropic pressure-density relation                                          + ∇ · [(ρEΦ + p)V] = q̇.                               (10)
+                                                                        ∂t
+         
+         
+         γ0 ,                                    1
+                                 for 1 ≤ y < 2 − 16 ,                 The system of equations is closed by the ideal-gas law
+         
+         
+         
+d ln p                                 1             1              p = (γ − 1) ρe                                                 (11)
+       = γ0 + η1 (y)(γ1 − γ0 ), for 2 − 16 ≤ y ≤ 2 + 16 ,   (4)
+ d ln ρ 
+         
+         
+         
+         γ1 ,                           1                            with γ = 5/3. We track the mixing between the two layers by
+                                 for 2 + < y < 3,
+                                           16
+                                                                      advecting the partial density ρXi of either of the two fluids,
+where γ0 = 5/3 and γ1 = 1.3. Equations 1 – 4, together with the
+ideal-gas law define a unique hydrostatic state.                      ∂(ρXi )
+                                                                              + ∇ · (ρXi V) = 0,                                     (12)
+     We impose friction-free, non-conductive wall boundary con-         ∂t
+ditions at y = 1 and y = 3. The specific implementation of these      and the other mass fraction follows from the requirement
+boundary conditions is code-dependent, see Sect. 2.3. The com-        X0 + X1 = 1. The mass fraction Xi acts as a passive tracer of
+putational domain is periodic in the two horizontal dimensions        mixing in our setup, which is a consequence of the set of as-
+and spans the coordinate intervals −1 ≤ x ≤ 1 and −1 ≤ z ≤ 1.         sumptions we make. The passive nature of composition may be
+The initial aspect ratio of the convective layer is thus 2:1 (width   somewhat surprising since composition has a direct influence on
+to height).                                                           buoyancy. However, fluctuations in composition are in our setup
+     Convection is driven using a time-independent heat source        advected together with fluctuations in entropy and the latter de-
+concentrated close to the lower boundary of the convective layer      termines the buoyancy. It does not matter whether the entropy
+with energy generation rate per unit volume of                        difference between a fluid parcel and its surroundings is a re-
+                                        1                            sult of a difference in composition or heat content or both. This
+        q̇0 sin (8πy) , for 1 ≤ y ≤ 1 + 8 ,
+        
+                                                                     special property of our setup would be lost if we introduced a
+q̇(y) = 
+                                                               (5)
+        0,              for 1 + 1 < y ≤ 3,                           composition dependence in Eqs. 7–10 by using a more complex
+                                8
+                                                                      equation of state, or by including temperature- and composition-
+where q̇0 = 3.795720 × 10−4 . The total luminosity of the heat        dependent terms such as heat-conduction, radiative-diffusion, or
+source is 1.2082151 × 10−4 . When the problem is discretised,         nuclear reactions.
+we take into account the fact that the average value of q̇(y) over
+a computational cell of height ∆y centred around y = y0 is
+                                                                      2.3. Codes
+q̇(y0 ) sin(4π∆y)/(4π∆y). The heat source is defined to be smooth
+and easy to resolve for this study; the energy generation profile     We run simulations of the problem described above using five
+in the stellar model is asymmetric and discontinuous (see Fig. 3      3D hydrodynamic codes that are well established in the field of
+of Jones et al. 2017). We do not include any cooling term. The        stellar convection: FLASH, MUSIC, PPMSTAR, PROMPI, and SLH.
+Kelvin-Helmholtz timescales of the convective layer and of the        All of these codes are based on the finite-volume method but
+whole computational domain are 1.29 × 104 and 1.43 × 104 time         there are many differences between the numerical schemes as
+units, respectively.                                                  shown in Table 2 and in the following subsections.
+     To break the initial symmetry, we use a density perturbation
+
+∆ρ            q̇(y)                                                   2.3.1. FLASH
+   = 5 × 10−5       [sin(3πx) + cos(πx)] [sin(3πz) − cos(πz)] ,
+ρ0             q̇0                                                    FLASH (Fryxell et al. 2000) is a modular multidimensional hy-
+                                                             (6)      drodynamics code that originated from the combination of the
+                                                                      legacy PROMETHEUS code (Fryxell et al. 1989) and the AMR
+where ρ0 = 1 is the density at the bottom of the convective layer.    library PARAMESH (MacNeice et al. 2000). FLASH was origi-
+The perturbation only affects the heating layer, so it is also con-   nally developed to simulate Type Ia supernovae (e.g. Plewa et al.
+centrated close to the lower boundary of the convective layer.        2004) and has since been extended by a large variety of modules
+There is no pressure perturbation. The smooth density perturba-       including magnetic fields, radiation transfer, and the considera-
+tion, although small, allows us to produce a well-resolved initial    tion of a cosmological redshift. Due to its great flexibility, FLASH
+transient, which should be similar in all codes.                      has since been used to address various astrophysical problems
+    The problem is described by the inviscid Euler equations          including core-collapse (e.g. Couch & Ott 2015) and type Ia (e.g.
+with gravity and volume heating,                                      Willcox et al. 2016) supernova explosions, galaxy evolution (e.g
+              ∂ρ                                                      Scannapieco & Brüggen 2015), or interstellar turbulence (e.g
+                 + ∇ · (ρV) = 0,                               (7)    Federrath et al. 2010). For this work we used version 4.6.2 of
+              ∂t
+                                                                      FLASH with its default unsplit hydrodynamics solver. Compared
+∂(ρV)
+        + ∇ · (ρV ⊗ V + pI) = ρg,                              (8)    to the default settings, we increase the order of reconstruction to
+  ∂t                                                                  the 3rd order PPM (Colella & Woodward 1984) and apply the
+  ∂(ρE)                                                               HLLC Riemann solver. The top and bottom boundary are im-
+          + ∇ · [(ρE + p)V] = ρV · g + q̇,                     (9)
+     ∂t                                                               plemented as reflective boundaries. FLASH uses double precision
+Article number, page 4 of 20
+                                          R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+Table 2. Basic characteristics of the codes used in this study.
+
+ Code          Energy        Grid           Reconstruction        Numerical Flux          Dimensional      Time                       FP
+               Equation                                           Function                Splitting        Stepper                    Precision
+ FLASH         Eq. 9         collocated     PPM                   HLLC                    no               Lee & Deane (2009)         64-bit∗
+                                                                  Toro (2009)
+ MUSIC         Eq. 9         staggered      Van Leer (1974)       upwinded advection      no               Crank-Nicolson             64-bit
+                                                                  Viallet et al. (2016)
+ PPMSTAR       Eq. 9         collocated     PPM+PPB               Woodward (2007)         yes              PPM∗∗                      32-bit
+ PROMPI        Eq. 9         collocated     PPM                   Fryxell et al. (2000)   yes              Fryxell et al. (2000)      64-bit∗
+ SLH           Eq. 10        collocated     PPM                   AUSM+-up                no               RK3                        64-bit
+                                                                  Liou (2006)
+
+Notes. Sect. 2.3 contains further references and details. ∗ Output is written in 32-bit precision. ∗∗ Exact algorithm to be described in a future
+publication.
+
+
+(64-bit) floating-point arithmetic to perform the computations,           execution speed. The time-stepping algorithm has been revised
+but the output that is used for post-processing has been written          and will be described in a future publication. Another key fea-
+in single precision (32-bit) to save disk space.                          ture of PPMSTAR is tracking the advection of the concentrations
+                                                                          in a two-fluid scheme using the Piecewise-Parabolic Boltzmann
+                                                                          moment-conserving advection scheme (PPB; Woodward 1986,
+2.3.2. MUSIC                                                              Woodward et al. 2015). Nuclear reactions and energy production
+The MUlti-dimensional Stellar Implicit Code MUSIC (Viallet                is taken into account with approximate networks (Herwig et al.
+et al. 2016, Goffrey et al. 2017) is a time-implicit hydrodynam-          2014, Andrassy et al. 2020, Stephens et al. 2021). Both radiation
+ics code designed to study key phases of stellar evolution in two         pressure and diffusion can be taken into account (Mao et al. in
+and three dimensions in spherical or Cartesian coordinates. The           prep.). Reflective boundary conditions are used at the top and
+code solves the Euler equations, optionally supplemented with             bottom boundaries.
+diffusive radiation transport, gravity, the Coriolis and centrifu-
+gal terms, and active and/or passive scalars. The equation set            2.3.4. PROMPI
+is closed using either an ideal gas or a tabulated equation of
+state. The equations are spatially discretised using a finite vol-        PROMPI is a multidimensional hydrodynamics code based on
+ume method, on a staggered mesh, with scalar quantities defined           an Eulerian implementation of the piecewise parabolic method
+at cell centres, and vector components at cell faces. The advec-          PPM by Colella & Woodward (1984) capable of treating realis-
+tion step uses a second-order interpolation, and a gradient limiter       tic equations of state (Colella & Glaz 1985) and multi-species
+originally described by van Leer (Van Leer 1974). Time discreti-          advection. It is equipped with an equation of state to handle the
+sation is carried out using the Crank-Nicolson method, and a              semi-degenerate stellar plasma (Timmes & Swesty 2000), grav-
+physics-based preconditioner is used to accelerate the conver-            ity, radiative diffusion and a general nuclear reaction network.
+gence of the implicit method (Viallet et al. 2016). The boundary          PROMPI is a version of the legacy PROMETHEUS code (Fryxell
+conditions are implemented via appropriate ghost zone layers              et al. 1991) parallelised with MPI (Message-Passing-Interface)
+(reflective along the top and bottom walls and periodic along the         by Meakin & Arnett (2007). Notable scientific work enabled by
+side walls), and the code uses 64-bit precision throughout.               PROMPI can by found in Meakin & Arnett (2007), Arnett et al.
+     The code has been benchmarked against a number of stan-              (2009), Viallet et al. (2013), Mocák et al. (2018), or Cristini et al.
+dard hydrodynamical test problems (e.g. Goffrey et al. 2017) and          (2019). Latest development of PROMPI includes GPU acceller-
+has been applied to a number of stellar physics problems, includ-         ation (Hirschi, private communication) and runtime calcula-
+ing accretion (Geroux et al. 2016) and convective overshooting            tion of space-time averaged mean-fields for extensive Reynolds-
+(Pratt et al. 2017, Baraffe et al. 2017, Pratt, J. et al. 2020).          Averaged-Navier Stokes (or RANS) analysis3 . PROMPI uses 64-
+     The concentration of the µ1 fluid is advected as a passive           bit precision internally but it writes output in 32-bit precision to
+scalar. The corresponding flux is reconstructed using the mass            save disk space. Reflective boundary conditions are used at the
+fractions of the µ1 fluid. For comparison with the other codes,           top and bottom boundaries.
+all output is linearly interpolated onto a cell-centred grid as a
+first post-processing step.
+                                                                          2.3.5. SLH
+
+2.3.3. PPMSTAR                                                            The Seven-League Hydro (SLH) code, initially developed by
+                                                                          Miczek (2013), solves the fully compressible Euler equations
+The explicit Cartesian compressible gas-dynamics code                     in one to three spatial dimensions. It contains a general equa-
+PPMSTAR is based on the Piecewise-Parabolic Method (PPM;                  tion of state including radiation pressure and electron degener-
+Woodward & Colella 1981, 1984, Colella & Woodward 1984,                   acy (Timmes & Swesty 2000) and supports radiative transfer in
+Woodward 1986, 2007). In its most recent version (Woodward                the diffusion limit. A monopole and a full 3D gravity solvers
+et al. 2019) it solves the conservation equations in a perturbation       are also available. An arbitrary number of fluids can be advected
+formulation with regard to an initial base state that is valid for
+perturbations of any size. This allows the computation to be               3
+                                                                             For more details on the PROMPI’s mean-fields utilisation see the
+carried out with only 32-bit precision and roughly doubles the            ransX framework https://github.com/mmicromegas/ransX
+
+                                                                                                                     Article number, page 5 of 20
+                                                   A&A proofs: manuscript no. ccpaper
+
+and interactions between them can be simulated using a nuclear-        where q is the quantity to be averaged, ρ is the density, i, j, and
+reaction module (Edelmann 2014).                                       k, are grid cell indices along the x, y, and z axes, respectively,
+    The equations are discretised on logically rectangular, but        and N x and Nz are the total numbers of cells along the axis given
+otherwise arbitrary, curvilinear grids using a finite-volume           in the subscript. The cell volume does not appear in Eqs. 13 and
+scheme. The code specialises in slow, nearly hydrostatic flows in      14, because it is the same for all cells. We use the notation hqi
+the stellar interior. Various methods to treat the hydrostatic back-   for time averages. We always give the averaging time interval
+ground stratification (Edelmann et al. 2021) are used in com-          in the text or in the figure caption. In some cases, we need to
+bination with several low-Mach flux functions (Liou 2006, Li           smooth a time series q(t) to suppress noise and make it easier to
+& Gu 2008, Miczek et al. 2015) to reduce dissipation at low            visually compare different simulations. To do so, a centred top-
+Mach numbers, which is unacceptably high with standard flux            hat convolution filter is employed. Its width τav is specified in
+functions. Reconstruction schemes available range from con-            each case individually. We suppress boundary effects by padding
+stant through linear with several optional slope limiters and un-      the time series with the time average of q(t) during the first and
+limited parabolic to the PPM reconstruction of Colella & Wood-         last τ2av time units before performing the convolution.
+ward (1984). SLH supports both implicit and explicit time step-
+ping. The code has been shown to scale up to several hundred
+thousand cores (Edelmann & Röpke 2016, Hammer et al. 2016)             3. Results
+and applied to problems involving mixing processes (Edelmann           Owing to the well-resolved initial perturbation, the initial growth
+et al. 2017, Horst et al. 2021) and wave generation (Horst et al.      of convection proceeds at the same rate in all of the codes con-
+2020) in stellar interiors.                                            sidered (see Fig. 3 and Sect. 3.1). As the animations available on
+    In the present work, we use PPM reconstruction with a              Zenodo4 show, a substantial amount of small-scale structure ap-
+slightly modified version of the AUSM+-up flux function (Liou          pears in the large-scale hot bubbles during their initial rise from
+2006) and the Deviation well-balancing method of Berberich             the heating layer towards the top of the convective layer. They
+et al. (2021). The wall boundary conditions are implemented as         deform the convective-stable interface significantly when they
+flux-based boundaries such that mass and energy fluxes through         impact it at t ≈ 60, generating the first upward-propagating inter-
+the walls are exactly zero. Ghost cells are used at the wall bound-    nal gravity waves (IGW). The stable nature of the upper layer
+aries in the reconstruction process: we perform parabolic extrap-      forces the convective upflows to decelerate and, ultimately, re-
+olation for all conserved variables with the exception of com-         verse. As this happens, the flows drag some of the µ1 fluid into
+position variables, which are assumed to be constant at the wall       the convective layer, starting the process of mass entrainment,
+boundaries. Because the flow in the test problem is relatively         see Fig. 2. The flow keeps accelerating during the first few con-
+fast, we employ explicit time stepping with the RK3 scheme to          vective timescales τconv = 80 (see Eq. 16) and we conservatively
+reduce computational costs. The code uses 64-bit floating-point        define the end of this initial transient to be t0 = 500 ≈ 6 τconv . We
+arithmetic. Unlike the other codes, we add another density per-        focus our analysis on the remaining 1500 time units (≈19 τconv )
+turbation on top of that defined by Eq. 6 in the form of white         of steady convection accompanied with continuous increase in
+noise with an amplitude of 5 × 10−7 because SLH otherwise pre-         the convective layer’s mass due to mass entrainment. In the fol-
+serves the reflection symmetry of Eq. 6 with respect to the plane      lowing subsections, we present different aspects of the simula-
+x = −z.                                                                tions and compare their evolution in the five codes in detail.
+
+2.4. Simulations and their output                                      3.1. Velocity field
+We use the same Cartesian computational grids with constant            We first compare the simulations in terms of horizontally aver-
+spacing in all codes: a low-resolution grid with 1283 cells, a         aged rms velocity fluctuations
+medium-resolution grid of 2563 cells and a high-resolution grid
+                                                                                                   1
+of 5123 cells. Because all quantities we compare in Sect. 3 con-       vrms (y) = σ
+                                                                       e            2
+                                                                                   ev,x +σ 2
+                                                                                         ev,y +σ 2 2
+                                                                                               ev,z    ,                                   (15)
+verge rapidly upon grid refinement, we only perform a full 5123
+run with PPMSTAR and a short one with PROMPI to save comput-           where σ ev,x , σ
+                                                                                      ev,y , and σ
+                                                                                                 ev,z are standard deviations of the three
+ing time.                                                              components of the velocity vector. We further average the veloc-
+    All simulations are stopped at time tend = 2 × 103 , which cor-    ity profiles over the convective and stable layer to obtain (mass-
+responds to 25 convective turnover timescales, and we write out-       weighted) bulk measures of typical velocity fluctuations in the
+put every 5 time units with the exception of the 5123 PROMPI run,      two layers.5 Because a substantial amount of mass gets entrained
+in which the output is written every 1.266 time units. The output      into the convective layer during the simulations, we track the ver-
+includes the full 3D state information, which is post-processed        tical coordinate yub of the upper boundary of the convective layer
+to obtain 1D horizontal averages for a number of quantities,           in time as described in Sect. 3.2. We compute the averages in the
+kinetic-energy spectra, and 2D slices through the simulation box,      regions with y < yub (t)−0.1 (convective layer) and y > yub (t)+0.1
+see Appendix A for details. We use both horizontal volume-             (stable layer). The offsets of 0.1 length units are used to exclude
+weighted averages                                                      the transition zone.
+                                                                            The time evolution of the rms velocity fluctuations in the
+         1 X                                                           convective and stable layer is shown in Fig. 3. During the ini-
+qj =              qi, j,k ,                                    (13)
+       N x Nz i,k                                                      tial transient (t < t0 = 500), the rms velocity in the convective
+                                                                       layer increases until it has saturated at a mean value of ≈ 0.034.
+and horizontal mass-weighted averages                                  4
+                                                                          https://doi.org/10.5281/zenodo.5796842
+                                                                       5
+     P                                                                    We do not use any special notation for the bulk averages. It should be
+       i,k qi, j,k ρi, j,k                                             clear from the text whether a bulk quantity or the vertical dependence
+qj = P
+e                          ,                                   (14)    vrms (y) is being discussed.
+                                                                       e
+           i,k ρi, j,k
+
+Article number, page 6 of 20
+                                                       R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+     FLASH, 2563
+     MUSIC, 2563
+     PPMSTAR, 2563
+     PROMPI, 2563
+     SLH, 2563
+
+
+
+
+                0.5   0.6     0.7      0.8      0.9   1.0   −2              0                2   0.0   0.2      0.4     0.6      0.8   1.0 −0.05         0.00       0.05
+                                                                 h               i
+                        tanh [X1 (z = 0) / 0.140]                     A − A / Arms                        tanh [|ω(z = 0)| / 1.80]                   vy (y = 1.7)
+                                                                                       z=0
+
+
+Fig. 2. Renderings of the flow field at t = 1000. The variables shown (from left to right) are the mass fraction X1 , relative entropy fluctuations
+(A − A)/Arms , magnitude of vorticity |ω|, and the vertical component of velocity vy . The first three variables correspond to slices through the
+simulations box in the z = 0 plane and the last one in the y = 1.7 plane. The non-linear scaling of X1 and |ω| and the normalisation of entropy
+fluctuations by their horizontal rms spread Arms (see the colour bars) are introduced for visualisation purposes.
+
+
+
+                                                                                                                                                   Article number, page 7 of 20
+                                                          A&A proofs: manuscript no. ccpaper
+
+
+     0.040                  convective layer                                       0.040                convective layer
+
+     0.035                                                                         0.035
+
+     0.030                                                                         0.030
+
+     0.025                         FLASH, 1283            SLH, 1283                0.025                       FLASH, 2563            SLH, 2563
+                                   MUSIC, 1283            PPMSTAR, 5123                                        MUSIC, 2563            PPMSTAR, 5123
+ vrms
+
+
+
+
+                                                                                vrms
+     0.020                         PPMSTAR, 1283          PROMPI, 5123             0.020                       PPMSTAR, 2563          PROMPI, 5123
+ e
+
+
+
+
+                                                                                e
+                                   PROMPI, 1283                                                                PROMPI, 2563
+     0.015                                                                         0.015
+
+     0.010                                                                         0.010
+
+     0.005                  stable layer                                           0.005                stable layer
+
+     0.000                                                                         0.000
+             0   250     500     750       1000   1250   1500   1750     2000              0   250   500     750       1000   1250   1500   1750     2000
+                                             t                                                                           t
+
+
+Fig. 3. Time evolution of the mass-weighted average rms velocity fluctuations in the convection zone (y < yub (t) − 0.1, upper set of curves) and
+in the stable layer (y > yub (t) + 0.1, lower set of curves). The location yub (t) of the convective boundary is tracked in time as shown in Fig. 9. The
+dotted vertical line marks the end of the initial transient excluded from the analysis.
+
+
+                                                                                Because the speed of sound is approximately 0.8 in the mid-
+                                                                                dle of the convective layer, the typical Mach number is ≈ 0.04.
+                                                                                The flow speed is statistically the same in all of our simula-
+                                                                                tions. This means that even in the 1283 simulations the convec-
+                                                                                tion is a fully developed turbulent flow, in which kinetic energy
+                                                                                is dissipated at a rate independent of the code-dependent nu-
+                                                                                merical viscosity close to the grid scale. The 3σ fluctuations
+                                                                                around the mean value of e   vrms range from 11% to 19% with
+                                                                                a median value of 13%. The 5123 PPMSTAR run contains two
+                                                                                high-velocity episodes in the time intervals 1090 . t . 1250 and
+                                                                                1440 . t . 1620, both ≈ 2τconv long, during which the bulk con-
+                                                                                vective velocity increases by up to ≈ 15% as compared with the
+                                                                                1283 and 2563 runs. These episodes are likely of statistical ori-
+                                                                                gin, although we would need an ensemble of 5123 runs to con-
+                                                                                firm this hypothesis. When all of the simulations are considered,
+                                                                                there is some weak evidence for a slight systematic increase in
+                                                                                velocity in the interval 500 < t < 2000 with a median value
+                                                                                of 4%. However, run-to-run values range from −1% to 15% and
+                                                                                seem to be dominated by statistical variation, so we do not sub-
+                                                                                tract the linear trend when computing the magnitude of fluctua-
+                                                                                tions.
+                                                                                     The rms velocity in the stable layer initially increases slowly
+                                                                                as IGW generated at the convective-stable interface propagate
+                                                                                through the stable layer. To understand the slow vertical prop-
+                                                                                agation of the waves, we refer to the 2D renderings of entropy
+                                                                                fluctuations in Fig. 2. The renderings show a number of wave-
+                                                                                fronts spanning almost the full width of the computational do-
+                                                                                main and inclined at angles of 5◦ . ϑ . 15◦ with respect to the
+                                                                                horizontal, ignoring projection effects. The Brunt-Väisälä fre-
+                                                                                quency NBV does not change much across the stable layer and
+                                                                                its typical value is NBV = 0.42 at t = 0. Using linear theory
+                                                                                of IGW (see e.g. Sutherland 2010), we estimate that such long
+                                                                                waves have periods in the range 2τconv & PIGW & 0.7τconv . The
+                                                                                magnitude of the vertical component of their group velocity is
+                                                                                0.001 . vy,IGW . 0.01, implying that it takes the waves be-
+                                                                                tween ≈100 and ≈1000 time units to propagate from the ini-
+                                                                                tial convective-stable interface at y = 2 to the upper bound-
+                                                                                ary condition at y = 3. Projection effects, which decrease the
+                                                                                apparent angle ϑ in the 2D slices, make this estimate slightly
+                                                                                biased towards longer timescales. Nevertheless, Fig. 3 shows
+                                                                                that the final velocity amplitude of ≈ 0.009 in the stable layer
+                                                                                is reached by t = t0 = 500 in all of our simulations. This observa-
+Article number, page 8 of 20
+                                                    R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+tion, combined with the estimate above suggests that there can-                               1.2
+not be strong resonant wave amplification caused by many wave                                                               FLASH, 1283        MUSIC, 2563
+                                                                                              1.0                           MUSIC, 1283        PPMSTAR, 2563
+reflections between the upper boundary of the simulation box                                                                PPMSTAR, 1283      PROMPI, 2563
+and the convective-stable interface because that would cause the                              0.8                           PROMPI, 1283       SLH, 2563
+
+rms velocity to increase on much longer timescales. Finally, the                                                            SLH, 1283          PPMSTAR, 5123
+                                                                                              0.6                           FLASH, 2563
+fact that the rms velocity reaches the same value on grids rang-
+ing from 1283 to 5123 implies that the dominant wave patterns                                 0.4
+
+
+
+
+                                                                                     R(∆t)
+are well resolved even on the coarsest grid. This conclusion is
+                                                                                              0.2
+further supported by kinetic-energy spectra, which we discuss at
+the end of this section.                                                                      0.0
+    We define the convective turnover timescale to be
+                                                                                             −0.2
+        2h∆ycl i
+τconv =          = 80,                                                      (16)             −0.4
+          vrms i
+         he
+                                                                                                    10−1               100                        101
+where hevrms i = 0.034 is the above-mentioned characteristic con-                                                        ∆t/τconv
+vective velocity and
+                                                                                   Fig. 4. Autocorrelation function R(∆t) of the convective velocity as a
+h∆ycl i = hyub i − ybot = 1.36                                              (17)   function of the time shift ∆t in units of the convective turnover timescale
+                                                                                   τconv . See Eq. 18 and the associated text in detail.
+is the average depth of the convective layer, that is the distance
+between the layer’s bottom at ybot = 1 and the vertical coordinate
+yub of the upper convective boundary averaged in the time inter-
+val 500 ≤ t ≤ 2000, see Fig. 9 and Sect. 3.2 for details. To show                       It is clear from Fig. 5 that all five codes produce simi-
+how well this timescale describes variability in the global con-                   lar time-averaged velocity profiles. However, we have to take
+vective velocity field, we compute the autocorrelation function                    the stochastic character of turbulent convection into account to
+                                                                                   see whether the remaining differences are significant. Instead of
+           R tend                                                                  running ensembles of simulations with randomised initial con-
+            t0
+                    e ∗
+                    vrms (t) e  ∗
+                              vrms  (t + ∆t) dt                                    ditions, which would be rather expensive, we obtain the ±3σ
+R(∆t) =              R tend                     ,                           (18)   statistical-variation bands shown in Fig. 5 as follows. The cen-
+                              ∗
+                       t
+                            vrms
+                            e     (t)2 dt                                          tral curve of each band corresponds to the arithmetic average
+                       0
+                                                                                   of all velocity profiles available on a given computational grid.
+                                     ∗
+where ∆t is a time shift and e     vrms (t) is constructed from the bulk           We also compute the standard deviations of each time series in
+convective velocity e    vrms (t) as follows: (1) the initial transient            the averaging time window at each height y and we average the
+(t < t0 ) is discarded, (2) the best-fit linear trend is subtracted to             standard deviation profiles over the same set of runs to obtain
+suppress spurious correlations caused by any slight systematic                     one standard deviation profile σ0 (y). The profile σ0 (y) is our best
+changes in e  vrms (t) on long timescales, and (3) the resulting time              estimate of the statistical variation to be expected in any of the
+series is made periodic by appending to it a time-reversed ver-                    runs, provided that they are statistically similar, and it does not
+sion of itself. Figure 4 shows that R(∆t) reaches high values for                  depend on any small systematic differences between the velocity
+∆t . 0.5τconv , implying that the time series is strongly correlated               amplitudes predicted by different codes. Obviously, the statisti-
+on such short timescales. However, R(∆t) decreases steeply and,                    cal variation associated with the time averages should decrease
+although the function’s first zero crossing occurs at ∆t < τconv                   as the length of the averaging interval is increased. We show
+in some runs and at ∆t > τconv in others due to stochasticity,                     above that there is approximately one independent realisation of
+∆t ≈ τconv is generally a good estimate of the temporal spacing                    the convective flow per turnover timescale τconv , so we estimate
+between different, largely independent, flow realisations.                         the statistical variation associated  with the time-averaged pro-
+                                                                                                              √
+    Figure 5 shows time-averaged profiles of rms vertical and                      files to be σ(y) = σ0 (y)/ Nconv , where Nconv is the length of the
+horizontal velocity fluctuations,                                                  averaging time window in units of τconv .
+evy,rms (y) = σ
+              ev,y ,                                                        (19)        However, we must keep in mind that σ(y) is just an estimate,
+                          1                                                      which involves both statistical and systematic uncertainties. It
+v xz,rms (y) = σ
+e                2
+                ev,x +σ 2 2
+                      ev,z    .                                             (20)   depends on our assumption that independent flow realisations are
+                                                                                   spaced by τconv in time. Figure 4 shows that the spacing could
+The vertical fluctuations he     vy,rms i reach a broad maximum close              also be estimated to be 0.5τconv or 2τconv , depending on which
+to the middle of the convective layer. They vanish at the bot-                     set of runs we use and on the very definition of ‘decorrelation’.
+tom of the simulations box as required by the wall boundary                        Moreover, the autocorrelation function R(∆t) is based on the time
+conditions but they also drop by as much as a factor of four                       evolution of the bulk convective velocity. Different parts of the
+at the transition to the stable layer. The velocity field is domi-                 simulation domain may have different characteristic timescales
+nated by the horizontal component he          vxz,rms i close to the bound-        and our use of τconv everywhere may bias the estimate of σ(y).
+aries of the convective layer, where the flow has to turn around,                  We should thus use the statistical-variation bands as a general
+and in the stable layer filled with internal gravity waves. The ve-                guideline in quantifying differences between simulations but this
+locity profiles are nearly constant in the bulk of the stable layer                simple approach does not allow us to calculate the probability
+with he
+      vxz,rms i / he
+                   vy,rms i ≈ 2 and only a mild increase in velocity to-           that a deviation of a given magnitude is observed under the null
+wards lower densities. There is another drop in he         vy,rms i at y & 2.9     hypothesis that the codes do not differ.
+as gravity is turned off (Eq. 2), removing the waves’ restoring                         Figure 5 shows that the profiles of both velocity components
+force, and the upper wall boundary condition forces he               vy,rms i to   in the 1283 and 2563 runs fall within or close to the respective
+vanish at y = 3.                                                                   estimated ±3σ statistical-variation bands. This means that the
+                                                                                                                                Article number, page 9 of 20
+                                                                   A&A proofs: manuscript no. ccpaper
+
+
+         0.06                                                                    0.04                        0.06                                                                      0.04
+                              FLASH, 1283              PROMPI, 1283                                                                 FLASH, 2563              PROMPI, 2563
+                              MUSIC, 1283              SLH, 1283                                                                    MUSIC, 2563              SLH, 2563
+         0.05                                                                                                0.05
+                              PPMSTAR, 1283            PPMSTAR, 5123                                                                PPMSTAR, 2563            PPMSTAR, 5123
+                                                                                 0.03                                                                                                  0.03
+         0.04                                                                                                0.04
+
+
+
+
+                                                                                         vxz,rms i
+
+
+
+
+                                                                                                                                                                                               vxz,rms i
+  vy,rms i
+
+
+
+
+                                                                                                      vy,rms i
+         0.03                                                                    0.02                        0.03                                                                      0.02
+ he
+
+
+
+
+                                                                                                     he
+                                                                                        he
+
+
+
+
+                                                                                                                                                                                              he
+         0.02                                                                                                0.02
+                                                                                 0.01                                                                                                  0.01
+         0.01                                                                                                0.01
+
+
+         0.00                                                                    0.00                        0.00                                                                      0.00
+                1.00   1.25   1.50   1.75     2.00   2.25   2.50   2.75   3.00                                       1.00   1.25    1.50   1.75     2.00   2.25   2.50   2.75   3.00
+                                                y                                                                                                     y
+
+
+Fig. 5. Vertical profiles of the rms velocity components he  vy,rms i (thick lines) and he
+                                                                                         vxz,rms i (thin lines) in the vertical and horizontal directions,
+respectively, averaged in a time interval τav = 6τconv = 480 wide and centred on time 1250. The two velocity axes in each plot have different scales
+to avoid the curves’ overlapping. The grey bands give an estimate of ±3σ statistical variation in the averages due to stochasticity, see Sect. 3.1 for
+details.
+
+
+small code-to-code differences are dominated by stochasticity.                                       where N x and Nz are the total numbers of computational cells
+The bands of both the 1283 and 2563 runs are slightly below the                                      along the x and z axes, respectively. The velocity array vmn
+velocity curves of the 5123 PPMSTAR run in the convective layer,                                     corresponds to a horizontal slice through the simulation box at
+suggesting that velocity profiles may not be fully converged on                                      y = 1.7, which is close to the midplane of the convective layer at
+the 2563 grid. However, the time-averaging window overlaps                                           t ≈ 1250. We compare the kinetic energy per unit mass 12 || |Ψ| ||2
+with the two above-mentioned episodes visible in Fig. 3, dur-                                                                                  1/2
+                                                                                                     binned over all wavenumbers k = k2x + kz2 , where
+ing each of which the 5123 PPMSTAR run reaches above-average
+bulk velocities for as much as ≈ 2τconv . Given the uncertainty in                                               (
+determining the width of the statistical-variation bands and the                                                     j,        0 ≤ j < N2x − 1,
+                                                                                                     kx =                                                                                     (24)
+fact that we only have a single full-length 5123 run6 , we do not                                                    −N x + j, N2x ≤ j < N x ,
+find the tension between the velocity profiles significant.                                                      (
+    The arguments leading to our                                                                                     l,            0 ≤ l < N2z − 1,
+                                    √ scaling the width of the                                       kz =                          Nz                                                         (25)
+statistical-variation bands with 1/ Nconv do not apply to the sta-                                                   −Nz + l,       2 ≤ l < Nz .
+ble layer directly because the response timescale of the stable
+layer is longer than τconv (see above). Nevertheless, Fig. 5 shows                                   These expressions hold for even values of N x and Nz , which is the
+that the statistical-variation bands describe the range of code-to-                                  case for all of our computational grids. Figure 6 shows the spec-
+code variation rather well. The velocity profiles of all 1283 and                                    tra averaged in the whole time interval of analysis (500 ≤ t ≤
+2563 runs closely match that of the 5123 PPMSTAR run both in                                         2000). Although the turbulence is anisotropic at small wavenum-
+shape and amplitude, which further supports our conclusion that                                      bers (large scales), it looks close to being isotropic at the larger
+the dominant wave patterns are essentially converged already on                                      wavenumbers (smaller scales) that we see in the renderings of
+the 1283 grid.                                                                                       vorticity in Fig. 2. All of the codes converge to the same kinetic
+    The renderings of the vertical component of velocity vy in the                                   energy spectrum upon grid refinement, which is consistent with
+horizontal midplane of the convective layer presented in Fig. 2                                      Kolmogorov’s − 53 law. Although we only use the k x and kz com-
+show that the convective flow is dominated by the largest pos-                                       ponents of the wavenumber vector for simplicity, the kinetic-
+sible scales with wavelengths equal to the width of the compu-                                       energy spectrum of isotropic turbulence should have the same
+tational box. This corresponds to convective cells with an as-                                       slope along all three axes of the wavenumber space in the iner-
+pect ratio of about unity early in the simulations, which later                                      tial range. If this was not the case there would be more power
+become slightly elongated in the vertical direction as the convec-                                   along one or two of the axes on small scales in conflict with the
+tive boundary moves upwards. The cells are turbulent on smaller                                      assumption of isotropy.
+scales with large amounts of small-scale vorticity ω, also shown                                          The 5123 PPMSTAR run illustrates that a rather fine grid is
+in Fig. 2 and in the animations available on Zenodo7 . We com-                                       needed to obtain a wide and well-converged inertial range. This
+pute spatial Fourier spectra of the velocity vector,                                                 is due to the well-known bottleneck effect – a power excess ob-
+                                                                                                     served in numerical simulations of turbulence between the in-
+                    N x −1 N z −1        (            !)                                             ertial and dissipation ranges (e.g. Falkovich 1994, Sytine et al.
+               1 X         X                   m j nl
+Ψ jl =                            vmn exp −2πi    +      ,                         (21)              2000, Dobler et al. 2003). All of our spectra have similar shapes
+             N x Nz m=0 n=0                    N x Nz
+                                                                                                     even in the dissipation range, although they diverge with increas-
+    j = 0, . . . , N x − 1,                                                        (22)              ing k and they reach a spread of as much as a factor of 10 at
+    l = 0, . . . , Nz − 1,                                                         (23)              the Nyquist frequency. The spectrum in the dissipation range de-
+                                                                                                     pends on the behaviour of the numerical scheme close to the
+ 6
+   The 5123 PROMPI run is too short to be included in this comparison,                               grid scale. However, this dependence is largely irrelevant thanks
+see Fig. 3.                                                                                          to the fact that the dissipation rate becomes independent of the
+ 7
+   https://doi.org/10.5281/zenodo.5796842                                                            magnitude of small-scale viscosity (be it of physical or numer-
+Article number, page 10 of 20
+                                          R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+ical origin) in turbulent flows as long as the viscosity is small            The converged thickness Hub ≈ 0.04 corresponds to 10 computa-
+enough.                                                                      tional cells on the 5123 grid, although the PPB advection method
+    We use the same procedure to characterise the spatial spectra            implemented in PPMSTAR can preserve gradients spanning only
+at y = 2.7 in the stable layer, see Fig. 7. These spectra are also           about two computational cells (Woodward et al. 2015). This
+dominated by the largest scales, which can also be seen in the               suggests that the 3D deformation of the boundary dominates
+2D renderings of entropy8 fluctuations in Fig. 2. Although we                the thickness of the spatially averaged boundary. However, it
+do not have any analytic prediction of the wave spectrum, all                is much more challenging for the codes to resolve the physical
+five codes predict essentially the same spectrum at k . 5 on                 thickness of the boundary on the 2563 and 1283 grids, on which
+the 1283 grid and at k . 10 on the 2563 grid, respectively. This             0.04 units of length correspond to only about 5 and 2.5 compu-
+corresponds to horizontal wavelengths & 26 computational cells               tational cells, respectively.
+in both cases. Although this seems to be a large number, the                     The total amount of the µ1 fluid entrained by time t is
+actual challenge is to resolve the vertical wavelength of the IGW,                      Z yub (t)
+which is several times shorter as the waves are nearly horizontal.
+                                                                             Me (t) =               e1 (y, t) ρ(y, t) dy
+                                                                                                    X                                              (27)
+The most extreme of these are revealed in the 2D renderings
+                                                                                          1
+of vorticity ω in Fig. 2, which put more emphasis on shorter
+vertical wavelengths as compared with the renderings of entropy              per unit of horizontal surface area and is shown in Fig. 11. This
+fluctuations.                                                                entrainment metric differs slightly from yub (t) because of the
+                                                                             density stratification. The agreement between the codes’ predic-
+3.2. Convective boundary and mass entrainment
+                                                                             tions is slightly better as compared with the yub (t) metric and
+                                                                             the 1283 and 2563 simulations agree within 9% and 4%, respec-
+When upflows reach the upper boundary of the convective layer,               tively, on the total amount of the µ1 fluid entrained by the end
+they stir and entrain some of the µ1 fluid in the transition zone            of the simulations. All of the initial transition layer is entrained
+and carry it down into the convective layer as they turn around.9            early on during the initial transient as indicated in Fig. 11.
+The distribution of this fluid’s mass fraction X1 , shown in Fig. 2,              It is also clear from Fig. 11 that the mass entrainment rate
+provides a good visual representation of the entrainment process.            Ṁe (t) is relatively high early on and slowly decreases throughout
+The process also involves the mixing of entropy, which flattens              the simulation time. We compute Ṁe (t) using second-order cen-
+the entropy gradient in the transition zone and makes the convec-            tral differences. The differencing greatly amplifies noise, which
+tive layer grow. The gradual growth can be seen in the profiles              we suppress using convolution with a centred top-hat kernel
+of the mass fraction X1 shown in Fig. 8.                                     τav = 3τconv = 240 wide. The mass entrainment rates, shown in
+    We define the vertical coordinate yub of the convective                  Fig. 12, agree between all of the codes within their statistical
+boundary to be where ∂y X         e1 reaches its global maximum. Dis-        fluctuations already on the 1283 grid and they remain unchanged
+cretisation noise is reduced by fitting a parabola to the three              as the grid is refined up to 5123 . However, Ṁe (t) varies randomly
+data points closest to the discrete estimate of the maximum’s                on timescales as long as several convective turnover timescales,
+vertical coordinate. Figure 9 shows that the 1283 runs diverge               which likely contributes to the small spread in Me (t) in Fig. 11.
+in yub (t) slightly with FLASH and PROMPI predicting the slowest             The entrainment rate decreases from ≈ 1.0×10−4 at the beginning
+and fastest boundary motion, respectively. However, the relative             of the initial transient to ≈ 4.5 × 10−5 at t = t0 and to ≈ 2.0 × 10−5
+difference in the distance travelled by the end of the simulations,          at t = tend . Part of the decrease may be attributed to the density
+∆yub (tend ) = yub (tend ) − yub (0), is only ≈14% between these two         at the convective boundary, which decreases from 0.28 at t = 0
+extremes. The spread is reduced by another factor of ≈ 3 on the              to 0.15 at t = tend .
+2563 grid, on which all five codes agree on ∆yub (tend ) within 5%.               One may find it surprising that the mass entrainment rates
+Moreover, the yub (t) curves derived from the 2563 runs closely              obtained on the coarse 1283 grid agree so well with one another.
+track those from the 5123 PROMPI and PPMSTAR runs.                           Perhaps even more surprisingly, they also agree with the rates
+    We characterise the thickness of the convective boundary us-             obtained in the 5123 PROMPI and PPMSTAR runs. Convective
+ing the scale height                                                         mass entrainment is usually thought of as a complex process sen-
+                                                                         sitive to small-scale flows and instabilities in the boundary layer.
+           ∂X  e1 −1                                               However, Spruit (2015) argues that the mass entrainment rate is
+Hub = X e1        
+                               .                                (26)        set by the amount of energy available to overcome the buoyancy
+                   ∂y
+                        y=yub                                                of the fluid being entrained; this was also observed in a labora-
+Because this quantity is highly variable on short timescales, we             tory study by Linden (1975). Applying this constraint in mod-
+smooth the time series using a top-hat filter τav = τconv = 80 wide          els of stars with helium-burning convective cores improves their
+and show the result in Fig. 10. In all five codes, the boundary is           agreement with both asteroseismology and population studies of
+up to 50% thicker on the 1283 grid than on the 2563 grid. How-               globular clusters (Constantino et al. 2017). The entrainment rate
+ever, differences between the 2563 and 5123 runs are substan-                is then proportional to the luminosity L driving the convective
+tially smaller, suggesting that Hub is close to being converged              flow as confirmed by the 3D simulations of Jones et al. (2017)
+on the 2563 grid at a value of ≈ 0.04. The converged value is                and Andrassy et al. (2020) of oxygen burning in a setup sim-
+close to the initial value Hub (t = 0) = 0.0404. This fact, however,         ilar to our present test setup. More evidence comes from cali-
+is purely coincidental. At t = 0, Hub characterises the steepness            brations of the entrainment law Ṁe ∝ vrms RiB −n , where vrms is
+of the 1D transition zone as we define it. Once convection has               the rms velocity of convection and RiB is the bulk Richardson
+started, Hub is a product of spatial averaging along a 3D con-               number proportional to v−2  rms for a given convective boundary (for
+vective boundary that is as sharp as the numerical scheme al-                a complete definition, see Meakin & Arnett 2007). Assuming
+lows at some places but much wider at other places, see Fig. 2.              that vrms ∝ L1/3 , we have Ṁe ∝ L(1+2n)/3 and n = 1 corresponds to
+                                                                             Ṁe ∝ L. Values of n measured in different numerical simulations
+8
+    We refer to the pseudo-entropy A = p/ργ as ‘entropy’ for simplicity.     range from 0.74 ± 0.04 (Cristini et al. 2019) and 0.74 ± 0.01
+9
+    Woodward et al. (2015) provide a detailed description of this process.   (Horst et al. 2021) through 1.05 ± 0.21 (Meakin & Arnett 2007)
+                                                                                                                           Article number, page 11 of 20
+                                                                      A&A proofs: manuscript no. ccpaper
+
+
+                                                   Convective layer                                                                   Convective layer
+                 10−3                                                                                   10−3
+
+                 10−4                                                                                   10−4
+
+                 10−5                                                                                   10−5
+
+                 10−6                                                                                   10−6
+             2
+
+
+
+
+                                                                                                    2
+ 2 || |Ψ| ||
+
+
+
+
+                                                                                        2 || |Ψ| ||
+                               FLASH, 1283                                                                            FLASH, 2563
+                 10−7                                                                                   10−7
+ 1
+
+
+
+
+                                                                                        1
+                               MUSIC, 1283                                                                            MUSIC, 2563
+                               PPMSTAR, 1283                                                                          PPMSTAR, 2563
+                 10−8          PROMPI, 128     3                                                        10−8          PROMPI, 2563
+                               SLH, 1283                                                                              SLH, 2563
+                 10−9          PPMSTAR, 5123                                                            10−9          PPMSTAR, 5123
+                               k−5/3                                                                                  k−5/3
+                 10−10                                                                                  10−10
+                         100                         101                    102                                 100                     101              102
+                                                           k                                                                                  k
+
+
+Fig. 6. Spectra of kinetic energy as functions of the wavenumber k in a horizontal slice through the convective layer at y = 1.7. The spectra
+have been averaged over the whole analysis time interval (500 ≤ t ≤ 2000, approximately 19 τconv ). The Kolmogorov scaling k−5/3 is shown for
+comparison.
+
+
+                                                     Stable layer                                                                       Stable layer
+
+
+                 10−5                                                                                   10−5
+
+
+
+                 10−7                                                                                   10−7
+             2
+
+
+
+
+                                                                                                    2
+ 2 || |Ψ| ||
+
+
+
+
+                                                                                        2 || |Ψ| ||
+
+
+
+
+                 10−9                                                                                   10−9
+ 1
+
+
+
+
+                                                                                        1
+
+
+
+
+                               FLASH, 1283                                                                            FLASH, 2563
+                                           3
+                               MUSIC, 128                                                                             MUSIC, 2563
+                               PPMSTAR, 1283                                                                          PPMSTAR, 2563
+                 10−11         PROMPI, 1283                                                             10−11         PROMPI, 2563
+                               SLH, 1283                                                                              SLH, 2563
+                               PPMSTAR, 5123                                                                          PPMSTAR, 5123
+                 10−13                                                                                  10−13
+                         100                         101                    102                                 100                     101              102
+                                                           k                                                                                  k
+
+
+Fig. 7. Spectra of kinetic energy as functions of the wavenumber k in a horizontal slice through the stable layer at y = 2.7. The spectra have been
+averaged over the whole analysis time interval (500 ≤ t ≤ 2000, approximately 19 τconv ).
+
+
+to 1.32±0.79 (Higl et al. 2021). If buoyancy is the dominant fac-                       m1 is the cumulative mass of the µ1 fluid integrated from the
+tor one can expect to obtain a good estimate of the entrainment                         bottom of the simulation box upwards. We measure the entropy
+rate as soon as the largest downflows are reasonably resolved.                          gradient dA/dm1 in the initial stratification. Its value is 1.6 at the
+    Finally, the very fact that we keep increasing the mean en-                         top of the initial transition layer between the two fluids and 3.8
+tropy of the convective layer by heating it at the bottom con-                          where m1 = Me (t = tend )  0.083 (see Fig. 11). This implies that
+tributes to mass entrainment. This process, previously mentioned                        Ṁe,heating = 2.9 × 10−5 early on during the initial transient, which
+by Meakin & Arnett (2007), Andrassy et al. (2020), and Horst                            is ≈ 30% of the entrainment rate Ṁe measured. This contribution
+et al. (2021), can be understood as follows. The convective layer                       increases to as much as ≈ 60% by the end of the simulations.
+is well mixed and its entropy is essentially constant in space. On
+the other hand, entropy increases with height in the stable layer
+(Fig. 1). If the mean entropy of the convective layer increases it                      3.3. Fluctuations and transport of energy
+becomes higher than that of a thin layer at the very bottom of
+the stable layer. This thin layer is thus negatively buoyant and                        The rates of convective transport of energy and chemical compo-
+it must sink and mix with the convective layer. In our simula-                          sition scale with the flow speed and with the magnitude of fluc-
+tions, we compute the rate of change of the mean entropy in the                         tuations in the flow field. We have already shown that the flow
+lower 2/3 of the convective layer to eliminate any influence of the                     speed is code-independent, see Sect. 3.1. Figure 13 shows that
+convective boundary. The value of dA/dt reaches 4.7 × 10−5 by                           the same holds for the time-averaged relative fluctuations in en-
+t ≈ 150 in our 2563 runs and it remains statistically constant until                    tropy h∆A/Ai and in the mass fraction of the µ1 fluid h∆X 1 /X 1 i.
+the end of the simulations. The entrainment rate due to the pro-                        The figure includes statistical-variation bands computed as de-
+cess described above is Ṁe,heating = (dA/dt) / (dA/dm1 ), where                        scribed in Sect. 3.1. The profiles of the fluctuations as produced
+Article number, page 12 of 20
+                                            R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+                                                                             convection zone in the 1283 PROMPI run may be statistically sig-
+     1.0         t=0                                                         nificant. However, the 2563 PROMPI run agrees well with other
+                 FLASH, 2563
+                                                                             codes run on the same grid as well as with the 5123 PPMSTAR
+                 MUSIC, 2563
+     0.8
+                 PPMSTAR, 2563
+                                                                             run. The small differences between the codes as well as the pos-
+                 PROMPI, 2563                                                sible feedback mechanism suggest that FH is a poor indicator of
+     0.6         SLH, 2563                                                   code or simulation quality.
+                 PPMSTAR, 5123                                                   The flux of kinetic energy is defined in a way analogous to
+  e1 i
+ hX
+
+
+
+
+                                                                             Eq. 28,
+     0.4
+                                                                                    1                     
+                                                                             Fk =     ρ |v|2 vy − ρ |v|2 e
+                                                                                                         vy .                                 (29)
+     0.2                                                                            2
+                                                                             Figure 16 shows that the amplitude of Fk is as much as ≈ 30
+     0.0
+                                                                             times smaller than that of FH in our simulations. Stochasticity
+           1.6      1.8          2.0        2.2       2.4       2.6          introduces large statistical variation into the time-averaged pro-
+                                        y                                    files of this small quantity. Nevertheless, all of the 1283 and 2563
+                                                                             runs agree with each other as well as with the 5123 PPMSTAR
+Fig. 8. Mass entrainment process visualised using vertical profiles of the   run on the profile of Fk within the statistical-variation bands in-
+mass fraction of the µ1 fluid. Only the uppermost parts of the convec-       cluded in the figure.
+tive layer and part of the stable layer are shown. The dotted line shows          Why is the magnitude of Fk so much smaller than that of FH ?
+the initial condition and the remaining three sets of lines correspond to    Using a simplified, two-stream model of convection, we show in
+averages over time windows τav = 2 τconv = 160 wide and centred on           Appendix B that the magnitude of Fk depends on the degree of
+times of (from left to right) 580, 1250, and 1920.                           asymmetry between upflows and downflows. We characterise the
+                                                                             asymmetry using a downflow filling factor fd defined to be the
+by all of the five codes fall within or close to the corresponding           relative horizontal area covered by flows with vertical velocity
+                                                                             vy − evy < 0. In the two-stream model, Fk vanishes for fd = 0.5,
+statistical-variation band. The profiles of h∆A/Ai agree better on
+                                                                             that is when there is perfect up-down symmetry. Figure 17 shows
+the 2563 grid in the bulk of the convection zone, although the dif-
+                                                                             that fd indeed is close to 0.5 in our simulations. In contrast to Fk ,
+ferences are small already on the 1283 grid. The slight code-to-
+                                                                             FH remains a substantial fraction of the total flux even if there
+code differences in the time-averaged position of the convective
+                                                                             is perfect up-down symmetry because convection must transport
+boundary (where h∆X 1 /X 1 i drops) decrease as the mass entrain-            heat across the convective layer. This explains why the ampli-
+ment rate converges upon grid refinement, see Sect. 3.2.                     tude of Fk is much smaller than that of FH in our simulations.
+    We define the flux of enthalpy to be the quantity                        The two-stream model also predicts that Fk is negative (i.e. di-
+                                                                             rected downwards) for fd < 0.5 and positive for fd > 0.5. We ob-
+FH = Hvy − H e
+             vy ,                                                     (28)
+                                                                             serve the same trend in our simulations: compare Figs. 16 and 17
+where H is enthalpy per unit volume and vy is the vertical com-              and see also Fig. B.2. The role of Fk is much more important in
+ponent of velocity. The second term in Eq. 28 is included to re-             strongly stratified, convective stellar envelopes, in which down-
+move the flux contribution of the thermal expansion and com-                 flows tend to be substantially narrower than upflows and Fk is
+pression of the horizontally averaged stratification. We average             large and negative (i.e. directed downwards). Viallet et al. (2013)
+the enthalpy flux over all of the simulation time after the initial          show this difference directly in their Fig. 13, in which they com-
+transient (500 ≤ t ≤ 2000), ignoring the upward propagation of               pare their 3D hydrodynamic models of the convective envelope
+the convective boundary and focusing on the bulk of the convec-              of a red giant and of an oxygen-burning shell in a massive star.
+tive layer instead. The profiles of FH (y) shown in Fig. 15 agree            The latter model is rather similar to our test setup and, not sur-
+well within the statistical-variation bands computed as described            prisingly, they also find that the amplitude of Fk is ≈ 30 times
+in Sect. 3.1, although our method seems to overestimate the sta-             smaller than that of FH in that model (compare their Figs. 13
+tistical variation in this quantity as it is significantly larger than       and 15).
+the code-to-code differences.
+     To explain this, we compute the autocorrelation function
+RFH (∆t) of FH (y = 1.5) using the method described in Sect. 3.1.            4. Summary and conclusions
+The shape of RFH (∆t) turns out to be rather different from the              In this work, we have defined a test problem involving adia-
+autocorrelation function R(∆t) of the bulk convective velocity;              batic turbulent convection and mass entrainment from a stably
+compare Fig. 14 with Fig. 4. First, the autocorrelation drops to             stratified layer. The problem is directly relevant to current 3D
+zero on a timescale as short as ≈ 0.3τconv . This suggests that the          simulation efforts to model convection in stellar interiors. The
+width of the statistical variation bands should be reduced by the            problem’s physics and geometry are simplified to make it acces-
+             1
+factor 0.3− 2 = 1.8, see Sect. 3.1. Moreover, all of our runs show           sible to a wide range of 3D hydrodynamic codes but to retain the
+some anticorrelation for 0.3τconv . ∆t . τconv before the values             crucial processes we are investigating. Because turbulent flows
+of RFH (∆t) start to oscillate around zero for longer time shifts.           are involved, this test problem is fundamentally different from
+The anticorrelation suppresses fluctuations in long-term time av-            standard test problems. There is no single solution and the simu-
+erages. From the physical point of view, the anticorrelation may             lations must be compared in a statistical way, taking care not to
+reflect the fact that changes to the heat flux divergence result             overinterpret statistical fluctuations as real differences between
+in local heating or cooling of the nearly isentropic stratification          codes or simulations. We compare simulations computed using
+and the convective instability provides strong negative feedback,            the codes FLASH, MUSIC, PPMSTAR, PROMPI, and SLH, which
+quickly driving the flux profile back to its quasi-stationary shape.         we run for 25 convective turnover timescales to gather as much
+In light of this, the ≈10% overestimation of FH (y) in the lower             statistics as possible.
+                                                                                                                     Article number, page 13 of 20
+                                                            A&A proofs: manuscript no. ccpaper
+
+
+
+       2.5                                                                              2.5
+
+
+       2.4                                                                              2.4
+
+
+       2.3                                                                              2.3
+ yub
+
+
+
+
+                                                                                  yub
+       2.2                                                                              2.2
+                                    FLASH, 1283             SLH, 1283                                                FLASH, 2563             SLH, 2563
+
+       2.1                          MUSIC, 1283             PPMSTAR, 5123               2.1                          MUSIC, 2563             PPMSTAR, 5123
+                                    PPMSTAR, 1283           PROMPI, 5123                                             PPMSTAR, 2563           PROMPI, 5123
+                                    PROMPI, 1283                                                                     PROMPI, 2563
+       2.0                                                                              2.0
+              0       250   500   750   1000       1250   1500   1750      2000                0       250   500   750   1000       1250   1500   1750      2000
+                                          t                                                                                t
+
+
+Fig. 9. Time evolution of the y coordinate of the upper boundary of the convection zone as determined from 1D averages. The dotted vertical line
+marks the end of the initial transient excluded from the analysis.
+
+
+       0.07                                                                             0.07
+
+       0.06                                                                             0.06
+
+       0.05                                                                             0.05
+
+       0.04                                                                             0.04
+ Hub
+
+
+
+
+                                                                                  Hub
+
+
+
+
+       0.03                                                                             0.03
+
+       0.02                         FLASH, 1283             SLH, 1283                   0.02                         FLASH, 2563             SLH, 2563
+                                    MUSIC, 1283             PPMSTAR, 5123                                            MUSIC, 2563             PPMSTAR, 5123
+       0.01                         PPMSTAR, 1283           PROMPI, 5123                0.01                         PPMSTAR, 2563           PROMPI, 5123
+                                    PROMPI, 1283                                                                     PROMPI, 2563
+       0.00                                                                             0.00
+                  0   250   500   750    1000      1250   1500   1750      2000                    0   250   500   750    1000      1250   1500   1750      2000
+                                           t                                                                                t
+
+
+Fig. 10. Time evolution of the thickness Hub (Eq. 26) of the upper convective boundary. The time series have been smoothed using convolution
+with a top-hat kernel τav = τconv = 80 wide. The dotted vertical line marks the end of the initial transient excluded from the analysis. The dotted
+horizontal line shows Hub (t = 0) = 0.0404 for comparison.
+
+
+    All of the simulations, computed on Cartesian grids rang-                     thickness value as determined by the 2563 and 5123 runs. Nev-
+ing from 1283 through 2563 to 5123 cells, show a turbulent con-                   ertheless, the simulations agree on the total amount of mass en-
+vective layer dominated by large-scale flows with an rms Mach                     trained by the simulations’ end within 9% already on the 1283
+number of ≈ 0.04. Upflows turning around at the upper convec-                     grid. This improves to 4% on the 2563 grid and the remaining
+tive boundary entrain mass from the bottom of the overlying sta-                  spread seems to be dominated by stochasticity. The rapid con-
+ble layer and pull it into the convective layer. They also gen-                   vergence of the mass entrainment rate upon grid refinement is
+erate internal gravity waves, which are present throughout the                    compatible with the idea of Spruit (2015) that the rate is set by
+stable layer. The bulk rms velocities as well as time- and space-                 the global energetics of the whole process as opposed to details
+averaged velocity profiles in both the convective and stable layer                of the small-scale instabilities occurring in the boundary layer.
+are statistically the same in all five codes even on the coarse 1283              We also show that approximately 30 to 60 per cent of the en-
+grid. They also agree with the profiles obtained on finer grids,                  trainment rate can be attributed to a process in which mass en-
+although the 5123 PPMSTAR run deviates slightly because of two                    trainment is caused by the constant heating of the convective
+long episodes of increased velocity, likely of statistical origin.                layer and the subsequent increase in its mean entropy.
+All of the codes converge to the same kinetic energy spectrum
+upon grid refinement, which is consistent with Kolmogorov’s − 35                      Finally, all of the codes statistically agree on the time-
+scaling. The five codes slightly differ in their dissipation rates                averaged profiles of fluctuations in composition and entropy and
+close to the grid scale, which is reflected in slight differences in              on the profiles of the enthalpy- and kinetic-energy fluxes. This
+the shape of the kinetic energy spectrum in the dissipation range.                agreement is somewhat better on the 2563 grid as compared to
+The codes also give essentially the same spectrum in the stable                   the 1283 one. We give likely reasons for the rapid convergence of
+layer for horizontal wavelengths & 26 computational cells.                        the time-averaged enthalpy flux, which makes it a rather poor in-
+                                                                                  dicator of code or simulation quality. The flux of kinetic energy
+   The convective boundary is somewhat under-resolved on the                      is ≈ 30 times smaller than the flux of enthalpy in our test prob-
+1283 grid, being as much as ≈ 50% thicker than its converged                      lem. We explain this disparity using a toy model showing that
+Article number, page 14 of 20
+                                          R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+
+       0.09                                                                           0.09
+
+       0.08                                                                           0.08
+
+       0.07                                                                           0.07
+
+       0.06                                                                           0.06
+
+       0.05                                                                           0.05
+ Me
+
+
+
+
+                                                                                Me
+       0.04                                                                           0.04
+
+       0.03                                                                           0.03
+                                  FLASH, 1283             SLH, 1283                                               FLASH, 2563             SLH, 2563
+       0.02                       MUSIC, 1283             PPMSTAR, 5123               0.02                        MUSIC, 2563             PPMSTAR, 5123
+                                  PPMSTAR, 1283           PROMPI, 5123                                            PPMSTAR, 2563           PROMPI, 5123
+       0.01                                                                           0.01
+                                  PROMPI, 1283                                                                    PROMPI, 2563
+       0.00                                                                           0.00
+              0   250   500     750    1000      1250   1500   1750      2000                0   250    500     750    1000      1250   1500    1750     2000
+                                         t                                                                               t
+
+
+Fig. 11. Mass per unit horizontal area of the µ1 fluid entrained into the convective layer as a function of time. The dotted vertical line marks the
+end of the initial transient excluded from the analysis. The dotted horizontal line shows the amount of the µ1 fluid contained in the initial transition
+zone between the convective and stable layer.
+
+
+                                  FLASH, 1283             SLH, 1283                                               FLASH, 2563             SLH, 2563
+       10−4                       MUSIC, 1283             PPMSTAR, 5123               10−4                        MUSIC, 2563             PPMSTAR, 5123
+                                  PPMSTAR, 1283           PROMPI, 5123                                            PPMSTAR, 2563           PROMPI, 5123
+                                  PROMPI, 1283                                                                    PROMPI, 2563
+ Ṁe
+
+
+
+
+                                                                                Ṁe
+
+
+
+
+       10−5                                                                           10−5
+              0   250   500     750    1000      1250   1500   1750      2000                0   250    500     750     1000     1250   1500    1750     2000
+                                         t                                                                                t
+
+
+Fig. 12. Mass entrainment rates corresponding to the curves shown in Fig. 11. The time series have been smoothed using convolution with a
+top-hat kernel τav = 3 τconv = 240 wide. The dotted vertical line marks the end of the initial transient excluded from the analysis.
+
+
+the flux of kinetic energy is very small indeed when the horizon-               tics of the waves in the stable layer on long timescales, which
+tal areas covered by upflows and downflows are close to being                   would provide well-resolved temporal wave spectra and test the
+the same as observed in our simulations.                                        accuracy of the codes’ asteroseismic predictions.
+    All in all, we find excellent code-to-code agreement on a                   Acknowledgements. PVFE was supported by the U.S. Department of Energy
+rather complex turbulent-flow problem. The numerical schemes                    through the Los Alamos National Laboratory (LANL). LANL is operated by
+implemented in these codes differ in many aspects such as nu-                   Triad National Security, LLC, for the National Nuclear Security Administration
+                                                                                of the U.S. Department of Energy (Contract No. 89233218CNA000001). This
+merical flux functions, reconstruction and time-stepping meth-                  work has been assigned a document release number LA-UR-21-25840. RA, JH,
+ods, or the use (or not) of dimensional splitting. It would cer-                LH, GL, and FKR acknowledge support by the Klaus Tschira Foundation. The
+tainly be interesting to compare our results with those obtained                work of FKR is supported by the German Research Foundation (DFG) through
+using finite difference or spectral methods, which are not in-                  the grant RO 3676/3-1. This work is funded by the Deutsche Forschungsge-
+cluded in the present work. To facilitate future studies of this                meinschaft (DFG, German Research Foundation) under Germany’s Excellence
+                                                                                Strategy EXC 2181/1 - 390900948 (the Heidelberg STRUCTURES Excellence
+kind, we formulated the test problem in Cartesian geometry and                  Cluster). The authors gratefully acknowledge the Gauss Centre for Supercom-
+such that the Mach number of the flows (≈ 0.04 rms) is easy to                  puting e.V. (www.gauss-centre.eu) for funding this project by providing comput-
+reach for a wide range of codes. We provide our data as well                    ing time through the John von Neumann Institute for Computing (NIC) on the
+as all of the setup files and analysis scripts needed if anyone                 GCS Supercomputer JUWELS (Jülich Supercomputing Centre 2019) at Jülich
+                                                                                Supercomputing Centre (JSC). FH acknowledges funding through an NSERC
+should be interested in performing and analysing simulations of                 Discovery Grant. This work has benefitted from and motivated in part by re-
+the kind presented here in the future, see Appendix A. A useful,                search performed as part of the JINA Center for the Evolution of the Elements
+if quite expensive, future extension of this study could involve a              (NSF Grant No. PHY-1430152). PRW acknowledges support from NSF grants
+series of simulations to see how weakly one can drive the con-                  1814181, 2032010, and PHY-1430152, as well as computing support through
+                                                                                NSF’s Frontera computing system at TACC. The software used in this work was
+vection and still maintain reasonable code-to-code agreement on                 in part developed by the DOE NNSA-ASC OASCR FLASH Center at the Uni-
+affordable grids. With a lower driving luminosity, the mass en-                 versity of Chicago. This work is partly supported by the ERC grant No. 787361-
+trainment rate would also decrease and allow us to gather statis-               COBOM and the consolidated STFC grant ST/R000395/1. The authors would
+
+                                                                                                                               Article number, page 15 of 20
+                                                                               A&A proofs: manuscript no. ccpaper
+
+
+                                  FLASH, 1283                                                                                              FLASH, 2563
+                                  MUSIC, 1283                                                                                              MUSIC, 2563
+               100                PPMSTAR, 1283                                                                         100                PPMSTAR, 2563
+                                  PROMPI, 1283                                                                                             PROMPI, 2563
+                   e1 i
+
+
+
+
+                                                                                                                            e1 i
+                                  SLH, 1283                                                                                                SLH, 2563
+              e1 / X
+
+
+
+
+                                                                                                                       e1 / X
+                                  PPMSTAR, 5123                                                                                            PPMSTAR, 5123
+  h∆A / Ai, h∆X
+
+
+
+
+                                                                                                           h∆A / Ai, h∆X
+            10−1                                                                                                     10−1
+
+
+
+
+            10−2                                                                                                     10−2
+
+
+
+
+            10−3                                                                                                     10−3
+                          1.00   1.25   1.50      1.75       2.00     2.25    2.50      2.75        3.00                           1.00   1.25   1.50      1.75   2.00   2.25   2.50   2.75   3.00
+                                                               y                                                                                                    y
+
+
+                                                                           e1 of the µ1 fluid (thick lines) averaged in a time interval τav = 6 τconv = 480
+Fig. 13. Relative fluctuations in entropy A (thin lines) and mass fraction X
+wide and centred on time 1250. The grey bands give an estimate of ±3σ statistical variation in the averages due to stochasticity, see Sect. 3.1 for
+details.
+
+
+                                                                                                           by the Pawsey Supercomputing Centre which is funded by Australian Govern-
+               1.0                                            FLASH, 1283            MUSIC, 2563           ment and the Government of Western Australia. We thank the anonymous referee
+                                                              MUSIC, 1283            PPMSTAR, 2563
+                                                                                                           for constructive comments that improved this paper.
+               0.8                                            PPMSTAR, 1283          PROMPI, 2563
+                                                              PROMPI, 1283           SLH, 2563
+               0.6                                            SLH, 1283              PPMSTAR, 5123
+                                                              FLASH, 2563
+               0.4                                                                                         References
+ RFH (∆t)
+
+
+
+
+               0.2                                                                                         Aerts, C. 2021, Reviews of Modern Physics, 93, 015001
+                                                                                                           Alvan, L., Brun, A. S., & Mathis, S. 2014, A&A, 565, A42
+               0.0                                                                                         Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491, 972
+            −0.2
+                                                                                                           Arnett, D., Meakin, C., & Young, P. A. 2009, ApJ, 690, 1715
+                                                                                                           Baraffe, I., Pratt, J., Goffrey, T., et al. 2017, The Astrophysical Journal Letters,
+            −0.4                                                                                              845, L6
+                                                                                                           Battino, U., Pignatari, M., Ritter, C., et al. 2016, ApJ, 827, 30
+            −0.6                                                                                           Beeck, B., Collet, R., Steffen, M., et al. 2012, A&A, 539, A121
+                                                                                                           Berberich, J. P., Chandrashekar, P., & Klingenberg, C. 2021, Computers & Flu-
+                      10−1                               100                             101                  ids, 104858
+                                                           ∆t/τconv                                        Böhm-Vitense, E. 1958, Z. Astrophys., 46, 108
+                                                                                                           Castro, N., Fossati, L., Langer, N., et al. 2014, A&A, 570, L13
+                                                                                                           Christensen-Dalsgaard, J., Silva Aguirre, V., Cassisi, S., et al. 2020, A&A, 635,
+Fig. 14. Autocorrelation function RFH (∆t) of FH (y = 1.5) as a function                                      A165
+of the time shift ∆t in units of the convective turnover timescale τconv .                                 Claret, A. & Torres, G. 2019, ApJ, 876, 134
+                                                                                                           Colella, P. & Glaz, H. M. 1985, Journal of Computational Physics, 59, 264
+                                                                                                           Colella, P. & Woodward, P. R. 1984, Journal of Computational Physics, 54, 174
+                                                                                                           Constantino, T., Campbell, S. W., & Lattanzio, J. C. 2017, MNRAS, 472, 4900
+like to acknowledge the use of the University of Exeter High-Performance Com-                              Couch, S. M. & Ott, C. D. 2015, ApJ, 799, 5
+puting (HPC) facility ISCA. DiRAC Data Intensive service at Leicester, operated                            Cristini, A., Hirschi, R., Meakin, C., et al. 2019, MNRAS, 484, 4645
+by the University of Leicester IT Services, which forms part of the STFC DiRAC                             Denissenkov, P. A., Herwig, F., Bildsten, L., & Paxton, B. 2013, ApJ, 762, 8
+HPC Facility. The equipment was funded by BEIS capital funding via STFC cap-                               Denissenkov, P. A., Herwig, F., Woodward, P., et al. 2019, MNRAS, 488, 4258
+ital grants ST/K000373/1 and ST/R002363/1 and STFC DiRAC Operations grant                                  Dimonte, G., Youngs, D. L., Dimits, A., et al. 2004, Physics of Fluids, 16, 1668
+ST/R001014/1. RH acknowledges support from the World Premier International                                 Dobler, W., Haugen, N. E., Yousef, T. A., & Brandenburg, A. 2003, Phys. Rev. E,
+Research Centre Initiative (WPI Initiative), MEXT, Japan and the IReNA Accel-                                 68, 026304
+Net Network of Networks, supported by the National Science Foundation under                                Doherty, C. L., Siess, L., Lattanzio, J. C., & Gil-Pons, P. 2010, MNRAS, 401,
+Grant No. OISE-1927130. This article is based upon work from the ChETEC                                       1453
+COST Action (CA16117), supported by COST (European Cooperation in Sci-                                     Edelmann, P. V. F. 2014, Dissertation, Technische Universität München
+ence and Technology). This project has received funding from the European                                  Edelmann, P. V. F., Horst, L., Berberich, J. P., et al. 2021, A&A, 652, A53
+Union’s Horizon 2020 research and innovation programme under grant agree-                                  Edelmann, P. V. F., Ratnasingam, R. P., Pedersen, M. G., et al. 2019, ApJ, 876, 4
+ment No 101008324 (ChETEC-INFRA). This work used the DiRAC@Durham                                          Edelmann, P. V. F. & Röpke, F. K. 2016, in JUQUEEN Extreme Scaling Work-
+facility managed by the Institute for Computational Cosmology on behalf of the                                shop 2016, ed. D. Brömmel, W. Frings, & B. J. N. Wylie, JSC Internal Report
+STFC DiRAC HPC Facility (www.dirac.ac.uk). The equipment was funded by                                        No. FZJ-JSC-IB-2016-01, 63–67
+BEIS capital funding via STFC capital grants ST/P002293/1 and ST/R002371/1,                                Edelmann, P. V. F., Röpke, F. K., Hirschi, R., Georgy, C., & Jones, S. 2017,
+Durham University, and STFC operations grant ST/R000832/1. This work also                                     A&A, 604, A25
+used the DiRAC Data Centric system at Durham University, operated by the                                   Ekström, S., Georgy, C., Eggenberger, P., et al. 2012, A&A, 537, A146
+Institute for Computational Cosmology on behalf of the STFC DiRAC HPC Fa-                                  Falkovich, G. 1994, Physics of Fluids, 6, 1411
+cility. This equipment was funded by BIS National E Infrastructure capital grant                           Federrath, C., Roman-Duval, J., Klessen, R. S., Schmidt, W., & Mac Low, M. M.
+ST/ K00042X/1, STFC capital grants ST/H008519/1 and ST/ K00087X/1, STFC                                       2010, A&A, 512, A81
+DiRAC Operations grant ST/K003267/1, and Durham University. DiRAC is part                                  Fleck, B., Carlsson, M., Khomenko, E., et al. 2021, Philosophical Transactions
+of the National E Infrastructure. SWC acknowledges federal funding from the                                   of the Royal Society of London Series A, 379, 20200170
+Australian Research Council through a Future Fellowship (FT160100046) and                                  Fryxell, B., Arnett, D., & Mueller, E. 1991, ApJ, 367, 619
+Discovery Project (DP190102431). This work was supported by computational                                  Fryxell, B., Müller, E., & Arnett, D. 1989, Max-Planck-Institut für Physik und
+resources provided by the Australian Government through NCI via the National                                  Astrophysik München: MPA, Vol. 449, Hydrodynamics and nuclear burning
+Computational Merit Allocation Scheme (project ew6), and resources provided                                   (Max-Planck-Inst. für Physik und Astrophysik)
+
+Article number, page 16 of 20
+                                                    R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+
+             ×10−5                                                                                        ×10−5
+
+     2.5                                    FLASH, 1283               PROMPI, 1283                2.5                                    FLASH, 2563              PROMPI, 2563
+                                            MUSIC, 1283               SLH, 1283                                                          MUSIC, 2563              SLH, 2563
+                                            PPMSTAR, 1283             PPMSTAR, 5123                                                      PPMSTAR, 2563            PPMSTAR, 5123
+     2.0                                                                                          2.0
+
+
+     1.5                                                                                          1.5
+ hFH i
+
+
+
+
+                                                                                              hFH i
+     1.0                                                                                          1.0
+
+
+     0.5                                                                                          0.5
+
+
+     0.0                                                                                          0.0
+
+           1.00        1.25      1.50    1.75    2.00        2.25   2.50   2.75        3.00             1.00        1.25      1.50    1.75    2.00      2.25    2.50   2.75      3.00
+                                                   y                                                                                            y
+
+
+Fig. 15. Vertical profiles of the enthalpy flux averaged over the whole analysis time interval (500 ≤ t ≤ 2000, approximately 19 τconv ). The grey
+bands give an estimate of ±3σ statistical variation in the averages due to stochasticity, see Sect. 3.1 for details.
+
+                  ×10−6                                                                                        ×10−6
+                                                         3                         3
+         1.25                               FLASH, 128                PROMPI, 128                     1.25                               FLASH, 2563              PROMPI, 2563
+                                            MUSIC, 1283               SLH, 1283                                                          MUSIC, 2563              SLH, 2563
+         1.00                                                                                         1.00
+                                            PPMSTAR, 1283             PPMSTAR, 5123                                                      PPMSTAR, 2563            PPMSTAR, 5123
+         0.75                                                                                         0.75
+
+         0.50                                                                                         0.50
+ hFk i
+
+
+
+
+                                                                                              hFk i
+
+
+
+
+         0.25                                                                                         0.25
+
+         0.00                                                                                         0.00
+
+     −0.25                                                                                        −0.25
+
+     −0.50                                                                                        −0.50
+
+     −0.75                                                                                        −0.75
+                1.00      1.25    1.50    1.75    2.00       2.25   2.50    2.75       3.00                  1.00      1.25    1.50    1.75    2.00      2.25   2.50    2.75     3.00
+                                                    y                                                                                            y
+
+
+Fig. 16. Vertical profiles of the kinetic-energy flux averaged over the whole analysis time interval (500 ≤ t ≤ 2000, approximately 19 τconv ). The
+grey bands give an estimate of ±3σ statistical variation in the averages due to stochasticity, see Sect. 3.1 for details.
+
+
+Fryxell, B., Olson, K., Ricker, P., et al. 2000, ApJS, 131, 273                               Liou, M.-S. 2006, Journal of Computational Physics, 214, 137
+Geroux, C., Baraffe, I., Viallet, M., et al. 2016, A&A, 588, A85                              MacNeice, P., Olson, K. M., Mobarry, C., de Fainchtein, R., & Packer, C. 2000,
+Gilet, C., Almgren, A. S., Bell, J. B., et al. 2013, ApJ, 773, 137                               Computer Physics Communications, 126, 330
+Goffrey, T., Pratt, J., Viallet, M., et al. 2017, A&A, 600, A7                                Maeder, A. 1976, A&A, 47, 389
+Hammer, N., Jamitzky, F., Satzger, H., et al. 2016, in Parallel Computing: On                 Magic, Z., Weiss, A., & Asplund, M. 2015, A&A, 573, A89
+   the Road to Exascale, Proceedings of the International Conference on Paral-                McNally, C. P., Lyra, W., & Passy, J.-C. 2012, ApJS, 201, 18
+   lel Computing, ParCo 2015, 1-4 September 2015, Edinburgh, Scotland, UK,                    Meakin, C. A. & Arnett, D. 2007, ApJ, 667, 448
+   827–836                                                                                    Miczek, F. 2013, Dissertation, Technische Universität München
+Herwig, F. 2000, A&A, 360, 952                                                                Miczek, F., Röpke, F. K., & Edelmann, P. V. F. 2015, A&A, 576, A50
+Herwig, F., Woodward, P. R., Lin, P.-H., Knox, M., & Fryer, C. 2014, ApJ, 792,                Mocák, M., Meakin, C., Campbell, S. W., & Arnett, W. D. 2018, MNRAS, 481,
+   L3                                                                                            2918
+Higl, J., Müller, E., & Weiss, A. 2021, A&A, 646, A133                                        Plewa, T., Calder, A. C., & Lamb, D. Q. 2004, ApJ, 612, L37
+Horst, L., Edelmann, P. V. F., Andrássy, R., et al. 2020, A&A, 641, A18                       Prandtl, L. 1925, Zeitschrift Angewandte Mathematik und Mechanik, 5, 136
+Horst, L., Hirschi, R., Edelmann, P. V. F., Andrassy, R., & Roepke, F. K. 2021,               Pratt, J., Baraffe, I., Goffrey, T., et al. 2017, A&A, 604, A125
+   A&A, 653, A55                                                                              Pratt, J., Baraffe, I., Goffrey, T., et al. 2020, A&A, 638, A15
+Joggerst, C. C., Nelson, A., Woodward, P., et al. 2014, Journal of Computational              Ramaprabhu, P., Dimonte, G., Woodward, P., et al. 2012, Physics of Fluids, 24,
+   Physics, 275, 154                                                                             074107
+Jones, S., Andrassy, R., Sandalski, S., et al. 2017, MNRAS, 465, 2991                         Rosvick, J. M. & Vandenberg, D. A. 1998, AJ, 115, 1516
+Jørgensen, A. C. S., Mosumgaard, J. R., Weiss, A., Silva Aguirre, V., &                       Scannapieco, E. & Brüggen, M. 2015, ApJ, 805, 158
+   Christensen-Dalsgaard, J. 2018, MNRAS, 481, L35                                            Scott, L. J. A., Hirschi, R., Georgy, C., et al. 2021, MNRAS, 503, 4208
+Jülich Supercomputing Centre. 2019, Journal of large-scale research facilities, 5             Silva Aguirre, V., Christensen-Dalsgaard, J., Cassisi, S., et al. 2020, A&A, 635,
+Kim, J.-h., Abel, T., Agertz, O., et al. 2014, ApJS, 210, 14                                     A164
+Kim, J.-h., Agertz, O., Teyssier, R., et al. 2016, ApJ, 833, 202                              Sonoi, T., Ludwig, H. G., Dupret, M. A., et al. 2019, A&A, 621, A84
+Lecoanet, D., Cantiello, M., Anders, E. H., et al. 2021, arXiv e-prints,                      Spruit, H. C. 2015, A&A, 582, L2
+   arXiv:2105.04558                                                                           Staritsin, E. I. 2013, Astron. Rep., 57, 380
+Lecoanet, D., McCourt, M., Quataert, E., et al. 2016, MNRAS, 455, 4274                        Stephens, D., Herwig, F., Woodward, P., et al. 2021, MNRAS, 504, 744
+Lee, D. & Deane, A. E. 2009, Journal of Computational Physics, 228, 952                       Sutherland, B. R. 2010, Internal gravity waves (Cambridge university press)
+Li, X.-s. & Gu, C.-w. 2008, Journal of Computational Physics, 227, 5144                       Sytine, I. V., Porter, D. H., Woodward, P. R., Hodson, S. W., & Winkler, K.-H.
+Linden, P. F. 1975, Journal of Fluid Mechanics, 71, 385                                          2000, Journal of Computational Physics, 158, 225
+
+                                                                                                                                                      Article number, page 17 of 20
+                                                             A&A proofs: manuscript no. ccpaper
+
+
+
+      0.56                                                                              0.56
+
+
+      0.54                                                                              0.54
+
+
+      0.52                                                                              0.52
+ h fd i
+
+
+
+
+                                                                                   h fd i
+      0.50                                                                              0.50
+
+
+      0.48                                                                              0.48
+                             FLASH, 1283             PROMPI, 1283                                              FLASH, 2563             PROMPI, 2563
+      0.46                   MUSIC, 1283             SLH, 1283                          0.46                   MUSIC, 2563             SLH, 2563
+                             PPMSTAR, 1283           PPMSTAR, 5123                                             PPMSTAR, 2563           PPMSTAR, 5123
+      0.44                                                                              0.44
+             1.00   1.25   1.50    1.75      2.00   2.25   2.50      2.75   3.00               1.00   1.25   1.50    1.75      2.00   2.25   2.50      2.75   3.00
+                                               y                                                                                 y
+
+
+Fig. 17. Vertical profiles of the downflow filling factor averaged over the whole analysis time interval (500 ≤ t ≤ 2000, approximately 19 τconv ).
+The grey bands give an estimate of ±3σ statistical variation in the averages due to stochasticity, see Sect. 3.1 for details.
+
+
+Timmes, F. X. & Swesty, F. D. 2000, ApJS, 126, 501
+Toro, E. F. 2009, Riemann Solvers and Numerical Methods for Fluid Dynamics:
+   A Practical Introduction (Berlin Heidelberg: Springer)
+Trampedach, R., Stein, R. F., Christensen-Dalsgaard, J., Nordlund, Å., & As-
+   plund, M. 2014, MNRAS, 442, 805
+Van Leer, B. 1974, Journal of computational physics, 14, 361
+Viallet, M., Goffrey, T., Baraffe, I., et al. 2016, A&A, 586, A153
+Viallet, M., Meakin, C., Arnett, D., & Mocák, M. 2013, ApJ, 769, 1
+Willcox, D. E., Townsley, D. M., Calder, A. C., Denissenkov, P. A., & Herwig,
+   F. 2016, ApJ, 832, 13
+Woodward, P. & Colella, P. 1981, in Lecture Notes in Physics, ed. W. C.
+   Reynolds and R. W. MacCormack (Berlin: Springer Verlag), 434–441
+Woodward, P. & Colella, P. 1984, Journal of Computational Physics, 54, 115
+Woodward, P. R. 1986, in Astrophysical Radiation Hydrodynamics, ed. K.-H. A.
+   Winkler & M. L. Norman, Vol. 188 (Dordrecht: Springer), 245–326, available
+   at https://www.lcse.umn.edu/PPMlogo
+Woodward, P. R. 2007, in Implicit Large Eddy Simulation, Computing Turbulent
+   Fluid Dynamics, ed. F. F. Grinstein, L. G. Margolin, & W. J. Rider (Cam-
+   bridge: Cambridge University Press), 130
+Woodward, P. R., Herwig, F., & Lin, P.-H. 2015, ApJ, 798, 49
+Woodward, P. R., Lin, P.-H., Mao, H., Andrassy, R., & Herwig, F. 2019, Journal
+   of Physics: Conference Series, 1225, 012020
+
+
+
+
+Article number, page 18 of 20
+                                         R. Andrassy et al.: Comparison of five 3D hydrodynamics codes
+
+Appendix A: Supplementary materials                                        whole horizontal plane vanishes. Both streams are assumed to
+                                                                           have the same density ρ0 for simplicity.15 Let 0 < fd < 1 be the
+To make this study easy to reproduce or extend, we provide                 geometrical filling factor (relative surface area) of the downflow.
+our data products as well as setup and analysis scripts in elec-           The net mass flux is then
+tronic form. The 1D and 2D data, animations and spectra are
+available on Zenodo10 . A set of Jupyter notebooks and Python              ρ0 (1 − fd )uu + ρ0 fd ud = 0,                                    (B.1)
+scripts that can set up the test problem and reproduce our anal-
+ysis as well as all plots shown in this work can be found on the           where uu > 0 and ud < 0 are the velocities of the upflow and
+CoCoPy GitHub repository11 , v1.1.0. The analysis makes use of             downflow, respectively. The ratio of the velocity components is
+the PyPPM toolkit12 , v2.0.1. To make the analysis even more
+approachable, we set up the CoCo Jupyter Hub13 , which con-                ud    1 − fd
+                                                                              =−                                                             (B.2)
+tains all of the data and scripts needed. The hub also contains            uu      fd
+the much more voluminous original 1283 and 2563 data sets. We
+will consider adding the 5123 runs upon request.                           and the rms velocity is
+     The hydrodynamic codes write 3D output into binary data                      q
+files, the structure of which is code-dependent. We have created a         urms = (1 − fd )u2u + fd u2d .                                    (B.3)
+Python interface for each of the codes. The interface makes sure
+that the 3D data are read and assigned to a set of arrays, which           Using Eq. B.2, we can express the individual velocities of the
+are then further processed in a code-independent way. The pro-             two streams in terms of urms :
+cessing is performed in the system of units defined in Table 1                  s
+independently of what units the hydrodynamic codes use. As                            fd
+detailed below, we produce text files containing 1D horizontal             uu =             urms ,                                  (B.4)
+                                                                                   1 − fd
+averages and kinetic energy spectra as well as binary files con-                  s
+taining 2D slices through the simulation box. This intermediate                      1 − fd
+step speeds up data visualisation and facilitates data sharing.            ud = −             urms .                                (B.5)
+                                                                                         fd
+     The 1D horizontal averages are written into text-based
+.rprof files14 with one file per each output interval. The files           The net flux of kinetic energy is
+contain a two-line header followed by a set of data tables con-
+taining the quantities summarised in Table A.1 such that the files                1 h                       i
+                                                                           Fk =     ρ0 (1 − fd )u3u + fd u3d ,                               (B.6)
+are both easily human- and machine-readable.                                      2
+     The kinetic-energy spectra are computed in the y = 1.7 and
+y = 2.7 planes using Eq. 23. They are written into text-based              which can be expressed as a function of fd and urms :
+.spec files with one file per each output interval. The files con-                                !3             !2       
+tain a one-line header followed by two data tables, the first for               1           1 − fd 2  fd               
+                                                                                     3
+                                                                           Fk = ρ0 urms fd                         − 1 .               (B.7)
+the y = 1.7 plane and the other for the y = 2.7 plane. The tables               2             fd           1 − fd
+list the value of 12 || |Ψ| ||2 as a function of the wavenumber k rang-
+                                                                                                                                     −1
+ing from k = 0 to the Nyquist wavenumber.                                  Figure B.1 shows the geometric factor Fk 21 ρ0 u3rms . Because
+     At each output interval, we also produce a set of NumPy’s             ρ0 > 0 and urms > 0, the flux is negative (i.e. directed down-
+binary .npy files, each containing one variable in a 2D slice              wards) for fd < 0.5, positive for fd > 0.5, and it vanishes when
+through the computation box. The slicing planes are x = 0,                  fd = 0.5, that is when there is perfect up-down symmetry and the
+y = 1.7, y = 2.7, and z = 0 and the variables are the pseudo-              upflow and downflow contributions cancel each other in Eq. B.6.
+entropy A = p/ργ , density ρ, mass fraction X1 of the µ1 fluid,                 We test the two-stream model by taking its input quantities
+the Cartesian components of velocity v x , vy , and vz , magnitude         from the 5123 PPMSTAR run and comparing the result with the ac-
+of vorticity |∇ × v|, and velocity divergence ∇ · v.                       tual profile of Fk in the same run. In particular, we set ρ0 = hρi,
+                                                                            fd = h fd i and u3rms = he
+                                                                                                     vrms i2 he
+                                                                                                              vy,rms i in Eq. B.7. The last expres-
+Appendix B: Flux of kinetic energy in a two-stream                         sion is motivated by the fact that we are computing the flux of
+  model of convection                                                      kinetic energy along the y axis. We use the whole analysis time
+                                                                           interval (500 ≤ t ≤ 2000, approximately 19 τconv ) for the time
+In this section, we derive a simple relation between the asymme-           averaging. Figure B.2 shows that the two-stream model closely
+try between upflows and downflows, quantified by the downflow              reproduces the actual profile of Fk both in magnitude and sign
+filling factor, and the flux of kinetic energy in a 1D, two-stream         over most of the convective layer.
+model of convection. Although purely kinematic in nature, the
+model shows how contributions from the upflows cancel those
+from the downflows, making the flux of kinetic energy vanish
+when the flow is close to perfect up-down symmetry.
+     We consider a 1D model of convection that consists of an
+upflow and a downflow such that the net mass flux through the
+10
+   https://doi.org/10.5281/zenodo.5796842
+11
+   https://github.com/robert-andrassy/CoCoPy
+12
+   https://github.com/PPMstar/PyPPM
+13
+   https://www.ppmstar.org/coco
+14
+   The extension .rprof is of historical origin: such files have mostly
+                                                                           15
+been used to store radial profiles of full-sphere PPMSTAR simulations of     We can neglect density fluctuations because (1) we do not model the
+stellar convection.                                                        dynamics of convection here and (2) the fluctuations are small.
+
+                                                                                                                    Article number, page 19 of 20
+                                                                  A&A proofs: manuscript no. ccpaper
+
+Table A.1. Definitions of the horizontally averaged quantities available in the .rprof files.
+
+                                Variable          Meaning                              Definition                                            Statistics
+                                Name
+                                Y                 vertical coordinate                  y                                                     ...
+                                RHO               density                              ρ                                                     full
+                                P                 pressure                             p                                                     full
+                                TEMP              temperature                          T                                                     full
+                                A                 pseudo-entropy                       A; A = p/ργ                                           full
+                                X1                mass fraction of the lighter         f
+                                                                                       X1                                                    full
+                                                  fluid
+                                V                 magnitude of velocity                e
+                                                                                       |v|                                                   full
+                                VX                x-component of velocity              vx
+                                                                                       e                                                     full
+                                VY                y-component of velocity              vy
+                                                                                       e                                                     full
+                                VZ                z-component of velocity              vz
+                                                                                       e                                                     full
+                                |VY|              magnitude of vy                       fy |
+                                                                                       |v                                                    average
+                                                                                                              q
+                                VXZ               magnitude of horizontal ve-          v xz ; v xz =
+                                                                                       e                       v2x + v2z                     average
+                                                  locity
+                                VORT              magnitude of vorticity               e; ω = |∇ × v|
+                                                                                       ω                                                     average
+                                FK                flux of kinetic energy               Fk = 21 (ρ|v|2 vy − ρ|v|2 e
+                                                                                                                 vy )                        ...
+                                FH                flux of enthalpy                     FH = Hvy − H vey                                      ...
+                                FFD               downflow filling factor              fraction of the total horizontal                      ...
+                                                                                       area where vy − e  vy < 0
+
+Notes. In the last column, ‘average’ means that only the average is computed and ‘full’ indicates that also the minimum, maximum, and standard
+deviation are computed. The names of the last three quantities then start with MIN_, MAX_, and STDEV_, respectively.
+
+
+                 10.0                                                                                           ×10−6
+
+                                                                                                       1.25                                                   PPMSTAR, 5123
+                  7.5
+                                                                                                                                                              two-stream model
+                                                                                                       1.00
+                  5.0
+                                                                                                       0.75
+                  2.5
+          −1
+
+
+
+
+                                                                                                       0.50
+ 2 ρ0 urms
+       3
+
+
+
+
+                  0.0
+                                                                                               hFk i
+
+
+
+
+                                                                                                       0.25
+ 1
+ 
+
+
+
+
+                 −2.5
+   Fk
+
+
+
+
+                                                                                                       0.00
+                 −5.0                                                                              −0.25
+
+                 −7.5                                                                              −0.50
+
+                −10.0                                                                              −0.75
+                        0.0   0.2           0.4            0.6     0.8         1.0                            1.00      1.25   1.50   1.75     2.00    2.25   2.50   2.75     3.00
+                                                      fd                                                                                         y
+
+                                                 
+                                                  −1
+Fig. B.1. Geometric factor Fk             1
+                                            ρ u3     in Eq. B.7 as a function of the     Fig. B.2. Profile of the kinetic-energy flux Fk given by the two-stream
+                                          2 0 rms
+downflow filling factor fd .                                                             model as compared with the actual profile of Fk in the 5123 PPMSTAR
+                                                                                         run. Inputs for the two-stream model are taken from the same PPMSTAR
+                                                                                         run. The time-averaging interval and statistical-variation bands are the
+                                                                                         same as those used in Fig. 16.
+
+
+
+
+Article number, page 20 of 20
+

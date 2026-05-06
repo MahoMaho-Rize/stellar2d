@@ -1,0 +1,1017 @@
+                                              Chlorine and Potassium Enrichment in the
+                                              Cassiopeia A Supernova Remnant
+                                              XRISM collaboration
+
+                                              The elements in the universe are synthesized primarily in stars and supernovae, where nu-
+                                              clear fusion favors the production of even-Z elements. In contrast, odd-Z elements are less
+                                              abundant and their yields are highly dependent on detailed stellar physics, making theo-
+arXiv:2512.04508v1 [astro-ph.HE] 4 Dec 2025
+
+
+
+
+                                              retical predictions of their cosmic abundance uncertain. In particular, the origin of odd-Z
+                                              elements such as phosphorus (P), chlorine (Cl), and potassium (K), which are important for
+                                              planet formation and life, is poorly understood. While the abundances of these elements in
+                                              Milky Way stars are close to solar values, supernova explosion models systematically under-
+                                              estimate their production by up to an order of magnitude, indicating that key mechanisms
+                                              for odd-Z nucleosynthesis are currently missing from theoretical models. Here we report the
+                                              observation of P, Cl, and K in the supernova remnant Cassiopeia A using high-resolution
+                                              X-ray spectroscopy with XRISM, with the detection of K at above the 6σ level being the most
+                                              significant finding. Supernova explosion models of normal massive stars cannot explain the
+                                              element abundance pattern, especially the high abundances of Cl and K, while models that
+                                              include stellar rotation, binary interactions or shell mergers agree closely with the observa-
+                                              tions. Our observations suggest that such stellar activity plays a significant role in supplying
+                                              these elements to the universe.
+                                                     Observing the chemical composition of supernovae (SNe) and their remnants (SNRs) pro-
+                                              vides direct evidence of how elements are synthesized and distributed in the universe. The el-
+                                              emental abundance patterns of these objects or stars reflect the physical processes occurring in
+                                              stellar interiors and explosions1–3 , offering crucial insights into the origin and evolution of ele-
+                                              ments. While even-Z elements (i.e., α-elements) have been extensively studied in SNe and SNRs,
+                                              observations of odd-Z elements, such as phosphorus (P), chlorine (Cl), and potassium (K), re-
+                                              main scarce, and their theoretical treatment is incomplete4, 5 . Notably, galactic chemical evolution
+                                              models struggle to explain the observed abundances of these elements6–9 , and discrepancies with
+                                              theoretical predictions have also been reported in observations of some metal-poor stars10 . These
+                                              inconsistencies highlight a fundamental gap in our understanding of nucleosynthesis processes.
+                                              Currently, stellar processes such as rotation, binary interactions, and shell mergers (the merging
+                                              of adjacent nuclear-burning shells into a single convective shell) have been proposed as plausible
+                                              mechanisms to resolve this issue9, 11, 12 . Here, the nucleosynthesis pathways for odd-Z element pro-
+                                              duction, which include γ-reactions and neutron/proton capture, are complex11 , and it is necessary
+                                              to directly discuss the synthesis yields of these elements based on observations. However, because
+                                              emission lines from odd-Z elements are faint, it has been difficult to observe them in SNe/SNRs
+                                              with existing detectors (particularly in X-rays), and their origin therefore remains unresolved.
+                                                     Recent near-infrared spectroscopic studies of Cassiopeia A, the youngest known core-collapse
+                                              SNR in our Galaxy, have reported the detection of emission from P4, 13 . In particular, its [P/Fe] ra-
+                                              tio is up to 100 times higher than the average in the Milky Way4 , prompting a discussion on the
+
+                                                                                               1
+nucleosynthesis processes during the SN explosion. However, the observed [P/Fe] ratios were scat-
+tered by about two orders of magnitude in the remnant because the two elements are synthesized
+at different locations and unevenly mixed in a SN, preventing a clear understanding of their origin.
+In addition, since most of the SN ejecta have already been heated by the reverse shock (≲ 20%
+of ejecta are unshocked)14 , X-ray emission from the shocked ejecta most accurately reflects the
+true elemental composition in the remnant. To fully understand the origin of odd-Z elements, it
+is thus crucial to systematically measure the abundances of several odd-Z elements, including Cl
+and K, together with neighbouring even-Z elements (e.g. Si, S, Ar, Ca) produced at the same site
+using X-ray spectroscopy. Therefore, high-resolution non-dispersive X-ray spectroscopy, which
+has the potential to observe all these elements, is a unique tool to probe the nucleosynthesis of
+odd-Z elements produced in SNe.
+      The X-Ray Imaging and Spectroscopy Mission (XRISM)15 , successfully launched on Septem-
+ber 7, 2023, is equipped with the Resolve microcalorimeter, capable of non-dispersive high-
+resolution spectroscopy (∆E < 7 eV) in the X-ray band (1.7–10 keV), where primary emission
+lines from ionized elements P, Cl, and K are emitted. We conducted observations of Cas A with
+XRISM twice in mid-December 2023 (Fig. 1 and Table 1; see also “Observation and Data Re-
+duction”). These two pointings cover the majority of the remnant’s SN ejecta, with the exception
+of the northeast-extending jet-like structure, enabling a comprehensive investigation of odd-Z ele-
+ments in this remnant. Notably, large clumps of ejecta are concentrated in the southeast, north, and
+west regions, reflecting the explosion’s asymmetry16 . As shown in the Chandra elemental maps
+(Fig. 1), the southeast and north blobs contain O-rich ejecta (which is most likely the product of
+hydrostatic nuclear fusion in the progenitor star’s deep interior) along with Fe- and Si-rich ejecta
+(the products of the explosive nucleosynthesis). In contrast, the west region is dominated by Fe
+and Si. We employ spatially-resolved spectroscopy with XRISM/Resolve to examine and compare
+the elemental abundances across these distinct regions.
+      Figure 2 shows the X-ray spectra of the north (N), southeastern (SE), and western (W) re-
+gions of Cas A. In the regions SE and N, Resolve clearly detected the emission from highly-ionized
+He-like ions of Cl and K (at ≳ 5σ and > 6σ confidence levels, respectively). In contrast, the W
+region shows no clear line structures and only marginal Cl- and K-line detection significances
+(< 2σ). Marginal evidence of P are also detected in the region SE and W (≳ 4σ confidence level;
+see Table 2 and Extended Data Table 1). These results reveal a spatially inhomogeneous distribu-
+tion of odd-Z elements in Cas A, with their emission confined to the O-rich regions in the north and
+southeast, and absent in the western region. These detections are unaffected by background emis-
+sion, spatial-spectral mixing from the telescope’s point spread function, fitting-range choices, or
+other factors (see Methods and Extended Data Table 1). The abundance ratios relative to hydrogen
+are approximately 3–5 solar values, confirming that these elements originate from the SN ejecta
+rather than the interstellar medium (ISM). Dielectronic recombination and inner-shell excitation
+lines from other elements lie close to the P and Cl line features, with the former being almost
+completely overlapped and the latter located immediately adjacent, making accurate abundance
+estimates dependent on careful plasma modeling. In the K band, there are no significant contam-
+inating lines, allowing for a clean separation of the emission feature. Region N shows complex
+
+
+                                                 2
+velocity structures in intermediate-mass elements (see Figure 4 in Suzuki et al. 202517 ), making
+abundance measurements there less reliable (see “Methods” for detail). We therefore adopt the
+K/Ar and Cl/S ratios from region SE as representative values, with the K/Ar ratio being the most
+reliable due to its clear detection and minimal contamination, and the Cl/S ratio also considered
+reasonably robust. The Cl/S ratio is estimated to be (Cl/S)/(Cl/S)⊙ = 1.0 ± 0.1 and the K/Ar
+ratio (K/Ar)/(K/Ar)⊙ = 1.3 ± 0.2, based on proto-solar values from18 . Here, we use the abun-
+dance ratios relative to neighboring even-Z elements in order to examine the characteristics of the
+synthesis processes in the subsequent discussion. Across a variety of fitting conditions, the de-
+rived abundance ratios remain consistent within a ∼10–40% range, which likely reflects the level
+of systematic uncertainty in our measurements and does not affect our conclusions (see “Spectral
+Analysis” and Extended Data Table 1).
+       The observed ratios close to the solar value suggest an abundant production of Cl and K in the
+remnant, in contrast to the scarcity in the theoretical models8 . Figure 3 shows the elemental mass
+ratios from Si to Ca (relative to Ar) obtained from our observation of region SE. It is noteworthy
+that the observed K and Cl abundances in Cas A, whose initial progenitor mass is estimated to be
+close to 15 M⊙ 19 , are significantly higher than those in SN models whithin the initial mass range
+13–25M⊙ from Nomoto et al. (2013)20 (here after NKT13), whereas the observed abundances of
+the even-Z elements roughly follow the trend of the models (see Extended Data Figure 1 for a
+more detailed comparison). This implies some mechanisms not included in the models enhanced
+the abundance of the odd-Z elements in Cas A. The fact that these Cl and K emission are spatially
+associated with the O-rich ejecta suggests that their production was amplified during the stellar
+evolution stage, rather than being solely the result of explosive nucleosynthesis. Regarding the P
+abundance, both observational uncertainties and large variations among theoretical models make
+quantitative discussion difficult at this stage (see Extended Data Table 1), even though the measured
+value falls within the range of theoretical predictions in Figure 3.
+       Some stellar activities have been proposed to explain the enhanced production of odd-Z el-
+ements in massive stars, most notably stellar rotation9 , binary interactions12 , and the shell merger
+phenomenon11 . To investigate these effects, we compare the observed Cl/S and K/Ar ratios with
+predictions from several core-collapse SN nucleosynthesis models in Fig. 4: non-rotating single-
+star models from NKT13, rotating models from Limongi & Chieffi (2018)21 , shell merger can-
+didates from Sukhbold et al. (2016)22 , and binary-star models from Farmer et al. (2023)12 (see
+Extended Data Figure 2 for a more detailed comparison). The models with the stellar effects tend
+to have higher Cl/S and K/Ar ratios than those of the NKT13 models, implying that these processes
+are required to explain our observations. In particular, some of the shell-merger and binary models
+predict ratios exceeding those measured in Cas A, indicating an efficient odd-Z production mech-
+anism in these scenarios. However, we note that these models involve significant uncertainties.
+In the case of shell merger models, the predicted yields are highly sensitive to the multidimen-
+sional mixing in the burning layer11 . Furthermore, Farmer et al. (2023)12 point out that, in their
+binary models, the convective structure near the nucleosynthesis region may introduce substan-
+tial uncertainties in the production of these elements. Since our work presents the observational
+constraint on Cl and K abundances in a core-collapse SN, further theoretical development will be
+
+
+                                                  3
+crucial to elucidating their production mechanisms. Detailed comparison and extended discussion
+of our model analysis are provided in “Model dependence on odd-Z yields” of the Methods sec-
+tion. These interpretations are constrained by current model uncertainties, highlighting the need
+for future efforts to fully integrate observational and theoretical constraints across diverse progen-
+itor scenarios, as well as for population studies combined with theoretical modeling to determine
+the prevalence of candidate mechanisms among massive star progenitors.
+       The observational characteristics of the Cas A remnant are generally more consistent with
+a progenitor that would support these stellar processes than the standard stellar nucleosynthesis.
+As the remnant of a Type IIb SN, Cas A likely lost most of its hydrogen envelope through binary
+interaction23 . Its extremely low neon (Ne) abundance (Ne/O ≈ 0.1 solar)26–28 , in contrast to the
+typical Ne/O ≈ 1 solar observed in other SNRs24, 25 , further suggests unusual stellar processes that
+deplete Ne. Stellar phenomena such as rotation and shell mergers have been proposed to account
+for this Ne scarcity in the O-rich layers of the progenitor star28–30 , implying a possible connection
+between Ne depletion and the enrichment of odd-Z elements during the stellar evolution of Cas A.
+In addition, our observation reveals a positive correlation between O emission intensity and odd-
+Z element abundances, further supporting a stellar nucleosynthetic origin. Although the odd-Z
+enhancement mechanism remains debated11, 12, 21 , this observational link between stellar activity
+and odd-Z element synthesis provides a unique benchmark. Interestingly, both the O-rich ejecta
+and odd-Z elements display a biased distribution from southeast to north in the remnant, which may
+suggest the impact of asymmetric convection in the stellar interior on SN dynamics31, 32 . Future
+observations of the odd-Z elements in Cas A and other remnants, using XRISM or upcoming X-ray
+observatories, will provide deeper insights into pre-SN activities and may hold the key to unveiling
+the chemical history of our galaxy.
+
+
+
+
+                                                  4
+                        Table 1: Observation log of Cas A with XRISM.
+
+          Target Name Sequential No.         Start Date of Obs.    Exposure Time (ksec)
+          Cas A SE         000129000        2023.12.11 05:49:47           181.3
+          Cas A NW         000130000        2023.12.14 14:38:50           166.6
+Note. Sequential No. is the identifier assigned to each observation made by XRISM. Exposure
+Time is the net duration of the observations after data screening.
+
+
+
+
+                           Table 2: Best-fit paremeters of spectral fits.
+
+      Region                            Region SE            Region W          Region N
+      Atomic Database          AtomDB             SPEX        AtomDB            AtomDB
+      (P/Si)/(P/Si)⊙           0.9 ± 0.2        0.9 ± 0.2     1.7 ± 0.4         0.8 ± 0.2
+      (Cl/S)/(Cl/S)⊙           1.0 ± 0.1          0.7+0.2
+                                                     −0.1     0.9 ±  0.3        0.9 ± 0.1
+      (K/Ar)/(K/Ar)⊙           1.3 ± 0.2        1.2 ± 0.2     0.5 ± 0.3         1.1 ± 0.2
+      (Mg/H)/(Mg/H)⊙            1.9±0.2          2.5±0.4      1.4±0.3           3.1±0.3
+      (Al/H)/(Al/H)⊙            2.1±0.5           2.1+0.8
+                                                     −0.7       <0.7              <0.5
+      (Si/H)/(Si/H)⊙          3.67±0.04        4.19±0.09     1.59±0.04          3.79+0.05
+                                                                                     −0.09
+                                +0.7                               +0.6
+      (P/H)/(P/H)⊙           3.5−0.6 (5.5σ) 3.6±0.8 (4.7σ)     2.7−0.7           3.1+0.7
+                                                                                    −0.8
+      (S/H)/(S/H)⊙             4.04+0.04
+                                    −0.03      4.23±0.09      1.85+0.03
+                                                                   −0.04        4.68+0.09
+                                                                                     −0.11
+                                +0.5             +0.7              +0.6
+      (Cl/H)/(Cl/H)⊙         4.2−0.6 (7.7σ) 3.1−0.6 (4.8σ)     1.6−0.5           4.3+0.7
+                                                                                     −0.6
+      (Ar/H)/(Ar/H)⊙          3.55±0.06         3.74+0.09
+                                                     −0.08    1.83+0.05
+                                                                   −0.06        4.22+0.08
+                                                                                     −0.07
+      (K/H)/(K/H)⊙           4.5+0.7
+                                −0.6 (7.0σ)   4.6+0.8
+                                                 −0.7 (6.3σ)   0.9 +0.6
+                                                                   −0.5          4.8 +0.8
+                                                                                     −0.7
+      (Ca/H)/(Ca/H)⊙          3.60±0.07        3.69±0.09      2.26+0.07
+                                                                   −0.03       5.14±0.09
+      kTe,1 [keV]             0.92±0.02        0.70±0.03     1.16±0.03          0.61+0.01
+                                                                                     −0.04
+      kTe,2 [keV]             2.13±0.02        2.18±0.06      1.78+0.02
+                                                                   −0.03        1.98+0.03
+                                                                                     −0.01
+      ne t1 [1010 cm−3 s]      3.10+0.10
+                                    −0.09        4.9±0.4        28 +5
+                                                                   −6            4.0 +0.7
+                                                                                     −0.3
+      ne t2 [1011 cm−3 s]      1.86+0.05
+                                    −0.03      1.90±0.07       2.2 +0.1
+                                                                   −0.2        1.64±0.04
+      Redshift z1 [10−3 ]      −3.8±0.1         −3.9±0.2      0.53+0.08
+                                                                   −0.06       -0.34±0.2
+      Redshift z2 [10−3 ] −4.11±0.04          −4.11±0.06      4.3±0.1           6.20+0.09
+                                                                                     −0.04
+      RMS V1 [km s−1 ]         1380±30          1370±40        480+30
+                                                                   −20          1030  +40
+                                                                                      −30
+                      −1
+      RMS V2 [km s ]           1340±10          1340±10      1830±30           1920±20
+      C-value/d.o.f          7438.28/6777 1613.18/1248 7053.81/6780 7208.06/6777
+Note. The elemental ratios show elemental abundance ratios relative to the solar values. The error
+represents a 1σ statistical uncertainty.
+
+
+
+
+                                                 5
+Figure 1: Three-color image of the core-collapse SNR Cas A. Red, green, and blue represent
+Chandra X-ray images of O- (0.6 to 0.85 keV), Si- (1.76 to 1.94 keV), and Fe-enhanced (6.54 to
+6.92 keV) regions, respectively. The white grids indicate the fields of view of our two-pointing
+observations with XRISM Resolve, which has a 6 × 6 pixel array: a pixel at a corner is only used
+for calibration. Pixels we selected for our spectral analysis are highlighted in yellow color. In the
+southeast (SE) and north (N) regions, we examined the spectrum of each pixel and selected those
+exhibiting large equivalent widths of K emission; the spatial distribution of these pixels closely
+matches that of the O and Si emission lines. In contrast, the west (W) region exhibits weak O line
+intensity, and the K emission line in its spectrum is faint (see Figure 2).
+
+
+
+
+                                                 6
+Figure 2: Resolve X-ray spectra of Cas A. The best-fit models are overplotted as a solid line
+with colors representing the spectral regions in Figure 1 (orange: region N, red: region SE, green:
+region W). In the top panel, the labels indicate the positions of the He-α emission lines for each
+element. The vertical broken lines correspond to the centroid energies of the resonance lines of
+P (∼ 2.152 keV), Cl (∼ 2.790 keV), and K (∼ 3.511 keV) in the rest frame. The bottom three
+panels show the zoom-in spectra around He-α P (left), Cl (middle), and K (right) line with the
+best fit models with or without the K emission line. In the spectra of the P band, models without
+P emission show residuals near 2.13 keV, particularly in the SE and W regions, indicating the
+signature of P emission in the spectra, while no significant residual is seen in the N region. In the
+Cl and K bands, models lacking the corresponding lines show residuals in the N and SE regions,
+but not in the W region. The intermediate-mass elements, particularly in region N, exhibit complex
+velocity structures (see Figure 4 in Suzuki et al. 202517 ), which introduces modeling uncertainties.
+For clarity, the spectrum of region SE has been shifted slightly along the energy axis in the zoomed-
+in panels.
+
+
+                                                 7
+Figure 3: Elemental mass ratios in Cas A compared to those in SN nucleosynthesis models.
+The red circles with error bars represent the mass ratios relative to Ar derived from different regions
+shown in Figure 1. The error shows a 1σ statistical uncertainty. The gray region indicates the
+range predicted by core-collapse SN nucleosynthesis models of Nomoto et al.20 , assuming single-
+star, non-rotating progenitors with solar metallicity and initial masses in the range 13–25 M⊙ . To
+facilitate comparison between the observed values and the model values, only the model values
+are connected and that range is shaded. See Extended Data Figure 2 for a more comprehensive
+comparison across a wider range of model parameters.
+
+
+
+
+                                                  8
+Figure 4: Observed Cl/S and K/Ar ratios in Cas A compared with representative nucleosyn-
+thesis models. The abundance ratio is defined as the elemental abundance ratio normalized to
+the solar value: (K/Ar)/(K/Ar)⊙ and (Cl/S)/(Cl/S)⊙ . The red regions indicate the 1σ statistical
+confidence intervals of observed abundance ratios in region SE. Model predictions are shown
+for non-rotating single-star progenitors with the initial masses of 13–25M⊙ from Nomoto et al.
+(2013)20 (gray crosses), rotating models from Limongi & Chieffi (2018)21 with initial masses of
+13–25 M⊙ and rotational velocities of 300 km s−1 (green squares), shell merger candidates from
+a subset of the Sukhbold et al. (2016)22 models with progenitor masses of ∼19–27 M⊙ (red cir-
+cles), and binary-star models from Farmer et al.12 with initial masses of 13–25 M⊙ and companion
+stars with 80% of the primary mass (blue diamonds). All models shown assume solar metallicity.
+See Extended Data Figure 2 for a more comprehensive comparison across a wider range of model
+parameters.
+
+
+
+
+                                               9
+Methods
+
+
+Observation and Data Reduction: We carried out a two-pointing observation of Cassiopeia A
+(Cas A) during the XRISM commissioning phase as summarized in Table 117, 33, 34 . The Resolve
+fields of view (FoV) are shown in Figure 1. Since the Resolve aperture door (“gate valve”) has not
+opened yet, a 250-µm-thickness beryllium filter attenuates X-ray photons in the soft X-ray band,
+reducing the effective area. The available energy bandpass in our analysis is above approximately
+1.6 keV. The data reduction was done by using calibration data archived in the HEASARC calibra-
+tion database (CALDB). Cleaned event data were obtained using the latest release version of the
+HEASARC software (version 6.34) with the standard screening during post-pipeline processing.
+We only used the highest energy resolution (“Hp”) primary events for the spectral analysis. The
+redistribution matrix file (RMF) was generated with the extra large size option using rslmkrmf.
+The ancillary response file (ARF) was created using xaarfgen, assuming the surface brightness
+of Cas A as derived from a Chandra X-ray image in the 2.0–8.0 keV band.
+
+
+Energy scale reconstruction: The gain of the XRISM/Resolve calorimeter detectors is intrin-
+sically unstable since the thermal detectors respond to their thermal environment. The XRISM
+observatory includes multiple on-board calibration sources to track the time-dependent gain of the
+Resolve instrument and reconstruct the energy scale for each observation. The Cas A observa-
+tions were performed early in the performance and verification phase of the mission while the gain
+reconstruction strategy was still being formalized. Currently, gain fiducials are acquired sparsely,
+approximately twice per day on average, to sample the slow drift of the detector gain due to changes
+in spacecraft attitude and the thermal recovery from recycling the sub-kelvin adiabatic demagne-
+tization refrigerator. However, the Cas A observations were performed with much more frequent
+sampling of the gain: once every other orbit, or approximately every 3 hours, during earth occulta-
+tion. One position of the instrument’s filter wheel (FW) contains a set of 55 Fe radioactive sources
+providing a fiducial x-ray line at 5.9 keV. During earth occultation, the FW sources were rotated
+into the aperture providing 30 minute exposures with 500 counts in the 5.9 keV line per pixel, per
+fiducial measurement. The fiducial measurements were then used to reconstruct the energy scale
+at that time step using the non-linear reconstruction method described in35 . The energy scale was
+linearly interpolated between fiducial steps which has been shown to be sufficient to reconstruct
+the energy scale to better than 0.3 eV at 5.9 keV36 , especially for the frequently sampled fiducials
+during this early observation. The summed, reconstructed fiducial measurements for the Cas A
+observations give a line shift error of <0.04 eV at 5.9 keV for the entire detector array. More detail
+can be found in appendix 1 of XRISM collaboration et al.37 .
+
+
+Spectral Analysis: As shown in Figure 1, we divided the FoV into three regions to investigate
+the spatial variations of odd-Z elements in the spectral analysis described below. For region SE,
+we checked the spectrum of each pixel and selected pixels with a large equivalent width of K
+
+                                                 10
+emissions (pixel ids: 17, 18, 25, 32, 33 and 34), where the distribution of the selected pixels
+is in good agreement with that of the O emissions. Each spectral fit was performed using the
+SPEX software39 version 3.08.0138 and the Xspec software39 version 12.14.1 (AtomDB 3.1.0.v7)
+with the maximum likelihood C-statistic40 : we analyzed the Resolve spectrum in the 1.6–5.0 keV
+band, where any background component is negligible (but, of course we considered the non-X-ray
+background emissions in our analysis as described below). The spectral fit used in the main text
+is the result with Xspec. To evaluate the effect of the Non-X-ray background (NXB), we use a
+temporal NXB spectral model provided by the XRISM calibration team. The NXB model was
+constructed from a stacked NXB event file based on night-earth observations with a total exposure
+of 785 ks, and has a power law and 17 Gaussian lines for Al-Kα1/Kα2, Au-Mα1, Cr-Kα1/Kα2,
+Mn-Kα1/Kα2, Fe-Kα1/Kα2, Ni-Kα1/Kα2, Cu Kα1/Kα2, Au-Lα1/Lα2, and Au-Lβ1/Lβ2. In
+Figure 2, the NXB contribution is taken into account in the modeling but is below the displayed
+range. The NXB model we used has no line features around the K He-like Kα emission. We
+have confirmed that the K/Ar ratios agree within the statistical error (only a few percent change),
+whether or not the NXB model is considered.
+       On the basis of the previous observations27 , the spectra were fitted with a two-component
+non-equilibrium ionization (NEI) model absorbed by the interstellar medium (ISM) with the solar
+abundances18 . For the ejecta component, we use a plane-parallel shock (pshock) plasma model (in
+the case of SPEX, ‘Mode=3’ in the neij model was used). The pshock and single NEI models give
+consistent results with respect to K detection, although the former gives a slightly better fit (Ex-
+tended Data Table 1). We allowed the volume emission measure VEMNEI (= ne np VNEI , where ne ,
+np , and VNEI are the electron density, proton density, and the volume of the plasma, respectively),
+the electron temperature kTe , and the ionization timescale ne t to vary. The abundances of Si, P,
+S, Cl, Ar, K, and Ca were left free and tied between the two NEI components, while the others
+were fixed at the solar values. The absorption column density NH was fixed at 1.9 × 1022 cm−2 ,
+2.0 × 1022 cm−2 and 1.5 × 1022 cm−2 for regions SE, W and N, respectively, based on the pre-
+vious observation27 . Supplementary Figure 1 shows the spectrum of region SE along with the
+best-fit model consisting of two plasma components. These components, having different electron
+temperatures and line-of-sight velocities, both contribute to the observed line structures, complicat-
+ing abundance measurements. For example, region N exhibits a complex velocity structure, with
+redshifts varying across elements and ionization states17 , which makes it difficult to accurately
+determine the abundances of Cl and K, even though their spectral features are clearly present. In
+contrast, region SE shows simpler velocity structure and narrower line widths compared to region
+N (Figure 2), allowing for more reliable abundance measurements. We confirmed that additional
+components such as non-thermal emission or another NEI model do not significantly affect the
+results for region SE. On the other hand, in regions N and W, if non-thermal emission is not con-
+sidered, the temperature of the high-temperature plasma component exceeds 5 keV, which is higher
+than in other regions. Therefore, we added a power-law (non-thermal) component for the spectral
+fitting of regions N and W. In these regions, previous studies have reported that non-thermal emis-
+sion is strong41–44 , supporting the validity of adding the power-law component in this study. All
+the results are summarized in Table 2, showing that the two-component NEI model effectively
+explains all the Resolve spectra with statistically acceptable fits.
+
+                                                 11
+      Several factors, such as differences in region selections, fit ranges and atomic codes, can in-
+troduce errors in abundance estimation. We here discuss systematic errors in abundance estimation
+(in particular, the K/Ar ratio, which is the focus of this study) by performing spectral analysis un-
+der various conditions. The XRISM calibration team does not recommend the asymmetric region
+selection used here because of the difficulty in evaluating contamination from other regions. For
+example, it is recommended to select a symmetrical region with a collection of 2×2 pixels. There-
+fore, we also analyzed the 2×2 pixel region at the center of the observation in the East region (pixel
+ids; 0, 17, 18, 35), where the odd-Z elements seem to be concentrated. Even in this region, we
+found the K/Ar ratio to be 1.4±0.2 with Xspec, which agrees with the result in region A. Here, the
+detection of K is 7.7σ. On the other hand, we emphasize that the effect of spatial-spectral mixing
+due to the point spread function of the telescope does not change our conclusion. In particular, in
+the eastern region used in the main text, the observed value of K/Ar ≈ 1 solar does not change even
+when using the Resolve full-array data. Also, whether we assume a single NEI plasma or a multi-
+temperature plasma, the result remains the same. Therefore, slight differences in region selection
+or plasma parameters do not change our conclusion. In a 2x2 pixel region we can estimate with the
+raytracing code “xrtraytrace” that ∼50–60% of the radiation comes from within this region. Even
+though there is such a significant amount of contamination from the neighboring regions, it would
+be difficult to change the plasma parameters to overturn the conclusion.
+       In Extended Data Table 1, we summarized the K/Ar (also P/Si and Cl/S) ratios in different
+fitting conditions. It is found that the best-fit values agree within 10% in most cases. We checked
+the spectral fitting using a narrower energy band of 3.0–4.2 keV, which agrees well with the results
+in 1.6–5.0 keV. The electron loss continuum considered in the XL response matrix mainly affects
+the continuum component below 1.8 keV, so the L matrix was used for the fitting in the 3.0-4.2
+keV band without its effect. As mentioned in the main text, the emission lines of Ar and K can
+be explained by almost a single plasma model, thus we have fit the spectrum using a single NEI
+(pshock or nei) model in this energy band. The NXB model was not included in this analysis,
+because the NXB level is three orders of magnitude lower than the emissions from the remnant.
+In fitting over a wide energy band, the plasma parameters of K and Ar may be affected by other
+components and their abundance may change. On the other hand, even with this simple approach
+in the narrow band, the K/Ar ratios agree very well, supporting the robustness of our K/Ar mea-
+surements. In the case of Cl/S, the best-fit values agree within 40% in most cases, which implies
+larger systematic errors for the Cl observations. This is influenced by the difficulty in modeling the
+continuum emission; in particular, using a wider fitting energy range tends to result in a larger Cl/S
+ratio. A similar trend is also seen in the case of the P/Si ratio. These variations likely reflect the
+magnitude of systematic uncertainties, but even when taking them into account, our conclusions
+remain robust.
+       We also investigated a broader energy band from 1.6 to 12 keV, including the Fe-K emissions.
+In this energy band, it is difficult to ignore the non-thermal emission even in region SE, so a power-
+law component was added to the analysis (the NXB model is also included). Here, the photon
+index of the power-law component was fixed at a typical value of 2.345 , because it was difficult to
+determine. We confirmed that the mean values of K/Ar ratios stay within the 1σ confidence range
+
+
+                                                 12
+with any photon-index values in the range of 2.3–3.0 even in the cases of regions W and N, where
+the non-thermal components are more dominant than in region SE. The addition of a power-law
+component can reduce the fitted continuum level of the thermal component, thereby resulting in
+higher abundance values as the line to continuum ratio increases. On the other hand, the K/Ar ratio
+is almost the same as those for the 1.6–5.0 keV band. The result with AtomDB has a slightly larger
+K/Ar ratio of 1.5, but the spectral fit around the Fe-K band is worse than with SPEX. Currently,
+there is a descrepancy between atomic codes in the Fe band, and an update is planned. Since the
+uncertainty may affect the determination of the plasma parameters of K and Ar, the results in the
+1.6–5 keV band are considered more reliable for the present analysis.
+       Supplementary Figure 2 shows a comparison of the spectra in 3.0–4.2 keV generated by
+AtomDB and SPEX. In the energy band where the Ar and K emissions are present, there are some
+differences between the different atomic codes, but the spectral models are in good agreement.
+Several updates were made in these atomic databases to explain this observation of Cassiopeia
+A. In the case of AtomDB, the new data (version 3.1.0) include significant improvements to the
+Dielectronic Recombination (DR) satellite lines for B-like to H-like ions; significantly improved
+inner shell lines from excitation for the same, going up to n = 15; inclusion of the K-beta and
+K-gamma lines from inner shell excitation; revised fluorescence yields for n = 3 and above inner
+shell lines. In the case of SPEX, a new calculation has been performed for Be- and Li-like Si, P, S,
+Cl, Ar, and K, focusing on a complete set of innershell and dielectronic recombination transitions
+up to n = 7. For the dominant S He- and H-like transitions, SPEX now includes an extended
+calculation up to n = 52. The high Rydberg series of He-like S lines reproduce better the observed
+spectrum around 3.2 keV. Since the fits to the 3.2 keV feature may influence the measurement
+of the K abundance, a Gaussian component has been introduced into the model with AtomDB to
+compensate the atomic code difference. The two atomic codes currently agree on K/Ar with a
+difference of only a few percent.
+
+
+Model dependence on odd-Z yields: Nucleosynthetic studies have predicted that the fraction of
+the odd-Z elements in SN ejecta depends on several stellar factors, for example, stellar rotation21 ,
+binary interaction12 , intarnal activities11 and initial metalicity21 . To investigate these effects, we
+plot the final yields in ejecta in theoretical models with our observational results in Extended Data
+Figure 1. The top panel shows the models provided by Limongi & Chieffi21 , in which they cal-
+culated the SN yield with different rotation velocoties (v = 0, 150, 300 km s−1 ) and metalicities
+([Fe/H]=−3, −2, −1, 0). While the even-Z elements less depend on the parameters, the odd-Z el-
+ements’ yields vary from the models with different parameters. In particular, K/Ar ratios appear
+to increase with both higher metallicities and faster rotational velocities. The middle panel shows
+the models of Farmer et al.12 , in which they surveyed effects of binary interactions by stellar sim-
+ulations with the companions, whose initial masses were set to be 0.8 times the main stars. In the
+range of the plot, the K/Ar ratios are likely to be higher in the binary models, but the yields of
+other elements, including even-Z, seem not to have clear dependence on whether the progenitor
+was a single star or a binary system. The bottom panel shows the models by Sukhbold et al.22 .
+We analyzed the mass fraction profiles at the onset of core collapse, and plot the yields of models
+
+
+                                                  13
+in which the O-burning layers are merging with outer C-burning layers (since this resembles the
+characteristics of a shell merger29 , hereafter we refer to it as a “shell merger candidate”) and those
+in which the distinct borders between the layers are maintained (see below paragraphs, Supple-
+mentary Figure 3, and Sato et al.46 for more details). As is consistent with Ritter et al.11 , the shell
+merger candidates show higher Cl and K yields than the other their models.
+       To compare the relative contributions of these effects to the enhancement of odd-Z elements,
+we constructed a more comprehensive model plot of the K/Ar and Cl/S ratios, using the models of
+Nomoto et al. (2013)20 , Limongi & Chieffi (2018)21 , Roberti et al. (2024)30 , Farmer et al. (2023)12
+and Sukhbold et al. (2016)22 (hereafter NKT13, LC18, R24, F23, and S16), incorpolating our
+observational results (Extended Data Figure 2). These models were computed using different stel-
+lar evolution codes (e.g., KEPLER, FRANEC), each employing distinct nuclear reaction networks
+and treatments. However, as shown in Extended Data Figure 2, NKT13, LC18, and S16 models
+excepted for the shell merger candidates show the similar ratios, implying the variation due to code
+differences appears small compared to the range caused by physical parameters such as rotation,
+binarity, and shell mergers. The K/Ar ratios and Cl/S ratios roughly show positive correlation and
+those in shell merger candidates in S16 models and F23 models are likely to be able to much more
+enhance the odd-Z yields than rotating models. Both the K/Ar and Cl/S ratios in Cas A are close to
+the shell merger candidates in S16 models and both single and binary models of F23, rather than
+LC18 models incorpolating stellar rotation and metalicity effects. R24 is an extension of LC18
+to higher metallicity ([Fe/H] = 0.3, i.e., twice solar). Although increased metallicity is known to
+enhance odd-Z element production, even the R24 models cannot reach the Cl/S and K/Ar ratios
+observed in Cas A. Given that the initial metallicity of Cas A is suggested to be sub-solar47 , the
+contribution of metallicity to the nucleosynthesis of odd-Z elements in Cas A is likely to be lim-
+ited. While the S16 results may suggest that progenitors with initial masses of ≳20 M⊙ tend to
+have enhanced odd-Z yields, it is important to note that the LC18 and NKT13 models in the sim-
+ilar mass range do not show such enhancements. This implies that the enhanced odd-Z element
+yields are unlikely to be a simple function of initial mass and instead highlight the importance of
+stellar processes such as shell mergers. We also note that although binary progenitors have been
+suggested to enhance odd-Z yields, single-star models show variable values of these ratios, and
+even they can exhibit significantly enhanced odd-Z yields.
+      While the enhancement of odd-Z elements such as K and Cl is often attributed to progeni-
+tor rotation or binary interaction, a closer inspection of our model survey reveals a more nuanced
+picture, indicating that additional mechanisms may be at play. To explore this point, we further
+investigated the mass fraction profiles of the models in Figure 3 and the results are shown in Sup-
+plementary Figure 3. The top panel shows the 14.9M⊙ model from Sukhbold et al. (S16), which
+retains a textbook onion-like structure. In contrast, the bottom panel exhibits a structure where the
+Si-rich layer (O-burning layer) appears to be merging with the ONe-rich layer (C-burning layer).
+The mass fraction profiles of the binary and rotating progenitor models deviate from the canonical
+onion-skin structure, exhibiting signatures of partial mixing or merging between adjacent burning
+layers. It has been suggested that such layer merging is more likely to occur in rotating progenitor
+models30 , and some of the binary models used in this study have also been reported to exhibit
+
+
+                                                  14
+similar structural features48 . Furthermore, in Farmer et al.12 , they found that their models with
+abundant K produced the amount durning their pre-SN phase and pointed out that the convective
+structure outside the Fe core is the key to the production. These results suggest that the internal
+structure at the final stage of stellar evolution may influence the yields of odd-Z elements as much
+as, or even more than, the initial stellar parameters. According to Ritter et al. (2018)11 , the pre-SN
+yields of odd-Z elements in such progenitors depend on the entrainment rate at the O/Si-burning
+shell. In other words, they are sensitive to the nature of the mixing processes occurring during
+the O/Si-burning phase shortly before or at the onset of core collapse. Furthermore, some multi-
+dimensional SN simulations suggest that such a convective state can result in the asymmetry of the
+remnant49 . Therefore, future deep observations of the asymmetric SNR Cas A, including spatially
+resolved abundance distributions, will provide further insight into the nucleosynthetic processes
+responsible for the excess production of odd-Z elements.
+
+
+
+
+                                                  15
+Data availability
+
+The XRISM data we used are now publicly available in the archives: https://heasarc.
+gsfc.nasa.gov/docs/xrism/archive/.
+
+
+
+Code availability
+
+To analyse X-ray data with XRISM, we used public software, HEASoft (https://heasarc.
+gsfc.nasa.gov/docs/software/heasoft/). We used public atomic data in AtomDB
+(http://www.atomdb.org/) and SPEX (https://www.sron.nl/astrophysics-spex).
+We fitted the X-ray spectra with a public package, Xspec (https://heasarc.gsfc.nasa.
+gov/xanadu/xspec/).
+
+
+
+Acknowledgments
+
+This work was supported by JSPS KAKENHI grant numbers JP22H00158, JP22H01268, JP22K03624,
+JP23H04899, JP21K13963, JP24K00638, JP24K17105, JP21K13958, JP21H01095, JP23K20850,
+JP24H00253, JP21K03615, JP24K00677, JP20K14491, JP23H00151, JP19K21884, JP20H01947,
+JP20KK0071, JP23K20239, JP24K00672, JP24K17104, JP24K17093, JP20K04009, JP21H04493,
+JP20H01946, JP23K13154, JP23K13128, JP19K14762, JP20H05857, JP23K03459, and JP24KJ1485,
+and NASA grant numbers 80NSSC23K0650, 80NSSC20K0733, 80NSSC18K0978, 80NSSC20K0883,
+80NSSC20K0737, 80NSSC24K0678, 80NSSC18K1684, and 80NNSC22K1922. LC acknowl-
+edges support from NSF award 2205918. CD acknowledges support from STFC through grant
+ST/T000244/1. LG acknowledges financial support from Canadian Space Agency grant 18XARM-
+STMA. AT and the present research are in part supported by the Kagoshima University postdoc-
+toral research program (KU-DREAM). SY acknowledges support by the RIKEN SPDR Program.
+IZ acknowledges partial support from the Alfred P. Sloan Foundation through the Sloan Research
+Fellowship. MS acknowledges the support by the RIKEN Pioneering Project Evolution of Matter
+in the Universe (r-EMU) and Rikkyo University Special Fund for Research (Rikkyo SFR). NW
+acknowledges the financial support of the GAČR EXPRO grant No. 21-13491X. Part of this work
+was performed under the aus- pices of the U.S. Department of Energy by Lawrence Livermore
+National Laboratory under Contract DE-AC52-07NA27344. The material is based upon work
+supported by NASA under award number 80GSFC21M0002. This work was supported by the
+JSPS Core-to-Core Program, JPJSCCA20220002. The material is based on work supported by the
+Strategic Research Center of Saitama University.
+
+
+
+
+                                           16
+Author Contributions
+
+T. S. led the Resolve data and pre-SN/SN model analysis and wrote the manuscript. K. M. ana-
+lyzed the nucleosynthesis models and the Resolve data and wrote the manuscript. H. U. is one of
+the authors who conceived this study, led the data analysis and prepared the manuscript. L. Gu
+performed a spatially-resolved odd-Z search and detailed spectral analysis of the remnant, and led
+the update of the SPEX database. A. F. updated the AtomDB database for explaining the observed
+spectra. M. A. analysed different combinations of Resolve pixels for the odd-Z element search.
+He confirmed that the detection of odd-Z elements is robust to small changes in pixel selection. J.
+V. & P. P. wrote the PV phase proposal for observing Cas A, which included the case for odd-Z
+detections using Resolve. P. Plucinsky also analyzed the data and prepared the manuscript. F. S. P.
+reviewed the Resolve observations of the remnant as an instrumental expert and wrote the Resolve
+gain section. S. K. helped to make the discussion about the low Ne/O ratio more robust. S. F. con-
+firmed the abundance of odd-Z elements in a multidimensional SN model. H. Y., A. B., A. S., K.
+S., E. B. and R. M. helped to improve the manuscript. The science goals of XRISM were discussed
+and developed over 7 years by the XRISM Science Team, all members of which are authors of this
+manuscript. All the instruments were prepared by the joint efforts of the team. The manuscript
+was subject to an internal collaboration-wide review process. All authors reviewed and approved
+the final version of the manuscript.
+
+
+
+Competing interests
+
+The authors declare no competing interests.
+
+
+
+
+                                                17
+Extended Data Figure 1: Elemental mass ratios in Cas A compared to supernova nu-
+cleosynthesis models across a wider range of model parameters. Top: Comparison with
+15M⊙ models with the several initial metalicities ([Fe/H]=−2, −1, 0) and rotation velocities
+(v = 0, 150, 300 km s−1 ) provided by Limongi & Chieffi21 . Middle: Comparison with 13, 14,
+15, 16M⊙ models of the single star cases and the binary cases provided by farmer et al.12 . In
+each binary case, the companion star mass is set to 0.8 times of the progenitor. Bottom: Com-
+parison with non-rotating single star models with several masses provided by Sukhbold et al.22 .
+The 14.9M⊙ and 19.3M⊙ models shows onion-like layers constituted with O-, Ne-, and C-burning
+layers. In contrast, in the 19.8M⊙ and 20.1M⊙ models, the O-burning layers are merging with the
+outer layers like shell mergers (see Supplementary Figure 3). To facilitate comparison between the
+observed values and the model values, only the model values are connected with lines.
+                                               18
+Extended Data Figure 2: Comparison between observed and predicted Cl/S and K/Ar ratios
+across multiple stellar models. The hatched light blue regions represent the 1σ confidence in-
+tervals for the observed mass ratios in region SE of Cas A. Sukhbold et al.22 models (12–30 M⊙ )
+are shown with different marker shapes for progenitor mass ranges (circle: 12–15 M⊙ , square:
+15–20 M⊙ , star: 20–30 M⊙ ). Shell merger candidates are highlighted in red; non-merger models
+are shown in black. Models from Limongi & Chieffi21 (13–25 M⊙ ) are shown with squares and
+circles representing solar and sub-solar metallicity ([Fe/H] = −1 and 0), respectively. Rotation is
+indicated by color: purple for non-rotating and green for rotating models at 300 km s−1 . Roberti et
+al.30 models extend LC18 to super-solar metallicity ([Fe/H] = 0.3), and are plotted in a similar for-
+mat (non-rotating and rotating cases). Farmer et al.12 models (10–30 M⊙ ) are shown as stars: blue
+for single-star models and orange for binary models. Nomoto et al.20 models (10–30 M⊙ ) are indi-
+cated as grey crosses. The figure shows that models involving shell mergers or binary interactions
+can produce enhanced Cl and K abundances, consistent with our observational constraints.
+
+
+
+
+                                                 19
+References
+ [1] Hughes, J.P., Rakowski, C.E., Burrows, D.N., Slane, P.O.: Nucleosynthesis and Mixing in
+     Cassiopeia A. Astrophys. J. Lett. 528(2), 109–113 (2000)
+
+ [2] Masseron, T., Garcı́a-Hernández, D.A., Santoveña, R., Manchado, A., Zamora, O., Manteiga,
+     M., Dafonte, C.: Phosphorus-rich stars with unusual abundances are challenging theoretical
+     predictions. Nature Communications 11, 3759 (2020)
+
+ [3] Xing, Q.-F., Zhao, G., Liu, Z.-W., Heger, A., Han, Z.-W., Aoki, W., Chen, Y.-Q., Ishigaki,
+     M.N., Li, H.-N., Zhao, J.-K.: A metal-poor star with abundances from a pair-instability su-
+     pernova. Nature 618(7966), 712–715 (2023)
+
+ [4] Koo, B.-C., Lee, Y.-H., Moon, D.-S., Yoon, S.-C., Raymond, J.C.: Phosphorus in the Young
+     Supernova Remnant Cassiopeia A. Science 342(6164), 1346–1348 (2013)
+
+ [5] Bekki, K., Tsujimoto, T.: Phosphorus enrichment by one novae in the galaxy. Astrophys. J.
+     Lett. 967(1), 1 (2024)
+
+ [6] Timmes, F.X., Woosley, S.E., Weaver, T.A.: Galactic Chemical Evolution: Hydrogen through
+     Zinc. Astrophys. J. Suppl. Ser. 98, 617 (1995)
+
+ [7] Kobayashi, C., Umeda, H., Nomoto, K., Tominaga, N., Ohkubo, T.: Galactic Chemical Evo-
+     lution: Carbon through Zinc. Astrophys. J. 653(2), 1145–1171 (2006)
+
+ [8] Kobayashi, C., Karakas, A.I., Lugaro, M.: The origin of elements from carbon to uranium.
+     Astrophys. J. 900(2), 179 (2020)
+
+ [9] Prantzos, N., Abia, C., Limongi, M., Chieffi, A., Cristallo, S.: Chemical evolution with
+     rotating massive star yields - I. The solar neighbourhood and the s-process elements. Mon.
+     Not. R. Astron. Soc. 476(3), 3432–3459 (2018)
+
+[10] Tominaga, N., Umeda, H., Nomoto, K.: Supernova Nucleosynthesis in Population III 13-50
+     Msolar Stars and Abundance Patterns of Extremely Metal-poor Stars. Astrophys. J. 660(1),
+     516–540 (2007)
+
+[11] Ritter, C., Andrassy, R., Côté, B., Herwig, F., Woodward, P., Pignatari, M., Jones, S.:
+     Convective–reactive nucleosynthesis of k, sc, cl and p-process isotopes in o–c shell merg-
+     ers. Mon. Not. R. Astron. Soc.Letters 474(1), 1–6 (2018)
+
+[12] Farmer, R., Laplace, E., Ma, J.-z., de Mink, S.E., Justham, S.: Nucleosynthesis of Binary-
+     stripped Stars. Astrophys. J. 948(2), 111 (2023)
+
+[13] Gerardy, C.L., Fesen, R.A.: Near-infrared spectroscopy of the cassiopeia a and kepler super-
+     nova remnants. Astrophys. J. 121(5), 2781 (2001)
+
+
+
+                                               20
+[14] Laming, J.M., Temim, T.: Element Abundances in the Unshocked Ejecta of Cassiopeia A.
+     Astrophys. J. 904(2), 115 (2020)
+[15] Tashiro, M. et al., X-Ray Imaging and Spectroscopy Mission. Publ. Astron. Soc. Jpn 77(SP1),
+     S1–S9 (2025)
+[16] Wongwathanarat, A., Janka, H.-T., Müller, E., Pllumbi, E., Wanajo, S.: Production and Dis-
+     tribution of 44 Ti and 56 Ni in a Three-dimensional Supernova Model Resembling Cassiopeia
+     A. Astrophys. J. 842(1), 13 (2017)
+[17] Suzuki, S. et al., Dynamics of the intermediate-mass-element ejecta in the supernova remnant
+     Cassiopeia A studied with XRISM. Publ. Astron. Soc. Jpn 77(SP1), S131–S143 (2025)
+[18] Lodders, K., Palme, H., Gail, H.-P.: Abundances of the Elements in the Solar System.
+     Landolt-Börnstein 4B, 712 (2009)
+[19] Young, P.A. et al., Constraints on the progenitor of cassiopeia a. Astrophys. J. 640(2), 891
+     (2006)
+[20] Nomoto, K., Kobayashi, C., Tominaga, N.: Nucleosynthesis in Stars and the Chemical En-
+     richment of Galaxies. Annu. Rev. Astron. Astrophys. 51(1), 457–509 (2013)
+[21] Limongi, M., Chieffi, A.: Presupernova Evolution and Explosive Nucleosynthesis of Rotating
+     Massive Stars in the Metallicity Range -3 ≤ [Fe/H] ≤ 0. Astrophys. J. Suppl. Ser. 237(1), 13
+     (2018)
+[22] Sukhbold, T., Ertl, T., Woosley, S., Brown, J.M., Janka, H.-T.: Core-collapse supernovae
+     from 9 to 120 solar masses based on neutrino-powered explosions. Astrophys. J. 821(1), 38
+     (2016)
+[23] Krause, O. et al., The Cassiopeia A Supernova Was of Type IIb. Science 320(5880), 1195
+     (2008)
+[24] Katsuda, S. et al., Discovery of X-ray-emitting O-Ne-Mg-rich Ejecta in the Galactic Super-
+     nova Remnant Puppis A. Astrophys. J. 714(2), 1725–1732 (2010)
+[25] Bhalerao, J., Park, S., Schenck, A., Post, S., Hughes, J.P.: Detailed X-Ray Mapping of the
+     Shocked Ejecta and Circumstellar Medium in the Galactic Core-collapse Supernova Remnant
+     G292.0+1.8. Astrophys. J. 872(1), 31 (2019)
+[26] Vink, J., Kaastra, J., Bleeker, J.: A new mass estimate and puzzling abundances of snr cas-
+     siopeia a. Astron. Astrophys., v. 307, p. L41-L44 307, 41–44 (1996)
+[27] Hwang, U., Laming, J.M.: A chandra x-ray survey of ejecta in the cassiopeia a supernova
+     remnant. Astrophys. J. 746(2), 130 (2012)
+[28] Sato, T. et al., Destratification in the Progenitor Interior of the Mg-rich Supernova Remnant
+     N49B. Astrophys. J. 984(2), 185 (2025)
+
+                                               21
+[29] Yadav, N., Müller, B., Janka, H.T., Melson, T., Heger, A.: Large-scale mixing in a violent
+     oxygen–neon shell merger prior to a core-collapse supernova. Astrophys. J. 890(2), 94 (2020)
+
+[30] Roberti, L., Limongi, M., Chieffi, A.: Zero and extremely low-metallicity rotating mas-
+     sive stars: Evolution, explosion, and nucleosynthesis up to the heaviest nuclei. Astrophys.
+     J. Suppl. Ser. 270(2), 28 (2024)
+
+[31] Müller, B., Melson, T., Heger, A., Janka, H.-T.: Supernova simulations from a 3D progenitor
+     model - Impact of perturbations and evolution of explosion properties. Mon. Not. R. Astron.
+     Soc. 472(1), 491–513 (2017)
+
+[32] Bollig, R. et al., Self-consistent 3D Supernova Models From -7 Minutes to +7 s: A 1-bethe
+     Explosion of a 19 M⊙ Progenitor. Astrophys. J. 915(1), 28 (2021)
+
+[33] Bamba, A. et al., Measuring the asymmetric expansion of the Fe ejecta of Cassiopeia A with
+     XRISM/Resolve. Publ. Astron. Soc. Jpn 77(SP1), S144–S153 (2025)
+
+[34] Vink, J. et al., Mapping Cassiopeia A’s silicon/sulfur Doppler velocities with
+     XRISM/Resolve. Publ. Astron. Soc. Jpn 77(SP1), S154–S170 (2025)
+
+[35] Porter, F.S. et al., Temporal gain correction for x-ray calorimeter spectrometers. Journal of
+     Low Temperature Physics 184(1), 498–504 (2016)
+
+[36] Porter, F.S. et al., In-flight performance of the XRISM/Resolve detector system. In: den
+     Herder, J.-W.A., Nikzad, S., Nakazawa, K. (eds.) Space Telescopes and Instrumentation
+     2024: Ultraviolet to Gamma Ray. Society of Photo-Optical Instrumentation Engineers (SPIE)
+     Conference Series, vol. 13093, p. 130931 (2024).
+
+[37] XRISM collaboration: The XRISM first-light observation: Velocity structure and thermal
+     properties of the supernova remnant N 132D. Publ. Astron. Soc. Jpn 76(6), 1186–1201
+     (2024)
+
+[38] Kaastra, J.S., Mewe, R., Nieuwenhuijzen, H.: SPEX: a new code for spectral analysis of X &
+     UV spectra. In: UV and X-ray Spectroscopy of Astrophysical and Laboratory Plasmas, pp.
+     411–414 (1996)
+
+[39] Arnaud, K.A.: XSPEC: The First Ten Years. In: Jacoby, G.H., Barnes, J. (eds.) Astronomi-
+     cal Data Analysis Software and Systems V. Astronomical Society of the Pacific Conference
+     Series, vol. 101, p. 17 (1996)
+
+[40] Cash, W.: Parameter estimation in astronomy through application of the likelihood ratio.
+     Astrophys. J., Part 1, vol. 228, Mar. 15, 1979, p. 939-947. 228, 939–947 (1979)
+
+[41] Helder, E.A., Vink, J.: Characterizing the Nonthermal Emission of Cassiopeia A. Astrophys.
+     J. 686(2), 1094–1102 (2008)
+
+
+
+                                               22
+[42] Uchiyama, Y., Aharonian, F.A.: Fast Variability of Nonthermal X-Ray Emission in Cas-
+     siopeia A: Probing Electron Acceleration in Reverse-Shocked Ejecta. Astrophys. J. Lett.
+     677(2), 105 (2008)
+
+[43] Sato, T. et al., X-Ray Measurements of the Particle Acceleration Properties at Inward Shocks
+     in Cassiopeia A. Astrophys. J. 853(1), 46 (2018)
+
+[44] Grefenstette, B.W. et al., Locating the Most Energetic Electrons in Cassiopeia A. Astrophys.
+     J. 802(1), 15 (2015)
+
+[45] Patnaude, D.J., Fesen, R.A.: Proper Motions and Brightness Variations of Nonthermal X-ray
+     Filaments in the Cassiopeia A Supernova Remnant. Astrophys. J. 697(1), 535–543 (2009)
+
+[46] Sato, T. et al., Inhomogeneous Stellar Mixing in the Final Hours before the Cassiopeia A
+     Supernova. Astrophys. J. 990(2), 103 (2025)
+
+[47] Sato, T. et al., A subsolar metallicity progenitor for cassiopeia a, the remnant of a type iib
+     supernova. Astrophys. J. 893(1), 49 (2020)
+
+[48] Laplace, E., Justham, S., Renzo, M., Götberg, Y., Farmer, R., Vartanyan, D., De Mink, S.:
+     Different to the core: The pre-supernova structures of massive single and binary-stripped
+     stars. Astron. Astrophys. 656, 58 (2021)
+
+[49] Couch, S.M., Ott, C.D.: Revival of the Stalled Core-collapse Supernova Shock Triggered by
+     Precollapse Asphericity in the Progenitor Star. Astrophys. J. Lett. 778(1), 7 (2013)
+
+
+
+
+                                                23
+Author list
+
+XRISM collabration
+Marc Audard1 Hisamitsu Awaki2 Ralf Ballhausen3,4,5 Aya Bamba6 Ehud Behar7 Rozenn Boissay-
+Malaquin8,4 Laura Brenneman9 Gregory V. Brown10 Lia Corrales11 Elisa Costantini12 Renata
+Cumbee4 Maria Diaz-Trigo13 Chris Done14 Tadayasu Dotani15 Ken Ebisawa15 Megan Eckart10
+Dominique Eckert1 Teruaki Enoto16 Satoshi Eguchi17 Yuichiro Ezoe18 Adam Foster9 Ryuichi
+Fujimoto15 Yutaka Fujita18 Yasushi Fukazawa19 Kotaro Fukushima15 Akihiro Furuzawa20 Luigi
+Gallo21 Javier A. Garcia4,22 Liyi Gu12 Matteo Guainazzi23 Kouichi Hagino6 Kenji Hamaguchi8,4,5
+Isamu Hatsukade24 Katsuhiro Hayashi15 Takayuki Hayashi8,4,5 Natalie Hell10 Edmund Hodges-
+Kluck4 Ann Hornschemeier4 Yuto Ichinohe25 Daiki Ishi15 Manabu Ishida15 Kumi Ishikawa18 Yoshi-
+taka Ishisaki18 Jelle Kaastra12,26 Timothy Kallman4 Erin Kara27 Satoru Katsuda28 Yoshiaki Kanemaru15
+Richard Kelley4 Caroline Kilbourne4 Shunji Kitamoto29 Shogo Kobayashi30 Takayoshi Kohmura31
+Aya Kubota32 Maurice Leutenegger4 Michael Loewenstein3,4,5 Yoshitomo Maeda15 Maxim Markevitch4
+Hironori Matsumoto33 Kyoko Matsushita30 Dan McCammon34 Brian McNamara35 François Mernier3,4,5
+Eric D. Miller27 Jon M. Miller11 Ikuyuki Mitsuishi36 Misaki Mizumoto37 Tsunefumi Mizuno38
+Koji Mori24 Koji Mukai8,4,5 Hiroshi Murakami39 Richard Mushotzky3 Hiroshi Nakajima40 Kazuhiro
+Nakazawa36 Jan-Uwe Ness41 Kumiko Nobukawa42 Masayoshi Nobukawa43 Hirofumi Noda44 Hi-
+rokazu Odaka33 Shoji Ogawa15 Anna Ogorzalek3,4,5 Takashi Okajima4 Naomi Ota45 Stephane
+Paltani1 Robert Petre4 Paul Plucinsky9 Frederick Scott Porter4 Katja Pottschmidt8,4,5 Kosuke Sato28,46
+Toshiki Sato47,∗ Makoto Sawada29 Hiromi Seta18 Megumi Shidatsu2 Aurora Simionescu12 Ran-
+dall Smith9 Hiromasa Suzuki15 Andrew Szymkowiak48 Hiromitsu Takahashi19 Mai Takeo28 Toru
+Tamagawa25 Keisuke Tamura8,4,5 Takaaki Tanaka49 Atsushi Tanimoto50 Makoto Tashiro28,15 Yukikatsu
+Terada28,15 Yuichi Terashima2 Yohko Tsuboi51 Masahiro Tsujimoto15 Hiroshi Tsunemi33 Takeshi
+G. Tsuru16 Hiroyuki Uchida16,∗ Nagomi Uchida15 Yuusuke Uchida31 Hideki Uchiyama52 Yoshi-
+hiro Ueda53 Shinichiro Uno54 Jacco Vink55 Shin Watanabe15 Brian J. Williams4 Satoshi Yamada56
+Shinya Yamada29 Hiroya Yamaguchi15 Kazutaka Yamaoka36 Noriko Yamasaki15 Makoto Yamauchi24
+Shigeo Yamauchi45 Tahir Yaqoob8,4,5 Tomokage Yoneyama51 Tessei Yoshida15 Mihoko Yukita57,4
+Irina Zhuravleva58 Shin-ichiro Fujimoto59 Kai Matsunaga16,∗ Manan Agarwal55
+∗
+ Corresponding authors: Toshiki Sato (toshiki@meiji.ac.jp), Kai Matsunaga (matsunaga.kai.i47@kyoto-
+u.jp), Hiroyuki Uchida (uchida@cr.scphys.kyoto-u.ac.jp)
+
+1
+  Department of Astronomy, University of Geneva, Versoix CH-1290, Switzerland
+2
+  Department of Physics, Ehime University, Ehime 790-8577, Japan
+3
+  Department of Astronomy, University of Maryland, College Park, MD 20742, USA
+4
+  NASA / Goddard Space Flight Center, Greenbelt, MD 20771, USA
+5
+  Center for Research and Exploration in Space Science and Technology, NASA / GSFC (CRESST
+II), Greenbelt, MD 20771, USA
+6
+  Department of Physics, University of Tokyo, Tokyo 113-0033, Japan
+7
+  Department of Physics, Technion, Technion City, Haifa 3200003, Israel
+
+
+                                               24
+8
+  Center for Space Science and Technology, University of Maryland, Baltimore County (UMBC),
+Baltimore, MD 21250, USA
+9
+  Center for Astrophysics — Harvard-Smithsonian, MA 02138, USA
+10
+   Lawrence Livermore National Laboratory, CA 94550, USA
+11
+   Department of Astronomy, University of Michigan, MI 48109, USA
+12
+   SRON Netherlands Institute for Space Research, Leiden, The Netherlands
+13
+   ESO, Karl-Schwarzschild-Strasse 2, 85748, Garching bei München, Germany
+14
+   Centre for Extragalactic Astronomy, Department of Physics, University of Durham, South Road,
+Durham DH1 3LE, UK
+15
+   Institute of Space and Astronautical Science (ISAS), Japan Aerospace Exploration Agency (JAXA),
+Kanagawa 252-5210, Japan
+16
+   Department of Physics, Kyoto University, Kyoto 606-8502, Japan
+17
+   Department of Economics, Kumamoto Gakuen University, Kumamoto 862-8680, Japan
+18
+   Department of Physics, Tokyo Metropolitan University, Tokyo 192-0397, Japan
+19
+   Department of Physics, Hiroshima University, Hiroshima 739-8526, Japan
+20
+   Department of Physics, Fujita Health University, Aichi 470-1192, Japan
+21
+   Department of Astronomy and Physics, Saint Mary’s University, Nova Scotia B3H 3C3, Canada
+22
+   Cahill Center for Astronomy and Astrophysics, California Institute of Technology, Pasadena, CA
+91125, USA
+23
+   European Space Agency (ESA), European Space Research and Technology Centre (ESTEC),
+2200 AG, Noordwijk, The Netherlands
+24
+   Faculty of Engineering, University of Miyazaki, Miyazaki 889-2192, Japan
+25
+   RIKEN Nishina Center, Saitama 351-0198, Japan
+26
+   Leiden Observatory, University of Leiden, P.O. Box 9513, NL-2300 RA, Leiden, The Nether-
+lands
+27
+   Kavli Institute for Astrophysics and Space Research, Massachusetts Institute of Technology, MA
+02139, USA
+28
+   Department of Physics, Saitama University, Saitama 338-8570, Japan
+29
+   Department of Physics, Rikkyo University, Tokyo 171-8501, Japan
+30
+   Faculty of Physics, Tokyo University of Science, Tokyo 162-8601, Japan
+31
+   Faculty of Science and Technology, Tokyo University of Science, Chiba 278-8510, Japan
+32
+   Department of Electronic Information Systems, Shibaura Institute of Technology, Saitama 337-
+8570, Japan
+33
+   Department of Earth and Space Science, Osaka University, Osaka 560-0043, Japan
+34
+   Department of Physics, University of Wisconsin, WI 53706, USA
+35
+   Department of Physics and Astronomy, University of Waterloo, Ontario N2L 3G1, Canada
+36
+   Department of Physics, Nagoya University, Aichi 464-8602, Japan
+37
+   Science Research Education Unit, University of Teacher Education Fukuoka, Fukuoka 811-4192,
+Japan
+38
+   Hiroshima Astrophysical Science Center, Hiroshima University, Hiroshima 739-8526, Japan
+39
+   Department of Data Science, Tohoku Gakuin University, Miyagi 984-8588, Japan
+40
+   College of Science and Engineering, Kanto Gakuin University, Kanagawa 236-8501, Japan
+
+
+                                              25
+41
+   European Space Agency(ESA), European Space Astronomy Centre (ESAC), E-28692 Madrid,
+Spain
+42
+   Department of Science, Faculty of Science and Engineering, KINDAI University, Osaka 577-
+8502, JAPAN
+43
+   Department of Teacher Training and School Education, Nara University of Education, Nara 630-
+8528, Japan
+44
+   Astronomical Institute, Tohoku University, Miyagi 980-8578, Japan
+45
+   Department of Physics, Nara Women’s University, Nara 630-8506, Japan
+46
+   International Center for Quantum-field Measurement Systems for Studies of the Universe and
+Particles (QUP) / High Energy Accelerator Research Organization (KEK), 1-1 Oho, Tsukuba,
+Ibaraki 305-0801, Japan
+47
+   School of Science and Technology, Meiji University, Kanagawa, 214-8571, Japan
+48
+   Yale Center for Astronomy and Astrophysics, Yale University, CT 06520-8121, USA
+49
+   Department of Physics, Konan University, Hyogo 658-8501, Japan
+50
+   Graduate School of Science and Engineering, Kagoshima University, Kagoshima, 890-8580,
+Japan
+51
+   Department of Physics, Chuo University, Tokyo 112-8551, Japan
+52
+   Faculty of Education, Shizuoka University, Shizuoka 422-8529, Japan
+53
+   Department of Astronomy, Kyoto University, Kyoto 606-8502, Japan
+54
+   Nihon Fukushi University, Shizuoka 422-8529, Japan
+55
+   Anton Pannekoek Institute, the University of Amsterdam, Postbus 942491090 GE Amsterdam,
+The Netherlands
+56
+   Frontier Research Institute for Interdisciplinary Sciences, Tohoku University, Sendai 980-8578,
+Japan
+57
+   Johns Hopkins University, Baltimore, MD 21218, USA
+58
+   Department of Astronomy and Astrophysics, University of Chicago, Chicago, IL 60637, USA
+59
+   Department of Control and Information Systems Engineering, National Institute of Technology,
+Kumamoto College, 2659-2 Suya, Goshi, Kumamoto 861-1102, Japan
+
+
+
+
+                                               26
+                   Supplementary Information:
+Chlorine and Potassium Enrichment in the Cassiopeia A Supernova
+                           Remnant
+
+
+
+
+Supplementary Figure 1: The Resolve spectrum and the best-fit model of Region SE. The
+supectrum is shown as the black points and the total best-fit model of AtomDB is shown as the red
+line. The purple and blue dashed lines show the two-NEI components, respectively. The grey line
+shows the Gaussian component adopted to the 3.2 keV structure.
+
+
+
+
+                                               1
+Supplementary Figure 2: Comparing different atomic codes. The red and blue curves show the
+pshock model for AtomDB (pre-release version 3.1.0.v7) and SPEX (3.08.1). The two models
+assume the same plasma parameters (ke T = 2 keV, ne t = 1 × 1011 cm−3 s and RMS V = 200 km
+s−1 ).
+
+
+
+
+                                            2
+Supplementary Figure 3: The mass-fraction profiles of the models in Figure 3. Top: 14.9M⊙
+standard model by Sukhbold et al.22 . Second top: 15M⊙ model with an initial rotation velocity of
+300 km s−1 by Limongi & Chieffi21 . Third top: 13M⊙ progenitor model with a 10.4M⊙ companion
+star by Farmer et al.12 . Bottom: 20.1M⊙ shell-merger model by Sukhbold et al.22 .
+
+
+                                               3
+

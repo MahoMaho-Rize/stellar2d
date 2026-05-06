@@ -1,0 +1,422 @@
+                                                 Draft version June 19, 2019
+                                                 Typeset using LATEX twocolumn style in AASTeX61
+
+
+
+
+                                                    CHROMIUM NUCLEOSYNTHESIS AND SILICON-CARBON SHELL MERGERS IN MASSIVE STARS
+
+
+                                                                 Benoit Côté,1, 2, 3, 4 Samuel Jones,5, 4 Falk Herwig,6, 3, 4 and Marco Pignatari7, 1, 3, 4
+
+
+
+                                               1 Konkoly Observatory, Research Centre for Astronomy and Earth Sciences, Hungarian Academy of Sciences, Konkoly Thege Miklos ut
+
+                                                15-17, H-1121 Budapest, Hungary
+arXiv:1906.07218v1 [astro-ph.SR] 17 Jun 2019
+
+
+
+
+                                               2 National Superconducting Cyclotron Laboratory, Michigan State University, East Lansing, MI 48824, USA
+                                               3 Joint Institute for Nuclear Astrophysics - Center for the Evolution of the Elements, USA
+                                               4 NuGrid Collaboration, https: // nugrid. github. io
+                                               5 X Computational Physics (XCP) Division, Los Alamos National Laboratory, Los Alamos, New Mexico 87545, USA
+                                               6 Department of Physics and Astronomy, University of Victoria, Victoria, Canada
+                                               7 E.A. Milne Centre for Astrophysics, Department of Physics & Mathematics, University of Hull, HU6 7RX, United Kingdom.
+
+
+
+
+                                                                                                      Submitted to ApJL
+
+                                                                                                           ABSTRACT
+                                                 We analyze the production of the element Cr in galactic chemical evolution (GCE) models using the NuGrid nucle-
+                                               osynthesis yields set. We show that the unusually large [Cr/Fe] abundance at [Fe/H] ≈ 0 reported by previous studies
+                                               using those yields and predicted by our Milky Way model originates from the merging of convective Si-burning and
+                                               C-burning shells in a 20 M model at metallicity Z = 0.01, about an hour before the star explodes. This merger mixes
+                                               the incomplete burning material in the Si shell, including 51 V and 52 Cr, out to the edge of the carbon/oxygen (CO)
+                                               core. The adopted supernova model ejects the outer 2 M of the CO core, which includes a significant fraction of
+                                               the Cr-rich material. When including this 20 M model at Z = 0.01 in the yields interpolation scheme of our GCE
+                                               model for stars in between 15 and 25 M , we overestimate [Cr/Fe] by an order of magnitude at [Fe/H] ≈ 0 relative to
+                                               observations in the Galactic disk. This raises a number of questions regarding the occurrence of Si-C shell mergers in
+                                               nature, the accuracy of different simulation approaches, and the impact of such mergers on the pre-supernova structure
+                                               and explosion dynamics. According to the conditions in this 1D stellar model, the substantial penetration of C-shell
+                                               material into the Si-shell could launch a convective-reactive global oscillation, if a merger does take place. In any case,
+                                               GCE provides stringent constraints on the outcome of this stellar evolution phase.
+
+                                                        Keywords: Galaxy: abundances - Stars: abundances - Stars: massive - Physical Data and Processes:
+                                                                  nuclear reactions, nucleosynthesis, abundances
+
+
+
+
+                                               Corresponding author: Benoit Côté
+                                               benoit.cote@csfk.mta.hu
+2                                                      Côté et al.
+
+                 1. INTRODUCTION                                large amounts of Cr, synthesized during Si-shell burn-
+   Galactic chemical evolution (GCE) models and simu-           ing, above the assumed mass cut1 .
+lations are powerful tools to bridge nuclear astrophysics          In Section 2.1 we use our chemical evolution tools to
+with astronomical observations (e.g., Tinsley 1980; Gib-        highlight the Cr overproduction that points to the spe-
+son et al. 2003; Matteucci 2014; Nomoto et al. 2013;            cific stellar model responsible for this overproduction.
+Prantzos et al. 2018). In spite of the complexity as-           In the other subsections of Section 2, we present the rel-
+sociated with simulating the formation and evolution            evant parts of the stellar model, show the implication
+of galaxies (e.g., Wise et al. 2012; Schaye et al. 2015;        of the Si-C shell merger on the pre-supernova structure,
+Somerville & Davé 2015; Hopkins et al. 2018; Pillepich         and discuss the convective and burning time scales dur-
+et al. 2018; Revaz & Jablonka 2018), the fundamental            ing the merger event. In Section 3, we conclude and
+input ingredients of all GCE studies are still the stel-        raise open questions regarding the occurrence of Si-C
+lar yields (e.g., Romano et al. 2010; Mollá et al. 2015;       shell mergers in nature and in multi-dimensional hydro-
+Philcox et al. 2018). In the past years, we have devel-         dynamic simulations.
+oped an open-source galactic chemical evolution (GCE)
+pipeline in order to bring nuclear astrophysics efforts to
+                                                                                      2. RESULTS
+the forefront of GCE studies.
+   There are several sources of uncertainties in generating             2.1. Galactic Chemical Evolution Model
+grids of stellar models for GCE applications, including,           We use the GCE code OMEGA+ (Côté et al. 2018) to
+for example, uncertainties in nuclear reaction rates (e.g.,     bring NuGrid yields (Ritter et al. 2018b) into a galac-
+Lugaro et al. 2004; Tur et al. 2009; Travaglio et al. 2014;     tic context. This code is part of the open-source JI-
+deBoer et al. 2017; Nishimura et al. 2017; Denissenkov          NAPyCEE python package2 and represents a one-zone
+et al. 2018; Fields et al. 2018), stellar evolution and in-     GCE model surrounded by a large circumgalactic gas
+ternal mixing (e.g., Meakin & Arnett 2007; Sukhbold             reservoir. The input parameters adopted in this study
+& Woosley 2014; Jones et al. 2015; Davis et al. 2019),          for regulating the star formation efficiency and the galac-
+and supernova explosion modeling (e.g., Sukhbold et al.         tic inflow and outflow rates are available online3 . We use
+2016; Fryer et al. 2018; Couch et al. 2019; Ebinger et al.      the initial mass function of Kroupa (2001). For Type Ia
+2019; Müller 2019). Turning this argument around,              supernovae we use the yields of Iwamoto et al. (1999)
+GCE studies are ideal framework to explore the impact           and assume a total number of 10−3 Type Ia supernova
+of stellar processes in a broader astronomical context          per unit of stellar mass formed. As shown below, the
+(Côté et al. 2017). In this study, we focus on the im-        overproduction of Cr is so strong that the choice of GCE
+pact of shell mergers occurring in NuGrid massive star          parameters and Type Ia supernova yields is of little im-
+models (Ritter et al. 2018b) during the pre-supernova           portance.
+evolution phase (see also Rauscher et al. 2002, Mocák             The upper panel of Figure 1 shows the predicted evo-
+et al. 2018, and Yadav et al. 2019).                            lution of Cr abundances as a function of [Fe/H]. Near
+   Ritter et al. (2018a) have shown that oxygen-carbon          [Fe/H] = 0, our predictions (solid line) have a bump that
+(O-C) shell mergers could potentially be a relevant site        overestimates disk data by almost an order of magni-
+for the production of odd-Z elements and p-process iso-         tude. The 20 M stellar model at Z = 0.01 is at the
+topes at galactic scale. Andrassy et al. (2018), mo-            origin of the Cr bump (see also Figure 7 in Herwig et al.
+tivated by this, have studied the 3D hydrodynamical             2018). When removing this stellar model from the yields
+properties of O-C shell mergers. Here we discuss the            set, the bump disappears entirely (dashed line in Fig-
+impact of silicon-carbon (Si-C) shell mergers on the evo-       ure 1). The bottom panel shows a production of V
+lution of chromium (Cr) in the Milky Way. Since the             accompanying the production of Cr. This is not sur-
+publication of the second set of NuGrid yields (Ritter          prising, since V and Cr are made efficiently at similar
+et al. 2018b), an overproduction of Cr at galactic scale        stellar conditions (e.g., Woosley & Weaver 1995). In
+has been reported by Herwig et al. (2018) and Philcox           agreement with the simulations reported here, [V/Fe] is
+et al. (2018) when using these yields in GCE codes. We          typically underestimated in GCE models at all metal-
+have isolated the source of this overproduction. In the
+20 M model at Z = 0.01, a Si-C shell merger mixes
+                                                                  1 Anything below the mass cut is locked inside the compact
+
+                                                                remnant and does not contribute to the ejected yields.
+                                                                  2 https://github.com/becot85/JINAPyCEE
+                                                                  3 https://github.com/becot85/JINAPyCEE/blob/master/DOC/
+
+                                                                OMEGA%2B_Milky_Way_model.ipynb
+                                               Chromium in Si-C Shell Mergers                                              3
+
+          1.0                                                    from the edge of the Fe core almost to the edge of the
+                  With 20M ¯ at Z = 0.01                         CO core. The top panel of Figure 2 shows that 52 Cr
+          0.8     Without 20M ¯ at Z = 0.01                      is mixed out to the edge of the CO core and its mass
+          0.6     Bensby et al. (2014)                           fraction is slightly reduced owing to dilution by the C
+          0.4                                                    shell material.
+[Cr/Fe]
+
+
+
+
+                                                                    As shown by our GCE model (Figure 1), a boost
+          0.2                                                    of [Cr/Fe] is generated above [Fe/H] ≈ −0.2 when the
+          0.0                                                    yields of this 20 M model are included. One might
+                                                                 expect that if the Si-burning shell was mixed out and
+          0.2
+                                                                 ejected, then [Cr/Fe] should stay relatively flat, since
+          0.4                                                    both Cr and Fe are predominant products of Si burn-
+          1.0     Battistini & Bensby (2015)                     ing. However, because the Si shell merges while it is still
+                                                                 convective, and hence still burning, the ejected chemical
+          0.8
+                                                                 signature is typical of incomplete Si burning.
+          0.6                                                       Si burning produces the neutron-magic isotope 52 Cr
+          0.4                                                    relatively quickly, and thereafter produces 56 Fe via a
+[V/Fe]
+
+
+
+
+                                                                 sequence of capture and photodisintegration processes.
+          0.2
+                                                                 This is illustrated in Figure 3, which shows the results of
+          0.0                                                    a one-zone nuclear reaction network calculation starting
+          0.2                                                    from pure 28 Si and evolved at density ρ = 2×106 g cm−3
+                                                                 and temperature T = 2.6 GK, which are approximately
+          0.4
+                                                                 the conditions during shell Si burning in the 20 M stel-
+                1.5       1.0         0.5        0.0     0.5     lar model about an hour before collapse. We note that
+                                [Fe/H]                           the time scales of the burning will be different in the star
+Figure 1. Predicted evolution of [Cr/Fe] (top panel) and         owing to the evolution of the core acting to increase the
+[V/Fe] (bottom panel) as a function of [Fe/H] for the Galactic   density and temperature of the shell. However, we have
+disk using NuGrid yields (Ritter et al. 2018b) and the GCE       confirmed that the behaviour is similar for a range of
+code OMEGA+ (Côté et al. 2018). The solid and dashed lines     temperatures and densities. Only in the most extreme
+show the predictions when including or excluding the 20 M        conditions (1010 g cm−3 , 5 GK) is Cr produced at the
+model at Z = 0.01, respectively. The cyan dots are stellar       same time as Fe.
+disk data from Bensby et al. (2014) and Battistini & Bensby
+                                                                    The core-collapse supernova (CCSN) explosion for this
+(2015).
+                                                                 star was modelled by Ritter et al. (2018b) in the same
+                                                                 way as described in Pignatari et al. (2016), with a mass
+licities compared to observations (e.g., Prantzos et al.         cut at 2.77 M based on remnant mass prescription de-
+2018 and references therein).                                    rived in Fryer et al. (2012). In this particular model with
+   2.2. Final Evolutionary Stages of the Stellar Model           these assumptions, a significant fraction of the incom-
+                                                                 plete Si-shell burning material, including 52 Cr and 51 V,
+  Here we describe the evolution of the 20 M model
+                                                                 is ejected during the explosion (the convective Si-C shell
+at Z = 0.01. We show that the source of Cr comes
+                                                                 extends up to ∼ 2 M above the assumed mass cut). The
+from the merging of the C- and Si-burning convective
+                                                                 yields from the stellar model are therefore heavily influ-
+shells during the last hour of evolution before the model
+                                                                 enced by the occurrence of a Si-C shell merger and by
+collapses.
+                                                                 the methods employed to model the supernova.
+  The Kippenhahn diagrams in Figure 2 show the evo-
+lution of convection zones (hatched regions) in the inner
+6 M of the model. At t∗ ≡ (tcollapse − t)/yr ≈ 10−3 ,                          2.3. Supernova Implications
+the convective Si-burning shell engulfs the overlying ra-          The 2.77 M compact remnant is a black hole cre-
+diative layer that separated it from the base of the con-        ated by fallback (Fryer et al. 2012). In agreement
+vective C burning shell above. From that time until              with Sukhbold et al. (2016) and Ebinger et al. (2019),
+t∗ ≈ 10−4 , the stratified Si- and C-burning convective          stars around 20 M are generally found to produce more
+shells share a convective boundary, which prevents the           failed explosions and black holes in 1D simulations than
+transport of material from the C shell into the Si shell,        for lower initial masses. However, CCSN theory has far
+and vice versa. Finally, at t∗ ≈ 10−4 , the convective           from settled on the precise relationship between pro-
+boundary is eroded and the Si burning shell extends              genitor structure and explosion properties (Sukhbold &
+4                                                       Côté et al.
+
+
+
+
+Figure 2. Kippenhahn (convective structure evolution) diagrams of the inner 6 M of the 20 M model at Z = 0.01. The
+x-axis has an inverse logarithmic time scale showing the time remaining before collapse. Hatched contours show convectively
+unstable regions and color indicates the mass fraction of 52 Cr in the top panel and the 52 Cr/56 Fe ratio in the bottom panel.
+The ratio is approximately unity in the merged C/O/Si shell at the presupernova stage, which is the signature of incomplete
+Si burning that has been mixed throughout the merged shells. This is the predominant signature that appears in the ejected
+yields from the stellar model.
+                                                     Chromium in Si-C Shell Mergers                                             5
+
+                100                                                                  2.4. Convective Time Scale
+                                                                        The Ye profile shown in Figure 4 raises another inter-
+                                                                      esting point. The profile is not flat in the newly com-
+                                                         Si shell     bined convection zone between 1.4 and 5 M (see solid
+                10 1
+Mass fraction
+
+
+
+                                                              28      orange line), as revealed by the time-dependent mix-
+                                                                 Si
+                                                              56      ing, implemented in the diffusion approximation, when
+                                 = 2.0E + 06 gcm 3               Fe
+                                T = 2.6GK                     51      nuclear and mixing time-scales are similar. The pre-
+                                                                 V
+                                                                      supernova profile represents a state of incomplete mix-
+                10 2                                          52
+                                                                 Cr   ing of the material in the two shells. The convective
+                                                                      time scale τconv , assuming it is approximately the time
+                                                                      taken for a fluid element to complete one cycle of ad-
+                                                                      vection around a convective cell whose diameter is the
+                10 10
+                   3
+                      0 10 1 10 2 10 3 10 4 10 5 10 6 10 7
+                                                                      shell’s thickness, is given by
+                                28
+                                     Si mass fraction
+                                                                                   2πrcell    (7.4 × 109 )π cm
+                                                                         τconv ≈            ≈                  = 3690 s.      (1)
+Figure 3. Evolution of key isotopes during a one-zone burn                         hvconv i   6.3 × 106 cm s−1
+network integration at conditions characteristic of Si shell
+burning in a 20 M star.                                               The shell merger takes place 10−4 yr or 3154 seconds
+                                                                      before collapse, which is a similar time scale.
+Woosley 2014; Müller 2016; Fryer et al. 2018). Even if                 This raises the question of how efficient will be the
+we did know the remnant mass for a typical model of this              mixing of 52 Cr and other Si-burning products into the
+initial mass and metallicity, the structure of the core in            outer core if there is only one turnover time to do it. Cer-
+our model is affected by the shell merger in ways that                tainly the use of mixing length theory (MLT) for convec-
+are likely important in determining the dynamics of the               tion becomes inappropriate under these conditions be-
+collapse and subsequent explosion, or lack thereof, and               cause MLT only predicts convection properties in terms
+compact remnant mass (e.g., Davis et al. 2019; Yadav                  of averages over many convective turn-over time-scales.
+et al. 2019).                                                             2.5. Burning Time Scale During Shell Merger
+   Two of the most important properties of the progen-
+itor models for determining the outcome of the CCSN                     The constitution of the C shell should burn rapidly
+are the stratification of density and electron fraction               when exposed to the temperatures in the Si-burning
+(Ye ). The left panel of Figure 4 shows how the Ye pro-               shell. This energetic feedback will likely modify the flow
+file is altered by the merger. The right panel shows that             dynamics and it should be considered when modeling
+the shell merger erases the density jump that existed                 the pre-supernova evolution of such a star (e.g. Herwig
+at the interface of the two shells (see arrow). Such a                et al. 2014; Andrassy et al. 2018; Yadav et al. 2019).
+jump may facilitate the revival of the stalled CCSN                     We have estimated the burning time scale of 12 C by
+shock wave owing to the rapid drop in accretion rate as               performing a simple nuclear network calculation begin-
+the shell arrives at the shock radius (Ott et al. 2018).              ning from 90 % 28 Si and 10 % 12 C. We keep the temper-
+Although this particular density jump appears small,                  ature fixed at 3 GK and the density at 1.4 × 108 g cm−3 .
+it could still be enough to alleviate the ram pressure                We define the burning time scale as the e-folding time
+at a critical time and allow for a successful explosion.              of the 12 C mass fraction XC under such conditions,
+Conversely, it may be that a more realistic simulation                                                dt
+of this progenitor model results in direct black hole for-                               τburn ≈             .                (2)
+                                                                                                   d lnXC
+mation or formation of a much larger black hole than
+2.77 M by fallback, in which case we would perhaps                    For example, near the bottom of the Si shell the time
+expect none of the CO core (and hence, none of the Cr)                scale is ∼ 10−3 s, which is much shorter than the
+to be ejected. Further implication for the SN explosion               ∼ 103 s convective time scale, giving an exceptionally
+may derive from asymmetries that could be seeded right                large Damköhler number of Da = τmix /τburn ≈ 106 (Fig-
+before the explosions in a shell merger, depending on                 ure 5). This means the material in the C shell will never
+the time scales for convection and burning during the                 actually reach the bottom of the convection zone. In-
+merger.                                                               stead, the situation is reminiscent of the H-ingestion into
+                                                                      He-shell convection in a post-AGB star. The distributed
+                                                                      combustion flame is located where Da ∼ 1 (Herwig et al.
+                                                                      2011), which in this case is in the lower third of the Si
+  6                                                                                             Côté et al.
+
+                                  0.51                                                                                                   105
+                                                                                                                                                                            Before merger
+                                  0.50                                                                                                                                      Pre-supernova
+Electron fraction (Ye )
+
+
+
+                                  0.49
+
+
+
+
+                                                                                                                     Density [g cm 3 ]
+                                  0.48
+
+                                  0.47
+                                                                                                                                         104
+                                  0.46
+
+                                  0.450         1       2          3         4         5                         6                         1.5   2.0       2.5       3.0        3.5         4.0
+                                                      Mass coordinate [M ¯ ]                                                                           Mass coordinate [M ¯ ]
+Figure 4. Electron fraction profile (left panel) and density profile (right panel) in the core of the stellar model before the shell
+merger and at the pre-supernova stage.
+
+                                   106                                                 2.75                                     Grid collaboration (Ritter et al. 2018b). The Si-C shell
+                                                              Damkohler number
+                                                                               2.50                                             merger occurs roughly an hour before collapse. Follow-
+Damkohler number ( mix / burn )
+
+
+
+
+                                   104                        Temperature
+                                                                                                                                ing this event, a large amount of incomplete Si-burning
+                                   102                                                 2.25                                     material, including 51 V and 52 Cr, is mixed all the way
+                                                                                              Temperature [GK]
+
+
+
+                                                                                       2.00                                     from the Si core to a mass coordinate of 5 M , which
+                                   100                                                                                          represents the upper boundary of the C shell as it was
+                                                                                       1.75
+                                  10 2                                                                                          before the merger event. The convective time scale of
+                                                                                       1.50                                     this mixed shell is similar to the delay before the star
+                                  10 4                                                                                          collapses. As a first order approximation, it is therefore
+                                                                                       1.25
+                                  10 6                                                                                          possible for the incomplete Si-burning material to mix
+                                                                                       1.00                                     and fill the Si-C shell by the time of the explosion. Be-
+                                  10 8
+                                                                                       0.75                                     cause the adopted mass cut for this model is 2.77 M , a
+                                          0.5          1.0             1.5       2.0                                            significant fraction of Cr is ejected during the explosion.
+                                                               9                                                                  Using our GCE code OMEGA+ (Côté et al. 2018), and
+                                                     Radius [10 cm]                                                             assuming that the ejecta of this specific 20 M model
+Figure 5. Damköhler number (blue solid line) and tem-                                                                          at Z = 0.01 is representative of all 20 M stars at that
+perature (green dashed line) as a function of radius within                                                                     metallicity, we overestimate the predicted evolution of
+the Si shell, about 20 cycles before the Si-C shell merger.                                                                     [Cr/Fe] in the Milky Way by almost an order of magni-
+The range of radius shown represents the boundaries of the                                                                      tude at [Fe/H] ∼ 0. A question that emerges is whether
+convective Si shell.                                                                                                            or not Si-C shell mergers occur in nature. From this ex-
+                                                                                                                                periment, the only conclusion we can draw from a GCE
+convection zone. Depending on the energy release of the                                                                         perspective is that the specific conditions (assumptions),
+convective-reactive burn relative to the initial convective                                                                     in which this 20 M model evolves and explodes, can-
+kinetic energy, a global non-spherical convective-reactive                                                                      not be representative of all 20 M stars and should be
+instability may ensue, such as the Global Oscillation of                                                                        extremely rare if they occur at all.
+Shell H-ingestion (GOSH) that has been reported for                                                                               From the analysis of the stellar evolution model,
+H-ingestion into He-shell flash convection (Herwig et al.                                                                       the Si-C merger could launch a non-spherical, global,
+2014). The exact nature of the convective-reactive event                                                                        convective-reactive instability similar to the GOSH
+and its impact on yields requires a more comprehensive                                                                          found in H-ingestion in post-AGB stars (Herwig et al.
+3D hydrodynamics and nucleosynthesis simulation ap-                                                                             2014). Such an instability could seed substantial non-
+proach which is beyond the scope of this work.                                                                                  spherical perturbations of the initial conditions for the
+                                                                                                                                SN explosion. Another implication could be that such
+                                                    3. CONCLUSIONS                                                              an instability enhances mixing of Cr-rich Si-shell ma-
+  In this paper, we analyzed the Si-C shell merger oc-                                                                          terial into the C-shell above. This would impact the
+curring in the 20 M model at Z = 0.01 of the Nu-
+                                             Chromium in Si-C Shell Mergers                                                  7
+
+amount of Cr ejected in this model. If such instabili-                This research is supported by the ERC Consolida-
+ties occur, their properties will depend on the detailed           tor Grant (Hungary) funding scheme (Project RA-
+balance between energy produced from the entrainment               DIOSTAR, G.A. n. 724560), by the National Science
+of C-shell material and the driving energetics of the              Foundation (NSF, USA) under grant No. PHY-1430152
+Si-burning convection shell. Without such instability,             (JINA Center for the Evolution of the Elements), and by
+if no or only a partial merger would take place, the               the US Department of Energy LDRD program through
+convective mixing time scale in the C-shell is similar to          the Los Alamos National Laboratory. Los Alamos Na-
+the remaining time to collapse, and dredge-up of Cr into           tional Laboratory is operated by Triad National Secu-
+the C-shell convection zone would likely be incomplete.            rity, LLC, for the National Nuclear Security Admin-
+   3D hydrodynamic simulations are required to investi-            istration of U.S. Department of Energy (Contract No.
+gate the range of mixing and burning conditions during             89233218NCA000001). MP acknowledges significant
+interactions between the Si and C shells. Such an inves-           support to NuGrid from STFC (through the University
+tigation would address important questions. How would              of Hull’s Consolidated Grant ST/R000840/1), and ac-
+a Si-C shell merger look in multi-dimensional hydrody-             cess to viper, the University of Hull High Performance
+namic simulations? To what extent would Cr make its                Computing Facility. MP acknowledges the support
+way up into the C shell? How would an interaction                  from the ”Lendulet-2014” Programme of the Hungarian
+between the Si and C shells impact the pre-supernova               Academy of Sciences (Hungary).
+structure and the dynamics of the supernova explosion?
+Would the star explode? In any case, GCE would pro-
+vide stringent constraints on the frequency and efficiency
+of Cr production through this process, which this study
+shows must remain small.
+
+
+                                                          REFERENCES
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2018,         Herwig, F., Woodward, P. R., Lin, P.-H., Knox, M., &
+  arXiv e-prints, arXiv:1808.04014 [astro-ph.SR]                     Fryer, C. 2014, ApJL, 792, L3
+Battistini, C., & Bensby, T. 2015, A&A, 577, A9                    Herwig, F., Andrassy, R., Annau, N., et al. 2018, ApJS,
+Bensby, T., Feltzing, S., & Oey, M. S. 2014, A&A, 562, A71           236, 2
+Côté, B., O’Shea, B. W., Ritter, C., Herwig, F., & Venn,         Hopkins, P. F., Wetzel, A., Kereš, D., et al. 2018, MNRAS,
+  K. A. 2017, ApJ, 835, 128                                          480, 800
+Côté, B., Silvia, D. W., O’Shea, B. W., Smith, B., & Wise,       Iwamoto, K., Brachwitz, F., Nomoto, K., et al. 1999, ApJS,
+  J. H. 2018, ApJ, 859, 67                                           125, 439
+Couch, S. M., Warren, M. L., & O’Connor, E. P. 2019,               Jones, S., Hirschi, R., Pignatari, M., et al. 2015, MNRAS,
+  arXiv e-prints, arXiv:1902.01340 [astro-ph.HE]                     447, 3115
+Davis, A., Jones, S., & Herwig, F. 2019, MNRAS, 484, 3921          Kroupa, P. 2001, MNRAS, 322, 231
+deBoer, R. J., Görres, J., Wiescher, M., et al. 2017,             Lugaro, M., Ugalde, C., Karakas, A. I., et al. 2004, ApJ,
+  Reviews of Modern Physics, 89, 035007                              615, 934
+Denissenkov, P., Perdikakis, G., Herwig, F., et al. 2018,          Matteucci, F. 2014, The Origin of the Galaxy and Local
+  Journal of Physics G Nuclear Physics, 45, 055203                   Group, Saas-Fee Advanced Course, Volume 37. ISBN
+Ebinger, K., Curtis, S., Fröhlich, C., et al. 2019, ApJ, 870, 1     978-3-642-41719-1. Springer-Verlag Berlin Heidelberg,
+Fields, C. E., Timmes, F. X., Farmer, R., et al. 2018, ApJS,         2014, p. 145, 37, 145
+  234, 19                                                          Meakin, C. A., & Arnett, D. 2007, ApJ, 667, 448
+Fryer, C. L., Andrews, S., Even, W., Heger, A., &                  Mocák, M., Meakin, C., Campbell, S. W., & Arnett, W. D.
+  Safi-Harb, S. 2018, ApJ, 856, 63                                   2018, MNRAS, 481, 2918
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012,        Mollá, M., Cavichia, O., Gavilán, M., & Gibson, B. K.
+  ApJ, 749, 91                                                       2015, MNRAS, 451, 3693
+Gibson, B. K., Fenner, Y., Renda, A., Kawata, D., & Lee,           Müller, B. 2016, PASA, 33, e048
+  H.-c. 2003, PASA, 20, 401                                        —. 2019, arXiv e-prints, arXiv:1902.04270 [astro-ph.SR]
+Herwig, F., Pignatari, M., Woodward, P. R., et al. 2011,           Nishimura, N., Hirschi, R., Rauscher, T., St. J. Murphy, A.,
+  ApJ, 727, 89                                                       & Cescutti, G. 2017, MNRAS, 469, 1752
+8                                                       Côté et al.
+
+Nomoto, K., Kobayashi, C., & Tominaga, N. 2013,                  Romano, D., Karakas, A. I., Tosi, M., & Matteucci, F.
+  ARA&A, 51, 457                                                   2010, A&A, 522, A32
+Ott, C. D., Roberts, L. F., da Silva Schneider, A., et al.       Schaye, J., Crain, R. A., Bower, R. G., et al. 2015,
+  2018, ApJ, 855, L3                                               MNRAS, 446, 521
+Philcox, O., Rybizki, J., & Gutcke, T. A. 2018, ApJ, 861, 40     Somerville, R. S., & Davé, R. 2015, ARA&A, 53, 51
+Pignatari, M., Herwig, F., Hirschi, R., et al. 2016, ApJS,       Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., &
+  225, 24                                                          Janka, H.-T. 2016, ApJ, 821, 38
+Pillepich, A., Springel, V., Nelson, D., et al. 2018, MNRAS,     Sukhbold, T., & Woosley, S. E. 2014, ApJ, 783, 10
+  473, 4077                                                      Tinsley, B. M. 1980, FCPh, 5, 287
+Prantzos, N., Abia, C., Limongi, M., Chieffi, A., &              Travaglio, C., Gallino, R., Rauscher, T., et al. 2014, ApJ,
+  Cristallo, S. 2018, MNRAS, 476, 3432                             795, 141
+Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E.        Tur, C., Heger, A., & Austin, S. M. 2009, ApJ, 702, 1068
+  2002, ApJ, 576, 323                                            Wise, J. H., Turk, M. J., Norman, M. L., & Abel, T. 2012,
+Revaz, Y., & Jablonka, P. 2018, A&A, 616, A96                      ApJ, 745, 50
+Ritter, C., Andrassy, R., Côté, B., et al. 2018a, MNRAS,       Woosley, S. E., & Weaver, T. A. 1995, ApJS, 101, 181
+  474, L1
+                                                                 Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+Ritter, C., Herwig, F., Jones, S., et al. 2018b, MNRAS, 480,
+                                                                   A. 2019, arXiv e-prints, arXiv:1905.04378
+  538
+

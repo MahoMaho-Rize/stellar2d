@@ -1,0 +1,1897 @@
+                                              Astronomy & Astrophysics manuscript no. main                                                                                        ©ESO 2024
+                                              September 4, 2024
+
+
+
+
+                                                   It’s written in the massive stars: The role of stellar physics in the
+                                                                         formation of black holes
+                                                                                  E. Laplace1⋆ , F. R. N. Schneider1, 2 , and Ph. Podsiadlowski3, 1
+
+                                                     1
+                                                       Heidelberger Institut für Theoretische Studien, Schloss-Wolfsbrunnenweg 35, 69118 Heidelberg, Germany
+                                                     2
+                                                       Astronomisches Rechen-Institut, Zentrum für Astronomie der Universität Heidelberg, Mönchhofstr. 12-14, 69120 Heidelberg, Ger-
+                                                       many
+                                                     3
+                                                       University of Oxford, St Edmund Hall, Oxford, OX1 4AR, United Kingdom
+
+                                                     Received ...; accepted ...
+arXiv:2409.02058v1 [astro-ph.SR] 3 Sep 2024
+
+
+
+
+                                                                                                                 ABSTRACT
+
+                                                     In the age of gravitational-wave (GW) sources and newly discovered local black holes (BH) and neutron stars (NS), understanding
+                                                     the fate of stars is a key question. Not every massive star is expected to successfully explode as a supernova (SN) and leave behind
+                                                     a NS; some stars form BHs. The remnant left after core collapse depends on explosion physics but also on the final core structure,
+                                                     often summarized by the compactness parameter or iron core mass, where high values have been linked to BH formation. Several
+                                                     independent groups have reported similar patterns in these parameters as a function of mass, characterized by a prominent “compact-
+                                                     ness peak” followed by another peak at higher masses, pointing to a common underlying physical mechanism. Here, we investigate
+                                                     its origin by computing detailed single star models from 17 to 50 solar masses with MESA. We show that the timing and energetics of
+                                                     the last nuclear burning phases determine whether stars will reach a high final compactness and iron-core mass and likely form BHs.
+                                                     The first and second compactness increases originate from core carbon and neon burning, respectively, becoming neutrino dominated,
+                                                     which enhances the core contraction and ultimately increases the iron-core mass and compactness. An early core neon ignition during
+                                                     carbon burning, and an early silicon ignition during oxygen burning both help counter the core contraction and decrease the final iron
+                                                     core mass and compactness. Shell mergers between C/Ne and O-burning shells further decrease the compactness and we show that
+                                                     they are due to an enhanced entropy production in these layers. We find that the final structure of massive stars is not random but
+                                                     already “written” in their cores at core helium exhaustion when it is characterized by the central carbon mass fraction XC and the CO
+                                                     core mass. The same mechanisms determine the final structure of any star in this core mass range, including binary products, though
+                                                     binary interactions induce a systematical shift in the range of expected BH formation due to changes in XC . Finally, we discuss the
+                                                     role of stellar physics uncertainties and how to apply these findings to studies of GW sources.
+                                                     Key words. Stars: black holes – stars: massive – stars: interiors – stars: evolution – supernovae: general – gravitational waves
+
+
+
+                                              1. Introduction                                                            Timmes et al. (1996) pointed out that the final structure of a
+                                                                                                                         star, characterized for example by the final iron core mass, is
+                                              Massive stars with masses larger than 10 M⊙ are rare compared              not monotonic with mass. This picture was confirmed by mul-
+                                              to their low-mass counterparts but their contribution to the evo-          tiple studies (e.g., Brown et al. 2001; O’Connor & Ott 2011;
+                                              lution and chemical enrichment of galaxies is disproportionately           Sukhbold & Woosley 2014; Pejcha & Thompson 2015; Ertl et al.
+                                              important (Hopkins 2014). Their strong winds and supernova ex-             2016; Sukhbold et al. 2018; Limongi & Chieffi 2018; Schneider
+                                              plosions create mechanical and energetic feedback and enrich               et al. 2021; Temaj et al. 2024). Moreover, it is now established
+                                              their surroundings with heavier elements, determining the prop-            that most massive stars live in close binary or multiple systems
+                                              erties and evolution of galaxies and of the next generations of            (e.g., Sana et al. 2012), further complicating this picture. Bi-
+                                              stars (Geen et al. 2023). However, not every massive star ex-              nary interactions have been shown to affect the pre-collapse core
+                                              plodes. A fraction is expected to collapse directly and form black         structures of stars, both based on studies of pure He star mod-
+                                              holes. Core-collapse supernovae are not always successful and              els approximating stripped stars in binaries (Brown et al. 2001;
+                                              failed explosions are another common path for black hole forma-            Woosley 2019; Aguilera-Dena et al. 2022, 2023) and binary evo-
+                                              tion (see, e.g., the recent review by Heger et al. 2023). Even suc-        lution models of stripped stars, accretors, and mergers (Laplace
+                                              cessful explosion can be associated with BH formation through              et al. 2021; Schneider et al. 2021, 2023; Schneider et al. 2024).
+                                              fallback accretion (Burrows et al. 2023). Understanding and pre-           In turn, this affects their explodability (Müller et al. 2019; Var-
+                                              dicting the fate of stars remains one of the main unsolved prob-           tanyan et al. 2021; Woosley et al. 2020; Antoniadis et al. 2022),
+                                              lems in astrophysics.                                                      nucleosynthesis (Farmer et al. 2021, 2023), significantly reduces
+                                                  The fate of stars is determined by the explosion mechanism,            the parameter space for the formation of compact object mergers
+                                              fallback dynamics, and their final core structure. In this work,           observable with gravitational-wave (GW) observations (Schnei-
+                                              we focus on the latter. Progress in stellar and supernova physics          der et al. 2021, 2023) and leads to features in the chirp-mass dis-
+                                              in recent years has shown that there is no simple initial mass             tribution of binary BH mergers (Schneider et al. 2023). However,
+                                              threshold for a star to form a BH. In fact, almost 30 years ago,           to study the properties of BH populations and the formation of
+                                                                                                                         GW sources, current state-of-the-art studies necessarily have to
+                                               ⋆
+                                                   eva.laplace@h-its.org
+
+                                                                                                                                                                    Article number, page 1 of 33
+                                                       A&A proofs: manuscript no. main
+
+make simplifying assumptions regarding the formation of BHs,              used in recent literature and defined as
+often using analytical prescriptions solely based on the core mass                  m/ M⊙
+of single-star progenitors (e.g., Fryer et al. 2012). These can lead      ξm =               ,                                            (1)
+to substantially different outcomes compared to models that take                 R(m)/1000km
+the structure of stars into account (Patton et al. 2022).                 where m is the mass coordinate at which the compactness is eval-
+    Observationally, only few direct hints of the link between the        uated, typically at a chosen value of 2.5 M⊙ , and R is the radius
+pre-supernova structure of massive stellar progenitors and the            at this mass coordinate. Essentially, it is a measure of the den-
+formation of BHs exist. A red supergiant (RSG), N6946-BH1,                sity (or mass-radius relation Chieffi & Limongi 2020) outside the
+that was observed to suddenly vanish in the optical after a short         iron-rich core. This quantity, though arguably arbitrary in its def-
+outburst (Gerke et al. 2015; Adams et al. 2017; Sukhbold &                inition, is known to correlate with other key properties, such as
+Adams 2020; Basinger et al. 2021) could be the first direct               the iron-core mass, and the binding energy above the iron-rich
+progenitor of a BH ever observed. This event is compatible                core (e.g., Sukhbold & Woosley 2014; Schneider et al. 2021;
+with model predictions for a single star with high compactness            Temaj et al. 2024, see also Fig. 1). Stars with large iron core
+undergoing a failed supenova explosion and eventually forming             masses tend to have a high binding energy outside this core, and
+a BH (Lovegrove & Woosley 2013; Sukhbold & Adams 2020;                    are thus difficult to explode by any explosion mechanism and
+Temaj et al. 2024). Very recent observations with JWST po-                tend to ultimately from BHs (Brown et al. 2001; Sukhbold &
+tentially challenge this interpretation by identifying an infrared        Woosley 2014; Heger et al. 2023; Temaj et al. 2024). In recent
+source at the location of this object, which may correspond to            literature, the compactness parameter has been used as a predic-
+a surviving star enshrouded by dust (Beasor et al. 2024) or to            tor for the final remnant expected after core collapse, with high
+the emission from a failed supernova (Kochanek et al. 2024).              values indicating BH- and low values NS formation (O’Connor
+Future observations are needed to better understand if this event         & Ott 2011; Ugliano et al. 2012; Sukhbold & Woosley 2014;
+was indeed a RSG forming a black hole after a failed explosion.           Limongi & Chieffi 2018; Schneider et al. 2021, 2023; Schneider
+An additional, indirect observational clue on the link between            et al. 2024; Heger et al. 2023). Multiple studies have pointed out
+RSGs and BH formation comes from observations of hydrogen-                that more sophisticated metrics are needed to accurately capture
+rich (type II) core-collapse SNe. Archival data searches have             the explosion physics and understand the conditions for shock
+unambiguously identified several RSG progenitors at the                   revival (Pejcha & Thompson 2015; Ertl et al. 2016; Müller et al.
+location of these SNe. These observed RSG SN progenitors                  2016; Sukhbold et al. 2016; Vartanyan et al. 2021; Burrows &
+tend to have low luminosities of log L/ L⊙ ≤ 5.1 (Smartt 2009).           Vartanyan 2021). The explodability of stars is a subject of active
+This is in tension with the observed maximum luminosity of                discussion in the community and several explodability criteria
+about log L/ L⊙ ≊ 5.5 found for RSGs in the galaxy and in the             have been proposed and explored in recent years. These include
+Magellanic Clouds (Davies & Beasor 2020), and is known as                 the two-parameter criterion of Ertl et al. (2016), the presence
+the missing RSG problem. A possible interpretation for these              of steep density profile with a density discontinuity around the
+“missing” luminous RSG SN progenitors is that these are high-             Si/O interface (Vartanyan et al. 2021; Tsang et al. 2022; Wang
+mass stars that “quietly” form black holes instead of exploding.          et al. 2022; Boccioli et al. 2023), or a forced explosion condition
+The exact value of this maximum luminosity remains to be                  (Murphy & Dolence 2017; Gogilashvili et al. 2023).
+determined because of systematic uncertainties associated with                 Independently of the discussion about explodability criteria,
+photometric data of these objects (Davies et al. 2018; Davies &           several unrelated groups making different assumptions regard-
+Beasor 2020). Nonetheless, these observations offer important             ing the microphysics and using different methods have reported
+insights into the structures of stars that may be the progenitors         remarkably similar patterns in the final core structure of stars
+of BHs. In principle, the bolometric pre-SN luminosity of a RSG           (often summarized by the compactness parameter) as a function
+can be directly linked to its final core mass, independently of the       of their core or initial mass (O’Connor & Ott 2011; Sukhbold &
+uncertainties in convective boundary mixing or rotation (Temaj            Woosley 2014; Sukhbold et al. 2018; Limongi & Chieffi 2018;
+et al. 2024)1 . However, the initial mass of these progenitors            Chieffi & Limongi 2020; Chieffi et al. 2021; Schneider et al.
+is very uncertain. This is because, even assuming single-star             2021; Patton & Sukhbold 2020; Takahashi et al. 2023; Temaj
+evolution, variations in internal mixing, mass loss history, and          et al. 2024). Typically, it consists of two prominent peaks in the
+rotation all affect the relation between the initial and final core       compactness parameter, separated by ≈ 15 M⊙ in initial mass
+mass of stars (Farrell et al. 2020). Taking binary evolution              and ≈ 7 M⊙ in CO core mass. The robustness of this pattern
+into account further complicates this relation (Zapartas et al.           points to a common underlying physical process determining the
+2019; Zapartas et al. 2021). Generally, the connection between            final core structure of stars, and with it, their fate.
+the final core mass and final observable properties of stars is                Pioneering work by Sukhbold & Woosley (2014) analyzed
+much better constrained (Temaj et al. 2024). Finally, the lack            the pattern in the compactness parameter for the first time in
+of stars with high core masses exploding as supernovae is also            great detail and linked it to the different nuclear burning condi-
+supported by studies of their late-time supernova spectra (e.g.,          tions in the last evolutionary stages of massive stars post helium
+Jerkstrand et al. 2012) and by age-dating of supernova remnant            burning. Patton & Sukhbold (2020) demonstrated that variations
+environments (e.g, Jennings et al. 2014).                                 in the final compactness are linked to the initial conditions for
+                                                                          core carbon burning, i.e. the mass of the CO core and the initial
+     Based on detailed stellar models, several summarizing quan-          central carbon abundance at core helium exhaustion. Sukhbold
+tities have been defined to evaluate the fate of massive stars. The       et al. (2018) found that the final compactness of a star is influ-
+compactness parameter ξm (O’Connor & Ott 2011) is commonly                enced by small variations in physical assumptions and resolu-
+                                                                          tion and interpreted this as a sign of intrinsic randomness in the
+                                                                          core structure of stars. However, Chieffi & Limongi (2020) ar-
+1
+   In practice, limited photometry, dust production and uncertainties     gued that these apparently random variations can be traced back
+in the distance can affect the inferred observational luminosity (e.g.,   to their assumptions regarding the core helium-burning evolu-
+Davies et al. 2018)                                                       tion, where in particular semi-convection can result in late inges-
+Article number, page 2 of 33
+                 E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+tion of helium in the core, generating “breathing pulses” which            the approximation that deleptonizations in this core only occur
+change the central carbon abundance and lead to different initial          through electron-captures onto 56 Fe. However, variations in Ye
+conditions for core carbon burning and ultimately, to a differ-            between different stellar models are generally small (Woosley
+ent final core structure. In our work, which includes convective           et al. 2002) and do not affect the formation of the main quali-
+boundary mixing above the helium-burning core, we do not find              tative patterns in the final core structure that are the subject of
+these signs of intrinsic stochasticity either (Schneider et al. 2023;      this work, which already appear at the end of core Ne burning
+Temaj et al. 2024).                                                        (see also Sec. 3.3). Using this nuclear reaction network is suf-
+Independent studies connected variations in the final core struc-          ficient for our purpose, but we caution against employing these
+ture of stars to the number and size of carbon-burning shells              models as input for predictions of three-dimensional supernova
+and to the transition from convective to radiative carbon burn-            simulations or nucleosynthesis yields, which require a larger nu-
+ing (Brown et al. 2001; Sukhbold & Woosley 2014; Sukhbold                  clear network (Farmer et al. 2016; Renzo et al. 2024). To fur-
+& Adams 2020; Chieffi & Limongi 2020). However, this expla-                ther verify that the final structure pattern is reproduced in mod-
+nation appears incomplete. Even after the transition from con-             els with larger networks, we compute three additional models
+vective to radiative core carbon burning, models of stars that             with initial masses of 21 M⊙ , 22 M⊙ , and 23 M⊙ , for which we
+undergo radiative core carbon burning can result in a low com-             employ a nuclear reaction network of 128 isotopes (as recom-
+pactness (see, e.g., Fig. 2 of Sukhbold & Adams 2020). In ad-              mended by Farmer et al. 2016). The 21 M⊙ and 22 M⊙ models
+dition, the cause of the prominent drop in compactness after the           encounter numerical difficulties after the iron-core infall veloc-
+first peak remains unclear, though Sukhbold & Woosley (2014)               ity exceeds 250 km s−1 . By this point the iron core mass and the
+identified a link between the base of the carbon shell exceeding           central entropy change only slightly (by less than 2%), so we
+the effective Chandrasekhar mass and a smaller oxygen-burning              consider these to be comparable to our default collapse models.
+core.                                                                      The reaction rates in our models are based on the JINA REA-
+     Schneider et al. (2021) identified a connection between mod-          CLIB database version 2.2 (Cyburt et al. 2010).
+els with high compactness and the mass range for which carbon                   We ensure a high spatial resolution in our models, in particu-
+burning and neon burning become neutrino-dominated. Follow-                lar in zones of high temperature and density (Farmer et al. 2016).
+ing these findings, in the present study, we investigate the origin        More specifically, we adopt a minimum of 2000 grid points and a
+of the observed patterns in the final structures of massive stars.         grid spacing option mesh_delta_coeff = 0.6, which results
+We compute detailed simulations of massive single, non-rotating            in an average of 5000–6000 grid points for each model. We also
+stars at solar metallicity that are the common progenitors of core-        ensure a high temporal resolution throughout the evolution with
+collapse events (17 – 50 M⊙ ) and focus on the evolution of the            a maximum time step of 10−4 years that is further limited based
+innermost 6 M⊙ .                                                           on changes in composition. Our final core collapse models and
+     We present our computational setup in Sect. 2 and the over-           further information are available online2 .
+all properties of our models in Sect. 3. In Sect. 4, we conduct                 To better disentangle the effects responsible for determining
+a simplified experiment to identify and understand the general             the final structure of massive stars, we perform a controlled ex-
+physical mechanisms responsible for the observed trends in final           periment (see Sec. 4). These models have the same core masses
+core structure. These insights are then applied to our fiducial set        but a different central carbon mass fraction at the moment of
+of stellar models in Sect. 5. We summarize the physical mech-              core helium depletion (when the central helium mass fraction is
+anisms identified as being responsible for determining the main            lower than 10−4 ). This is achieved by computing additional mod-
+pattern in the final core structure of stars in Sect. 6. We discuss        els using the MESA relax_initial_composition method
+the implications and uncertainties of our results in Sect. 7 and           in which we artificially modify the central 12 C abundance and
+present our conclusions in Sect. 8.                                        the central 16 O abundance while keeping the total mass frac-
+                                                                           tions constant. Our base model for this experiment is our fiducial
+                                                                           model with an initial mass of 22 M⊙ , which corresponds to the
+2. Methods
+                                                                           first compactness peak, at the moment of core helium depletion.
+We compute the interior structure of massive single stars with                  We examine the effect of changing the 12 C(α, γ)16 O reaction
+initial masses between 17 and 50 M⊙ with the MESA stel-                    rate and discuss these in Appendix A. This notoriously uncertain
+lar evolution code (version 10398, Paxton et al. 2011, 2013,               nuclear reaction plays a crucial role for the evolution of stars,
+2015, 2018). Our models build upon Schneider et al. (2021,                 including their fate (Weaver & Woosley 1993; Austin et al. 2014;
+2023), with similar assumptions. Specifically, our models are              Sukhbold & Adams 2020; Farmer et al. 2020), as it determines
+computed at solar metallicity Z=0.0142 (Asplund et al. 2009)               the final central abundances at the end core helium depletion and
+and are non-rotating. We compute convective mixing with an                 the mass of the CO core (see also Section 3.3). Our fiducial set of
+mixing-length theory (Böhm-Vitense 1958) parameter of αMLT =               models adopts the default MESA rate from Xu et al. (2013). The
+1.8 and assume step overshooting of 0.2 pressure-scale height,             other two sets we compute adopt the approximately 15% lower
+which is only applied over the H and He-burning convective                 rate from Kunz et al. (2002) which is often used in the literature,
+cores. We adopt the Ledoux criterion for convection and as-                and a rate that is 10% higher than that of our default model. We
+sume a semi-convection efficiency of αsc = 1.0 (Schootemei-                compute additional sets of models for which we vary the semi-
+jer et al. 2019). We adopt the re-scaled “Dutch” wind mass                 convection efficiency, discussed in detail in Appendix B. Finally,
+loss rates of Schneider et al. (2021) and enable the MLT++                 we perform a resolution test in Appendix C to explore the effect
+method of MESA that boosts the local energy transport for                  of numerical uncertainties on the occurrence of shell mergers.
+outer layers of our massive star models that locally exceed the                 To evaluate the final fate of our massive star models, we
+Eddington limit. The models are computed with the MESA                     compute the expected explosion outcome of our models using
+approx21_cr60_plus_co56.net nuclear network until the                      the semi-analytical parametric neutrino-driven supernova explo-
+onset of core collapse, which is defined as the moment when                sion model of Müller et al. (2016), with the same assumptions
+the infall velocity of the iron-rich core exceeds 900 km s−1 . This
+network effectively sets Ye in the entire iron-rich core by making          2
+                                                                                https://zenodo.org/doi/10.5281/zenodo.13645155
+
+                                                                                                                       Article number, page 3 of 33
+                                                         A&A proofs: manuscript no. main
+
+                                                                               3. Final stellar properties
+                                                                               3.1. Final stellar structure
+                                                                               We characterize the final stellar structure of our models by sev-
+                                                                               eral quantities, including the compactness parameter, final spe-
+                                                                               cific central entropy, iron-core mass, and final binding energy
+                                                                               (Fig. 1). Here, the binding energy E B of a star of mass M above
+                                                                               M4 is defined as
+                                                                                        Z M
+                                                                                             Gm
+                                                                               EB = −             dm.                                        (2)
+                                                                                         M4   r
+                                                                               We identify specific mass ranges, labeled A, B, C, and D in
+                                                                               Fig. 1, during which the compactness parameter, final specific
+                                                                               central entropy, iron-core mass, and final binding energy follow
+                                                                               specific trends (significant increase or decrease), whose physical
+                                                                               origin we investigate in Sections 5.1, 5.2, 5.3, and 5.4, respec-
+                                                                               tively. These mass ranges are indicated as a function of initial
+                                                                               mass (bottom axis of Fig. 1) and of the CO core mass, based
+                                                                               on the linear relation we derive between the two for our default
+                                                                               assumptions (see also Fig. B.1):
+                                                                               MCO = 0.532 Mi − 5.31.                                        (3)
+                                                                                   Fig. 1 demonstrates that all quantities summarizing the
+                                                                               final stellar structure follow a very similar, non-linear trend as
+                                                                               a function of mass, confirming earlier findings (e.g., Timmes
+                                                                               et al. 1996; Brown et al. 2001; Sukhbold & Woosley 2014;
+                                                                               Chieffi & Limongi 2020; Schneider et al. 2021, 2023; Schneider
+                                                                               et al. 2024; Takahashi et al. 2023; Temaj et al. 2024). For low
+                                                                               masses, the values are approximately constant, with only small
+                                                                               variations. A characteristic increase (region A) begins at initial
+                                                                               (CO core) masses of about 19 (5.8) M⊙ and reaches a maximum
+                                                                               at CO core (initial) masses of 22 (6.5) M⊙ , commonly referred
+                                                                               to as the “compactness peak”. It is followed by a decrease
+Fig. 1. Final (a) compactness, (b) specific central entropy, (c) iron core     (region B) until a minimum is reached at about 25 (8) M⊙ .
+mass, and (d) binding energy above M4 at the onset of core collapse as
+a function of the initial mass. The top axis shows the CO core mass at
+                                                                               After a mass range of about 3 M⊙ with small variations, all
+core helium exhaustion. Circles and crosses represent black hole for-          quantities then experience a significant second increase from
+mation and explosions, respectively according to the Ertl et al. (2016)        30 (11) M⊙ (region C) until a second peak is reached and the
+criterion, while black and white colors indicate BH formation and ex-          values generally decrease from masses of 40 (16) M⊙ (region
+plosions based on the Müller et al. (2016) supernova model.                    D). As shown in the lowest panel, at this point all models have a
+                                                                               high binding energy above M4 . Even if a supernova shock were
+                                                                               successfully propagating after core collapse in these models,
+                                                                               potentially leading to an observable supernova, the high binding
+                                                                               energy means that the formation of a black hole is likely for
+                                                                               these mass ranges, independently of the explosion mechanism
+                                                                               (Sukhbold & Woosley 2014; Heger et al. 2023).
+as in Schneider et al. (2021, 2023); Schneider et al. (2024) and
+Temaj et al. (2024). For simplicity, we do not consider black                      Our models show a lower intrinsic variability in the fi-
+holes formed by supernova fallback in this work.                               nal structure than models by Sukhbold & Woosley (2014) and
+                                                                               Sukhbold et al. (2016, 2018), just like the studies by Chieffi
+                                                                               & Limongi (2020); Chieffi et al. (2021), and Takahashi et al.
+    For comparison, we also employ the two-parameter explod-                   (2023). This is likely due to our choices of convective boundary
+ability criterion by Ertl et al. (2016). This criterion depends on             mixing that prevent the occurrence of “breathing pulses” during
+the mass M4 , which is mass coordinate m where the entropy                     core helium burning (Chieffi & Limongi 2020) that can change
+                                               ∆m/ M⊙                          the relation between the CO core mass and the core carbon
+reaches a value of s/(NA kB ) = 4 and on µ4 = ∆r/1000km                , the
+                                                                 s=4           mass fraction XC at core helium exhaustion. Secondary peaks
+radial mass gradient at M4 . Physically, this location M4 typically            in the quantities shown in Fig. 1 are not observed for our de-
+corresponds to the Si/O interface (i.e. the transition point be-               fault assumptions and mass sampling but can appear for differ-
+tween the Si-rich and O-rich layers), which has been found to                  ent choices of physics. We argue that they are probably real (see
+be a good predictor for successful multi-dimensional neutrino-                 Appendices A and B for more details).
+driven supernova explosions (Ertl et al. 2016; Müller et al. 2016;                 All quantities shown in Fig. 1 follow similar patterns because
+Ertl et al. 2020). We use the s19.8 calibration of Ertl et al.                 they are intrinsically linked (Fryer 2014; Sukhbold & Woosley
+(2016) to models by Woosley et al. (2002) to distinguish suc-                  2014; Takahashi et al. 2023; Schneider et al. 2021; Schneider
+cessful and failed explosions.                                                 et al. 2024; Temaj et al. 2024). For completeness, we repeat
+Article number, page 4 of 33
+                  E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+these arguments below. The connection between the final cen-                                                                  MCO /M
+tral entropy (Fig. 1b) and the final iron-core mass (Fig. 1c) can                                   5                  10                15               20
+be understood through the effective Chandrasekhar mass (e.g.,
+Timmes et al. 1996; Woosley et al. 2002; Sukhbold & Woosley
+2014; Schneider et al. 2024). In massive stars, core collapse is                              1.0       Core H depl.
+triggered once the iron-rich core has reached a critical mass.
+However, in contrast to the cores of low-mass stars, the degen-                               0.8
+                                                                                                                       Core He depl.
+
+
+
+
+                                                                            log(sc /NA kB )
+erate iron-rich cores of massive stars are hot, i.e. they have a
+finite temperature (entropy) that needs to be taken into account.                             0.6
+                                                                                                             Core C depl.
+This thermal structure leads to additional corrections compared
+to the classical Chandrasekhar mass MCh,0 = 1.457 0.5
+                                                       Y 2
+                                                         e
+                                                             (e.g.,                           0.4
+                                                                                                             Core Ne depl.
+Timmes et al. 1996, and references therein), and lead to the ap-                                                               Core O depl.
+                                                                                              0.2
+proximate effective Chandrasekhar mass (ignoring special and
+relativistic corrections, and Coulomb corrections)
+                                                                                              0.0
+                            !2                                                                                                Core collapse
+                    se             
+MCh ≈ MCh,0                  + 1 ,                      (4)                                  20         25        30       35          40     45        50
+                   πYe kB NA
+                                                                                                                              Mi /M
+where se is the average electronic entropy, which is roughly
+a third of the average central entropy (Baron & Cooperstein                 Fig. 2. Evolution of the central specific entropy as a function of the ini-
+1990; Timmes et al. 1996). This critical mass is mainly sensi-              tial mass for different evolutionary stages from core hydrogen depletion
+tive to changes in entropy because the electron fraction Ye tends           until core-collapse. Key difference in the final entropy start to appear
+to be very similar between different progenitors3 (Sukhbold &               at the end of core carbon burning. Red markers indicate three models
+                                                                            computed with a nuclear network comprising 128 isotopes. Taking into
+Woosley 2014). Thus, the final iron-rich core mass that can form
+                                                                            account more nuclear reactions generally leads to a slightly lower final
+in a massive star before it exceeds MCh and its core begins to              central entropy, though the general qualitative pattern of the compact-
+dynamically collapse is directly linked to the central entropy.             ness peak is unchanged. The characteristic final landscape is already
+     As shown in Fig. 1, the compactness parameter also corre-              mostly determined at the end of core Ne burning and remains until core
+lates well with the final entropy and iron-core mass, which may             collapse.
+appear surprising at first. This connection can be understood by
+considering that the compactness is essentially a measure of the
+mass-radius relation outside the iron core (Chieffi & Limongi               Overall, we find that based on these explosion criteria, BH for-
+2020). By taking into account that the final iron-rich core is adi-         mation is consistently expected for models with high compact-
+abatic, this mass radius relation is directly connected to entropy          ness and high central entropy, including the compactness-peak
+through polytrope relations (Schneider et al. 2021). Thus the fi-           models at a mass of 22–23 (6.5–7) M⊙ and models beyond
+nal compactness can be understood as being equivalent to cen-               a mass of 34 (14) M⊙ . We confirm that using a compactness
+tral entropy (see also Fryer 2014), itself linked to the final iron-        threshold for models in which BH formation is expected (e.g.,
+                                                                              f
+core mass (and MCh ) as described above. The mass-radius rela-              ξ2.5 > 0.4, see dashed line in Fig. 1a) is too simplified to fully
+tion and entropy both enter into the definition of binding energy           reproduce the predictions by more sophisticated measures of ex-
+above M4 (see Eq. 2), which explains the observed correlation               plodability. Considering a larger set of models (Schneider et al.
+(Fig. 1d).                                                                  2021; Temaj et al. 2024; Schneider et al. 2024) we note that there
+                                                                            is no clear compactness threshold separating successful and un-
+                                                                                                                                    f
+3.2. Link to black hole formation                                           successful explosions (Maltsev et al. in prep.). For ξ2.5   ≲ 0.3
+                                                                                                                          f
+                                                                            successful explosions are found, and for ξ2.5 ≳ 0.45 explosions
+To estimate the range of stars for which BH formation is ex-                are unsuccessful, similarly to previous works (Müller et al. 2016;
+pected, beyond considering the binding energy, we apply the Ertl            Takahashi et al. 2023; Zha et al. 2023). A compactness thresh-
+et al. (2016) explodability criterion to our models. This is shown          old can thus only be regarded as a rough first approximation of
+by the different markers (crosses for explosions and circles for            the core-collapse outcome. Approaches based on the entire final
+black holes) in Fig. 1. Based on this criterion, stars with initial         stellar structure, such as the Müller et al. (2016) model, can be
+(core) masses below 30 (12) M⊙ are expected to preferentially               applied more generally.
+explode. Models in the first compactness peak and beyond the
+second compactness increase are predicted to form black holes.
+In addition, we compute the expected explosion outcome of our               3.3. Emergence of the final structure pattern
+models using the semi-analytical neutrino-driven supernova ex-
+                                                                            To understand at which point the observed pattern in the final
+plosion model of Müller et al. (2016). Black hole formation is
+                                                                            stellar structure emerges, we trace the value of the central en-
+indicated with black and successful explosions with white mark-
+                                                                            tropy at key evolutionary stages, shown in Fig. 2. At every stage,
+ers in Fig. 1. We find that the Müller et al. (2016) model also
+                                                                            there is a general underlying trend of an increasing entropy as
+predicts black hole formation for stars with a high compactness.
+                                                                            function of initial (or CO core) mass, which reflects the increas-
+The mass range for which successful explosions are expected is
+                                                                            ing core mass of stars as a function of their mass. As a function
+more extended compared to the outcome of the Ertl et al. (2020)
+                                                                            of time, the central entropy generally decreases. This can be un-
+criterion, reaching up to models with masses of 34 (12.5) M⊙ .
+                                                                            derstood as the effect of a changing mass-radius relation of the
+3
+  In our models, Ye is pre-determined at the end of core oxygen burning     core, as it becomes increasingly compact due to core contraction
+and similar by construction (values between 0.4607 and 0.4629), see         (Chieffi & Limongi 2020; Schneider et al. 2021). Central nuclear
+Sect. 2.                                                                    burning episodes temporarily increase the central entropy, while
+                                                                                                                                    Article number, page 5 of 33
+                                                     A&A proofs: manuscript no. main
+
+thermal neutrino losses, which become important after core car-                       10.0
+bon burning, decrease it. At the end of core C burning (blue                                      C ign.              O depl.
+                                                                                                  C depl.             Si depl.
+diamonds in Fig. 2), a first peak feature in the central entropy
+                                                                                                  Ne depl.
+appears around 20 (5) M⊙ initial (CO core) masses. It can be                           9.8                                                                   0.17
+understood as a difference in heat content between models be-                                   MCO = 6.4 M
+fore and after 21.5 (6) M⊙ . Models below this mass experience
+convective core carbon burning while models above this mass                            9.6
+burn carbon radiatively as the burning becomes more neutrino-
+dominated (see also the Kippenhahn diagrams in the appendix                                                                         Core Si burn.
+
+
+
+
+                                                                        log(T c /K)
+Fig. D.1 and D.2). From the end of core neon burning on (orange                        9.4        Core O burn.
+crosses in Fig. 2), the characteristic feature corresponding to the                                                                                          0.23
+
+
+
+
+                                                                                                                                                                    XC
+compactness peak emerges around 22 (6.4) M⊙ and remains un-
+til core collapse (black squares in Fig. 2). As we discuss later,                                                           Core Ne burn.
+this is because central entropy reflects the degree of contraction                     9.2
+the core experiences in these models. Between the end of core                                                                               XC
+O burning and core collapse, an additional feature emerges in                                Core C burn.                            0.25        0.20
+the central entropy landscape for models above 40 (15) M⊙ . The                        9.0                                 0.75
+central entropy drops to lower values, though the general trend                                                                                              0.28
+                                                                                                                           0.50
+
+
+
+
+                                                                                                                    ξ2.5
+of increasing entropy as a function of mass remains. The key
+processes that determine the final entropy or compactness land-                        8.8                                 0.25
+scape thus already occur close to the time of core neon burning.                             Core He burn.
+For the models above 40 (15) M⊙ additional processes play a role                                             6                8                         10
+around the time of core silicon burning.                                                                         log(ρc /g cm−3 )
+     The emergence of the final structure landscape at the moment
+of core neon burning demonstrates that using a small nuclear re-        Fig. 3. Central temperature as a function of the central density for mod-
+action network is sufficient for characterizing the final structure     els with the same core mass and different carbon mass fractions XC after
+landscape of stars. However, such models are not well-suited as         core helium burning (indicated in the color bar). The previous evolution
+input for multi-dimensional simulations of core collapse, which         of the core (not shown here for clarity) is indistinguishable for all mod-
+require larger reaction networks (Farmer et al. 2016; Renzo et al.      els, while the post core helium burning evolution is greatly affected by
+2024). We compare our default models to three additional mod-           the differences in central carbon abundance. Symbols indicate key evo-
+els with initial masses of 21 M⊙ , 22 M⊙ , and 23 M⊙ , for which we     lutionary phases. To the right of the gray dashed line electron degener-
+employ a nuclear reaction network of 128 isotopes (Farmer et al.        acy dominates the pressure. The inset axis indicates the final compact-
+                                                                        ness of the models as a function of decreasing XC .
+2016), shown with red markers in Fig 2. We find the same pattern
+in the formation of a compactness peak as in models computed
+with a smaller nuclear reaction network, though the final central
+entropy is 5% smaller. In addition, the patterns in final central en-
+tropy shown here are very similar to the ones found by Takahashi
+et al. (2023), who used a network comprising 300 isotopes and           production, followed by electron-positron pair annihilation, can
+a finer grid (see their Fig. 11). The exact quantitative details of     occur. In rare cases, a neutrino-antineutrino pair is produced,
+the final structure landscape, especially at the higher mass end,       which escapes the star. This process is significant enough to be
+are thus still affected by changes in Ye induced by taking into         the dominant energy sink in our models with an energy loss
+account more nuclear reactions, which ultimately change MCh,eff         rate ϵν ∼ ρ−1 T 12 (Sukhbold & Adams 2020). Photo-neutrinos
+(see Eq. 4). This can slightly shift the mass range for which a         from electron scattering processes also play a role, but the en-
+high final central entropy is reached, but does not significantly       ergy loss they cause is an order of magnitude lower than from
+affect the main qualitative trends described here.                      pair-annihilation neutrinos. The balance between ϵν and ϵnuc de-
+                                                                        termines the final evolution of the core. As shown by the expres-
+                                                                        sions for ϵnuc and ϵν , it mainly depends on ρ and T , which are set
+4. A controlled experiment for understanding the                        by the core mass, and the initial central carbon abundance XC .
+   origin of the final structure
+4.1. Post core helium burning evolution                                      To disentangle the effects of the core mass and of XC on
+                                                                        the final structure (Patton & Sukhbold 2020) and understand
+Beyond core helium burning, the evolution of massive stars pro-         the formation of the compactness peak identified between re-
+ceeds differently compared to earlier stages, as thermal neu-           gions A and B in Fig. 1, we perform a controlled experiment.
+trino losses become important. Because of their minuscule in-           For a fixed CO core mass (6.62 M⊙ , corresponding to an initial
+teraction cross sections, the vast majority of neutrinos escape         mass of Mi = 22 M⊙ for our assumption), we compute models
+the star, causing a tremendous energy loss and greatly acceler-         with a modified central carbon abundance. Our fiducial model
+ating the evolution (e.g., Woosley et al. 2002). At the end of          (XC = 0.23) corresponds to the compactness peak model, while
+core helium burning, the core contracts. For temperatures around        the models with carbon abundances of 0.28 and 0.17 have final
+log(T/K) ≈ 8.9 and densities around 105 g cm−3 , carbon burning         compactness values before and after the peak, respectively. As
+ignites in the center (see Fig. 3). The nuclear energy generation       shown in Fig. 3, small differences in their central abundances
+rate ϵnuc can be expressed as ϵnuc ∼ ρT 23 XC during carbon burn-       cause large deviations in the post core helium evolution. Over-
+ing, where ρ and T are the density and temperature conditions           all, the XC = 0.23 model (red line in Fig. 3) reaches higher
+close to the core, and XC the initial carbon abundance (Woosley         central temperatures and lower densities after core Ne burning
+et al. 2002). For high enough temperatures, log(T/K) ≳ 9, pair          compared to the other models at similar evolutionary stages.
+Article number, page 6 of 33
+                      E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+
+
+
+      0.4       (b)           Mass of 12 C in conv. zone         O depl.                                                                       0.17
+                              C depl.                            Si depl.
+                              Ne depl.
+M/M
+
+
+
+
+                                                                                                                                               0.23
+
+
+
+
+                                                                                                                                                      XC
+      0.2
+
+                                                                                                                                               0.28
+      0.0
+            0               −1                   −2                 −3                −4                 −5           −6                  −7
+                                                           τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr]
+
+Fig. 4. (a) Evolution of key elements of the inner 6 M⊙ core structure as a function of time from carbon ignition to core collapse for models with
+the same core mass and a different central carbon abundances XC . Full and dashed lines indicate the carbon and neon-burning fronts, respectively.
+Shaded (hatched) regions show convective carbon (neon) burning regions in the core. The iron-core masses are indicated with dash-dotted lines.
+The gray horizontal dashed line indicates the classical Chandrasekhar limit. The inset figure shows the final compactness of these models as a
+function of decreasing XC . (b) Total mass of 12 C in the convective carbon-burning shells for each of the models as a function of time.
+
+
+4.2. Carbon burning and beyond                                                            After core carbon burning ignites in the stellar cores, the C-
+                                                                                     burning front moves outward in mass for all models as it burns
+In Fig. 4, we summarize the final evolution of the stellar struc-                    through the available carbon fuel. In the XC = 0.28 model (dark
+ture for our three models with the same core mass and a dif-                         blue lines in Fig. 4), the high core carbon abundance leads to a
+ferent initial core carbon mass fraction XC . As indicated in the                    nuclear energy generation rate that is large enough to overcome
+inset figure in Fig. 4a, these models vary in final compactness                      the neutrino energy loss rate, which triggers the development
+and represent models before (XC = 0.27), in (XC = 0.23), and                         of a relatively small (< 0.2 M⊙ ) convective zone (Sukhbold &
+after (XC = 0.18) the compactness peak, where the highest fi-                        Adams 2020). It brings in 0.1 M⊙ of fresh 12 C (see Fig. 4 b) and
+nal central entropy and iron core mass are reached. Because they                     keeps the carbon-burning front in the center until all the carbon
+have the same core mass, their central temperature and density                       has been burned. Subsequently, the core contracts until the tem-
+conditions at the end of core helium burning are the same (see                       perature in the carbon-rich layers above the former convective
+also Fig. 3) and therefore the neutrino loss rate ϵν is the same.                    zone reach high enough temperatures for carbon burning to take
+However, at lower XC , neutrinos increasingly dominate the en-                       place and the carbon-burning front moves outward in mass. The
+ergetic balance during core carbon burning because the nuclear                       location of the burning front thus reflects the amount of core con-
+energy generation rate ϵnuc decreases.                                               traction that occurred below it. In this model (XC = 0.28), this
+                                                                                     first convective episode is followed by two more successive con-
+    In Fig. 4a, we show the progression of the C- and Ne-burning                     vective regions that become more extended in mass as the tem-
+fronts in these models in a Kippenhahn-like diagram as a func-                       perature at the burning front increases. At the end of core carbon
+tion of the time from core carbon ignition to core collapse. The                     burning (blue cross in Fig. 4b), the core contracts even further,
+location of these nuclear burning fronts are defined as the mass                     and core neon burning ignites in the center. The C-burning front
+coordinate at which the maximum energy generation rate for a                         moves further out in mass (though its progression is slowed by
+particular burning process (e.g., C or Ne), is reached. In other                     core neon burning, see also Fig. 5a) until the conditions for con-
+words, a burning front traces the location at which the maximum                      vection to occur are reached once again. At this point the carbon-
+burning occurs. These burning fronts are important for the final                     burning front has a high temperature and reaches a region with
+core structure because their location determines the maximum                         unburned carbon, which means it reaches a high energy gener-
+potential growth of the underlying core mass. A model with car-                      ation rate that highly exceeds the neutrino losses, triggering the
+bon burning front that reaches a higher mass coordinate forms                        formation of a large convective zone with over 0.4 M⊙ of carbon
+a larger carbon-free core, and can eventually form a larger iron-                    (see Fig. 4b). Because of the large amount of fuel remaining,
+rich core (dashed-dotted lines in Fig. 4).
+                                                                                                                            Article number, page 7 of 33
+                                                    A&A proofs: manuscript no. main
+
+the C-burning front keeps producing energy at a high rate and         iron core forms in this XC = 0.17 model compared to the
+stays at this mass coordinate of 3 M⊙ until the end of the evo-       compactness-peak model.
+lution. As a result, the carbon-free core below can only reach            From this experiment, we have demonstrated that the final
+a relatively low mass. Hence, after silicon burning, a relatively     core structure of stars in this mass range is already determined
+low-mass iron core of 1.7 M⊙ forms.                                   at core helium depletion, where the initial conditions for core
+     For the other models, which have lower central carbon abun-      carbon burning are set. The same effect of a change in the fi-
+dances (red and yellow lines in Fig. 4), central carbon-burning       nal structure pattern due to a change in XC can be observed for
+proceeds radiatively. Even though these models have the same          models with different initial or core masses. This is shown more
+mass, and therefore initially the same temperature and density        generally in Appendix A, where we investigate changes induced
+conditions as the XC = 0.28 model, the lower core carbon abun-        by the 12 C(α, γ)16 O rate, which is largely responsible for deter-
+dance means that less energy is generated from carbon burning.        mining XC at the end of core helium burning.
+Neutrino losses dominate and during the initial central carbon            We have seen that the transition from a final stellar structure
+burning, energy is transported solely through radiation (see also     with low compactness and iron core mass to high compactness
+Fig. 5). The available carbon in the center is depleted quicker, as   and iron core mass can be understood as the effect of increas-
+no fresh carbon is brought in, and thus the core contracts and the    ingly neutrino-dominated burning. It results in an overall larger
+C-burning front moves further out in mass.                            core contraction and the formation of a larger carbon-free core,
+     The contraction also increases the temperature at the burn-      and eventually, to the formation of a larger iron-rich core. At the
+ing front. Once the energy generation rate at the carbon-burning      compactness peak, the neutrino-dominated carbon-burning con-
+front reaches high enough values to exceed the neutrino losses        ditions are such that most of the available carbon is burned be-
+(see also Fig. 5) two effects occur. First, a convective region       fore the end of core neon burning. Afterward, the carbon-burning
+forms and the carbon-burning front stays at a constant mass co-       front quickly moves out in mass and grows a particularly large
+ordinate. Second, this convective carbon-burning shell acts like      core C-free core, which eventually forms a particularly large
+a mirror between the layers above and the core below. As the          iron-rich core. For the transition between the compactness peak
+core below the shell contracts, the layers above greatly expand       model and the model beyond, we identify three mechanisms that
+(as seen in the summary of the gravothermal energy in the stel-       are responsible for the observed drop in compactness: (1) the
+lar structure shown in Fig. D.2). The convective region increases     effect of an earlier central neon and oxygen ignition with de-
+in mass, bringing in more fuel for the carbon-burning shell (see      creasing XC , (2) an increased electron degeneracy, and (3) shell
+Fig. 4b) and prolonging the duration of this burning episode.         mergers.
+     For XC = 0.23 and XC = 0.17 (red and yellow lines in Fig. 4),
+the carbon-burning front reaches further out in mass during core
+                                                                      4.3. Effect of an early core neon ignition
+carbon burning (time coordinate t ≈ −2) than the XC = 0.28
+model, signifying a larger core contraction. At this point, the       We have observed that the timing of core neon ignition varies
+mass coordinate of the C-burning front of the XC = 0.23 model,        significantly between models in our experiment with the same
+which corresponds to the compactness peak, is mC = 1.35 M⊙ ,          core mass and a changing initial core carbon abundance XC
+close to the classical Chandrasekhar mass MCh,0 = 1.455 M⊙ ,          (Fig. 4). The consequence of this early neon ignition is shown
+while that of the XC = 0.17 model exceeds it (mC = 1.83 M⊙ ).         in Fig. 5, where the evolution of the ratio between the nuclear
+As we discuss in Sect. 4.4, this is an important difference be-       energy generation ϵnuc and the neutrino loss rate ϵν at the loca-
+cause electron degeneracy pressure plays a role in these models,      tion of the C, Ne, and O-burning fronts is plotted as a function of
+slowing down the core contraction during core carbon burning          time until core collapse. Phases when ϵnuc significantly exceeds
+in the XC = 0.23 and instead speeding it up in the XC = 0.17          ϵν correspond to convective episodes (Barkat & Marom 1990;
+model.                                                                Barkat 1994; Sukhbold & Adams 2020). In the XC = 0.28 model
+     The end of core carbon burning is the critical moment when       (Fig. 5a), core neon burning ignites immediately after core car-
+the behavior of the compactness peak model (XC = 0.23) and            bon depletion, when a core contraction occurs. Neon burning
+the model beyond the compactness peak start to differ signif-         temporarily slows down the progression of the carbon-burning
+icantly. In the XC = 0.17 model, core neon burning already            front and dominates the energy generation rate. However, it
+ignites while the C-burning front is still experiencing the first     does not take long before the slowed down carbon-burning front
+convective episode. In contrast, in the compactness-peak model        reaches regions of unburned carbon, quickly becoming the main
+(XC = 0.23) by the time neon ignites, convective carbon burn-         energy source again and forming a large convective region that
+ing has mostly ended (τ = −2.6). Because the core contraction         remains at the same mass coordinate until the end of the evolu-
+is slower the model can burn a large fraction of the carbon in        tion (see also Fig. 4b).
+the convective region before core Ne burning ignites (see also            In the compactness-peak model (XC = 0.23, Fig. 5b), core
+Fig. 4b). Later on (τ ≈ −3), it quickly burns through the re-         neon and oxygen burning ignite in rapid succession after the
+maining carbon in this region, growing a large C-free core. The       convective carbon-burning region has exhausted its fuel. They
+C-burning front in the XC = 0.17 model grows more slowly and          dominate the energy generation, slowing down the progression
+less far (m/ M⊙ = 3.18 at τ = −5.15) than in the compactness-         of the carbon burning front until the end of core oxygen burn-
+peak model (m/ M⊙ = 3.33 at τ = −4). As we show in Sect. 4.3,         ing is reached. The ensuing core contraction helps the carbon-
+this is a direct consequence of the earlier core neon and oxy-        burning front reach layers where the nuclear energy generation
+gen ignition in the XC = 0.17 model, which suppresses carbon          rate dominates compared to the neutrino losses, triggering the
+burning and slows down the progression of the C-burning front.        formation of a large convective zone and marking the final loca-
+     Moreover, towards the end of the evolution (τ = −5.2) the        tion of this burning front.
+C-burning front of the XC = 0.17 model suddenly drops in mass             In the XC = 0.17, model (Fig. 5c), while the convective
+and reaches the same level as the Ne-burning front. As we dis-        carbon-burning episode is still ongoing, the conditions for neon
+cuss in more detail in Sect. 4.5, this is caused by a shell merger    burning are already reached in the center due to the stronger pre-
+between the C- and Ne-burning front. Eventually, a lower-mass         ceding contraction of the core aided by exceeding MCh,0 (see
+Article number, page 8 of 33
+                                E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+
+                      (a)          Suppr.       3rd conv.               (b)                                 2nd conv.           (c)                                      2nd conv.
+           102          Conv. core
+                                   of C burn.
+                                   by Ne ign.
+                                                shell                                     Suppr. of C burn. shell
+                                                                                          by Ne/O ign.
+                                                                                                                                                  Suppr. of C burn.
+                                                                                                                                                  by Ne/O ign.
+                                                                                                                                                                         shell
+                        burn.                                                                                                         1st conv.
+                                                                              1st conv.                                               shell
+                            1st conv.                                         shell
+           101              shell
+nuc /ν
+
+
+
+
+           100
+                                2nd conv.                                Rad. core                                                Rad. core
+                                shell                                    burn.                                                    burn.
+                −1
+           10
+                               C-burn. front
+                               Ne-burn. front
+                −2
+           10                  O-burn. front                XC = 0.28                                               XC = 0.23                                         XC = 0.17
+                     0         −2          −4           −6         0         −2          −4           −6         0         −2          −4           −6
+                     τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr] τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr] τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr]
+
+Fig. 5. Time evolution of the ratio between the specific nuclear energy generation rate ϵnuc and the neutrino loss rate ϵν at the location of the C,
+Ne, and O-burning fronts for models with the same core mass and different central carbon abundances. The dashed horizontal line indicates where
+ϵnuc = ϵν . When the energy ratio significantly exceeds this line, convection occurs (Sukhbold & Adams 2020). With a decreasing core carbon
+abundance, the core becomes more neutrino dominated and neon burning, followed by oxygen burning, occur earlier. As highlighted in the red
+boxes, this temporarily suppresses carbon burning.
+
+
+Sect. 4.4). While core neon burning is more neutrino-dominated
+in this model and produces less energy, this simultaneous burn-
+ing reduces the luminosity of the carbon-burning front, impact-
+ing the extend of the convective region above. Once oxygen
+burning ignites shortly after, it counters the contraction and helps
+drastically slow down the progression of the now very neutrino-
+dominated carbon-burning front. In the subsequent phases, neon
+and oxygen burning dominate the energy generation, followed
+by core silicon burning. After silicon depletion, the neon-burning
+front, which moves out rapidly in mass, merges with the carbon-
+burning front (see Sect. 4.5). The slowed C-burning implies a
+smaller carbon-free core and ultimately, a smaller iron core mass
+and compactness.
+
+
+4.4. Origin of the changing timing of core neon and oxygen
+     ignition
+
+Here, we investigate the origin of the systematically earlier igni-
+tion of neon and oxygen for lower XC . We find that it is mainly
+due to a systematic shortening of the duration of core carbon
+burning for a decreasing amount of fuel (XC ). This is shown for
+a large set of models with the same core mass and a varying core
+carbon abundance in Fig. 6a. For reference, we show the final
+compactness of these models in Fig. 6b. The contraction phase
+that follows core carbon depletion (when XC < 10−4 ) before core
+neon burning ignites is significantly shorter than the duration of
+core carbon burning, on a neutrino-losses accelerated thermal
+time scale on the order of years (see Fig. 6c). It therefore plays
+a smaller role than the duration of core carbon burning in deter-
+mining the timing of core neon ignition.
+    Besides the duration of core carbon burning, a secondary ef-
+fect related to electron degeneracy also appears to play a role
+in accelerating the evolution after core carbon burning, as first                                   Fig. 6. (a) Duration of core carbon burning for models with the same
+pointed out by Sukhbold & Woosley (2014). This is shown in                                          mass and a varying initial core carbon abundance XC , indicated with
+Fig. 7, where the evolution of the electron degeneracy parameter                                    colors. (b) Final compactness as a function of XC . Models that undergo
+η = µ/kB T is displayed as colored contours in a Kippenhahn-                                        convective core carbon burning are highlighted with black outlines. (c)
+like plot for each of our example models. η ≈ 0 indicates partial                                   Duration of the phase between core carbon depletion and core neon
+degeneracy, while η ≫ 0 signifies that electrons are strongly de-                                   ignition as a function of mC , the maximum mass coordinate reached by
+generate. We also show the evolution of the classical (MCh,0 ) and                                  the carbon-burning front before core neon burning. The classical (MCh,0 )
+effective Chandrasekhar masses (MCh ) (see Eq. 4). For a decreas-                                   and effective (MCh ) Chandrasekhar mass at core C depletion are shown
+ing XC , the central region where electrons are degenerate during                                   as vertical dashed and full lines, respectively.
+core carbon burning is more extended in mass. This can be un-
+                                                                                                                                                    Article number, page 9 of 33
+                                                          A&A proofs: manuscript no. main
+
+
+
+
+Fig. 7. Kippenhahn diagram of the inner 6 M⊙ core structure of models with the same core mass and different core carbon abundance at core
+C ignition. Colors indicate the dimensionless electron degeneracy parameter η = µ/kB T (electrons are partially degenerate for η ≈ 0 and very
+degenerate for η ≫ 0). Convective zones are highlighted by the hatched regions and the dotted vertical lines indicate, from left to right, the
+moments when 12 C, 20 Ne, 16 O, and 28 Si are depleted at the center (central abundance lower than 10−4 ). Grey full and dashed line indicates the
+classical (MCh,0 ) and effective (MCh ) Chandrasekhar mass, respectively. Electron degeneracy during core carbon burning increases for models with
+lower central carbon abundances.
+
+
+derstood as a symptom of the overall stronger core contraction                different central entropy, with values of MCh ∼ 1.82 − 1.84 M⊙ .
+experienced by models that are more neutrino-dominated. For                   Only in the model with the lowest core carbon abundance (XC =
+the model with XC = 0.28 (Fig. 7a), electron degeneracy plays                 0.17, shown in more detail in Fig. 7c), mC exceeds MCh .
+a small role during central carbon burning. The C-burning front                    From the variation of the timescale between core carbon de-
+(at the base of the convective carbon burning shell) remains sig-             pletion and core neon ignition, we derive the following inter-
+nificantly below the values of the classical and effective Chan-              pretation. Models with XC < 0.25 (mC > 1.2 M⊙ ) are strongly
+drasekhar mass. For the compactness peak model (XC = 0.23,                    neutrino-dominated and burn carbon radiatively in the core, ex-
+Fig. 7b), degeneracy pressure helps support the core at the end               periencing a stronger contraction than those with larger XC that
+of core carbon burning, reaching 15% of the total pressure in the             still burn carbon convectively in their cores. However, degen-
+center (ηc = 0.93) before it is lifted during core oxygen burn-               eracy pressure helps to counter the core contraction towards the
+ing. The carbon burning front remains close to, but below MCh,0               end of core carbon burning and to delay the ignition of core neon
+and MCh during core carbon burning. For the XC = 0.17 model                   burning. For models where mC > 1.5 M⊙ , the entire region below
+(Fig. 7c) the region where electrons are at least partially degen-            MCh,0 is at least partially degenerate and degeneracy pressure no
+erate extends up MCh,0 . The carbon-burning front exceeds MCh,0               longer helps to counter the core contraction, leading to an ear-
+and even reaches the value of MCh . This appears to help accel-               lier core neon ignition. Sukhbold & Woosley (2014); Sukhbold
+erate the core contraction, which is somewhat surprising since                et al. (2018), and Sukhbold & Adams (2020) noted a smaller size
+the Chandrasekhar mass is known to mainly play a role at full                 of the oxygen-burning shell once the base of the carbon-burning
+degeneracy, and deserves further study.                                       shell mC exceeds MCh and linked it to the role of degeneracy. It is
+     To understand if this effect applies more generally, we inves-           noteworthy that we observe the same phenomenology here (see
+tigate the behavior of a larger set of models with varying XC .               Fig. 7) despite the different assumptions and methods we use. As
+In Fig. 6c, we show the duration of the phase between core car-               we discuss in Sect. 5.4, the same mechanism helps explain the
+bon depletion and neon ignition as a function of mC , which is                second drop in compactness (region D in Fig.1) though in this
+defined as the maximum mass coordinate of the carbon-burning                  case it involves the oxygen-burning front and an earlier core Si
+front mC during core carbon burning (i.e., the base of the furthest           ignition.
+convective carbon-burning shell)4 . The changes in this timescale
+are very close to the compactness pattern shown in Fig. 6b as a
+function of decreasing core carbon abundance. A similar trend in              4.5. Shell mergers
+this timescale was also noted by Chieffi et al. (2021). At the end
+                                                                              In our experiment, the model with the lowest initial carbon abun-
+of core carbon burning, all models reach the same value of the
+                                                                              dance XC = 0.17 experiences a merger of the C- and Ne-burning
+classical Chandrasekhar MCh,0 = 1.455 M⊙ , while the effective
+                                                                              layers shortly after core Si burning. This is highlighted within
+Chandrasekhar mass varies slightly between models due to their
+                                                                              the red rectangle in the Kippenhahn diagram (Fig. 8a). The lo-
+ 4                                                                            cation of the C-burning and Ne-burning shells are indicated with
+   We note that the computed timescale is somewhat sensitive to the
+definitions used for core carbon depletion (here, when the central car-       markers. The origin of this shell merger can be understood by
+bon abundance is below 10−4 ) and neon ignition (here, when the central       inspecting Fig. 8b, which shows the entropy profile in the high-
+neon abundance has decreased by 2% after core carbon burning). How-           lighted region. The entropy in the layers corresponding to the lo-
+ever, the general trends remain, in particular the acceleration of the core   cation of the Ne-burning shell (2.5 to 2.9 M⊙ ) rapidly increases.
+contraction for models with mC > 1.6 M⊙ .                                     This is because after Si-burning ignites, a rapid contraction of the
+Article number, page 10 of 33
+                         E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+
+
+
+                   (b)                                                                                                                             -3.6
+                                                                                                                                                   -3.53
+             5.8                                                                                                                                   -3.47
+
+
+
+
+                                                                                                                                                           log10 [(tcc − t)/yr]
+                                                                                                                                                   -3.4
+s/(NA kB )
+
+
+
+
+                                                                                                                                                   -3.33
+             5.6                                                                                                                                   -3.27
+                                                                                                                                                   -3.2
+                                                                                                                                                   -3.13
+             5.4                                                                                                                                   -3.07
+                                                                                                                                                   -3.0
+               2.5                3.0                  3.5                 4.0                  4.5                  5.0                     5.5
+                                                                          m/M
+
+Fig. 8. Top: Kippenhahn diagram showing the final evolution of the inner stellar structure of the model with XC = 0.17. Colors indicate the regions
+dominated by nuclear burning or neutrino losses and gray hatched regions indicate convective areas. Brown lines show contours of constant
+(logarithmic) density. Colored markers trace the burning front for C, Ne, and O burning. The red box highlights the mass and time range shown in
+the bottom panel. Small colored vertical lines indicate the times at which the entropy profile are shown in the bottom panel. Bottom panel: Entropy
+profiles in the mass and time range highlighted in the red box in the top panel. The entropy in the neon burning region (2.5 − 2.9 M⊙ ) gradually
+increases until it exceeds the entropy of the C-burning layers above, triggering a merger between these regions.
+
+
+core below the Ne-burning front leads to enhanced Ne burning,                      5. Final core structures of actual stellar models
+which generates entropy. Eventually, the entropy of these layers
+exceeds that of the carbon-burning layers above (see the entropy                   In the previous section, we have identified key mechanisms that
+profile at a time of log10 [(tcc − t)/yr] = −3.33). This entropy                   lead to a change in the final core structure through an experi-
+contrast means that these layers are unstable against convection                   ment in which we varied the core carbon abundance for a fixed
+(Schwarzschild criterion). No convective boundary mixing is as-                    core mass. We now apply the insights gained to more realistic
+sumed in these models after core helium burning, which means                       simulations of massive stars.
+that the mixing is solely caused by this entropy change. In Ap-                        The initial conditions for central carbon burning are set by
+pendix C, we perform a resolution test and find that this shell                    the core mass, which determines the central density and tem-
+merger is barely affected by numerical uncertainties. The mixing                   perature, and by the initial carbon abundance. Hydrostatic equi-
+leads to the merging of these shells and to a new configuration                    librium implies a characteristic trend in the central density and
+of the stellar structure.                                                          temperature of stars as a function of mass (e.g., Kippenhahn et al.
+After the merger, the Ne/C burning shell suddenly drops to a                       2013). While their central temperatures systematically increase
+lower mass coordinate and a large convective zone develops                         with mass, their central densities decrease. The central carbon
+above. These layers suddenly expand, leading to a dramatic den-                    mass fraction at core helium depletion decreases systematically
+sity drop in these regions (see the density contours in Fig. 8a).                  as a function of mass. This is a signature of the increased im-
+This particular model additionally experiences a merger of the                     portance of the 12 C(α, γ)16 O reaction rate with respect to the
+Ne-burning and O-burning shells (visible at a mass coordinate                      triple-alpha process at the end of core helium burning for cores
+of 2 M⊙ at log10 [(tcc − t)/yr] = −5.2). These mergers lead to                     of higher mass and lower density, which effectively leads to an
+a low final mass coordinate of the C/Ne/and O-burning fronts,                      increased destruction of carbon (e.g., Arnett 1972). For increas-
+eventually limiting the development of the Si-burning front, and                   ing masses, the higher central temperatures, lower central densi-
+thus setting a limit to the maximum mass of the iron-rich core.                    ties, and lower central carbon abundance imply stronger neutrino
+                                                                                   losses (see Sect. 4.2), with important consequences for the final
+                                                                                                                              Article number, page 11 of 33
+                                                                 A&A proofs: manuscript no. main
+
+                                          Mi /M                                                                               Mi /M
+                20.0               21.0           21.5                 22.0                         22.0               23.0           23.5                 24.0
+
+      3.5                                                                                 3.5
+                 C-burning front                                                                     C-burning front
+      3.0        C-free core                                                              3.0        C-free core
+                 Fe core                                                                             Fe core
+      2.5                                                                                 2.5
+
+      2.0                                                                                 2.0
+m/M
+
+
+
+
+                                                                                    m/M
+      1.5                                                                                 1.5
+                                                                     Mi /M                                                                               Mi /M
+      1.0                                                0.75                             1.0                                                0.75
+                                                         0.50                                                                                0.50
+                                                  ξ2.5
+
+
+
+
+                                                                                                                                      ξ2.5
+      0.5                                                0.25                             0.5                                                0.25
+                                                                20             22                                                                   22             24
+      0.0                                                                                 0.0
+            0          −2             −4             −6                       −8                0          −2             −4             −6                       −8
+                    τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr]                                       τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr]
+
+Fig. 9. Evolution of the C-burning front, the C-free core (which follows            Fig. 10. Same as Fig. 9 for models beyond the compactness peak (re-
+the progression of neon burning), and the iron-rich core as a function of           gion B in Fig. 1, see inset). As a function of initial mass, neon burning,
+time from carbon burning to core collapse for models before and up to               ignites systematically earlier (as traced by the C-free core mass) and
+the compactness peak (region A of Fig. 1, see inset). As carbon burning             slows down the progression of the C-burning front. Shell mergers be-
+becomes increasingly neutrino-dominated, the C-burning front moves                  tween the C/Ne/O-burning fronts are responsible for the sudden drops
+further out in mass, ultimately leading to the formation of a larger C-             in the C-burning front at τ ≈ −5. Ultimately, for increasing masses,
+free and iron-rich core.                                                            these models form systematically smaller iron-rich cores.
+
+
+structure. For reference, a compilation of the changes in interior
+structure post core helium burning for all models is shown in the                   than the 20 M⊙ model (1.59 M⊙ ). This transition in the energy
+Appendix, Figs. D.1, D.2, D.3, D.4, D.5, and D.6.                                   transport mechanism from convection to radiation can be under-
+                                                                                    stood as a symptom for neutrino losses becoming increasingly
+                                                                                    dominant, but it is not the cause of the increase in compactness
+5.1. Origin of the increase in final compactness (region A)                         and iron core mass.
+We first focus on stars at the lower-mass end before the compact-                       For increasing masses, the models experience larger neutrino
+ness peak (region A in Fig. 1). The change in interior structure as                 losses during core carbon burning because they have higher cen-
+a function of mass is summarized in Fig. 9, in which we show the                    tral temperatures, lower densities, and a lower central carbon
+progression of the C-burning front, the C-free core mass (which                     abundance (see Sect. 4.2). The neutrino losses imply that the lay-
+follows the progression of neon burning), and the iron core mass                    ers above the burning front can contract more significantly than
+as a function of time.                                                              when neutrino losses are not dominant. This causes an overall
+    In the lowest-mass model (20 M⊙ ) core carbon burning is                        more significant and earlier core contraction in these stars, which
+convective initially. The C-burning front remains at the center                     is reflected in the location of the burning fronts. The smaller
+until the carbon fuel is exhausted (at τ ≈ −0.75) and the C-                        amount of carbon fuel, together with the increased nuclear en-
+burning front moves further out in mass until the conditions for                    ergy generation rate in higher-mass stars accelerate the outward
+convective core carbon burning are reached once again. Because                      progression of the C-burning front. For example, as shown in
+of the additional fuel from convective core carbon burning, the                     Fig. 9, at the end of the evolution, the C-burning front reaches
+progression of the C-burning front proceeds somewhat differ-                        2.3 M⊙ in the 21 M⊙ model, while it reaches 3.35 M⊙ in the
+ently in this 20 M⊙ model compared to the higher-mass models.                       22 M⊙ model (which corresponds to the compactness peak). This
+The carbon-burning phase lasts longer and as a result, neon burn-                   progression of the C-burning front halts when the energy gener-
+ing ignites later while the C-burning front is still moving out in                  ated by carbon burning greatly exceeds the neutrino losses and
+mass (as shown by the growth of the C-free core at τ ≈ −0.75,                       convection sets in. For the compactness-peak model (22 M⊙ )
+dotted lines in Fig. 9). Eventually, the C-burning front reaches a                  the C-burning front reaches a particularly high final mass coor-
+higher value (2.3 M⊙ ) than in the 21 M⊙ model, which proceeds                      dinate. This is because most of the carbon in the large convective
+radiatively. At the end of the evolution, the model forms a rela-                   shell that forms during core carbon burning is already exhausted
+tively low-mass iron core of 1.59 M⊙ .                                              by the time of core neon ignition (τ ≈ −2.1), and the carbon-
+    The transition from convective to radiative core carbon burn-                   burning front quickly burns through the remaining fuel. A fur-
+ing has previously been invoked as the origin of patterns in                        ther progression of the C-burning front is a symptom of a larger
+compactness or iron-core mass (Brown et al. 1999; Sukhbold                          core contraction which results in the growth of a systematically
+& Woosley 2014; Sukhbold & Adams 2020; Chieffi & Limongi                            more massive C-free core as a function of initial mass (dotted
+2020; Takahashi et al. 2023). However, we can clearly see in                        lines in Fig. 9). In all models, the C-free core mass grows almost
+Fig. 9 that the 21 M⊙ model, which burns carbon radiatively,                        up to the final value of the C-burning front. Consequently, the O-
+does not immediately develop a larger iron-core mass (1.56 M⊙ )                     and Si-burning fronts also move further out in mass and eventu-
+Article number, page 12 of 33
+                 E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+ally, a more massive iron-core grows in the higher-mass models             5.3. Origin of the second compactness increase (region C)
+(dash-dotted line in Fig. 9).
+                                                                           For models between 25 and 28 M⊙ , neutrino losses become in-
+                                                                           creasingly important as the central temperature increases and the
+                                                                           initial central carbon abundance decreases further. The core con-
+5.2. Origin of the decrease in final compactness (region B)                tracts even further during core carbon burning and the carbon-
+                                                                           burning front moves further out in mass. Core neon burning ig-
+                                                                           nites even earlier and becomes more neutrino-dominated, which
+For models in region B, the early behavior of the carbon-
+                                                                           means neon burning proceeds in smaller convective zones (see
+burning front is similar to the neutrino-dominated models in re-
+                                                                           Fig. D.3). These models are characterized by a large convective
+gion A (see Fig. 10). For higher-mass models, the C-burning
+                                                                           oxygen-burning shell that temporarily stops the progression of
+front moves systematically further out in mass (e.g. reaching
+                                                                           the carbon-burning front after it reaches its initial location. The
+m ≈ 1.35 M⊙ for the 22 M⊙ model, compared to m ≈ 1.6 M⊙
+                                                                           final compactness and iron-core mass of these models remains
+for the 24 M⊙ model). However, around the time of core car-
+                                                                           low (see Fig.1).
+bon depletion (τ ≈ -2 Fig. 10), these models experience a clear
+reversal of the trends observed in region A. The convective                     After an initial mass of about 27 M⊙ , the final compactness
+carbon-burning episode at τ ≈ −2, where the C-burning front                increases again (see Fig.1). This is due to core neon burning be-
+remains at a fixed mass coordinate, is systematically shorter. Af-         coming fully neutrino dominated. This is best seen in the interior
+terward, the C-burning front moves out systematically slower in            structure evolution of the models with initial masses from 27 M⊙
+mass for increasing masses and reaches lower final values (e.g.,           to 32 M⊙ (Fig. D.3). For higher initial masses, neon burning
+m ≈ 3.35 M⊙ for the compactness-peak model with an initial                 changes from a succession of multiple small convection zones
+mass of 22 M⊙ compared to m ≈ 2.28 M⊙ for the 25 M⊙ model).                (four in the 27 M⊙ model), to one or two tiny (< 0.2 M⊙ ) convec-
+Consequently, the final iron-core mass is smaller in the higher-           tive zones (27.5–30 M⊙ ) followed by radiative burning, before
+mass models compared to the lower-mass ones.                               eventually transitioning to fully radiative, neutrino-dominated
+                                                                           neon burning (from models of 31 M⊙ , where convective core
+     The observed change in final compactness and iron core                neon burning regions completely disappear, see Fig. D.4). Once
+mass can be traced back to the same mechanisms as outlined                 again, this transition from convective to radiative burning does
+in Sect. 4. Higher neutrino losses in higher-mass models and the           not immediately lead to a change in the final compactness.
+ensuing contraction of the core, together with the low initial core        Rather, the compactness gradually increases for fully neutrino-
+carbon abundance and shorter duration of core carbon burning,              dominated models as the core contracts further to compensate
+mean that the conditions for core neon burning to occur are met            the energy loss due to neutrinos.
+systematically earlier than in lower-mass models. This can be                   In Fig. 12 we summarize the changes in the stellar structure
+observed by the timing of the growth of the C-free core (dotted            for models in region C. All models show a very similar trend as
+lines in Fig. 10), which occurs systematically earlier in higher-          in the neutrino-dominated models in region A. As the neutrino
+mass models. Additionally, as shown in Fig. 11, the extent of              losses increase and the core contracts further, the C-burning front
+the degenerate region within the core increases and helps accel-           moves further out in mass until it ignites a convective-burning
+erate the core contraction in models where the C-burning front             shell. In these models, neon burning ignites even earlier than
+(at the base of the C-burning shell) exceeds the classical Chan-           in region B (as shown by the progression of the C-free core at
+drasekhar mass. This earlier central neon ignition increases the           τ ≈ −2, dotted line in Fig. 12). However, for these masses, it
+core luminosity which slows down the core contraction above                becomes neutrino-dominated, which means that the contraction
+the neon-burning front. This causes the observed slower increase           of the layers above the Ne-burning front cannot be slowed sig-
+in the C-burning front which implies a slower growth of the C-             nificantly by this early ignition of neon. Furthermore, as the ini-
+free core.                                                                 tial carbon abundance decreases, so does the neon abundance
+                                                                           after core carbon burning, which shortens the duration and im-
+     In addition, central neon burning is more neutrino-dominated          pact of core neon burning. Thus core neon ignition barely affects
+for higher mass-models, and leads to a smaller increase in en-             the progression of the C-burning front and neon shell burning
+tropy during these burning phases. After core Silicon ignition             no longer leads to a high enough increase in entropy to cause
+(as traced by the growth of the iron-rich core, dash-dotted lines in       shell mergers with the C-burning layers. The Ne-burning front
+Fig. 10), we observe a phase during which neon and oxygen shell            moves systematically further out in mass for higher-mass mod-
+burning become more energetic for higher masses, leading to a              els as the core contracts and the C-free core almost reaches the
+higher entropy, which ultimately causes shell mergers just like in         C-burning front (e.g., 2.09 M⊙ in the 28.0 M⊙ model, and 3.9 M⊙
+our previous experiment (see Sect. 4.5). These shell mergers are           in the 40.0 M⊙ model, see dotted lines in Fig. 12). Eventually, for
+found for all models in region B beyond the compact peak and               increasing masses, the Si-burning front can also move further out
+can be identified by a sudden drop in the C-burning front shortly          in mass and a systematically larger iron-core mass forms (e.g.,
+after core silicon burning sets in and the iron-core mass starts           1.7 M⊙ in the 28.0 M⊙ model compared to 2.35 M⊙ in the 40 M⊙
+to increase (e.g. at τ ≈ 5 in the 24 M⊙ model). In most cases,             model, see dash-dotted lines in Fig. 12).
+this involves a merger of the neon-burning and carbon-burning
+shells. In the highest mass models (Mi > 23 M⊙ ), the oxygen               5.4. Origin of the second compactness decrease (region D)
+and Ne-burning shell merge additionally. The shell merger im-
+plies a reconfiguration of the stellar structure and a large expan-        For models beyond 40 M⊙ , we once again observe a drop in the
+sion of the layers above the C/O burning shells (see Fig. D.2).            final compactness (see Fig. 1). As best observed in Fig. D.5,
+The lower final location of the C and O-burning fronts after the           in these models, both carbon and neon are neutrino-dominated
+shell mergers (e.g., m ≈ 2.28 M⊙ for the 25 M⊙ model) limit the            and the respective nuclear burning fronts move out so far in
+progression of the Si-burning front. Consequently, the iron-core           mass from the central regions that they no longer play a large
+mass of these higher-mass models remains small.                            role in setting the final iron core mass (see Fig. 13). Instead,
+                                                                                                                      Article number, page 13 of 33
+                                                              A&A proofs: manuscript no. main
+
+
+
+
+Fig. 11. Same as Fig. 7 for three stellar models of our grid after the first compactness peak.
+
+
+                                       Mi /M                                                                             Mi /M
+            28.0                32.0           36.0                  40.0                      40.0               41.0            42.0                  43.0
+
+
+              C-burning front                                                                   C-burning front
+              C-free core                                                                       C-free core
+      4       Fe core
+                                                                                        4       O-burning front
+                                                                                                Fe core
+
+      3                                                                                 3
+m/M
+
+
+
+
+                                                                                  m/M
+
+
+
+
+      2                                                                                 2
+                                                                   Mi /M                                                                              Mi /M
+                                                       0.75                                                                               0.75
+      1                                                0.50                             1                                                 0.50
+                                                ξ2.5
+
+
+
+
+                                                                                                                                   ξ2.5
+                                                       0.25                                                                               0.25
+                                                              30             40                                                                  40       42
+      0                                                                                 0
+             0            −2             −4            −6                   −8                 0             −2             −4            −6                   −8
+                   τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr]                                      τ = log10 [(tcc − t)/yr] − log10 [tCign. /yr]
+
+Fig. 12. Same as Fig. 9 for models in the mass range of the second                Fig. 13. Same as Fig. 9 for models in the mass range of the second
+compactness increase (region C in Fig. 1, see inset). In these models,            decrease in compactness (region D in Fig. 1, see inset). The dashed line
+both carbon and neon burning are fully neutrino-dominated.                        traces the O-burning fronts. For increasing masses, the progression of
+                                                                                  the O-burning front is slowed by a systematically earlier ignition of core
+                                                                                  silicon burning (as traced by the iron core mass).
+the core oxygen and silicon-burning phase increase in impor-
+tance, as shown in Fig. 14. Oxygen burning produces a large
+amount of energy per gram and occurs convectively (Woosley                        the 42 M⊙ model, the oxygen-burning front (at the base of the
+et al. 2002). In analogy to the effects observed for the C- and Ne-               oxygen-burning shell) even reaches the effective Chandrasekhar
+burning front in lower-mass models, after core oxygen burning                     mass (indicated by a dotted line in Fig. 14c) with m ∼ 1.85 M⊙ at
+the oxygen-burning front initially moves further out in mass the                  log(t/yr) = −2.5. When silicon burning occurs during the oxy-
+more neutrinos dominate in the center (as indicated in Fig. 13)).                 gen shell-burning phase, it slows down the contraction of the
+The timescale between core oxygen and core silicon ignition                       layers above, and with it the progression of the oxygen-burning
+shortens for increasing masses (as shown by the timing of the                     front. Eventually, this limits the maximum progression of the
+growth of the iron-rich core, dash-dotted lines in Fig. 13). The (at              Si-burning front, which forms a lower iron-core mass than in
+least partially) degenerate core region becomes more extended,                    models in which core silicon burning occurs later. For example,
+as it generally reaches up to the base of the oxygen-burning                      as shown in Fig. 14, in the 43.0 M⊙ model the oxygen-burning
+front (see Fig. 14). The core contraction accelerates for mod-                    front (dashed lines) remains at a mass coordinate of 2.1 M⊙ af-
+els in which the oxygen-burning front reaches a mass coordinate                   ter core silicon burning ignites (as traced by the growth of the
+higher than the (classical) Chandrasekhar mass. For example, in                   iron-rich core, dash-dotted lines) . It only moves further out in
+Article number, page 14 of 33
+                  E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+
+
+
+Fig. 14. Same as Fig. 7 for three stellar models of our grid after the second compactness increase. Here, neon burning is fully neutrino-dominated
+and radiative, and not visible in the figure. After convective core oxygen burning (hatched region in the center) the degenerate core region reaches
+up to the oxygen burning front (at the base of the convective oxygen-burning shell) for all models. Panel c: When this front exceeds the (effective)
+Chandrasekhar mass, the degenerate core contracts and core silicon burning ignites earlier, slowing the contraction of the layers above and affecting
+the extent of the convective region.
+
+
+mass shortly before core collapse (τ = −7), which does not leave            the final structure patterns. For higher masses (lower densities,
+enough time for the iron-core mass to grow further in mass than             higher temperatures, and lower central carbon abundance), neu-
+1.85 M⊙ in this model.                                                      trino losses become increasingly important and affect the effi-
+     Beyond region D, for models with higher masses the final               ciency and timing of nuclear burning episodes and with it the
+compactness remains lower than during the second peak (see                  associated core growth.
+Fig. 1a) but above a value of 0.4. The 44 M⊙ model has an unusu-                We identified physical mechanisms explaining the emer-
+ally high compactness (0.7) compared to the other models with               gence and decline of the two prominent “compactness peaks”
+initial masses larger than 40 M⊙ . We link this back to the oxygen-         (see Fig. 1) found in several independent studies, i.e. mass ranges
+burning front remaining at a rather low mass coordinate (close              for which stars develop a high final compactness, iron core
+to 1.45 M⊙ , not exceeding the effective Chandrasekhar mass)                mass, central entropy, and binding energy. These are summa-
+after core oxygen burning, triggering a small (0.1 M⊙ ) convec-             rized schematically in Fig. 15, where we show how neutrino-
+tive episode (see Fig. D.5). The core contracts less during core            dominated nuclear burning in the cores of massive stars post core
+oxygen shell burning than for the adjacent models, which means              helium depletion leads to different stellar structures. These out-
+silicon burning ignites later and does not slow down the progres-           comes are “written” in the stellar cores at core helium depletion,
+sion of the oxygen-burning front as effectively, leading to a larger        when the initial burning conditions of the subsequent burning
+final compactness and iron core mass. Small changes in the en-              phases are set.
+ergy generation rate or mixing could influence the existence of
+this small oxygen-burning episode and we therefore consider this
+model not to be representative of the more general patterns de-             6.1. Increase in final iron core mass (Region A and C):
+scribed here. We note that the emergence and disappearance of               For increasing stellar masses, the central nuclear burning source
+such small secondary peaks in the final structure landscape can             (C or Ne) becomes increasingly neutrino-dominated. As ob-
+be observed when physical assumptions are varied, such as the               served in multiple studies (e.g. Brown et al. 2001; Sukhbold &
+efficiency of semiconvection (see Appendix B) and deserve fur-              Woosley 2014; Sukhbold et al. 2018; Sukhbold & Adams 2020;
+ther study. Despite the observed variations, it should be noted             Chieffi & Limongi 2020; Takahashi et al. 2023), energy transport
+that for all these models, the binding energy above the inner core          at the center transitions from convection in a large central region
+is so high (see Fig. 1 d) that the formation of a BH is expected            followed by shell burning, to ever smaller and more numerous
+even if a successful explosion were triggered in the core.                  successive convective burning episodes, until it becomes fully
+                                                                            radiative for stars in which nuclear burning is fully neutrino-
+6. Global picture                                                           dominated. In Fig. 15 I, the structure of a star with a neutrino-
+                                                                            dominated, radiative core is shown schematically mid burning
+Based on our findings, we can derive a global picture of the phys-          (left wedge) and at the onset of core collapse (right wedge). The
+ical processes that determine the final core structures of mas-             decreasing amount of fuel together with the neutrino dominance
+sive stars. After core helium burning, thermal neutrino emission            lead to an acceleration of the core contraction and to a faster
+becomes important and complicates the final evolution by tak-               and further outward progression of the burning front (the point
+ing away energy from the interior, leading to an acceleration               where the maximum nuclear energy generation rate is reached,
+of the evolution. The transition from convective to of radiative            red lines in Fig. 15 I) and associated growth of the C/Ne-free core
+carbon and neon burning is a symptom of neutrino losses be-                 below. When the burning front reaches layers with a high C/Ne
+coming dominant, but not the cause of the observed changes in               abundance, the generated nuclear energy becomes large enough
+                                                                                                                       Article number, page 15 of 33
+                                                         A&A proofs: manuscript no. main
+
+
+
+
+Fig. 15. Schematic representation of the mechanisms leading to the emergence and decline of peaks in final iron core mass and compactness.
+Horizontal gray dotted guidelines are included to aid the comparison. Star I: Before peak Schematic stellar structures of a star with a low final
+iron core mass at two points in the evolution represented by two adjacent wedges. The initial mass fraction of the fuel is still high (see red area in
+the rectangle) but the main burning stage is neutrino-dominated (arrows). Because neutrinos take away energy, the core contracts and the burning
+front (red line) moves out in mass as the burning progresses. The large amount of fuel prevents it from moving far out before a convective zone
+forms above the burning front once the energy generated is high (shaded red area). Ultimately (right wedge), it grows a small fuel-free core and the
+silicon-burning front (yellow line) cannot move far out in mass, forming a small iron core (black area). Star II: Peak With a higher mass and lower
+initial fuel mass fraction, the burning is even more neutrino dominated and a strong contraction occurs. Hence the burning front moves further out
+in mass than in I, but stays just below the effective Chandrasekhar mass. Aided by degeneracy pressure support, the star burns through almost all
+available fuel before the next burning stage ignites, after which it quickly moves out in mass, growing a large fuel-free core and eventually a large
+iron core. Star III: Beyond peak: For an even lower initial fuel abundance and higher mass, the burning is even more neutrino dominated and the
+core contraction accelerates. The burning front moves further out and exceeds the effective Chandrasekhar mass. This triggers a fast contraction
+of the partially-degenerate core and the next burning stage (blue area) ignites early. This next stage suppresses nuclear burning at the front above.
+As a result, the burning front moves out in mass slowly and eventually (right wedge) the star grows a low-mass iron core.
+
+
+to significantly exceed the neutrino losses, and convection sets                At the compactness peak (structure II in Fig. 15), nuclear
+in above the front (shaded red area in Fig. 15 I). The star with            burning at the center is strongly neutrino-dominated due to a
+the structure I still contains a large amount of fuel, which means          higher mass (lower initial density) and low initial fuel mass frac-
+(a) that a small core contraction is sufficient for convection to           tion. The strong core contraction leads to an outward progression
+set in and (b) that the newly formed convective region contains             of the burning front until it nearly reaches the effective Chan-
+enough fuel to remain until core collapse without the need of               drasekhar mass. Support from degeneracy pressure helps slow
+a large core contraction. This limits the growth of the fuel-free           the contraction during the main burning phase such that nearly
+core below as the burning front moves only slowly out in mass.              all the fuel in the convective region is burned before the next
+Ultimately (right wedge in Fig. 15 I), this structure grows a rela-         burning stage ignites in the center. Afterward, the burning front
+tively small fuel-free core, which in turn limits the growth of the         quickly burns through the former convective region as the core
+Si-rich core, which then forms a relatively low-mass iron-rich              contracts further. It grows a particularly massive fuel-free core
+core.                                                                       and eventually, a massive iron core.
+
+    The final location of the burning front reflects the contrac-           6.2. Decrease in final iron core mass (Region B and D)
+tion of the inner core and sets the maximum core growth for
+the subsequent nuclear-burning episodes. Through this process,              For even higher masses, stars develop structures that are even
+for increasing masses, stars in which the central burning source            more neutrino-dominated (star III in Fig. 15). Two mechanisms,
+becomes neutrino-dominated grow increasingly massive C/Ne-                  (a) a lower initial fuel abundance decreasing the duration of the
+free cores, which in turn form massive oxygen-free cores and                main fuel burning phase (core C-burning or Ne-burning), and (b)
+eventually, more massive iron-rich cores. For higher masses, as             electron degeneracy no longer helping support the stellar struc-
+the cores contract further and their density increases, electron            ture once the main burning front and the fuel-free core it pro-
+degeneracy also starts to play a role. Degeneracy pressure con-             duces exceed the (effective) Chandrasekhar mass, both lead to
+tributes to supporting the core during the main burning phase               an acceleration of the core contraction. What follows is an early
+(carbon or oxygen, depending on the mass range), delaying the               ignition of the next burning fuel while the main nuclear burning
+ignition of the next burning phase as long as the burning front             phase is still in progress (e.g. Ne ignition during C burning or
+does not exceed the effective Chandrasekhar mass.                           Si ignition during Ne/O burning, indicated by the blue central
+Article number, page 16 of 33
+                 E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+region in Fig. 15 III). The luminosity of this new nuclear energy          1988) by allowing core carbon burning to take place at lower
+source contributes to slowing down the contraction of the layers           temperatures and densities. Carbon thus ignites under conditions
+above and prevents the further growth of the C/O-free core. Con-           where neutrino losses are less severe, which means that the over-
+sequently, the Si-burning front cannot move far out in mass and            all core contraction is slightly less significant. This results in a
+grows a lower-mass iron core than in star II.                              systematic shift in the final compactness to slightly lower values
+     Additionally, in particular in region B, mergers of the Ne-           (0.05 in ξ2.5 , see Fig. 9 in Chieffi et al. 2021). Finally, the triple-
+and C-burning shells, and, in some cases, of the Ne and O-                 alpha reaction rate also plays an important role, though it is less
+burning shells, can occur due to the high energy generation rate           uncertain (Austin et al. 2014).
+and entropy at these fronts. These lead to a reconfiguration of
+the stellar structure in which the burning fronts all merge to-
+gether at the lowest mass coordinate. If these mergers occur be-           Mass loss: Wind mass loss (and equivalently, metallicity) has
+fore the end of core silicon burning, they limit the progression           a large impact on the properties of stars and is still very un-
+of the silicon-burning front, and, with it, the growth of the iron-        certain. Latest observational constraints suggest that wind mass
+rich core. Eventually, stars that experience such shell mergers            loss at solar metallicity may be less strong than we assume here.
+form iron cores of even lower mass. Shell mergers before the               When mass loss is strong enough to remove a large fraction of
+end of core Si burning are thus an additional mechanism which              the hydrogen-rich envelope, it can have a large impact on the fi-
+produces final stellar structures with low iron core masses.               nal structure of stars as it changes the evolution of the helium
+     Because of these physical mechanisms, we expect a non-                core, and with it the initial conditions for core carbon burn-
+monotonic landscape of final compactness, iron core mass, cen-             ing. In particular, strong wind mass loss can lead to a less effi-
+tral entropy, and binding energy as a function of the initial and          cient hydrogen-burning shell and to a recession of the convective
+core masses of massive stars. Based on a neutrino-driven super-            helium-burning core, which results in a large core carbon abun-
+nova model we have shown that stars with high compactness,                 dance XC at core helium depletion. This in turn shifts the pa-
+iron core masses and binding energy are predicted to form black            rameter space for neutrino-dominated carbon burning to higher
+holes. Hence, the existence of these robust final structure pat-           CO core masses. Stars that experience strong wind mass loss are
+terns of massive stars observed by multiple independent studies            thus generally more explodable (just like binary-stripped stars,
+imply the formation of black holes at characteristic mass ranges.          see Sect. 7.3). In our models with high enough initial masses
+                                                                           (≳ 35 M⊙ ), stars may also enter a Luminous Blue Variable phase
+                                                                           in which eruptive mass loss has been observed to occur (Smith
+7. Discussion                                                              et al. 2004; Davies et al. 2018). The mechanism behind these
+                                                                           eruptions has been suggested to be related to helium opacity in
+7.1. Uncertainties in stellar physics                                      the outer layers (Jiang et al. 2018; Grassitelli et al. 2021). Un-
+Our stellar evolution models are subject to uncertainties concern-         like line-driven winds, this mechanism would also be important
+ing the physics of massive stars that can affect the lanscape of the       at low metallicity. This highly uncertain mass loss is not taken
+final structure of stars, and with it, their fate.                         into account in our models but can lead to the removal of the
+                                                                           entire hydrogen-rich envelope, which would significantly affect
+                                                                           the final core properties, and lead to a final core structure that
+Nuclear reaction rates: As discussed previously, the final core            explodes more easily.
+structures of stars are sensitive to the conditions under which
+core helium and carbon burning take place. In particular, the
+12
+   C(α, γ)16 O is a key helium-burning process which is still very         Mixing: How mixing proceeds in stellar interiors remains an
+uncertain and has a tremendous impact on the final fate of stars           importance uncertainty. Convective core boundary mixing, com-
+(e.g. Austin et al. 2014; Farmer et al. 2020). This nuclear reaction       puted in our models through step overshooting, influences the
+rate sets the amount of carbon left after core helium burning (XC )        size of convective cores. During core hydrogen burning, it helps
+by fusing carbon into oxygen. As shown in Appendix A, vary-                determine the initial mass to helium core mass relation. Simi-
+ing this reaction rate changes the core mass range at which stellar        larly, core overshooting during core helium burning influences
+structures reach a high final compactness and iron-core mass and           the resulting CO core mass and thus has a particularly large in-
+are expected to form black holes. A higher nuclear reaction rate           fluence of their final fate. Temaj et al. (2024) showed that core
+resulting in a lower core carbon abundance means that neutrino-            overshooting systematically shifts the compactness landscape of
+dominated burning occurs at lower CO core masses, systemat-                stars as a function of their initial masses, as a larger overshoot-
+ically shifting the compactness landscape (Sukhbold & Adams                ing allows a star to behave as if it had the core of an initially
+2020; Schneider et al. 2023). For example, a 10% higher car-               higher-mass star. This also implies a larger number of black
+bon alpha-capture rate leads to a compactness peak occurring at            holes formed, as more stars can reach the mass range for black
+0.4 M⊙ lower CO core masses (see Appendix A). In turn, this in-            hole formation (see also Fig 6. of Schneider et al. 2023). As a
+creases the number of stars expected to form black holes, as stars         function of the CO core mass, the compactness landscape is sim-
+with lower (CO core) masses are more common. It will also af-              ilar to that of single stars, though the compactness peak shifts to-
+fect the final masses of black holes, which is expected to be pro-         wards higher CO core masses (1.3 M⊙ by varying the step over-
+portional to the final mass of a star and is generally lower for           shooting scaling parameter αOV from 0.05 to 0.5, Temaj et al.
+progenitors with lower masses (see also Schneider et al. 2023).            2024). This shift is because, as convective overshooting affects
+    Similarly, the value of the 12 C +12 C cross section also sys-         the core mass of stars, it also changes their luminosity and there-
+tematically shifts the final core structures of stars (Chieffi et al.      fore mass loss rate. Especially for high initial masses, when the
+2021). The newly determined, higher rate found by Tumino et al.            total mass loss is large, XC increases and thus the compactness
+(2018) due to low-lying resonances shifts the compactness land-            landscape shifts to higher CO core masses (Temaj et al. 2024).
+scape to slightly lower core and initial masses compared to the            Overshooting during core helium burning also influences the ra-
+classical rate we use in the present work (Caughlan & Fowler               tio of the total mass to the CO core mass, thus the final black
+                                                                                                                      Article number, page 17 of 33
+                                                    A&A proofs: manuscript no. main
+
+hole mass. In stripped helium stars, large overshooting implies a     that shell mergers are expected in stellar structures with strong
+lower black hole mass (see also Fig. 6 of Schneider et al. 2023).     neon shell burning. We observe that this systematically occurs in
+    As we explore in more detail Appendix B, semiconvection is        models just beyond the compactness peak (23 < Mi / M⊙ < 27,
+another mixing process that has a large effect on the final core      6.3 < MCO / M⊙ < 8.5), in which carbon burning is neutrino-
+structure of stars. It changes the compactness landscape as a         dominated and core neon burning is becoming neutrino domi-
+function of the initial mass but only slightly affects the compact-   nated.
+ness landscape as a function of the CO core mass (see Fig. B.3).
+Semiconvection affects the stellar structure after core hydrogen
+                                                                      7.3. Final structures of stars that experience binary
+exhaustion through the development of intermediate convection
+                                                                           interactions
+zones (Sibony et al. 2023). Furthermore, it can lead to late in-
+gestion of helium during core helium burning depending on the         In this work, we have focused on the core structures of single
+chemical gradient at the edge of the helium core (Langer et al.       massive stars. However, it is well established that the majority
+1985; Langer 1991) and thus not only shifts the CO core mass          of massive stars live in binary systems and are expected to inter-
+but also XC (see Fig. B.2). This can explain the "noise" or "ran-     act during their lifetime (Sana et al. 2012). As a result of binary
+domness" reported by Sukhbold et al. (2018) in the compact-           interactions, the core structure of stars can be greatly modified,
+ness landscape (see also Chieffi & Limongi 2020). Schootemei-         and lead to a different fate even for stars with the same core mass
+jer et al. (2019) found through a comparison with observations        (Laplace et al. 2021; Schneider et al. 2021, 2023; Schneider et al.
+that semi-convection may be an efficient process, i.e. favoring       2024). In addition, the vast majority of black holes are found in
+high values of αsc ≥ 1. However, it remains a major uncertainty       binaries observationally. In these systems their properties, in par-
+in our models.                                                        ticular their masses, can be measured most accurately (Casares
+                                                                      & Jonker 2014). It is therefore important to discuss the effect of
+7.2. Shell mergers                                                    binary interactions on the final structures of stars.
+                                                                           The mechanisms we identified here that set the final structure
+In our models beyond the compactness peak, we identify sev-           of stars (i.e. the impact of neutrino-dominated burning) apply
+eral models that experience mergers of their C-, Ne- and in some      generally for any stellar structure, as shown by our experiment
+cases also O-burning shells. As we show in Sect. 4.5 these are the    in Sect. 4 and are mainly influenced by the initial conditions for
+result of an increasing entropy at a nuclear burning front (e.g. Ne   core carbon burning (i.e. the CO core mass and central carbon
+or O) that exceeds the entropy of the layers above, implying that     abundance, see also Patton & Sukhbold 2020). These conditions
+these layers are unstable against convection and must mix. Sev-       can be influenced by binary interactions or strong wind mass
+eral studies have reported the occurrence of such shell mergers       loss, in particular if the structure of a star is significantly af-
+in their one-dimensional models for a similar parameter space         fected after core H-burning, which will ultimately change the
+(i.e models before and just beyond the compactness peak, typ-         initial conditions for core carbon burning (Brown et al. 1999,
+ically in the CO core mass range from 3 to 7 M⊙ , Sukhbold &          2001; Woosley 2019; Schneider et al. 2021; Laplace et al. 2021).
+Woosley 2014; Sukhbold et al. 2018; Sukhbold & Adams 2020;            This implies a shift in the compactness landscape.
+Collins et al. 2018; Laplace et al. 2021). We argue that these             When it comes to black hole formation, binary-stripped stars
+shell mergers are not artifacts from our treatment of convective      are particularly important binary products. In isolated massive
+boundary mixing since we do not include overshooting above            binary systems, they are the natural progenitors of both black
+shells post helium burning. In Appendix C, we verify that these       holes that eventually form binary black hole mergers that are
+shell mergers are barely affected by our choices of spatial and       now commonly detected as GW sources (Schneider et al. 2023).
+temporal resolution. The exact predictions for the outcomes of        After mass transfer or strong wind mass loss removes the outer
+shell mergers will still depend on a more accurate treatment of       envelope of these stars, the conditions under which core helium
+convective mixing than the mixing-length approximation used           burning occur can change drastically compared to single stars. A
+here, i.e. informed by multi-dimensional simulations (Rizzuti         weaker or even absent hydrogen-burning shell, and strong wind
+et al. 2023). Several three-dimensional calculations have also        mass loss leads to a shrinking of the convective helium-burning
+observed the occurrence of shell mergers, strengthening the find-     core. This results in a higher final core carbon abundance com-
+ing from one-dimensional simulations (e.g., Couch & Ott 2013;         pared to single stars for the same CO core mass (Brown et al.
+Collins et al. 2018; Yoshida et al. 2019; Andrassy et al. 2020;       2001; Schneider et al. 2021; Laplace et al. 2021). The higher
+Yadav et al. 2020; McNeill & Müller 2020). Collins et al. (2018)      core carbon abundance means that the compactness peak, and
+shows that shell mergers help develop stellar structures that have    the corresponding expected parameter space for BH formation
+extended oxygen shells with high convective Mach numbers. In          is shifted to higher core masses in these stars (MCO ≈ 7.5 M⊙ ,
+such stellar structure, perturbations can be induced by this con-     see Fig. 2 in Schneider et al. 2023). Therefore, binary-stripped
+vective oxygen shell burning at the time of core collapse. 3D         stars are expected to be common progenitors of supernovae and
+supernova simulations suggest that such perturbations are cru-        to only form black holes for high initial masses (of about 30 M⊙ ),
+cial for increasing the efficiency of neutrino heating in neutrino-   which significantly reduces the parameter space for BH forma-
+driven supernova explosions and for a successful shock revival        tion (Schneider et al. 2021). Moreover, the core structures of
+(e.g., Couch & Ott 2013). Thus, stellar structures experiencing       binary-stripped stars have a weak metallicity dependence, im-
+shell mergers may be particularly prone to successful explosions.     plying the formation of universal BH masses at the compact-
+In addition, due to the mixing process and ensuing nuclear burn-      ness peaks, with strong observational signatures (Schneider et al.
+ing episodes, stars experiencing shell mergers are expected to        2023).
+produce peculiar abundance patterns. Typically, these are en-              The final core structures of accretors and stellar mergers
+hanced alpha-capture products in the oxygen-shell region, which       can also be affected by binary interactions. In our recent work
+in turn affect the nucleosynthesis, in particular the Ca/O ratio      (Schneider et al. 2024) we have shown that mass accretion, in
+of core-collapse supernovae (e.g., Ritter et al. 2018; Dessart &      particular onto stars that have completed core hydrogen burn-
+John Hillier 2020; Laplace et al. 2021). In our work, we find         ing, can lead to systematically different final core structures.
+Article number, page 18 of 33
+                 E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+In particular, the compactness peak in case B and C accretors                 Sukhbold & Adams (2020) showed that the luminosity of
+shifts systematic to lower core masses (Schneider et al. 2024).            immediate BH progenitors could be used to test the existence of
+Contrary to binary-stripped stars, this means that accretors form          characteristic core structures corresponding to the compactness
+black holes in stars with lower initial masses than in single stars.       peaks observationally. The observation of the disappearing red-
+                                                                           supergiant N6946-BH1 could be a piece of evidence (Sukhbold
+                                                                           & Adams 2020), though more observations are needed to
+7.4. Compactness peaks and black hole formation                            understand the latest constraints on this object (Beasor et al.
+                                                                           2024; Kochanek et al. 2024). Finding more disappearing stars
+In this work, we estimate the outcome of core-collapse for our             or additional direct observational link between black holes
+models based on the Ertl et al. (2016) criterion and on the 1D             and supernovae, and their progenitors, will provide crucial
+semi-analytical neutrino-driven model of Müller et al. (2016).             constraints. For example, Temaj et al. (2024) showed that the
+We find a correspondence between the formation of black holes              luminosity of supernova progenitors in hydrostatic equilibrium
+and models with high final compactness, which all have a high              can be directly linked to their core mass, independently of
+final binding energy, iron-core mass, and central entropy (see             uncertainties in interior mixing or wind mass loss.
+Fig. 1). To first order, compactness (or equivalently, any of these
+quantities) captures the information that stars with high binding
+energy are difficult to explode. Thus, independently of the uncer-             If there is a direct link between massive star structures in the
+tainties regarding the explosion mechanism of core-collapse su-            "compactness peak" and BH formation, i.e. if it is not fully ob-
+pernovae, a signature of the characteristic final structure of stars       scured by supernova physics and fallback dynamics, then black
+described here is expected in their final remnants and in the prop-        hole masses should also encode information about the final struc-
+erties of their explosions.                                                ture of stars in the compactness peak. We expect that such a
+                                                                           link should be readily identified in binary-stripped stars, which
+    However, while compactness captures the general final struc-           have characteristic final structures with a weak metallicity de-
+ture of the star, it is not a good predictor of the detailed ex-           pendence (see also Sec. 7.3). We predicted that this would lead to
+plosion outcome (see Sect. 3.1). Explodability criteria and the            the formation of BHs of universal masses (Schneider et al. 2023).
+remnants expected after the core collapse are the subject of ac-           Alternatively, if supernova and fallback physics “wash out” these
+tive discussion in the supernova modeling community, includ-               signals, then identifying broad features in the BH mass distribu-
+ing within groups studying the neutrino-driven explosion mech-             tion and significant numbers of low-mass black holes may pro-
+anism. For example, some 3D neutrino-driven simulations (e.g.,             vide further constraints into these processes and their relative
+Chan et al. 2018; Kuroda et al. 2018; Ott et al. 2018; Burrows             importance. The complete absence of features in the BH mass
+et al. 2023) have recently found successful shock revival in mod-          distribution of binary-stripped stars (e.g., a flat black hole mass
+els with high compactness. However, the revival of the super-              distribution) would also give particularly strong constraints on
+nova shock does not necessarily imply a full supernova explo-              stellar, binary, and supernova physics, as this would require nar-
+sion with complete ejection of the stellar layers, or that these           row ranges of physical ingredients.
+will all form neutron stars. Due to the high accretion rate typical
+for models with high compactness, these are still likely to form                Using GW observations to find features in the chirp-mass
+black holes through fallback accretion, especially in stars with           distribution of binary BH mergers could provide evidence for the
+high core masses (Heger et al. 2023). For example, Chan et al.             existence of the characteristic final stellar structures of binary-
+(2018) found that a 40 M⊙ progenitor star with high compactness            stripped stars (Schneider et al. 2023; Disberg & Nelemans 2023).
+forms a black hole early on through fallback accretion. In their           Considering a population of merging binary BHs resulting from
+simulation, the supernova shock succeeds in unbinding parts of             isolated binary evolution, we predicted peaks in the chirp-mass
+the envelope despite the explosion energy being lower than the             distribution of binary BH mergers at ∼ 8 M⊙ and ∼ 14 M⊙ , and
+binding energy of the envelope. More recently, Burrows et al.              a dearth between ∼ 10 − 12 M⊙ (Schneider et al. 2023). Based
+(2023) found that a 40 M⊙ model with high compactness results              on the published data from LIGO-Virgo-KAGRA (LVK) obser-
+in a successful explosion, though the remnant eventually forms             vations, a peak at a chirp mass of ∼ 8 M⊙ is found to be statis-
+a black hole due to the high accretion rate onto the proto neutron         tically significant, while the existence of a feature at ∼ 14 M⊙
+star. Black holes formed through fallback accretion have system-           is less robust (Talbot & Thrane 2018; Tiwari & Fairhurst 2021;
+atically lower masses than those formed through direct collapse            Tiwari 2022; Abbott et al. 2023; Edelman et al. 2023; Farah
+because parts of the star can be expelled. They therefore have             et al. 2023). Tentative evidence for the predicted dearth in the
+distinct properties, which may be constrained through observa-             distribution between 10 and 12 M⊙ has recently been reported,
+tions (Chan et al. 2020). However, consistently finding explosion          though more data, even beyond the upcoming O4a data release
+of models with high masses and high final compactness would                by the LVK collaboration, is required to further test its existence
+be at odds with observational constraints, which seem to point             (Adamcewicz et al. 2024; Galaudage & Lamberts 2024).
+to a lack of core-collapse supernovae from stars with high core            Signatures of the characteristic core structures of massive stars
+masses (e.g., Smartt 2009; Davies & Beasor 2020).                          that form black holes may also be identified in the mass dis-
+                                                                           tribution of BHs from electromagnetic observations (Nambena
+                                                                           et al. in prep.). Studies of black holes in X-ray binaries point
+7.5. Observational constraints on the pre-supernova                        to the existence of a characteristic peak in black hole masses
+     structure of stars                                                    of about ∼ 8 M⊙ (e.g., Kreidberg et al. 2012; Casares et al.
+                                                                           2017), which is similar to the mass we predict for black holes
+The robustness of the patterns found for the final core struc-             in binary-stripped stars originating from the compactness peak
+ture of massive stars, i.e. the “compactness peaks” based on               (Schneider et al. 2023). The recent discovery of new X-ray quiet
+the neutrino-dominated burning mechanism identified here, sug-             black holes in wide binaries (Shenar et al. 2022; El-Badry et al.
+gests that signatures of this pattern could be identifiable in ob-         2023; El-Badry et al. 2023; Gaia Collaboration et al. 2024) pro-
+servations.                                                                vides a promising avenue to discover more black holes and better
+                                                                                                                      Article number, page 19 of 33
+                                                     A&A proofs: manuscript no. main
+
+understand their properties, and ultimately, their formation and          in compactness after the compactness peak, lead to smaller
+progenitors.                                                              iron-core masses, and make these stars more explodable. We
+                                                                          find that shell mergers are not numerical artifacts but take
+                                                                          place because of energetic neon and oxygen burning which
+8. Conclusions                                                            generates enough entropy to mix with the layers above, inde-
+Understanding the fate of massive stars, i.e. whether stars form          pendently of convective boundary mixing. Shell mergers not
+black holes at the end of their lives or successfully explode in          only affect the pre-supernova structure but also change the
+a supernova is a major goal of astrophysics. In this work, we             pre-supernova composition and may have observable signa-
+have explored how stellar physics determines the pre-supernova            tures which call for further investigation.
+core structure and the role it plays in the fate of massive stars by    – The exact final core structure landscape of stars is subject
+studying the final evolution of single star in the range from 17          to uncertainties in stellar evolution, such as semi-convective
+to 50 M⊙ at solar metallicity. Our findings can be summarized as          mixing, mass loss, and uncertain nuclear reactions, in par-
+follows:                                                                  ticular the 12 C(α, γ)16 O reaction rate. The origin of small
+                                                                          variations and secondary peaks in compactness and central
+ – We confirm that the final structure landscape of massive               entropy observed when nuclear burning conditions change
+   stars found in multiple independent one-dimensional stellar            remains to be explored further. However, the robustness of
+   evolution studies (Timmes et al. 1996; Brown et al. 1999;              the main features identified in the final structures of massive
+   Sukhbold & Woosley 2014; Sukhbold et al. 2018; Müller                  stars as a function of their CO core masses provides a clear
+   et al. 2016; Chieffi & Limongi 2020; Chieffi et al. 2021;              theoretical prediction and an opportunity to constrain stellar
+   Schneider et al. 2021, 2023; Schneider et al. 2024; Taka-              physics from the observation of black holes and their imme-
+   hashi et al. 2023; Temaj et al. 2024) is robust. The prominent         diate progenitors.
+   features in the final compactness and iron core mass can be
+   traced back to the conditions under which late nuclear burn-            The final structure landscape discussed here applies for any
+   ing occurs in the cores of stars at this mass range.                massive star, including those that interact in binary systems.
+ – Summarizing quantities such as the final compactness, cen-          However, binary interactions shift the compactness landscape
+   tral entropy, iron core mass, and binding energy are all equiv-     to different core masses, which affects the parameter space for
+   alent and intrinsically linked. Stars with high final compact-      expected black hole formation and successful supernovae explo-
+   ness all have a high binding energy, and we verify that the         sions (Schneider et al. 2021, 2023; Schneider et al. 2024). For
+   formation of a black hole is likely in these stars based on         accurate predictions of supernova and black hole formation, in
+   a neutrino-driven supernova model. Independently from un-           particular for understanding the population of gravitational-wave
+   certainties in the supernova mechanism and explodability of         sources, it is crucial to take the different final core structures of
+   stars, stellar physics thus plays a large role in determining the   single and binary stars into account.
+   final remnants of stars, in particular the formation of black       Acknowledgements. We thank the referee for constructive comments that helped
+   holes. We confirm that the final structure of massive stars         improve the manuscript. This work was funded by the European Research
+                                                                       Council (ERC) under the European Union’s Horizon 2020 research and in-
+   is already mostly “written” in their cores at the end of core       novation program (Grant agreement No. 945806) and supported by the Klaus
+   helium burning.                                                     Tschira Stiftung. It was also supported by the Deutsche Forschungsgemein-
+ – We find that the final compactness increases when carbon            schaft (DFG, German Research Foundation) under Germany’s Excellence Strat-
+   burning becomes neutrino-dominated (region A in Fig. 1).            egy EXC 2181/1-390900948 (the Heidelberg STRUCTURES Excellence Clus-
+                                                                       ter).
+   The transition from convective to radiative core carbon burn-
+   ing and the change in the extent and number of carbon-
+   burning shells identified in previous studies is a symptom
+   of this effect, but not its cause. Strong neutrino losses force     References
+   a larger core contraction and the development of a larger
+                                                                       Abbott, R., Abbott, T. D., Acernese, F., et al. 2023, Physical Review X, 13,
+   carbon-free core. Eventually, this enables the formation of           011048
+   a larger iron core. The same mechanism leads to the forma-          Adamcewicz, C., Lasky, P. D., Thrane, E., & Mandel, I. 2024, arXiv e-prints,
+   tion of a second compactness increase once neon burning               arXiv:2406.11111
+   becomes neutrino dominated (region C in Fig. 1).                    Adams, S. M., Kochanek, C. S., Gerke, J. R., Stanek, K. Z., & Dai, X. 2017,
+                                                                         MNRAS, 468, 4968
+ – We trace back the drop in compactness after the compactness
+                                                                       Aguilera-Dena, D. R., Langer, N., Antoniadis, J., et al. 2022, A&A, 661, A60
+   peaks (regions B and D in Fig. 1) to the effect of an earlier       Aguilera-Dena, D. R., Müller, B., Antoniadis, J., et al. 2023, A&A, 671, A134
+   ignition of the next nuclear fuel (neon or silicon) in these        Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020, MNRAS, 491, 972
+   stars, which slows down the core contraction and eventually         Antoniadis, J., Aguilera-Dena, D. R., Vigna-Gómez, A., et al. 2022, A&A, 657,
+   leads to the formation of smaller iron core masses. We find           L6
+                                                                       Arnett, W. D. 1972, ApJ, 176, 681
+   that the next burning phase ignites earlier in these stars be-      Asplund, M., Grevesse, N., Sauval, A. J., & Scott, P. 2009, ARA&A, 47, 481
+   cause of two main mechanisms (1) a shorter duration of the          Austin, S. M., West, C., & Heger, A. 2014, Phys. Rev. Lett., 112, 111101
+   main burning stage due to a decrease in available fuel and          Barkat, Z. 1994, in Proceedings of the 54th École d’été de physique théorique,
+   increase in temperature and (2) the role of electron degen-           session LIV, held in Les Houches, Haute-Savoie, France 31 July - 1 Septem-
+   eracy, which further accelerates the contraction of the core          ber, 1990
+                                                                       Barkat, Z. & Marom, A. 1990, in Jerusalem Winter School for Theoretical
+   when the fuel-free core exceeds the effective Chandrasekhar           Physics. Supernovae. Volume 6, Jerusalem, Dec. 28, 1988- Jan. 5, 1989, Vol. 6
+   mass.                                                                 (World Scientific Publishing Co., Singapore), 95
+ – Shell mergers between the C and Ne- burning shells, and in          Baron, E. & Cooperstein, J. 1990, ApJ, 353, 597
+   some cases also between the Ne and O-burning shells, occur          Basinger, C. M., Kochanek, C. S., Adams, S. M., Dai, X., & Stanek, K. Z. 2021,
+                                                                         MNRAS, 508, 1156
+   in our models after the first compactness peak, just like other     Beasor, E. R., Hosseinzadeh, G., Smith, N., et al. 2024, ApJ, 964, 171
+   studies have observed (Sukhbold & Woosley 2014; Sukhbold            Boccioli, L., Roberti, L., Limongi, M., Mathews, G. J., & Chieffi, A. 2023, ApJ,
+   et al. 2018; Collins et al. 2018). These contribute to the drop       949, 17
+
+Article number, page 20 of 33
+                    E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+Böhm-Vitense, E. 1958, Zeitschrift fur Astrophysik, 46, 108                         Schneider, F. R. N., Podsiadlowski, P., & Müller, B. 2021, A&A, 645, A5
+Brown, G. E., Heger, A., Langer, N., et al. 2001, New A, 6, 457                     Schootemeijer, A., Langer, N., Grin, N. J., & Wang, C. 2019, A&A, 625, A132
+Brown, G. E., Lee, C. H., & Bethe, H. A. 1999, New A, 4, 313                        Shenar, T., Sana, H., Mahy, L., et al. 2022, Nature Astronomy, 6, 1085
+Burrows, A. & Vartanyan, D. 2021, Nature, 589, 29                                   Sibony, Y., Georgy, C., Ekström, S., & Meynet, G. 2023, A&A, 680, A101
+Burrows, A., Vartanyan, D., & Wang, T. 2023, ApJ, 957, 68                           Smartt, S. J. 2009, Annual Review of Astronomy & Astrophysics, vol. 47, Issue
+Casares, J. & Jonker, P. G. 2014, Space Science Reviews, 183, 223                      1, pp.63-106, 47, 63
+Casares, J., Jonker, P. G., & Israelian, G. 2017, X-Ray Binaries (Springer Inter-   Smith, N., Vink, J. S., & de Koter, A. 2004, ApJ, 615, 475
+   national Publishing AG), handbook of Supernovae                                  Sukhbold, T. & Adams, S. 2020, MNRAS, 492, 2578
+Caughlan, G. R. & Fowler, W. A. 1988, Atomic Data and Nuclear Data Tables,          Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., & Janka, H. T. 2016, ApJ,
+   40, 283                                                                             821, 38
+Chan, C., Müller, B., & Heger, A. 2020, MNRAS, 495, 3751                            Sukhbold, T. & Woosley, S. E. 2014, ApJ, 783, 10
+Chan, C., Müller, B., Heger, A., Pakmor, R., & Springel, V. 2018, ApJ, 852, L19     Sukhbold, T., Woosley, S. E., & Heger, A. 2018, ApJ, 860, 93
+Chieffi, A. & Limongi, M. 2020, ApJ, 890, 43                                        Takahashi, K., Takiwaki, T., & Yoshida, T. 2023, ApJ, 945, 19
+Chieffi, A., Roberti, L., Limongi, M., et al. 2021, ApJ, 916, 79                    Talbot, C. & Thrane, E. 2018, ApJ, 856, 173
+Collins, C., Müller, B., & Heger, A. 2018, MNRAS, 473, 1695                         Temaj, D., Schneider, F. R. N., Laplace, E., Wei, D., & Podsiadlowski, P. 2024,
+Couch, S. M. & Ott, C. D. 2013, ApJ, 778, L7                                           A&A, 682, A123
+Cyburt, R. H., Amthor, A. M., Ferguson, R., et al. 2010, Ap&SS, 189, 240            Timmes, F. X., Woosley, S. E., & Weaver, T. A. 1996, ApJ, 457, 834
+Davies, B. & Beasor, E. R. 2020, MNRAS, 493, 468                                    Tiwari, V. 2022, ApJ, 928, 155
+Davies, B., Crowther, P. A., & Beasor, E. R. 2018, MNRAS, 478, 3138                 Tiwari, V. & Fairhurst, S. 2021, ApJ, 913, L19
+Dessart, L. & John Hillier, D. 2020, A&A, 642, A33                                  Tsang, B. T. H., Vartanyan, D., & Burrows, A. 2022, ApJ, 937, L15
+Disberg, P. & Nelemans, G. 2023, A&A, 676, A31
+                                                                                    Tumino, A., Spitaleri, C., La Cognata, M., et al. 2018, Nature, 557, 687
+Edelman, B., Farr, B., & Doctor, Z. 2023, ApJ, 946, 16
+                                                                                    Ugliano, M., Janka, H.-T., Marek, A., & Arcones, A. 2012, ApJ, 757, 69
+El-Badry, K., Rix, H.-W., Cendes, Y., et al. 2023, MNRAS, 521, 4323
+                                                                                    Vartanyan, D., Laplace, E., Renzo, M., et al. 2021, ApJ, 916, L5
+El-Badry, K., Rix, H.-W., Quataert, E., et al. 2023, MNRAS, 518, 1057
+                                                                                    Wang, T., Vartanyan, D., Burrows, A., & Coleman, M. S. B. 2022, MNRAS, 517,
+Ertl, T., Janka, H. T., Woosley, S. E., Sukhbold, T., & Ugliano, M. 2016, ApJ,
+                                                                                       543
+   818, 124
+Ertl, T., Woosley, S. E., Sukhbold, T., & Janka, H. T. 2020, ApJ, 890, 51           Weaver, T. A. & Woosley, S. E. 1993, Physics Reports, 227, 65
+Farah, A. M., Edelman, B., Zevin, M., et al. 2023, ApJ, 955, 107                    Woosley, S. E. 2019, ApJ, 878, 49
+Farmer, R., Fields, C. E., Petermann, I., et al. 2016, Ap&SS, 227, 22               Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Reviews of Modern Physics,
+Farmer, R., Laplace, E., de Mink, S. E., & Justham, S. 2021, ApJ, 923, 214             74, 1015
+Farmer, R., Laplace, E., Ma, J.-z., de Mink, S. E., & Justham, S. 2023, ApJ, 948,   Woosley, S. E., Sukhbold, T., & Janka, H.-T. 2020, ApJ, 896, 56
+   111                                                                              Xu, Y., Takahashi, K., Goriely, S., et al. 2013, Nuclear Physics A, 918, 61
+Farmer, R., Renzo, M., de Mink, S. E., Fishbach, M., & Justham, S. 2020, ApJ,       Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger, A. 2020, ApJ, 890, 94
+   902, L36                                                                         Yoshida, T., Takiwaki, T., Kotake, K., et al. 2019, ApJ, 881, 16
+Farrell, E. J., Groh, J. H., Meynet, G., & Eldridge, J. J. 2020, MNRAS, 494, L53    Zapartas, E., de Mink, S. E., Justham, S., et al. 2019, A&A, 631, A5
+Fryer, C. 2014, in Remnant Masses and Compact Binary Mergers                        Zapartas, E., de Mink, S. E., Justham, S., et al. 2021, A&A, 645, A6
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012, ApJ, 749, 91            Zha, S., Müller, B., Weir, A., & Heger, A. 2023, ApJ, 952, 155
+Gaia Collaboration, Panuzzo, P., Mazeh, T., et al. 2024, A&A, 686, L2
+Galaudage, S. & Lamberts, A. 2024, arXiv e-prints, arXiv:2407.17561
+Geen, S., Agrawal, P., Crowther, P. A., et al. 2023, PASP, 135, 021001
+Gerke, J. R., Kochanek, C. S., & Stanek, K. Z. 2015, MNRAS, 450, 3289
+Gogilashvili, M., Murphy, J. W., & O’Connor, E. P. 2023, MNRAS, 524, 4109
+Grassitelli, L., Langer, N., Mackey, J., et al. 2021, A&A, 647, A99
+Heger, A., Müller, B., & Mandel, I. 2023, arXiv e-prints, arXiv: 2304.09350
+Hopkins, P. F. 2014, Nature, 516, 44
+Jennings, Z. G., Williams, B. F., Murphy, J. W., et al. 2014, ApJ, 795, 170
+Jerkstrand, A., Fransson, C., Maguire, K., et al. 2012, A&A, 546, A28
+Jiang, Y.-F., Cantiello, M., Bildsten, L., et al. 2018, Nature, 561, 498
+Kippenhahn, R., Weigert, A., & Weiss, A. 2013, Stellar Structure and Evolution
+   (Springer-Verlag)
+Kochanek, C. S., Neustadt, J. M. M., & Stanek, K. Z. 2024, ApJ, 962, 145
+Kreidberg, L., Bailyn, C. D., Farr, W. M., & Kalogera, V. 2012, ApJ, 757, 36
+Kunz, R., Fey, M., Jaeger, M., et al. 2002, ApJ, 567, 643
+Kuroda, T., Kotake, K., Takiwaki, T., & Thielemann, F.-K. 2018, MNRAS, 477,
+   L80
+Langer, N. 1991, A&A, 252, 669
+Langer, N., El Eid, M. F., & Fricke, K. J. 1985, A&A, 145, 179
+Laplace, E., Justham, S., Renzo, M., et al. 2021, A&A, 656, A58
+Limongi, M. & Chieffi, A. 2018, Ap&SS, 237, 13
+Lovegrove, E. & Woosley, S. E. 2013, ApJ, 769, 109
+McNeill, L. O. & Müller, B. 2020, MNRAS, 497, 4644
+Müller, B., Heger, A., Liptai, D., & Cameron, J. B. 2016, MNRAS, 460, 742
+Müller, B., Tauris, T. M., Heger, A., et al. 2019, MNRAS, 484, 3307
+Murphy, J. W. & Dolence, J. C. 2017, ApJ, 834, 183
+O’Connor, E. & Ott, C. D. 2011, ApJ, 730, 70
+Ott, C. D., Roberts, L. F., da Silva Schneider, A., et al. 2018, ApJ, 855, L3
+Patton, R. A. & Sukhbold, T. 2020, MNRAS, 499, 2803
+Patton, R. A., Sukhbold, T., & Eldridge, J. J. 2022, MNRAS, 511, 903
+Paxton, B., Bildsten, L., Dotter, A., et al. 2011, Ap&SS, 192, 3
+Paxton, B., Cantiello, M., Arras, P., et al. 2013, Ap&SS, 208, 4
+Paxton, B., Marchant, P., Schwab, J., et al. 2015, ApJS, 220, 15
+Paxton, B., Schwab, J., Bauer, E. B., et al. 2018, Ap&SS, 234, 34
+Pejcha, O. & Thompson, T. A. 2015, ApJ, 801, 90
+Renzo, M., Goldberg, J. A., Grichener, A., Gottlieb, O., & Cantiello, M. 2024,
+   arXiv e-prints, arXiv:2406.02590
+Ritter, C., Andrassy, R., Côté, B., et al. 2018, MNRAS, 474, L1
+Rizzuti, F., Hirschi, R., Arnett, W. D., et al. 2023, MNRAS, 523, 2317
+Sana, H., de Mink, S. E., de Koter, A., et al. 2012, Science, 337, 444
+Schneider, F. R. N., Podsiadlowski, P., & Laplace, E. 2023, ApJ, 950, L9
+Schneider, F. R. N., Podsiadlowski, P., & Laplace, E. 2024, A&A, 686, A45
+
+                                                                                                                                 Article number, page 21 of 33
+                                                        A&A proofs: manuscript no. main
+
+Appendix A: The effect of the 12 C(α, γ)16 O reaction                    of core hydrogen burning when a H/He composition gradient
+  rate                                                                   is created by the receding convective core. This can form a
+                                                                         transient intermediate convection zone (ICZ) and hence change
+                                                                         the structure of the core outside the inner convective region
+                                                     10% higher rate     (Sibony et al. 2023). Semi-convection remains difficult to con-
+                                                     Fiducial            strain observationally, though a recent study suggest that it may
+     0.30                                                                be an efficient process, with an efficiency parameter of αsc ≥ 1
+                                                     ≈ 15% lower rate
+                                                     (Kunz+2002)         (Schootemeijer et al. 2019). It has a large influence on the final
+                                                                         core structure of stars because it affects the development of the
+     0.25                                                                convective helium-burning core (Langer et al. 1985; Langer
+XC
+
+
+
+
+                                                                         1991), generally leading to smaller core masses for a higher
+                                                                         semi-convection efficiency (see Fig. B.1). In addition, even
+     0.20                                                                small semi-convective layers above a convective burning core
+                                                                         can drastically change the initial conditions for the next burning
+                                                                         phase. For example, late ingestion of helium due to semicon-
+                                                                         vection during core helium burning can strongly affect the core
+            4        5          6        7          8          9
+                                                                         carbon abundance at core helium depletion (Langer 1991). This
+                                    MCO /M                               is shown in Fig. B.2, where the core carbon abundance XC at
+                                                                         the end of core helium depletion is plotted as a function of the
+Fig. A.1. Central carbon mass fraction at core helium depletion as a
+function of the CO core mass for varying 12 C(α, γ)16 O reaction rate.
+                                                                         CO core mass for varying degrees of semi-convective mixing.
+                                                                         Between the models with no semi-convection mixing and the
+                                                                         αsc = 0.1 and αsc = 10 models, there appears to be a systematic
+    Among all nuclear reactions taking place in the interiors of         shift to a higher XC . This can be attributed to a systematically
+stars, the 12 C(α, γ)16 O reaction rate is particularly important for    smaller helium core mass after core hydrogen burning with
+determining the fate of stars (e.g., Weaver & Woosley 1993).             respect to the initial mass, which creates a systematically
+However, it remains notoriously uncertain (Farmer et al. 2020).          smaller CO core and generates more carbon overall (see also
+Towards the end of core helium burning, this reaction becomes            Fig. B.1). Generally, for lower masses and higher densities, the
+the main helium-burning process. It determines the fraction of           triple alpha reaction (which depends on the density cubed) is
+remaining carbon and oxygen in the core after core helium burn-          favored during core helium burning and alpha captures onto
+ing, as shown in Fig. A.1. For a higher reaction rate, the core          carbon (which linearly depends on density) play less of a role
+carbon mass fraction XC reaches systematically lower values. As          (Brown et al. 2001), which means less carbon is destroyed at
+this sets the initial conditions for the subsequent core carbon-         lower masses, leading to a higher XC . However, this trends is no
+burning stage, this reaction thus plays a crucial role in determin-      longer reproduced for the αsc = 1 models, where XC decreases
+ing the final structure and fate of stars. In Fig. A.2, we show the      for CO core masses larger than 5 M⊙ compared to the αsc = 0.1
+effect of varying this reaction rate, from a ∼ 15% lower (Kunz           models. This can be understood as the effect of a late ingestion
+et al. 2002) to a 10% higher rate than our fiducial assumptions          of helium due to semi-convection during core helium burning
+on the final central entropy and compactness. Both as a function         in these models, which boost alpha captures onto carbon, which
+of initial and CO core mass, varying this reaction rate systemati-       reduce XC .
+cally shifts the location of the compactness peak to lower masses
+for a higher reaction rate. This is because a higher rate leads to a          For the αsc = 10 models, we observe a significant jump
+lower core carbon abundance and thus to carbon burning becom-            of ∼ 0.03 in XC for models with CO core masses larger than
+ing neutrino-dominated at lower masses. This is thus a similar           4.5 M⊙ in Fig. B.2. This is because the lowest-mass models
+effect as described in our experiment in which we vary the core          (Mi < 19 M⊙ , MCO < 4.5 M⊙ ) have a different structure com-
+carbon abundances for models with the same core mass (Sect. 4).          pared to higher- models, which all burn helium as red super-
+A difference comes from the role of the 12 C(α, γ)16 O reaction          giants. Due to the efficient semiconvection, these low-mass mod-
+rate in setting the mass of the CO core (see the small shift in CO       els develop a large ICZ after core hydrogen burning and experi-
+core mass in Fig. A.1). Secondary compactness and central en-            ence a blue loop, igniting helium as blue supergiants (BSGs).
+tropy peaks appear at CO core masses between 5 and 6 M⊙ and              The characteristic strong hydrogen-burning shell of the BSG
+7 to 8 M⊙ for a varying 12 C(α, γ)16 O rate. These are discussed in      grows a more massive helium core compared to their initial mass
+more detail in Appendix B. Finally, shifts in the maximum and            than is the case in RSG structures (Fig. B.1). For example, the
+minimum compactness values can be observed. These can be                 18.5 M⊙ model, which develops a BSG structure, has the same
+understood as a varying degree of maximum or minimum con-                He core mass of 6.2 M⊙ as the 19 M⊙ model which has a RSG
+traction in the stellar structure, induced by the varying effect of      structure. This larger helium core mass and the ensuing differ-
+neutrino losses for different nuclear burning conditions during          ent burning conditions during core helium burning favor carbon
+core carbon burning.                                                     destruction through alpha captures and result in a systematically
+                                                                         lower XC in these models.
+Appendix B: The impact of semi-convective mixing                              Changes in semi-convection lead to systematic variations in
+  on the final structure                                                 the final stellar structure, as shown in Fig. B.3. The shift of the
+                                                                         compactness and entropy peaks to higher initial masses (2 M⊙
+Semi-convection is a particularly uncertain mixing process that          for a shift of αsc from 0 to 10) reflects the change in the ini-
+occurs in stellar layers that are unstable against convection            tial mass to helium core mass relation (see Fig. B.1). However,
+because of their superadiabaticity (Schwarzschild criterion for          the CO core mass at which the compactness peak occurs is re-
+convection) but supported by a stabilizing molecular weight              markably similar and varies by only 0.2 M⊙ between models
+gradient (Ledoux criterion). It occurs for example at the end            with different semi-convective mixing. This is because the onset
+Article number, page 22 of 33
+                 E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+of neutrino-dominated burning happens at a similar core mass               this work are barely affected by numerics. The C and Ne shell
+(∼ 6.5 M⊙ ) and similar XC ∼ 0.23. Small variations in the com-            mergers are not numerical artifacts, but instead originate from
+pactness landscape, i.e. the existence of small secondary peaks            the high entropy contrast between the Ne-burning shell and the
+next to the main compactness peak are observed for different val-          C shell in this model (see Sec. 4.5).
+ues of semi-convection in Fig. B.3. For example, the small peak
+in central entropy and compactness at an initial (CO core mass)
+of 20 (5.6) M⊙ has been identified out in multiple other stud-             Appendix D: Interior structure evolution diagrams
+ies (Sukhbold & Woosley 2014; Sukhbold et al. 2018; Chieffi &              We provide an overview of the evolution of the interior 6 M⊙
+Limongi 2020; Chieffi et al. 2021). This appears to be a recur-            structure of all our models from core carbon ignition to core col-
+rent feature in this narrow CO core mass and XC range. Mod-                lapse, shown in Fig. D.1, D.2, D.3, D.4, D.5, and D.6.
+els with initial (CO core) masses between 24 and 28 M⊙ (8 and
+10 M⊙ ) also show variations in compactness and final entropy
+for a changing semi-convection efficiency. This is the region at
+the transition when neon burning becomes neutrino-dominated
+and develops through several convective shells. We observed that
+for a varying semi-convection efficiency, the development of this
+neon-burning front is affected, which leads to small variations in
+compactness. However, the exact mechanisms behind these sec-
+ondary peaks remains to be understood.
+Uncertainties in semi-convective mixing can thus lead to varia-
+tions in the final stellar structure by influencing the initial con-
+ditions for core helium and carbon burning. This creates in part
+the“noise” observed by Sukhbold et al. 2018 in their study of
+the compactness of massive stars. However, it is noteworthy that
+semi-convection does not affect the existence of the main fea-
+tures observed in the compactness landscape and does not sig-
+nificantly change the CO core mass range at which the main
+compactness peak occurs.
+
+Appendix C: Resolution test for the occurrence of
+  shell mergers
+To test how the occurrence of shell mergers is affected by nu-
+merical uncertainties, we perform a resolution test for the model
+presented in Sect. 4.5, i.e. our default 22 M⊙ model with a mod-
+ified central carbon abundance XC = 0.17, starting from core
+oxygen exhaustion. We double the spatial and temporal reso-
+lution, and in pariticular, double the number of grid points in
+zones containing composition gradients and nuclear burning re-
+gions of C, O, and Ne (MESA settings mesh_logX_species
+and mesh_dlog_burn_c_dlogP_extra and equivalent). In
+Fig. C.1 we show the comparison of the Kippenhahn diagrams of
+the default model and the model with double the resolution. We
+find no difference in the occurrence of the shell merger between
+the C and Ne shell (highlighted by the red box). The timing and
+extent is nearly identical, and can be traced back to the same
+mechanism, i.e. the increase in entropy in the Ne-burning shell.
+We therefore verify that these shell mergers between the C and
+Ne shell do not originate from poor resolution. The second shell
+merger between the C/Ne and the O-burning shells (highlighted
+by the blue box in Fig. C.1) occurs 5 min earlier for the model
+with higher resolution. Since this shell merger occurs towards
+the end of Si shell-burning, after most of the iron-rich core has
+already formed, it barely affects the final core structure. Numeri-
+cal uncertainties mainly influence the timing of this shell merger
+event.
+    In Fig. C.2 we compare the final density profiles at the onset
+of core collapse. The density profiles are almost identical, except
+for small variations of order ρ ∼ 10g cm−3 in the He-rich layer.
+The final iron core mass is a little larger for the higher-resolution
+model (MFe core = 1.80 compared to MFe core = 1.89). Similarly,
+the final compactness values is a little larger (ξ2.5 = 0.357 for
+the default model and ξ2.5 = 0.364 for the models with double
+the resolution). We conclude that the shell mergers identified in
+                                                                                                                      Article number, page 23 of 33
+                                                          A&A proofs: manuscript no. main
+
+
+                    10% higher rate                                                                                                      10% higher rate
+             1.2                                                                          1.2
+                    Fiducial                                                                                                             Fiducial
+                    ≈ 15% lower rate                                                                                                     ≈ 15% lower rate
+             1.1    (Kunz+2002)                                                           1.1                                            (Kunz+2002)
+sfc /NA kB
+
+
+
+
+                                                                             sfc /NA kB
+             1.0                                                                          1.0
+
+             0.9                                                                          0.9
+
+             0.8                                                                          0.8
+                    18        20       22        24         26         28                           4       5       6        7       8            9
+                                       Mi /M                                                                            MCO /M
+
+                    10% higher rate                                                                                                  10% higher rate
+             0.6    Fiducial                                                              0.6                                        Fiducial
+                    ≈ 15% lower rate                                                                                                 ≈ 15% lower rate
+                    (Kunz+2002)                                                                                                      (Kunz+2002)
+
+             0.4                                                                          0.4
+ξ2.5
+
+
+
+
+                                                                             ξ2.5
+ f
+
+
+
+
+                                                                              f
+             0.2                                                                          0.2
+
+
+               16    18         20      22        24         26         28                      4       5       6          7     8            9         10
+                                       Mi /M                                                                            MCO /M
+
+Fig. A.2. Final central entropy (top) and compactness (bottom) as a function of the core mass (left) and initial mass (right) for a varying 12 C(α, γ)16 O
+rate.
+
+
+
+
+Article number, page 24 of 33
+                           E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+           14
+                      αsc = 10
+           12         αsc = 1 (fiducial)
+                      αsc = 0.1
+           10                                                       He core
+                      αsc = 0
+Mcore /M
+
+
+
+
+            8
+
+            6                                                       CO core
+
+            4
+                      18           20        22         24         26         28
+                                             Mi /M
+
+Fig. B.1. He (full lines) and CO (dashed lines) core mass at core helium
+depletion for models with a varying semiconvection efficiency. A higher
+efficiency generally leads to a smaller core mass.
+
+
+           0.28                                               αsc = 10
+                                                              αsc = 1 (fiducial)
+           0.26                                               αsc = 0.1
+                                                              αsc = 0
+           0.24
+XC
+
+
+
+
+           0.22
+
+           0.20
+
+                  4            5         6        7           8         9
+                                             MCO /M
+
+Fig. B.2. Central carbon mass fraction at core helium depletion as a
+function of the CO core mass for varying semi-convection efficiency.
+
+
+
+
+                                                                                                                                Article number, page 25 of 33
+                                                        A&A proofs: manuscript no. main
+
+
+                                                       αsc = 10                                                               αsc = 10
+                                                                                         1.2
+                                                       αsc = 1 (fiducial)                                                     αsc = 1 (fiducial)
+             1.1
+                                                       αsc = 0.1
+                                                                                                                              αsc = 0.1
+                                                       αsc = 0                           1.1
+                                                                                                                              αsc = 0
+sfc /NA kB
+
+
+
+
+                                                                            sfc /NA kB
+             1.0
+                                                                                         1.0
+
+             0.9                                                                         0.9
+
+                                                                                         0.8
+                    18    20        22         24         26          28                       4   5      6        7         8          9
+                                    Mi /M                                                                     MCO /M
+
+                                                     αsc = 10                                                                 αsc = 10
+             0.6                                     αsc = 1 (fiducial)                  0.6                                  αsc = 1 (fiducial)
+                                                     αsc = 0.1                                                                αsc = 0.1
+                                                     αsc = 0                                                                  αsc = 0
+ξ2.5
+
+
+
+
+                                                                            ξ2.5
+             0.4                                                                         0.4
+ f
+
+
+
+
+                                                                             f
+
+             0.2                                                                         0.2
+
+                   18    20       22      24           26          28                          4   5      6        7          8         9
+                                    Mi /M                                                                     MCO /M
+
+Fig. B.3. Final central entropy and compactness as a function of the initial mass for varying semi-convection efficiency.
+
+
+
+
+Fig. C.1. (a) Same as Fig. 8 but from core oxygen depletion to core collapse. (b) The same model in which we double the spatial and temporal
+resolution. The red and blue boxes highlight the shell merger between the C and Ne-burning shells, and the C/Ne and O-burning shells, respectively.
+
+
+
+Article number, page 26 of 33
+                                  E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+                      10
+                                                                default
+                                                                2x higher resolution
+
+                       5
+log10 (ρ/(g cm−3 )
+
+
+
+
+                       0
+
+
+
+                     −5
+
+
+                           MFe core MSi core       MCO core MHe core
+                     −10
+                           0       2           4        6        8       10        12
+                                                        m/M
+
+Fig. C.2. Final density profile of the models in Fig. C.1 with our default
+assumptions compared to a model with double the resolution at the on-
+set of core collapse. From left to right, vertical lines indicate the Fe, Si,
+CO, and He core masses in black and orange for the default and higher
+resolution model, respectively.
+
+
+
+
+                                                                                                                                       Article number, page 27 of 33
+                                                          A&A proofs: manuscript no. main
+
+
+
+
+Fig. D.1. Final interior structure evolution of massive stars from core C ignition to the onset of core collapse. Colors indicate the specific gravother-
+mal energy released or used by contraction (red) and expansion (blue). Brown contours show lines of constant (logarithmic) density. Convective
+regions are shown by hatches and the evolution of the central specific entropy is shown with a black line. From left to right, vertical white dashed
+lines mark the moments of core C, Ne, O, and Si depletion, respectively. The dashed horizontal line represents the value of the classical Chan-
+drasekhar mass before the end of core oxygen burning. Here we show models from 17 M⊙ to 20.5 M⊙ , where central carbon burning is slowly
+becoming neutrino dominated and the core structures are expected to lead to a successful supernova.
+
+
+
+
+Article number, page 28 of 33
+                  E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+
+
+
+Fig. D.2. Same as Fig. D.1 with initial masses between 21.0 M⊙ and 24.5 M⊙ (region A and B), where central carbon burning is neutrino dominated.
+The final core structure favors black hole formation for the 22 M⊙ – 23 M⊙ models and successful supernova explosions in the other cases.
+
+
+
+
+                                                                                                                       Article number, page 29 of 33
+                                                    A&A proofs: manuscript no. main
+
+
+
+
+Fig. D.3. Same as Fig. D.1 for models with initial masses between 25 M⊙ and 29 M⊙ , where central carbon burning is neutrino dominated and
+central neon burning becomes increasingly neutrino-dominated. All models are expected to lead to a successful supernova explosion.
+
+
+
+
+Article number, page 30 of 33
+                  E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+
+
+
+Fig. D.4. Same as Fig. D.1 for models with initial masses between 30.0 M⊙ and 37.0 M⊙ (region C), where central carbon burning and central neon
+burning are both neutrino-dominated. Above an initial mass of 34.0 M⊙ , Because of the high final binding energy of the layers above the central
+core, these models are expected to lead to black hole formation.
+
+
+
+
+                                                                                                                       Article number, page 31 of 33
+                                                      A&A proofs: manuscript no. main
+
+
+
+
+Fig. D.5. Same as Fig. D.1 for models with initial masses between 38.0 M⊙ and 45.0 M⊙ (region D and beyond), where central carbon burning and
+central neon burning are both neutrino-dominated, and core oxygen burning is increasingly neutrino dominated. Because of the high final binding
+energy of the layers above the central core, these models are expected to lead to black hole formation.
+
+
+
+
+Article number, page 32 of 33
+                 E. Laplace et al.: It’s written in the massive stars: The role of stellar physics in the formation of black holes
+
+
+
+
+Fig. D.6. Same as Fig. D.1 for models with initial masses between 46.0 M⊙ and 50.0 M⊙ . Because of the high final binding energy of the layers
+above the central core, these models are expected to lead to black hole formation.
+
+
+
+
+                                                                                                                      Article number, page 33 of 33
+

@@ -1,0 +1,487 @@
+                                                Draft version March 8, 2024
+                                                Typeset using LATEX twocolumn style in AASTeX631
+
+
+
+
+                                                         Destratification in the Progenitor Interior of the Mg-rich Supernova Remnant N49B
+                                                        Toshiki Sato,1 Kai Matsunaga,2 Ryo Sawada,3 Koh Takahashi,4 Yudai Suwa,3 John P. Hughes,5
+                                                                          Hiroyuki Uchida,2 Takuto Narita,2 and Hideyuki Umeda6
+                                                1 Department of Physics, School of Science and Technology, Meiji University, 1-1-1 Higashi Mita, Tama-ku, Kawasaki, Kanagawa
+
+                                                                                                       214-8571, Japan
+                                              2 Department of Physics, Graduate School of Science, Kyoto University, Kitashirakawa Oiwake-cho, Sakyo-ku, Kyoto 606-8502, Japan
+                                              3 Department of Earth Science and Astronomy, Graduate School of Arts and Sciences, The University of Tokyo, Tokyo 153-8902, Japan
+arXiv:2403.04156v1 [astro-ph.HE] 7 Mar 2024
+
+
+
+
+                                              4 National Astronomical Observatory of Japan, National Institutes for Natural Science, 2-21-1 Osawa, Mitaka, Tokyo 181-8588, Japan
+                                                     5 Department of Physics and Astronomy, Rutgers University, 136 Frelinghuysen Road, Piscataway, NJ 08854-8019, USA
+                                                 6 Department of Astronomy, Graduate School of Science, University of Tokyo, 7-3-1 Hongo, Bunkyo-ku, Tokyo 113-0033, Japan
+
+
+
+                                                                                                        ABSTRACT
+                                                        Simulations of pre-supernova evolution suggest that some intense shell burning can be so active that,
+                                                      in extreme cases, it can merge with the outer shell, changing the initial conditions for the supernova
+                                                      explosion. However, such violent activity in the interior of stars has been difficult to confirm from
+                                                      observations of stars. Here we propose that the elemental composition of O-rich ejecta in supernova
+                                                      remnants can be a tool to test for this kind of intense shell burning activity in the final stages of
+                                                      progenitor evolution. As an example, we discuss the origin of “Mg-rich” ejecta in the supernova
+                                                      remnant N49B. A high Mg/Ne mass ratio ≳ 1 suggests that the Ne- or O-burning shell has broken
+                                                      into or merged with the outer shell before the collapse. Such Mg-rich (or Ne-poor) ejecta has been
+                                                      identified in some other supernova remnants, supporting the idea that some destratification process,
+                                                      such as a shell merger, does indeed occur in the interiors of some massive stars, although they may not
+                                                      be the majority. Our results suggest that X-ray observations of O-rich ejecta in core-collapse supernova
+                                                      remnants will be a unique tool to probe the shell burning activity during the final stage of a massive
+                                                      star’s interior.
+
+
+                                                      Keywords: Massive stars (732) — Stellar structures (1631) — Supernove (1688) — Core collapse
+                                                                supernovae (304)
+
+                                                                1. INTRODUCTION                                    pactness of the pre-supernova core, which is closely re-
+                                                In the final days of a massive star’s life, a series of            lated to a series of shell-burning processes in the final
+                                              shell burnings is known to be crucial for determining                stages, controls the post-bounce accretion evolution and
+                                              the internal structure of the star. The stellar structure            its remnant mass (e.g., O’Connor & Ott 2011; Sukhbold
+                                              affects the propagation of the supernova shock wave,                 & Woosley 2014). The compactness is defined as
+                                              therefore the activity of the burning shells has recently                                       M/M⊙
+                                              attracted much attention from the point of view of the                            ξM =                         ,                 (1)
+                                                                                                                                       R(Mbary = M )/1000 km
+                                              explosion mechanism of core-collapse supernovae (e.g.,
+                                              O’Connor & Ott 2011, 2013; Sukhbold & Woosley 2014;                  where R(Mbary = M ) is the radial coordinate that en-
+                                              Sukhbold et al. 2016, 2018; Müller et al. 2016a; Suwa &             closes a baryonic mass of M at the time of core bounce
+                                              Müller 2016; Couch & Ott 2013, 2015; Couch et al. 2020;             (O’Connor & Ott 2011). Several studies have suggested
+                                              Burrows & Vartanyan 2021; Ugliano et al. 2012; Ertl                  that a smaller compactness more easily leads to super-
+                                              et al. 2016; Janka 2012). However, both observation and              nova explosions (e.g., Ugliano et al. 2012; Nakamura
+                                              theory have struggled to describe the drastic evolution              et al. 2015; Pejcha & Thompson 2015; Sukhbold et al.
+                                              in the stellar interior during this short period.                    2016). More recently, Ertl et al. (2016) have discussed
+                                                One of the most important parameters to link the fi-               a new criterion based on two parameters, M4 and µ4 ,
+                                              nal stages of the pre-supernova evolution to the super-              which are the mass enclosed at the point where the en-
+                                              nova mechanism would be “compactness”. The com-                      tropy in the progenitor exceeds a value of 4 kB baryon−1
+                                                                                                                   and the mass derivative at the same position, respec-
+2
+
+tively. M4 has been used to locate the steep density           Table 1. The best-fit parameters for the spectral fitting.
+drop often associated with a strong O-burning shell in         The errors show 90% confidence level (∆χ2 = 2.7). The
+the progenitor star (e.g., Woosley & Heger 2007). In this      solar abundance in Anders & Grevesse (1989) is used.
+criterion, a high value of M4 combined with a low value
+of µ4 is favorable for an explosion, because both a high        Components           Parameters               Best-fit values
+accretion luminosity, which accounts for a large fraction       Absorption (phabs)   NH [1021 cm−2 ]             2.0+0.3
+                                                                                                                     −0.1
+
+of the neutrino luminosity of the proto-neutron star at         ISM (nei)            kTe [keV]                  0.22+0.11
+                                                                                                                     −0.01
+the time of shock revival, and a low mass accretion rate                             Abundance                   0.2 (fix)
+outside the M4 interface are realized.                                               Redshift [10−3 ]          1.91±0.01
+   Turbulent flow in the Si/O-burning shell is also known                            EM [1059 cm−3 ]             1.5+0.1
+                                                                                                                     −0.3
+to be another important effect affecting the evolution          Ejecta (vpshock)     kTe [keV]                  0.65+0.01
+                                                                                                                     −0.02
+of the supernova shock wave (e.g., Couch & Ott 2013,                                 (O/H)/(O/H)⊙               0.64+0.02
+                                                                                                                     −0.04
+2015; Couch et al. 2020), because the development                                    (Ne/H)/(Ne/H)⊙             0.88+0.03
+                                                                                                                     −0.08
+and strength of neutrino-driven convection in the gain                               (Mg/H)/(Mg/H)⊙             2.30+0.16
+                                                                                                                     −0.10
+layer increase with increasing magnitude of the accret-                              (Si/H)/(Si/H)⊙            0.57±0.06
+ing seed perturbations (e.g., Foglizzo et al. 2006; Scheck                           (Fe/H)/(Fe/H)⊙             0.35+0.01
+                                                                                                                     −0.04
+et al. 2008). For example, using three-dimensional core-                             ne tlow [109 cm−3 s]        1.9+2.0
+                                                                                                                     −1.1
+collapse supernova simulations, Couch & Ott (2013)                                   ne thigh [1011 cm−3 s]      2.6+0.3
+                                                                                                                     −0.1
+have shown that aspherical velocity perturbations can                                Redshift [10−3 ]          1.91±0.01
+alter the post-bounce evolution and trigger an explosion                             EM [1058 cm−3 ]             7.9+0.8
+                                                                                                                     −0.3
+in a model that does not explode without them. This
+                                                                                     χ2 /d.o.f                 184.25/125
+is known as a “perturbation-aided” explosion. However,
+the activity in the Si/O shell of a massive star has been
+difficult to discuss observationally, and currently the dis-   drostatic nucleosynthesis during stellar evolution, and
+cussion of pre-supernova asphericity is mainly based on        its elemental composition is not so sensitive to explosive
+simulations.                                                   nucleosynthesis (e.g., Woosley & Weaver 1995; Thiele-
+   Yadav et al. (2020) have performed a three-                 mann et al. 1996; Woosley et al. 2002; Umeda et al. 2012,
+dimensional (3D) simulation of a non-rotating 18.88            and see also Appendix A). This means that by measur-
+M⊙ supernova progenitor (see also Müller et al. 2016b;        ing the elemental composition of the O-rich ejecta, the
+Yoshida et al. 2019, 2021) and observed a violent shell        theoretically predicted disappearance of the O/Ne layer
+merger event, where the interface between the O/Ne             can be evidence for the intense shell burning activity.
+layer and the Si/O layer disappears during the evolu-          Such an observation of supernova remnants provides a
+tion, and Si is mixed far out into the merged O/Ne shell.      unique test that is not possible with any observations
+In the merging process, Ne entrained inward by convec-         of stars. In general, C-shell burning produces an O/Ne-
+tive downdrafts burns, resulting in lower Ne/O ratio in        rich layer at the endpoint of stellar evolution. On the
+the 3D model compared to the 1D model at the time of           other hand, some type of destratification, such as a shell
+collapse. In addition to changing the elemental distri-        merger, has the potential to produce an O/Mg-rich (Ne-
+butions and fractions in the interior of a massive star,       poor) layer through enhanced Ne burning. Indeed, some
+the shell merger also affects the convective seed pertur-      “Mg-rich” ejecta have been identified in some supernova
+bations and the compactness of the stellar core, which         remnants (e.g., N49B and G284.3-1.8: Park et al. 2003;
+are dynamically important for the explosion.                   Williams et al. 2015), the origin of which is still un-
+   As shown in the theoretical studies above, the activ-       clear. In this study, we discuss the origin of the Mg-rich
+ity of a series of shell burning events in the final stage     ejecta in N49B, which is known to be the remnant of a
+of stellar evolution is a key to understanding the initial     core-collapse supernova in the Large Magellanic Cloud
+conditions for the supernova explosion. In particular,         (LMC) (Park et al. 2003; Park & Bhalerao 2017). We
+shell mergers would be a fascinating phenomenon, af-           propose that the destratification during the stellar evo-
+fecting both compactness and seed perturbations. We            lution can be a new solution to explain the origin of the
+propose here that X-ray observations of O-rich ejecta          Mg-rich (Ne-poor) ejecta in supernova remnants.
+in supernova remnants could provide a unique opportu-
+nity to study such activity around the O-rich layer dur-       2. OBSERVATION OF MG-RICH EJECTA IN N49B
+ing the pre-supernova evolution. The majority of the
+                                                                 Chandra ACIS-S has observed the LMC supernova
+O-rich ejecta should have been synthesized during hy-
+                                                               remnant N49B on 2001 September 15 with a total ex-
+                                                                                                                                3
+
+
+
+
+Figure 1. (a) Chandra X-ray image of N49B, combining images in green, and red made from energy bands of 0.5–10 keV
+(full band) and 1.32–1.42 keV (Mg Kα), respectively. The white contour shows the ejecta-dominanted region with strong Mg
+emissions for the spectral analysis. The dashed ellipses are the background region. (b) X-ray spectrum of the Mg-rich ejecta
+in N49B and its best-fit model (see solid lines). The blue and magenta curves represent the best-fit low- and high-temperature
+components, respectively. The dashed magenta line shows the plasma model that assumes the solar ratio between Mg and O.
+
+posure of 33.9 ks. We here reprocessed the event file of            of ≈ ±900 km s−1 . The plasma parameters, kTe ∼ 0.7
+this observation (from level 1 to level 2) to remove pixel          keV and ne t ∼ 3 × 1011 cm−3 s for the ejecta, agree well
+randomization and to correct for CCD charge transfer                with the previous studies (e.g., Park et al. 2003; Park &
+efficiencies using CIAO (Fruscione et al. 2006) version             Bhalerao 2017; Uchida et al. 2015).
+4.13 and CalDB 4.9.5. The bad grades were filtered out,               We found a high Mg/Ne abundance ratio of 2.62+0.21   −0.26 ,
+and good time intervals were reserved.                              which is converted to a mass ratio of 0.97+0.08
+                                                                                                                  −0.10  assum-
+   Figure 1a shows the Chandra image of N49B, with                  ing atomic weights of 24.3 and 20.2 for Mg and Ne,
+the Mg-Kα emissions (1.32-1.42 keV band) highlighted                respectively. Park et al. (2003) and Park & Bhalerao
+in red. We extracted the X-ray spectra from the cen-                (2017) have already reported such “Mg-rich” ejecta with
+tral ejecta-dominanted region. After subtracting the                high Mg/Ne ratios in the central regions of the rem-
+background spectrum from the surrounding empty sky                  nant. The spatially resolved analysis performed in Park
+(dashed ellipse), we fitted the X-ray spectrum with ab-             & Bhalerao (2017) suggests that the Mg/Ne abundance
+sorbed thermal plasma models (phabs×(nei+vpshock)                   ratio varies from region to region in the range of ∼3–5,
+in Xspec) as shown in Figure 1b. The best-fit parame-               which is slightly larger than our estimate. Uchida et al.
+ters are summarized in Table 1. Here, we assumed that               (2015) have also reported a high Mg/Ne abundance ra-
+N49B has two plasma components: a low-temperature                   tio of ∼2.8 based on the Suzaku observation of N49B,
+ISM (nei: non-equilibrium ionization collisional plasma             which is in good agreement with our estimate. The dif-
+model) and a high-temperature Ejecta component (vp-                 ference amoung these Mg/Ne observations would come
+shock: plane-parallel shock plasma model). The abun-                from different situations of spectral analysis (e.g., region
+dance of the ISM component was fixed to be 0.2 to re-               selection, plasma modeling). However, even considering
+semble the LMC abundance (e.g., Hughes et al. 1998).                these observational uncertainties, there is a strong con-
+For the Ejecta component, the abundances of S, Ar, Ca               sensus on the high Mg/Ne mass ratio ≳ 1 in the N49B
+were linked to Si. The redshift parameters were linked              ejecta. For example, the Mg/Ne mass ratio is 0.37–0.56
+between the ISM and Ejecta components, where the red-               in the solar values (Anders & Grevesse 1989; Asplund
+shift velocity is estimated to be ∼ 600 km s−1 . This               et al. 2009), which is significantly lower than that in
+shift can be interpreted as the ACIS gain uncertainty of            N49B. Since the solar abundances for Mg and Ne would
+±0.3%1 , which is converted to the velocity uncertainty             be a sort of average of the contributions from massive
+                                                                    stars, N49B with the high Mg/Ne ratio that deviates
+  1 https://cxc.harvard.edu/cal/summary/Calibration Status Report.html
+4
+
+
+
+
+Figure 2. Top left: Compactness enclosing the innermost 2.5 M⊙ (ξ2.5 ) plotted as a function of He core mass. Top middle:
+M4 plotted as a function of He core mass. Top right: µ4 plotted as a function of He core mass. Bottom: The relation between
+the Ertl parameters, µ4 M4 and µ4 . The dashed line show a BH–SN separation curve for the w18.0 calibration shown in Ertl
+et al. (2016). In the gray data, the models have a low Mg/Ne mass ratio < 1. The blue and red data show that the models have
+a high Mg/Ne mass ratio > 1 with MZAMS < 14M⊙ and MZAMS ≧ 14M⊙ , respectively. The circle, square and star data show
+the models in the mass ranges of MZAMS = 12–14 M⊙ , 14–19 M⊙ and 19–27 M⊙ , respectively. All the parameters shown here
+were calculated by using the pre-supernova models provided by Sukhbold et al. (2018).
+
+from the average could have experienced some peculiar            Ne burning region is too narrow to contribute to a sig-
+stellar evolution or explosion.                                  nificant change in the abundance of the entire O-rich
+                                                                 layer (see Appendix A and Figure 7). Therefore, we dis-
+                    3. DISCUSSION                                cuss here the cause of the high Mg/Ne ratio based on a
+  As already pointed out in the previous studies (Park           comparison with that in pre-supernova models.
+et al. 2003; Park & Bhalerao 2017; Uchida et al. 2015),            We analyzed 1,499 one-dimensional pre-supernova
+we found that the Mg-rich ejecta of N49B present a high          models (with the standard mass loss) provided by
+                          +0.08
+Mg/Ne mass ratio of 0.97−0.10   . However, it is still un-       Sukhbold et al. (2018) to search for destratification
+clear how the Mg-rich ejecta were produced. In this sec-         events that reproduce a high Mg/Ne ratio as observed
+tion, we discuss the origin of the Mg-rich ejecta based          in N49B. As pointed out by Yadav et al. (2020), the dis-
+on a comparison with theoretical models.                         turbed shell activity is expected to reduce the amount
+                                                                 of Ne in the O-rich layer as the Ne mixes inward and is
+     3.1. Comparison with pre-supernova models                   burned. Not only in 3D simulations, some shell merg-
+  Because both the observed Mg and Ne in the N49B                ers has also been observed in 1D pre-supernova sim-
+ejecta should have been synthesized in the O-rich layer          ulations (e.g., Woosley et al. 1995; Woosley & Heger
+of the progenitor star, we assume that the Mg/Ne ra-             2007; Rauscher et al. 2002; Tur et al. 2007; Sukhbold &
+tio purely reflects the elemental composition in that            Woosley 2014), where the compactness is tend to be
+layer. Of course, although the explosive nucleosynthesis         small (see section 3.4 in Sukhbold & Woosley 2014).
+could change the elemental composition, the explosive            The interior of the star expands as nuclear burning is
+                                                                                                                                 5
+
+
+
+
+Figure 3. Schematic views of the destratification processes of shell-burning structures. (a) In the low-mass models with
+MHecore < 4 M⊙ , strong Ne shell burning results in Ne-burning shell intrusion into the outer region. Here, the outer region is not
+a convective burning shell, thus there is no violent shell merger in this case. (b) In the high-mass models with MHecore > 4 M⊙ ,
+strong O shell burning produces a violent shell merger between the O and C burning shells. Both the destratification processes
+produce an Mg-rich composition in the O-rich layer by the combustion of Ne taken inward.
+
+enhanced in the merged burning shell, which makes the                of the 15.28 M⊙ and 15.90 M⊙ pre-supernova models,
+compactness smaller. Therefore, some relationship be-                where we have chosen the two similar-mass models that
+tween the Mg/Ne ratio and compactness is expected.                   most easily compare the differences in elemental distri-
+  In Figure 2, we clearly see that a model with a high               butions. In the 15.28 M⊙ model, the fourth convective
+Mg/Ne mass ratio > 1 has a small compactness, M4                     C-burning shell ignites about 0.1 years before the col-
+and µ4 (see the detail discussions in section 3.2). Here             lapse, expanding into the region between 2 M⊙ and 3
+we have calculated the Mg/Ne mass ratios in the O-rich               M⊙ at the same time as the first O-shell ignites. This
+layer of pre-supernova models, which has a high oxygen               C-burning shell does not merge with the inner shell until
+mass fraction > 0.4. The Mg-rich models appear around                the collapse, forming a flat O/Ne layer in the region be-
+regions where the compactness changes drastically, ex-               tween ∼2 M⊙ and ∼3 M⊙ . In the 15.90 M⊙ model, the
+cept for the models that have a low He-core mass below               last Ne- and O-burning shells expand and merge with
+4 M⊙ (MZAMS ≲ 14M⊙ ).                                                the outer C-burning shell after ∼10−3 yr before collapse,
+  In the low-mass models with MHecore < 4 M⊙ , the                   producing a large convective zone that expands between
+Mg-rich cases are mainly the result of Ne-burning shell              ∼1.6 M⊙ and ∼3 M⊙ . Here, the mixing is more exten-
+intrusion into the outer region (Figure 3(a)). As an ex-             sive than in the low-mass cases, and Ne is burned more
+ample, Figure 4 shows the mass fraction profiles and                 efficiently, resulting in a higher abundance of Mg.
+convective histories of the 12.02 M⊙ and 12.75 M⊙                       The most significant difference between the shell de-
+pre-supernova models, where we have chosen the two                   struction processes for the low-mass and high-mass mod-
+similar-mass models that most easily compare the dif-                els is the degree of Si intrusion into the O-rich layer. In
+ferences in elemental distributions. In the 12.02 M⊙                 the former, the Ne-burning shell, where the Si fraction is
+model, the Ne-shell burning is not convective after the              low, breaks into the outer shell, producing a low Si/O ra-
+third O-shell burning (about 0.1 yr before the collapse),            tio in the O-rich layer. On the other hand, in the latter,
+leaving a thin O/Mg/Si layer. On the other hand, in                  the O-burning shell, where the Si fraction is high, merges
+the 12.75 M⊙ model, the Ne-shell burning becomes con-                with the outer C-burning shell. As a result, the O/Ne
+vective and breaks into the outer region shortly after               layer disappears and a new O/Si layer is formed (see the
+∼10−3 yr before the collapse. The mixing process re-                 mass region between 2 M⊙ and 3 M⊙ in the bottom of
+duces the Ne fraction in the O-rich layer, resulting in a            Figure 5). In some extreme cases, the entire Si-rich layer
+high Mg/Ne ratio in the O-rich layer.                                is incorporated into the O-rich layer, which resembles
+  In the high-mass models with MHecore > 4 M⊙ , the                  the multi-dimensional simulation of Yadav et al. (2020).
+Mg-rich models are considered as the result of shell                 Therefore, the Si/O mass ratio would also be important
+mergers between the O- and C-burning shells (Figure                  to characterize these shell-merger phenomena.
+3(b)). In this case, the strong O-shell burning produces                Indeed, the Mg/Ne vs. Si/Ne plot (Figure 6) shows
+a violent merger of shells. As an example, Figure 5                  this tendency very well. We found that N49B has a low
+shows the mass fraction profiles and convective histories            Si abundance, which currently supports the Ne-shell in-
+6
+
+
+
+
+Figure 4. Top: The mass fraction profile and convective history of the 12.02 M⊙ pre-supernova model, where the last Ne-
+burning shells are not convective. Bottom: Same as above, but for the 12.75 M⊙ pre-supernova model, where the last Ne-burning
+shell is convective and breaks into the outer shell. The model data and convective plots are taken from Sukhbold et al. (2018).
+
+trusion into the outer shell, which can be seen in the               As shown in Figure 2, the destratification processes
+low-mass progenitors, as the origin of the Mg-rich ejecta          that produce a high Mg/Ne ratio in the pre-supernova
+in the remnant. However, there is a possibility that the           interior would also affect the explosion itself. Remark-
+Si abundance is diluted by mixing with the ISM gas, as             ably, almost all the Mg-rich models have the lowest µ4
+seen in its sub-solar abundance. Also, in the low-mass             values (see also Figure 2 top right). This is thought
+progenitor case, the effects of explosive nucleosynthesis          to be achieved by the expansion of the convection zone
+show unfavorable results for too large Mg/Ne mass ra-              due to the intense shell-burning activity, which would
+tios greater than 1, as seen in N49B (see Appendix A               lead to a low infall-mass rate into the stalled shock.
+and Figure 7). In addition, there would be uncertainties           Another interesting feature would be a relatively high
+in pre-supernova models, thus we refrain from drawing              M4 value, which implies a high neutrino luminosity
+strong conclusions on this topic. We note that the un-             from its proto-neutron star, in the Mg-rich models with
+certainty in nuclear reaction rates such as 12 C(α,γ)16 O          MHecore < 4M⊙ (see blue points in Figure 2). Both the
+also changes the values in Figure 6.                               low infall-mass rate and the high neutrino luminosity
+                                                                   in the low-mass Mg-rich progenitors imply the easiest
+                                                                   explosions among all the models, which may produce a
+          3.2. Impact on supernova explosions
+                                                                   more spherical and low-energy explosion. In the case of
+                                                                                                                       7
+
+
+
+
+                  Figure 5. Same as Figure 4, but for the 15.28 M⊙ and 15.90 M⊙ pre-supernova models.
+
+
+Table 2. The number ratios between the O/Ne-rich and Mg-rich progenitors in Sukhbold et al. (2018), where “Mg-rich” means
+their Mg/Ne mass ratio is above 1.
+                                12–13 M⊙    13–14 M⊙     14–15 M⊙   15–16 M⊙   16–17 M⊙    17–18 M⊙
+                                   0.19        0.02         0.07       0.56       0.07        0.12
+                                18–19 M⊙    19–22 M⊙     22–23 M⊙   23–24 M⊙   24–27 M⊙    12–27 M⊙
+                                   0.15        0.00         0.13       0.14       0.00        0.10
+
+
+N49B, a relatively high explosion energy of ∼2–4×1051                            3.3. Other candidates
+erg was estimated (Hughes et al. 1998) and its shape has          In many O-rich supernova remnants, their O/Ne layer
+a smooth spherical form, which does not support all the         appears to be intact without destratification. For ex-
+features. While accurate estimates of explosion energy          ample, famous O-rich supernova remnants such as 1E
+are always difficult in supernova remnant studies, future       0102.2–7219, G292.0+1.8, and Puppis A show high
+systematic discussions of this topic will be very interest-     O/Ne ratios of ∼0.4 (e.g., Flanagan et al. 2004; Kamit-
+ing to understand the impact of intense shell activity on       sukasa et al. 2014; Katsuda et al. 2010), suggesting that
+supernova explosions.                                           destratification processes may not be a universal phe-
+8
+
+                                                               events. However, the model uncertainties are thought
+                                                               to be very large.
+                                                                  As pointed out in Sukhbold et al. (2018), the C- and
+                                                               O-convective shells are separated from coupling by only
+                                                               a single thin zone in some models, which may actually
+                                                               appear as other shell merger events. Therefore, differ-
+                                                               ences in the treatment of multidimensional convection
+                                                               and overshoot may affect the appearance of shell merg-
+                                                               ers. This means that observational calibration will be
+                                                               important to understand the true rate of destratification
+                                                               events. As a first step in the observational approach to
+                                                               this topic, we discuss here two Mg-rich/Ne-poor can-
+                                                               didates, G284.3-1.8 and Cassiopeia A, that are likely
+                                                               to have undergone the destratification during their pre-
+                                                               supernova evolution.
+                                                                  G284.3-1.8 is known as a Galactic supernova remnant
+                                                               hosting a high-mass X-ray binary (HMXB) in the cen-
+                                                               tral region. Williams et al. (2015) have reported a high
+                                                               Mg/Ne abundance ratio of ∼3.5 in the western region,
+Figure 6. A scatter plot between the Mg/Ne and Si/Ne
+                                                               which is converted to a mass ratio of ∼1.3 using the
+mass ratios derived from the pre-supernova models in
+Sukhbold et al. (2018). The magenta star shows the values
+                                                               solar abundance ratios in Anders & Grevesse (1989).
+of N49B obtained in this study. The magenta box shows the      As can be seen in Figure 6, the elemental composition
+ratios in the western region of G284.3-1.8, which also shows   of its ejecta is similar to that of N49B. The most sig-
+a Mg-rich composition (Williams et al. 2015). The red cir-     nificant difference from the N49B case is that only a
+cle and box show the ratios in Puppis A and G292.0+1.8         portion of the western side has the Mg-rich composi-
+(Katsuda et al. 2010; Kamitsukasa et al. 2014), which show     tion. If the shell merger causes the Mg-rich ejecta, the
+the normal Ne-rich ejecta. The differences in He core mass     Mg-rich composition is expected to see in the entire O-
+are color-coded, where models that do not explode in Figure
+                                                               rich layer because the O-rich layer is well mixed in by
+2 are transparent in color. The dashed gray line shows the
+threshold for Mg-rich events (Mg/Ne mass ratio = 1). Shell     convection. To produce the asymmetric distribution of
+mergers between the O- and C-burning shells, which occur       Mg/Ne abundance in the remnant, some special shell
+in models with MHecore > 5M⊙ , result in a high Si/Ne ratio    destruction process may be needed, however we cannot
+of >1.                                                         conclude it from the current observed facts alone.
+                                                                  Cassiopeia A is one of the most well-studied core-
+nomenon in the evolution of massive stars (see red data        collapse supernova remnants in our Galaxy. Vink et al.
+points in Figure 6 for the normal O/Ne layer cases). Fu-       (1996) have reported significantly low Ne and Mg abun-
+ture systematic studies of the elemental composition of        dances in the ejecta of Cassiopeia A. The Ne/O mass
+the O-rich ejecta in core-collapse supernova remnants          ratio was estimated to be ∼0.01-0.02 (see also Hwang
+will provide a fruitful discussion of the fraction of mas-     & Laming 2012), suggesting the possibility of the Ne
+sive stars that undergo the destratification processes.        consumption by shell merger. On the other hand, the
+  Table 2 shows the rate of destratificated Mg-rich            Mg/Ne mass ratio of ∼0.3 is not large, in contrast to the
+events in the pre-supernova models in Sukhbold et al.          theoretical predictions for shell mergers with Ne deple-
+(2018), which shows that 10% of the pre-supernova mod-         tion. Therefore, it cannot be explained by the destrati-
+els have a Mg-rich (Ne-poor) oxygen layer. In particu-         fication process alone, as investigated in this paper.
+lar, the models in the mass ranges 12–13 M⊙ and 15–               As discussed above, few candidates can currently
+16 M⊙ , where convection and shell burning conditions          be concluded to have undergone shell destruction like
+change significantly, have high Mg-rich event rates of         N49B; a comprehensive survey of O-rich remnants to
+19% and 56%, respectively. In contrast to this, there          show what fraction of such events exist would be bene-
+are no Mg-rich events in the 19–22 M⊙ and 24–27 M⊙             ficial to the discussion of the internal structure of pro-
+mass regions where the compactness increases steadily.         genitors of supernova remnants.
+Given the initial mass function, the progenitors of ≲ 16
+M⊙ could account for the majority of destratification
+                                                                        4. SUMMARY AND CONCLUSION
+                                                                                                                        9
+
+  A series of shell burnings is known to be crucial for de-    burning shell has broken into or merged with the outer
+termining the internal structure of the star, which is also    shell. Such Mg-rich (or Ne-poor) ejecta have been iden-
+dynamically important for the explosion itself. There-         tified in some other supernova remnants, supporting the
+fore, the activity of the burning shells has recently at-      idea that shell mergers do indeed occur in the interiors of
+tracted much attention from the point of view of the           some massive stars, although they may not be the ma-
+explosion mechanism of core-collapse supernovae. Sim-          jority. Our results suggest that X-ray observations of
+ulations of pre-supernova evolution suggest that some          O-rich ejecta in core-collapse supernova remnants will
+strong shell burning can be so active that, in extreme         be a unique tool to probe the activity during the final
+cases, it can merge with the outer shells, changing the        stage of a massive star’s interior.
+initial conditions for the supernova explosion. However,
+such activity in the interior of stars has been difficult to   We thank Stanford E. Woosley and Alexander Heger
+confirm from observations of stars.                            for providing some convective plots for the progenitors
+  In this study, we demonstrated that the elemental            with the ZAMS mass above 20 M⊙ and useful com-
+composition of O-rich ejecta in supernova remnants can         ments. This work was supported by the Japan Society
+be a tool to test for this destratification phenomenon.        for the Promotion of Science (JSPS) KAKENHI grant
+As a first example, we studied the origin of “Mg-rich”         No. JP19K14739 and JP23K13128.
+ejecta in the supernova remnant N49B. A high Mg/Ne
+mass ratio ≳ 1 in its ejecta suggests that the Ne- or O-
+
+                                                        APPENDIX
+
+
+                                 A. EFFECTS OF EXPLOSIVE NUCLEOSYNTHESIS
+
+
+
+
+Figure 7. Comparison of the mass fraction profiles between pre-SN and SN models with the ZAMS mass of (a) 12.02 M⊙ , (b)
+12.75 M⊙ , (c) 15.28 M⊙ and (d) 15.90 M⊙ .
+
+
+  We have simulated 1D supernova explosions for the progenitors shown in Figure 4 and 5 to check the effects of
+explosive nucleosynthesis. For numerical simulations, we employed the 1D Lagrangian hydrodynamic code in which
+neutrino heating and cooling terms are taken into account by the light-bulb approximation as described in Sawada &
+10
+
+Suwa (2023) (see also Suwa et al. 2019). As a result, we found that the explosive nucleosynthesis does not change our
+conclusion, although the values change a little.
+   Figures 7 (a) and (b) show the results for the low-mass cases (12.02 M⊙ and 12.75 M⊙ ). If there is no destratification
+process (12.02 M⊙ ), the O/Ne ratio in the O-rich layer shows little change, even though the inner part of the O-rich
+layer is scraped off by explosive nucleosynthesis. If there is the Ne-shell intrusion (12.75 M⊙ ), the Mg-rich layer in
+the progenitor was burned by the explosion; thus, the contribution of Mg in the O-rich layer becomes smaller. This
+means that the Mg/Ne ratios in the low-mass cases were overestimated. For example, the Mg/Ne mass ratio in the
+O-rich layer of the 12.75 M⊙ progenitor is 1.02 and the ratio becomes about 0.75 after the SN explosion. Thus, even
+if we consider the explosive nucleosynthesis, the ratio is more than twice higher than that without the destratification
+event of 0.32.
+   Figures 7 (c) and (d) show the results for the high-mass cases (15.28 M⊙ and 15.90 M⊙ ). In these cases, there are no
+major differences in the Mg/Ne ratio of the O-rich layer between the pre-SN and SN models, although the inner part
+of the O-rich layer is scraped off by explosive nucleosynthesis as in the low-mass cases. At least, the Mg/Ne mass ratio
+is greater than 1 in the shell-merger model (15.90 M⊙ ) even if considering the effects of explosive nucleosynthesis.
+
+
+                                                        REFERENCES
+Anders, E., & Grevesse, N. 1989, GeoCoA, 53, 197,               Katsuda, S., Hwang, U., Petre, R., et al. 2010, ApJ, 714,
+  doi: 10.1016/0016-7037(89)90286-X                              1725, doi: 10.1088/0004-637X/714/2/1725
+Asplund, M., Grevesse, N., Sauval, A. J., & Scott, P. 2009,     Müller, B., Heger, A., Liptai, D., & Cameron, J. B. 2016a,
+  ARA&A, 47, 481,                                                MNRAS, 460, 742, doi: 10.1093/mnras/stw1083
+  doi: 10.1146/annurev.astro.46.060407.145222                   Müller, B., Viallet, M., Heger, A., & Janka, H.-T. 2016b,
+Burrows, A., & Vartanyan, D. 2021, Nature, 589, 29,              ApJ, 833, 124, doi: 10.3847/1538-4357/833/1/124
+  doi: 10.1038/s41586-020-03059-w                               Nakamura, K., Takiwaki, T., Kuroda, T., & Kotake, K.
+Couch, S. M., & Ott, C. D. 2013, ApJL, 778, L7,                   2015, PASJ, 67, 107, doi: 10.1093/pasj/psv073
+  doi: 10.1088/2041-8205/778/1/L7                               O’Connor, E., & Ott, C. D. 2011, ApJ, 730, 70,
+—. 2015, ApJ, 799, 5, doi: 10.1088/0004-637X/799/1/5              doi: 10.1088/0004-637X/730/2/70
+Couch, S. M., Warren, M. L., & O’Connor, E. P. 2020,            —. 2013, ApJ, 762, 126, doi: 10.1088/0004-637X/762/2/126
+  ApJ, 890, 127, doi: 10.3847/1538-4357/ab609e
+                                                                Park, S., & Bhalerao, J. 2017, ApJ, 834, 189,
+Ertl, T., Janka, H. T., Woosley, S. E., Sukhbold, T., &
+                                                                  doi: 10.3847/1538-4357/834/2/189
+  Ugliano, M. 2016, ApJ, 818, 124,
+                                                                Park, S., Hughes, J. P., Slane, P. O., et al. 2003, ApJL, 592,
+  doi: 10.3847/0004-637X/818/2/124
+                                                                  L41, doi: 10.1086/377507
+Flanagan, K. A., Canizares, C. R., Dewey, D., et al. 2004,
+                                                                Pejcha, O., & Thompson, T. A. 2015, ApJ, 801, 90,
+  ApJ, 605, 230, doi: 10.1086/382145
+                                                                  doi: 10.1088/0004-637X/801/2/90
+Foglizzo, T., Scheck, L., & Janka, H. T. 2006, ApJ, 652,
+                                                                Rauscher, T., Heger, A., Hoffman, R. D., & Woosley, S. E.
+  1436, doi: 10.1086/508443
+                                                                  2002, ApJ, 576, 323, doi: 10.1086/341728
+Fruscione, A., McDowell, J. C., Allen, G. E., et al. 2006, in
+                                                                Sawada, R., & Suwa, Y. 2023, arXiv e-prints,
+  Society of Photo-Optical Instrumentation Engineers
+                                                                  arXiv:2301.03610, doi: 10.48550/arXiv.2301.03610
+  (SPIE) Conference Series, Vol. 6270, Society of
+  Photo-Optical Instrumentation Engineers (SPIE)                Scheck, L., Janka, H. T., Foglizzo, T., & Kifonidis, K. 2008,
+  Conference Series, ed. D. R. Silva & R. E. Doxsey,              A&A, 477, 931, doi: 10.1051/0004-6361:20077701
+  62701V, doi: 10.1117/12.671760                                Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., &
+Hughes, J. P., Hayashi, I., & Koyama, K. 1998, ApJ, 505,          Janka, H. T. 2016, ApJ, 821, 38,
+  732, doi: 10.1086/306202                                        doi: 10.3847/0004-637X/821/1/38
+Hwang, U., & Laming, J. M. 2012, ApJ, 746, 130,                 Sukhbold, T., Woosley, S., & Heger, A. 2018, High
+  doi: 10.1088/0004-637X/746/2/130                                Resolution Study of Presupernova Compactness, V1,
+Janka, H.-T. 2012, Annual Review of Nuclear and Particle          Harvard Dataverse, doi: 10.7910/DVN/VOEXDE
+  Science, 62, 407,                                             Sukhbold, T., & Woosley, S. E. 2014, ApJ, 783, 10,
+  doi: 10.1146/annurev-nucl-102711-094901                         doi: 10.1088/0004-637X/783/1/10
+Kamitsukasa, F., Koyama, K., Tsunemi, H., et al. 2014,          Sukhbold, T., Woosley, S. E., & Heger, A. 2018, ApJ, 860,
+  PASJ, 66, 64, doi: 10.1093/pasj/psu035                          93, doi: 10.3847/1538-4357/aac2da
+                                                                                                                     11
+
+Suwa, Y., & Müller, E. 2016, MNRAS, 460, 2664,             Williams, B. J., Rangelov, B., Kargaltsev, O., & Pavlov,
+  doi: 10.1093/mnras/stw1150                                  G. G. 2015, ApJL, 808, L19,
+Suwa, Y., Tominaga, N., & Maeda, K. 2019, MNRAS, 483,         doi: 10.1088/2041-8205/808/1/L19
+  3607, doi: 10.1093/mnras/sty3309                          Woosley, S. E., & Heger, A. 2007, PhR, 442, 269,
+                                                              doi: 10.1016/j.physrep.2007.02.009
+Thielemann, F.-K., Nomoto, K., & Hashimoto, M.-A. 1996,
+                                                            Woosley, S. E., Heger, A., & Weaver, T. A. 2002, Reviews
+  ApJ, 460, 408, doi: 10.1086/176980
+                                                              of Modern Physics, 74, 1015,
+Tur, C., Heger, A., & Austin, S. M. 2007, ApJ, 671, 821,
+                                                              doi: 10.1103/RevModPhys.74.1015
+  doi: 10.1086/523095
+                                                            Woosley, S. E., Langer, N., & Weaver, T. A. 1995, ApJ,
+Uchida, H., Koyama, K., & Yamaguchi, H. 2015, ApJ, 808,       448, 315, doi: 10.1086/175963
+  77, doi: 10.1088/0004-637X/808/1/77                       Woosley, S. E., & Weaver, T. A. 1995, ApJS, 101, 181,
+Ugliano, M., Janka, H.-T., Marek, A., & Arcones, A. 2012,     doi: 10.1086/192237
+  ApJ, 757, 69, doi: 10.1088/0004-637X/757/1/69             Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+Umeda, H., Yoshida, T., & Takahashi, K. 2012, Progress of     A. 2020, ApJ, 890, 94, doi: 10.3847/1538-4357/ab66bb
+  Theoretical and Experimental Physics, 2012, 01A302,       Yoshida, T., Takiwaki, T., Aguilera-Dena, D. R., et al.
+  doi: 10.1093/ptep/pts017                                    2021, MNRAS, 506, L20, doi: 10.1093/mnrasl/slab067
+                                                            Yoshida, T., Takiwaki, T., Kotake, K., et al. 2019, ApJ,
+Vink, J., Kaastra, J. S., & Bleeker, J. A. M. 1996, A&A,
+                                                              881, 16, doi: 10.3847/1538-4357/ab2b9d
+  307, L41
+

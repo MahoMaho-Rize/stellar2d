@@ -1,0 +1,2008 @@
+Astronomy & Astrophysics manuscript no. pap_ff
+September 17, 2024
+
+©ESO 2024
+
+The shape of convection in 2D and 3D global simulations of stellar
+interiors
+M.-G. Dethero2 , J. Pratt1, 2, 3 , D.G. Vlaykov3 , I. Baraffe3, 4 , T. Guillet3 , T. Goffrey5 , A. Le Saux6 , and A. Morison3
+1
+
+Lawrence Livermore National Laboratory, 7000 East Ave, Livermore, CA 94550, USA e-mail: pratt34@llnl.gov
+Department of Physics and Astronomy, Georgia State University, Atlanta GA 30303, USA
+3
+Astrophysics, College of Engineering, Mathematics and Physical Sciences, University of Exeter, EX4 4QL Exeter, United Kingdom
+2
+
+4
+
+École Normale Supérieure de Lyon, CRAL (UMR CNRS 5574), Université de Lyon 1, 69007 Lyon, France
+Centre for Fusion, Space and Astrophysics, Department of Physics, University of Warwick, Coventry, CV4 7AL, United Kingdom
+6
+Laboratoire de Meteorologie Dynamique (IPSL), Sorbonne University, CNRS, Ecole Polytechnique, Ecole Normale Superieure,
+Paris, France
+
+arXiv:2409.09815v1 [astro-ph.SR] 15 Sep 2024
+
+5
+
+September 17, 2024
+ABSTRACT
+Context. Theoretical descriptions of convective overshooting in stellar interiors often rely on a basic one-dimensional parameterization
+
+of the flow called the filling factor for convection. Several different definitions of the filling factor have been developed for this purpose,
+based on: (1) the percentage of the volume, (2) the mass flux, and (3) the convective flux that moves through the boundary.
+Aims. We examine these definitions of the filling factor with the goal of establishing their ability to explain differences between 2D
+and 3D global simulations of stellar interiors that include fully compressible hydrodynamics and realistic microphysics for stars.
+Methods. We study convection and overshooting in pairs of identical two- and three-dimensional global simulations of stars produced
+with MUSIC, a fully compressible, time-implicit hydrodynamics code. We examine pairs of simulations for (1) a 3 M⊙ red giant star
+near the first dredge-up point, (2) a 1 M⊙ pre-main-sequence star with a large convection zone, (3) the current sun, and (4) a 20 M⊙
+main-sequence star with a large convective core.
+Results. Our calculations of the filling factor based on the volume percentage and the mass flux indicate asymmetrical convection
+near the surface for each star with an outer convection zone. However, near the convective boundary, convective flows achieve inwardoutward symmetry for each star that we study; for 2D and 3D simulations, these filling factors are indistinguishable. A filling factor
+based on the convective flux is contaminated by boundary-layer-like flows, making a theoretical interpretation difficult. We present
+two possible new alternatives to these frequently used definitions of a filling factor, which instead compare flows at two different
+radial points. The first alternative is the penetration parameter of Anders et al. (2022). The second alternative is a new statistic that
+we call the plume interaction parameter. We demonstrate that both of these parameters captures systematic differences between 2D
+and 3D simulations around the convective boundary.
+Key words. Methods: numerical – Convection – Stars: interiors – Stars: evolution
+
+1. Introduction
+Predicting the evolution of stars requires a prescription for the
+amount of mixing caused by convection at different values of
+the internal radius of the star. This mixing has been widely
+linked to the concept of a filling factor for the convective inflows (e.g. Schmitt et al. 1984; Stein & Nordlund 1989; Cattaneo et al. 1989; Toomre et al. 1990; Cattaneo et al. 1991; Zahn
+1991; Canuto & Dubovikov 1998; Brummell et al. 2002; Rempel 2004; Browning et al. 2004; Rogers et al. 2006; Käpylä et al.
+2017; Cai 2020). Conceptually, a filling factor quantifies, based
+on fluid motion or heat, how much of the star is moving inward at a given radius. Several early works on stellar convection (e.g. Schmitt et al. 1984; Stein & Nordlund 1989; Hurlburt et al. 1984) predict that the large stratification present in
+stellar convection zones should produce convective motions that
+have a pronounced asymmetry between inflows and outflows,
+corresponding to a filling factor less than one-half. Indeed observations of the solar surface find strong, coherent inflows surrounded by weaker, more diffuse outflows (e.g. as discussed in
+Nordlund et al. 2009). Where present, such an asymmetry would
+
+alter the shear interaction between opposing flow structures, and
+thus change the amount of fluid mixing. The filling factor has
+thus been viewed as a fundamental measure of how the stellar
+convection zone is structured.
+Evaluating the filling factor at the boundary of convective
+instability provides a measure of how much fluid overshoots the
+convection zone and enters the radiative zone. This provides a
+link between the structure of convective flows in the convection
+zone and the depth of convective overshooting or penetration.
+Several works (Zahn 1991; Brummell et al. 2002) suggest that
+a filling factor could play a more significant role in determining
+the overshooting depth than the radial velocity at the convective
+boundary. The convective velocities typically differ between 2D
+and 3D, and, as noted in these works, the convective flow structures are visually different; the filling factor has been discussed
+as a plausible source of difference between two-dimensional and
+three-dimensional stellar simulations (e.g. Schmitt et al. 1984;
+Cai 2020; Pratt et al. 2020).
+The question of how to best define a filling factor remains
+open because it depends on how to accurately define the edges of
+structures in a convective flow. Without loss of generality, we call
+Article number, page 1 of 15
+
+A&A proofs: manuscript no. pap_ff
+
+such structures “plumes” in this work. We will also refer to convective flows moving inward toward the core as “inflows” and
+those moving outward toward the surface as “outflows.” Many
+works (e.g. Schmitt et al. 1984; Canuto & Dubovikov 1998;
+Brummell et al. 2002; Andrássy 2015) have defined the filling
+factor to be the fractional area occupied by inflows at a given
+radius interior to the star. These works thus define the edges of
+convective plumes using the radial velocity. We call this definition the volume-percentage filling factor. In contrast, Rempel
+(2004) defines a filling factor as the fraction of the volume at a
+given radius with an inward mass flux; we call this the mass-flux
+filling factor. Zahn (1991) defines a plume based on the convective flux, and uses the fraction of the convective flux carried by
+inflows to define a filling factor; we call this the convective-flux
+filling factor. In a similar vein, Anders et al. (2022) propose a
+“penetration parameter,” based on the change in the convective
+flux between the convection zone and the overshooting zone, as
+a predictive one-dimensional quantity.
+These definitions of the filling factor have been evaluated in
+ideal box-in-a-star type simulations, which often use a moderate
+stratification and an ideal gas equation of state. However, they
+have not been examined in the kinds of global stellar simulations
+that we perform in this work. Our simulations are performed in
+a spherical shell that includes a large portion of the stellar radius and uses a stratification, temperature gradient, equation of
+state, and opacity tables that are extracted directly from stellar
+structure models accurate to the current state-of-the-art in stellar modeling. Our simulations also solve the equations for fully
+compressible convection; no additional assumptions are made
+that could impact the asymmetry of the convective flow.1 We
+evaluate each definition of a filling factor for suitability to use in
+theoretical models of convection and overshooting based on two
+criteria, namely whether they: (1) are different for different stellar models and for 2D and 3D simulations, and (2) are correlated
+with the measured overshooting depth in the simulations.
+This work is structured as follows. In Section 2, we will discuss the global fluid simulations of stars that we use to study
+the filling factor. In Section 3 we describe observed differences
+between 2D and 3D simulations of stars. In Section 4 we describe how the volume-percentage, mass-flux, and convectiveflux filling factors are calculated and present results from our
+simulations. We also evaluate calculations of the Anders penetration parameter. In Section 5 we present statistics based on the
+width and numbers of inflows and outflows. We use these diagnostics to build a new nondimensional parameter, which we call
+the plume interaction parameter, and we show that this parameter is systematically different in 2D and 3D simulations for the
+stars we examine. In Section 6, we discuss the implications of
+our results for future stellar evolution calculations.
+
+2. Simulations
+We produce simulations of stellar convection in four different
+stellar structures. One star that we examine is a 3 M⊙ star that is
+ascending the red giant branch, produced with the open-source
+Modules for Experiments in Stellar Astrophysics (MESA) code
+(Paxton et al. 2010); this star has a large outer convection zone
+because it is near the first dredge-up point. The second star that
+1
+
+We will generally refer to this combination of choices for modeling stellar interiors using a stratification and microphysics directly from
+stellar structure and evolution calculations, a spherical volume, and
+compressible hydrodynamic equations as realistic, as opposed to more
+idealized models.
+Article number, page 2 of 15
+
+we examine is a one M⊙ pre-main sequence star, called the young
+sun, produced with the Lyon stellar evolution code (Baraffe &
+El Eid 1991; Baraffe et al. 1997, 1998). This model has been described and examined in Pratt et al. (2016, 2017, 2020); we refer
+to that earlier work for additional details of the young sun, beyond the brief summary of relevant points given here. The third
+star is a one M⊙ main-sequence star with a moderate outer convective layer, similar to the current sun, produced with the Lyon
+stellar evolution code. The fourth star is a 20 M⊙ star at the zeroage main sequence (ZAMS) with a large convective core, produced with the Lyon stellar evolution code. These stars represent the different stages of evolution where convection occurs:
+pre-main sequence, main sequence, and evolved stars. They also
+represent different types of convection zones: outer convective
+envelopes that range between deep and shallow, as well as convective cores. Visualizations of the radial velocities in each of
+these stars are provided in Fig. 1.
+In these simulations, each star is assumed to have a homogeneous chemical composition. We perform pairs of 2D and 3D
+Implicit Large Eddy Simulations (ILES) (Grinstein et al. 2007;
+Ritos et al. 2018; Margolin 2019) of these stars using the MUltidimensional Stellar Implicit Code (MUSIC). In these pairs, the
+simulation volume and grid for the 3D simulation are identical to
+the 2D simulation except for the dimensionality, as in Pratt et al.
+(2020). Our simulations in this work only take convection into
+account; the possibility of studying additional physical effects
+such as rotation, a tachocline, chemical mixing, and magnetic
+fields is omitted from the current study.
+We use the MUSIC code to solve the inviscid compressible
+hydrodynamic equations for density ρ, momentum ρu, and internal energy ρe:
+∂
+ρ = −∇ · (ρu) ,
+(1)
+∂t
+∂
+(ρu) = −∇ · (ρu ⊗ u) − ∇p + ρg ,
+(2)
+∂t
+∂
+(ρe) = −∇ · (ρeu) − p∇ · u + ∇ · (χ∇T ) ,
+(3)
+∂t
+using a second-order finite volume method, a MUSCL method
+(Van Leer 1997; Thornber et al. 2008) of interpolation on a staggered grid, and a van Leer flux limiter (as described in Van Leer
+1974; Roe 1986; LeVeque et al. 2006). For 2D simulations, the
+finite volume method assumes azimuthal symmetry. Time integration in the MUSIC code is fully implicit and uses a Jacobian
+free Newton-Krylov (JFNK) solver (Knoll & Keyes 2004) with
+physics-based preconditioning (Viallet et al. 2016; Newman &
+Knoll 2013; Mousseau et al. 2000; Chen et al. 2014; Holod et al.
+2021). The MUSIC code uses an adaptive time step, which is
+constrained identically for each pair of 2D and 3D simulations.
+MUSIC simulations use the same tabulated equation of state and
+opacity that are used by the 1D stellar evolution code that produced the stellar structure. In Eq. (2), g is the gravitational acceleration, a spherically symmetric vector consistent with that
+used in the stellar evolution calculation. It is not evolved for any
+of the simulations with an outer convective envelope; the convective core simulation did allow the gravity to be recalculated,
+but changes in this gravity term were small (see Baraffe et al.
+(2023)).
+We study the pairs of MUSIC simulations in 2D and 3D described in Table 1. In all of our MUSIC simulations, the compressible hydrodynamic equations (1)-(3) are solved in a spherical
+shell using spherical coordinates: radius r, and angular variables
+θ and ϕ (in 3D). As we noted in Pratt et al. (2020), grid spacing is particularly important in determining the physics in ILES,
+
+M.-G. Dethero et. al.: The shape of convection in stellar interiors
+
+Fig. 1. Visualizations of radial velocity in 2D simulations (from left to right) bg2D, wm2D, dcs2D, and cc2D. Outward flows are indicated in pink,
+while inward flows are in blue; the zero point in velocity is black. The maximum and minimum values of the color scale are defined by a radial
+velocity magnitude near the maximum for each simulation: bg2D (±6.5 km/s), wm2D (±2.9 km/s), dcs2D (±0.63 km/s), cc2D (±1.5 km/s).
+
+Table 1. Parameters for compressible hydrodynamic simulations performed with MUSIC. Two different pairs of young sun simulations are included:
+(1) the wide2D and wide3D pair have lower radial resolution but the 3D simulation uses a large angle along the equator, while (2) wm2D and wm3D
+use a smaller equatorial angle but significantly higher radial resolution. The pair of red giant simulations is bg2D and bg3D; the pair of current
+sun simulations is dcs2D and dcs3D; the pair of convective core simulations is cc2D and cc3D. The simulation name, dimensionality, evolutionary
+state, and stellar mass M in units of the solar mass M⊙ are provided. The inner radius Ri of the spherical shell, the radius of the convective boundary
+RCB determined by the Schwarzschild criterion, and the outer radius Ro of the spherical shell for the simulation are given in units of the total radius
+of each star, R, as a triplet. The angular extent of the simulation in the polar and equatorial directions is given as (θ, ϕ), and the grid spacing in both
+angular directions is (∆θ, ∆ϕ). The average global convective turnover time τconv is provided as well as its standard deviation in time, and the total
+time span for each simulation is given in units of the convective turnover time.
+
+wide3D
+wide2D
+wm3D
+wm2D
+bg3D
+bg2D
+cc3D
+cc2D
+dcs3D
+dcs2D
+
+dims.
+3D
+2D
+3D
+2D
+3D
+2D
+3D
+2D
+3D
+2D
+
+evol.
+PMS
+PMS
+PMS
+PMS
+RGB
+RGB
+MS
+MS
+MS
+MS
+
+M/M⊙
+1
+1
+1
+1
+3
+3
+20
+20
+1
+1
+
+(Ri , RCB , Ro )/R
+(0.21,0.43, 1.00)
+(0.21,0.43, 1.00)
+(0.10,0.43, 1.00)
+(0.10,0.43, 1.00)
+(0.02, 0.175,0.90)
+(0.02, 0.175,0.90)
+(0.194, 0.287, 0.38)
+(0.194, 0.287, 0.38)
+(0.40, 0.72, 0.97)
+(0.40, 0.72, 0.97)
+
+(θ, ϕ) (◦ )
+(140, 140)
+(140,0)
+(140,9)
+(140,0)
+(140,19)
+(140,0)
+(90,22)
+(90,0)
+(120,240)
+(120,0)
+
+because it is directly related to the effective numerical viscosity.
+In Table 1, the inner and outer radius of the spherical shell for
+each simulation is noted, and the radial and angular grid spacings are specified. The simulation volume and grid in the r – θ
+plane are identical for each pair of simulations. To obtain accurate statistics on overshooting, both radial resolution and a longtime series of data are critical. For that reason, it is ideal for us
+to examine convection in spherical shells. Herwig et al. (2023)
+have recently described a dipole mode that fills the entire convective core in their simulation of a 25M⊙ main-sequence star; that
+mode is clearly not possible in either of the simulations of the
+main-sequence star that we examine here. Nevertheless, the 2D
+and 3D simulations of this star both equally neglect the possibility of such a dipole mode dominating the flow. We leave further
+study of dipole modes in convective cores to future work.
+
+(∆θ, ∆ϕ) (◦ )
+(0.55,0.55)
+(0.55,-)
+(0.14,0.14)
+(0.14,-)
+(0.30,0.30)
+(0.30,-)
+(0.27,0.52)
+(0.27,-)
+(0.33, 0.64)
+(0.33,-)
+
+H p,CB /∆r
+63
+63
+258
+258
+55
+55
+140
+140
+134
+134
+
+τconv (105 s)
+7.06 ± 0.3
+7.9 ± 0.7
+3.91 ± 0.21
+3.76 ± 0.98
+6.48 ± 0.07
+10.86 ± 2.16
+92.6 ± 7.7
+36.5 ± 27.5
+9.6 ± 1.0
+28.4 ± 5.5
+
+time (τconv )
+3.8
+104
+5.4
+141
+22
+163
+3.77
+35.7
+3.9
+84
+
+To allow a clear comparison of the convective turnover time
+between 2D and 3D simulations, we define this fundamental parameter as in Pratt et al. (2016):
+Z
+Z
+Hp .
+dV
+(4)
+τconv (t) =
+dV
+|v|
+CZ
+CZ
+In this expression, H p is the pressure scale height, and the magnitude of velocity in the denominator is calculated in either 2D
+or 3D, depending on the simulation. The integration covers the
+convection zone (CZ) and is volume-weighted using volume element dV. The instantaneous value of τconv in eq. (4) is averaged
+over time to produce the values in Table 1.
+In Table 1, we introduce the quantity H p,CB /∆r. This ratio
+shows how many grid spaces resolve each pressure scale height
+at the convective boundary. In this work, we will often refer to
+the convective boundary; this is the boundary of the region of
+Article number, page 3 of 15
+
+A&A proofs: manuscript no. pap_ff
+
+convective instability calculated by the Schwarzschild criterion,
+which does not evolve during the simulations in Table 1. Our
+highest resolution simulation pair is wm2D/wm3D. Simulation
+wm3D has a grid of r ×θ ×ϕ = 1312×1024×64. Our simulations
+have sufficient radial resolution to produce a characteristic radial
+profile for velocity in 2D.
+All simulations in this work are ILES, and convergence is
+not expected in the absolute sense that direct numerical simulations (DNS) converge. A universal shape of the velocity profiles can be observed with sufficiently small grid spacing, and
+the increase in the velocities becomes less as the grid spacing
+is progressively decreased (see also the discussion of ILES and
+convergence in Andrassy, R. et al. 2024). A study of the effect of grid spacing was examined systematically for the young
+sun in Pratt et al. (2016), and for the current sun in Vlaykov et al.
+(2022). The main sequence core convection simulation was studied in Baraffe et al. (2023). Similar results are obtained for the
+red giant simulations. Because of the complications presented
+by ILES for convergence, we find the use of resolution criteria
+based on H p,CB /∆r to be more useful for convective overshooting
+than the traditional DNS-style convergence studies. Such resolution criteria allow for clear comparisons between simulations of
+different stars that use different grids.
+All data studied here are produced during steady-state convection, a period where the time-averaged value of the total kinetic energy is well-defined and not evolving in time. Each 3D
+simulation includes at least 3 convective turnover times of data
+taken during steady-state convection; for each 2D simulation, the
+time span is more than 30 τconv . The uncertainties in the calculation of the average convective turnover time have a larger standard deviation for the 2D simulation than the 3D simulation; this
+is clearly impacted by the longer time series of data available for
+the 2D simulations (e.g. also observed in Pratt et al. 2020).
+We examine simulations with two variations on energy
+boundary conditions that maintain the original radial profiles
+of density and temperature of the 1D stellar evolution model.
+For the wide2D/wide3D and wm2D/wm3D simulations, which
+include the full stellar radius up to the photosphere, the surface
+radiates energy with the local surface temperature. In this case,
+the energy flux varies as σT s4 , where σ is the Stefan-Boltzmann
+constant and T s (θ, t) is the temperature along the surface. This
+boundary condition can only be effectively used when the nearsurface layers are included in the simulation volume and the temperature gradient near the surface is sufficiently resolved; otherwise, it results in artificially high cooling rates. The young
+sun simulations have more than one grid space per pressure
+scale height in this region. For the bg2D/bg3D, cc2D/cc3D, and
+dcs2D/dcs3D simulations, which do not include the full stellar
+radius, we hold the energy flux and luminosity constant on the
+outer radial boundary, at values established by the stellar structure. For an examination of how these boundary conditions affect
+the dynamics, we refer to Pratt et al. (2016) and Vlaykov et al.
+(2022).
+In all of the simulations studied in this work, we use the
+luminosity profiles accurate to the stellar structure models; we
+do not employ the tactic of luminosity boosting to shorten the
+convective turnover time and bring the thermal time-scale of the
+star closer to the convective turnover time. Luminosity boosting
+leads to a substantial reduction in computational costs and makes
+reaching thermal equilibrium feasible when a large enough boost
+factor is used. However, it can also distort the original background stratification of the star. Even if this is avoided, as discussed in Baraffe et al. (2021), luminosity boosting increases the
+overshooting depth, the local heating in the overshooting layer,
+Article number, page 4 of 15
+
+and the shape of the spectrum of waves excited (Lecoanet et al.
+2019; Le Saux et al. 2022). Our choice to use luminosities that
+have not been artificially boosted is motivated by the need to
+measure an overshooting depth for a specific star. The simulations that we study in this work are far from thermal equilibrium. However the temperature gradient is not evolving during
+the course of these simulations, and the statistics that we produce
+are meaningful.
+For the velocity, we impose non-penetrative and stress-free
+boundary conditions in the radial directions for all simulations.
+The energy flux and luminosity are held constant at the inner
+radial boundary, at the value of the energy flux at that radius
+in the one-dimensional stellar evolution calculation. On the inner radial boundary of the spherical shell, we impose a constant
+radial derivative on the density for all simulations. At the outer
+radial boundary, we apply different boundary conditions that suit
+the local derivatives in density best. For simulations bg2D/bg3D,
+wide2D/wide3D, and wm2D/wm3D this is a hydrostatic equilibrium boundary condition on the density that maintains hydrostatic equilibrium by assuming constant internal energy and
+constant radial acceleration due to gravity in the boundary
+cells (Grimm-Strele et al. 2015). For simulations dcs2D/dcs3D
+and cc2D/cc3D the outer radial boundary has a constant radial
+derivative imposed on the density. For simulations bg2D/bg3D,
+wide2d/wide3d, wm2D/wm3D, and dcs2D/dcs3D, we impose periodicity on all physical quantities at the boundaries in θ and
+ϕ. For simulation cc2D the angular direction is treated with reflective boundary conditions; for simulation cc3D both angular
+directions are treated with periodic boundary conditions.
+
+3. Differences between 2D and 3D stellar
+simulations
+For each of the pairs of simulations that we study, the rootmean-square (RMS) radial velocity profile in the 2D simulation
+is larger than in the 3D simulation (see for example Fig. 2). This
+is a common result for stellar convection also noted in Muthsam
+et al. (1995) and Pratt et al. (2020); the extent to which the 2D
+velocities are larger appears to be dependent on the stellar model
+examined. In addition, the radial velocities in 2D and 3D simulations look different; 3D simulations appear to be “rougher,” i.e.
+more small-scale structure is present. This is particularly visible
+at points where inflows and outflows interact (see Fig. 3).
+The differences between 2D and 3D simulations also reach
+beyond velocity amplitudes into the structure of the flow. We examine the radial profile of the local enstrophy in the ϕ-direction,
+defined as the square of the ϕ component of the vorticity ωϕ =
+∇ × u|ϕ . The local ϕ enstrophy is larger in 2D than in 3D, with the
+largest differences occurring at, or near, the convective boundary
+(see Fig. 4). These plots reveal a different shape and structuring
+in the flow that occurs near convective boundaries based on the
+dimensionality.
+We calculate the overshooting depth ℓov by fitting the distribution of overshooting plumes calculated using the vertical kinetic energy flux with a generalized extreme value distribution,
+as described in Pratt et al. (2017). We adopt the location parameter from this fit as the overshooting depth ℓov . The values of ℓov
+are provided in Table 2 for all of our simulations. For the simulation pairs wm2d/wm3D, bg2D/bg3D, and cc2D/cc3D these numbers are extremely close. For the simulation pair dcs2D/dcs3D,
+the 2D simulation has somewhat deeper overshooting, while
+for the simulation pair wide2D/wide3D, the 3D simulation has
+somewhat deeper overshooting. Given the limited amount of
+
+4000
+
+M.-G. Dethero et. al.: The shape of convection in stellar interiors
+
+kind of definition for a filling factor. Some have chosen to evaluate the area at the cell surfaces rather than the volume of the
+cell to calculate this filling fact. These two alternatives converge
+toward the same value as the cell size is decreased; using the volume to calculate this filling factor is convenient because MUSIC is
+a finite-volume code. In the work of Zahn (1991), the implication is that the filling factor is a single number, independent of
+radius. However other authors, including Schmitt et al. (1984);
+Cai (2020); Canuto & Dubovikov (1998); Käpylä (2023) formulate a filling factor that is a function of the radial depth in the star;
+doing so allows us to examine ideas about non-local convection
+throughout the stellar radius. Based on ideas acquired from early
+simulations of solar convection, Canuto & Dubovikov (1998) expect a highly asymmetric convection pattern with fast, concentrated inflows and slow, broad outflows. Based on observational
+data at the solar surface and the idea of a stratified star, they thus
+assert that the filling factor for inflows is always less than half:
+σvp,in < 1/2.
+
+2000
+0
+
+1000
+
+vr,RMS (m/s)
+
+3000
+
+bg2D
+bg3D
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+r/R
+Fig. 2. The radial profile of RMS radial velocity vr,RMS for 2D and 3D
+simulations of the 3M⊙ red giant star. The lines indicate a time average,
+taken over the entire simulation time, of the horizontally averaged radial profile. The shaded regions represent one standard deviation above
+and below the time-averaged line. The radial position of the convective
+boundary, calculated by the Schwarzschild criterion, is indicated by a
+vertical black line. The interior radial coordinate of the star r is normalized by the star’s radius R.
+
+data for the 3D simulations, it is not clear whether these differences between the 2D and 3D simulations are statistically significant.
+
+4. Filling factor calculations
+4.1. Definition of the filling factor based on volume
+percentage
+
+We define a volume-percentage filling factor to be the fractional
+volume occupied by either the inflows σvp,in or the outflows
+σvp,out :
+σvp,in
+
+=
+
+σvp,out
+
+=
+
+V in (r, t)
+V in (r, t) + V out (r, t)
+V out (r, t)
+V in (r, t) + V out (r, t)
+
+(5)
+(6)
+
+Here V in indicates the total volume of grid cells at a given radius that has an inward velocity, while V out indicates the total
+volume of grid cells that have an outward velocity. The natural
+consequence is that the sum of the filling factors of inflows and
+outflows must be one σvp,in + σvp,out = 1. Because of this relation, we will generally use the notation σvp to indicate the filling
+factor for the plumes moving toward the convective boundary,
+dropping the “in” and “out” labels. Conceptually, the volumepercentage filling factor is equating the situation where there are
+many small plumes with an equivalent single large inflow and
+single large outflow. Many works (Schmitt et al. 1984; Brummell et al. 2002; Andrássy 2015; Käpylä 2023) have used this
+
+A calculation of σvp in our simulation pair bg2D/bg3D is
+shown in Fig. 5(a). Both of these simulations evidence a σvp
+close to a third near the surface of the star, in rough agreement with observations of solar surface convection (e.g. Nordlund et al. 2009). The similarity between our simulations and
+observations of the solar surface is striking, given that the resolution of near-surface dynamics is challenging for simulations
+of the stellar interior. As we examine σvp deeper in the convective envelope, we find that it grows to approximately one-half,
+indicating that the convection becomes highly symmetric at the
+point that plumes are overshooting the bottom of the convection
+zone. This result is interesting when considered in conjunction
+with the kinetic energy flux (see Fig. 5(b)). The kinetic energy
+flux in all of our simulations is negative in the upper and middle parts of the convection zone. It becomes positive near the
+convective boundary, a result not seen in early works (e.g. Hurlburt et al. 1984). These combined results indicate that flows in
+the convection zone are more complex than the simple picture of
+thin, fast-moving inward plumes. In the highly stratified deep interior, inward moving plumes can be both faster and wider than
+plumes in the near-surface layers.
+
+We calculate the value of the volume-percentage filling factor for plumes moving toward the convective boundary in each
+simulation. We then extract the value at the convective boundary,
+σvp,CB , for each of our simulations; these can be found in Table
+2. Across all simulations, the mean value of σvp,CB is 0.499 and
+the median value is 0.50. For each simulation, the value of 0.5
+is within one standard deviation of the time-averaged value. We
+find no clear difference between the values of σvp,CB calculated
+from 2D and 3D simulations. The distributions of these values,
+calculated at different points in time during steady state convection, strongly overlap; for some simulations, the time-averaged
+2D value is slightly larger, and for others, the time-averaged 3D
+value is slightly larger. Given the wide range in overshooting
+depths that we calculate for the four different stars that we examine in this work, we find no clear correlation between the
+volume-percentage filling factor at the convective boundary and
+the overshooting length (see Fig. 6).
+Article number, page 5 of 15
+
+A&A proofs: manuscript no. pap_ff
+
+Fig. 3. A comparison of radial velocity in the 3M⊙ red giant star from (left) 2D simulation bg2D, and (right) 3D simulation bg3D. The visualization
+is zoomed in on a small region inside the convection zone to emphasize the differences in the shape of convection between 2D and 3D. Outward
+flows are indicated in pink, while inward flows are in blue; the zero point in velocity is black. The maximum and minimum values of the color
+scale are defined by a radial velocity magnitude near the maximum for each simulation: bg2D (±6.5 km/s), bg3D (±2.9 km/s).
+Table 2. Calculated quantities related to the filling factor for convection. The table includes: the overshooting depth ℓov in units of the pressure
+scale height at the convective boundary, the volume-percentage filling factor σvp,CB , the mass-flux filling factor σmf,CB , and the incompressible
+convective-flux filling factor fz,CB . The subscript CB indicates that the quantity is evaluated at the convective boundary (CB), as defined by the
+Schwarzschild criterion. Several additional quantities that are evaluated above or below this convective boundary are also shown. This includes the
+Anders penetration parameter PA and the plume interaction parameter σint . It also includes for convective envelopes (convective cores) the average
+number of inflows (outflows) in the overshooting layer NOL and in the convection zone NCZ , and the average width of inflows (outflows) in the
+overshooting layer WOL and in the convection zone WCZ . The average widths are displayed in units of the percentage of the simulation volume at
+the given radius.
+
+wide3D
+wide2D
+wm3D
+wm2D
+bg3D
+bg2D
+cc3D
+cc2D
+dcs3D
+dcs2D
+
+ℓov,k /Hp,CB
+0.51
+0.35
+1.20
+1.11
+0.60
+0.61
+0.15
+0.13
+0.06
+0.14
+
+σvp,CB
+0.51
+0.50
+0.50
+0.49
+0.49
+0.49
+0.48
+0.46
+0.48
+0.45
+
+σmf,CB
+0.49
+0.50
+0.50
+0.51
+0.51
+0.51
+0.52
+0.54
+0.52
+0.55
+
+fz,CB
+-0.11
+-0.10
+0.00
+-0.02
+0.00
+-0.04
+0.00
+-0.07
+0.00
+-0.02
+
+4.2. Definition of the filling factor based on mass flux
+
+We define filling factors based on the vertical mass flux Fmass =
+ρvr so that
+σmf,in
+σmf,out
+
+=
+=
+
+inflows
+Fmass
+outflows
+inflows
+Fmass
++ Fmass
+outflows
+Fmass
+inflows
+outflows
+Fmass
++ Fmass
+
+,
+.
+
+(7)
+(8)
+
+The use of absolute values in the denominator of these ratios is necessary because, due to mass conservation, the direct
+Article number, page 6 of 15
+
+PA
+0.25
+0.10
+1.52
+0.27
+0.91
+0.06
+25.8
+0.52
+1.88
+0.44
+
+NOL
+16.0
+14.3
+31.3
+26.0
+14.9
+12.8
+17.7
+21.7
+28.4
+23.2
+
+NCZ
+7.6
+6.4
+19.9
+12.9
+10.5
+3.3
+8.7
+5.3
+16.0
+8.1
+
+WOL
+2.8
+3.4
+1.6
+1.9
+3.4
+3.8
+2.6
+2.1
+1.5
+2.1
+
+WCZ
+5.3
+7.5
+2.0
+3.8
+4.7
+16.7
+5.0
+8.7
+2.3
+6.0
+
+σint
+0.53
+0.45
+0.79
+0.50
+0.72
+0.23
+0.51
+0.25
+0.67
+0.36
+
+sum of these fluxes is small at any point in time. We note that
+σmf,in + σmf,out = 1, and we will generally use the notation σmf
+to indicate the filling factor for the plumes moving toward the
+convective boundary. This definition of a mass-flux filling factor
+represents a mass-weighted rather than volume-weighted version
+of the filling factor.
+Table 2 includes values of the mass-flux filling factor at the
+convective boundary, σmf,CB , for each of our simulations. Like
+the volume-percentage filling factor, the mass-flux filling factor
+is close to one-half at this point. Fig. 7 demonstrates that, like
+the volume-percentage filling factor, there is no clear trend between 2D and 3D results, with strongly overlapping distributions
+
+M.-G. Dethero et. al.: The shape of convection in stellar interiors
+
+3e−10
+2e−10
+1e−10
+0e+00
+
+Enstrophy (cm2 s2)
+
+4e−10
+
+bg2D
+bg3D
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+r/R
+Fig. 4. Radial profiles of the local ϕ enstrophy for 2D and 3D simulations of the 3M⊙ red giant star. The lines indicate a time average,
+taken over the entire simulation time, of the horizontally averaged radial profile. The shaded region represents one standard deviation above
+and below the time-averaged line. The radial position of the convective
+boundary determined by the Schwarzschild criterion is indicated by a
+vertical black line.
+
+from 2D and 3D simulations. There is also no clear correlation
+between the mass-flux flux filling factor and the overshooting
+length. For the selection of stars that we study in this work,
+the mass-flux filling factor provides similar information to the
+volume-percentage filling factor.
+Canuto & Dubovikov (1998) defined a filling factor based
+purely on the velocity (see eq. (49a) of that work). For the simulations examined in this work, this velocity-based filling factor
+produces results similar to the mass-flux filling factor.
+4.3. Definition of the filling factor based on convective flux
+
+The analytical work of Zahn (1991) is based on the radial profile
+of the convective flux
+F conv (r, t) = −c p (r, t)ρ(r, t)ur (r, θ, t)T 1 (r, θ, t) .
+
+(9)
+
+The bar on the right-hand side of this equation indicates an average over the horizontal directions, here indicated by θ. The
+temperature fluctuation T 1 is the difference between the local
+temperature field T and the average temperature at a given radius, angle, and time. We conveniently measure this temperature
+fluctuation as a deviation from an initial radial profile, because
+the radial profile of the temperature does not evolve during our
+simulations. This formulation of the convective flux neglects any
+changes in the density and specific heat that could be dependent
+on an angle.
+Examining the convective flux in eq. (9), we find that the difference between this flux in the inflows and outflows is large
+around the convective boundary, resulting in a characteristic
+negative peak when the total convective flux is calculated (see
+Fig. 8). This is consistent with earlier works; both Brun et al.
+
+Fig. 5. (a) Radial profile of the volume-percentage filling factor of the
+inward moving plumes σvp,in vs the star’s internal radius, in units of the
+total stellar radius R for simulations bg2D/bg3D. (b) Radial profile of
+the normalized kinetic energy flux, Fk for simulations bg2D/bg3D. The
+solid and dashed lines indicate time-averaged radial profiles. Shaded
+areas indicate one standard deviation above and below these averaged
+lines. A thin vertical line indicates the convective boundary determined
+by the Schwarzschild criterion.
+
+(2011) and Browning et al. (2004) define the top of the overshooting layer as the point where the time average of the convective flux first changes sign. They then define the bottom of
+the overshooting layer as the radius in the radiative zone where
+the convective flux becomes small. As is clear in the figure, using this definition of an overshooting layer along with our fully
+compressible simulations would mean defining a sizable portion
+Article number, page 7 of 15
+
+●
+●
+
+●
+
+●
+
+●
+
+0.40
+
+−2
+
+0.45
+
+●
+
+0
+
+0.50
+σvp,CB
+
+●
+
+●
+
+−1
+
+●
+
+wide3D
+wide2D
+wm3D
+wm2D
+bg3D
+bg2D
+cc3D
+cc2D
+dcs3D
+dcs2D
+
+Fconv
+
+0.55
+
+●
+
+1
+
+A&A proofs: manuscript no. pap_ff
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+2.0
+
+0.0
+
+0.2
+
+0.4
+
+lov Hp, CB
+
+0.60
+
+●
+
+●
+
+●
+
+0.50
+
+●
+●
+
+●
+
+wide3D
+wide2D
+wm3D
+wm2D
+bg3D
+bg2D
+cc3D
+cc2D
+dcs3D
+dcs2D
+
+0.45
+
+σmf,CB
+
+0.55
+
+●
+
+●
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+2.0
+
+lov Hp, CB
+Fig. 7. The time-averaged mass-flux filling factor evaluated at the convective boundary determined by the Schwarzschild criterion σmf,CB vs
+the overshooting depth in units of the pressure scale height at the convective boundary ℓov /H p,CB for all simulations described in Table 1. Error bars indicate one standard deviation around the time-averaged value
+of σmf,CB . Error bars obtained in the calculation of the overshooting
+depth ℓov are smaller than the size of the data points.
+
+Article number, page 8 of 15
+
+0.8
+
+r/R
+
+Fig. 6. The time-averaged volume-percentage filling factor evaluated
+at the convective boundary determined by the Schwarzschild criterion,
+σvp,CB , vs the overshooting depth in units of the pressure scale height
+at the convective boundary ℓov /H p,CB for all simulations described in
+Table 1. Error bars indicate one standard deviation around the timeaveraged value of σvp,CB . Error bars obtained in the calculation of the
+overshooting depth ℓov are smaller than the size of the data points.
+
+●●
+
+0.6
+
+Fig. 8. The radial profile of time-averaged convective flux for the 3 M⊙
+red giant star bg2D, normalized to its maximum magnitude value. The
+shaded region represents one standard deviation in time, above and below the time-averaged line. The radial position of the convective boundary determined by the Schwarzschild criterion is indicated by a vertical
+black line.
+
+of the convection zone as part of the overshooting layer. This
+shape of the convective flux is not the result of changes in the
+temperature gradient of the star; the average temperature profile
+has not evolved during the course of our simulations. The large
+extent of the shaded area in the figure also demonstrates that the
+time-variation in the convective flux is substantial. These characteristics are universally present for the different kinds of stars
+we have simulated.
+In their derivation of a filling factor based on the convective flux, Zahn (1991) defines two functions that are “horizontal
+structures” of the fluid h1 (θ, t) and h2 (θ, t) such that
+ur (r, θ, t) =
+
+uin
+r,RMS (r, t)h1 (θ, t) ,
+
+(10)
+
+T 1 (r, θ, t) =
+
+T 1,inRMS (r, t)h2 (θ, t) .
+
+(11)
+
+Here T in and uin are the temperature fluctuations and radial velocity only in the volume where the fluid is moving radially inward. We will derive the convective-flux filling factor for the
+inflows; the corresponding equations for outflows are fully analogous. The RMS operation takes the average in the horizontal
+direction, i.e. over θ if the simulation is 2D, and over both θ and
+ϕ if the simulation is 3D. Zahn (1991) assumes that h1 = h2 ≡ h.
+To satisfy this assumption requires that the temperature fluctuation and radial velocity are strongly correlated for inflows, or
+T 1 (r, θ, t)
+ur (r, θ, t)
+= in
+.
+uin
+T
+(r,
+t)
+r,RMS
+1,RMS (r, t)
+
+(12)
+
+If an average over a sufficiently long time period is taken, then
+the numerators on both sides of this equation will be zero. However, it is unclear how well this assumption is satisfied at any
+point in time. As the width of a plume changes with the radius,
+the ratios in eq. (12) could change as well; this could happen if
+
+M.-G. Dethero et. al.: The shape of convection in stellar interiors
+
+0.2
+
+0.3
+
+the inflows are less coherent, or if a convective boundary layer alters the flow near the bottom of the convection zone. The degree
+to which eq. (12) is satisfied could also be different for different
+stars.
+
+(13)
+
+Solving eqs. (10) and (11) for h1 (θ, t) and h2 (θ, t), we express eq.
+(13) as
+
+−0.2
+
+−0.1
+
+fz (r, t) ≡ h1 (r, θ, t)h2 (r, θ, t) ≡ h2 (r, θ, t) .
+
+0.0
+
+fz
+
+0.1
+
+Zahn (1991) then defines the convective-flux filling factor fz
+as a horizontally averaged function from these horizontal structures
+
+bg2D
+bg3D
+0.0
+
+fz (r, t) =
+
+ur (r, θ, t)T 1 (r, θ, t)
+.
+in
+uin
+r,RMS (r, t)T 1,RMS (r, t)
+
+=
+
+in
+−c p (r, t)ρ(r, t)uin
+r,RMS (r, t)T 1,RMS (r, t) fz (t) .
+
+0.4
+
+(14)
+
+This expression clarifies that the filling factor defined by Zahn
+(1991) is essentially a horizontal average of the convective flux,
+normalized by a proxy for the convective flux in the inflows. The
+formula in eq. (14) is in a convenient form for direct calculations. Combining this expression for fz with Zahn’s expression
+for incompressible convective flux in eq. (9), we represent the
+convective flux in terms of the convective flux filling factor
+
+F conv (r, t)
+
+0.2
+
+(15)
+
+We find that fz (t) is highly variable in time, and that a long-time
+average is required to produce a smooth profile; this is unsurprising because this filling factor is related to Fconv , which also
+requires a long-time average to converge. Our formulation of the
+convective-flux filling factor is dependent on radius, a departure
+from the formula written by Zahn (1991), where the horizontal
+structure functions are not radially dependent.
+A characteristic result for the time-averaged radial profile of
+the convective-flux filling factor is shown in Fig. 9. Far from
+the convective boundary, this filling factor is larger and positive.
+However, approaching the convective boundary, the convectiveflux filling factor becomes small and/or negative. This appears to
+be related to the negative peak in the convective flux at the convective boundary. The implication is that the complex flow patterns, and thus complex fluxes that occur around this boundary
+contaminate the convective-flux filling factor. A full description
+of those flows is beyond the scope of the present work, but will
+be pursued in the future. For a filling factor, which is conceptualized as a percentage of the flow moving inward, a negative number makes little sense. Nevertheless, we have also documented
+the time-averaged value of fz at the Schwarzschild boundary for
+convective instability for all of the simulations examined in this
+work in Table 2.
+
+0.6
+
+0.8
+
+r/R
+Fig. 9. The radial profile of the time-averaged filling factor fz as defined
+in eq. (14) for 2D and 3D simulations of the 3M⊙ red giant star. The lines
+indicate a time average, taken over the entire simulation time, of the
+horizontally averaged radial profile. The shaded regions represent one
+standard deviation above and below the time-averaged line. The radial
+position of the convective boundary determined by the Schwarzschild
+criterion is indicated by a vertical black line.
+
+4.4. Eliminating compressibility as a source of error for the
+convective flux filling factor
+
+One possible source of error in the convective-flux filling factor
+formulated by Zahn (1991) is that the assumption of incompressibility could be unphysical around the convective boundary of a
+star; we therefore expand on Zahn’s incompressible definition of
+a filling factor. A definition of the horizontally-averaged convective flux that includes compressibility is
+F conv (r, t) = −c p (r, θ, t)ρ(r, θ, t)ur (r, θ, t)T 1 (r, θ, t) .
+
+(16)
+
+We note that Käpylä et al. (2017) use a similar definition of this
+flux where the horizontal average does not include the specific
+heat. In this case, we define four horizontal structures such that
+ur (r, θ, t) =
+
+uin
+r,RMS (r, t)h1 (θ, t) ,
+
+(17)
+
+T 1 (r, θ, t) =
+
+T 1,inRMS (r, t)h2 (θ, t) ,
+ρin
+RMS (r, t)h3 (θ, t) ,
+in
+c p,RMS (r, t)h4 (θ, t) .
+
+(18)
+
+ρ(r, θ, t) =
+c p (r, θ, t) =
+
+(19)
+(20)
+
+As in the incompressible case, the superscript indicates that the
+RMS only includes contributions where the fluid is moving radially inward, the RMS operation takes the average in the horizontal direction, and we will derive the filling factor for inward
+plumes. We then define a compressible-convective-flux filling
+factor
+fcomp (t) =
+=
+
+h1 (θ, t)h2 (θ, t)h3 (θ, t)h4 (θ, t) ,
+c p (r, θ, t)ρ(r, θ, t)ur (r, θ, t)T 1 (r, θ, t)
+in
+
+in
+c p,RMS (r, t)ρin
+(r, t)uin
+RMS
+r,RMS (r, t)T 1,RMS (r, t)
+
+(21)
+. (22)
+
+Article number, page 9 of 15
+
+●
+
+●
+
+●
+
+●
+
+1.00
+
+PA
+
+5.00
+
+●
+
+●
+
+●
+●
+
+0.20
+
+bg2D
+bg3D
+
+●
+
+●
+
+wide3D
+wide2D
+wm3D
+wm2D
+bg3D
+bg2D
+cc3D
+cc2D
+dcs3D
+dcs2D
+
+0.05
+
+0.0010
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+2.0
+
+0.0005
+
+lov Hp, CB
+Fig. 11. The Anders penetration parameter PA vs the overshooting depth
+in units of the pressure scale height at the convective boundary determined by the Schwarzschild criterion ℓov /H p,CB for all 2D and 3D simulations described in Table 1. Error bars consider one standard deviation
+of the convective flux at each of the two radial points that contribute to
+this number. A logarithmic scale is applied to the vertical axis because
+this parameter, as formulated, can be larger than one.
+
+0.0000
+
+Absolute Difference
+
+0.0015
+
+We calculate fcomp for all of the simulations studied in this work.
+The absolute difference between fz and fcomp is small near the
+convective boundary in all of our simulations (see Fig. 10). The
+compressible filling factor fcomp is slightly larger near the surface in both 2D and 3D, where compressible effects, e.g. Mach
+numbers, are expected to be slightly larger; this is typical of all
+of our simulations. Including the effect of compressibility does
+not resolve the problematic aspects of the convective-flux filling
+factor near convective boundaries.
+
+20.00
+
+A&A proofs: manuscript no. pap_ff
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+r/R
+Fig. 10. Radial profile of the absolute difference | fz − fcomp | between
+the incompressible convective-flux filling factor and the compressible
+convective-flux filling factor for 2D and 3D simulations of the 3M⊙ red
+giant star. The radial position of the convective boundary determined by
+the Schwarzschild criterion is indicated by a vertical black line.
+
+4.5. The Anders penetration parameter
+
+Although it is not strictly a filling factor, we also examine a
+nondimensional number formulated by Anders et al. (2022),
+called the “penetration parameter.” Similar to Zahn (1991), their
+motivation is to predict convective overshooting and penetration
+using a ratio of convective fluxes. It is therefore fitting to examine it here as a comparison to the filling factor in our realistic
+global simulations of stars. The Anders penetration parameter
+PA is defined as the ratio of the time-averaged convective flux on
+either side of the convective boundary, namely
+PA = −
+
+F̂conv |CZ
+.
+F̂conv |OL
+
+(23)
+
+In Anders et al. (2022), F̂conv |CZ is described as the timeaveraged convective flux evaluated “slightly” inside the convection zone where both outflows and inflows exist, and F̂conv |OL is
+the time-averaged convective flux located “slightly” inside the
+radiative zone, in a layer where only inflows exist. In global
+simulations of stars, this language is not specific enough to determine where the convective flux should be evaluated. In addition, there is the complication of the complex boundary-layerlike flows that we find inside the convective boundary. To calArticle number, page 10 of 15
+
+culate the Anders penetration parameter across global simulations of different stars, we define F̂conv |CZ as the maximum timeaveraged value of Fconv (r) in the convective zone, a point that is
+unaffected by boundary layer flows. Similarly, we define F̂conv |OL
+as the minimum time-averaged value of Fconv (r), which can be
+found near the convective boundary, in the overshooting layer.
+Values of PA for each of our simulations, calculated in this way,
+are shown in Table 2. The Anders penetration parameter has the
+useful characteristic of producing larger average values in 2D
+than in 3D for all of our simulation pairs (see Fig. 11). We use
+the standard deviation in time of F̂conv |CZ and F̂conv |OL to calculate uncertainties for the penetration parameter; the error bars
+are large, in most cases overlapping data points from both 2D
+and 3D simulations. Whether the differences between 2D and
+3D simulations that we observe in the Anders penetration parameter can explain differences in the overshooting depth in 2D
+and 3D, however, remains unclear (see Fig. 11). A longer time
+period of data may also be required to successfully evaluate PA .
+Another useful result is that the Anders penetration parameter clearly produces different values for different stellar models.
+For the simulation pair cc2D/cc3D, which has small overshooting lengths, the minimum of the convective flux in the overshooting layer is also a small value; consequently, the value of PA
+becomes large, exceeding 20 for the 3D simulation. This large
+value, in addition to the large error bars shown in Fig. 11, is a
+result of how the ratio is formulated. Using 1/PA would tend to
+produce values less than one, as the formulations of filling factors did.
+
+M.-G. Dethero et. al.: The shape of convection in stellar interiors
+
+5. Plume interactions and overshooting
+wide2D
+wide3D
+
+10
+8
+6
+2
+
+4
+
+Win (volume %)
+
+0
+
+(a)
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+0.8
+
+0.9
+
+1.0
+
+r/R
+
+10
+
+15
+
+20
+
+25
+
+30
+
+480x480
+300x300
+256x256
+
+5
+
+Win (volume %)
+
+(b)
+
+0
+
+The essence of the filling factor is as a diagnostic for quantitatively measuring how symmetric or asymmetric inflows and outflows are. The formulation of a filling factor in this way is linked
+to the early measurement that convective flows observed on the
+solar surface are structured into thinner regions with intense inflows and broader regions with slower outflows. We therefore
+consider this early idea, and we examine directly how plume
+widths change with radius in our simulations. As a number that
+sums up the widths of inflows, the filling factor is related to a
+low-order statistic. By instead examining the widths directly, we
+can pursue higher-order statistics that may be different in 2D and
+3D convective flows.
+As with the volume-percentage filling factor, we define a single inflow as a continuous set of cells in the θ direction, at a given
+radius, that all have a negative radial velocity; similarly, we define an outflow based on positive radial velocity. For our 3D simulations, we perform the same calculation for each angle ϕ in our
+grid. This allows for the 2D and 3D calculations to be directly
+compared; otherwise to define a two-dimensional perimeter for
+a convective plume would require a more involved calculation
+(e.g. Haller 2015; Balasuriya et al. 2018; Rempel et al. 2023).
+For each of our simulations, a characteristic profile is produced
+for the average widths of plumes as a function of radius (see
+Fig. 12). Two important features emerge in each profile: a maximum average width occurs approximately in the middle of the
+convection zone, which we call WCZ , and a minimum average
+width occurs near the bottom of the overshooting layer, which
+we call WOL . In our 2D red giant simulation, we find that the difference in the width of plumes between these two points is more
+than 10%. Fig. 12 also demonstrates that this characteristic profile is present for simulations with a sufficient resolution; as the
+grid spacing is decreased, the average width is naturally smaller.
+We find that there is a wider distribution of average widths in
+the convection zones in each of the 2D simulations that we study
+than in their 3D counterparts, which may be due to the larger
+amount of data generated in 2D.
+The distribution of plume widths in the convection zone is
+a fundamental diagnostic pointing toward the multi-scale nature
+of stellar convection. In comparison, the controlled situation of
+Rayleigh-Bénard convection produces convection rolls that have
+roughly the same size, dictated by the size of the experiment.
+In some thin stellar convection zones, this can also be the case;
+however, in a large convection zone that is defined by a significant density stratification, inflows can have a range of sizes
+at any given radius. The stellar simulations we examine in this
+work have convection zones that represent a wide range of stratifications. Our 20 M⊙ convective core simulation has a density
+ratio of ∼ 2 from the top to the bottom of the convection zone, the
+current sun simulations have a density ratio of ∼ 55, the red giant
+simulations include a density ratio of ∼ 200, and the density ratio
+in the young sun simulations is greater than 105 . Particularly for
+the young sun, the convection becomes a truly multi-scale flow,
+with plumes and convection rolls of different sizes frequently interacting with each other. This is evidenced by the examination
+of higher-order statistics for plume widths. The time-averaged
+radial profile of the skewness of inflow width is generally positive throughout the convection zone in our simulations (see for
+example Figs. 13 and 14), only dipping briefly into the negative
+for the 3D simulations, where there is a smaller time-series of
+data available to average. A normal distribution is defined by a
+skewness of zero; a positive skewness indicates that the distri-
+
+12
+
+5.1. The width of inflows
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+r/R
+Fig. 12. (a) Widths of inflowing plumes for 2D and 3D simulations of
+the young sun, wide2D/3D. (b) Widths of inflows for three 2D simulations of the red giant that have different grid sizes as labeled, but are
+otherwise identical. The shaded region represents one standard deviation above and below the time-averaged line. The radial position of the
+convective boundarydetermined by the Schwarzschild criterion is indicated by a vertical black line.
+
+bution of inflowing plume widths is not symmetrical about the
+mean value, such that inflowing plumes larger than the average
+are more prevalent than smaller ones.
+These figures also include the excess kurtosis, which is zero
+for a normal distribution. In comparison to a Gaussian distribution, a distribution with positive excess kurtosis indicates a
+greater prevalence of events in the wings of the distribution.
+Therefore, the excess kurtosis could give us an indication of the
+Article number, page 11 of 15
+
+A&A proofs: manuscript no. pap_ff
+
+(a)
+
+(a)
+Excess Kurtosis
+Skewness
+
+0
+
+0
+
+10
+
+5
+
+20
+
+10
+
+30
+
+15
+
+40
+
+Excess Kurtosis
+Skewness
+
+0.2
+
+0.4
+
+0.6
+
+0.4
+
+0.8
+
+0.5
+
+0.6
+
+0.7
+
+0.8
+
+0.9
+
+1.0
+
+r/R
+
+8
+
+(b)
+
+(b)
+Excess Kurtosis
+Skewness
+
+−1
+
+0
+
+0
+
+2
+
+1
+
+2
+
+4
+
+3
+
+6
+
+4
+
+Excess Kurtosis
+Skewness
+
+5
+
+r/R
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+0.4
+
+0.5
+
+0.7
+
+0.8
+
+0.9
+
+1.0
+
+r/R
+
+r/R
+Fig. 13. Time-averaged profiles of skewness and excess kurtosis of the
+width of inflows for the red giant simulations (a) in bg2D, and (b)
+bg3D. The radial position of the convective boundary determined by
+the Schwarzschild criterion is indicated by a vertical black line.
+
+0.6
+
+Fig. 14. Time-averaged profiles of skewness and excess kurtosis of the
+width of inflows for the young sun simulations (a) in wm2D, and (b)
+wm3D. The radial position of the convective boundary determined by
+the Schwarzschild criterion is indicated by a vertical black line.
+
+5.2. Plume numbers
+
+importance of different scales in a convection zone that involves
+many length scales. In the 2D red giant simulation bg2D shown
+in Fig. 13(a), the excess kurtosis is positive throughout. However, the 3D simulation bg3D shown in Fig. 13(b) has an excess
+kurtosis that is both positive and negative. We find similar results
+for the young sun pair wm2D/wm3D; in Fig. 14(b), the 3D simulation has negative excess kurtosis. This reinforces the idea that
+examination of the plume width can expose differences between
+2D and 3D simulations.
+Article number, page 12 of 15
+
+The width of inflows can be directly related to their number. The
+number of inflows does not capture information on asymmetry; however, the number of plumes decreases when inflowing
+plumes are wider and increases when inflowing plumes are thinner. Some theoretical predictions of overshooting have used the
+number of plumes (Rieutord & Zahn 1995; Pinçon et al. 2016).
+In addition to this relationship to the plume width, the number
+of plumes can be related to two possible paradigms for convection in stellar interiors (Käpylä et al. 2017; Brandenburg 2016;
+
+M.-G. Dethero et. al.: The shape of convection in stellar interiors
+
+10
+
+20
+
+Nin
+
+30
+
+40
+
+bg2D
+bg3D
+
+(a)
+0.0
+
+Inspired by our relative success in using the Anders penetration
+parameter to differentiate between 2D and 3D simulations, we
+construct non-dimensional numbers from the number of plumes
+and their widths, using values at two radial points. The characteristic radial profile of plume widths (see Fig. 12) indicates
+that there is a funneling effect on the plumes as they reach and
+then pass the convective boundary. We therefore construct a nondimensional parameter to indicate the strength of this funneling
+effect. Because both the widths and numbers of plumes scale
+with the number of shear interactions between inflows and outflows, we call this the plume interaction parameter, which we
+define
+σint = WOL /WCZ .
+
+(24)
+
+For each of our simulations, the plume interaction parameter is
+included in Table 2; it is always less than one for our simulations. Resolution of the complex small-scale flows in the overshooting layer can be a challenge for diagnostics. For simulation
+
+0.4
+
+0.6
+
+0.8
+
+25
+5
+
+10
+
+15
+
+20
+
+cc2d
+cc3d
+
+(b)
+0.20
+
+5.3. Using plume widths and numbers in a non-dimensional
+parameter
+
+0.2
+
+r/R
+
+Nout
+
+Spruit 1996). The first has been described as a “tree-like” structure, where the number of inflows is dependent on depth. The
+second has been described as a “forest-like” structure where the
+number of inflows is depth-independent. To connect these ideas
+to overshooting, and the differences between 2D and 3D convection, we examine numbers of plumes in our simulations.
+We calculate the number of inflows, Nin by counting up the
+continuous regions of inflowing cells at each radius; we then
+average over time. The number of outflows Nout is calculated
+analogously. In each of our simulations with convective envelopes, we find the largest number of inflowing plumes at the
+surface. As radius decreases, the number of plumes continually
+decreases until the convective boundary. The average number
+of inflows increases again just beyond this convective boundary (see Fig. 15(a)), a signature that could indicate the break-up
+or dissipation of convective flow structures or the interaction between convection and the waves that populate the radiative region. In the figure, the number of inflowing plumes increases
+rapidly for radii above r/R = 0.7; this could be described as a
+tree-like structure, with large plumes dominating at the bottom of
+this region and much smaller convective flow structures dominating at the top. Below r/R = 0.7, the number of plumes changes
+only mildly until the bottom of the convection zone; this region
+could be described as having a “forest-like” structure, with convective flows of similar size dominating. Following this analogy,
+a mildly “tree-like” structure exists in the overshooting layer, as
+the number of inflowing plumes increases with the depth into the
+overshooting layer; to our knowledge, this has not been observed
+before.
+In the case of core convection (see Fig. 15(b)) the largest
+number of plumes occurs at the convective boundary. Deeper in
+the convection core, the number of plumes decreases and then
+increases toward the inner radial boundary of the simulation. Because the convective core is comparatively small, convection appears to be entirely “tree-like” in this case. This structure in the
+number of plumes looks highly similar to the structure that we
+observe in shallow outer convection zones, such as the current
+sun.
+The picture of tree-like or forest-like convection evokes the
+question of whether plumes split or merge. That question can
+only clearly be addressed from a Lagrangian point of view, and
+so it is beyond the scope of this work.
+
+0.22
+
+0.24
+
+0.26
+
+0.28
+
+0.30
+
+r/R
+Fig. 15. (a) Number of inflows vs. internal radius for 2D and 3D simulations of the 3M⊙ red giant star, and (b) number of outflows vs.
+internal radius for the 20M⊙ main-sequence star with a convective
+core. The radial position of the convective boundary determined by the
+Schwarzschild criterion is indicated by a vertical black line.
+
+wide2D, we find σint = 0.45, while for simulation wm2D, where
+the young sun is resolved about 4 times better, σint = 0.50. This
+gives a clear indication that the plume interaction parameter is
+sufficiently resolved in our simulations, so that it changes only a
+small amount with increased resolution. The value of σint is also
+always larger for our 3D simulations than our 2D simulations.
+This suggests that the plume interaction parameter can encapsulate a general difference between 2D and 3D stellar convection.
+Using the standard deviation of the plume widths to calculate
+an uncertainty for the average plume interaction parameter, we
+Article number, page 13 of 15
+
+A&A proofs: manuscript no. pap_ff
+
+Article number, page 14 of 15
+
+1.00
+0.50
+
+●
+
+●
+●
+
+●
+●
+
+0.20
+
+●
+
+●
+
+0.10
+
+●
+
+0.05
+
+●
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+wide3D
+wide2D
+wm3D
+wm2D
+bg3D
+bg2D
+cc3D
+cc2D
+dcs3D
+dcs2D
+
+2.0
+
+lov Hp, CB
+
+(b)
+0.7
+
+6. Summary and Conclusions
+
+●
+●
+
+0.4 0.5
+
+●
+
+●
+●
+
+●
+●
+
+●
+
+0.3
+
+NCZ NOL
+
+●
+
+0.2
+
+Because 2D simulations have higher radial velocities than 3D
+simulations, it has generally been assumed that 2D simulations
+have a larger overshooting depth. Examining convection in four
+different models of stars, we show that the overshooting depth is
+often very similar in 2D and 3D simulations. Because 2D and 3D
+convective flows are visibly different, one possible explanation
+has been that a filling factor could explain these results.
+In this work, we have studied different definitions of the filling factor for convection in realistic global simulations of stars
+to understand differences in 2D and 3D convection as well as
+their link to an overshooting depth. Our calculations of a filling
+factor based on the volume percentage or based on mass flux result in characteristic profiles. These profiles reveal that, for stars
+with outer convective envelopes, the inward and outward flows
+are highly asymmetrical near the stellar surface with a value of
+about one-third (for the volume-percentage filling factor) or twothirds (for the mass-flux filling factor). However, at the bottom
+of the convection zone, the filling factor is about one-half, and
+the convection is nearly perfectly symmetrical. For our convective core simulation, these profiles are similar to those of a small
+convective envelope; at the convective boundary, there is symmetry between inflows and outflows. This is a significant new
+result for understanding stellar convection because it indicates
+that a filling factor calculated either using a volume percentage
+or the mass flux does not distinguish between 2D and 3D simulations. Nor are these filling factors, or any arguments based on
+asymmetrical convection, able to predict the overshooting depth
+for different stars.
+We study a filling factor based on the convective flux, as suggested by Zahn (1991). This calculation reveals that boundarylayer-like dynamics, as discussed by Kupka & Muthsam (2017),
+are significant in realistic global simulations of stars. These flows
+contaminate the convective flux, distorting the signal near the
+convective boundary, where it might be used to predict an overshooting length. Connected to the convective flux, we also examine the Anders penetration parameter. This is not a filling factor
+because it involves two different radial points rather than a separation of inflows and outflows at a single radial point. However,
+
+(a)
+●
+
+σint
+
+find that these uncertainties are smaller than the differences between the 2D and 3D values of the plume interaction parameter
+in about half of our simulation pairs. Because the plume interaction parameter is based solely on the velocity rather than the
+convective flux, this measure is also physically distinct from the
+Anders penetration parameter.
+In addition to the widths of plumes, the number of plumes
+can be combined in a ratio to produce a second nondimensional
+number, NCZ /NOL . As with the plume interaction parameter, this
+number is meaningfully different for our 2D and 3D simulation
+pairs, with the 3D simulation always having a larger value. Although a ratio based on the numbers of plumes does include different information from the widths of plumes, for our simulations they appear to be remarkably similar. Because the plume
+interaction parameter is more clearly linked to a filling factor, we
+focus on that diagnostic. Fig. 16 shows how both of our nondimensional ratios relate to the overshooting length in our simulations. No clear trend emerges for these pairs of simulations.
+However, the stellar models that we selected here are very different; investigation of a more similar set of stellar models could
+more easily exhibit a trend between the plume interaction parameter and the overshooting length; we are pursuing that study.
+
+●
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+wide3D
+wide2D
+wm3D
+wm2D
+bg3D
+bg2D
+cc3D
+cc2D
+dcs3D
+dcs2D
+
+2.0
+
+lov Hp, CB
+Fig. 16. Nondimensional ratios (a) the plume interaction parameter, and
+(b) the ratio of average numbers of plumes NCZ /NOL vs the overshooting
+depth in units of the pressure scale height at the convective boundary determined by the Schwarzschild criterion, ℓov /H p,CB , for all simulations
+studied in this work. A logarithmic scale is applied to the vertical axis.
+
+we find that this parameter can distinguish between 2D and 3D
+stellar convection, so it may be useful in explaining the amount
+of overshooting in 2D and 3D global simulations of stars, as well
+as for the box-in-a-star simulations where it was developed. The
+convective flux in the overshooting layer is particularly intermittent, making this diagnostic converge only slowly.
+We proceed to examine statistics of the widths of inwardflowing plumes (for convective envelopes) and outward-flowing
+plumes (for core convection). We find clear statistical differences
+between 2D and 3D simulations in the standard deviation and the
+
+M.-G. Dethero et. al.: The shape of convection in stellar interiors
+
+kurtosis. We identify a universal shape to the radial profile of the
+average plume width. We also examine the radial profile of the
+average number of plumes, which we link to pictures of tree-like
+and forest-like convection. Based on these profiles, we observe
+tree-like convection in overshooting layers. We construct a nondimensional number from the ratio of the average radial profile
+of the inward plume widths at two different radial points; we
+call this the plume interaction parameter. We demonstrate that
+the plume interaction parameter captures differences between 2D
+and 3D simulations.
+Although both the Anders penetration parameter and our
+plume interaction parameter successfully and reliably indicate
+differences between 2D and 3D stellar convection, for the set of
+stars that we examine in this work, they do not clearly correlate with the overshooting length. However, this set of stars was
+selected because they are very different from each other: they
+represent stars of different sizes, with different kinds of convection zones, at different evolutionary phases. A more systematic
+study of how these parameters change with overshooting depth
+may successfully demonstrate their use in predicting overshooting; that work is underway.
+Acknowledgements. This research is part of the Blue Waters sustained-petascale
+computing project, which is supported by the National Science Foundation
+(awards OCI-0725070 and ACI-1238993) and the state of Illinois. Blue Waters
+is a joint effort of the University of Illinois at Urbana-Champaign and its National Center for Supercomputing Applications. The research leading to these
+results is partly supported by the ERC grants 787361-COBOM and by the STFC
+Consolidated Grant ST/V000721/1. This work used the DiRAC Complexity system, operated by the University of Leicester IT Services, which forms part of the
+STFC DiRAC HPC Facility (www.dirac.ac.uk). This equipment is funded by BIS
+National E-Infrastructure capital grant ST/K000373/1 and STFC DiRAC Operations grant ST/K0003259/1. DiRAC is part of the National E-Infrastructure.
+This work also used the University of Exeter local supercomputer ISCA. Part
+of this work was performed under the auspices of the U.S. Department of Energy by Lawrence Livermore National Laboratory under Contract DE-AC5207NA27344. LLNL-JRNL-857704.
+
+References
+Anders, E. H., Jermyn, A. S., Lecoanet, D., & Brown, B. P. 2022, The Astrophysical Journal, 926, 169
+Andrássy, R. 2015, PhD thesis, Universiteit van Amsterdam
+Andrassy, R., Leidi, G., Higl, J., et al. 2024, A&A, 683, A97
+Balasuriya, S., Ouellette, N. T., & Rypina, I. I. 2018, Physica D: Nonlinear Phenomena, 372, 31
+Baraffe, I., Chabrier, G., Allard, F., & Hauschildt, P. 1997, A&A, 327, 1054
+Baraffe, I., Chabrier, G., Allard, F., & Hauschildt, P. 1998, A&A, 337, 403
+Baraffe, I., Clarke, J., Morison, A., et al. 2023, Monthly Notices of the Royal
+Astronomical Society, 519, 5333
+Baraffe, I. & El Eid, M. F. 1991, A&A, 245, 548
+Baraffe, I., Pratt, J., Vlaykov, D., et al. 2021, Astronomy & Astrophysics, 654,
+A126
+Brandenburg, A. 2016, The Astrophysical Journal, 832, 6
+Browning, M. K., Brun, A. S., & Toomre, J. 2004, The Astrophysical Journal,
+601, 512
+Brummell, N. H., Clune, T. L., & Toomre, J. 2002, ApJ, 570, 825
+Brun, A. S., Miesch, M. S., & Toomre, J. 2011, Astrophys. J., 742, 79
+Cai, T. 2020, The Astrophysical Journal, 891, 49
+Canuto, V. & Dubovikov, M. 1998, The Astrophysical Journal, 493, 834
+Cattaneo, F., Brummell, N. H., Toomre, J., Malagoli, A., & Hurlburt, N. E. 1991,
+The Astrophysical Journal, 370, 282
+Cattaneo, F., Hurlburt, N. E., & Toomre, J. 1989, in Solar and Stellar Granulation
+(Springer), 415–423
+Chen, G., Chacon, L., Leibs, C. A., Knoll, D. A., & Taitano, W. 2014, J. Comput.
+Phys., 258, 555
+Grimm-Strele, H., Kupka, F., Löw-Baselli, B., et al. 2015, New A, 34, 278
+Grinstein, F. F., Margolin, L. G., & Rider, W. J. 2007, Implicit large eddy simulation, Vol. 10 (Cambridge university press Cambridge)
+Haller, G. 2015, Annu. Rev. Fluid Mech., 47, 137
+Herwig, F., Woodward, P. R., Mao, H., et al. 2023, Monthly Notices of the Royal
+Astronomical Society, 525, 1601
+
+Holod, I., Hoelzl, M., Verma, P., et al. 2021, Plasma Physics and Controlled
+Fusion, 63, 114002
+Hurlburt, N. E., Toomre, J., & Massaguer, J. M. 1984, Astrophysical Journal,
+282, 557
+Käpylä, P. J. 2023, arXiv preprint arXiv:2310.12855
+Käpylä, P. J., Rheinhardt, M., Brandenburg, A., et al. 2017, The Astrophysical
+Journal Letters, 845, L23
+Knoll, D. A. & Keyes, D. E. 2004, J. Comput. Phys., 193, 357
+Kupka, F. & Muthsam, H. J. 2017, Living Reviews in Computational Astrophysics, 3, 1
+Le Saux, A., Guillet, T., Baraffe, I., et al. 2022, Astronomy & Astrophysics, 660,
+A51
+Lecoanet, D., Cantiello, M., Quataert, E., et al. 2019, The Astrophysical Journal
+Letters, 886, L15
+LeVeque, R. J., Mihalas, D., Dorfi, E., & Müller, E. 2006, Saas-Fee Advanced
+Course 27. Lecture Notes 1997 Swiss Society for Astrophysics and Astronomy, Vol. 27, Computational Methods for Astrophysical Fluid Flow (Springer
+Science & Business Media)
+Margolin, L. G. 2019, Shock Waves, 29, 27
+Mousseau, V., Knoll, D., & Rider, W. 2000, Journal of computational physics,
+160, 743
+Muthsam, H., Göb, W., Kupka, F., Liebich, W., & Zöchling, J. 1995, Astronomy
+and Astrophysics, 293
+Newman, C. & Knoll, D. A. 2013, SIAM Journal on Scientific Computing, 35,
+S445
+Nordlund, Å., Stein, R. F., & Asplund, M. 2009, Living Reviews in Solar Physics,
+6, 1
+Paxton, B., Bildsten, L., Dotter, A., et al. 2010, The Astrophysical Journal Supplement Series, 192, 3
+Pinçon, C., Belkacem, K., & Goupil, M. 2016, Astronomy & Astrophysics, 588,
+A122
+Pratt, J., Baraffe, I., Goffrey, T., et al. 2017, Astronomy & Astrophysics, 604,
+A125
+Pratt, J., Baraffe, I., Goffrey, T., et al. 2020, Astronomy & Astrophysics, 638,
+A15
+Pratt, J., Baraffe, I., Goffrey, T., et al. 2016, Astronomy & Astrophysics, 593,
+A121
+Rempel, E. L., Chian, A. C.-L., de SA Silva, S., et al. 2023, Reviews of Modern
+Plasma Physics, 7, 32
+Rempel, M. 2004, The Astrophysical Journal, 607, 1046
+Rieutord, M. & Zahn, J.-P. 1995, Astronomy and Astrophysics, 296, 127
+Ritos, K., Kokkinakis, I. W., & Drikakis, D. 2018, Computers & Fluids, 173, 307
+Roe, P. 1986, Annu. Rev. Fluid Mech., 18, 337
+Rogers, T. M., Glatzmaier, G. A., & Jones, C. 2006, The Astrophysical Journal,
+653, 765
+Schmitt, J., Rosner, R., & Bohn, H. 1984, The Astrophysical Journal, 282, 316
+Spruit, H. C. 1996, arXiv preprint astro-ph/9605020
+Stein, R. & Nordlund, Å. 1989, The Astrophysical Journal, 342, L95
+Thornber, B., Mosedale, A., Drikakis, D., Youngs, D., & Williams, R. 2008, J.
+Comput. Phys., 227, 4873
+Toomre, J., Brummell, N., Cattaneo, F., & Hurlburt, N. E. 1990, Computer
+Physics Communications, 59, 105
+Van Leer, B. 1974, J. Comput. Phys., 14, 361
+Van Leer, B. 1997, Journal of computational physics, 135, 229
+Viallet, M., Goffrey, T., Baraffe, I., et al. 2016, A&A, 586, A153
+Vlaykov, D., Baraffe, I., Constantino, T., et al. 2022, Monthly Notices of the
+Royal Astronomical Society, 514, 715
+Zahn, J.-P. 1991, Astronomy & Astrophysics, 252, 179
+
+Article number, page 15 of 15
+
+

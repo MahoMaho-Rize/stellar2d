@@ -1,0 +1,819 @@
+                                                 Draft version June 3, 2024
+                                                 Typeset using LATEX twocolumn style in AASTeX631
+
+
+
+
+                                                  Progenitor Constraint Incorporating Shell Merger: The Case of Supernova Remnant G359.0−0.9
+                                               Kai Matsunaga        ,1 Hiroyuki Uchida ,1 Rei Enokiya ,2 Toshiki Sato ,3 Ryo Sawada                    ,4 Hideyuki Umeda        ,5
+                                                                                  Takuto Narita ,1 and Takeshi Go Tsuru 1
+                                               1 Department of Physics, Graduate School of Science, Kyoto University, Kitashirakawa Oiwake-cho, Sakyo-ku, Kyoto 606-8502, Japan
+                                                           2 Faculty of Science and Engineering, Kyushu Sangyo University, 2-3-1 Matsukadai, Fukuoka 813-8503, Japan
+                                                 3 Department of Physics, School of Science and Technology, Meiji University, 1-1-1 Higashi Mita, Tama-ku, Kawasaki, Kanagawa
+arXiv:2405.20736v1 [astro-ph.HE] 31 May 2024
+
+
+
+
+                                                                                                        214-8571, Japan
+                                               4 Department of Earth Science and Astronomy, Graduate School of Arts and Sciences, The University of Tokyo, Tokyo 153-8902, Japan
+                                                                   5 1Department of Astronomy, School of Science, University of Tokyo, Tokyo 113-0033, Japan
+
+
+
+                                                                                                        ABSTRACT
+                                                          It is generally hard to put robust constraints on progenitor masses of supernovae (SNe) and remnants
+                                                       (SNRs) observationally, while they offer tantalizing clues to understanding explosion mechanisms and
+                                                       mass distribution. Our recent study suggests that “shell merger”, which is theoretically expected
+                                                       for stellar evolution, can appreciably affect final yields of inter-mediate mass elements (IMEs; such
+                                                       as Ne, Mg, and Si). In light of this, here we report results of X-ray spectral analysis of a Galactic
+                                                       SNR G359.0−0.9, whose abundance pattern may possibly be anomalous according to a previous study.
+                                                       Our spectroscopy using all the available data taken with XMM-Newton reveals that this remnant
+                                                       is classified as Mg-rich SNRs because of its high Mg-to-Ne ratio (ZMg /ZNe = 1.90+0.27  −0.19 ; mass ratio
+                                                       0.66+0.09
+                                                            −0.07 ) and  conclude  that the result cannot be explained without  the shell merger. By comparing
+                                                       the observation with theoretical calculations, we prefer the so-called Ne-burning shell intrusion and in
+                                                       this case the progenitor mass MZAMS is likely < 15M⊙ . We confirm the result also by our new molecular
+                                                       line observations with the NRO-45 m telescope: G359.0−0.9 is located in the Scutum-Centaurus arm
+                                                       (2.66–2.94 kpc) and in this case the resultant total ejecta mass ∼ 6.8M⊙ is indeed consistent with the
+                                                       above estimate. Our method using mass ratios of IMEs presented in this paper will become useful to
+                                                       distinguish the type of the shell merger, the Ne-burning shell intrusion and the O-burning shell merger,
+                                                       for future SNR studies.
+
+                                                                 1. INTRODUCTION                                   Sawada & Maeda 2019; Ertl et al. 2020; Imasheva et al.
+                                                  Core-collapse (CC) supernovae (SNe) spread heavy el-             2023; Sawada & Suwa 2023, and references therein).
+                                               ements produced during their progenitor’s evolution and               Lighter elements such as O, Ne, and Mg are mainly
+                                               ensuing explosive end, and thus abundances of ejecta in             synthesized in the pre-SN phase, which may give us more
+                                               supernova remnants (SNRs) should provide rich infor-                direct hints in understanding progenitors. In our recent
+                                               mation on their past stellar and explosive nucleosyn-               study (Sato et al. 2024), we suggested that the high
+                                               thesis. Although a wide variety of elemental composi-               Mg/Ne ratio in the ejecta of a SNR N49B can be ex-
+                                               tions has been reported so far from X-ray spectroscopy              plained by a destratification process, in agreement with
+                                               of SNRs, a plausible connection between their abun-                 progenitor models published by Sukhbold et al. (2018).
+                                               dances and progenitor properties is still missing. This             Such so-called ”shell merger” processes are also reported
+                                               is partially because the yield of nucleosynthesis prod-             by recent multi-dimension simulations of the progenitor
+                                               ucts depends on explosion mechanisms which are cur-                 interior (c.f. Mocák et al. 2018; Andrassy et al. 2020; Ya-
+                                               rently not fully understood. 56 Ni (decaying to 56 Fe) is,          dav et al. 2020). According to Collins et al. (2018) and
+                                               for instance, created near the proto-neutron star (PNS),            our study (Sato et al. 2024) with the models of Sukhbold
+                                               where there is a large theoretical uncertainty. While, as           et al. (2018), such events will commonly occur in sev-
+                                               Katsuda et al. (2018) reported, the abundance ratio of              eral tenths of a percent of progenitors, which may also
+                                               Fe/Si is known as one of the promising parameters for es-           affect the chemical evolution of galaxies (Ritter et al.
+                                               timating zero age main sequence mass (MZAMS ), a total              2018). As indicated by Yadav et al. (2020), when the O-
+                                               mass of 56 Ni varies with different explosion engines (e.g.,        or Ne-burning shell is merged with the outer O-Ne-Mg
+                                                                                                                   layer before the collapse, the total yield of Ne is heavily
+2
+
+depleted and the resultant Mg/Ne will become higher.              2. OBSERVATION AND DATA REDUCTION
+We also found that if such violent mergers of burning                2.1. X-ray observation with XMM-Newton
+shells occur the compactness parameter (O’Connor &
+Ott 2011) tends to become smaller (Sato et al. 2024):             G359.0−0.9 has been observed with XMM-Newton
+with this stellar evolution path even a supermassive star      four times so far as summarized in Table 1. For the
+with MZAMS ≳ 20M⊙ may become explodable. Mg-                   following analysis, we used data from European Photon
+rich SNRs are therefore possibly massive-star remnants         Imaging Camera (EPIC) instruments: two metal-oxide
+while observations of SNe show no robust evidence for          semiconductor (MOS) detectors (Turner et al. 2001) and
+an explosion of a red supergiant whose MZAMS exceeds           one pn detector (Strüder et al. 2001). Data reduction
+20M⊙ (red supergiant problem; Davies & Beasor 2020,            was performed using the XMM Science Analysis Sys-
+and references therein).                                       tem (SAS) version 19.1.0 with the most recent Current
+   Although only a few Mg-rich SNRs has been re-               Calibration Files (CCF). We combined the spectral files
+ported so far (N49B; G284.3-1.8, Park & Bhalerao 2017;         using mathpha from the HEASoft software package. The
+Williams et al. 2015), more candidates will be identi-         redistribution matrix file (RMF) and ancillary response
+fied by precisely measuring the Ne and Mg abundances;          file (ARF) for each observation were multiplied using
+most promising targets for this purpose would be low-          marfrmf. They were then merged using addrmf, weight-
+absorbed, i.e., nearby remnants. Here, we focus on             ing by their effective exposure times and detector ar-
+the analysis of G359.0−0.9, which has a large appar-           eas. For the following spectral analysis, we used version
+ent size, suggesting a nearby SNR. G359.0−0.9 was first        12.13.0c of an X-Ray Spectral Fitting Package (XSPEC,
+discovered by a 10-GHz radio continuum survey with             Arnaud 1996).
+the Nobeyama 45-m (NRO 45-m) telescope (Sofue &                   2.2. Nobeyama 45-m molecular line observations
+Handa 1984) and follow-up observations revealed a par-
+                                                                  Molecular line observations were carried out by two
+tial radio shell in 1.2 GHz (MeerKAT; Heywood et al.
+                                                               separated sessions in April 2023 by using the Nobeyama
+2022) and Hα (Anglo-Australian Observatory/United
+                                                               45 m telescope (PI; K. Matsunaga). We used FOur-
+Kingdom Schmidt Telescope; Stupar & Parker 2011).
+                                                               beam REceiver System on the 45-m Telescope (FOR-
+X-ray observations have been performed with ASCA
+                                                               EST; Minamidani et al. 2016), and Spectral Anal-
+(Bamba et al. 2000) and Suzaku (Bamba et al. 2009),
+                                                               ysis Machine for the 45-m telescope (SAM45; Ka-
+which have revealed an extremely asymmetric morphol-
+                                                               mazaki et al. 2012) in the frontend and backend,
+ogy and also suggested a relatively large Mg abundance
+                                                               respectively. FOREST is comprised of four beams
+of ejecta. Although these previous studies imply that
+                                                               with two polarization and two sidebands. Thanks to
+G359.0−0.9 is another candidate for massive-star rem-
+                                                               the large intermediate frequency (IF) bandwidths of
+nants, the ejecta mass, which correlates with MZAMS
+                                                               8 GHz (4–12 GHz), a simultaneous observation with
+(e.g., Sukhbold et al. 2016), is still uncertain due to dis-   12
+                                                                  CO (J=1–0), 13 CO (J=1–0), and C18 O(J=1–0) is re-
+crepant distance estimates; ∼ 6 kpc (X-ray absorption;
+                                                               alized. A typical system noise temperature toward the
+Bamba et al. 2000), 3.5 ± 0.4 kpc or 3.3 ± 0.2 kpc (lu-
+                                                               source and the image rejection ratio were ∼500 K,
+minosity attenuation of red clumps; Wang et al. 2020),
+                                                               and 15 dB, respectively. SAM45 is a FX-type cor-
+and ∼ 3.7 kpc (Σ-D relation; Pavlović et al. 2012).
+                                                               relator, which consists of 16 IF bands (4 beams×2
+   In this paper, we present the results of X-ray and
+                                                               polarizations×2 sidebands) with a 2-GHz bandwidth.
+molecular line observations of G359.0−0.9 with XMM-
+                                                               We configured two settings for the spectrometer: CO
+Newton and NRO 45-m. This paper is organized as
+                                                               isotopes in a first wide-area survey (setting 1), and
+follows. Section 2 details the above observations and
+                                                               follow-up, small-area observations with HCO+, SiO,
+data reduction method. In Section 3, we show results of
+                                                               and HCN (setting 2). We used a “spectral window
+spectroscopy and provide evidence that this remnant is
+                                                               mode”, which produces two independent spectral win-
+classified as Mg-rich SNRs. We also report discovery of
+                                                               dows within each IF band. The roles of 32 spectral
+a molecular cloud associated with G359.0−0.9. We then
+                                                               windows to the two spectrometer settings are summa-
+discuss the origin of the Mg-rich SNRs in Section 4 and
+                                                               rized in Table 2. The narrow/wide bands correspond
+infer the progenitor mass of G359.0−0.9 in conjunction
+                                                               to the velocity resolutions and velocity coverages of
+with a distance estimation through the velocity of the
+                                                               0.33/0.67 km s−1 and ±300/±600 km s−1 , respectively.
+associated cloud. Throughout the paper, errors of pa-
+                                                                  Through a deep position-switching observation toward
+rameters are defined as 1σ confidence level and the solar
+                                                               (l, b) = (−1.◦ 1000, −1.◦ 8000) by beam 1, we found that
+abundance is given by Wilms et al. (2000).
+                                                               this direction does not include any significant emis-
+                                                               sions over a 3σ noise level in all beams, and thus we
+                                                                                                                                                                                             3
+
+                               Table 1. Observation log of G359.0−0.9 with XMM-Newton.
+                          Obs. ID     Date of Obs.   Detector   Total Exposure (ks)                                               Effective Exposure (ks)
+                        0152920101     2003-04-02     MOS1                                            51.5                                     48.1
+                                                      MOS2                                            51.5                                     47.0
+                                                       pn                                             48.9                                     36.8
+                        0801680501     2017-09-18     MOS1                                            26.9                                     20.4
+                                                      MOS2                                            28.1                                     22.2
+                                                       pn                                             22.9                                     16.0
+                        0801680701     2017-09-23     MOS1                                            28.5                                     26.9
+                                                      MOS2                                            28.6                                     27.1
+                                                       pn                                             26.1                                     23.6
+                        0804250301     2018-03-13     MOS1                                            40.6                                     39.5
+                                                      MOS2                                            40.6                                     39.7
+                                                       pn                                             39.5                                     38.4
+
+
+                                      Table 2. Roles of spectral windows by settings.
+
+ Setting         A01 to A08                   A09 to A16                                                 A17 to A24                                             A25 to A32
+           12                           18                                       12                                                                13
+    1       CO (J=1–0) wide band      C O(J=1–0) narrow band                               CO (J=1–0) narrow band                                    CO (J=1–0) narrow band
+    2      HCO+ (J=1–0) wide band      SiO(J=2–1) wide band                                HCN(J=1–0) wide band                                     SiO(J=2–1) narrow band
+
+used this coordinate as the emission-free direction to                                                               SNR G359.1−0.5
+
+do a chopper wheel calibration (Kutner & Ulich 1981).
+Pointing observations were done every two hours by ob-
+                                                                 Galactic Latitude (deg)
+
+
+
+
+                                                                                                        The Mouse Pulsar
+                                                                                               -0.8
+
+
+
+
+serving SiO masers (OH2.6−0.4) with the H40 receiver
+at 40 GHz, and achieved a pointing accuracy better
+than 2′′ . We carried out mapping observations of the
+                                                                                                                                                                G359.0−0.9
+large area shown in Figure 3 with setting 1, and lim-
+                                                                                               -1.0
+
+
+
+
+ited areas with setting 2. The half-power beam widths
+(HPBW), velocity resolutions, and typical r.m.s. noise
+fluctuations of the final datasets are ∼26′′ /26′′ /26′′ ,
+0.25/0.25/0.25 km s−1 , and 0.60/0.17/0.17 K per chan-
+                                                                                               -1.2
+
+
+
+
+nel in Ta∗ scale for 12 CO, 13 CO, and C18 O, respectively.                                                  359.4                 359.2                359.0            358.8
+
+
+
+SiO(J=2–1) emissions were not detected in our observa-                                     0            10            30
+
+                                                                                                                             Galactic Longitude (deg)
+                                                                                                                             69        148   307         622    1248   2512      5012   99
+
+
+
+
+tions.
+                                                                 Figure 1. X-ray image of G359.0−0.9 (1.0–2.0 keV) and
+                                                                 the surrounding field obtained with XMM-Newton (green).
+                                                                 The radio continuum emission obtained with MeerKAT at
+                 3. DATA ANALYSIS                                1284 MHz is overlaid in red. The spectral extraction region
+                3.1. X-ray Spectroscopy                          is enclosed by the cyan line. The magenta line represents the
+                                                                 background region, where we excluded a bright point source.
+   Figure 1 shows the background-subtracted X-ray im-
+age of G359.0−0.9. We found that only the eastern part
+                                                                 other MM SNRs such as W44 (Uchida et al. 2012) and
+is bright in X-ray within the radio shell whereas the
+                                                                 G359.1−0.5 (Suzuki et al. 2020).
+other region is comparable with the background level
+                                                                   For the following analysis, we focus on the bright east-
+outside of the remnant. It is also notable that the X-
+                                                                 ern part of G359.0−0.9 as shown in Figure 1. The back-
+ray surface brightness is rather uniform in the east and
+                                                                 ground region was chosen from the vicinity of the rem-
+that no apparent shell-like structure is seen there, which
+                                                                 nant, avoiding the point-spread function from nearby
+implies that G359.0−0.9 belongs to the class of Mixed-
+                                                                 bright binaries (SLX 1744–300/299). Figure 2 displays
+Morphology (MM) SNRs (Rho & Petre 1998). If this
+                                                                 the obtained spectrum, in which we detected prominent
+is the case, X-ray emission we detected in G359.0−0.9
+                                                                 emission lines of highly ionized Mg and Si; no appar-
+is from shock-heated ejecta, as is the case with the
+4
+                                                                                     1
+ent line features of the Fe-L complex and Ne are found.
+We applied an absorbed non-equilibrium ionization col-
+                                                                                  10 1
+
+
+
+
+                                                               Counts s 1 keV 1
+lisional plasma model (NEI; vnei in XSPEC), which
+is based on Bamba et al. (2009). We set the electron
+temperature kTe , ionization timescale ne t, normaliza-                           10 2
+tion and abundances of Ne, Mg, Si (=S=Ar=Ca), Fe
+(=Ni) as free parameters. The column density NH was                               10 3     MOS1     NEI + Al K
+also varied using tbabs (Tübingen-Boulder absorption                                      MOS2     NEI
+                                                                                           PN       Al K
+model; Wilms et al. 2000). We also added a Gaussian
+component at 1.48 keV, which represents a known Al                                   4
+
+
+
+
+                                                               Residuals
+Kα line emission due to the particle-induced background                              2
+                                                                                     0
+of EPIC (Carter & Read 2007). The single-component                                  -2
+NEI model provides a successful fit for the spectrum,                               -4
+as shown in Figure 2. Although residuals are seen es-                                0.5              1.0                   2.0       3.0
+                                                                                                        Energy (keV)
+pecially around the ∼ 1 keV band, the widths of these
+humps are smaller than the response function of EPIC.             Figure 2. X-ray spectrum of G359.0−0.9 obtained with
+The addition of another NEI component or freeing the O            MOS1 (black), MOS2 (red), and pn (green). The best-fit
+                                                                  model is represented by the dotted lines. The residuals are
+abundance does not significantly improve the fit, hence
+                                                                  displayed in the lower panel.
+we conclude that these residuals are attributed to sta-
+tistical uncertainty.
+   The best-fit parameters are listed in Table 3.1. The                                     Table 3. The best-fit Parameters.
+result is almost consistent with the previous studies
+(Bamba et al. 2000), whereas we additionally mea-                        Components                    Parameters                 Best-fit values
+sured abundances of Ne and Si for the first time.                                                                      −2
+                                                                         Absorption (TBabs)                      22
+                                                                                                       NH [10 cm ]                2.13+0.08
+                                                                                                                                       −0.05
+Since Fe is less abundant than the other elements,
+                                                                         NEI                           kTe [keV]                  0.2715+0.0009
+                                                                                                                                          −0.0008
+which exceed the solar value, the plasma is most
+                                                                                                       ZNe                        1.02+0.19
+                                                                                                                                       −0.20
+likely ejecta and thus G359.0−0.9 would be a rem-
+                                                                                                       ZMg                        1.93+0.19
+                                                                                                                                       −0.17
+nant of a core-collapse SN. The most striking result
+                                                                                                       ZSi = ZS = ZAr = ZCa       2.52+0.16
+                                                                                                                                       −0.19
+of our analysis is the high Mg abundance against Ne;
+ZMg /ZNe = (Mg/Ne)/(Mg/Ne)⊙ ∼ 1.90+0.27                                                                ZFe = ZNi                  0.60+0.26
+                                             −0.19 (mass ra-
+                                                                                                                                       −0.15
+           +0.09
+tio ∼ 0.66−0.07 ) deviates significantly from ZMg /ZNe ∼ 1                                             Zother                     1 (fix)
+that is expected in most of SNRs. We therefore con-                                                    ne t [cm−3 s]              > 1013
+clude that G359.0−0.9 is another example of the Mg-                                                    norm [10−2 ]               5.5+0.1
+                                                                                                                                     −0.3
+
+rich SNRs (Park et al. 2003), which has been reported                    Gaussian                      E [keV]                    1.48 (fixed)
+for only two samples: N49B (Park & Bhalerao 2017) and                                                  normMOS1 [10−4 ]           8.6+8.1
+                                                                                                                                     −7.7
+G284.3−1.8 (Williams et al. 2015). We additionally note                                                normMOS2 [10−3 ]           2.8+0.7
+                                                                                                                                     −0.6
+that the Si abundance is also significantly higher than                                                normpn [10−3 ]             3.4+1.8
+                                                                                                                                     −1.6
+that of Ne and even more abundant than that of Mg;                                                     χ2 /d.o.f                  1665.5/1492
+ZSi /ZMg = (Si/Mg)/(Si/Mg)⊙ ∼ 1.30+0.16    −0.17 (mass ratio
+∼ 1.11 ± 0.14). Such a characteristic abundance pattern
+                                                                  the entire observation field, while 13 CO (J=1–0) and
+implies a somehow unusual nucleosynthesis during the
+                                                                  C18 O(J=1–0) are detected only toward the bright parts
+stellar evolution or explosion.
+                                                                  in 12 CO (J=1–0). We discovered a bright CO clump
+                                                                  seen in all three CO isotopes toward (l, b) = (359.◦ 00 to
+    3.2. Discovery of a molecular cloud associated with           359.◦ 12, −1.◦ 22 to −1.◦ 02). The cloud displays complex
+                         G359.0−0.9                               structure with a sharp edge at the boundary of the rem-
+  Although the investigation for interactions with sur-           nant and coincides with the edges of the southeastern
+rounding material is important for measuring the dis-             radio-bright rims, which suggests an interaction between
+tance, no evidence has been reported for G359.0−0.9               the cloud and the SN shock. As displayed in Figure 4,
+so far. Figure 3 shows velocity channel distributions             the spectra obtained by our follow-up observations un-
+of 12 CO (J=1–0), 13 CO (J=1–0), and C18 O(J=1–0)                 der setting 2 (see Section 2.2) clearly show HCN(J=1–0)
+obtained with our new observations.          The opti-            and HCO+ (J=1–0) lines from the cloud with a suffi-
+cally thick 12 CO (J=1–0) emission prevails almost over           cient significance (∼9–10σ). According to Seta et al.
+                                                                                                                                                                                       5
+                                                    -0.6 -9.62 to -8.12 km/s                                -8.12 to -6.62 km/s             -6.62 to -5.12 km/s
+
+
+
+
+                       Galactic Latitude [degree]
+                                                    -0.8
+
+
+                                                    -1.0
+
+                                                                                         K
+                                                    -1.2                         0   5 10 15 20
+
+                                                           359.4 359.2 359.0 358.8                     359.4 359.2 359.0 358.8             359.4 359.2 359.0 358.8 358.6
+                                                              Galactic Longitude [degree]                 Galactic Longitude [degree]         Galactic Longitude [degree]
+                                                    -0.6 -9.62 to -8.12 km/s                                -8.12 to -6.62 km/s             -6.62 to -5.12 km/s
+                       Galactic Latitude [degree]
+
+
+
+
+                                                    -0.8
+
+
+                                                    -1.0
+
+                                                                                         K
+                                                    -1.2                         0   2       4   6
+
+                                                           359.4 359.2 359.0 358.8                     359.4 359.2 359.0 358.8             359.4 359.2 359.0 358.8 358.6
+                                                              Galactic Longitude [degree]                 Galactic Longitude [degree]         Galactic Longitude [degree]
+                                                    -0.6 -9.62 to -8.12 km/s                                -8.12 to -6.62 km/s             -6.62 to -5.12 km/s
+                       Galactic Latitude [degree]
+
+
+
+
+                                                    -0.8
+
+
+                                                    -1.0
+
+                                                                                         K
+                                                    -1.2                     0.0 0.5     1.0 1.5 2.0                                                    5 × HPBW   10 pc
+                                                           359.4 359.2 359.0 358.8                     359.4 359.2 359.0 358.8             359.4 359.2 359.0 358.8 358.6
+                                                              Galactic Longitude [degree]                 Galactic Longitude [degree]         Galactic Longitude [degree]
+
+Figure 3. Velocity channel distributions of 12 CO (J=1–0) (top three panels), 13 CO (J=1–0) (middle three panels), and
+C18 O(J=1–0) (bottom three panels) with smoothed 1.3 GHz contours obtained by MeerKAT. The 10 pc scale bar at 2.5 kpc
+and the HPBW are indicated in the bottom right panel. The light green cross indicates the position at which the molecular line
+spectra shown in Figure 4 have been obtained.
+
+               0.8
+                      RMS = 0.059 K                                       (L,B)=(359.066, -1.059)                                 ment, and they are mainly detected in SN shock regions.
+                      RMS = 0.063 K                                                                                               Thus, we conclude that the southeastern dense cloud at
+               0.6
+                                                                                                                                  VLSR ∼−7 km s−1 is associated with G359.0−0.9. The
+                                                                                                                                  diffuse envelope of the associated cloud may be blown
+               0.4
+     Ta* [K]
+
+
+
+
+                                                                                                                                  away by the stellar wind from the progenitor, and the
+                                                                                                                                  surviving dense part is interacting with the remnant.
+               0.2
+
+                                                                                                                                                       4. DISCUSSION
+               0.0
+                                                                                                                                      4.1. Origin of G359.0−0.9 and Mg-rich SNRs
+                                                                                                                                     As stated in Section 3.1, our spectral analysis of
+                -30                                   -20          -10               0                 10
+                                                                   Vlsr [km/s]                                                    G359.0−0.9 indicates that the Mg (and also Si) abun-
+                                                                                                                                  dance is significantly higher than the solar value when
+Figure 4. Molecular line spectra of HCN(J=1–0) (blue)                                                                             compared with that of Ne. We have categorized this
+and HCO+ (J=1–0) (orange) toward (l, b) = (359.◦ 066,                                                                             remnant as a Mg-rich SNR defined by Park et al.
+−1.◦ 059). R.M.S. noise intensities in Ta∗ are indicated at the
+                                                                                                                                  (2003). While only two SNRs have been identified as
+top left of the panel.
+                                                                                                                                  Mg-rich SNRs so far (Park & Bhalerao 2017; Williams
+                                                                                                                                  et al. 2015), we expect more candidates to be iden-
+                                                                                                                                  tified as is the case with G359.0−0.9. Based on a
+(2004), HCO+ lines trace collisionally excited, higher
+                                                                                                                                  literature search, we found that at least two SNRs,
+density spots owing to their large electric dipole mo-
+                                                                                                                                  RX J1713.7−3946 (Katsuda et al. 2015) and G290.1−0.8
+6
+                                                                                                      27
+                                                    explosion
+                                                    implosion
+                                             10     SNR ejecta
+                                                    G359.0 0.9                                        24
+
+
+                        Si/Mg [mass ratio]                                                            21
+                                                                     8 5 12
+
+
+
+
+                                                                                                       MZAMS [M ]
+                                                                                                3
+                                                                                   G359.0 0.9
+                                              1                       7
+                                                                       6
+                                                                        10           11               18
+                                                                      4
+                                                          1                               9 2
+                                                                                                      15
+
+                                             0.1
+                                                   0.1                                    1           12
+                                                              Mg/Ne [mass ratio]
+Figure 5.      Parameter distribution of Mg/Ne and Si/Mg expected from stellar models (circles; Sukhbold et al. 2018) and
+obtained from previous observations of SNRs (green squares). The colored and gray circles represent explosion and implosion
+cases, respectively. The result of G359.0−0.9 is shown by the red cross. The gray dashed lines represent the solar values. The
+numbers correspond to the targets as follows; [1] 1E 0102.2−7219; Sasaki et al. (2001), [2] G284.3−1.8; Williams et al. (2015),
+[3] G290.1−0.8; Kamitsukasa et al. (2015), [4] MSH 15−52 ; Yatsu et al. (2005), [5] MSH 15−56 ; Yatsu et al. (2013), [6] N132D;
+Hughes et al. (1998), [7] N23; Uchida et al. (2015), [8] N49; Uchida et al. (2015), [9] N49B; Uchida et al. (2015), [10] N63A;
+Hughes et al. (1998), [11] RX J1713.7−3946; Katsuda et al. (2015), [12] W44; Uchida et al. (2012).
+
+(Kamitsukasa et al. 2015), may possibly fall into the                      undergoes, the resultant Si/Mg also becomes higher.
+“Mg-rich”category. In Figure 5, we plot the abundance                      Our spectral analysis of G359.0−0.9 shows a relatively
+ratios among Ne, Si, and Mg obtained in our spectral                       high Si/Mg mass ratio ∼ 1.11±0.14 compared with those
+fit of G359.0−0.9 and previous measurements of other                       of N49B and G284.3−1.8 (∼0.3 Park & Bhalerao 2017;
+luminous SNRs. The result supports that several SNRs                       Williams et al. 2015), which may be explained by the
+including G359.0−0.9 show higher Mg/Ne (∼ 0.66+0.09−0.07 )                 shell merger with/without the O-burning shell merger.
+while the others are roughly clustered around the solar                       In order to compare our results with theoretical ex-
+value (∼ 0.35).                                                            pectations, we calculate a nucleosynthesis model taking
+   We recently proposed that the abundant Mg ob-                           into account the destratification. We used 1D stellar
+served in N49B is likely due to a destratification in                      simulations with a standard mass-loss rate published by
+the progenitor (Sato et al. 2024), where the O- or                         Sukhbold et al. (2018). The results are overlaid in Fig-
+Ne-burning shell is breaking into outer layers shortly                     ure 5, where we distinguish whether the models are ex-
+before the core collapse (shell merger; Yadav et al.                       ploding or non-exploding by evaluating a threshold for
+2020, and references therein). Such violent destratifi-                    the explodability (computed with the W18 engine) ac-
+cation promotes a series of Ne-burning processes like                      cording to Ertl et al. (2016). Note that we calculated
+20
+   Ne(α, γ)24 Mg and in the case of an O-burning shell                     the values of Mg/Ne and Si/Mg outside than the O-
+merger, 20 Ne(α, γ)24 Mg(α, γ)28 Si is further enhanced.                   burning shell, where the elemental composition is not
+This scenario can account for the origin of the Mg-                        changed drastically before/after a shock passage. Since
+rich SNRs and we speculate that the abundance ratios                       Mg and Ne are mainly synthesized before core collapse
+among Ne, Si, and Mg are the keys to deciphering stel-                     whereas Si is enriched also in the explosive nucleosynthe-
+lar nucleosynthesis and evolution. The Ne-burning pro-                     sis, the calculated values and the measured abundances
+cesses before the explosion result in a higher Mg/Ne, i.e.,                (particularly of Si) should not be directly compared in
+Mg-rich ejecta, whereas if the O-burning shell merger                      Figure 5. It would be nevertheless remarkable that the
+                                                                                                                                            7
+
+                      100               (a) pre-supernova            56Ni
+                                                                              100          (b) after shock-passage
+                                                                                                                             pre-SN
+                                                                     28Si                                                    SN
+                                                                                                                             56Ni
+                      10 1                                           24Mg
+                                                                     20Ne
+                                                                             10 1                                            28Si
+      Mass fraction
+
+                                                                     16O                                                     24Mg
+                      10 2                                           12C
+                                                                     4He
+                                                                             10 2                                            20Ne
+                                                                                                                             16O
+                                                                                                                             12C
+                                                                                                                             4He
+                      10 3     Si/Mg 0.25                                    10 3     Si/Mg 0.87
+                               Mg/Ne 0.31                      13.77 M                Mg/Ne 0.28                       13.77 M
+                      10 4                                                   10 4
+                       100                                           56Ni
+                                                                              100
+                                                                                                                             pre-SN
+                                                                     28Si                                                    SN
+                                                                                                                             56Ni
+                      10 1                                           24Mg
+                                                                     20Ne
+                                                                             10 1                                            28Si
+      Mass fraction
+
+
+
+
+                                                                     16O                                                     24Mg
+                      10 2                                           12C
+                                                                     4He
+                                                                             10 2                                            20Ne
+                                                                                                                             16O
+                                                                                                                             12C
+                                                                                                                             4He
+                      10 3     Si/Mg 0.43                                    10 3     Si/Mg 0.86
+                               Mg/Ne 0.90                      14.27 M                Mg/Ne 0.80                       14.27 M
+                      10 4                                                   10 4
+                       100                                           56Ni
+                                                                              100
+                                                                                                                             pre-SN
+                                                                     28Si                                                    SN
+                                                                                                                             56Ni
+                      10 1                                           24Mg
+                                                                     20Ne
+                                                                             10 1                                            28Si
+      Mass fraction
+
+
+
+
+                                                                     16O                                                     24Mg
+                      10 2                                           12C
+                                                                     4He
+                                                                             10 2                                            20Ne
+                                                                                                                             16O
+                                                                                                                             12C
+                                                                                                                             4He
+                      10 3     Si/Mg 7.4                                     10 3     Si/Mg 7.8
+                               Mg/Ne 0.94                      14.88 M                Mg/Ne 0.90                       14.88 M
+                      10 4                                                   10 4
+                       100                                           56Ni
+                                                                              100
+                                                                                                                             pre-SN
+                                                                     28Si                                                    SN
+                                                                                                                             56Ni
+                      10 1                                           24Mg
+                                                                     20Ne
+                                                                             10 1                                            28Si
+      Mass fraction
+
+
+
+
+                                                                     16O                                                     24Mg
+                      10 2                                           12C
+                                                                     4He
+                                                                             10 2                                            20Ne
+                                                                                                                             16O
+                                                                                                                             12C
+                                                                                                                             4He
+                      10 3     Si/Mg 3.0                                     10 3     Si/Mg 3.1
+                               Mg/Ne 0.86                      22.82 M                Mg/Ne 0.85                       22.82 M
+                      10 1.4
+                         4
+                                               2.0                       3.0 10 1.4
+                                                                                4
+                                                                                                       2.0                       3.0
+                                            Mass radius [M ]                                        Mass radius [M ]
+Figure 6. Mass fraction profiles of stellar models in pre-SN (left; Sukhbold et al. 2018) and after shock passage (right). The
+colors of lines represent each element. From the top to the bottom panels, we show the cases of MZAMS = 13.77M⊙ , 14.27M⊙ ,
+14.88M⊙ and 22.82M⊙ . The inset indicates expected mass ratios of Si/Mg and Mg/Ne, which are obtained by integrating
+elements in the O-rich and the outer layers. The grey shaded area represents a mass radius of a PNS.
+
+calculated trend roughly coincides with the observations                               As displayed in the left panels of Figure 6, we con-
+and especially that there are two “Mg-rich” groups with                             firmed that the shell merger triggers efficient Ne-burning
+different Si/Mg. We found that the Mg-rich group with                               processes and enhances the total yield of Mg and Si, on
+a high Si/Mg ratio indicates a relatively high MZAMS                                the basis of the stellar simulations by Sukhbold et al.
+(> 14M⊙ ), and it is particularly notable that all the re-                          (2018). In the case of the 13.77M⊙ progenitor, for in-
+sults of massive progenitors with MZAMS > 20M⊙ are                                  stance, the O-Mg layer are formed as a result of Ne-
+distributed only in this group. The result suggests that                            burning processes, keeping up the boundary with the
+the high Si/Mg ratio observed in the ejecta of a Mg-rich                            outer O-Ne layer. On the other hand, due to the shell
+SNR is a good indicator of a remnant of a massive pro-                              merger, the boundary in the 14.27M⊙ progenitor seems
+genitor: only a SNR that exhibits both Mg-rich ejecta                               to disappear (Ne-burning shell intrusion; cf. Sato et al.
+and a high Si/Mg ratio would be a plausible candidate                               2024) and also in the 14.88M⊙ and 22.82M⊙ progeni-
+for a massive star’s remnant (MZAMS > 20M⊙ ).                                       tors O-Si layers are formed by mixing the O-Ne or O-
+                                                                                    Mg layers (O-burning shell merger; cf. Sato et al. 2024).
+                       4.2. Explosive Nucleosynthesis Yield                         We found that these merger processes tend to enhance
+8
+                25
+                          wind                                                             spherical
+                          ejecta                                                           observed (uneven)
+                                                                                 100
+                20        neutron star
+
+                15
+
+
+
+
+                                                                  Mejecta [M ]
+    Mass [M ]
+
+
+
+
+                10                                                                                                 MZAMS = 14 24M
+                                                                                 10                                  MZAMS 15M
+                 5
+
+                 0                                                                                Our result
+                                                                                  2    1      2       3        4      5     6       7   8
+                     10           15             20   25
+                                         MZAMS [M ]                                                       Distance [kpc]
+Figure 7. Mass distributions of a compact object (dark           Figure 8. Expected Mejecta of G359.0−0.9 versus distance
+blue), ejecta (magenta), and stellar wind (grey) for different   plot. The solid and dash-dotted lines indicate the results
+MZAMS based on the dataset of the Z9.6 and W18 engines           assuming the uneven (aspherical) and completely spherical
+given by Sukhbold et al. (2016).                                 ejecta distribution, respectively. The green hatched area rep-
+                                                                 resents the accepted distance range determined by our radio
+                                                                 observation with NRO 45-m. The orange and blue hatched
+and reduce the total amount of Mg and Ne, respectively.
+                                                                 regions show ejecta mass ranges of 14–24M⊙ and 12–15M⊙ ,
+Our simulation reveals that all the models whose Mg/Ne           which are expected for the Mg-rich SNRs (Figure 7).
+ratio is higher than ∼ 0.6 can be explained by such de-
+stratification. It can be used as a threshold to determine
+                                                                      4.3. Estimation of the ejecta mass of G359.0−0.9
+whether a SNR is Mg-rich or not.
+   In order to check how the subsequent nucleosynthesis             As noted in the previous section, our nucleosynthesis
+affects the final yields of Ne, Mg, and Si, we run 1D            calculations prefer a progenitor mass (MZAMS ) less than
+SN simulations using The SuperNova Explosion Code                15M⊙ as the origin of G359.0−0.9, which should be con-
+(SNEC, Morozova et al. 2015) with a Lagrangian hydro-            sistent with the ejecta mass estimate based on the obser-
+dynamic code, in which we incorporate neutrino heating           vation. Figure 7 shows the relationship between MZAMS
+and cooling via a light-bulb scheme (Suwa et al. 2019).          and the ejecta mass on the basis of calculations given
+The right panels of Figure 6 displays the resultant mass         by Sukhbold et al. (2016). The result suggests that the
+fraction profiles for various MZAMS after shock passage.         ejecta mass of G359.0−0.9 is expected to be less than
+We found no significant change in Mg/Ne although a               ∼ 10M⊙ in total. In order to measure the ejecta mass
+slight decrease is seen: the aforementioned threshold            from the emitting volume of this remnant, we require an
+∼ 0.6 is still able to discriminate between Mg-rich and          accurate distance measurement. Nevertheless, whether
+normal SNRs. While the explosive nucleosynthesis gives           G359.0−0.9 is a nearby SNR or not is still a question
+an overall trend of increase in Si/Mg, only a slight in-         in the previous studies; 3.5 ± 0.4 kpc with UKIDSS and
+crease is seen in the cases of the O-burning shell merger,       3.3 ± 0.2 kpc with VVV (luminosity attenuation of red
+i.e., MZAMS = 14.88M⊙ and 22.82M⊙ . This may be be-              clumps Wang et al. 2020), ∼ 3.7 kpc (the Σ-D relation;
+cause before core collapse the O-burning shell merger            Pavlović et al. 2012), and ∼ 6 kpc (X-ray absorption;
+produces a large amount of Si in the O-rich layer, where         Bamba et al. 2000).
+the explosive nucleosynthesis is less effective. It is re-          We estimate the distance to G359.0−0.9 on the ba-
+markable that all massive star models (> 20M⊙ ) experi-          sis of the newly discovered cloud (Section 3.2) using a
+ence the O-burning shell merger and hence the resultant          similar method applied for G359.1−0.5 by Suzuki et al.
+Si/Mg becomes significantly higher than the solar value          (2020). This is one of the most reliable methods to ob-
+(0.86; Wilms et al. 2000). We therefore believe that if a        tain the distance to a SNR (cf. Fukui et al. 2012). The
+Mg-rich SNR exhibits high Si/Mg as well it may possi-            associated cloud has a small velocity width ∼ 2 km s−1 ,
+bly be a remnant of a massive star. In this sense, since         and its velocity is very close to 0 km s−1 . These proper-
+Si/Mg in G359.0−0.9 (∼ 1.11 ± 0.14) is close to the              ties strongly suggest its location in a foreground spiral
+solar value and relatively consistent with the 14.27M⊙           arm rather than in the Galactic Center (see Enokiya
+case, the progenitor is likely smaller than 15M⊙ and             et al. 2014, 2023, for details). According to a spiral arm
+was experienced the Ne-burning shell intrusion before            model of our Galaxy (e.g., Reid et al. 2016) , the velocity
+the explosion.                                                   of the associated cloud well coincides with that of the
+                                                                                                                       9
+
+Scutum-Centaurus arm. We thus conclude that the as-                 occur before core collapse (e.g., Yadav et al. 2020).
+sociated cloud is likely located in the Scutum-Centaurus            By comparing stellar evolution models given by
+arm. Based on Figure 5 in Enokiya et al. (2023), we es-             Sukhbold et al. (2018) and our SN simulations
+timated the distance of the Scutum-Centaurus arm in                 with the abundance ratios of previously observed
+the direction of G359.0−0.9 to be 2.8 kpc. Since the                SNRs, we found that if we take Mg/Ne ∼ 0.6 as
+width of the Scutum-Centaurus arm is obtained to be                 the threshold several SNRs including G359.0−0.9
+∼ 0.14 kpc (Reid et al. 2016, see Figure 5), the distance           are labeled as the Mg-rich SNRs.
+d to G359.0−0.9 is estimated to be between 2.66 kpc
+and 2.94 kpc. The real radius r of the remnant in this           2. Our calculations also reveal that there are two
+case is ∼ 11 pc.                                                    “Mg-rich” groups with different Si/Mg. This is
+   Since G359.0−0.9 exhibits a highly asymmetric mor-               because there are two types of the destratification,
+phology, we consider two cases with different 3D struc-             the Ne-burning shell intrusion and the O-burning
+tures for calculating the entire volume: the ejecta has             shell merger, and the latter process enhances the
+an intrinsically uneven distribution due to an aspherical           total yield of Si. Since all massive star models
+explosion or a completely spherical with r = 11 pc but              (> 20M⊙ ) experience the O-burning shell merger,
+emitting region is somehow limited in the east. In the              a Mg-rich SNR with high Si/Mg may possibly
+former case, we assume a spherical cap whose opening                be evidence for a remnant of a massive star. In
+solid angle is π/2, which is consistent with a previous             this sense, the abundance pattern of G359.0−0.9
+estimate (Bamba et al. 2000). The ejecta mass is then               prefers the Ne-burning shell intrusion and thus we
+calculated as follows:                                              conclude that the progenitor mass MZAMS is likely
+                                                              smaller than 15M⊙ .
+                     d         f            norm
+Mejecta ∼ 6.8                                           M⊙ ,
+                 2.8 kpc      0.9     5.5 × 10−2 cm−5            3. We also discovered a molecular cloud interacting
+                                                       (1)          with G359.0−0.9 with the Nobeyama 45 m tele-
+where the volume filling factor f was deduced from a                scope. Consequently, the distance ambiguity that
+fluctuation in X-ray surface brightness. The result of              has been argued was solved in favor of the fore-
+our calculation is displayed in Figure 8, where the latter          ground remnant. We conclude that G359.0−0.9
+spherical case overlaid as well. We found that Mejecta              is located in the Scutum-Centaurus arm, whose
+only assuming the latter uneven case lies within an ac-             distance is ∼ 2.8 kpc (2.66–2.94 kpc). Apply-
+ceptable range given by Sukhbold et al. (2016) and that             ing this result, we measured the total ejecta mass
+on the contrary the former spherical case requires much             of Mejecta ∼ 6.8M⊙ , which is consistent with the
+larger Mejecta than theoretically expected. Given that              above estimation of MZAMS < 15M⊙ . Our result
+the ejecta of G359.0−0.9 is unevenly distributed to the             also indicates that the ejecta distribution is not
+east, the progenitor mass MZAMS seems to be less than               spherical but highly distorted, which implies an
+15M⊙ , following our expectation from the abundance                 asymmetric SN explosion.
+pattern.
+                  5. CONCLUSIONS
+                                                                 This work is supported by JSPS/MEXT Science Re-
+   We performed detailed observations of a Galactic SNR        search grant Nos. JP24KJ1485 (K.M.), JP19K03915,
+G359.0−0.9 in X-ray and radio bands, which reveal a            JP22H01265 (H.U.) and JP23KJ1350 (T.N.), and JSPS
+distorted X-ray morphology with a shell-like structure.        Core-to-Core Program grant No. JPJSCCA20220002
+The result implies that this remnant belongs to the class      (T.N.). Based on observations obtained with XMM-
+of mixed-morphology SNRs. Our spectral analysis with           Newton, an ESA science mission with instruments and
+XMM-Newton allows us to measure accurate ejecta mass           contributions directly funded by ESA Member States
+                           +0.09
+ratios of Mg/Ne (∼ 0.66−0.07     ; solar value is ∼ 0.35)      and NASA. The Nobeyama 45-m radio telescope is op-
+                    +0.14
+and Si/Mg (∼ 1.11−0.14 ) for the first time. The result        erated by Nobeyama Radio Observatory, a branch of
+indicates that this remnant is categorized as the Mg-          National Astronomical Observatory of Japan. We also
+rich SNRs (Park et al. 2003), whose origin is still under      thank M., Matsuda and S., Inoue for helpful advice in
+debate. Our conclusions are presented below:                   our analysis.
+   1. On the basis of our ongoing study (Sato et al.            Facilities: XMM, NRO
+      2024), we speculate that such Mg-rich abundance
+      pattern is derived from violent destratification, so-     Software: XSPEC, HEASoft, SNEC
+      called shell merger processes that are expected to
+10
+
+                                                        REFERENCES
+Andrassy, R., Herwig, F., Woodward, P., & Ritter, C. 2020,       Minamidani, T., Nishimura, A., Miyamoto, Y., et al. 2016,
+  Monthly Notices of the Royal Astronomical Society, 491,         in Society of Photo-Optical Instrumentation Engineers
+  972, doi: 10.1093/mnras/stz2952                                 (SPIE) Conference Series, Vol. 9914, Millimeter,
+Arnaud, K. A. 1996, 101, 17                                       Submillimeter, and Far-Infrared Detectors and
+Bamba, A., Yamazaki, R., Kohri, K., et al. 2009, The              Instrumentation for Astronomy VIII, ed. W. S. Holland
+  Astrophysical Journal, 691, 1854,                               & J. Zmuidzinas, 99141Z, doi: 10.1117/12.2232137
+  doi: 10.1088/0004-637X/691/2/1854                              Mocák, M., Meakin, C., Campbell, S. W., & Arnett, W. D.
+Bamba, A., Yokogawa, J., Sakano, M., & Koyama, K. 2000,           2018, Monthly Notices of the Royal Astronomical
+  Publications of the Astronomical Society of Japan, 52,          Society, 481, 2918, doi: 10.1093/mnras/sty2392
+  259, doi: 10.1093/pasj/52.2.259                                Morozova, V., Piro, A. L., Renzo, M., et al. 2015, ApJ, 814,
+Carter, J. A., & Read, A. M. 2007, A&A, 464, 1155,                63, doi: 10.1088/0004-637X/814/1/63
+  doi: 10.1051/0004-6361:20065882                                O’Connor, E., & Ott, C. D. 2011, ApJ, 730, 70,
+Collins, C., Müller, B., & Heger, A. 2018, Monthly Notices        doi: 10.1088/0004-637X/730/2/70
+  of the Royal Astronomical Society, 473, 1695,                  Park, S., & Bhalerao, J. 2017, ApJ, 834, 189,
+  doi: 10.1093/mnras/stx2470                                       doi: 10.3847/1538-4357/834/2/189
+Davies, B., & Beasor, E. R. 2020, Monthly Notices of the         Park, S., Hughes, J. P., Slane, P. O., et al. 2003, The
+  Royal Astronomical Society, 493, 468,                            Astrophysical Journal, 592, L41, doi: 10.1086/377507
+  doi: 10.1093/mnras/staa174
+                                                                 Pavlović, M. Z., Urošević, D., Vukotić, B., Arbutina, B., &
+Enokiya, R., Sano, H., Filipović, M. D., et al. 2023, PASJ,
+                                                                   Göker, Ü. D. 2012, ApJS, 204, 4,
+  75, 970, doi: 10.1093/pasj/psad054
+                                                                   doi: 10.1088/0067-0049/204/1/4
+Enokiya, R., Torii, K., Schultheis, M., et al. 2014, ApJ, 780,
+                                                                 Reid, M. J., Dame, T. M., Menten, K. M., & Brunthaler,
+  72, doi: 10.1088/0004-637X/780/1/72
+                                                                   A. 2016, ApJ, 823, 77, doi: 10.3847/0004-637X/823/2/77
+Ertl, T., Janka, H.-T., Woosley, S. E., Sukhbold, T., &
+                                                                 Reid, M. J., Dame, T. M., Menten, K. M., & Brunthaler,
+  Ugliano, M. 2016, ApJ, 818, 124,
+                                                                   A. 2016, ApJ, 823, 77, doi: 10.3847/0004-637X/823/2/77
+  doi: 10.3847/0004-637X/818/2/124
+                                                                 Rho, J., & Petre, R. 1998, ApJ, 503, L167,
+Ertl, T., Woosley, S. E., Sukhbold, T., & Janka, H.-T.
+                                                                  doi: 10.1086/311538
+  2020, ApJ, 890, 51, doi: 10.3847/1538-4357/ab6458
+                                                                 Ritter, C., Andrassy, R., Côté, B., et al. 2018, Monthly
+Fukui, Y., Sano, H., Sato, J., et al. 2012, ApJ, 746, 82,
+                                                                   Notices of the Royal Astronomical Society: Letters, 474,
+  doi: 10.1088/0004-637X/746/1/82
+                                                                   L1, doi: 10.1093/mnrasl/slx126
+Heywood, I., Rammala, I., Camilo, F., et al. 2022, ApJ,
+                                                                 Sasaki, M., Stadlbauer, T. F. X., Haberl, F., Filipović,
+  925, 165, doi: 10.3847/1538-4357/ac449a
+                                                                   M. D., & Bennie, P. J. 2001, A&A, 365, L237,
+Hughes, J. P., Hayashi, I., & Koyama, K. 1998, ApJ, 505,
+                                                                   doi: 10.1051/0004-6361:20000015
+  732, doi: 10.1086/306202
+Imasheva, L., Janka, H.-T., & Weiss, A. 2023, Monthly            Sato, T., Matsunaga, K., Sawada, R., et al. 2024,
+  Notices of the Royal Astronomical Society, 518, 1818,            Destratification in the Progenitor Interior of the Mg-rich
+  doi: 10.1093/mnras/stac3239                                      Supernova Remnant N49B, arXiv,
+Kamazaki, T., Okumura, S. K., Chikada, Y., et al. 2012,            doi: 10.48550/arXiv.2403.04156
+  PASJ, 64, 29, doi: 10.1093/pasj/64.2.29                        Sawada, R., & Maeda, K. 2019, ApJ, 886, 47,
+Kamitsukasa, F., Koyama, K., Uchida, H., et al. 2015,              doi: 10.3847/1538-4357/ab4da3
+                                                                                                             ˆ
+                                                                 Sawada, R., & Suwa, Y. 2023, Updating the ${56}$Ni
+  Publications of the Astronomical Society of Japan, 67,
+  16, doi: 10.1093/pasj/psu149                                     Problem in Core-collapse Supernova Explosion,
+Katsuda, S., Takiwaki, T., Tominaga, N., Moriya, T. J., &          doi: 10.48550/arXiv.2301.03610
+  Nakamura, K. 2018, ApJ, 863, 127,                              Seta, M., Hasegawa, T., Sakamoto, S., et al. 2004, AJ, 127,
+  doi: 10.3847/1538-4357/aad2d8                                    1098, doi: 10.1086/381058
+Katsuda, S., Acero, F., Tominaga, N., et al. 2015, ApJ, 814,     Sofue, Y., & Handa, T. 1984, Nature, 310, 568,
+  29, doi: 10.1088/0004-637X/814/1/29                              doi: 10.1038/310568a0
+Kutner, M. L., & Ulich, B. L. 1981, ApJ, 250, 341,               Strüder, L., Briel, U., Dennerl, K., et al. 2001, A&A, 365,
+  doi: 10.1086/159380                                              L18, doi: 10.1051/0004-6361:20000066
+                                                                                                                         11
+
+Stupar, M., & Parker, Q. A. 2011, Monthly Notices of the     Uchida, H., Koyama, K., Yamaguchi, H., et al. 2012,
+  Royal Astronomical Society, 414, 2282,                       Publications of the Astronomical Society of Japan, 64,
+  doi: 10.1111/j.1365-2966.2011.18547.x                        141, doi: 10.1093/pasj/64.6.141
+Sukhbold, T., Ertl, T., Woosley, S. E., Brown, J. M., &
+                                                             Wang, S., Zhang, C., Jiang, B., et al. 2020, A&A, 639, A72,
+  Janka, H. T. 2016, The Astrophysical Journal, 821, 38,
+                                                               doi: 10.1051/0004-6361/201936868
+  doi: 10.3847/0004-637X/821/1/38
+Sukhbold, T., Woosley, S. E., & Heger, A. 2018, The          Williams, B. J., Rangelov, B., Kargaltsev, O., & Pavlov,
+  Astrophysical Journal, 860, 93,                              G. G. 2015, ApJL, 808, L19,
+  doi: 10.3847/1538-4357/aac2da                                doi: 10.1088/2041-8205/808/1/L19
+Suwa, Y., Tominaga, N., & Maeda, K. 2019, Monthly            Wilms, J., Allen, A., & McCray, R. 2000, The
+  Notices of the Royal Astronomical Society, 483, 3607,        Astrophysical Journal, 542, 914, doi: 10.1086/317016
+  doi: 10.1093/mnras/sty3309
+                                                             Yadav, N., Müller, B., Janka, H. T., Melson, T., & Heger,
+Suzuki, H., Bamba, A., Enokiya, R., et al. 2020, ApJ, 893,
+                                                               A. 2020, ApJ, 890, 94, doi: 10.3847/1538-4357/ab66bb
+  147, doi: 10.3847/1538-4357/ab80ba
+Turner, M. J. L., Abbey, A., Arnaud, M., et al. 2001, A&A,   Yatsu, Y., Asano, K., Kawai, N., Yano, Y., & Nakamori, T.
+  365, L27, doi: 10.1051/0004-6361:20000087                    2013, ApJ, 773, 25, doi: 10.1088/0004-637X/773/1/25
+Uchida, H., Koyama, K., & Yamaguchi, H. 2015, The            Yatsu, Y., Kawai, N., Kataoka, J., et al. 2005, ApJ, 631,
+  Astrophysical Journal, 808, 77,                              312, doi: 10.1086/432590
+  doi: 10.1088/0004-637X/808/1/77
+

@@ -289,6 +289,9 @@ void AnelasticSLSolver::free_all() {
     free_ptr(d_strang_v_s);   free_ptr(d_strang_w_s);   free_ptr(d_strang_b_s);
     free_ptr(d_strang_deriv);
     free_ptr(d_strang_dw);    free_ptr(d_strang_db);
+    free_ptr(d_X);
+    free_ptr(d_strang_x0);    free_ptr(d_strang_x_acc);
+    free_ptr(d_strang_x_s);   free_ptr(d_strang_dx);
     free_cptr(d_Psi_fwd); free_cptr(d_Psi_inv);
     free_ptr(d_mu); free_ptr(d_cc_weights);
     free_cptr(d_fhat); free_cptr(d_ghat); free_cptr(d_Ghat);
@@ -1083,6 +1086,11 @@ void AnelasticSLSolver::init(int nx_, int ny_, int n_modes_,
     CUDA_CHECK(cudaMalloc(&d_rhs_v,   sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_rhs_b,   sizeof(double) * ncell));
     CUDA_CHECK(cudaMalloc(&d_scratch, sizeof(double) * ncell));
+
+    if (tracer_enabled) {
+        CUDA_CHECK(cudaMalloc(&d_X, sizeof(double) * ncell));
+        CUDA_CHECK(cudaMemset(d_X, 0, sizeof(double) * ncell));
+    }
     CUDA_CHECK(cudaMemset(d_b, 0, sizeof(double) * ncell));
 
     // Chebyshev differentiation matrix on [0, Ly], col-major ny × ny.
@@ -1149,6 +1157,61 @@ void AnelasticSLSolver::init_zero() {
     CUDA_CHECK(cudaMemset(d_u,     0, sizeof(double) * ncell));
     CUDA_CHECK(cudaMemset(d_v,     0, sizeof(double) * ncell));
     CUDA_CHECK(cudaMemset(d_omega, 0, sizeof(double) * ncell));
+    if (tracer_enabled && d_X) CUDA_CHECK(cudaMemset(d_X, 0, sizeof(double) * ncell));
+}
+
+// ── Passive tracer IC helpers (Route A) ──────────────────────────────────
+void AnelasticSLSolver::init_tracer_tanh(double y0, double delta) {
+    if (!tracer_enabled || !d_X) {
+        std::fprintf(stderr, "init_tracer_tanh: set_tracer_enabled(true) before init().\n");
+        return;
+    }
+    std::vector<double> h_X(ncell);
+    for (int jy = 0; jy < ny; ++jy) {
+        double y = h_y_cgl[jy];
+        double Xv = 0.5 * (1.0 + std::tanh((y - y0) / delta));
+        for (int jx = 0; jx < nx; ++jx) h_X[jy * nx + jx] = Xv;
+    }
+    CUDA_CHECK(cudaMemcpy(d_X, h_X.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
+}
+
+void AnelasticSLSolver::init_tracer_uniform(double x0) {
+    if (!tracer_enabled || !d_X) {
+        std::fprintf(stderr, "init_tracer_uniform: set_tracer_enabled(true) before init().\n");
+        return;
+    }
+    std::vector<double> h_X(ncell, x0);
+    CUDA_CHECK(cudaMemcpy(d_X, h_X.data(), sizeof(double) * ncell,
+                          cudaMemcpyHostToDevice));
+}
+
+void AnelasticSLSolver::download_X(std::vector<double>& h_X) {
+    h_X.resize(ncell);
+    if (!tracer_enabled || !d_X) {
+        std::fill(h_X.begin(), h_X.end(), 0.0);
+        return;
+    }
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, sizeof(double) * ncell,
+                          cudaMemcpyDeviceToHost));
+}
+
+double AnelasticSLSolver::total_tracer_mass() {
+    // ∫ρ₀(y)·X(x,y) dV ≈ (Lx/nx) · Σ_j Σ_i w_cc[j]·ρ₀(y_j)·X(x_i, y_j)
+    // with Clenshaw-Curtis y-weights already in h_cc_weights and periodic
+    // trapezoid = uniform Lx/nx in x.
+    if (!tracer_enabled || !d_X) return 0.0;
+    std::vector<double> h_X;
+    download_X(h_X);
+    const double dxw = Lx / (double)nx;
+    double total = 0.0;
+    for (int jy = 0; jy < ny; ++jy) {
+        double wy = h_cc_weights[jy] * h_rho[jy];
+        double row = 0.0;
+        for (int jx = 0; jx < nx; ++jx) row += h_X[jy * nx + jx];
+        total += wy * row * dxw;
+    }
+    return total;
 }
 
 void AnelasticSLSolver::init_kh_shear(double vshear, double amp, int k) {
@@ -4289,6 +4352,12 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
     malloc_if_null(d_strang_v_s);   malloc_if_null(d_strang_w_s);   malloc_if_null(d_strang_b_s);
     malloc_if_null(d_strang_deriv);
     malloc_if_null(d_strang_dw);    malloc_if_null(d_strang_db);
+    if (tracer_enabled) {
+        malloc_if_null(d_strang_x0);
+        malloc_if_null(d_strang_x_acc);
+        malloc_if_null(d_strang_x_s);
+        malloc_if_null(d_strang_dx);
+    }
 
     const int n_int = n_int_path_d;
     dt_current = dt;
@@ -4340,6 +4409,17 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_field, d_fhat));
         k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, kx_cut);
         k_zero_kx0_column<<<grid_ny_1d, 256>>>(d_fhat, ny, nh);
+        CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_fhat, d_field));
+        double s = 1.0 / (double)nx;
+        CUBLAS_CHECK(cublasDscal(cublas, ncell, &s, d_field, 1));
+    };
+
+    // 2/3-rule x-dealias that KEEPS the kx=0 column (= horizontal mean).
+    // Passive tracer X has no anelastic mean-flow constraint; ⟨X⟩_x(y, t)
+    // IS the Andrassy 2022 entrainment diagnostic and must survive.
+    auto dealias_keep_kx0 = [&](double* d_field) {
+        CUFFT_CHECK(cufftExecD2Z(plan_r2c_x, d_field, d_fhat));
+        k_dealias_x_inplace<<<g_ny_nh, b2>>>(d_fhat, ny, nh, kx_cut);
         CUFFT_CHECK(cufftExecZ2D(plan_c2r_x, d_fhat, d_field));
         double s = 1.0 / (double)nx;
         CUBLAS_CHECK(cublasDscal(cublas, ncell, &s, d_field, 1));
@@ -4456,8 +4536,10 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
     // ∇·(ρ₀u) = 0).
     auto nonlinear_deriv = [&](const double* d_V_src,
                                const double* d_B_src,
+                               const double* d_X_src,      // nullptr if tracer_enabled=false
                                double* d_out_dV,
-                               double* d_out_dB) {
+                               double* d_out_dB,
+                               double* d_out_dX) {         // nullptr likewise
         // Rebuild u into d_u.
         rebuild_u_from_v(d_V_src, d_u);
         const double inv_nx = 1.0 / (double)nx;
@@ -4467,7 +4549,10 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         // is necessary but not sufficient — the product itself re-populates
         // the unresolved modes via k1+k2 mixing.  project_VK on the output
         // closes the Galerkin loop.
-        auto advect = [&](const double* d_F_src, double* d_dF) {
+        //
+        // keep_kx0=true: dealias but preserve the horizontal-mean column
+        // (used for passive tracer X; ⟨X⟩_x(y,t) IS the entrainment signal).
+        auto advect = [&](const double* d_F_src, double* d_dF, bool keep_kx0) {
             // ∂x F → d_rhs_pi  (input fhat dealiased pre-derivative).
             CUFFT_CHECK(cufftExecD2Z(plan_r2c_x,
                                      const_cast<double*>(d_F_src), d_fhat));
@@ -4481,12 +4566,15 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
             CUDA_CHECK(cudaMemsetAsync(d_dF, 0, sizeof(double) * ncell));
             k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_u, d_rhs_pi, ncell);
             k_fma_product<<<grid1d, block>>>(d_dF, -1.0, d_V_src, d_scratch, ncell);
-            // Galerkin closure: project the quadratic product back onto V_K.
-            project_VK(d_dF);
+            if (keep_kx0) dealias_keep_kx0(d_dF);
+            else          project_VK(d_dF);
         };
 
-        advect(d_V_src, d_out_dV);
-        advect(d_B_src, d_out_dB);
+        advect(d_V_src, d_out_dV, /*keep_kx0=*/false);
+        advect(d_B_src, d_out_dB, /*keep_kx0=*/false);
+        if (tracer_enabled && d_X_src && d_out_dX) {
+            advect(d_X_src, d_out_dX, /*keep_kx0=*/true);
+        }
     };
 
     // ── Nonlinear RK4 full step of size dt on (V, B) ──────────────────
@@ -4494,46 +4582,68 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
     // Uses d_strang_{v,b}_{0,acc,s} for snapshots / accumulators /
     // substep state, and d_strang_{deriv, db} for the RK4 k-stages.
     auto nonlinear_step = [&](double h) {
-        // Snapshots + accumulators (V, B only; W is frozen).
+        const bool has_X = tracer_enabled && d_X && d_strang_x0 && d_strang_x_acc
+                        && d_strang_x_s && d_strang_dx;
+        // Snapshots + accumulators (V, B, optionally X; W is frozen).
         copy_dev(d_strang_v0, d_v);
         copy_dev(d_strang_b0, d_b);
         copy_dev(d_strang_v_acc, d_strang_v0);
         copy_dev(d_strang_b_acc, d_strang_b0);
+        if (has_X) {
+            copy_dev(d_strang_x0, d_X);
+            copy_dev(d_strang_x_acc, d_strang_x0);
+        }
 
-        // ── k1 at (V0, B0) ───────────────────────────────────────────
+        // ── k1 at (V0, B0 [, X0]) ────────────────────────────────────
         nonlinear_deriv(d_strang_v0, d_strang_b0,
-                        d_strang_deriv, d_strang_db);
+                        has_X ? d_strang_x0 : nullptr,
+                        d_strang_deriv, d_strang_db,
+                        has_X ? d_strang_dx : nullptr);
         axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
         axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
+        if (has_X) axpy(h / 6.0, d_strang_dx, d_strang_x_acc);
         copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
+        if (has_X) { copy_dev(d_strang_x_s, d_strang_x0); axpy(0.5 * h, d_strang_dx, d_strang_x_s); }
 
-        // ── k2 at (V_s, B_s) ────────────────────────────────────────
+        // ── k2 ──────────────────────────────────────────────────────
         nonlinear_deriv(d_strang_v_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_db);
+                        has_X ? d_strang_x_s : nullptr,
+                        d_strang_deriv, d_strang_db,
+                        has_X ? d_strang_dx : nullptr);
         axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
         axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
+        if (has_X) axpy(h / 3.0, d_strang_dx, d_strang_x_acc);
         copy_dev(d_strang_v_s, d_strang_v0); axpy(0.5 * h, d_strang_deriv, d_strang_v_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(0.5 * h, d_strang_db,    d_strang_b_s);
+        if (has_X) { copy_dev(d_strang_x_s, d_strang_x0); axpy(0.5 * h, d_strang_dx, d_strang_x_s); }
 
-        // ── k3 at (V_s, B_s) ────────────────────────────────────────
+        // ── k3 ──────────────────────────────────────────────────────
         nonlinear_deriv(d_strang_v_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_db);
+                        has_X ? d_strang_x_s : nullptr,
+                        d_strang_deriv, d_strang_db,
+                        has_X ? d_strang_dx : nullptr);
         axpy(h / 3.0, d_strang_deriv, d_strang_v_acc);
         axpy(h / 3.0, d_strang_db,    d_strang_b_acc);
+        if (has_X) axpy(h / 3.0, d_strang_dx, d_strang_x_acc);
         copy_dev(d_strang_v_s, d_strang_v0); axpy(h, d_strang_deriv, d_strang_v_s);
         copy_dev(d_strang_b_s, d_strang_b0); axpy(h, d_strang_db,    d_strang_b_s);
+        if (has_X) { copy_dev(d_strang_x_s, d_strang_x0); axpy(h, d_strang_dx, d_strang_x_s); }
 
-        // ── k4 at (V_s, B_s) ────────────────────────────────────────
+        // ── k4 ──────────────────────────────────────────────────────
         nonlinear_deriv(d_strang_v_s, d_strang_b_s,
-                        d_strang_deriv, d_strang_db);
+                        has_X ? d_strang_x_s : nullptr,
+                        d_strang_deriv, d_strang_db,
+                        has_X ? d_strang_dx : nullptr);
         axpy(h / 6.0, d_strang_deriv, d_strang_v_acc);
         axpy(h / 6.0, d_strang_db,    d_strang_b_acc);
+        if (has_X) axpy(h / 6.0, d_strang_dx, d_strang_x_acc);
 
         // Commit.  W (d_rhs_v) is untouched — retains the value left by
         // the preceding linear half-step.
         copy_dev(d_v, d_strang_v_acc);
         copy_dev(d_b, d_strang_b_acc);
+        if (has_X) copy_dev(d_X, d_strang_x_acc);
         k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
         // Galerkin closure:  P_{V_K} on state.  Also absorbs the k=0
         // anelastic mean-flow projection (diagnosed 2026-05-04: without
@@ -4544,6 +4654,9 @@ double AnelasticSLSolver::step_strang_nonlinear(double dt) {
         // here is defensive against round-off drift.
         project_VK(d_v);
         project_VK(d_b);
+        // Tracer uses kx=0-preserving dealias; project_VK would wipe the
+        // horizontal-mean entrainment signal.
+        if (has_X) dealias_keep_kx0(d_X);
         // zero_y_boundary a second time: FFT round-trip can leak 1e-16
         // into the walls.
         k_zero_y_boundary<<<grid_bdy, 256>>>(d_v, nx, ny);
