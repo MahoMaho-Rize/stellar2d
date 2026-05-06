@@ -1982,3 +1982,109 @@ void k_cale2_bc_velocity(double* vX, double* vY, int nnx, int nny, int bc_mode) 
     if (!x_per && (in == 0 || in == nnx - 1)) vX[flat] = 0.0;
     if (!y_per && (jn == 0 || jn == nny - 1)) vY[flat] = 0.0;
 }
+
+// ============================================================
+// Passive species tracer X ∈ [0, 1]
+// Remap conserves species-mass  mX = X·dm  via donor-cell swept flux.
+// Same swept-quad geometry as k_cale2_remap_east/north; we only carry
+// ONE extra scalar so the kernels are small.
+// ============================================================
+// swept_quad_signed() is the __device__ __forceinline__ helper defined
+// earlier in this TU (near k_cale2_remap_east); it's already visible.
+
+__global__
+void k_cale2_species_init_scratch(const double* mX, double* mX_new, int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    mX_new[c] = mX[c];
+}
+
+__global__
+void k_cale2_species_remap_east(const double* X0, const double* Y0,
+                                const double* X,  const double* Y,
+                                const double* mX, const double* Vol0,
+                                double* mX_new,
+                                int nx, int ny, int bc_mode) {
+    bool x_per = (bc_mode & 1) != 0;
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int n_edges = x_per ? nx * ny : (nx - 1) * ny;
+    if (flat >= n_edges) return;
+    int ic = flat / ny, jc = flat % ny;
+    int nny = ny + 1;
+    int nA = caln(ic+1, jc,   nny);
+    int nB = caln(ic+1, jc+1, nny);
+    double Ax = X0[nA], Ay = Y0[nA];
+    double Bx = X0[nB], By = Y0[nB];
+    double Anx = X[nA], Any = Y[nA];
+    double Bnx = X[nB], Bny = Y[nB];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+    int cL = calc(ic, jc, ny);
+    int cR_idx = ic + 1;
+    if (x_per && cR_idx >= nx) cR_idx = 0;
+    int cR = calc(cR_idx, jc, ny);
+    int donor = (As > 0.0) ? cL : cR;
+    double V_sweep = fabs(As);
+    double V_donor = fmax(Vol0[donor], 1e-30);
+    double frac = fmin(V_sweep / V_donor, 0.5);
+    double V = frac * V_donor;
+    double d_mX = (mX[donor] / V_donor) * V;
+    if (As > 0.0) {
+        atomicAdd(&mX_new[cL], -d_mX);
+        atomicAdd(&mX_new[cR],  d_mX);
+    } else {
+        atomicAdd(&mX_new[cR], -d_mX);
+        atomicAdd(&mX_new[cL],  d_mX);
+    }
+}
+
+__global__
+void k_cale2_species_remap_north(const double* X0, const double* Y0,
+                                 const double* X,  const double* Y,
+                                 const double* mX, const double* Vol0,
+                                 double* mX_new,
+                                 int nx, int ny, int bc_mode) {
+    bool y_per = (bc_mode & 2) != 0;
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int ny_eff = y_per ? ny : (ny - 1);
+    int n_edges = nx * ny_eff;
+    if (flat >= n_edges) return;
+    int ic = flat / ny_eff, jc = flat % ny_eff;
+    int nny = ny + 1;
+    int nW = caln(ic,   jc+1, nny);
+    int nE = caln(ic+1, jc+1, nny);
+    double Ax = X0[nE], Ay = Y0[nE];
+    double Anx = X[nE],  Any = Y[nE];
+    double Bx = X0[nW], By = Y0[nW];
+    double Bnx = X[nW],  Bny = Y[nW];
+    double As = swept_quad_signed(Ax, Ay, Anx, Any, Bnx, Bny, Bx, By);
+    if (As == 0.0) return;
+    int cD = calc(ic, jc, ny);
+    int cU_idx = jc + 1;
+    if (y_per && cU_idx >= ny) cU_idx = 0;
+    int cU = calc(ic, cU_idx, ny);
+    int donor = (As > 0.0) ? cD : cU;
+    double V_sweep = fabs(As);
+    double V_donor = fmax(Vol0[donor], 1e-30);
+    double frac = fmin(V_sweep / V_donor, 0.5);
+    double V = frac * V_donor;
+    double d_mX = (mX[donor] / V_donor) * V;
+    if (As > 0.0) {
+        atomicAdd(&mX_new[cD], -d_mX);
+        atomicAdd(&mX_new[cU],  d_mX);
+    } else {
+        atomicAdd(&mX_new[cU], -d_mX);
+        atomicAdd(&mX_new[cD],  d_mX);
+    }
+}
+
+// Finalize: mX ← mX_new, X ← mX/dm.  dm is already the post-remap mass.
+__global__
+void k_cale2_species_finalize(const double* mX_new, const double* dm,
+                              double* mX, double* X, int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    double m = fmax(dm[c], 1e-30);
+    mX[c] = mX_new[c];
+    X[c]  = fmin(fmax(mX_new[c] / m, 0.0), 1.0);
+}

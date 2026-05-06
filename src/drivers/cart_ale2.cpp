@@ -183,7 +183,10 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     char csv_path[512];
     std::snprintf(csv_path, sizeof(csv_path), "%s/diagnostics.csv", ctx.run_dir.c_str());
     std::FILE* csv = std::fopen(csv_path, "w");
-    std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach\n");
+    if (cale.tracer_enabled)
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach,species_mass\n");
+    else
+        std::fprintf(csv, "step,t,dt,mass,KE,IE,PE,E,max_v,max_mach\n");
 
     int diag_every = cfg.diag_interval > 0 ? cfg.diag_interval : cfg.output_interval;
     int vtk_every  = cfg.vtk_interval  > 0 ? cfg.vtk_interval  : cfg.output_interval;
@@ -221,9 +224,18 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
             std::printf("Step %6d  t=%.6e dt=%.3e M=%.10e KE=%.4e IE=%.10e PE=%.10e E=%.10e |v|=%.3e\n",
                         step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
                         d.total_PE, d.total_E, d.max_v);
-            std::fprintf(csv, "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
-                         step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
-                         d.total_PE, d.total_E, d.max_v, d.max_mach);
+            if (cale.tracer_enabled) {
+                double m_species = cale.total_species_mass();
+                std::fprintf(csv,
+                    "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e,%.10e\n",
+                    step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                    d.total_PE, d.total_E, d.max_v, d.max_mach, m_species);
+            } else {
+                std::fprintf(csv,
+                    "%d,%.10e,%.6e,%.10e,%.10e,%.10e,%.10e,%.10e,%.6e,%.6e\n",
+                    step, t, dt, d.total_mass, d.total_KE, d.total_internal_E,
+                    d.total_PE, d.total_E, d.max_v, d.max_mach);
+            }
             std::fflush(csv);
         }
         if (do_vtk) {

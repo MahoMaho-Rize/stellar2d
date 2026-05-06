@@ -51,6 +51,12 @@ __global__ void k_cale2_remap_north(const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int, int, int);
 __global__ void k_cale2_remap_finalize_cells(const double*, const double*, double*, double*, int);
+__global__ void k_cale2_species_init_scratch(const double*, double*, int);
+__global__ void k_cale2_species_remap_east(const double*, const double*, const double*, const double*,
+    const double*, const double*, double*, int, int, int);
+__global__ void k_cale2_species_remap_north(const double*, const double*, const double*, const double*,
+    const double*, const double*, double*, int, int, int);
+__global__ void k_cale2_species_finalize(const double*, const double*, double*, double*, int);
 __global__ void k_cale2_rebuild_node_v(const double*, const double*, const double*,
     double*, double*, int, int, int);
 __global__ void k_cale2_bc_velocity(double*, double*, int, int, int);
@@ -220,7 +226,60 @@ void CartAle2Solver::destroy() {
     f(d_cool_weight_y);
     f(d_heat_dedt_base_y);
     f(d_gy_node);
+    f(d_species_X); f(d_mX); f(d_mX_new);
     std::memset(this, 0, sizeof(*this));
+}
+
+// ============================================================
+// Passive species tracer X ∈ [0, 1] — conservative donor-cell swept flux
+// via species mass mX = X·dm.  Initialises X with Andrassy Eq. 3 cosine
+// ramp over (y_lo, y_hi).  Below y_lo: X=0 (μ₀ fluid); above y_hi: X=1
+// (μ₁ fluid).  Default ramp in cart_ale2 slab coords: y∈(Y_CB−1/16, Y_CB+1/16)
+// with Y_CB = 1 (paper's y=2 shifted to local y=1).
+// ============================================================
+void CartAle2Solver::init_tracer_ramp(double y_lo, double y_hi) {
+    if (d_species_X == nullptr) {
+        CUDA_CHECK(cudaMalloc(&d_species_X, ncell * sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_mX,        ncell * sizeof(double)));
+        CUDA_CHECK(cudaMalloc(&d_mX_new,    ncell * sizeof(double)));
+    }
+    std::vector<double> h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_dm(ncell);
+    CUDA_CHECK(cudaMemcpy(h_dm.data(), d_dm, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_X(ncell), h_mX(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I0 = ic*nnode_y + jc;
+            int I3 = ic*nnode_y + jc + 1;
+            double Yc = 0.5 * (h_Y[I0] + h_Y[I3]);
+            double X_val;
+            if      (Yc <= y_lo) X_val = 0.0;
+            else if (Yc >= y_hi) X_val = 1.0;
+            else {
+                double s = (Yc - y_lo) / (y_hi - y_lo);
+                X_val = 0.5 * (1.0 - std::cos(M_PI * s));
+            }
+            h_X[flat]  = X_val;
+            h_mX[flat] = X_val * h_dm[flat];
+        }
+    CUDA_CHECK(cudaMemcpy(d_species_X, h_X.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mX,        h_mX.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    tracer_enabled = true;
+    std::fprintf(stderr,
+        "  [tracer] species X enabled: ramp y∈[%.4f, %.4f] (Andrassy Eq. 3)\n",
+        y_lo, y_hi);
+}
+
+double CartAle2Solver::total_species_mass() {
+    if (!tracer_enabled || d_mX == nullptr) return 0.0;
+    std::vector<double> h_mX(ncell);
+    CUDA_CHECK(cudaMemcpy(h_mX.data(), d_mX, ncell*sizeof(double),
+                          cudaMemcpyDeviceToHost));
+    double sum = 0.0;
+    for (int c = 0; c < ncell; ++c) sum += h_mX[c];
+    return sum;
 }
 
 // ============================================================
@@ -950,6 +1009,11 @@ void CartAle2Solver::init_andrassy2022(const std::string& slab_file,
         q_cell[jc] = interp(qs_file, (jc + 0.5) * dy_cell);
     configure_heating_profile(q_cell, /*cool_top_frac=*/1.0);
 
+    // Passive species tracer X (Andrassy Eq. 3 μ₁ mass fraction).
+    // Paper η₁(y) ramps on y_paper ∈ [2 − 1/16, 2 + 1/16].  In slab coords
+    // (y_slab = y_paper − 1) that's y_slab ∈ [15/16, 17/16].
+    init_tracer_ramp(15.0 / 16.0, 17.0 / 16.0);
+
     double cs_bot = std::sqrt(gamma * Ps.front() / rhos.front());
     double cs_top = std::sqrt(gamma * Ps.back()  / rhos.back());
     std::fprintf(stderr,
@@ -1332,6 +1396,26 @@ double CartAle2Solver::step(double t, double t_end) {
     // Finalize dm, e_int from accumulators
     k_cale2_remap_finalize_cells<<<BCell, B>>>(d_dm_new, d_ie_new, d_dm, d_e_int, ncell);
 
+    // Passive species tracer X: donor-cell swept flux of species mass mX=X·dm.
+    // Runs regardless of remap_order — tracer uses 1st-order by design (fine
+    // for Andrassy entrainment bulk diagnostic; bulk rate dominated by BC).
+    if (tracer_enabled && d_mX != nullptr) {
+        k_cale2_species_init_scratch<<<BCell, B>>>(d_mX, d_mX_new, ncell);
+        if (n_east > 0) {
+            int BE = (n_east + B - 1) / B;
+            k_cale2_species_remap_east<<<BE, B>>>(
+                d_X0, d_Y0, d_X, d_Y, d_mX, d_Area0, d_mX_new,
+                nx, ny, bc_mode);
+        }
+        if (n_north > 0) {
+            int BN = (n_north + B - 1) / B;
+            k_cale2_species_remap_north<<<BN, B>>>(
+                d_X0, d_Y0, d_X, d_Y, d_mX, d_Area0, d_mX_new,
+                nx, ny, bc_mode);
+        }
+        k_cale2_species_finalize<<<BCell, B>>>(d_mX_new, d_dm, d_mX, d_species_X, ncell);
+    }
+
     // Rebuild node velocities from remapped momentum and mass
     k_cale2_rebuild_node_v<<<BNode, B>>>(d_px_new, d_py_new, d_dm_new,
                                         d_vX, d_vY, nx, ny, bc_mode);
@@ -1553,6 +1637,17 @@ void CartAle2Solver::write_vtk_2d(const char* filename, double Lx, double Ly) {
             double cs = std::fmax(h_cs[c], 1e-30);
             std::fprintf(fp, "%.10e\n", speed / cs);
         }
+
+    // Passive species tracer X (μ₁ mass fraction) if enabled.
+    if (tracer_enabled && d_species_X != nullptr) {
+        std::vector<double> h_X(ncell);
+        CUDA_CHECK(cudaMemcpy(h_X.data(), d_species_X, ncell*sizeof(double),
+                              cudaMemcpyDeviceToHost));
+        std::fprintf(fp, "SCALARS species_X double 1\nLOOKUP_TABLE default\n");
+        for (int jc = 0; jc < ny; ++jc)
+            for (int ic = 0; ic < nx; ++ic)
+                std::fprintf(fp, "%.10e\n", h_X[ic*ny + jc]);
+    }
 
     std::fclose(fp);
 }

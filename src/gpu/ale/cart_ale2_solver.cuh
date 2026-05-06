@@ -165,6 +165,25 @@ struct CartAle2Solver {
     double heat_bot_frac       = 0.05;     // heating depth fraction (e-fold of exp profile / Ly)
     void alloc_cooling_ref(const std::vector<double>& e_ref_per_row);
     void configure_thermal(double F_bot, double heat_bot_frac_, double cool_top_frac_);
+
+    // ---- Passive species tracer X ∈ [0, 1] (Andrassy 2022 mass fraction) ----
+    // X is advected alongside mass through the swept-remap pipeline.  Stored
+    // as species-mass density mX = X·dm_cell so donor-cell swept flux is
+    // conservative by construction (identical machinery as dm itself).
+    // Finalize: X_new = mX_new / dm_new.  After remap X stays in [0, 1]
+    // because swept-mass fraction ≤ 0.5 (clamped) and donor mX/dm ∈ [0, 1].
+    //
+    // Tracer-on paths:
+    //   - configure_tracer(ramp_y_lo, ramp_y_hi): init X with η₁(y) tanh
+    //     (0 below lo, 1 above hi, cosine ramp in between).  Matches
+    //     Andrassy Eq. 3 with Y_CB = Y_BOTTOM + (lo+hi)/2 and δ = (hi-lo)/2.
+    //   - tracer_enabled = true is auto-set; bit-reset on destroy().
+    bool    tracer_enabled = false;
+    double* d_species_X = nullptr;   // per-cell mass fraction X ∈ [0, 1]
+    double* d_mX        = nullptr;   // species mass = X·dm (conservative scalar)
+    double* d_mX_new    = nullptr;   // remap scratch
+    void init_tracer_ramp(double y_lo, double y_hi);
+    double total_species_mass();
     // Inject an arbitrary volumetric heating profile q̇(y) [erg/s/cm³],
     // one value per cell row (length = ny).  Overrides any heating shape
     // set by configure_thermal.  cool_top_frac is also reset from the
