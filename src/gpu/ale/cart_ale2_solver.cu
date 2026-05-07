@@ -13,6 +13,7 @@
 #include "cart_ale2_trace.h"
 #include "gpu_common.cuh"
 #include "gpu_linalg.cuh"
+#include "sod_exact.h"
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -2113,6 +2114,62 @@ void CartAle2Solver::compute_entropy_wave_error(double t_now, int ncycle,
         "entropy_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
         "L1_phase=%.4e (shift=%+.4f)\n",
         nx, ny, ncycle, l1, linf, best_l1, best_s);
+}
+
+// ============================================================
+// Sod shock tube compute_error — compare y-averaged ρ to Toro
+// exact at t_now. Analytic solver lives in sod_exact.h (shared
+// with athena_vl2). Appends schema-line + one data row to
+// <run_dir>/sod-errors.dat.
+// ============================================================
+void CartAle2Solver::compute_sod_error(double t_now, int ncycle,
+                                       const std::string& run_dir) {
+    std::vector<double> xs, rhos, Ps, vxs, es;
+    download_xslice(xs, rhos, Ps, vxs, es);
+
+    sod_exact::Params P;
+    P.x0 = 0.5 * g_Lx;
+    // Exclude the 5% wrap-pollution zones near x=0 and x=Lx: when a
+    // solver uses x-periodic BC (athena_vl2), waves at t ≳ 0.1 have
+    // wrapped and spuriously contaminate the edges. cart_ale2 with
+    // reflect BC is fine on the full domain but we use the same window
+    // for consistency so both solvers get scored the same way.
+    const double x_lo_win = 0.05 * g_Lx;
+    const double x_hi_win = 0.95 * g_Lx;
+    double l1 = 0.0, linf = 0.0;
+    int n_scored = 0;
+    for (int i = 0; i < (int)xs.size(); ++i) {
+        if (xs[i] < x_lo_win || xs[i] > x_hi_win) continue;
+        double rho_e = sod_exact::rho_at(P, xs[i], t_now);
+        double e = std::fabs(rhos[i] - rho_e);
+        l1 += e;
+        linf = std::max(linf, e);
+        ++n_scored;
+    }
+    l1 /= (double)std::max(n_scored, 1);
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/sod-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_sod_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end L1 Linf\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, l1, linf);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "sod error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e\n",
+        nx, ny, ncycle, l1, linf);
 }
 
 // ============================================================

@@ -27,6 +27,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_yee    = (cfg.test_case == "yee_vortex");
     bool is_shear  = (cfg.test_case == "shear_mode");
     bool is_ewave  = (cfg.test_case == "entropy_wave");
+    bool is_sod    = (cfg.test_case == "sod");
     double Lx = 1.0;
     // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
     // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
@@ -338,6 +339,9 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
             cfg.ewave_rho0, cfg.ewave_P0, cfg.ewave_u0,
             cfg.ewave_A, cfg.ewave_k, cfg.ewave_periods,
             ctx.run_dir);
+    }
+    if (cfg.compute_error && is_sod) {
+        cale.compute_sod_error(t, step, ctx.run_dir);
     }
     cale.destroy();
     return 0;

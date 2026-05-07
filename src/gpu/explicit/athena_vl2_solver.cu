@@ -5,6 +5,7 @@
 
 #include "athena_vl2_solver.cuh"
 #include "gpu/common/gpu_common.cuh"
+#include "gpu/common/sod_exact.h"
 
 #include <algorithm>
 #include <cmath>
@@ -570,6 +571,70 @@ void AthenaVL2Solver::compute_entropy_wave_error(double t_now, int ncycle,
         "entropy_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
         "L1_phase=%.4e (shift=%+.4f)\n",
         nx, ny, ncycle, l1, linf, best_l1, best_s);
+}
+
+// ============================================================
+// Sod shock tube compute_error for athena_vl2. Uses the same
+// shared sod_exact::rho_at Toro solver as cart_ale2.
+// ============================================================
+void AthenaVL2Solver::compute_sod_error(double t_now, int ncycle,
+                                        const std::string& run_dir) {
+    const int sx = stride_x();
+    const int sy = stride_y();
+    std::vector<double> h_rho((size_t)sx * (size_t)sy);
+    CUDA_CHECK(cudaMemcpy(h_rho.data(), d_rho,
+                          h_rho.size() * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+
+    std::vector<double> rho_x(nx, 0.0);
+    for (int ic = 0; ic < nx; ++ic) {
+        double acc = 0.0;
+        for (int jc = 0; jc < ny; ++jc) {
+            acc += h_rho[(size_t)(ic + ng) * sy + (jc + ng)];
+        }
+        rho_x[ic] = acc / (double)ny;
+    }
+
+    sod_exact::Params P;
+    P.x0 = x_lo + 0.5 * Lx;
+    // Exclude the 5% wrap-pollution zones (Athena-style).
+    const double x_lo_win = x_lo + 0.05 * Lx;
+    const double x_hi_win = x_lo + 0.95 * Lx;
+    double l1 = 0.0, linf = 0.0;
+    int n_scored = 0;
+    for (int ic = 0; ic < nx; ++ic) {
+        double xc = x_lo + (ic + 0.5) * dx;
+        if (xc < x_lo_win || xc > x_hi_win) continue;
+        double rho_e = sod_exact::rho_at(P, xc, t_now);
+        double e = std::fabs(rho_x[ic] - rho_e);
+        l1 += e;
+        linf = std::max(linf, e);
+        ++n_scored;
+    }
+    l1 /= (double)std::max(n_scored, 1);
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/sod-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_sod_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end L1 Linf\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, l1, linf);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "sod error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e\n",
+        nx, ny, ncycle, l1, linf);
 }
 
 // ============================================================

@@ -19,9 +19,10 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_andrassy = (cfg.test_case == "andrassy2022");
     bool is_shear    = (cfg.test_case == "shear_mode");
     bool is_ewave    = (cfg.test_case == "entropy_wave");
-    if (!is_andrassy && !is_shear && !is_ewave) {
+    bool is_sod      = (cfg.test_case == "sod");
+    if (!is_andrassy && !is_shear && !is_ewave && !is_sod) {
         std::fprintf(stderr,
-            "athena_vl2: supports --test {andrassy2022, shear_mode, entropy_wave}\n");
+            "athena_vl2: supports --test {andrassy2022, shear_mode, entropy_wave, sod}\n");
         return 1;
     }
     double Lx = 1.0, Ly = 1.0;
@@ -53,6 +54,9 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
             }
         }
         std::fclose(fp);
+    } else if (is_sod) {
+        // Sod shock tube: Lx = Ly = 1, γ = 1.4 (standard).
+        Lx = 1.0; Ly = 1.0; gam = 1.4;
     } else {
         // shear_mode / entropy_wave: Lx = Ly = 1, γ = 5/3.
         Lx = 1.0; Ly = 1.0; gam = 5.0 / 3.0;
@@ -72,6 +76,8 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     } else if (is_shear) {
         av.init_shear_mode(cfg.shear_rho, cfg.shear_P,
                            cfg.shear_V0, cfg.shear_k);
+    } else if (is_sod) {
+        av.init_sod();
     } else {
         av.init_entropy_wave(cfg.ewave_rho0, cfg.ewave_P0,
                              cfg.ewave_u0, cfg.ewave_A, cfg.ewave_k);
@@ -168,6 +174,9 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
             cfg.ewave_rho0, cfg.ewave_P0, cfg.ewave_u0,
             cfg.ewave_A, cfg.ewave_k, cfg.ewave_periods,
             ctx.run_dir);
+    }
+    if (cfg.compute_error && is_sod) {
+        av.compute_sod_error(t, step, ctx.run_dir);
     }
     av.destroy();
     return 0;

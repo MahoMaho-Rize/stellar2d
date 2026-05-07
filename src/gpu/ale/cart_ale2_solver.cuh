@@ -443,6 +443,16 @@ struct CartAle2Solver {
                                     double A, int k, double periods,
                                     const std::string& run_dir);
 
+    // ---- Sod shock tube post-run error (Athena++ compute_error pattern) ----
+    // Standard Sod IC: ρL=1, PL=1, ρR=0.125, PR=0.1, γ=1.4, v=0, split at
+    // Lx/2. At time t_now, the analytic solution is a self-similar fan of
+    // left rarefaction + contact + right shock (Toro §4.3). We compute L1
+    // and Linf on ρ between y-averaged simulation and sod_exact::rho_at.
+    // Appends one line to <run_dir>/sod-errors.dat with schema:
+    //   # Nx Ny Ncycle t_end L1 Linf
+    void compute_sod_error(double t_now, int ncycle,
+                           const std::string& run_dir);
+
     struct Diagnostics {
         double total_mass;
         double total_KE;

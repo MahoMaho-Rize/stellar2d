@@ -166,6 +166,11 @@ struct AthenaVL2Solver {
                                     double A, int k, double periods,
                                     const std::string& run_dir);
 
+    // Sod shock tube post-run error. See CartAle2Solver::compute_sod_error
+    // for schema and IC details (shared via sod_exact.h).
+    void compute_sod_error(double t_now, int ncycle,
+                           const std::string& run_dir);
+
     // ---- internal helpers ------------------------------------
     int stride_x() const { return nx + 2 * ng; }
     int stride_y() const { return ny + 2 * ng; }
