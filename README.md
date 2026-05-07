@@ -8,8 +8,9 @@ CLI entry point; each has its own intended use domain.
 
 | Coordinate | Grid | Solver families |
 |---|---|---|
-| Axisymmetric spherical $(r, \theta)$ | Log-radial × uniform polar | `explicit`, `fas`, `simple`, `projection`, `lowmach`, `radial1d`, `ale2d`, `wb2d`, `compressible` |
-| 2D Cartesian $(x, y)$ | Uniform | `strang` (tests-only), `cart_lag`, `cart_ale`, `cart_ale2` |
+| Axisymmetric spherical $(r, \theta)$ | Log-radial × uniform polar | `explicit`, `fas`, `fas2`, `simple`, `projection`, `lowmach`, `radial1d`, `ale2d`, `wb2d`, `compressible` |
+| 2D Cartesian $(x, y)$ | Uniform | `strang`, `cart_lag`, `cart_ale`, `cart_ale2`, `athena_vl2` |
+| 2D Cartesian $(x, y)$ periodic spectral | `pseudo_spectral`, `sph2d_spectral`, `anelastic_sl` |
 
 ## Build
 
@@ -46,20 +47,39 @@ See [docs/projects/spectral_liouville/equations.md](docs/projects/spectral_liouv
 | Solver | Grid | Status | Use for |
 |---|---|---|---|
 | `explicit` | polar | ✅ stable | RK2 HLLC + MUSCL, baseline for polar tests |
-| `fas` | polar | ✅ stable | Nonlinear multigrid, implicit polar time stepping |
+| `fas` / `fas2` | polar | ✅ stable | Nonlinear multigrid, implicit polar time stepping |
 | `simple` | polar | ✅ stable | SIMPLE pressure correction (low-Mach-ish) |
 | `projection` | polar | ✅ stable | Fractional-step pressure projection |
 | `lowmach` | polar | ✅ stable | JFNK fully implicit, stellar low-Mach regime |
-| `radial1d` | 1D radial | ✅ stable | MESA-style 1D, baseline for ALE radial regression |
+| `radial1d` | 1D radial | ✅ stable | 1D Lagrangian implicit hydro; testbed for 2D ALE Newton-Krylov. **Not a stellar evolution code** (cannot do KH contraction, see [CLAUDE.md](CLAUDE.md) radial1d scope) |
 | `compressible` | polar | ⚠️ requires AmgX | Legacy HLLC + AmgX Poisson |
 | `wb2d` | polar | ⚠️ perturbation dies ~t=2 | Well-balanced Euler family, kept as reference |
 | `ale2d` | polar | ⚠️ axisymmetric hoop bug | Axisymmetric Caramana; see `docs/design/ale_hoop_stress_fix.md` |
 | `cart_lag` | Cartesian | ⚠️ HSE dt degenerates | Pure Lagrangian reference (hourglass mode over long HSE) |
 | `cart_ale` | Cartesian | ✅ stable | Cartesian ALE baseline (reflective walls only) |
-| `cart_ale2` | Cartesian | ✅ stable | **cart_ale + periodic BC + PPM + char projection.** Intended for compressible stellar convection. See [docs/design/cart_ale2_design.md](docs/design/cart_ale2_design.md). |
+| `cart_ale2` | Cartesian | ✅ stable | **cart_ale + periodic BC + PPM + char projection.** Intended for compressible stellar convection. linwave convergence ~0.9-order (Lagrangian rebuild diffuses smooth modes). Gresho/Yee need `--shear-aware-av --rebuild-order 1`. See [docs/design/cart_ale2_design.md](docs/design/cart_ale2_design.md) |
+| `athena_vl2` | Cartesian | ✅ stable | GPU port of Athena++ vl2 predictor-corrector (PLM + HLLC). **linwave 2.03-order** (cleanest convergence in the repo). Hard-coded x-periodic BC → not suitable for shock tubes. First choice for smooth-flow convergence studies |
+| `pseudo_spectral` | 2D periodic Cartesian | ⚠️ Taylor-Green test currently FAILS (pre-existing regression) | 2D incompressible Navier-Stokes: cuFFT + IFRK3 + 2/3 dealias. Target for KH turbulence + forced turbulence |
+| `anelastic_sl` | plane-parallel spectral | ✅ stable | Anelastic spectral-Liouville for stratified subsonic convection |
+| `sph2d_spectral` | thin spherical shell | ✅ stable | 2D spherical spectral (Rossby waves, shallow shell turbulence) |
+| `strang` | Cartesian | ✅ stable | Full 2D explicit Strang split HLLC+MUSCL; standard baseline |
 
-`strang` exists in `src/gpu/strang_solver.*` and is exercised by the
-Strang test suite; it is not currently wired into `main.cpp` dispatch.
+### Solver selection by use case (2026-05-07 quantitative guidance)
+
+Based on the Phase 2 `tst/` convergence data (linwave, Sod, entropy wave):
+
+| Use case | Recommended | Alternate | Avoid |
+|---|---|---|---|
+| Stellar convection / long-time stratified HSE | `cart_ale2` | `cart_ale` (reflect only) | `athena_vl2` (y-reflect not robust) |
+| Andrassy 2022 O-shell benchmark | `cart_ale2` | `athena_vl2` (for CPU↔GPU cross-validation) | `cart_lag` (hourglass mode) |
+| 2D incompressible turbulence, KH spectrum | `pseudo_spectral` *(after regression fix)* | — | `cart_ale2` (ν_eff too high, k^{-10} spectrum) |
+| Sod / shock tube 1D verification | `cart_ale2` w/ `--bc-x reflect` | `strang` | `athena_vl2` (x-periodic hard-coded) |
+| Linear wave convergence study | `athena_vl2` (2.03-order verified) | `strang` | `cart_ale2` (~0.9-order on smooth flow) |
+| Smooth scalar advection | `athena_vl2` | `pseudo_spectral` | `cart_ale2` (rebuild amplifies v modes) |
+| Gresho stationary vortex | `cart_ale2` + `--shear-aware-av --rebuild-order 1` | — | `cart_ale2` defaults (vφ→0.2 in 1 s) |
+| Yee isentropic vortex | `cart_ale2` + `--ppm` at N≥256, manual scan only | — | `cart_ale2` defaults (blows up at t≳5) |
+| Pulsation / acoustic response in stellar atmosphere | `lowmach` (JFNK) | `radial1d` (1D cap) | — |
+| pre-MS KH contraction / any τ_KH-scale evolution | Use MESA/KEPLER/GENEC output as IC | — | `radial1d` (architecturally cannot do this) |
 
 ## Test cases
 
@@ -71,14 +91,23 @@ Selected via `--test <name>`. Not every test case runs on every solver.
 | `lane_emden_perturbed` | Lane-Emden + 0.1% density perturbation (oscillation modes) | `explicit`, `fas`, `lowmach` |
 | `bubble` | Entropy bubble in Lane-Emden star (buoyant convection) | `fas`, `simple`, `lowmach` |
 | `sedov` | Point-source blast, uniform ambient | `explicit`, `fas` |
+| `sedov2d` | 2D cylindrical Sedov blast (Cartesian) | `cart_ale2` |
+| `noh` | 2D Noh implosion (strong AV test) | `cart_ale2` |
+| `gresho` | Stationary vortex, AV trigger test | `cart_ale2` |
+| `yee_vortex` | Yee-Vinokur-Djomehri isentropic vortex round-trip | `cart_ale2` |
 | `jeans` | Uniform medium + perturbation, gravitational collapse | `explicit`, `fas` |
 | `evrard` | Cold isothermal gas sphere, gravitational collapse | `explicit`, `fas` |
 | `hse` | 2D Cartesian hydrostatic polytrope | `cart_lag`, `cart_ale`, `cart_ale2` |
 | `hse_perturbed` | HSE + density perturbation | `cart_ale`, `cart_ale2` |
 | `hse_bubble` | HSE + Gaussian bubble overlay(s) | `cart_ale`, `cart_ale2` |
-| `sod` | 1D Sod tube in 2D Cartesian | `cart_ale`, `cart_ale2` |
+| `sod` | 1D Sod tube in 2D Cartesian | `cart_ale2`, `athena_vl2` (note: vl2 x-periodic pollutes Sod) |
 | `kh_shear` | Classic dual shear band KH (density contrast) | `cart_ale`, `cart_ale2` |
 | `kh_lecoanet` | Athena iprob=4 canonical KH (dual tanh layers, periodic) | `cart_ale2` only |
+| `shear_mode` | Linear shear-mode decay (T3 ν_eff characterization) | `cart_ale2`, `athena_vl2` |
+| `entropy_wave` | Smooth entropy wave advection (T1 convergence) | `cart_ale2`, `athena_vl2` |
+| `acoustic_wave` | Right-running acoustic eigenmode (linwave convergence) | `cart_ale2`, `athena_vl2` |
+| `andrassy2022` | Idealized O-shell convection benchmark | `cart_ale2`, `athena_vl2` |
+| `local_convection` | MESA-envelope slab stratified convection | `cart_ale2` |
 
 ## Core CLI flags
 
@@ -138,6 +167,17 @@ All dispatch flags; some are solver-specific (ignored when not applicable).
 | `--lm-hllc` | flag | off (enable acoustic blending) |
 | `--no-sponge` | flag | off (disable velocity sponge layer) |
 
+### Test-case IC parameters (2026-05-07 `tst/` framework)
+
+| Flag | Applies to | Notes |
+|---|---|---|
+| `--compute-error` | any benchmark with a C++ `compute_*_error` | Solver writes `<testname>-errors.dat` at t_end |
+| `--ewave-{rho0,P0,u0,A,k,periods}` | `entropy_wave` | δρ = A·ρ₀·sin(kx), advected at u₀ |
+| `--awave-{rho0,P0,A,k,periods}` | `acoustic_wave` | Right-acoustic eigenmode, c₀ = √(γP₀/ρ₀) |
+| `--shear-{V0,k,rho,P}` | `shear_mode` | Linear shear-mode decay for ν_eff probe |
+| `--rebuild-order <0\|1>` | cart_ale2 | Node-velocity rebuild order (see cart_ale2 notes) |
+| `--shear-aware-av` | cart_ale2 | Reduce Q in shear-dominated cells (needed for Gresho) |
+
 Run `./build/stellar2d --help` equivalent: there is none. Read
 `src/main.cpp` lines 160–250 for the full argument parser.
 
@@ -188,29 +228,59 @@ and write an MP4/PNG next to the VTK files.
 
 ## Tests
 
-C++ unit + GPU integration tests via CTest:
+Three-layer test organisation (2026-05-07 refactor, see
+[docs/design/testing_infrastructure_plan_2026-05-07.md](docs/design/testing_infrastructure_plan_2026-05-07.md)):
+
+1. **`tests/test_*.cu`** — in-process CUDA unit / regression locks
+   (Strang, FAS, lowmach, cart_ale2 Phase 1 regression guards).
+2. **`tst/test_*/test_*_gpu.py`** — end-to-end pytest suite. Each test
+   launches `build/stellar2d --compute-error`, which writes a schema-
+   documented `<testname>-errors.dat`; pytest reads it and asserts L1 /
+   convergence-ratio thresholds. **No analytic solvers in Python.**
+3. **`tests/test_*.py`** — legacy Python tests (CPU polar hydro).
+
+### Running
+
 ```bash
-cd build && ctest -j$(nproc)
+cd build
+
+# Fast CI bucket (< 20 s) — Phase 1 CUDA locks + pytest_gpu_fast suite
+ctest -L fast
+
+# Everything (includes slow and scan-marker pytest tests if any)
+ctest -j$(nproc)
+
+# Just the pytest end-to-end suite
+cd ../tst && STELLAR2D_BIN=../build/stellar2d pytest -m fast -v
 ```
 
-Python integration tests (slow tests gated):
-```bash
-pytest                 # fast tests
-pytest -m slow         # convergence tests
-```
+### Current coverage (2026-05-07)
 
-The `stellar2d.py test` wrapper also runs a curated subset:
-```bash
-./stellar2d.py test         # C++ unit + fast Python
-./stellar2d.py test --gpu   # also GPU-specific
-./stellar2d.py test --slow  # include slow convergence
-```
+**`ctest -L fast`**: 23 tests, 20 passing in ~16 s.
+3 pre-existing failures unrelated to the Phase 2 migration work:
 
-Current GPU test status (`test_strang_*`, `test_fas_*`, `test_coverage_critical`):
-**88 checks across 8 suites, all passing** at the Strang/FAS/lowmach layer.
-The cart_ale{,2} stack does not yet have a dedicated ctest target —
-uniform-advection periodic conservation check (P30/P31 regression)
-should be added next.
+| Failing | Nature |
+|---|---|
+| `lowmach_s_e_regression` | S_E = ρv·g leak ratio = 20 (expected ≲ 1e-6) |
+| `fas_verify` | FAS HSE residual verify below tolerance |
+| `pseudo_spectral_taylor_green` | Taylor-Green analytic decay regression |
+
+**`tst/` pytest suite** (16 tests, all passing in ~16 s):
+
+| benchmark | cart_ale2 | athena_vl2 |
+|---|---|---|
+| entropy_wave | ✅ 2 tests | ✅ 2 tests |
+| sod (Toro Riemann in `src/gpu/common/sod_exact.h`) | ✅ 2 tests | ✅ 2 tests |
+| gresho | ✅ 2 tests (stationary-vortex L1) | — |
+| yee_vortex | ✅ 2 tests (short-t smoke) | — |
+| acoustic_wave (linwave) | ✅ 2 tests | ✅ 2 tests **(2.03-order verified)** |
+
+**`tests/` CUDA unit tests**: Strang (6), FAS (2), lowmach family (7),
+Helm/Dual (5), cart_ale2 Phase 1 regression (4: `hse_stratified_reflect`,
+`phase_m_compensation`, `symmetry`, `athena_vl2_sod`).
+
+See [docs/tests_ale2/README.md](docs/tests_ale2/README.md) for the
+standard verification runbook (Sod / Sedov / Noh / Gresho / Yee).
 
 ## Code structure
 
@@ -348,6 +418,10 @@ stellar2d/
 - [docs/design/lag2d_design.md](docs/design/lag2d_design.md) — Lag2d legacy notes
 - [docs/design/wb2d_design.md](docs/design/wb2d_design.md) — wb2d design notes
 - [docs/provenance.md](docs/provenance.md) — Figure/data filename and footer convention
+- [docs/design/testing_infrastructure_plan_2026-05-07.md](docs/design/testing_infrastructure_plan_2026-05-07.md) — Test architecture (Phase 1/2 done, Phase 3/4 backlog)
+- [docs/design/testing_scheme_characterization_2026-05-07.md](docs/design/testing_scheme_characterization_2026-05-07.md) — ν_eff, convergence order, and scheme-type classification across all hydro solvers
+- [docs/sessions/session_journal_2026-05-07_phase2_testing.md](docs/sessions/session_journal_2026-05-07_phase2_testing.md) — Phase 1+2 implementation journal + discovered solver issues + solver selection guide
+- [tst/README.md](tst/README.md) — `tst/` pytest framework + compute_error pattern
 - [CLAUDE.md](CLAUDE.md) — Solver asset-preservation rules (read first before modifying existing solvers)
 
 ## Equation-code traceability
