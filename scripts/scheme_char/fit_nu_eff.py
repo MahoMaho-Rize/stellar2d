@@ -171,7 +171,9 @@ def plot(results: list[FitResult]) -> Path:
 
 
 def write_summary(results: list[FitResult], csv_path: Path, png_path: Path):
-    md = OUT_DIR / f"{DATE}_nu_eff_comparison.md"
+    # Auto-summary is a separate file so it doesn't clobber the hand-
+    # written interpretive md at `<DATE>_nu_eff_comparison.md`.
+    md = OUT_DIR / f"{DATE}_nu_eff_comparison_auto.md"
     with md.open("w") as fh:
         fh.write(f"# ν_eff comparison — {DATE}\n\n")
         fh.write("T3 Linear shear-mode / Taylor-Green pure-diffusion decay:\n\n")

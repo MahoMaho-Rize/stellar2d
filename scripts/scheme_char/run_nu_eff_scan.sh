@@ -44,15 +44,16 @@ run_one() {
             --tend "$TEND" --diag-interval "$DIAG" \
             --run-base "$dir" --output-interval 10000 \
             $extra >run.log 2>&1)
-    # The driver writes into $dir/runs/.../diagnostics.csv (via SimContext).
-    # Flatten: copy the newest diagnostics.csv up to $dir/
-    local latest=$(ls -1dt "$dir"/runs/*/diagnostics.csv 2>/dev/null | head -1 || true)
-    if [[ -n "$latest" ]]; then
+    # make_run_dir writes into $run_base/<testcase>_NxN_<ts>/diagnostics.csv.
+    # Flatten: copy the newest diagnostics.csv up to $dir/.
+    local latest
+    latest=$(find "$dir" -maxdepth 2 -name diagnostics.csv -printf '%T@ %p\n' \
+             2>/dev/null | sort -n | tail -1 | cut -d' ' -f2- || true)
+    if [[ -n "$latest" && -f "$latest" ]]; then
         cp "$latest" "$dir/diagnostics.csv"
         echo "  -> $dir/diagnostics.csv"
     else
-        # Some drivers write diagnostics.csv directly in run_dir; fallback.
-        echo "  [warn] no diagnostics.csv found under $dir/runs; check run.log"
+        echo "  [warn] no diagnostics.csv found under $dir; check run.log"
     fi
 }
 
