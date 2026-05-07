@@ -126,6 +126,12 @@ struct AthenaVL2Solver {
     // Analytic NS decay: max|vx|(t) = V0·exp(-ν·k²·t) with k = k·2π/Ly.
     void init_shear_mode(double rho, double P, double V0, int k);
 
+    // Standard Sod shock tube in x: ρL=1, PL=1 for x<Lx/2, ρR=0.125,
+    // PR=0.1 for x>=Lx/2.  v=0, γ=1.4.  BC: x-periodic by default (for
+    // use with analytic comparison at a short t before the wave hits
+    // the wrap), y-reflect.  Unit test uses a very short t (0.2).
+    void init_sod();
+
     // T1 entropy wave (x-advection, periodic both dirs). Same definition
     // as CartAle2::init_entropy_wave: ρ = ρ0(1 + A·sin(k·2π x/Lx)),
     // P = P0 uniform, v = (u0, 0). After one period t = Lx/u0 the exact

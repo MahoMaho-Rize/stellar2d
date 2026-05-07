@@ -397,6 +397,54 @@ void AthenaVL2Solver::init_shear_mode(double rho, double P, double V0, int k) {
 }
 
 // ============================================================
+// init_sod — standard Sod shock tube (x split at Lx/2, γ=1.4)
+// ============================================================
+void AthenaVL2Solver::init_sod() {
+    gamma = 1.4;
+    x_lo = 0.0; x_hi = Lx;
+    y_lo = 0.0; y_hi = Ly;
+    dx = Lx / (double)nx;
+    dy = Ly / (double)ny;
+    y_periodic = false;   // reflect in y
+    tracer_enabled = false;
+
+    int sx = stride_x();
+    int sy = stride_y();
+    int ncell = sx * sy;
+    std::vector<double> h_rho(ncell, 0.0), h_mx(ncell, 0.0),
+                        h_my(ncell, 0.0), h_E(ncell, 0.0);
+    double gm1 = gamma - 1.0;
+    double xmid = x_lo + 0.5 * Lx;
+    for (int ic = 0; ic < nx; ++ic) {
+        double xc = x_lo + (ic + 0.5) * dx;
+        double rho, P;
+        if (xc < xmid) { rho = 1.0;   P = 1.0; }
+        else           { rho = 0.125; P = 0.1; }
+        double e_int = P / gm1;
+        for (int jc = 0; jc < ny; ++jc) {
+            int cidx = (ic + ng) * sy + (jc + ng);
+            h_rho[cidx] = rho;
+            h_mx [cidx] = 0.0;
+            h_my [cidx] = 0.0;
+            h_E  [cidx] = e_int;
+        }
+    }
+    h_g_row.assign(ny, 0.0);
+    h_q_row.assign(ny, 0.0);
+    h_phi_row.assign(ny, 0.0);
+    CUDA_CHECK(cudaMemcpy(d_rho, h_rho.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mx,  h_mx .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_my,  h_my .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_E,   h_E  .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_g_row, h_g_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_q_row, h_q_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+
+    std::fprintf(stderr,
+        "  AthenaVL2 Sod IC: ρL=1 PL=1 | ρR=0.125 PR=0.1  (Lx=%g γ=%.2f)\n",
+        Lx, gamma);
+}
+
+// ============================================================
 // init_entropy_wave — T1 smooth-convergence probe (periodic BC both dirs)
 // ============================================================
 void AthenaVL2Solver::init_entropy_wave(double rho0, double P0, double u0,

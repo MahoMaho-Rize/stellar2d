@@ -232,6 +232,10 @@ function(add_gpu_test name source)
     target_link_libraries(test_${name} PRIVATE CUDA::cudart)
     if(NOT T_NO_CTEST)
         add_test(NAME ${name} COMMAND test_${name})
+        # Default label `fast` (< 30 s).  Callers can re-label via
+        # set_tests_properties(${name} PROPERTIES LABELS "slow") to mark
+        # longer tests for exclusion from the `ctest -L fast` filter.
+        set_tests_properties(${name} PROPERTIES LABELS "fast")
     endif()
 endfunction()
 
@@ -298,6 +302,27 @@ if(USE_GPU)
                  EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
                                src/gpu/ale/cart_ale2_kernels.cu
                                src/gpu/ale/cart_ale2_trace.cu)
+
+    # Phase 1 (testing_infrastructure_plan) regression locks
+    add_gpu_test(ale2_hse_stratified_reflect
+                 tests/test_ale2_hse_stratified_reflect.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
+    add_gpu_test(ale2_phase_m_compensation
+                 tests/test_ale2_phase_m_compensation.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
+    add_gpu_test(ale2_symmetry
+                 tests/test_ale2_symmetry.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
+    add_gpu_test(athena_vl2_sod
+                 tests/test_athena_vl2_sod.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_vl2_solver.cu
+                               src/gpu/explicit/athena_vl2_kernels.cu)
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)
