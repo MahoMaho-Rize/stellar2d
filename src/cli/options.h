@@ -203,6 +203,13 @@ struct SimConfig {
     double ewave_A    = 0.01;
     int    ewave_k    = 1;
     double ewave_periods = 1.0;
+    // Linear acoustic wave — Athena++ linwave style. Advection speed
+    // is c0 = sqrt(γ·P0/ρ0); driver auto-sets t_end = periods · Lx/c0.
+    double awave_rho0 = 1.0;
+    double awave_P0   = 0.6;   // with γ=5/3 and ρ0=1 → c0 = 1
+    double awave_A    = 1.0e-4;
+    int    awave_k    = 1;
+    double awave_periods = 1.0;
     // --compute-error: when set, the solver's compute_*_error() is called
     // at t_end for the active test_case (Athena++ compute_error pattern).
     // Emits <run-base>/<test_case>-errors.dat; pytest tst/ reads it.

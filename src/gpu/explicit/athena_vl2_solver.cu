@@ -496,6 +496,60 @@ void AthenaVL2Solver::init_entropy_wave(double rho0, double P0, double u0,
 }
 
 // ============================================================
+// Linear acoustic wave IC (right-running sound wave).
+// See CartAle2Solver::init_acoustic_wave for the eigenvector math.
+// ============================================================
+void AthenaVL2Solver::init_acoustic_wave(double rho0, double P0,
+                                         double A, int k) {
+    x_lo = 0.0; x_hi = Lx;
+    y_lo = 0.0; y_hi = Ly;
+    dx = Lx / (double)nx;
+    dy = Ly / (double)ny;
+    y_periodic = true;
+    tracer_enabled = false;
+
+    const double c0 = std::sqrt(gamma * P0 / rho0);
+
+    int sx = stride_x();
+    int sy = stride_y();
+    int ncell = sx * sy;
+    std::vector<double> h_rho(ncell, rho0);
+    std::vector<double> h_mx(ncell, 0.0);
+    std::vector<double> h_my(ncell, 0.0);
+    std::vector<double> h_E(ncell, 0.0);
+    double gm1 = gamma - 1.0;
+    for (int ic = 0; ic < nx; ++ic) {
+        double xc = x_lo + (ic + 0.5) * dx;
+        double s  = std::sin(k * 2.0 * M_PI * xc / Lx);
+        double rho = rho0 + A * rho0 * s;
+        double vx  = A * c0 * s;            // (c0/rho0)·δρ
+        double P   = P0   + A * rho0 * c0 * c0 * s;
+        double e_int = P / gm1;
+        double ke    = 0.5 * rho * vx * vx;
+        for (int jc = 0; jc < ny; ++jc) {
+            int cidx = (ic + ng) * sy + (jc + ng);
+            h_rho[cidx] = rho;
+            h_mx [cidx] = rho * vx;
+            h_my [cidx] = 0.0;
+            h_E  [cidx] = e_int + ke;
+        }
+    }
+    h_g_row.assign(ny, 0.0);
+    h_q_row.assign(ny, 0.0);
+    h_phi_row.assign(ny, 0.0);
+    CUDA_CHECK(cudaMemcpy(d_rho, h_rho.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mx,  h_mx .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_my,  h_my .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_E,   h_E  .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_g_row, h_g_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_q_row, h_q_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+
+    std::fprintf(stderr,
+        "  AthenaVL2 acoustic_wave IC: rho0=%g P0=%g A=%g k=%d c0=%g  (Lx=%g, period=%g)\n",
+        rho0, P0, A, k, c0, Lx, Lx / c0);
+}
+
+// ============================================================
 // T1 entropy wave compute_error (Athena++ compute_error pattern).
 // Download ρ to host, average over y, compute L1/Linf vs analytic
 // ρ_exact(x) = rho0·(1 + A·sin(k·2π x/Lx)), also report best-shift
@@ -569,6 +623,81 @@ void AthenaVL2Solver::compute_entropy_wave_error(double t_now, int ncycle,
     std::fclose(f);
     std::fprintf(stderr,
         "entropy_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
+        "L1_phase=%.4e (shift=%+.4f)\n",
+        nx, ny, ncycle, l1, linf, best_l1, best_s);
+}
+
+// ============================================================
+// Linear acoustic wave compute_error for athena_vl2.
+// ============================================================
+void AthenaVL2Solver::compute_acoustic_wave_error(double t_now, int ncycle,
+                                                  double rho0, double P0,
+                                                  double A, int k, double periods,
+                                                  const std::string& run_dir) {
+    (void)periods;
+    const int sx = stride_x();
+    const int sy = stride_y();
+    std::vector<double> h_rho((size_t)sx * (size_t)sy);
+    CUDA_CHECK(cudaMemcpy(h_rho.data(), d_rho,
+                          h_rho.size() * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+
+    std::vector<double> rho_x(nx, 0.0);
+    for (int ic = 0; ic < nx; ++ic) {
+        double acc = 0.0;
+        for (int jc = 0; jc < ny; ++jc) {
+            acc += h_rho[(size_t)(ic + ng) * sy + (jc + ng)];
+        }
+        rho_x[ic] = acc / (double)ny;
+    }
+
+    const double c0 = std::sqrt(gamma * P0 / rho0);
+    const double twopi_k = 2.0 * M_PI * (double)k / Lx;
+    double l1 = 0.0, linf = 0.0;
+    for (int ic = 0; ic < nx; ++ic) {
+        double xc = x_lo + (ic + 0.5) * dx;
+        double expected = rho0 * (1.0 + A * std::sin(twopi_k * xc));
+        double e = std::fabs(rho_x[ic] - expected);
+        l1  += e;
+        linf = std::max(linf, e);
+    }
+    l1 /= (double)nx;
+
+    const int N_SHIFT = 2001;
+    double best_l1 = l1, best_s = 0.0;
+    for (int si = 0; si < N_SHIFT; ++si) {
+        double s = -Lx + 2.0 * Lx * (double)si / (double)(N_SHIFT - 1);
+        double sum = 0.0;
+        for (int ic = 0; ic < nx; ++ic) {
+            double xc = x_lo + (ic + 0.5) * dx;
+            double expected = rho0 * (1.0 + A * std::sin(twopi_k * (xc - s)));
+            sum += std::fabs(rho_x[ic] - expected);
+        }
+        sum /= (double)nx;
+        if (sum < best_l1) { best_l1 = sum; best_s = s; }
+    }
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/acoustic_wave-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_acoustic_wave_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end A k c0 L1 Linf L1_phase phase_shift\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.6e %d %.6e %.10e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, A, k, c0, l1, linf, best_l1, best_s);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "acoustic_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
         "L1_phase=%.4e (shift=%+.4f)\n",
         nx, ny, ncycle, l1, linf, best_l1, best_s);
 }

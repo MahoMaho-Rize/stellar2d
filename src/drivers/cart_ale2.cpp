@@ -27,6 +27,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_yee    = (cfg.test_case == "yee_vortex");
     bool is_shear  = (cfg.test_case == "shear_mode");
     bool is_ewave  = (cfg.test_case == "entropy_wave");
+    bool is_awave  = (cfg.test_case == "acoustic_wave");
     bool is_sod    = (cfg.test_case == "sod");
     double Lx = 1.0;
     // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
@@ -38,6 +39,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
               : is_yee ? 10.0
               : is_shear ? 1.0
               : is_ewave ? 1.0
+              : is_awave ? 1.0
               : 0.2;
     if (is_yee) Lx = 10.0;
     double gam = is_hse ? cfg.gamma : 1.4;
@@ -226,6 +228,21 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                 "  entropy_wave: auto t_end = %g (%.3g periods)\n",
                 cfg.t_end, cfg.ewave_periods);
         }
+    } else if (is_awave) {
+        if (cale.bc_mode != 3) {
+            std::fprintf(stderr,
+                "  [warn] acoustic_wave requires --bc-x periodic --bc-y periodic; "
+                "current bc_mode=%d\n", cale.bc_mode);
+        }
+        cale.init_acoustic_wave(cfg.awave_rho0, cfg.awave_P0,
+                                cfg.awave_A, cfg.awave_k);
+        if (cfg.t_end == 1.0) {
+            double c0 = std::sqrt(cale.gamma * cfg.awave_P0 / cfg.awave_rho0);
+            cfg.t_end = cfg.awave_periods * Lx / c0;
+            std::fprintf(stderr,
+                "  acoustic_wave: auto t_end = %g (%.3g periods)\n",
+                cfg.t_end, cfg.awave_periods);
+        }
     } else {
         cale.init_sod();
     }
@@ -350,6 +367,13 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
         cale.compute_yee_error(t, step, /*beta=*/5.0,
                                 /*u_inf=*/1.0, /*v_inf=*/1.0,
                                 ctx.run_dir);
+    }
+    if (cfg.compute_error && is_awave) {
+        cale.compute_acoustic_wave_error(
+            t, step,
+            cfg.awave_rho0, cfg.awave_P0,
+            cfg.awave_A, cfg.awave_k, cfg.awave_periods,
+            ctx.run_dir);
     }
     cale.destroy();
     return 0;

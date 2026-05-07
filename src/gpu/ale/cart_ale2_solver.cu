@@ -618,6 +618,52 @@ void CartAle2Solver::init_shear_mode(double rho, double P, double V0, int k) {
         rho, P, V0, k, Ly, k * 2.0 * M_PI / Ly);
 }
 
+// ----- Linear acoustic wave ----------------------------------
+// Background (ρ₀, P₀, v=0), right-acoustic perturbation along R⁺ =
+// (1, c₀/ρ₀, 0, c₀²). One period T = Lx/c₀ returns state to IC exactly.
+void CartAle2Solver::init_acoustic_wave(double rho0, double P0, double A, int k) {
+    g_y = 0.0;
+    double Lx = g_Lx;
+    const double c0 = std::sqrt(gamma * P0 / rho0);
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double s = std::sin(k * 2.0 * M_PI * Xc / Lx);
+            double rho = rho0 + A * rho0 * s;
+            double P   = P0   + A * rho0 * c0 * c0 * s;
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = P / ((gamma - 1.0) * rho);
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+
+    // Node velocities: δvx = (c0/ρ0)·δρ = A·c0·sin(k·2π·X/Lx), vy=0.
+    std::vector<double> h_vX(nnode), h_vY(nnode, 0.0);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double s = std::sin(k * 2.0 * M_PI * h_X[f] / Lx);
+            h_vX[f] = A * c0 * s;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    std::fprintf(stderr,
+        "  CartAle2 acoustic_wave IC: rho0=%g P0=%g A=%g k=%d c0=%g (Lx=%g, period=%g)\n",
+        rho0, P0, A, k, c0, Lx, Lx / c0);
+}
+
 void CartAle2Solver::init_entropy_wave(double rho0, double P0, double u0,
                                        double A, int k) {
     g_y = 0.0;
@@ -2112,6 +2158,73 @@ void CartAle2Solver::compute_entropy_wave_error(double t_now, int ncycle,
     std::fclose(f);
     std::fprintf(stderr,
         "entropy_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
+        "L1_phase=%.4e (shift=%+.4f)\n",
+        nx, ny, ncycle, l1, linf, best_l1, best_s);
+}
+
+// ============================================================
+// Linear acoustic wave compute_error (Athena++ linwave pattern).
+// After integer periods, exact ρ returns to IC. Same phase-aligned
+// L1 as entropy_wave (Lagrangian rezone injects a bulk timing drift
+// that shouldn't count as dissipation).
+// ============================================================
+void CartAle2Solver::compute_acoustic_wave_error(double t_now, int ncycle,
+                                                 double rho0, double P0,
+                                                 double A, int k, double periods,
+                                                 const std::string& run_dir) {
+    (void)periods;
+    std::vector<double> xs, rhos, Ps, vxs, es;
+    download_xslice(xs, rhos, Ps, vxs, es);
+
+    const double Lx = g_Lx;
+    const double c0 = std::sqrt(gamma * P0 / rho0);
+    const double twopi_k = 2.0 * M_PI * (double)k / Lx;
+    // Exact at t_end (periodic): ρ₀·(1 + A·sin(k·2π·x/Lx)).
+    double l1 = 0.0, linf = 0.0;
+    for (int i = 0; i < (int)xs.size(); ++i) {
+        double expected = rho0 * (1.0 + A * std::sin(twopi_k * xs[i]));
+        double e = std::fabs(rhos[i] - expected);
+        l1  += e;
+        linf = std::max(linf, e);
+    }
+    l1 /= (double)std::max<size_t>(xs.size(), 1);
+
+    // Phase-aligned best-shift L1 (same treatment as entropy wave).
+    const int N_SHIFT = 2001;
+    double best_l1 = l1, best_s = 0.0;
+    for (int si = 0; si < N_SHIFT; ++si) {
+        double s = -Lx + 2.0 * Lx * (double)si / (double)(N_SHIFT - 1);
+        double sum = 0.0;
+        for (int i = 0; i < (int)xs.size(); ++i) {
+            double expected = rho0 *
+                (1.0 + A * std::sin(twopi_k * (xs[i] - s)));
+            sum += std::fabs(rhos[i] - expected);
+        }
+        sum /= (double)std::max<size_t>(xs.size(), 1);
+        if (sum < best_l1) { best_l1 = sum; best_s = s; }
+    }
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/acoustic_wave-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_acoustic_wave_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end A k c0 L1 Linf L1_phase phase_shift\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.6e %d %.6e %.10e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, A, k, c0, l1, linf, best_l1, best_s);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "acoustic_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
         "L1_phase=%.4e (shift=%+.4f)\n",
         nx, ny, ncycle, l1, linf, best_l1, best_s);
 }

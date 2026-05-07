@@ -139,6 +139,9 @@ struct AthenaVL2Solver {
     void init_entropy_wave(double rho0, double P0, double u0,
                            double A, int k);
 
+    // Linear acoustic wave (see CartAle2Solver::init_acoustic_wave).
+    void init_acoustic_wave(double rho0, double P0, double A, int k);
+
     // One vl2 predictor-corrector step.  Returns the dt actually used.
     double step(double t, double t_end);
 
@@ -170,6 +173,12 @@ struct AthenaVL2Solver {
     // for schema and IC details (shared via sod_exact.h).
     void compute_sod_error(double t_now, int ncycle,
                            const std::string& run_dir);
+
+    // Linear acoustic wave post-run error (see CartAle2).
+    void compute_acoustic_wave_error(double t_now, int ncycle,
+                                     double rho0, double P0,
+                                     double A, int k, double periods,
+                                     const std::string& run_dir);
 
     // ---- internal helpers ------------------------------------
     int stride_x() const { return nx + 2 * ng; }

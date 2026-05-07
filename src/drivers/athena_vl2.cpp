@@ -19,10 +19,11 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_andrassy = (cfg.test_case == "andrassy2022");
     bool is_shear    = (cfg.test_case == "shear_mode");
     bool is_ewave    = (cfg.test_case == "entropy_wave");
+    bool is_awave    = (cfg.test_case == "acoustic_wave");
     bool is_sod      = (cfg.test_case == "sod");
-    if (!is_andrassy && !is_shear && !is_ewave && !is_sod) {
+    if (!is_andrassy && !is_shear && !is_ewave && !is_awave && !is_sod) {
         std::fprintf(stderr,
-            "athena_vl2: supports --test {andrassy2022, shear_mode, entropy_wave, sod}\n");
+            "athena_vl2: supports --test {andrassy2022, shear_mode, entropy_wave, acoustic_wave, sod}\n");
         return 1;
     }
     double Lx = 1.0, Ly = 1.0;
@@ -58,7 +59,7 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
         // Sod shock tube: Lx = Ly = 1, γ = 1.4 (standard).
         Lx = 1.0; Ly = 1.0; gam = 1.4;
     } else {
-        // shear_mode / entropy_wave: Lx = Ly = 1, γ = 5/3.
+        // shear_mode / entropy_wave / acoustic_wave: Lx = Ly = 1, γ = 5/3.
         Lx = 1.0; Ly = 1.0; gam = 5.0 / 3.0;
     }
 
@@ -78,6 +79,16 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                            cfg.shear_V0, cfg.shear_k);
     } else if (is_sod) {
         av.init_sod();
+    } else if (is_awave) {
+        av.init_acoustic_wave(cfg.awave_rho0, cfg.awave_P0,
+                              cfg.awave_A, cfg.awave_k);
+        if (cfg.t_end == 1.0) {
+            double c0 = std::sqrt(av.gamma * cfg.awave_P0 / cfg.awave_rho0);
+            cfg.t_end = cfg.awave_periods * Lx / c0;
+            std::fprintf(stderr,
+                "  acoustic_wave: auto t_end = %g (%.3g periods)\n",
+                cfg.t_end, cfg.awave_periods);
+        }
     } else {
         av.init_entropy_wave(cfg.ewave_rho0, cfg.ewave_P0,
                              cfg.ewave_u0, cfg.ewave_A, cfg.ewave_k);
@@ -177,6 +188,13 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     }
     if (cfg.compute_error && is_sod) {
         av.compute_sod_error(t, step, ctx.run_dir);
+    }
+    if (cfg.compute_error && is_awave) {
+        av.compute_acoustic_wave_error(
+            t, step,
+            cfg.awave_rho0, cfg.awave_P0,
+            cfg.awave_A, cfg.awave_k, cfg.awave_periods,
+            ctx.run_dir);
     }
     av.destroy();
     return 0;

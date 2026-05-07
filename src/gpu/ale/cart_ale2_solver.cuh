@@ -398,6 +398,17 @@ struct CartAle2Solver {
     // ν_eff = −slope / k² (the effective numerical dissipation).
     void init_shear_mode(double rho, double P, double V0, int k);
 
+    // Linear acoustic wave (Athena++ core convergence test).
+    //   Background: ρ₀, P₀ = ρ₀·c₀²/γ, v = 0, γ supplied via gamma field.
+    //   c₀ = sqrt(γ·P₀/ρ₀) is the sound speed.
+    //   Perturbation along the right-acoustic eigenvector R⁺ = (1, c₀/ρ₀, 0, c₀²):
+    //     δρ = A·sin(k·2π x/Lx)
+    //     δvx = (c₀/ρ₀)·δρ
+    //     δP = c₀²·δρ   (→ δe = δP/((γ-1)ρ) − P·δρ/((γ-1)ρ²) to linear order)
+    //   One period T = Lx/c₀ returns exact solution to IC (periodic BC).
+    //   Requires periodic BC both directions.
+    void init_acoustic_wave(double rho0, double P0, double A, int k);
+
     // T1 smooth-convergence entropy wave (x-direction uniform advection):
     //   ρ(x, 0) = ρ0 · (1 + A · sin(k · 2π x / Lx))
     //   P = P0  (uniform),  v = (u0, 0)
@@ -461,6 +472,15 @@ struct CartAle2Solver {
     //   # Nx Ny Ncycle t_end L1 Linf v_max_sim
     void compute_gresho_error(double t_now, int ncycle,
                               const std::string& run_dir);
+
+    // Linear acoustic wave post-run error (Athena++ linwave pattern).
+    // After N periods, exact solution equals IC. We download y-averaged
+    // ρ and compute L1/Linf vs rho0·(1 + A·sin(k·2π x/Lx)). Schema:
+    //   # Nx Ny Ncycle t_end A k c0 L1 Linf L1_phase phase_shift
+    void compute_acoustic_wave_error(double t_now, int ncycle,
+                                     double rho0, double P0,
+                                     double A, int k, double periods,
+                                     const std::string& run_dir);
 
     // Yee-Vinokur-Djomehri isentropic vortex round-trip error.
     // After one period T = Lx/u_inf (default t=10 on [-5,5]²), the
