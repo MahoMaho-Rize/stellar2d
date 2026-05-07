@@ -10,6 +10,7 @@
 //   6. Refresh node mass from (possibly unchanged) dm.
 
 #include "cart_ale2_solver.cuh"
+#include "cart_ale2_trace.h"
 #include "gpu_common.cuh"
 #include "gpu_linalg.cuh"
 #include <cstdio>
@@ -1472,6 +1473,8 @@ double CartAle2Solver::step(double t, double t_end) {
     int BCell = (ncell + B - 1) / B;
     int BNode = (nnode + B - 1) / B;
 
+    if (trace) trace->snapshot_pre_lag(*this);
+
     // --- Phase L: Lagrangian substep -------------------------
     // Mesh is always X0/Y0 at step entry (reset by previous step's Phase R),
     // so Vol ≡ Area0 and minheight is constant — both cached at init time.
@@ -1527,6 +1530,8 @@ double CartAle2Solver::step(double t, double t_end) {
     k_cale2_energy_update<<<BCell, B>>>(nx, ny, d_FSX, d_FSY,
                                        d_dX, d_dY, d_dm, d_e_int);
 
+    if (trace) { trace->begin_step(t, step_count, dt); trace->snapshot_post_lag(*this); }
+
     // --- Phase M: Remap --------------------------------------
     // remap_order == 0 → pure Lagrangian: skip rezone + remap entirely,
     // so Phase R does NOT reset X to X0. Used for diagnostic comparison
@@ -1566,6 +1571,7 @@ double CartAle2Solver::step(double t, double t_end) {
                                         d_px_cell, d_py_cell,
                                         d_e_int,  // Jensen #1 deposit
                                         nx, ny);
+    if (trace) trace->after_cell_mom(*this);
 
     // Vol was set to pre-Lagrangian geom; we need pre-Lagrangian donor volume.
     // In Eulerian rezone the "old" mesh for swept-remap is X0/Y0 (uniform),
@@ -1721,6 +1727,8 @@ double CartAle2Solver::step(double t, double t_end) {
     // Finalize dm, e_int from accumulators + per-cell Jensen #2 deposit (P33).
     // Pass pre-remap (dm, e_int, px_cell, py_cell) AND post-remap new state
     // so the kernel can compute fixed-mass KE difference in place.
+    if (trace) trace->after_remap(*this);  // note: uses dm_new/px_new BEFORE finalize
+
     k_cale2_remap_finalize_cells<<<BCell, B>>>(d_dm, d_e_int, d_px_cell, d_py_cell,
                                                d_dm_new, d_ie_new, d_px_new, d_py_new,
                                                d_dm, d_e_int, ncell);
@@ -1822,6 +1830,8 @@ double CartAle2Solver::step(double t, double t_end) {
                                            nx, ny, bc_mode);
     k_cale2_apply_ie_incr<<<BCell, B>>>(d_e_int, d_e_int_incr, ncell);
 
+    if (trace) trace->after_rebuild(*this);
+
     // (B) Diagnostic KE snapshots — consistent-mass caliper, independent of
     //     compensation path. Currently written but not read in the hot loop;
     //     left available for step-by-step E-budget debugging scripts.
@@ -1833,6 +1843,7 @@ double CartAle2Solver::step(double t, double t_end) {
     // Optional Newton cooling toward the IC stratification (only applied
     // if alloc_cooling_ref was called and tau_cool > 0).
     apply_cooling(dt);
+    if (trace) { trace->after_heating(*this); trace->end_step(*this); }
 
     step_count++;
     dt_current = dt;

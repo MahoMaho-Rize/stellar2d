@@ -109,6 +109,11 @@ struct SimConfig {
     std::string cart_ale2_ppm_space = "prim"; // cart_ale2: PPM recon space (prim | cons)
     bool cart_ale2_ppm_char = true;  // cart_ale2: project to characteristic variables (prim space only)
     int cart_ale2_kh_k = 0;   // cart_ale2: KH mode number (0 = IC default: k=2 shear, k=1 Lecoanet)
+    // Diagnostic tracer (cart_ale2_trace.h): per-cell cumulative KE/IE
+    // accounting + per-step pick-cell time series. Fully VRAM-buffered;
+    // CSV flushed only at VTK boundaries (cum) and at run end (picks).
+    std::string cart_ale2_trace_cells; // "ic,jc;ic,jc;..." (empty = disabled)
+    int cart_ale2_trace_step_cap = 0;  // max step rows per pick cell (0 = disabled)
     std::string cart_ale2_slab_file;   // cart_ale2 --test local_convection: slab stratification
     double cart_ale2_slab_perturb = 0.01;  // entropy seed amplitude at slab bottom
     int cart_ale2_slab_seed_k = 4;     // horizontal mode of entropy seed

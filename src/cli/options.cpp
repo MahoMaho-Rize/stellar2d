@@ -207,6 +207,10 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.cart_ale2_ppm_char = true;
         else if (std::strcmp(argv[i], "--cart-ale2-kh-k") == 0 && i + 1 < argc)
             cfg.cart_ale2_kh_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--trace-cells") == 0 && i + 1 < argc)
+            cfg.cart_ale2_trace_cells = argv[++i];
+        else if (std::strcmp(argv[i], "--trace-step-cap") == 0 && i + 1 < argc)
+            cfg.cart_ale2_trace_step_cap = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ic-slab") == 0 && i + 1 < argc)
             cfg.cart_ale2_slab_file = argv[++i];
         else if (std::strcmp(argv[i], "--slab-perturb") == 0 && i + 1 < argc)

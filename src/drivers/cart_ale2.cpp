@@ -2,6 +2,7 @@
 
 #ifdef USE_GPU
 #include "cart_ale2_solver.cuh"
+#include "cart_ale2_trace.h"
 #include "sim/helpers.h"
 #include "sim/run_loop.h"
 
@@ -228,6 +229,24 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     }
     if (cfg.frame_buffer) cale.alloc_frame_buffer(cfg.frame_headroom_mb);
 
+    // Optional diagnostic tracer hook
+    TraceHook trace;
+    bool trace_enabled = false;
+    {
+        std::vector<int> pick_ic, pick_jc;
+        bool has_picks = !cfg.cart_ale2_trace_cells.empty() &&
+                         parse_trace_cells(cfg.cart_ale2_trace_cells, pick_ic, pick_jc);
+        bool want_trace = has_picks || cfg.cart_ale2_trace_step_cap > 0;
+        if (want_trace) {
+            int cap = cfg.cart_ale2_trace_step_cap > 0
+                      ? cfg.cart_ale2_trace_step_cap : 0;
+            trace.allocate(cale, cap, pick_ic, pick_jc, ctx.run_dir);
+            cale.trace = &trace;
+            trace_enabled = true;
+        }
+    }
+    int trace_frame = 0;
+
     int frame = 0;
     while (t < cfg.t_end && !g_interrupted) {
         double dt = cale.step(t, cfg.t_end);
@@ -273,9 +292,17 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                 std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", ctx.run_dir.c_str(), frame);
                 cale.write_vtk_2d(path, Lx, Ly);
             }
+            if (trace_enabled) {
+                trace.flush_cum_to_csv(t, trace_frame++);
+            }
         }
     }
     if (cfg.frame_buffer) cale.flush_frames_to_disk(ctx.run_dir, Lx, Ly);
+    if (trace_enabled) {
+        trace.flush_pick_to_csv();
+        cale.trace = nullptr;
+        trace.destroy();
+    }
     std::fclose(csv);
     std::fprintf(stderr, "\n");
     cale.destroy();

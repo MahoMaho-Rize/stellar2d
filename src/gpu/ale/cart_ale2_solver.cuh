@@ -285,6 +285,11 @@ struct CartAle2Solver {
     int step_count = 0;
     double remap_mass_drift = 0.0;   // |Σ dm_after − Σ dm_before| / Σ dm_before per step
 
+    // ---- Diagnostic tracer hook (cart_ale2_trace.h) ----
+    // Opt-in pointer; when non-null, step() emits per-stage KE/IE snapshots
+    // and optional per-cell high-freq records. Zero numerical impact when null.
+    struct TraceHook* trace = nullptr;
+
     // ---- Lifecycle ----
     void init(int nx, int ny, double Lx, double Ly, double gamma, double cfl);
     void destroy();

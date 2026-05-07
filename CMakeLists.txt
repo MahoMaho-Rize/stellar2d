@@ -83,6 +83,7 @@ if(USE_GPU)
         src/gpu/ale/cart_ale_kernels.cu
         src/gpu/ale/cart_ale2_solver.cu
         src/gpu/ale/cart_ale2_kernels.cu
+        src/gpu/ale/cart_ale2_trace.cu
         src/gpu/ale/cart_impl_solver.cu
         src/gpu/ale/cart_impl_residual.cu
         src/gpu/ale/cart_impl_jfnk.cu
@@ -295,7 +296,8 @@ if(USE_GPU)
     add_gpu_test(cart_ale2_uniform_advect
                  tests/test_cart_ale2_uniform_advect.cu
                  EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
-                               src/gpu/ale/cart_ale2_kernels.cu)
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)
