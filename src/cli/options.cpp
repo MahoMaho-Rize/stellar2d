@@ -231,6 +231,14 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.cart_ale2_andrassy_seed = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--andrassy-noise") == 0 && i + 1 < argc)
             cfg.cart_ale2_andrassy_noise = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--athena-xorder") == 0 && i + 1 < argc)
+            cfg.athena_vl2_xorder = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--athena-limiter") == 0 && i + 1 < argc) {
+            std::string v = argv[++i];
+            if      (v == "vanleer" || v == "vl") cfg.athena_vl2_limiter = 0;
+            else if (v == "minmod")               cfg.athena_vl2_limiter = 1;
+            else std::fprintf(stderr, "unknown --athena-limiter %s; using vanleer\n", v.c_str());
+        }
         else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
             cfg.ps_nu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)

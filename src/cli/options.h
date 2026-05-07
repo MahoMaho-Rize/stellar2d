@@ -127,6 +127,14 @@ struct SimConfig {
     double cart_ale2_andrassy_amp  = 5.0e-5;  // Eq. 6 δρ/ρ amplitude (paper value)
     int    cart_ale2_andrassy_seed = -1;      // -1 = paper-exact; ≥0 adds noise
     double cart_ale2_andrassy_noise = 0.0;    // ensemble noise amplitude
+    // athena_vl2 scheme knobs (only used when --solver athena_vl2):
+    //   xorder: 1 = donor-cell only (for debugging), 2 = PLM (default, matches
+    //           Athena++ --input xorder=2). Stage-1 of vl2 is ALWAYS order=1
+    //           (that's the vl2 design); xorder=1 forces stage-2 also to DC.
+    //   limiter: 0 = van-Leer harmonic (Athena default at xorder=2),
+    //            1 = minmod (Athena "2m" flag).
+    int athena_vl2_xorder = 2;
+    int athena_vl2_limiter = 0;
     // pseudo-spectral (偽譜法) 專用
     double ps_nu = 1e-4;          // 運動黏度
     double ps_Lx = 1.0;

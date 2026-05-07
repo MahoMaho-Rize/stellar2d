@@ -38,6 +38,7 @@ set(SOURCES
     src/drivers/cart_ale.cpp
     src/drivers/cart_impl.cpp
     src/drivers/cart_ale2.cpp
+    src/drivers/athena_vl2.cpp
     src/drivers/fas.cpp
     src/drivers/fas2.cpp
     src/drivers/radial1d.cpp
@@ -69,6 +70,8 @@ if(USE_GPU)
         src/gpu/explicit/strang_solver.cu
         src/gpu/explicit/wb2d_solver.cu
         src/gpu/explicit/wb2d_kernels.cu
+        src/gpu/explicit/athena_vl2_solver.cu
+        src/gpu/explicit/athena_vl2_kernels.cu
         # --- common device utilities ----------------------------------------
         src/gpu/common/gmg_gpu.cu
         # --- Lagrangian / ALE family ----------------------------------------

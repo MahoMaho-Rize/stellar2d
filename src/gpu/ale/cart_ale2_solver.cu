@@ -593,6 +593,209 @@ void CartAle2Solver::init_sod() {
     std::fprintf(stderr, "  CartAle Sod IC: ρL=1.0 PL=1.0 | ρR=0.125 PR=0.1\n");
 }
 
+// ----- 2D Sedov-Taylor cylindrical blast ------------------------
+void CartAle2Solver::init_sedov(double rho0, double p_amb,
+                                double E0, double r_exp) {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    double r_exp2 = r_exp * r_exp;
+    // Sum volume of cells inside r_exp so E0 deposits conservatively.
+    double V_hot = 0.0;
+    std::vector<double> h_Xc(ncell), h_Yc(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            h_Xc[flat] = Xc; h_Yc[flat] = Yc;
+            double dx = Xc - xc_dom, dy = Yc - yc_dom;
+            if (dx*dx + dy*dy < r_exp2) V_hot += h_Vol[flat];
+        }
+    // e_hot chosen so Σ ρ·e·Vol over hot cells = E0.
+    double e_hot = (V_hot > 0.0) ? (E0 / (rho0 * V_hot)) : 0.0;
+    double e_amb = p_amb / ((gamma - 1.0) * rho0);
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    int n_hot = 0;
+    for (int c = 0; c < ncell; ++c) {
+        double dx = h_Xc[c] - xc_dom, dy = h_Yc[c] - yc_dom;
+        bool hot = (dx*dx + dy*dy < r_exp2);
+        h_dm[c] = rho0 * h_Vol[c];
+        h_e[c]  = hot ? e_hot : e_amb;
+        if (hot) ++n_hot;
+    }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_vX, 0, nnode*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_vY, 0, nnode*sizeof(double)));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Sedov IC: ρ0=%g, p_amb=%g, E0=%g, r_exp=%g "
+        "(n_hot=%d, V_hot=%g, e_hot=%g)\n",
+        rho0, p_amb, E0, r_exp, n_hot, V_hot, e_hot);
+}
+
+// ----- 2D Noh implosion ----------------------------------------
+void CartAle2Solver::init_noh() {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    const double rho0 = 1.0;
+    const double p0   = 1.0e-6;
+    double e0 = p0 / ((gamma - 1.0) * rho0);
+    std::vector<double> h_dm(ncell, 0), h_e(ncell, 0);
+    for (int c = 0; c < ncell; ++c) {
+        h_dm[c] = rho0 * h_Vol[c];
+        h_e[c]  = e0;
+    }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    // Nodes: v = −r̂ (unit inflow); centre node v=0.
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double dx = h_X[f] - xc_dom, dy = h_Y[f] - yc_dom;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            if (r < 1e-14) continue;
+            h_vX[f] = -dx / r;
+            h_vY[f] = -dy / r;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Noh IC: ρ=1, p=%g, v=-r̂, γ=%g (expect ρ_post=16 at t=2)\n",
+        p0, gamma);
+}
+
+// ----- Gresho stationary vortex --------------------------------
+void CartAle2Solver::init_gresho() {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    const double rho0 = 1.0;
+    auto P_gresho = [](double r) {
+        if (r < 0.2) return 5.0 + 12.5 * r * r;
+        if (r < 0.4) return 9.0 + 12.5 * r * r - 20.0 * r + 4.0 * std::log(5.0 * r);
+        return 3.0 + 4.0 * std::log(2.0);
+    };
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double dx = Xc - xc_dom, dy = Yc - yc_dom;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            double P  = P_gresho(r);
+            h_dm[flat] = rho0 * h_Vol[flat];
+            h_e[flat]  = P / ((gamma - 1.0) * rho0);
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    auto vphi = [](double r) {
+        if (r < 0.2) return 5.0 * r;
+        if (r < 0.4) return 2.0 - 5.0 * r;
+        return 0.0;
+    };
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double dx = h_X[f] - xc_dom, dy = h_Y[f] - yc_dom;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            if (r < 1e-14) continue;
+            double vp = vphi(r);
+            h_vX[f] = -vp * dy / r;
+            h_vY[f] =  vp * dx / r;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Gresho IC: ρ=1, γ=%g, centred at (%g,%g); v_max=1 at r=0.2\n",
+        gamma, xc_dom, yc_dom);
+}
+
+// ----- Yee-Vinokur-Djomehri isentropic vortex ------------------
+void CartAle2Solver::init_yee_vortex(double beta, double u_inf, double v_inf) {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    const double gm1 = gamma - 1.0;
+    const double coef = beta / (2.0 * M_PI);
+    // T(r²) = 1 − (γ−1)β²/(8γπ²) · exp(1 − r²);
+    // ρ = T^{1/(γ−1)}; P = ρ^γ → e = T/(γ−1) (ρ·e = P).
+    auto compute_rho_e = [&](double x, double y, double& rho, double& e) {
+        double dx = x - xc_dom, dy = y - yc_dom;
+        double r2 = dx*dx + dy*dy;
+        double T  = 1.0 - gm1 * beta * beta / (8.0 * gamma * M_PI * M_PI)
+                        * std::exp(1.0 - r2);
+        rho = std::pow(T, 1.0 / gm1);
+        e   = T / gm1;
+    };
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double rho, e;
+            compute_rho_e(Xc, Yc, rho, e);
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = e;
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_vX(nnode), h_vY(nnode);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double dx = h_X[f] - xc_dom, dy = h_Y[f] - yc_dom;
+            double r2 = dx*dx + dy*dy;
+            double fac = coef * std::exp(0.5 * (1.0 - r2));
+            h_vX[f] = u_inf - fac * dy;
+            h_vY[f] = v_inf + fac * dx;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Yee vortex: β=%g, (u∞,v∞)=(%g,%g), γ=%g; periodic [%g,%g]×[%g,%g]\n",
+        beta, u_inf, v_inf, gamma, 0.0, Lx, 0.0, Ly);
+}
+
 void CartAle2Solver::init_hse_polytrope(double rho_base, double g_val, double amp) {
     g_y = g_val;
     double Ly = g_Ly;

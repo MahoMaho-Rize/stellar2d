@@ -20,15 +20,25 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_kh_lec = (cfg.test_case == "kh_lecoanet");
     bool is_loc_conv = (cfg.test_case == "local_convection");
     bool is_andrassy = (cfg.test_case == "andrassy2022");
+    bool is_sedov  = (cfg.test_case == "sedov2d");
+    bool is_noh    = (cfg.test_case == "noh");
+    bool is_gresho = (cfg.test_case == "gresho");
+    bool is_yee    = (cfg.test_case == "yee_vortex");
     double Lx = 1.0;
     // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
     // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
+    // Standard-test domains: Sedov/Gresho = 1×1, Noh = 1×1 (centred rescale
+    // of the canonical [-1,1]²), Yee vortex = 10×10 (standard [-5,5]²).
     double Ly = is_kh_lec ? 2.0
-              : (is_hse || is_kh) ? 1.0
+              : (is_hse || is_kh || is_sedov || is_noh || is_gresho) ? 1.0
+              : is_yee ? 10.0
               : 0.2;
+    if (is_yee) Lx = 10.0;
     double gam = is_hse ? cfg.gamma : 1.4;
     // andrassy2022 uses γ=5/3 (paper §2.2).
     if (is_andrassy) gam = 5.0 / 3.0;
+    // Noh problem canonical γ=5/3.
+    if (is_noh) gam = 5.0 / 3.0;
     // local_convection / andrassy2022: read slab header to get real Ly, Lx, γ.
     if (is_loc_conv || is_andrassy) {
         if (cfg.cart_ale2_slab_file.empty()) {
@@ -176,6 +186,17 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
         // No Newton cooling per paper §2.2; heating comes from slab column 6,
         // set inside init_andrassy2022 via configure_heating_profile.
         cale.tau_cool = 0.0;
+    } else if (cfg.test_case == "sedov2d") {
+        // 2D cylindrical Sedov. Standard test: E0=1, rho=1, p_amb=1e-5.
+        // r_exp chosen so a 256² grid has ~4 cells inside the hot spot.
+        double r_exp = 2.5 * (Lx / std::max(cfg.nr, 1));
+        cale.init_sedov(1.0, 1.0e-5, 1.0, r_exp);
+    } else if (cfg.test_case == "noh") {
+        cale.init_noh();
+    } else if (cfg.test_case == "gresho") {
+        cale.init_gresho();
+    } else if (cfg.test_case == "yee_vortex") {
+        cale.init_yee_vortex(5.0, 1.0, 1.0);
     } else {
         cale.init_sod();
     }

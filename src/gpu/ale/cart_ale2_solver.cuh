@@ -314,6 +314,39 @@ struct CartAle2Solver {
                            int    noise_seed    = -1,
                            double noise_amp     = 0.0);
 
+    // ----- Standard verification tests --------------------------
+    // Sedov-Taylor 2D cylindrical blast. Domain [0,Lx]×[0,Ly] (centred at
+    // (Lx/2, Ly/2)). Explosion energy E0 is concentrated in the cells within
+    // radius r_exp of the centre, uniform rho, gamma=1.4. Ambient pressure
+    // p_amb. Self-similar solution: r_shock(t) = ξ₀(E0/ρ)^{1/4}·t^{1/2}
+    // with ξ₀ ≈ 1.0 in 2D cylindrical (Kamm 2007 LA-UR-07-2849).
+    void init_sedov(double rho0 = 1.0, double p_amb = 1.0e-5,
+                    double E0 = 1.0,   double r_exp  = 0.04);
+
+    // Noh 2D implosion. ρ=1, p=1e-6, v=-r̂ (unit inflow) everywhere.
+    // γ=5/3. Exact post-shock state inside the shock: ρ=16, v=0, p=16/3;
+    // shock speed D=1/3. Domain [-1,1]² with reflect BC; analyze at t=2.
+    void init_noh();
+
+    // Gresho stationary vortex. Centred at (0.5,0.5), ρ=1:
+    //   vφ(r) = 5r         (r < 0.2)
+    //         = 2 - 5r     (0.2 ≤ r < 0.4)
+    //         = 0          (r ≥ 0.4)
+    //   P(r)  = 5 + 12.5 r²                           (r<0.2)
+    //         = 9 + 12.5 r² − 20r + 4 ln(5r)          (0.2≤r<0.4)
+    //         = 3 + 4 ln 2                            (r≥0.4)
+    // Exactly stationary solution of 2D Euler. Drift measures AV false
+    // trigger on pure rotation. γ=1.4, run to t=3.
+    void init_gresho();
+
+    // Yee-Vinokur-Djomehri isentropic vortex on [-5,5]² periodic. Carried
+    // on uniform translation (u∞,v∞)=(1,1); after one period (t=10) the
+    // flow returns to IC exactly. Measures remap + advection diffusion
+    // of a smooth, isolated structure. γ=1.4, vortex strength β=5,
+    // T∞=1, ρ∞=1, p∞=1.
+    void init_yee_vortex(double beta = 5.0, double u_inf = 1.0,
+                         double v_inf = 1.0);
+
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
     // Athena inputs/hydro/athinput.lecoanet_kh: vflow=1, amp=0.01,

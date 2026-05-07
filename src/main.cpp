@@ -55,6 +55,7 @@ int main(int argc, char** argv) {
     else if (cfg.solver_type == "cart_ale")        { if (int rc = run_cart_ale       (cfg, ctx, t, step); rc != 0) return rc; }
     else if (cfg.solver_type == "cart_impl")       { if (int rc = run_cart_impl      (cfg, ctx, t, step); rc != 0) return rc; }
     else if (cfg.solver_type == "cart_ale2")       { if (int rc = run_cart_ale2      (cfg, ctx, t, step); rc != 0) return rc; }
+    else if (cfg.solver_type == "athena_vl2")      { if (int rc = run_athena_vl2     (cfg, ctx, t, step); rc != 0) return rc; }
     else if (cfg.solver_type == "pseudo_spectral") { if (int rc = run_pseudo_spectral(cfg, ctx, t, step); rc != 0) return rc; }
     else if (cfg.solver_type == "anelastic_sl")    { if (int rc = run_anelastic_sl   (cfg, ctx, t, step); rc != 0) return rc; }
     else if (cfg.solver_type == "sph2d_spectral")  { if (int rc = run_sph2d_spectral (cfg, ctx, t, step); rc != 0) return rc; }
