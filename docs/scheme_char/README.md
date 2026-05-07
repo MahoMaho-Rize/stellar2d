@@ -20,6 +20,10 @@ docs/scheme_char/
 ├── 2026-05-07_entropy_wave_convergence.*  ← T1: smooth scalar advection
 │                                        convergence slope, ale2 vs vl2
 │                                        (task #47)
+├── 2026-05-07_jensen_probe.*          ← T4: ν_eff(k) at N=256, verifies
+│                                        cart_ale2 dissipation is a real
+│                                        Laplacian (k-independent) on
+│                                        resolved modes (task #48)
 └── runs/                              ← raw diagnostics.csv from each scan
     └── <solver>/res_N_V_V0/
         ├── diagnostics.csv            (flattened copy of the actual run)
@@ -44,6 +48,13 @@ coarse resolution).
 |------------------|------------|---------|-----------|----------------------------------------|
 | cart_ale2        | 3.7e-3     | -0.31   | 2026-05-07| dispersive, L1 *grows* at 512² (coupled Lagrangian-rebuild issue) |
 | athena_vl2       | 1.9e-5     | 2.06    | 2026-05-07| textbook 2nd-order, phase returns to 0 |
+
+## Solver T4 ν_eff(k) k-dependence (Jensen probe)
+
+| solver           | ν_eff(k=1) | ν_eff(k=16) | k-flat? | measured  | notes                          |
+|------------------|-----------|-------------|---------|-----------|--------------------------------|
+| cart_ale2        | 3.88e-3   | 3.88e-3     | ✅ (0.3 % across k=1..16) | 2026-05-07| confirmed Laplacian-like viscosity |
+| athena_vl2       | ≤ 1e-17   | ≤ 1e-17     | N/A     | 2026-05-07| still zero on this IC — Phase B rotated-shear followup pending |
 | strang           | —                      | —       | —         | pending task #47 / #50 extension                |
 | cart_ale         | —                      | —       | —         | pending                                         |
 | cart_lag         | —                      | —       | —         | pending (HSE-incompatible BC, need cook IC)     |
