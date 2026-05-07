@@ -185,6 +185,15 @@ struct SimConfig {
     uint64_t sph_forcing_seed = 0x5a5a5a5aULL;
     int    sph_ckpt_every = 0;
     std::string sph_resume;
+    // ---- T3 shear_mode (scheme characterization ν_eff probe) ----
+    // Domain defaults to Lx=Ly=1.0, periodic both dirs, uniform rho=1, P=1.
+    // IC: vx = shear_V0 · sin(shear_k · 2π y / Ly), vy = 0, g = 0.
+    // Applies to --test shear_mode for cart_ale2 and athena_vl2.
+    double shear_V0 = 0.01;
+    int    shear_k  = 1;
+    double shear_rho = 1.0;
+    double shear_P   = 1.0;
+
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;

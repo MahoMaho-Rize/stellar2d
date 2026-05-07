@@ -25,6 +25,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_noh    = (cfg.test_case == "noh");
     bool is_gresho = (cfg.test_case == "gresho");
     bool is_yee    = (cfg.test_case == "yee_vortex");
+    bool is_shear  = (cfg.test_case == "shear_mode");
     double Lx = 1.0;
     // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
     // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
@@ -33,6 +34,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     double Ly = is_kh_lec ? 2.0
               : (is_hse || is_kh || is_sedov || is_noh || is_gresho) ? 1.0
               : is_yee ? 10.0
+              : is_shear ? 1.0
               : 0.2;
     if (is_yee) Lx = 10.0;
     double gam = is_hse ? cfg.gamma : 1.4;
@@ -198,6 +200,14 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
         cale.init_gresho();
     } else if (cfg.test_case == "yee_vortex") {
         cale.init_yee_vortex(5.0, 1.0, 1.0);
+    } else if (is_shear) {
+        if (cale.bc_mode != 3) {
+            std::fprintf(stderr,
+                "  [warn] shear_mode requires --bc-x periodic --bc-y periodic; "
+                "current bc_mode=%d\n", cale.bc_mode);
+        }
+        cale.init_shear_mode(cfg.shear_rho, cfg.shear_P,
+                             cfg.shear_V0, cfg.shear_k);
     } else {
         cale.init_sod();
     }

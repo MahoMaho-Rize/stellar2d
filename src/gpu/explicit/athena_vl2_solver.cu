@@ -26,6 +26,9 @@ __global__ void k_athvl2_fill_ghost_x_periodic(
 __global__ void k_athvl2_fill_ghost_y_reflect(
     double* rho, double* mx, double* my, double* E, double* s,
     int ny, int ng, int sx, int sy);
+__global__ void k_athvl2_fill_ghost_y_periodic(
+    double* rho, double* mx, double* my, double* E, double* s,
+    int ny, int ng, int sx, int sy);
 __global__ void k_athvl2_flux_x(
     const double* w_rho, const double* w_u, const double* w_v,
     const double* w_P, const double* w_X,
@@ -345,6 +348,55 @@ void AthenaVL2Solver::init_andrassy2022(const std::string& slab_file,
 }
 
 // ============================================================
+// init_shear_mode — T3 ν_eff probe IC (periodic BC both dirs)
+// ============================================================
+void AthenaVL2Solver::init_shear_mode(double rho, double P, double V0, int k) {
+    // Anchor the domain at [0, Lx] × [0, Ly].
+    x_lo = 0.0; x_hi = Lx;
+    y_lo = 0.0; y_hi = Ly;
+    dx = Lx / (double)nx;
+    dy = Ly / (double)ny;
+    y_periodic = true;
+    tracer_enabled = false;
+
+    int sx = stride_x();
+    int sy = stride_y();
+    int ncell = sx * sy;
+    std::vector<double> h_rho(ncell, rho);
+    std::vector<double> h_mx(ncell, 0.0);
+    std::vector<double> h_my(ncell, 0.0);
+    std::vector<double> h_E(ncell, 0.0);
+    double e_int = P / (gamma - 1.0);
+    double kphys = k * 2.0 * M_PI / Ly;
+    for (int jc = 0; jc < ny; ++jc) {
+        double yc = y_lo + (jc + 0.5) * dy;
+        double vx = V0 * std::sin(kphys * yc);
+        double ke = 0.5 * rho * vx * vx;
+        for (int ic = 0; ic < nx; ++ic) {
+            int cidx = (ic + ng) * sy + (jc + ng);
+            h_rho[cidx] = rho;
+            h_mx [cidx] = rho * vx;
+            h_my [cidx] = 0.0;
+            h_E  [cidx] = e_int + ke;
+        }
+    }
+    // Zero per-row gravity/heating source tables.
+    h_g_row.assign(ny, 0.0);
+    h_q_row.assign(ny, 0.0);
+    h_phi_row.assign(ny, 0.0);
+    CUDA_CHECK(cudaMemcpy(d_rho, h_rho.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mx,  h_mx .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_my,  h_my .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_E,   h_E  .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_g_row, h_g_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_q_row, h_q_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+
+    std::fprintf(stderr,
+        "  AthenaVL2 shear_mode IC: rho=%g P=%g V0=%g k=%d  (Ly=%g k_phys=%g)\n",
+        rho, P, V0, k, Ly, kphys);
+}
+
+// ============================================================
 // fill_ghost / cons_to_prim: dispatch helpers
 // ============================================================
 void AthenaVL2Solver::fill_ghost() {
@@ -353,8 +405,13 @@ void AthenaVL2Solver::fill_ghost() {
     k_athvl2_fill_ghost_x_periodic<<<gx, bx>>>(
         d_rho, d_mx, d_my, d_E, d_s, nx, ng, sx, sy);
     dim3 by(64, 4), gy((sx + by.x - 1) / by.x, (ng + by.y - 1) / by.y);
-    k_athvl2_fill_ghost_y_reflect<<<gy, by>>>(
-        d_rho, d_mx, d_my, d_E, d_s, ny, ng, sx, sy);
+    if (y_periodic) {
+        k_athvl2_fill_ghost_y_periodic<<<gy, by>>>(
+            d_rho, d_mx, d_my, d_E, d_s, ny, ng, sx, sy);
+    } else {
+        k_athvl2_fill_ghost_y_reflect<<<gy, by>>>(
+            d_rho, d_mx, d_my, d_E, d_s, ny, ng, sx, sy);
+    }
 }
 
 void AthenaVL2Solver::cons_to_prim() {

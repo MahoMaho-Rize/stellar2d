@@ -17,20 +17,21 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     // tests can be added by expanding the if-chain here and by calling
     // init_andrassy2022 or any future IC method on the solver.
     bool is_andrassy = (cfg.test_case == "andrassy2022");
-    if (!is_andrassy) {
+    bool is_shear    = (cfg.test_case == "shear_mode");
+    if (!is_andrassy && !is_shear) {
         std::fprintf(stderr,
-            "athena_vl2: currently only supports --test andrassy2022\n");
+            "athena_vl2: supports --test {andrassy2022, shear_mode}\n");
         return 1;
     }
-    if (cfg.cart_ale2_slab_file.empty()) {
-        std::fprintf(stderr,
-            "athena_vl2 andrassy2022 requires --ic-slab <file>\n");
-        return 1;
-    }
-    // Peek slab header for Lx / Ly / gamma.
-    double Lx = 2.0, Ly = 2.0;
+    double Lx = 1.0, Ly = 1.0;
     double gam = 5.0 / 3.0;
-    {
+    if (is_andrassy) {
+        if (cfg.cart_ale2_slab_file.empty()) {
+            std::fprintf(stderr,
+                "athena_vl2 andrassy2022 requires --ic-slab <file>\n");
+            return 1;
+        }
+        // Peek slab header for Lx / Ly / gamma.
         std::FILE* fp = std::fopen(cfg.cart_ale2_slab_file.c_str(), "r");
         if (!fp) {
             std::fprintf(stderr,
@@ -51,6 +52,9 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
             }
         }
         std::fclose(fp);
+    } else {
+        // shear_mode: Lx = Ly = 1, γ = 5/3.
+        Lx = 1.0; Ly = 1.0; gam = 5.0 / 3.0;
     }
 
     AthenaVL2Solver av;
@@ -59,10 +63,15 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     av.limiter = cfg.athena_vl2_limiter;
     // Force Athena vl2 2D stability limit (Athena hardcodes this to 0.5).
     av.cfl_limit = 0.5;
-    av.init_andrassy2022(cfg.cart_ale2_slab_file,
-                         cfg.cart_ale2_andrassy_amp,
-                         cfg.cart_ale2_andrassy_seed,
-                         cfg.cart_ale2_andrassy_noise);
+    if (is_andrassy) {
+        av.init_andrassy2022(cfg.cart_ale2_slab_file,
+                             cfg.cart_ale2_andrassy_amp,
+                             cfg.cart_ale2_andrassy_seed,
+                             cfg.cart_ale2_andrassy_noise);
+    } else {
+        av.init_shear_mode(cfg.shear_rho, cfg.shear_P,
+                           cfg.shear_V0, cfg.shear_k);
+    }
 
     const char* lim_name = (av.limiter == 1) ? "minmod" : "vanleer";
     const char* order_name = (av.xorder == 1) ? "DC" : "PLM";

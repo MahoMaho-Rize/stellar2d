@@ -60,6 +60,9 @@ struct AthenaVL2Solver {
     // ---- scheme toggles --------------------------------------
     int  limiter = 0;            // 0 = van-Leer harmonic (default), 1 = minmod
     int  xorder = 2;             // 1, 2 supported (3 = PPM is future work)
+    // BC in y. Default reflect (Andrassy2022 and other HSE flows). shear_mode
+    // / pure-periodic flows set this true via init_shear_mode.
+    bool y_periodic = false;
 
     // ---- tracer ----------------------------------------------
     bool tracer_enabled = false; // nscalars=1 if true
@@ -117,6 +120,11 @@ struct AthenaVL2Solver {
                            double delta_rho_amp = 5.0e-5,
                            int noise_seed = -1,
                            double noise_amp = 0.0);
+
+    // T3 linear shear-mode decay (ν_eff probe). Uniform rho/P, g=0,
+    // vx = V0·sin(k·2π y/Ly), vy=0, periodic BC in both directions.
+    // Analytic NS decay: max|vx|(t) = V0·exp(-ν·k²·t) with k = k·2π/Ly.
+    void init_shear_mode(double rho, double P, double V0, int k);
 
     // One vl2 predictor-corrector step.  Returns the dt actually used.
     double step(double t, double t_end);

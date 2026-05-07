@@ -320,6 +320,14 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.sph_forcing_lmax = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-forcing-seed") == 0 && i + 1 < argc)
             cfg.sph_forcing_seed = std::strtoull(argv[++i], nullptr, 0);
+        else if (std::strcmp(argv[i], "--shear-V0") == 0 && i + 1 < argc)
+            cfg.shear_V0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-k") == 0 && i + 1 < argc)
+            cfg.shear_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-rho") == 0 && i + 1 < argc)
+            cfg.shear_rho = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-P") == 0 && i + 1 < argc)
+            cfg.shear_P = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-ckpt-every") == 0 && i + 1 < argc)
             cfg.sph_ckpt_every = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-resume") == 0 && i + 1 < argc)

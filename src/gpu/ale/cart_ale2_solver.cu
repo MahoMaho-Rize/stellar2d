@@ -584,6 +584,37 @@ void CartAle2Solver::init_uniform(double rho, double P, double vx, double vy) {
     std::fprintf(stderr, "  CartAle Uniform IC: ρ=%g, P=%g, v=(%g,%g)\n", rho, P, vx, vy);
 }
 
+void CartAle2Solver::init_shear_mode(double rho, double P, double V0, int k) {
+    g_y = 0.0;
+    double Ly = g_Ly;
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    double e_unif = P / ((gamma - 1.0) * rho);
+    for (int c = 0; c < ncell; ++c) {
+        h_dm[c] = rho * h_Vol[c];
+        h_e[c]  = e_unif;
+    }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double y = h_Y[f];
+            h_vX[f] = V0 * std::sin(k * 2.0 * M_PI * y / Ly);
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    std::fprintf(stderr,
+        "  CartAle2 shear_mode IC: rho=%g P=%g V0=%g k=%d  (Ly=%g, k_phys=%g)\n",
+        rho, P, V0, k, Ly, k * 2.0 * M_PI / Ly);
+}
+
 void CartAle2Solver::init_sod() {
     std::vector<double> h_X(nnode), h_Y(nnode);
     CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));

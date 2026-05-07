@@ -387,6 +387,17 @@ struct CartAle2Solver {
     void init_yee_vortex(double beta = 5.0, double u_inf = 1.0,
                          double v_inf = 1.0);
 
+    // T3 linear shear-mode decay (scheme characterization ν_eff probe).
+    // Uniform ρ, P; g=0; periodic BC both directions:
+    //   vx(y,0) = V0 · sin(k · 2π y / Ly),   vy = 0
+    // Nonlinear advection v·∇v vanishes identically (vx depends on y only,
+    // vy=0 → vx·∂vx/∂x=0, vy·∂vx/∂y=0), so a physical Navier-Stokes with
+    // kinematic viscosity ν gives exact analytic decay:
+    //   max|vx|(t) = V0 · exp(-ν k² t),   k² = (k·2π/Ly)²
+    // For schemes without explicit ν, the decay slope of max|vx| yields
+    // ν_eff = −slope / k² (the effective numerical dissipation).
+    void init_shear_mode(double rho, double P, double V0, int k);
+
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
     // Athena inputs/hydro/athinput.lecoanet_kh: vflow=1, amp=0.01,

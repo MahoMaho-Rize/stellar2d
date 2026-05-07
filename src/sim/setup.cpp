@@ -235,7 +235,8 @@ static int setup_ic(const SimConfig& cfg, Grid& grid, State& state) {
                || cfg.test_case == "sedov2d"
                || cfg.test_case == "noh"
                || cfg.test_case == "gresho"
-               || cfg.test_case == "yee_vortex") {
+               || cfg.test_case == "yee_vortex"
+               || cfg.test_case == "shear_mode") {
         // Grid-less test cases — each solver branch initialises its own IC.
     } else {
         std::fprintf(stderr, "Unknown test case: %s\n", cfg.test_case.c_str());

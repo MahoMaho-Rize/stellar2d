@@ -158,6 +158,33 @@ __global__ void k_athvl2_fill_ghost_y_reflect(
     if (s != nullptr) { s[cBd] = s[cBs]; s[cTd] = s[cTs]; }
 }
 
+__global__ void k_athvl2_fill_ghost_y_periodic(
+    double* rho, double* mx, double* my, double* E, double* s,
+    int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || g >= ng) return;
+    // wrap-around (same convention as x-periodic)
+    int jB_dst = g;
+    int jB_src = ny + g;
+    int jT_dst = ng + ny + g;
+    int jT_src = ng + g;
+    int cBd = cflat(i, jB_dst, sy);
+    int cBs = cflat(i, jB_src, sy);
+    int cTd = cflat(i, jT_dst, sy);
+    int cTs = cflat(i, jT_src, sy);
+    rho[cBd] = rho[cBs];
+    mx [cBd] = mx [cBs];
+    my [cBd] = my [cBs];
+    E  [cBd] = E  [cBs];
+    rho[cTd] = rho[cTs];
+    mx [cTd] = mx [cTs];
+    my [cTd] = my [cTs];
+    E  [cTd] = E  [cTs];
+    if (s != nullptr) { s[cBd] = s[cBs]; s[cTd] = s[cTs]; }
+}
+
 // ============================================================
 // x-direction flux via PLM (primitive) + HLLC
 // order = 1 → donor-cell (pure upwind Toro-style);
