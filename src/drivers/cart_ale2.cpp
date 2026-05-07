@@ -62,6 +62,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     cale.CQ_lin  = cfg.cart_ale_cq_lin;
     cale.CQ_quad = cfg.cart_ale_cq_quad;
     cale.shear_aware_av = cfg.cart_ale_shear_aware ? 1 : 0;
+    cale.rebuild_order  = cfg.cart_ale2_rebuild_order;
     int bcm = 0;
     if (cfg.cart_ale2_bc_x == "periodic") bcm |= 1;
     if (cfg.cart_ale2_bc_y == "periodic") bcm |= 2;

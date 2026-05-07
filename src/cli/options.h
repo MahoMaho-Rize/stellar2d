@@ -92,6 +92,7 @@ struct SimConfig {
     // --hllc <standard|lm|lhllc> — explicit form
     int hllc_variant = 0;
     int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
+    int cart_ale2_rebuild_order = 1; // cart_ale2 node v-rebuild: 0=1st-order mass-weighted avg, 1=2nd-order corner MUSCL w/ Barth-Jespersen limiter (default)
     std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
     int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
     int vtk_interval  = 0;   // cart_ale: step interval for VTK dump; 0 = follow output_interval

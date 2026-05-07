@@ -50,7 +50,17 @@ void k_cale2_geometry(const double* X, const double* Y,
     // Eq. (15.2): shoelace formula for quadrilateral signed area.
     double A2 = 0.5 * ((X0*Y1 - X1*Y0) + (X1*Y2 - X2*Y1)
                      + (X2*Y3 - X3*Y2) + (X3*Y0 - X0*Y3));
-    Vol[flat] = fabs(A2);
+    // Fail-fast on cell inversion: A2 <= 0 means the Lagrangian sub-step
+    // over-rotated or tangled this cell. Writing minheight=0 drives CFL
+    // dt → 0, which the host loop detects and aborts. (Previously we used
+    // fabs(A2), silently producing positive volume on a flipped cell and
+    // letting forces act with the wrong sign.)
+    if (A2 <= 0.0) {
+        Vol[flat] = 1e-30;
+        minheight[flat] = 0.0;
+        return;
+    }
+    Vol[flat] = A2;
 
     auto perp = [](double Px, double Py, double Ax, double Ay, double Bx, double By) {
         double dx = Bx - Ax, dy = By - Ay;
@@ -86,9 +96,12 @@ void k_cale2_eos_and_q(const double* X, const double* Y,
     int nny = ny + 1;
 
     double V = fmax(Vol[flat], 1e-30);
-    double r_ = dm[flat] / V;
+    // Positivity floors on ρ and e_int match the P floor below — strong
+    // rarefactions (near-vacuum wings of blast waves, mesh-inversion
+    // recovery) otherwise produce NaN cs / Q.
+    double r_ = fmax(dm[flat] / V, 1e-30);
     rho[flat] = r_;
-    double e = e_int[flat];
+    double e = fmax(e_int[flat], 1e-30);
     double p = fmax((gam - 1.0) * r_ * e, 1e-30);   // Eq. (1.2)
     P[flat] = p;
     cs[flat] = sqrt(gam * p / r_);                   // Eq. (1.3)
@@ -660,9 +673,190 @@ void k_cale2_remap_finalize_cells(const double* dm_new, const double* ie_new,
                                  int ncell) {
     int c = blockIdx.x * blockDim.x + threadIdx.x;
     if (c >= ncell) return;
+    // Floor dm: PPM/MUSCL overshoot on sharp contacts can produce tiny
+    // negative masses after the donor/acceptor swap. Clamp to keep EOS
+    // sane; the paired e_int floor mirrors the positivity guard in EOS.
+    double m_new = fmax(dm_new[c], 1e-30);
+    dm[c] = m_new;
+    e_int[c] = fmax(ie_new[c] / m_new, 1e-30);
+}
+
+// Forward-decl: defined below alongside the hydro slopes_minmod kernel.
+__device__ __forceinline__ double minmod(double a, double b);
+__device__ __forceinline__ double vanleer(double a, double b);
+__device__ __forceinline__ double mc_lim(double a, double b);
+__device__ __forceinline__ double apply_limiter(double a, double b, int id);
+
+// ------ 2nd-order node-velocity rebuild ------------------------
+// Step A: compute cell-centred v from remapped conservative (px, dm).
+__global__
+void k_cale2_cell_velocity(const double* px_new, const double* py_new,
+                           const double* dm_new,
+                           double* vxc, double* vyc, int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
     double m = fmax(dm_new[c], 1e-30);
-    dm[c] = dm_new[c];
-    e_int[c] = ie_new[c] / m;
+    vxc[c] = px_new[c] / m;
+    vyc[c] = py_new[c] / m;
+}
+
+// Step B: Barth-Jespersen multidimensional limiter (JCP 1989 §3.2).
+//
+// Per-axis minmod is the 1-D TVD recipe, but the rebuild_node_v 2D corner
+// reconstruction evaluates  f_corner = f_c + s_x·ex + s_y·ey  at 4 corners
+// simultaneously — axis-independent slopes can have simultaneous contribution
+// that still produces a corner value outside the neighbour-cell range,
+// seeding non-linear instability (Yee 256² supersonic vortex: NaN by t~0.03).
+//
+// Barth-Jespersen enforces the strict monotonicity constraint:
+//   ∀ corner k:  f_c + s_x·ex_k + s_y·ey_k ∈ [f_min_nb, f_max_nb]
+// by first computing the central-difference slope (s_x^*, s_y^*), then
+// scaling ISOTROPICALLY by φ ∈ [0,1] so the constraint holds at every
+// corner.  φ is the min over 4 corners of the Venkatakrishnan-style ratio:
+//   φ_k = { min(1, (f_max_nb − f_c)/Δf_k)  if Δf_k > 0
+//         { min(1, (f_min_nb − f_c)/Δf_k)  if Δf_k < 0
+//         { 1                              if Δf_k = 0
+// where Δf_k = s_x^*·ex_k + s_y^*·ey_k.  Output: (s_x, s_y) = φ·(s_x^*, s_y^*).
+//
+// Neighbour set: 4-point ({N,S,E,W}) suffices on uniform mesh; we include
+// the cell itself in the min/max to handle flat regions cleanly.
+__device__ __forceinline__
+void bj_limit_slope(double fc, double fN, double fS, double fE, double fW,
+                    double sx_star, double sy_star,
+                    double dx_u, double dy_u,
+                    double& sx, double& sy) {
+    double fmax_nb = fmax(fmax(fc, fN), fmax(fmax(fS, fE), fW));
+    double fmin_nb = fmin(fmin(fc, fN), fmin(fmin(fS, fE), fW));
+    double dmax = fmax_nb - fc;
+    double dmin = fmin_nb - fc;
+    double phi = 1.0;
+    // Four corner offsets: (ex, ey) ∈ {(-½dx, -½dy), (+½dx, -½dy),
+    // (+½dx, +½dy), (-½dx, +½dy)}.
+    const double ex[4] = { -0.5*dx_u,  0.5*dx_u,  0.5*dx_u, -0.5*dx_u };
+    const double ey[4] = { -0.5*dy_u, -0.5*dy_u,  0.5*dy_u,  0.5*dy_u };
+    for (int k = 0; k < 4; ++k) {
+        double df = sx_star * ex[k] + sy_star * ey[k];
+        double r;
+        if (df > 1e-30) {
+            r = dmax / df;
+        } else if (df < -1e-30) {
+            r = dmin / df;
+        } else {
+            r = 1.0;
+        }
+        if (r < phi) phi = r;
+    }
+    if (phi < 0.0) phi = 0.0;   // safety
+    if (phi > 1.0) phi = 1.0;
+    sx = phi * sx_star;
+    sy = phi * sy_star;
+}
+
+__global__
+void k_cale2_velocity_slopes(const double* vxc, const double* vyc,
+                             double* vxc_sx, double* vxc_sy,
+                             double* vyc_sx, double* vyc_sy,
+                             int nx, int ny, double dx_u, double dy_u,
+                             int /*limiter_id unused*/, int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nx*ny) return;
+    int ic = flat / ny, jc = flat % ny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+
+    auto nbx = [&](int ioff) -> int {
+        int i = ic + ioff;
+        if (x_per) { if (i < 0) i += nx; else if (i >= nx) i -= nx; }
+        else       { if (i < 0 || i >= nx) return -1; }
+        return i * ny + jc;
+    };
+    auto nby = [&](int joff) -> int {
+        int j = jc + joff;
+        if (y_per) { if (j < 0) j += ny; else if (j >= ny) j -= ny; }
+        else       { if (j < 0 || j >= ny) return -1; }
+        return ic * ny + j;
+    };
+    int iE = nbx(+1), iW = nbx(-1), iN = nby(+1), iS = nby(-1);
+    // At reflective boundary reuse self — limiter then sees flat neighbour
+    // → slope gets clamped to 0 in that direction, matching donor-cell fallback.
+
+    auto bj = [&](const double* f, double& sx, double& sy) {
+        double fc = f[flat];
+        double fE = (iE >= 0) ? f[iE] : fc;
+        double fW = (iW >= 0) ? f[iW] : fc;
+        double fN = (iN >= 0) ? f[iN] : fc;
+        double fS = (iS >= 0) ? f[iS] : fc;
+        // Central-difference slope (unlimited); at a boundary one side
+        // equals fc → degenerates to one-sided which BJ then caps.
+        double sx_star = (fE - fW) / (2.0 * dx_u);
+        double sy_star = (fN - fS) / (2.0 * dy_u);
+        bj_limit_slope(fc, fN, fS, fE, fW, sx_star, sy_star, dx_u, dy_u, sx, sy);
+    };
+    bj(vxc, vxc_sx[flat], vxc_sy[flat]);
+    bj(vyc, vyc_sx[flat], vyc_sy[flat]);
+}
+
+// Step C: each node samples the 4 adjacent cells' MUSCL-reconstructed
+// velocity at the corner shared with the node; mass-weighted average.
+// For cell (ic,jc) the offset to the node at (in=ic+a, jn=jc+b) with
+// (a,b)∈{(0,0),(1,0),(1,1),(0,1)} is ((a−½)·dx_u, (b−½)·dy_u).
+// Summed over 4 corners of a cell the slope contributions cancel, so
+// per-cell momentum is preserved on a uniform mesh; that makes the
+// global Σ_node m_node·v_node = Σ_cell px_new hold exactly when node
+// mass is ¼Σ_adj dm (the same relation the legacy rebuild used).
+__global__
+void k_cale2_rebuild_node_v_2nd(const double* vxc, const double* vyc,
+                                const double* vxc_sx, const double* vxc_sy,
+                                const double* vyc_sx, const double* vyc_sy,
+                                const double* dm_new,
+                                double* vX, double* vY,
+                                int nx, int ny, double dx_u, double dy_u,
+                                int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int nnx = nx + 1, nny = ny + 1;
+    int n = nnx * nny;
+    if (flat >= n) return;
+    int in = flat / nny, jn = flat % nny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    double svx = 0.0, svy = 0.0, sm = 0.0;
+    for (int di = -1; di <= 0; ++di) {
+        for (int dj = -1; dj <= 0; ++dj) {
+            int ic = in + di, jc = jn + dj;
+            if (x_per) {
+                if (ic < 0)  ic = nx - 1;
+                if (ic >= nx) ic = 0;
+            } else {
+                if (ic < 0 || ic >= nx) continue;
+            }
+            if (y_per) {
+                if (jc < 0)  jc = ny - 1;
+                if (jc >= ny) jc = 0;
+            } else {
+                if (jc < 0 || jc >= ny) continue;
+            }
+            int c = ic * ny + jc;
+            // Local corner offset derived from (di, dj), NOT from (in - ic).
+            // Under periodic BC ic/jc can be wrapped by ±nx/ny so in−ic
+            // would give a huge (nx-1)·dx offset — spurious slope extrapolation
+            // that blew up Yee 256² historically. With (di, dj) fixed ∈
+            // {-1, 0}²:
+            //   di = -1 ⇒ node is to the right/top of cell  ⇒ +½Δ
+            //   di =  0 ⇒ node is to the left/bottom of cell ⇒ -½Δ
+            double ex = (di == -1 ? +0.5 : -0.5) * dx_u;
+            double ey = (dj == -1 ? +0.5 : -0.5) * dy_u;
+            double vx_corner = vxc[c] + vxc_sx[c]*ex + vxc_sy[c]*ey;
+            double vy_corner = vyc[c] + vyc_sx[c]*ex + vyc_sy[c]*ey;
+            double mq = 0.25 * dm_new[c];
+            svx += mq * vx_corner;
+            svy += mq * vy_corner;
+            sm  += mq;
+        }
+    }
+    if (sm > 1e-30) {
+        vX[flat] = svx / sm;
+        vY[flat] = svy / sm;
+    }
 }
 
 // Rebuild node velocity — mass-weighted average of adjacent cell-centered
@@ -2047,6 +2241,75 @@ void k_cale2_bc_velocity(double* vX, double* vY, int nnx, int nny, int bc_mode) 
     bool y_per = (bc_mode & 2) != 0;
     if (!x_per && (in == 0 || in == nnx - 1)) vX[flat] = 0.0;
     if (!y_per && (jn == 0 || jn == nny - 1)) vY[flat] = 0.0;
+}
+
+// ============================================================
+// Phase-M energy compensation.
+//
+// Per cell KE defined via its 4 corner nodes with equal ¼ mass share:
+//     KE_cell = Σ_{k=0..3} ½·(m_cell/4)·(vX² + vY²)_k
+//             = (m_cell/8) · Σ_{k} (vX² + vY²)_k
+// With node mass m_node = ¼ Σ_{adj cell} m_cell, the sum over all cells
+// gives Σ_node m_node·(v_node)²·½ = diagnostic KE — so adding the
+// (KE_before − KE_after) difference as extra internal energy exactly
+// restores total-energy conservation across the remap + rebuild step.
+// ============================================================
+// Per-node KE at a FIXED (pre-remap) node-mass snapshot, with periodic
+// duplicates written as 0 so gpu_reduce_sum hits unique nodes only.
+//
+//   KE_node = ½·m_ref·(vX² + vY²)     if node is unique-rep
+//           = 0                        if node is a periodic duplicate
+//
+// Using m_ref (same for before/after) means ΔKE = ½·m_ref·(v²_bef − v²_aft)
+// purely reflects velocity change from remap/rebuild — no mass movement
+// artifacts. Matches diagnostic KE exactly (same m_node·½v² formula,
+// same duplicate skip).
+__global__
+void k_cale2_node_KE(const double* vX, const double* vY,
+                     const double* m_ref,
+                     int nnx, int nny, int bc_mode,
+                     double* KE_node) {
+    int f = blockIdx.x * blockDim.x + threadIdx.x;
+    int n = nnx * nny;
+    if (f >= n) return;
+    int in = f / nny, jn = f % nny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    // Zero the periodic-duplicate nodes so the reduce skips them.
+    if ((x_per && in == nnx - 1) || (y_per && jn == nny - 1)) {
+        KE_node[f] = 0.0;
+        return;
+    }
+    double vx = vX[f], vy = vY[f];
+    KE_node[f] = 0.5 * m_ref[f] * (vx*vx + vy*vy);
+}
+
+// Copy m_node → m_ref once per step (at start of Phase M).
+__global__
+void k_cale2_copy(const double* src, double* dst, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) dst[i] = src[i];
+}
+
+// Mass-weighted distribution of the GLOBAL KE deficit across cells.
+// The cell-local KE_before/KE_after pair is not a clean before/after of
+// the same fluid parcel (remap swaps mass between cells), so using the
+// cell-local ΔKE double-counts the transported part. Instead we apply
+// the global total ΔKE, distributed over cells in proportion to their
+// post-remap mass — this makes total E = KE+IE invariant to machine
+// precision while preserving the physical interpretation "lost KE
+// becomes heat".
+//
+// dKE_total is precomputed on the host via a gpu_reduce over
+// (KE_before − KE_after), then passed in as `dKE_total_over_M` =
+// dKE_total / total_mass (scalar).
+__global__
+void k_cale2_ke_compensate_uniform(double delta_e_per_mass,
+                                   double* e_int, int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    e_int[c] += delta_e_per_mass;
+    if (e_int[c] < 1e-30) e_int[c] = 1e-30;
 }
 
 // ============================================================

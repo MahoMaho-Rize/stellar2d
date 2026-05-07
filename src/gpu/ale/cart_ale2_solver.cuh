@@ -61,6 +61,51 @@ struct CartAle2Solver {
     double *d_px_new = nullptr;      // new cell momentum
     double *d_py_new = nullptr;
 
+    // Node-velocity rebuild order:
+    //   0 = 1st-order mass-weighted average (legacy; stable but KE-diffusive)
+    //   1 = 2nd-order corner MUSCL with Barth-Jespersen multidim limiter
+    //       (default; strictly monotone even on strong supersonic vortices —
+    //       BJ enforces f_corner ∈ [f_min_nb, f_max_nb] isotropically).
+    int rebuild_order = 1;
+
+    // 2nd-order node-velocity rebuild scratch. v_cell = px_new/dm_new,
+    // then minmod-limited slopes; each node samples 4 corner-extrapolated
+    // cell velocities, mass-weighted aggregation.  Momentum-conserving
+    // because the 4 corner offsets of every cell are symmetric around
+    // its centroid so the slope terms cancel in Σ_nodes m_node·v_node.
+    double *d_vxc = nullptr, *d_vyc = nullptr;
+    double *d_vxc_sx = nullptr, *d_vxc_sy = nullptr;
+    double *d_vyc_sx = nullptr, *d_vyc_sy = nullptr;
+
+    // Node-based KE scratch for Phase-M compensation.
+    //
+    // Rationale (why not cell-based):
+    //   The diagnostic KE is node-based, KE_diag = Σ_node ½·m_node·|v_node|²
+    //   (periodic duplicates skipped). A cell-based compensation scalar
+    //   (½·p²/m_cell) differs by a subgrid-variance term that is
+    //   nonconstant across remap, so cell-based ΔKE does NOT equal the
+    //   diagnostic KE loss — E_diag drifts even when cell-ΔKE is balanced.
+    //
+    // Design:
+    //   - d_m_node_ref captured at the START of Phase M (one fixed mass
+    //     snapshot for both before/after KE). Using a constant mass makes
+    //     ΔKE = ½·m_ref·(v²_before − v²_after), purely reflecting the
+    //     velocity change from remap + rebuild — no spurious "mass moved
+    //     between cells, KE rebalances" contribution.
+    //   - d_KE_node_{before,after}: per-node scalar, periodic duplicates
+    //     written as 0 so gpu_reduce_sum gives the unique-node KE sum.
+    //   - d_node_reduce_buf: nnode-sized scratch for gpu_reduce_sum.
+    //   - Σ ΔKE distributed to cells mass-weighted (per unit mass, so the
+    //     kernel writes delta_e = ΔKE/M_tot to every e_int).
+    double *d_m_node_ref = nullptr;      // node-size: post-remap m_node, same
+                                         // mass used for both before/after so
+                                         // matches diagnostic KE exactly.
+    double *d_vX_pre = nullptr;          // node-size: pre-remap v snapshot
+    double *d_vY_pre = nullptr;
+    double *d_KE_node_before = nullptr;  // node-size
+    double *d_KE_node_after  = nullptr;  // node-size
+    double *d_node_reduce_buf = nullptr; // node-size
+
     // ---- 2nd-order remap (MUSCL-in-remap, Kucharik-Shashkov 2012) ----
     // Per-cell densities on the reference uniform grid.
     double *d_rho_dens  = nullptr;   // dm/V0

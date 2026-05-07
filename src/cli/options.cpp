@@ -189,6 +189,8 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.cart_ale_cq_quad = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--shear-aware-av") == 0)
             cfg.cart_ale_shear_aware = true;
+        else if (std::strcmp(argv[i], "--rebuild-order") == 0 && i + 1 < argc)
+            cfg.cart_ale2_rebuild_order = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--bc-x") == 0 && i + 1 < argc)
             cfg.cart_ale2_bc_x = argv[++i];
         else if (std::strcmp(argv[i], "--bc-y") == 0 && i + 1 < argc)

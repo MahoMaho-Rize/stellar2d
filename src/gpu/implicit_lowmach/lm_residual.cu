@@ -66,11 +66,28 @@ void LowMachSolver::launch_ghost() {
 // Donor-cell (1st-order upwind) flux: F(u, qL, qR) = u>0 ? u*qL : u*qR
 // This replaces HLLC. No Riemann solver, no sound speed.
 //
+// IMPORTANT — LowMach uses the INTERNAL energy equation (state variable
+// `rhoE` in this solver stores ρ·e_int, NOT total energy ρE = ρe + ½ρv²).
+// See upload_state() in lowmach_solver.cu which subtracts KE on upload,
+// and k_lm_floor which treats rhoE as (ρe) when computing P = (γ−1)·rhoE.
+// This is DIFFERENT from the FAS solver, which uses the total-energy form
+// (rhoE = ρE) — do not cross-reference fas_residual.cu naively.
+//
 // Spatial residual R(U):
 //   R_ρ   = -∇·(ρv)
 //   R_mr  = -∇·(ρvr·v) - ∂P/∂r + ρgr + geometric
 //   R_mt  = -∇·(ρvθ·v) - (1/r)∂P/∂θ + ρgθ + geometric
-//   R_rhoE = -∇·(ρe·v) - P∇·v
+//   R_rhoE = -∇·(ρe·v) - P∇·v            (internal-energy form; NO ρv·g)
+//
+// Why no ρv·g in the energy residual:
+//   In Euler, gravity couples only to KE via ∂_t(½ρv²) ⊃ +ρv·g.
+//   The internal-energy equation is closed by -P∇·v alone; adding ρv·g
+//   here would double-count (it belongs to the KE equation, which the
+//   momentum residual already implicitly carries) and inject a spurious
+//   O(Ma) IE↔PE conversion bypassing KE during convection. At HSE (v=0)
+//   the bug is invisible; it only biases non-trivial dynamics.
+//   Fixed 2026-05-07 — previously `S_E = ρvr·(g0+g')` was erroneously
+//   added here, copied from the total-energy form used by FAS.
 //
 // Gravity: full Φ (not perturbation).
 // Pressure gradient: central difference (same stencil as Poisson).
@@ -202,8 +219,9 @@ void k_lm_residual(
     // Theta: only pressure (no gravity component)
     double force_t = -dPp_dt_r;
 
-    // Gravity work on energy: ρ·v·g  (v=0 at HSE → zero, well-balanced)
-    double S_E = rho_c * vr_c * (g0_r + gp_r);
+    // No ρv·g source in the internal-energy equation — see file-head
+    // docstring. The momentum residual's well-balanced gravity term
+    // implicitly drives KE; IE is closed by -P∇·v alone.
 
     // ===== P∇·v (compression work in internal energy equation) =====
     auto vr_face_f = [&](int il, int ir, int jj) -> double {
@@ -224,7 +242,7 @@ void k_lm_residual(
     res[flat]       = div[0];
     res[n + flat]   = div[1] + force_r + S_mr;
     res[2*n + flat] = div[2] + force_t + S_mt;
-    res[3*n + flat] = div[3] - P_c * div_v + S_E;
+    res[3*n + flat] = div[3] - P_c * div_v;
 }
 
 // ========================= Origin kernel (i=0, divergence theorem) ========
@@ -323,7 +341,7 @@ void k_lm_residual_origin(
     double force_r = -dPp_dr + rhop_c*g0_r + rho_c*gp_r;
     double force_t = -dPp_dt_r;
 
-    double S_E = rho_c * vr_c * (g0_r + gp_r);
+    // No ρv·g in IE residual (see file-head docstring).
 
     double rl = fmax(rho[d_idx(0,j,nt,ng)],1e-20);
     double rr = fmax(rho[d_idx(1,j,nt,ng)],1e-20);
@@ -339,7 +357,7 @@ void k_lm_residual_origin(
     res[flat]       = div[0];
     res[n + flat]   = div[1] + force_r + S_mr;
     res[2*n + flat] = div[2] + force_t + S_mt;
-    res[3*n + flat] = div[3] - P_c * div_v + S_E;
+    res[3*n + flat] = div[3] - P_c * div_v;
 }
 
 // ========================= Pack / unpack (5-DOF: ρ, mr, mt, ρe, Φ) =

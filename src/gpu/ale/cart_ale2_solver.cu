@@ -82,6 +82,21 @@ __global__ void k_cale2_remap_north_2nd(const double*, const double*, const doub
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int, int, double, double, int);
+__global__ void k_cale2_node_KE(const double*, const double*, const double*,
+                                int, int, int, double*);
+__global__ void k_cale2_copy(const double*, double*, int);
+__global__ void k_cale2_ke_compensate_uniform(double, double*, int);
+__global__ void k_cale2_cell_velocity(const double*, const double*, const double*,
+                                      double*, double*, int);
+__global__ void k_cale2_velocity_slopes(const double*, const double*,
+                                        double*, double*, double*, double*,
+                                        int, int, double, double, int, int);
+__global__ void k_cale2_rebuild_node_v_2nd(const double*, const double*,
+                                           const double*, const double*,
+                                           const double*, const double*,
+                                           const double*,
+                                           double*, double*,
+                                           int, int, double, double, int);
 __global__ void k_cale2_snapshot(const double*, const double*, const double*,
     const double*, const double*, double*, int, int);
 __global__ void k_cale2_ppm_reconstruct(const double*, const double*, const double*, const double*,
@@ -170,6 +185,18 @@ void CartAle2Solver::init(int nx_in, int ny_in, double Lx, double Ly,
     mal(&d_ie_new,  ncell*sizeof(double));
     mal(&d_px_new,  ncell*sizeof(double));
     mal(&d_py_new,  ncell*sizeof(double));
+    mal(&d_m_node_ref,      nnode*sizeof(double));
+    mal(&d_vX_pre,          nnode*sizeof(double));
+    mal(&d_vY_pre,          nnode*sizeof(double));
+    mal(&d_KE_node_before,  nnode*sizeof(double));
+    mal(&d_KE_node_after,   nnode*sizeof(double));
+    mal(&d_node_reduce_buf, nnode*sizeof(double));
+    mal(&d_vxc, ncell*sizeof(double));
+    mal(&d_vyc, ncell*sizeof(double));
+    mal(&d_vxc_sx, ncell*sizeof(double));
+    mal(&d_vxc_sy, ncell*sizeof(double));
+    mal(&d_vyc_sx, ncell*sizeof(double));
+    mal(&d_vyc_sy, ncell*sizeof(double));
 
     mal(&d_rho_dens,  ncell*sizeof(double));
     mal(&d_rhoE_dens, ncell*sizeof(double));
@@ -219,6 +246,10 @@ void CartAle2Solver::destroy() {
     f(d_P); f(d_Q); f(d_cs); f(d_minheight); f(d_strain_rate);
     f(d_px_cell); f(d_py_cell);
     f(d_dm_new); f(d_ie_new); f(d_px_new); f(d_py_new);
+    f(d_m_node_ref); f(d_vX_pre); f(d_vY_pre);
+    f(d_KE_node_before); f(d_KE_node_after); f(d_node_reduce_buf);
+    f(d_vxc); f(d_vyc);
+    f(d_vxc_sx); f(d_vxc_sy); f(d_vyc_sx); f(d_vyc_sy);
     f(d_rho_dens); f(d_rhoE_dens); f(d_pxd_dens); f(d_pyd_dens);
     f(d_rho_sx); f(d_rho_sy); f(d_rhoE_sx); f(d_rhoE_sy);
     f(d_pxd_sx); f(d_pxd_sy); f(d_pyd_sx); f(d_pyd_sy);
@@ -1223,8 +1254,14 @@ double CartAle2Solver::step(double t, double t_end) {
     // Mesh is always X0/Y0 at step entry (reset by previous step's Phase R),
     // so Vol ≡ Area0 and minheight is constant — both cached at init time.
     // Skipping the per-step geometry kernel saves one launch per step.
+    // Exception: in pure-Lagrangian mode (remap_order == 0) Phase R is
+    // skipped, so mesh drifts and Vol/minheight must be recomputed.
+    if (remap_order == 0) {
+        k_cale2_geometry<<<BCell, B>>>(d_X, d_Y, d_Vol, d_minheight, nx, ny);
+    }
+    const double* d_V_eos = (remap_order == 0) ? d_Vol : d_Area0;
     k_cale2_eos_and_q<<<BCell, B>>>(
-        d_X, d_Y, d_vX, d_vY, d_dm, d_Area0, d_Area0, d_e_int,
+        d_X, d_Y, d_vX, d_vY, d_dm, d_V_eos, d_Area0, d_e_int,
         d_rho, d_P, d_Q, d_cs, d_strain_rate,
         nx, ny, gamma, CQ_lin, CQ_quad, shear_aware_av);
 
@@ -1269,6 +1306,37 @@ double CartAle2Solver::step(double t, double t_end) {
                                        d_dX, d_dY, d_dm, d_e_int);
 
     // --- Phase M: Remap --------------------------------------
+    // remap_order == 0 → pure Lagrangian: skip rezone + remap entirely,
+    // so Phase R does NOT reset X to X0. Used for diagnostic comparison
+    // (Gresho, Yee) where we want to isolate Lagrangian substep accuracy.
+    // Mesh will drift and eventually tangle; only use for short runs.
+    if (remap_order == 0) {
+        // Recompute geometry for the drifted mesh so the next step sees
+        // the correct Vol / minheight (Phase L normally assumes X=X0).
+        k_cale2_geometry<<<BCell, B>>>(d_X, d_Y, d_Vol, d_minheight, nx, ny);
+        // Node mass stays the same (no mass redistribution without remap).
+        step_count++;
+        dt_current = dt;
+        if (step_count <= 10 || step_count % 500 == 0)
+            std::fprintf(stderr,
+                "  [cart_ale PURE-LAG] step %d  t=%.4e  dt=%.3e\n",
+                step_count, t+dt, dt);
+        return dt;
+    }
+
+    // Snapshot pre-remap node velocities AND node mass for Phase-M
+    // compensation. The diagnostic KE uses the current (post-step)
+    // m_node·v_node, so consecutive-step E conservation requires
+    //   KE_before = Σ m_node_pre · ½ v_pre²    (matches last step's diag)
+    //   KE_after  = Σ m_node_post · ½ v_post²  (matches this step's diag)
+    // ΔKE = KE_before − KE_after is therefore exactly the diagnostic KE
+    // loss across the step, and adding it back as IE makes E_diag invariant.
+    // (Mixing m_post with v_pre would introduce a (m_post−m_pre)·v_pre²
+    // bias that accumulates as ~1e-6 per step on Sod.)
+    k_cale2_copy<<<BNode, B>>>(d_vX, d_vX_pre, nnode);
+    k_cale2_copy<<<BNode, B>>>(d_vY, d_vY_pre, nnode);
+    k_cale2_copy<<<BNode, B>>>(d_mnode, d_m_node_ref, nnode);
+
     // Snapshot cell-centered momentum from current node velocities BEFORE rezone.
     k_cale2_cell_momentum<<<BCell, B>>>(d_vX, d_vY, d_dm, d_px_cell, d_py_cell, nx, ny);
 
@@ -1467,9 +1535,30 @@ double CartAle2Solver::step(double t, double t_end) {
         k_cale2_species_finalize<<<BCell, B>>>(d_mX_new, d_dm, d_mX, d_species_X, ncell);
     }
 
-    // Rebuild node velocities from remapped momentum and mass
-    k_cale2_rebuild_node_v<<<BNode, B>>>(d_px_new, d_py_new, d_dm_new,
-                                        d_vX, d_vY, nx, ny, bc_mode);
+    // Rebuild node velocities from remapped momentum and mass.
+    // 2nd-order MUSCL-style: each node samples 4 corner-extrapolated
+    // cell velocities (linear reconstruction with same limiter as hydro
+    // remap). Symmetric corner offsets cancel slope contributions per
+    // cell → momentum-conservative, but v-field is preserved exactly
+    // on linear/rotational flows (fixes Gresho KE smoothing).  Falls
+    // back to 1st-order mass-weighted average when remap_order < 2.
+    if (rebuild_order >= 1 && remap_order >= 2) {
+        k_cale2_cell_velocity<<<BCell, B>>>(d_px_new, d_py_new, d_dm_new,
+                                           d_vxc, d_vyc, ncell);
+        k_cale2_velocity_slopes<<<BCell, B>>>(d_vxc, d_vyc,
+                                              d_vxc_sx, d_vxc_sy,
+                                              d_vyc_sx, d_vyc_sy,
+                                              nx, ny, dx_u, dy_u,
+                                              remap_limiter, bc_mode);
+        k_cale2_rebuild_node_v_2nd<<<BNode, B>>>(d_vxc, d_vyc,
+                                                 d_vxc_sx, d_vxc_sy,
+                                                 d_vyc_sx, d_vyc_sy,
+                                                 d_dm_new, d_vX, d_vY,
+                                                 nx, ny, dx_u, dy_u, bc_mode);
+    } else {
+        k_cale2_rebuild_node_v<<<BNode, B>>>(d_px_new, d_py_new, d_dm_new,
+                                            d_vX, d_vY, nx, ny, bc_mode);
+    }
     k_cale2_bc_velocity<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode);
     if (bc_mode) k_cale2_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY,
                                                          nnode_x, nnode_y, bc_mode, /*mode=copy*/ 0);
@@ -1477,8 +1566,23 @@ double CartAle2Solver::step(double t, double t_end) {
     // --- Phase R: snap mesh back to uniform ------------------
     k_cale2_reset_mesh<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, nnode);
 
-    // Refresh node mass (dm redistributes a bit each step)
+    // Refresh node mass (dm redistributes a bit each step).
     k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+
+    // Phase-M KE compensation. KE_before uses pre-remap (m_node_ref, v_pre)
+    // → matches the diagnostic of the previous step; KE_after uses post-
+    // remap (m_node, v) → matches the diagnostic of the current step.
+    // Σ (KE + IE) seen by the diagnostic is invariant to machine precision
+    // across this step.
+    k_cale2_node_KE<<<BNode, B>>>(d_vX_pre, d_vY_pre, d_m_node_ref,
+                                  nnode_x, nnode_y, bc_mode, d_KE_node_before);
+    k_cale2_node_KE<<<BNode, B>>>(d_vX, d_vY, d_mnode,
+                                  nnode_x, nnode_y, bc_mode, d_KE_node_after);
+    double KE_before_tot = gpu_reduce_sum(d_KE_node_before, d_node_reduce_buf, nnode);
+    double KE_after_tot  = gpu_reduce_sum(d_KE_node_after,  d_node_reduce_buf, nnode);
+    double M_tot         = gpu_reduce_sum(d_dm,             d_reduce_buf,      ncell);
+    double delta_e = (M_tot > 1e-30) ? (KE_before_tot - KE_after_tot) / M_tot : 0.0;
+    k_cale2_ke_compensate_uniform<<<BCell, B>>>(delta_e, d_e_int, ncell);
 
     // Optional Newton cooling toward the IC stratification (only applied
     // if alloc_cooling_ref was called and tau_cool > 0).
