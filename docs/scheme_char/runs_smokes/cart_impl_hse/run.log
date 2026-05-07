@@ -1,0 +1,14 @@
+CartImplSolver: 32x32 cells, box=[0,1]x[0,1], dx=0.03125 dy=0.03125, γ=1.66667, g_y=1, CFL=0.2
+  line-y precond: ON, Viallet scaling: ON (α1=1.0e-05, α2=1.0e+00)
+  CartImpl HSE polytrope: ρ_b=1, g=1, K=0.4, Ly=1, perturb=0
+  CartImpl HSE snapshot: ρ_max=0.976654, atm=9.76654e-05
+
+
+stellar2d - 2D Axisymmetric Euler + Self-Gravity
+Test case: hse, mesh: log
+Grid: 32 x 32, R_outer = 1.000000
+Output directory: /home/yujian_shi/stellar2d/docs/scheme_char/runs_smokes/cart_impl_hse/hse_32x32_20260507_214312/
+Starting time integration...
+Step     13  t=5.000000e-02 dt=3.709e-03 M=3.9994180852e-01 E=1.7136751488e-01 |v|=0.000e+00 Ma=0.000e+00
+Final: step 13  t = 5.000000e-02  M = 6.6666666667e-31  E = 6.6666666667e-31
+Done.

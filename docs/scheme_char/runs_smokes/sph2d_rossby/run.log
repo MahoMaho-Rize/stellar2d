@@ -1,0 +1,13 @@
+  SphTransform: N_theta=32 N_phi=64 L_max=30 (n_lm=496) R=1
+  Sph2DSpectral init: R=1 Ω=1 ν=0.0001 cfl=0.3
+  Sph2D Rossby wave IC: (l,m)=(4,2) amp=1, ω_rw = -2Ω·m/(l(l+1)) = -0.2
+
+
+stellar2d - 2D Axisymmetric Euler + Self-Gravity
+Test case: rossby_wave, mesh: log
+Grid: 32 x 64, R_outer = 1.000000
+Output directory: /home/yujian_shi/stellar2d/docs/scheme_char/runs_smokes/sph2d_rossby/rossby_wave_32x64_20260507_214313/
+Starting time integration...
+Step    100  t=5.000000e-01 dt=5.000e-03 KE=1.238464e-03 Ω=2.265504e-02 |v|=2.364e-02 |ζ|=1.350e-01 err=5.193e-01
+Final: step 100  t = 5.000000e-01  M = 6.6666666667e-31  E = 6.6666666667e-31
+Done.

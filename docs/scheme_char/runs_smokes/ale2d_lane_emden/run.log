@@ -1,0 +1,25 @@
+Ale2DSolver initialized: 32x16 cells, 561 nodes, γ=1.66667, CFL=0.2, CQ_q=2, CQ_l=0.5
+  Ale2D Lane-Emden: nr=32 nt=16, M_total=3.042356, P_surf=3.162e-38
+  Ale2D HSE defect: max|F|/m = 4.188e+00  (|F|=5.425e-03, node in=22 jn=16)
+  [ale2d] step 1  t=5.2914e-05  dt=5.291e-05
+  [ale2d] step 2  t=1.0583e-04  dt=5.291e-05
+  [ale2d] step 3  t=1.5874e-04  dt=5.291e-05
+  [ale2d] step 4  t=2.1166e-04  dt=5.291e-05
+  [ale2d] step 5  t=2.6457e-04  dt=5.291e-05
+
+  [ale2d] step 6  t=3.1748e-04  dt=5.291e-05
+  [ale2d] step 7  t=3.7040e-04  dt=5.291e-05
+  [ale2d] step 8  t=4.2331e-04  dt=5.291e-05
+  [ale2d] step 9  t=4.7622e-04  dt=5.291e-05
+  [ale2d] step 10  t=5.0000e-04  dt=2.378e-05
+
+
+stellar2d - 2D Axisymmetric Euler + Self-Gravity
+Test case: lane_emden, mesh: log
+Grid: 32 x 16, R_outer = 1.792777
+Output directory: /home/yujian_shi/stellar2d/docs/scheme_char/runs_smokes/ale2d_lane_emden/lane_emden_32x16_20260507_214312/
+Starting time integration...
+Step      5  t=2.645693e-04 dt=5.291e-05 M=3.0423556349e+00 E=-2.3610335449e-03 |v|_max=1.107e-03 Mach_max=8.575e-04
+Step     10  t=5.000000e-04 dt=2.378e-05 M=3.0423556349e+00 E=-2.3600826317e-03 |v|_max=2.092e-03 Mach_max=1.621e-03
+Final: step 10  t = 5.000000e-04  M = 4.8189986789e-01  E = 3.8373546246e-01
+Done.

@@ -24,6 +24,12 @@ docs/scheme_char/
 │                                        cart_ale2 dissipation is a real
 │                                        Laplacian (k-independent) on
 │                                        resolved modes (task #48)
+├── 2026-05-07_forced_turb_spectrum.*  ← T6: pseudo_spectral forced-turb
+│                                        spectrum pipeline (smoke; not
+│                                        paper-grade inertial range yet)
+└── runs_smokes/                       ← frozen-solver liveness smoke
+                                         outputs (ale2d, cart_impl,
+                                         sph2d_spectral, ps_kh_shear)
 └── runs/                              ← raw diagnostics.csv from each scan
     └── <solver>/res_N_V_V0/
         ├── diagnostics.csv            (flattened copy of the actual run)
@@ -55,6 +61,19 @@ coarse resolution).
 |------------------|-----------|-------------|---------|-----------|--------------------------------|
 | cart_ale2        | 3.88e-3   | 3.88e-3     | ✅ (0.3 % across k=1..16) | 2026-05-07| confirmed Laplacian-like viscosity |
 | athena_vl2       | ≤ 1e-17   | ≤ 1e-17     | N/A     | 2026-05-07| still zero on this IC — Phase B rotated-shear followup pending |
+
+## Frozen-solver smoke suite (§10.1)
+
+Minimal "does it run?" smoke for low-activity solvers.  Run with:
+`scripts/scheme_char/run_frozen_solver_smokes.sh`
+
+| tag               | solver           | status      | notes                                          |
+|-------------------|------------------|-------------|------------------------------------------------|
+| ale2d_lane_emden  | ale2d            | ✅ PASS     | 15 steps, no NaN (longer runs hit hoop bug)    |
+| wb2d_hse          | wb2d             | ⚠ SKIPPED   | known broken: perturb IC → inf within t ≤ 5e-3 |
+| cart_impl_hse     | cart_impl        | ✅ PASS     | HSE quasi-steady, M drift 0                    |
+| sph2d_rossby      | sph2d_spectral   | ✅ PASS     | Rossby-wave test, KE finite, enstrophy finite |
+| ps_kh_smoke       | pseudo_spectral  | ✅ PASS     | KH baseline, mass drift 8e-4 (within 1e-3 tol) |
 | strang           | —                      | —       | —         | pending task #47 / #50 extension                |
 | cart_ale         | —                      | —       | —         | pending                                         |
 | cart_lag         | —                      | —       | —         | pending (HSE-incompatible BC, need cook IC)     |
