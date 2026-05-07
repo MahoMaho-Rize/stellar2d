@@ -397,6 +397,54 @@ void AthenaVL2Solver::init_shear_mode(double rho, double P, double V0, int k) {
 }
 
 // ============================================================
+// init_entropy_wave — T1 smooth-convergence probe (periodic BC both dirs)
+// ============================================================
+void AthenaVL2Solver::init_entropy_wave(double rho0, double P0, double u0,
+                                        double A, int k) {
+    x_lo = 0.0; x_hi = Lx;
+    y_lo = 0.0; y_hi = Ly;
+    dx = Lx / (double)nx;
+    dy = Ly / (double)ny;
+    y_periodic = true;
+    tracer_enabled = false;
+
+    int sx = stride_x();
+    int sy = stride_y();
+    int ncell = sx * sy;
+    std::vector<double> h_rho(ncell, rho0);
+    std::vector<double> h_mx(ncell, 0.0);
+    std::vector<double> h_my(ncell, 0.0);
+    std::vector<double> h_E(ncell, 0.0);
+    double gm1 = gamma - 1.0;
+    for (int ic = 0; ic < nx; ++ic) {
+        double xc = x_lo + (ic + 0.5) * dx;
+        double rho = rho0 * (1.0 + A * std::sin(k * 2.0 * M_PI * xc / Lx));
+        double e_int = P0 / gm1;
+        double ke = 0.5 * rho * u0 * u0;
+        for (int jc = 0; jc < ny; ++jc) {
+            int cidx = (ic + ng) * sy + (jc + ng);
+            h_rho[cidx] = rho;
+            h_mx [cidx] = rho * u0;
+            h_my [cidx] = 0.0;
+            h_E  [cidx] = e_int + ke;
+        }
+    }
+    h_g_row.assign(ny, 0.0);
+    h_q_row.assign(ny, 0.0);
+    h_phi_row.assign(ny, 0.0);
+    CUDA_CHECK(cudaMemcpy(d_rho, h_rho.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mx,  h_mx .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_my,  h_my .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_E,   h_E  .data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_g_row, h_g_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_q_row, h_q_row.data(), ny*sizeof(double), cudaMemcpyHostToDevice));
+
+    std::fprintf(stderr,
+        "  AthenaVL2 entropy_wave IC: rho0=%g P0=%g u0=%g A=%g k=%d  (Lx=%g, period=%g)\n",
+        rho0, P0, u0, A, k, Lx, Lx / u0);
+}
+
+// ============================================================
 // fill_ghost / cons_to_prim: dispatch helpers
 // ============================================================
 void AthenaVL2Solver::fill_ghost() {

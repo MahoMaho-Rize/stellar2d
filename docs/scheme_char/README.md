@@ -17,6 +17,9 @@ docs/scheme_char/
 ├── 2026-05-07_andrassy_vrms_vs_res.*  ← T5: Andrassy 2022 v_rms / Ṁ_e
 │                                        resolution scan + non-monotonic
 │                                        dip explanation (task #49)
+├── 2026-05-07_entropy_wave_convergence.*  ← T1: smooth scalar advection
+│                                        convergence slope, ale2 vs vl2
+│                                        (task #47)
 └── runs/                              ← raw diagnostics.csv from each scan
     └── <solver>/res_N_V_V0/
         ├── diagnostics.csv            (flattened copy of the actual run)
@@ -34,6 +37,13 @@ coarse resolution).
 | cart_ale2        | 7.8e-3                 | 1.00    | 2026-05-07| Jensen-ILES, ν ≈ 0.31·V·dx                      |
 | athena_vl2       | ≤ 10⁻¹⁶                | —       | 2026-05-07| Godunov direction-aligned; zero on this IC      |
 | pseudo_spectral  | ≤ 10⁻¹⁷                | —       | 2026-05-07| TG nonlinear vanishes identically, machine ε   |
+
+## Solver T1 entropy-wave convergence
+
+| solver           | L1 @ 128²  | slope p | measured  | notes                                  |
+|------------------|------------|---------|-----------|----------------------------------------|
+| cart_ale2        | 3.7e-3     | -0.31   | 2026-05-07| dispersive, L1 *grows* at 512² (coupled Lagrangian-rebuild issue) |
+| athena_vl2       | 1.9e-5     | 2.06    | 2026-05-07| textbook 2nd-order, phase returns to 0 |
 | strang           | —                      | —       | —         | pending task #47 / #50 extension                |
 | cart_ale         | —                      | —       | —         | pending                                         |
 | cart_lag         | —                      | —       | —         | pending (HSE-incompatible BC, need cook IC)     |

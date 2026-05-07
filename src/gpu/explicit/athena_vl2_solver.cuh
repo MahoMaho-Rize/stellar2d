@@ -126,6 +126,13 @@ struct AthenaVL2Solver {
     // Analytic NS decay: max|vx|(t) = V0·exp(-ν·k²·t) with k = k·2π/Ly.
     void init_shear_mode(double rho, double P, double V0, int k);
 
+    // T1 entropy wave (x-advection, periodic both dirs). Same definition
+    // as CartAle2::init_entropy_wave: ρ = ρ0(1 + A·sin(k·2π x/Lx)),
+    // P = P0 uniform, v = (u0, 0). After one period t = Lx/u0 the exact
+    // solution returns to the IC.
+    void init_entropy_wave(double rho0, double P0, double u0,
+                           double A, int k);
+
     // One vl2 predictor-corrector step.  Returns the dt actually used.
     double step(double t, double t_end);
 

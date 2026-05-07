@@ -320,6 +320,18 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.sph_forcing_lmax = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-forcing-seed") == 0 && i + 1 < argc)
             cfg.sph_forcing_seed = std::strtoull(argv[++i], nullptr, 0);
+        else if (std::strcmp(argv[i], "--ewave-rho0") == 0 && i + 1 < argc)
+            cfg.ewave_rho0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-P0") == 0 && i + 1 < argc)
+            cfg.ewave_P0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-u0") == 0 && i + 1 < argc)
+            cfg.ewave_u0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-A") == 0 && i + 1 < argc)
+            cfg.ewave_A = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-k") == 0 && i + 1 < argc)
+            cfg.ewave_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-periods") == 0 && i + 1 < argc)
+            cfg.ewave_periods = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--shear-V0") == 0 && i + 1 < argc)
             cfg.shear_V0 = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--shear-k") == 0 && i + 1 < argc)

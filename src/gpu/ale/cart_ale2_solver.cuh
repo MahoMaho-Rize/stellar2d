@@ -398,6 +398,17 @@ struct CartAle2Solver {
     // ν_eff = −slope / k² (the effective numerical dissipation).
     void init_shear_mode(double rho, double P, double V0, int k);
 
+    // T1 smooth-convergence entropy wave (x-direction uniform advection):
+    //   ρ(x, 0) = ρ0 · (1 + A · sin(k · 2π x / Lx))
+    //   P = P0  (uniform),  v = (u0, 0)
+    // With ΔP = 0 at every face and v·∇v = 0, the wave advects exactly:
+    //   ρ(x, t) = ρ(x - u0 t, 0)
+    // After one period T = Lx / u0 the exact solution returns to IC.
+    // L1 error on ρ at t = T, log-log fit across res → formal order.
+    // Requires periodic BC in both directions.
+    void init_entropy_wave(double rho0, double P0, double u0,
+                           double A, int k);
+
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
     // Athena inputs/hydro/athinput.lecoanet_kh: vflow=1, amp=0.01,

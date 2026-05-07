@@ -193,6 +193,16 @@ struct SimConfig {
     int    shear_k  = 1;
     double shear_rho = 1.0;
     double shear_P   = 1.0;
+    // ---- T1 entropy_wave (smooth convergence probe) ----
+    // IC: ρ = ewave_rho0·(1 + ewave_A·sin(ewave_k·2π x/Lx)),
+    //     P = ewave_P0, v = (ewave_u0, 0).  Periodic both dirs.
+    //     t_end set to `ewave_periods · Lx / u0` in the driver.
+    double ewave_rho0 = 1.0;
+    double ewave_P0   = 1.0;
+    double ewave_u0   = 1.0;
+    double ewave_A    = 0.01;
+    int    ewave_k    = 1;
+    double ewave_periods = 1.0;
 
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner

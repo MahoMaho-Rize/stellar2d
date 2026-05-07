@@ -26,6 +26,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_gresho = (cfg.test_case == "gresho");
     bool is_yee    = (cfg.test_case == "yee_vortex");
     bool is_shear  = (cfg.test_case == "shear_mode");
+    bool is_ewave  = (cfg.test_case == "entropy_wave");
     double Lx = 1.0;
     // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
     // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
@@ -35,6 +36,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
               : (is_hse || is_kh || is_sedov || is_noh || is_gresho) ? 1.0
               : is_yee ? 10.0
               : is_shear ? 1.0
+              : is_ewave ? 1.0
               : 0.2;
     if (is_yee) Lx = 10.0;
     double gam = is_hse ? cfg.gamma : 1.4;
@@ -208,6 +210,21 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
         }
         cale.init_shear_mode(cfg.shear_rho, cfg.shear_P,
                              cfg.shear_V0, cfg.shear_k);
+    } else if (is_ewave) {
+        if (cale.bc_mode != 3) {
+            std::fprintf(stderr,
+                "  [warn] entropy_wave requires --bc-x periodic --bc-y periodic; "
+                "current bc_mode=%d\n", cale.bc_mode);
+        }
+        cale.init_entropy_wave(cfg.ewave_rho0, cfg.ewave_P0,
+                               cfg.ewave_u0, cfg.ewave_A, cfg.ewave_k);
+        // Set t_end to N periods (period = Lx / u0) unless user overrode tend.
+        if (cfg.t_end == 1.0) {
+            cfg.t_end = cfg.ewave_periods * Lx / cfg.ewave_u0;
+            std::fprintf(stderr,
+                "  entropy_wave: auto t_end = %g (%.3g periods)\n",
+                cfg.t_end, cfg.ewave_periods);
+        }
     } else {
         cale.init_sod();
     }

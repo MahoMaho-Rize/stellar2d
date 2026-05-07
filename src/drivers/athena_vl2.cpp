@@ -18,9 +18,10 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     // init_andrassy2022 or any future IC method on the solver.
     bool is_andrassy = (cfg.test_case == "andrassy2022");
     bool is_shear    = (cfg.test_case == "shear_mode");
-    if (!is_andrassy && !is_shear) {
+    bool is_ewave    = (cfg.test_case == "entropy_wave");
+    if (!is_andrassy && !is_shear && !is_ewave) {
         std::fprintf(stderr,
-            "athena_vl2: supports --test {andrassy2022, shear_mode}\n");
+            "athena_vl2: supports --test {andrassy2022, shear_mode, entropy_wave}\n");
         return 1;
     }
     double Lx = 1.0, Ly = 1.0;
@@ -53,7 +54,7 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
         }
         std::fclose(fp);
     } else {
-        // shear_mode: Lx = Ly = 1, γ = 5/3.
+        // shear_mode / entropy_wave: Lx = Ly = 1, γ = 5/3.
         Lx = 1.0; Ly = 1.0; gam = 5.0 / 3.0;
     }
 
@@ -68,9 +69,18 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                              cfg.cart_ale2_andrassy_amp,
                              cfg.cart_ale2_andrassy_seed,
                              cfg.cart_ale2_andrassy_noise);
-    } else {
+    } else if (is_shear) {
         av.init_shear_mode(cfg.shear_rho, cfg.shear_P,
                            cfg.shear_V0, cfg.shear_k);
+    } else {
+        av.init_entropy_wave(cfg.ewave_rho0, cfg.ewave_P0,
+                             cfg.ewave_u0, cfg.ewave_A, cfg.ewave_k);
+        if (cfg.t_end == 1.0) {
+            cfg.t_end = cfg.ewave_periods * Lx / cfg.ewave_u0;
+            std::fprintf(stderr,
+                "  entropy_wave: auto t_end = %g (%.3g periods)\n",
+                cfg.t_end, cfg.ewave_periods);
+        }
     }
 
     const char* lim_name = (av.limiter == 1) ? "minmod" : "vanleer";

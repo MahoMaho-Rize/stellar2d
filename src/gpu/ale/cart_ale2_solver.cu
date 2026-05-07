@@ -615,6 +615,38 @@ void CartAle2Solver::init_shear_mode(double rho, double P, double V0, int k) {
         rho, P, V0, k, Ly, k * 2.0 * M_PI / Ly);
 }
 
+void CartAle2Solver::init_entropy_wave(double rho0, double P0, double u0,
+                                       double A, int k) {
+    g_y = 0.0;
+    double Lx = g_Lx;
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double rho = rho0 * (1.0 + A * std::sin(k * 2.0 * M_PI * Xc / Lx));
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = P0 / ((gamma - 1.0) * rho);
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_vX(nnode, u0), h_vY(nnode, 0.0);
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    std::fprintf(stderr,
+        "  CartAle2 entropy_wave IC: rho0=%g P0=%g u0=%g A=%g k=%d  (Lx=%g, period=%g)\n",
+        rho0, P0, u0, A, k, Lx, Lx / u0);
+}
+
 void CartAle2Solver::init_sod() {
     std::vector<double> h_X(nnode), h_Y(nnode);
     CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
