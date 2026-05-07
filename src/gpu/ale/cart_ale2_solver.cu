@@ -2173,6 +2173,145 @@ void CartAle2Solver::compute_sod_error(double t_now, int ncycle,
 }
 
 // ============================================================
+// Gresho stationary vortex compute_error.
+// Exact: vφ(r) = 5r (r<0.2), 2-5r (0.2≤r<0.4), 0 (r≥0.4) on [0,Lx]²
+// with domain centre (Lx/2, Lx/2). Stationary solution → IC at every t.
+// We download node velocities, average onto cell centers, compute
+// |v_sim − v_exact| inside r < 0.5 (the vortex disk) where the analytic
+// profile is non-trivial.
+// ============================================================
+void CartAle2Solver::compute_gresho_error(double t_now, int ncycle,
+                                          const std::string& run_dir) {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    std::vector<double> h_vX(nnode), h_vY(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(),  d_X,  nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(),  d_Y,  nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_vX.data(), d_vX, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_vY.data(), d_vY, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+
+    const double xc0 = 0.5 * g_Lx;
+    const double yc0 = 0.5 * g_Ly;
+    double l1 = 0.0, linf = 0.0, v_max_sim = 0.0;
+    int n_scored = 0;
+    for (int ic = 0; ic < nx; ++ic) {
+        for (int jc = 0; jc < ny; ++jc) {
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc  = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc  = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double vx  = 0.25 * (h_vX[I[0]] + h_vX[I[1]] + h_vX[I[2]] + h_vX[I[3]]);
+            double vy  = 0.25 * (h_vY[I[0]] + h_vY[I[1]] + h_vY[I[2]] + h_vY[I[3]]);
+            double speed_sim = std::sqrt(vx*vx + vy*vy);
+            if (speed_sim > v_max_sim) v_max_sim = speed_sim;
+
+            double dx = Xc - xc0, dy = Yc - yc0;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            if (r >= 0.5) continue;
+
+            double vphi;
+            if      (r < 0.2) vphi = 5.0 * r;
+            else if (r < 0.4) vphi = 2.0 - 5.0 * r;
+            else              vphi = 0.0;
+            // Gresho speed equals |vφ| since flow is purely azimuthal.
+            double e = std::fabs(speed_sim - vphi);
+            l1 += e;
+            linf = std::max(linf, e);
+            ++n_scored;
+        }
+    }
+    l1 /= (double)std::max(n_scored, 1);
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/gresho-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_gresho_error: cannot open %s\n", path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end L1 Linf v_max_sim\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, l1, linf, v_max_sim);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "gresho error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  v_max_sim=%.4f\n",
+        nx, ny, ncycle, l1, linf, v_max_sim);
+}
+
+// ============================================================
+// Yee-Vinokur-Djomehri isentropic vortex round-trip compute_error.
+// Domain [0,Lx]×[0,Ly] with centre (Lx/2, Ly/2), γ=1.4, advected at
+// (u_inf, v_inf). After t = Lx/u_inf the solution returns to IC by
+// periodicity. We compute L1/Linf on ρ − ρ_IC across the full domain.
+// ============================================================
+void CartAle2Solver::compute_yee_error(double t_now, int ncycle,
+                                       double beta, double u_inf, double v_inf,
+                                       const std::string& run_dir) {
+    (void)u_inf; (void)v_inf;  // periodicity returns state to IC exactly
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    std::vector<double> h_rho(ncell);
+    CUDA_CHECK(cudaMemcpy(h_X.data(),   d_X,   nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(),   d_Y,   nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_rho.data(), d_rho, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    const double xc0 = 0.5 * g_Lx;
+    const double yc0 = 0.5 * g_Ly;
+    const double gm1 = gamma - 1.0;
+    const double pref = gm1 * beta * beta / (8.0 * gamma * M_PI * M_PI);
+    double l1 = 0.0, linf = 0.0;
+    double rho_min = 1e30, rho_max = -1e30;
+    for (int ic = 0; ic < nx; ++ic) {
+        for (int jc = 0; jc < ny; ++jc) {
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double dx = Xc - xc0, dy = Yc - yc0;
+            double r2 = dx*dx + dy*dy;
+            double T  = 1.0 - pref * std::exp(1.0 - r2);
+            double rho_e = std::pow(T, 1.0 / gm1);
+
+            int flat = ic*ny + jc;
+            double rho = h_rho[flat];
+            if (rho < rho_min) rho_min = rho;
+            if (rho > rho_max) rho_max = rho;
+            double e = std::fabs(rho - rho_e);
+            l1 += e;
+            linf = std::max(linf, e);
+        }
+    }
+    l1 /= (double)std::max(ncell, 1);
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/yee-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_yee_error: cannot open %s\n", path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end L1 Linf rho_min rho_max\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.10e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, l1, linf, rho_min, rho_max);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "yee error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  rho=[%.3f,%.3f]\n",
+        nx, ny, ncycle, l1, linf, rho_min, rho_max);
+}
+
+// ============================================================
 // Write 2D Cartesian VTK (STRUCTURED_GRID) with density, pressure,
 // internal energy, velocity, mach. Nodes are always uniform in ALE,
 // so the mesh block is just nnode_x × nnode_y lattice points.

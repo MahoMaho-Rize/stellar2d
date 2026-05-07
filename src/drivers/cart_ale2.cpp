@@ -343,6 +343,14 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     if (cfg.compute_error && is_sod) {
         cale.compute_sod_error(t, step, ctx.run_dir);
     }
+    if (cfg.compute_error && is_gresho) {
+        cale.compute_gresho_error(t, step, ctx.run_dir);
+    }
+    if (cfg.compute_error && is_yee) {
+        cale.compute_yee_error(t, step, /*beta=*/5.0,
+                                /*u_inf=*/1.0, /*v_inf=*/1.0,
+                                ctx.run_dir);
+    }
     cale.destroy();
     return 0;
 }

@@ -453,6 +453,25 @@ struct CartAle2Solver {
     void compute_sod_error(double t_now, int ncycle,
                            const std::string& run_dir);
 
+    // Gresho stationary vortex post-run error.
+    // Exact solution is the IC itself (flow is stationary). We compute
+    // L1/Linf of |v_sim − v_exact| on cells inside the vortex disk
+    // (r < 0.5 from domain center) where the analytic vφ profile is
+    // non-trivial. Schema:
+    //   # Nx Ny Ncycle t_end L1 Linf v_max_sim
+    void compute_gresho_error(double t_now, int ncycle,
+                              const std::string& run_dir);
+
+    // Yee-Vinokur-Djomehri isentropic vortex round-trip error.
+    // After one period T = Lx/u_inf (default t=10 on [-5,5]²), the
+    // analytic ρ profile returns to the IC. We score L1/Linf of
+    // ρ_sim − ρ_exact on the full domain (periodic BC, no edge
+    // exclusion needed). Schema:
+    //   # Nx Ny Ncycle t_end L1 Linf rho_min rho_max
+    void compute_yee_error(double t_now, int ncycle,
+                           double beta, double u_inf, double v_inf,
+                           const std::string& run_dir);
+
     struct Diagnostics {
         double total_mass;
         double total_KE;

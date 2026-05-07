@@ -35,10 +35,14 @@
     --vtk-dt 0.2 --run-dir runs/sod_256
 ```
 
-**Check**:
+**Check** (C++ compute_error + pytest tst/, 2026-05-07 onwards):
 ```bash
-python3 scripts/tests_ale2/sod_compare.py --run-dir runs/sod_256 --t 0.2
+# Pass --compute-error to emit sod-errors.dat; pytest reads it.
+cd tst && STELLAR2D_BIN=../build/stellar2d pytest test_ale2/test_ale2_sod_gpu.py -v
 ```
+`scripts/tests_ale2/sod_compare.py` (legacy 120-line python Toro
+solver) was removed — the analytic is now in `src/gpu/common/sod_exact.h`,
+shared with `athena_vl2`.
 
 **Expected**:`L1(ρ)/|Δρ|` < 6%(256² MUSCL-vanleer 2026-05-07
 实测 5.0%,128² 实测 7.3%)。ALE swept-remap 在 Sod 上的典型
@@ -132,11 +136,12 @@ clamp 为 0,**掐断 IC 能量来源**,导致 ρ_post 根本无法达到 16。
     --vtk-dt 3.0 --run-dir runs/gresho_128
 ```
 
-**Check**:
+**Check** (C++ compute_error + pytest tst/):
 ```bash
-python3 scripts/tests_ale2/gresho_compare.py \
-    --run-dir runs/gresho_128 --t 3.0
+cd tst && STELLAR2D_BIN=../build/stellar2d pytest test_ale2/test_ale2_gresho_gpu.py -v
 ```
+`scripts/tests_ale2/gresho_compare.py` removed — error scored in C++
+via `CartAle2Solver::compute_gresho_error` (inside r<0.5 disk).
 
 **Expected**:`L1 drift` < 0.02 (v_max=1 → 2% 相对衰减)。如果
 `--shear-aware-av 0` 关 shear weight 则 drift 会明显增大,正好
@@ -158,11 +163,14 @@ python3 scripts/tests_ale2/gresho_compare.py \
     --vtk-dt 10.0 --run-dir runs/yee_256
 ```
 
-**Check**:
+**Check** (C++ compute_error + pytest tst/):
 ```bash
-python3 scripts/tests_ale2/yee_compare.py \
-    --run-dir runs/yee_256 --t 10.0
+cd tst && STELLAR2D_BIN=../build/stellar2d pytest test_ale2/test_ale2_yee_gpu.py -v
 ```
+`scripts/tests_ale2/yee_compare.py` removed — error scored in C++
+via `CartAle2Solver::compute_yee_error`. NOTE: pytest test uses
+short-t (t=1.0) for the fast bucket; full t=10 round-trip convergence
+is tracked in this README, not the fast CI.
 
 **Expected**:`L1(ρ − ρ_IC)` < 0.02(256²,2nd-order MUSCL)。
 PPM-prim 应当更好,L1 < 0.01。如果 L1 > 0.05 基本是 remap
@@ -172,15 +180,25 @@ PPM-prim 应当更好,L1 < 0.01。如果 L1 > 0.05 基本是 remap
 
 ## 跑一把所有 5 项
 
+**快速验证**(Sod / Gresho / Yee 走 pytest,2026-05-07 起):
+
 ```bash
-for t in sod sedov2d noh gresho yee_vortex; do
-    # res + BC + tend 差异由 runbook 决定 — 这里只是 skeleton
-    :
+cd tst
+STELLAR2D_BIN=../build/stellar2d pytest test_ale2 -m fast -v
+# 或者 ctest -L fast 在 build/ 跑(自动设环境变量)
+```
+
+**完整 convergence**(Sedov / Noh 仍用 python,无 C++ 解析解):
+
+```bash
+for t in sedov2d noh; do
+    ./stellar2d --solver cart_ale2 --test $t --nr 512 --ntheta 512 ...
+    python3 scripts/tests_ale2/${t}_compare.py --run-dir runs/${t}_512
 done
 ```
 
-推荐:第一次做 solver 改动后,**依次**手跑一遍确认没有回归;
-正式 PR/paper 前再用 512² 跑一遍 Sod / Sedov / Noh 看 convergence。
+推荐:第一次做 solver 改动后 `ctest -L fast` 扫一遍;
+正式 PR/paper 前用 512² 跑 Sedov / Noh 看 convergence。
 
 ## 调试建议
 
@@ -199,5 +217,8 @@ done
   `init_gresho`, `init_yee_vortex`),头文件 `cart_ale2_solver.cuh`
 - Driver dispatch:`src/drivers/cart_ale2.cpp`
 - test_case 白名单:`src/sim/setup.cpp`(grid-less branch)
-- 分析脚本:`scripts/tests_ale2/{sod,sedov,noh,gresho,yee}_compare.py`
-  + `_common.py`(VTK loader 复用自 andrassy2022/diagnose.py)
+- pytest tests(Sod / Gresho / Yee,2026-05-07 起):
+  `tst/test_ale2/test_ale2_{sod,gresho,yee}_gpu.py`,读 C++ 端写的
+  `<test>-errors.dat`(`CartAle2Solver::compute_{sod,gresho,yee}_error`)。
+- 分析脚本(仅 Sedov / Noh 仍用 python):
+  `scripts/tests_ale2/{sedov,noh}_compare.py` + `_common.py`。
