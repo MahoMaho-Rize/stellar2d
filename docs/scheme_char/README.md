@@ -14,6 +14,9 @@ docs/scheme_char/
 ├── README.md                          ← this file
 ├── 2026-05-07_nu_eff_comparison.*     ← T3: ν_eff on cart_ale2, athena_vl2,
 │                                        pseudo_spectral (task #50)
+├── 2026-05-07_andrassy_vrms_vs_res.*  ← T5: Andrassy 2022 v_rms / Ṁ_e
+│                                        resolution scan + non-monotonic
+│                                        dip explanation (task #49)
 └── runs/                              ← raw diagnostics.csv from each scan
     └── <solver>/res_N_V_V0/
         ├── diagnostics.csv            (flattened copy of the actual run)
