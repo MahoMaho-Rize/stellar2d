@@ -332,6 +332,8 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.ewave_k = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ewave-periods") == 0 && i + 1 < argc)
             cfg.ewave_periods = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--compute-error") == 0)
+            cfg.compute_error = true;
         else if (std::strcmp(argv[i], "--shear-V0") == 0 && i + 1 < argc)
             cfg.shear_V0 = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--shear-k") == 0 && i + 1 < argc)

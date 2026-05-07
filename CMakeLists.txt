@@ -197,6 +197,14 @@ if(PYTEST_EXECUTABLE)
     add_test(NAME pytest_fast
         COMMAND ${PYTEST_EXECUTABLE} -m "not slow" --tb=short -q
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    # End-to-end GPU pytest suite (tst/ framework, Phase 2 onwards).
+    # Needs the built stellar2d binary; STELLAR2D_BIN env points at it.
+    add_test(NAME pytest_gpu_fast
+        COMMAND ${PYTEST_EXECUTABLE} -m fast --tb=short -q
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tst)
+    set_tests_properties(pytest_gpu_fast PROPERTIES
+        LABELS "fast"
+        ENVIRONMENT "STELLAR2D_BIN=${CMAKE_BINARY_DIR}/stellar2d")
 endif()
 
 # Release build by default

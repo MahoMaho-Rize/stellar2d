@@ -203,6 +203,10 @@ struct SimConfig {
     double ewave_A    = 0.01;
     int    ewave_k    = 1;
     double ewave_periods = 1.0;
+    // --compute-error: when set, the solver's compute_*_error() is called
+    // at t_end for the active test_case (Athena++ compute_error pattern).
+    // Emits <run-base>/<test_case>-errors.dat; pytest tst/ reads it.
+    bool compute_error = false;
 
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner

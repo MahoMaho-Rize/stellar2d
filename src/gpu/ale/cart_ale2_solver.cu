@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
+#include <sys/stat.h>
+#include <string>
 
 // ==== Forward decls of all kernels in cart_ale_kernels.cu =====
 __global__ void k_cale2_geometry(const double*, const double*, double*, double*, int, int);
@@ -2043,6 +2045,74 @@ void CartAle2Solver::download_xslice(std::vector<double>& x,
         double wi = (w[ic] > 0) ? 1.0 / w[ic] : 0.0;
         x[ic] *= wi; rho[ic] *= wi; P[ic] *= wi; vx[ic] *= wi; e_int[ic] *= wi;
     }
+}
+
+// ============================================================
+// T1 entropy wave compute_error (Athena++ compute_error pattern).
+// Append one line to <run_dir>/entropy_wave-errors.dat with L1/Linf and a
+// phase-aligned L1 (shift fit removes bulk timing drift). python/pytest
+// only reads the .dat — never replicates the analytic solution.
+// ============================================================
+void CartAle2Solver::compute_entropy_wave_error(double t_now, int ncycle,
+                                                double rho0, double P0, double u0,
+                                                double A, int k, double periods,
+                                                const std::string& run_dir) {
+    std::vector<double> xs, rhos, Ps, vxs, es;
+    download_xslice(xs, rhos, Ps, vxs, es);
+
+    const double Lx = g_Lx;
+    const double twopi_k = 2.0 * M_PI * (double)k / Lx;
+    double l1 = 0.0, linf = 0.0;
+    for (int i = 0; i < (int)xs.size(); ++i) {
+        double expected = rho0 * (1.0 + A * std::sin(twopi_k * xs[i]));
+        double e = std::fabs(rhos[i] - expected);
+        l1  += e;
+        linf = std::max(linf, e);
+    }
+    l1 /= (double)std::max<size_t>(xs.size(), 1);
+
+    // Phase-aligned L1: fit best shift s in ρ_exact(x − s). The Lagrangian
+    // rezone injects a small bulk timing drift that is NOT a dissipation
+    // error. Scan shifts on a regular grid fine enough to resolve O(1/Nx):
+    // 2001 samples on [-Lx, Lx] gives < 0.1 * dx precision for Nx ≤ 1024.
+    const int N_SHIFT = 2001;
+    double best_l1 = l1, best_s = 0.0;
+    for (int si = 0; si < N_SHIFT; ++si) {
+        double s = -Lx + 2.0 * Lx * (double)si / (double)(N_SHIFT - 1);
+        double sum = 0.0;
+        for (int i = 0; i < (int)xs.size(); ++i) {
+            double expected = rho0 *
+                (1.0 + A * std::sin(twopi_k * (xs[i] - s)));
+            sum += std::fabs(rhos[i] - expected);
+        }
+        sum /= (double)std::max<size_t>(xs.size(), 1);
+        if (sum < best_l1) { best_l1 = sum; best_s = s; }
+    }
+
+    // Ensure the run_dir exists (no-op if already there) and append.
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/entropy_wave-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_entropy_wave_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end A k u0 L1 Linf L1_phase phase_shift\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.6e %d %.6e %.10e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, A, k, u0, l1, linf, best_l1, best_s);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "entropy_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
+        "L1_phase=%.4e (shift=%+.4f)\n",
+        nx, ny, ncycle, l1, linf, best_l1, best_s);
 }
 
 // ============================================================

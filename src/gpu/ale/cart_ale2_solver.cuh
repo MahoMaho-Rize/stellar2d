@@ -421,6 +421,28 @@ struct CartAle2Solver {
     // One ALE step: Lagrangian → Rezone → Remap
     double step(double t, double t_end);
 
+    // ---- T1 entropy wave post-run error (Athena++ compute_error pattern) ----
+    // After advecting the smooth wave for `periods` periods of length Lx/u0,
+    // the analytic solution is bit-identical to the IC. We compute:
+    //
+    //   ρ̄(x) = ⟨ρ(x, y)⟩_y  (volume-weighted, via download_xslice)
+    //   ρ_exact(x) = rho0 · (1 + A · sin(k · 2π x / Lx))
+    //
+    //   L1(ρ)   = ⟨|ρ̄ − ρ_exact|⟩_x
+    //   Linf(ρ) = max_x |ρ̄ − ρ_exact|
+    //
+    // We also report a phase-aligned L1 that fits the best shift s in
+    // ρ_exact(x − s), which is the "dissipation-only" residual after
+    // subtracting any Lagrangian-rezone bulk timing drift.
+    //
+    // Writes a single appended line to <run_dir>/entropy_wave-errors.dat
+    // with schema:
+    //   # Nx Ny Ncycle t_end A k u0 L1 Linf L1_phase phase_shift
+    void compute_entropy_wave_error(double t_now, int ncycle,
+                                    double rho0, double P0, double u0,
+                                    double A, int k, double periods,
+                                    const std::string& run_dir);
+
     struct Diagnostics {
         double total_mass;
         double total_KE;

@@ -158,6 +158,14 @@ struct AthenaVL2Solver {
     // VTK dump — same RECTILINEAR_GRID format cart_ale2 uses.
     void write_vtk_2d(const char* filename, double Lx, double Ly);
 
+    // T1 entropy wave post-run error (Athena++ compute_error pattern).
+    // See CartAle2Solver::compute_entropy_wave_error for the schema.
+    // Writes one appended line to <run_dir>/entropy_wave-errors.dat.
+    void compute_entropy_wave_error(double t_now, int ncycle,
+                                    double rho0, double P0, double u0,
+                                    double A, int k, double periods,
+                                    const std::string& run_dir);
+
     // ---- internal helpers ------------------------------------
     int stride_x() const { return nx + 2 * ng; }
     int stride_y() const { return ny + 2 * ng; }

@@ -1,0 +1,4 @@
+# Ephemeral per-test output directories created by run_stellar2d().
+# Each test writes diagnostics.csv, output_*.vtk, entropy_wave-errors.dat, etc.
+# inside tst/bin/<test_name>/<timestamp>/ — nothing worth tracking.
+bin/

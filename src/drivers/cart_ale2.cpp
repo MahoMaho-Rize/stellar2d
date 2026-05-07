@@ -332,6 +332,13 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     }
     std::fclose(csv);
     std::fprintf(stderr, "\n");
+    if (cfg.compute_error && is_ewave) {
+        cale.compute_entropy_wave_error(
+            t, step,
+            cfg.ewave_rho0, cfg.ewave_P0, cfg.ewave_u0,
+            cfg.ewave_A, cfg.ewave_k, cfg.ewave_periods,
+            ctx.run_dir);
+    }
     cale.destroy();
     return 0;
 }
