@@ -92,7 +92,7 @@ struct SimConfig {
     // --hllc <standard|lm|lhllc> — explicit form
     int hllc_variant = 0;
     int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
-    int cart_ale2_rebuild_order = 1; // cart_ale2 node v-rebuild: 0=1st-order mass-weighted avg, 1=2nd-order corner MUSCL w/ Barth-Jespersen limiter (default)
+    int cart_ale2_rebuild_order = 0; // cart_ale2 node v-rebuild: 0=1st-order mass-weighted avg (default, stable on stratified/reflect), 1=2nd-order corner MUSCL w/ Barth-Jespersen (experimental — stable on smooth periodic flow, but 2nd-order remap + 2nd-order rebuild + reflect wall + long-t stratification triggers atmosphere-mode instability as of 2026-05-07)
     std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
     int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
     int vtk_interval  = 0;   // cart_ale: step interval for VTK dump; 0 = follow output_interval

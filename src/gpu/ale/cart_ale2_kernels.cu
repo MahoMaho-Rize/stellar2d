@@ -447,11 +447,18 @@ void k_cale2_node_mass(const double* dm, double* mnode,
 // 4 corners. Using corner mass = 0.25·dm_cell keeps the sum
 // Σ_cell p_cell = Σ_node m_node · v_node exactly (because corner
 // shares sum back to node mass).
+//
+// P33 (Jensen #1): averaging 4 node velocities into a single cell
+// velocity is Jensen-convex on m·½v², so KE drops by
+//   ΔKE_#1 = Σ_k ¼dm · ½|v_k|²  −  ½dm · |v_cell|²                ≥ 0
+// which must become heat in THIS cell (strict local deposit, no
+// global reduction).
 // ============================================================
 __global__
 void k_cale2_cell_momentum(const double* vX, const double* vY,
                           const double* dm,
                           double* px, double* py,
+                          double* e_int,            // P33: in-place cell IE gets Jensen #1
                           int nx, int ny) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nx*ny) return;
@@ -461,14 +468,28 @@ void k_cale2_cell_momentum(const double* vX, const double* vY,
                  caln(ic+1, jc,   nny),
                  caln(ic+1, jc+1, nny),
                  caln(ic,   jc+1, nny) };
-    double qm = 0.25 * dm[flat];
+    double m = dm[flat];
+    double qm = 0.25 * m;
     double sx = 0.0, sy = 0.0;
+    double KE_node_sum = 0.0;
     for (int k = 0; k < 4; ++k) {
-        sx += qm * vX[I[k]];
-        sy += qm * vY[I[k]];
+        double vxk = vX[I[k]], vyk = vY[I[k]];
+        sx += qm * vxk;
+        sy += qm * vyk;
+        KE_node_sum += qm * 0.5 * (vxk*vxk + vyk*vyk);
     }
     px[flat] = sx;
     py[flat] = sy;
+    // Cell-centered velocity after averaging; its KE is ½m|v_cell|².
+    if (m > 1e-30) {
+        double vxc = sx / m, vyc = sy / m;
+        double KE_cell = 0.5 * m * (vxc*vxc + vyc*vyc);
+        double dKE_1 = KE_node_sum - KE_cell;    // Jensen ≥ 0
+        // Deposit heat per unit mass so m·Δe = dKE_1.
+        if (dKE_1 > 0.0) {
+            e_int[flat] += dKE_1 / m;
+        }
+    }
 }
 
 // ============================================================
@@ -547,41 +568,35 @@ void k_cale2_remap_east(const double* X0, const double* Y0,
     int cR_idx = ic + 1;
     if (x_per && cR_idx >= nx) cR_idx = 0;
     int cR = calc(cR_idx, jc, ny);
-    int donor = (As > 0.0) ? cL : cR;
+    int donor  = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
     double V_donor = fmax(Vol0[donor], 1e-30);
     double frac = fmin(V_sweep / V_donor, 0.5);   // clamp for safety
-    // Actual volume transferred:
     double V = frac * V_donor;
 
-    // Eq. (16.2): first-order donor-cell upwind flux — transported scalar
-    // equals the donor-cell density times the swept volume.
+    // Eq. (16.2): first-order donor-cell upwind flux.
     double d_dm = (dm[donor] / V_donor) * V;
     double d_ie = (dm[donor] * e_int[donor] / V_donor) * V;
     double d_px = (px[donor] / V_donor) * V;
     double d_py = (py[donor] / V_donor) * V;
 
-    // Eq. (16.5): donor subtracts, acceptor adds the same value.
-    if (As > 0.0) {
-        // donor = L, receiver = R
-        atomicAdd(&dm_new[cL], -d_dm);
-        atomicAdd(&ie_new[cL], -d_ie);
-        atomicAdd(&px_new[cL], -d_px);
-        atomicAdd(&py_new[cL], -d_py);
-        atomicAdd(&dm_new[cR],  d_dm);
-        atomicAdd(&ie_new[cR],  d_ie);
-        atomicAdd(&px_new[cR],  d_px);
-        atomicAdd(&py_new[cR],  d_py);
-    } else {
-        atomicAdd(&dm_new[cR], -d_dm);
-        atomicAdd(&ie_new[cR], -d_ie);
-        atomicAdd(&px_new[cR], -d_px);
-        atomicAdd(&py_new[cR], -d_py);
-        atomicAdd(&dm_new[cL],  d_dm);
-        atomicAdd(&ie_new[cL],  d_ie);
-        atomicAdd(&px_new[cL],  d_px);
-        atomicAdd(&py_new[cL],  d_py);
-    }
+    // Eq. (16.5): donor subtracts, acceptor adds the transported amount.
+    // KE Jensen loss is handled LATER in remap_finalize_cells (P33) where
+    // the full pre-to-post KE difference is computed per cell — avoids the
+    // pairwise-vs-sequential N-streams-merge approximation error from
+    // deposing Jensen edge-by-edge.
+    atomicAdd(&dm_new[donor],  -d_dm);
+    atomicAdd(&ie_new[donor],  -d_ie);
+    atomicAdd(&px_new[donor],  -d_px);
+    atomicAdd(&py_new[donor],  -d_py);
+    atomicAdd(&dm_new[cR],  (As > 0.0) ? d_dm : 0.0);
+    atomicAdd(&ie_new[cR],  (As > 0.0) ? d_ie : 0.0);
+    atomicAdd(&px_new[cR],  (As > 0.0) ? d_px : 0.0);
+    atomicAdd(&py_new[cR],  (As > 0.0) ? d_py : 0.0);
+    atomicAdd(&dm_new[cL],  (As > 0.0) ? 0.0 : d_dm);
+    atomicAdd(&ie_new[cL],  (As > 0.0) ? 0.0 : d_ie);
+    atomicAdd(&px_new[cL],  (As > 0.0) ? 0.0 : d_px);
+    atomicAdd(&py_new[cL],  (As > 0.0) ? 0.0 : d_py);
 }
 
 // North edges: edge between (ic, jc) and (ic, jc+1).
@@ -618,7 +633,7 @@ void k_cale2_remap_north(const double* X0, const double* Y0,
     int cU_idx = jc + 1;
     if (y_per && cU_idx >= ny) cU_idx = 0;
     int cU = calc(ic, cU_idx, ny);     // up (wraps under y-periodic)
-    int donor = (As > 0.0) ? cD : cU;
+    int donor  = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
     double V_donor = fmax(Vol0[donor], 1e-30);
     double frac = fmin(V_sweep / V_donor, 0.5);
@@ -629,25 +644,18 @@ void k_cale2_remap_north(const double* X0, const double* Y0,
     double d_px = (px[donor] / V_donor) * V;
     double d_py = (py[donor] / V_donor) * V;
 
-    if (As > 0.0) {
-        atomicAdd(&dm_new[cD], -d_dm);
-        atomicAdd(&ie_new[cD], -d_ie);
-        atomicAdd(&px_new[cD], -d_px);
-        atomicAdd(&py_new[cD], -d_py);
-        atomicAdd(&dm_new[cU],  d_dm);
-        atomicAdd(&ie_new[cU],  d_ie);
-        atomicAdd(&px_new[cU],  d_px);
-        atomicAdd(&py_new[cU],  d_py);
-    } else {
-        atomicAdd(&dm_new[cU], -d_dm);
-        atomicAdd(&ie_new[cU], -d_ie);
-        atomicAdd(&px_new[cU], -d_px);
-        atomicAdd(&py_new[cU], -d_py);
-        atomicAdd(&dm_new[cD],  d_dm);
-        atomicAdd(&ie_new[cD],  d_ie);
-        atomicAdd(&px_new[cD],  d_px);
-        atomicAdd(&py_new[cD],  d_py);
-    }
+    atomicAdd(&dm_new[donor],  -d_dm);
+    atomicAdd(&ie_new[donor],  -d_ie);
+    atomicAdd(&px_new[donor],  -d_px);
+    atomicAdd(&py_new[donor],  -d_py);
+    atomicAdd(&dm_new[cU],  (As > 0.0) ? d_dm : 0.0);
+    atomicAdd(&ie_new[cU],  (As > 0.0) ? d_ie : 0.0);
+    atomicAdd(&px_new[cU],  (As > 0.0) ? d_px : 0.0);
+    atomicAdd(&py_new[cU],  (As > 0.0) ? d_py : 0.0);
+    atomicAdd(&dm_new[cD],  (As > 0.0) ? 0.0 : d_dm);
+    atomicAdd(&ie_new[cD],  (As > 0.0) ? 0.0 : d_ie);
+    atomicAdd(&px_new[cD],  (As > 0.0) ? 0.0 : d_px);
+    atomicAdd(&py_new[cD],  (As > 0.0) ? 0.0 : d_py);
 }
 
 // Initialize remap accumulators to the Lagrangian-state values
@@ -666,19 +674,38 @@ void k_cale2_remap_init(const double* dm, const double* e_int,
     py_new[c] = py[c];
 }
 
-// Finalize: write dm_new → dm, ie_new/dm_new → e_int, p/m → velocity contribs.
+// Finalize: write dm_new → dm, ie_new/dm_new → e_int.
+// Jensen KE→IE compensation happens via edge-level deposits inside
+// remap_east/north (for flux Jensen) and rebuild_node_v (for node-avg
+// Jensen). This kernel just writes out state.
 __global__
-void k_cale2_remap_finalize_cells(const double* dm_new, const double* ie_new,
-                                 double* dm, double* e_int,
-                                 int ncell) {
+// Per-cell Jensen #2 deposit (P33): KE lost by swept-remap averaging becomes
+// local IE. Each cell uses its OWN pre/post mass as the KE caliper:
+//   ΔKE_2[c] = ½|p_pre|²/m_pre  −  ½|p_new|²/m_new
+// Σ px, Σ py, Σ dm are conserved by linear swept transport; ½|p|²/m is convex
+// in p, so Σ ΔKE_2 = global Jensen #2 loss ≥ 0. Per-cell value can be ±, but
+// the transfer is conservative: each cell's p and e_int jointly hold a fixed
+// total kinetic+internal budget regardless of sign.
+//
+// This is strictly local — no reduction, no mean-field. Replaces the pre-P33
+// global KE-compensate_uniform kernel.
+void k_cale2_remap_finalize_cells(const double* dm_pre, const double* /*e_int_pre*/,
+                                  const double* px_pre, const double* py_pre,
+                                  const double* dm_new, const double* ie_new,
+                                  const double* px_new, const double* py_new,
+                                  double* dm, double* e_int,
+                                  int ncell) {
     int c = blockIdx.x * blockDim.x + threadIdx.x;
     if (c >= ncell) return;
-    // Floor dm: PPM/MUSCL overshoot on sharp contacts can produce tiny
-    // negative masses after the donor/acceptor swap. Clamp to keep EOS
-    // sane; the paired e_int floor mirrors the positivity guard in EOS.
+    double m_pre = dm_pre[c];
     double m_new = fmax(dm_new[c], 1e-30);
-    dm[c] = m_new;
-    e_int[c] = fmax(ie_new[c] / m_new, 1e-30);
+    double KE_pre = (m_pre > 1e-30)
+                  ? 0.5 * (px_pre[c]*px_pre[c] + py_pre[c]*py_pre[c]) / m_pre
+                  : 0.0;
+    double KE_new = 0.5 * (px_new[c]*px_new[c] + py_new[c]*py_new[c]) / m_new;
+    double ie_total = ie_new[c] + (KE_pre - KE_new);   // Jensen #2
+    dm[c]    = m_new;
+    e_int[c] = fmax(ie_total / m_new, 1e-30);
 }
 
 // Forward-decl: defined below alongside the hydro slopes_minmod kernel.
@@ -805,11 +832,26 @@ void k_cale2_velocity_slopes(const double* vxc, const double* vyc,
 // global Σ_node m_node·v_node = Σ_cell px_new hold exactly when node
 // mass is ¼Σ_adj dm (the same relation the legacy rebuild used).
 __global__
+// Per-node compatible KE→IE compensation (P33 fix).
+// Rebuild just averages cell momentum into node velocity (Jensen-convex
+// operation → necessarily loses KE). The deposit point of this lost KE
+// must be LOCAL: the 4 cells touching the node that lost it.
+// The actual ΔKE is computed by k_cale2_compute_node_dKE *after* rebuild
+// using the snapshotted v_pre (Phase-M entry node velocity, which equals
+// Lagrangian-phase exit v) and current v_post (rebuild output), with the
+// consistent post-remap mass m_node (set in solver.cu before this kernel
+// is called). This kernel therefore only contains the rebuild itself (no
+// energy accounting) and delegates ΔKE math to a dedicated compute kernel —
+// cleaner separation, and lets 1st/2nd-order rebuild share the same
+// post-rebuild compensation path.
+__global__
 void k_cale2_rebuild_node_v_2nd(const double* vxc, const double* vyc,
                                 const double* vxc_sx, const double* vxc_sy,
                                 const double* vyc_sx, const double* vyc_sy,
                                 const double* dm_new,
                                 double* vX, double* vY,
+                                double* /*e_int_incr*/,    // unused here (see compute_node_dKE)
+                                double* /*dKE_node_out*/,  // unused
                                 int nx, int ny, double dx_u, double dy_u,
                                 int bc_mode) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
@@ -836,13 +878,6 @@ void k_cale2_rebuild_node_v_2nd(const double* vxc, const double* vyc,
                 if (jc < 0 || jc >= ny) continue;
             }
             int c = ic * ny + jc;
-            // Local corner offset derived from (di, dj), NOT from (in - ic).
-            // Under periodic BC ic/jc can be wrapped by ±nx/ny so in−ic
-            // would give a huge (nx-1)·dx offset — spurious slope extrapolation
-            // that blew up Yee 256² historically. With (di, dj) fixed ∈
-            // {-1, 0}²:
-            //   di = -1 ⇒ node is to the right/top of cell  ⇒ +½Δ
-            //   di =  0 ⇒ node is to the left/bottom of cell ⇒ -½Δ
             double ex = (di == -1 ? +0.5 : -0.5) * dx_u;
             double ey = (dj == -1 ? +0.5 : -0.5) * dy_u;
             double vx_corner = vxc[c] + vxc_sx[c]*ex + vxc_sy[c]*ey;
@@ -860,17 +895,15 @@ void k_cale2_rebuild_node_v_2nd(const double* vxc, const double* vyc,
 }
 
 // Rebuild node velocity — mass-weighted average of adjacent cell-centered
-// velocities. For a node with up to 4 adjacent cells:
-//   v_node = Σ(0.25·m_c · v_c) / Σ(0.25·m_c) = Σ p_c/4 / Σ m_c/4
-// Equivalently Σ px_c / Σ m_c (each cell contributes 1/4 of its mass to
-// a node). This is exactly momentum-conservative: the kinetic energy
-// loss from the averaging is proportional to ∇v variance within the
-// stencil, which is physically meaningful (sub-grid diffusion), not
-// the arithmetic-mean artifact of the old rebuild.
+// velocities. 1st-order (donor-cell) rebuild. KE compensation is identical
+// in structure to the 2nd-order version, just with constant per-cell velocity
+// (no slope extrapolation). See rebuild_node_v_2nd for the full rationale.
 __global__
 void k_cale2_rebuild_node_v(const double* px_new, const double* py_new,
                            const double* dm_new,
                            double* vX, double* vY,
+                           double* /*e_int_incr*/,    // unused (see compute_node_dKE)
+                           double* /*dKE_node_out*/,  // unused
                            int nx, int ny, int bc_mode) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     int nnx = nx + 1, nny = ny + 1;
@@ -896,16 +929,84 @@ void k_cale2_rebuild_node_v(const double* px_new, const double* py_new,
                 if (jc < 0 || jc >= ny) continue;
             }
             int c = ic * ny + jc;
-            // each adjacent cell contributes 1/4 of its corner mass+momentum.
             spx += 0.25 * px_new[c];
             spy += 0.25 * py_new[c];
             sm  += 0.25 * dm_new[c];
         }
     }
-    // Eq. (16.6): mass-weighted rebuild — momentum-conservative.
     if (sm > 1e-30) {
         vX[flat] = spx / sm;
         vY[flat] = spy / sm;
+    }
+}
+
+// Per-node Jensen #3 loss: rebuild_node_v does
+//   v_node = (Σ_k ¼m_c v_c) / (Σ_k ¼m_c)
+// which is Jensen-convex averaging of N cell velocities (N=4 interior,
+// fewer at reflective boundaries). Loss:
+//   ΔKE_#3 = Σ_k ¼m_c · ½|v_c|²  −  ½m_node · |v_node|²      ≥ 0
+// computed from POST-REMAP cell state only (dm_new, px_new, py_new),
+// which is self-consistent (no mixing of old/new masses). Deposited
+// equally among the N contributing cells (each m_c·Δe = share_c).
+__global__
+void k_cale2_compute_node_dKE(const double* vX,     const double* vY,
+                              const double* m_node,       // post-remap node mass
+                              const double* dm_new,       // post-remap cell mass
+                              const double* px_new,       // post-remap cell momentum
+                              const double* py_new,
+                              double* e_int_incr,         // cell-local ΔIE accumulator
+                              double* dKE_node_out,       // diagnostic (may be nullptr)
+                              int nx, int ny, int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int nnx = nx + 1, nny = ny + 1;
+    int n = nnx * nny;
+    if (flat >= n) return;
+    int in = flat / nny, jn = flat % nny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    bool is_dup = (x_per && in == nnx - 1) || (y_per && jn == nny - 1);
+    if (is_dup) {
+        if (dKE_node_out) dKE_node_out[flat] = 0.0;
+        return;
+    }
+    // Accumulate each corner's KE contribution (¼ m_c · ½ v_c²).
+    int cc[4]; int n_cells = 0;
+    double KE_corner_sum = 0.0;
+    for (int di = -1; di <= 0; ++di) {
+        for (int dj = -1; dj <= 0; ++dj) {
+            int ic = in + di, jc = jn + dj;
+            if (x_per) {
+                if (ic < 0)  ic = nx - 1;
+                if (ic >= nx) ic = 0;
+            } else {
+                if (ic < 0 || ic >= nx) continue;
+            }
+            if (y_per) {
+                if (jc < 0)  jc = ny - 1;
+                if (jc >= ny) jc = 0;
+            } else {
+                if (jc < 0 || jc >= ny) continue;
+            }
+            int c = ic * ny + jc;
+            double m_c = fmax(dm_new[c], 1e-30);
+            double vx_c = px_new[c] / m_c;
+            double vy_c = py_new[c] / m_c;
+            double qm = 0.25 * dm_new[c];
+            KE_corner_sum += qm * 0.5 * (vx_c*vx_c + vy_c*vy_c);
+            cc[n_cells++] = c;
+        }
+    }
+    if (n_cells == 0) { if (dKE_node_out) dKE_node_out[flat] = 0.0; return; }
+    double mn = m_node[flat];
+    double vxn = vX[flat], vyn = vY[flat];
+    double KE_node = 0.5 * mn * (vxn*vxn + vyn*vyn);
+    double dKE = KE_corner_sum - KE_node;   // Jensen ≥ 0 modulo round-off
+    if (dKE_node_out) dKE_node_out[flat] = dKE;
+    if (dKE <= 0.0) return;                  // no spurious negatives
+    double share = dKE / (double) n_cells;
+    for (int k = 0; k < n_cells; ++k) {
+        double m_c = fmax(dm_new[cc[k]], 1e-30);
+        atomicAdd(&e_int_incr[cc[k]], share / m_c);
     }
 }
 
@@ -1133,6 +1234,7 @@ void k_cale2_remap_east_2nd(const double* X0, const double* Y0,
     }
 
     // Eq. (16.4): MUSCL linear reconstruction at swept-region centroid.
+    // KE Jensen loss NOT deposited here — handled in remap_finalize_cells (P33).
     double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
     double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
     double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
@@ -1221,6 +1323,7 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
     }
 
     // Eq. (16.4): MUSCL linear reconstruction at swept-region centroid.
+    // KE Jensen loss NOT deposited here — handled in remap_finalize_cells (P33).
     double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
     double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
     double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
@@ -2291,25 +2394,25 @@ void k_cale2_copy(const double* src, double* dst, int n) {
     if (i < n) dst[i] = src[i];
 }
 
-// Mass-weighted distribution of the GLOBAL KE deficit across cells.
-// The cell-local KE_before/KE_after pair is not a clean before/after of
-// the same fluid parcel (remap swaps mass between cells), so using the
-// cell-local ΔKE double-counts the transported part. Instead we apply
-// the global total ΔKE, distributed over cells in proportion to their
-// post-remap mass — this makes total E = KE+IE invariant to machine
-// precision while preserving the physical interpretation "lost KE
-// becomes heat".
-//
-// dKE_total is precomputed on the host via a gpu_reduce over
-// (KE_before − KE_after), then passed in as `dKE_total_over_M` =
-// dKE_total / total_mass (scalar).
+// Apply the per-cell local IE increment accumulated during rebuild_node_v.
+// This replaces the old global k_cale2_ke_compensate_uniform (P33).
+// Each cell's Δe was written by 1-4 adjacent nodes during rebuild, strictly
+// drawing from Jensen-KE losses at those nodes — purely local, no global
+// mean-field mixing. After this kernel, clear e_int_incr for next step.
 __global__
-void k_cale2_ke_compensate_uniform(double delta_e_per_mass,
-                                   double* e_int, int ncell) {
+void k_cale2_apply_ie_incr(double* e_int, double* e_int_incr, int ncell) {
     int c = blockIdx.x * blockDim.x + threadIdx.x;
     if (c >= ncell) return;
-    e_int[c] += delta_e_per_mass;
+    e_int[c] += e_int_incr[c];
     if (e_int[c] < 1e-30) e_int[c] = 1e-30;
+    e_int_incr[c] = 0.0;   // zero for next step
+}
+
+// Zero a device scalar buffer (cell- or node-size).
+__global__
+void k_cale2_zero_buf(double* buf, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) buf[i] = 0.0;
 }
 
 // ============================================================

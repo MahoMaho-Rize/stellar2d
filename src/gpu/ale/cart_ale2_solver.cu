@@ -41,7 +41,7 @@ __global__ void k_cale2_init_nodes(double*, double*, double*, double*, double, d
 __global__ void k_cale2_reset_mesh(const double*, const double*, double*, double*, int);
 __global__ void k_cale2_node_mass(const double*, double*, int, int, int);
 __global__ void k_cale2_cell_momentum(const double*, const double*, const double*,
-    double*, double*, int, int);
+    double*, double*, double*, int, int);
 __global__ void k_cale2_remap_init(const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int);
 __global__ void k_cale2_remap_east(const double*, const double*, const double*, const double*,
@@ -50,7 +50,11 @@ __global__ void k_cale2_remap_east(const double*, const double*, const double*, 
 __global__ void k_cale2_remap_north(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int, int, int);
-__global__ void k_cale2_remap_finalize_cells(const double*, const double*, double*, double*, int);
+__global__ void k_cale2_remap_finalize_cells(const double*, const double*,
+                                              const double*, const double*,
+                                              const double*, const double*,
+                                              const double*, const double*,
+                                              double*, double*, int);
 __global__ void k_cale2_species_init_scratch(const double*, double*, int);
 __global__ void k_cale2_species_remap_east(const double*, const double*, const double*, const double*,
     const double*, const double*, double*, int, int, int);
@@ -64,7 +68,9 @@ __global__ void k_cale2_species_remap_east_2nd(const double*, const double*, con
 __global__ void k_cale2_species_remap_north_2nd(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, double*, int, int, double, double, int);
 __global__ void k_cale2_rebuild_node_v(const double*, const double*, const double*,
-    double*, double*, int, int, int);
+    double*, double*,
+    double*, double*,  /* e_int_incr, dKE_node_out */
+    int, int, int);
 __global__ void k_cale2_bc_velocity(double*, double*, int, int, int);
 __global__ void k_cale2_periodic_sync_node(double*, double*, int, int, int, int);
 __global__ void k_cale2_cell_densities(const double*, const double*, const double*, const double*,
@@ -85,7 +91,14 @@ __global__ void k_cale2_remap_north_2nd(const double*, const double*, const doub
 __global__ void k_cale2_node_KE(const double*, const double*, const double*,
                                 int, int, int, double*);
 __global__ void k_cale2_copy(const double*, double*, int);
-__global__ void k_cale2_ke_compensate_uniform(double, double*, int);
+__global__ void k_cale2_apply_ie_incr(double*, double*, int);
+__global__ void k_cale2_zero_buf(double*, int);
+__global__ void k_cale2_compute_node_dKE(const double*, const double*,
+                                         const double*,
+                                         const double*,
+                                         const double*, const double*,
+                                         double*, double*,
+                                         int, int, int);
 __global__ void k_cale2_cell_velocity(const double*, const double*, const double*,
                                       double*, double*, int);
 __global__ void k_cale2_velocity_slopes(const double*, const double*,
@@ -96,6 +109,7 @@ __global__ void k_cale2_rebuild_node_v_2nd(const double*, const double*,
                                            const double*, const double*,
                                            const double*,
                                            double*, double*,
+                                           double*, double*,  /* e_int_incr, dKE_node_out */
                                            int, int, double, double, int);
 __global__ void k_cale2_snapshot(const double*, const double*, const double*,
     const double*, const double*, double*, int, int);
@@ -185,12 +199,16 @@ void CartAle2Solver::init(int nx_in, int ny_in, double Lx, double Ly,
     mal(&d_ie_new,  ncell*sizeof(double));
     mal(&d_px_new,  ncell*sizeof(double));
     mal(&d_py_new,  ncell*sizeof(double));
-    mal(&d_m_node_ref,      nnode*sizeof(double));
-    mal(&d_vX_pre,          nnode*sizeof(double));
-    mal(&d_vY_pre,          nnode*sizeof(double));
-    mal(&d_KE_node_before,  nnode*sizeof(double));
-    mal(&d_KE_node_after,   nnode*sizeof(double));
-    mal(&d_node_reduce_buf, nnode*sizeof(double));
+    mal(&d_m_node_ref,       nnode*sizeof(double));
+    mal(&d_vX_pre,           nnode*sizeof(double));
+    mal(&d_vY_pre,           nnode*sizeof(double));
+    mal(&d_KE_node_snap_pre, nnode*sizeof(double));
+    mal(&d_KE_node_snap_post,nnode*sizeof(double));
+    mal(&d_dKE_node_local,   nnode*sizeof(double));
+    mal(&d_e_int_incr,       ncell*sizeof(double));
+    mal(&d_node_reduce_buf,  nnode*sizeof(double));
+    // e_int_incr must start zeroed — rebuild atomic-adds into it.
+    cudaMemset(d_e_int_incr, 0, ncell*sizeof(double));
     mal(&d_vxc, ncell*sizeof(double));
     mal(&d_vyc, ncell*sizeof(double));
     mal(&d_vxc_sx, ncell*sizeof(double));
@@ -247,7 +265,8 @@ void CartAle2Solver::destroy() {
     f(d_px_cell); f(d_py_cell);
     f(d_dm_new); f(d_ie_new); f(d_px_new); f(d_py_new);
     f(d_m_node_ref); f(d_vX_pre); f(d_vY_pre);
-    f(d_KE_node_before); f(d_KE_node_after); f(d_node_reduce_buf);
+    f(d_KE_node_snap_pre); f(d_KE_node_snap_post);
+    f(d_dKE_node_local); f(d_e_int_incr); f(d_node_reduce_buf);
     f(d_vxc); f(d_vyc);
     f(d_vxc_sx); f(d_vxc_sy); f(d_vyc_sx); f(d_vyc_sy);
     f(d_rho_dens); f(d_rhoE_dens); f(d_pxd_dens); f(d_pyd_dens);
@@ -1541,7 +1560,12 @@ double CartAle2Solver::step(double t, double t_end) {
     k_cale2_copy<<<BNode, B>>>(d_mnode, d_m_node_ref, nnode);
 
     // Snapshot cell-centered momentum from current node velocities BEFORE rezone.
-    k_cale2_cell_momentum<<<BCell, B>>>(d_vX, d_vY, d_dm, d_px_cell, d_py_cell, nx, ny);
+    // Jensen #1 loss (node v → cell v averaging) is deposited in-place into
+    // d_e_int for this cell — strictly local, no global reduction (P33 fix).
+    k_cale2_cell_momentum<<<BCell, B>>>(d_vX, d_vY, d_dm,
+                                        d_px_cell, d_py_cell,
+                                        d_e_int,  // Jensen #1 deposit
+                                        nx, ny);
 
     // Vol was set to pre-Lagrangian geom; we need pre-Lagrangian donor volume.
     // In Eulerian rezone the "old" mesh for swept-remap is X0/Y0 (uniform),
@@ -1694,8 +1718,12 @@ double CartAle2Solver::step(double t, double t_end) {
         }
     }
 
-    // Finalize dm, e_int from accumulators
-    k_cale2_remap_finalize_cells<<<BCell, B>>>(d_dm_new, d_ie_new, d_dm, d_e_int, ncell);
+    // Finalize dm, e_int from accumulators + per-cell Jensen #2 deposit (P33).
+    // Pass pre-remap (dm, e_int, px_cell, py_cell) AND post-remap new state
+    // so the kernel can compute fixed-mass KE difference in place.
+    k_cale2_remap_finalize_cells<<<BCell, B>>>(d_dm, d_e_int, d_px_cell, d_py_cell,
+                                               d_dm_new, d_ie_new, d_px_new, d_py_new,
+                                               d_dm, d_e_int, ncell);
 
     // Passive species tracer X: conservative swept flux of species mass mX=X·dm.
     // Order matches hydro remap_order:  1 = donor-cell, ≥2 = MUSCL minmod-limited
@@ -1745,6 +1773,9 @@ double CartAle2Solver::step(double t, double t_end) {
     // cell → momentum-conservative, but v-field is preserved exactly
     // on linear/rotational flows (fixes Gresho KE smoothing).  Falls
     // back to 1st-order mass-weighted average when remap_order < 2.
+    // Rebuild node velocity from remapped cell momenta (mass-weighted avg →
+    // Jensen-convex, necessarily loses KE). KE accounting happens in a
+    // dedicated kernel below, so rebuild itself stays pure.
     if (rebuild_order >= 1 && remap_order >= 2) {
         k_cale2_cell_velocity<<<BCell, B>>>(d_px_new, d_py_new, d_dm_new,
                                            d_vxc, d_vyc, ncell);
@@ -1757,10 +1788,13 @@ double CartAle2Solver::step(double t, double t_end) {
                                                  d_vxc_sx, d_vxc_sy,
                                                  d_vyc_sx, d_vyc_sy,
                                                  d_dm_new, d_vX, d_vY,
+                                                 nullptr, nullptr,  // unused legacy params
                                                  nx, ny, dx_u, dy_u, bc_mode);
     } else {
         k_cale2_rebuild_node_v<<<BNode, B>>>(d_px_new, d_py_new, d_dm_new,
-                                            d_vX, d_vY, nx, ny, bc_mode);
+                                            d_vX, d_vY,
+                                            nullptr, nullptr,
+                                            nx, ny, bc_mode);
     }
     k_cale2_bc_velocity<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode);
     if (bc_mode) k_cale2_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY,
@@ -1772,20 +1806,29 @@ double CartAle2Solver::step(double t, double t_end) {
     // Refresh node mass (dm redistributes a bit each step).
     k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
 
-    // Phase-M KE compensation. KE_before uses pre-remap (m_node_ref, v_pre)
-    // → matches the diagnostic of the previous step; KE_after uses post-
-    // remap (m_node, v) → matches the diagnostic of the current step.
-    // Σ (KE + IE) seen by the diagnostic is invariant to machine precision
-    // across this step.
+    // (A) Jensen #3: cell v → node v averaging in rebuild. Compute entirely
+    //     from post-remap state (self-consistent, no old/new-mass mixing).
+    //     Deposit equally to N ≤ 4 adjacent cells' IE via e_int_incr.
+    //     Together with Jensen #1 (in cell_momentum) and Jensen #2 (in
+    //     remap_east/north edge kernels), this covers all three mass-
+    //     averaging operations in a full step — E is conserved exactly
+    //     to machine precision, locally.
+    k_cale2_compute_node_dKE<<<BNode, B>>>(d_vX, d_vY,
+                                           d_mnode,
+                                           d_dm_new,
+                                           d_px_new, d_py_new,
+                                           d_e_int_incr,
+                                           d_dKE_node_local,
+                                           nx, ny, bc_mode);
+    k_cale2_apply_ie_incr<<<BCell, B>>>(d_e_int, d_e_int_incr, ncell);
+
+    // (B) Diagnostic KE snapshots — consistent-mass caliper, independent of
+    //     compensation path. Currently written but not read in the hot loop;
+    //     left available for step-by-step E-budget debugging scripts.
     k_cale2_node_KE<<<BNode, B>>>(d_vX_pre, d_vY_pre, d_m_node_ref,
-                                  nnode_x, nnode_y, bc_mode, d_KE_node_before);
-    k_cale2_node_KE<<<BNode, B>>>(d_vX, d_vY, d_mnode,
-                                  nnode_x, nnode_y, bc_mode, d_KE_node_after);
-    double KE_before_tot = gpu_reduce_sum(d_KE_node_before, d_node_reduce_buf, nnode);
-    double KE_after_tot  = gpu_reduce_sum(d_KE_node_after,  d_node_reduce_buf, nnode);
-    double M_tot         = gpu_reduce_sum(d_dm,             d_reduce_buf,      ncell);
-    double delta_e = (M_tot > 1e-30) ? (KE_before_tot - KE_after_tot) / M_tot : 0.0;
-    k_cale2_ke_compensate_uniform<<<BCell, B>>>(delta_e, d_e_int, ncell);
+                                  nnode_x, nnode_y, bc_mode, d_KE_node_snap_pre);
+    k_cale2_node_KE<<<BNode, B>>>(d_vX,     d_vY,     d_m_node_ref,
+                                  nnode_x, nnode_y, bc_mode, d_KE_node_snap_post);
 
     // Optional Newton cooling toward the IC stratification (only applied
     // if alloc_cooling_ref was called and tau_cool > 0).

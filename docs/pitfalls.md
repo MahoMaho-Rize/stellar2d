@@ -8,6 +8,7 @@ P01–P22: Low-Mach implicit solver (`lowmach_solver.cu`).
 P23–P29: FAS solver and Strang Cartesian solver.
 P30: Conservation fix for atmosphere reset.
 P31–P32: cart_ale2 周期邊界與力/速度同步(`cart_ale2_solver.cu`, `cart_ale2_kernels.cu`)。
+P33: cart_ale2 KE→IE compensation 违反局域性 — 全局均分 ΔKE 导致分层对流稳定层被伪加热。
 
 ---
 
@@ -45,6 +46,7 @@ P31–P32: cart_ale2 周期邊界與力/速度同步(`cart_ale2_solver.cu`, `car
 30. [P30: Atmosphere reset and sponge layer destroy mass/energy conservation](#p30)
 31. [P31: cart_ale2 remap skipped periodic wrap edge](#p31)
 32. [P32: cart_ale2 periodic sync master missed x-only / y-only duplicate classes + wrong accumulator semantics](#p32)
+33. [P33: cart_ale2 Phase-M KE→IE compensation 违反局域性(全局均分 ΔKE)](#p33)
 
 ---
 
@@ -626,6 +628,117 @@ Applied to all 4 polar solvers: FAS (implicit + explicit), SIMPLE, projection.
 **Files**: `src/gpu/cart_ale2_kernels.cu:k_cale2_periodic_sync_node`(master 判斷 + mode 參數),`src/gpu/cart_ale2_solver.cu`(3 處 sync 呼叫加 mode;`compute_diagnostics` 的 KE 累加循環 skip duplicates)。
 
 **Test strategy**: 同 P31 的 uniform-advection test,但要求 KE 變化 ≤ 1e-10(比 P31 嚴 5 個數量級,因為兩個 bug 疊起來時漂移很明顯,單獨修一個會看到另一個殘餘)。Lecoanet KH t=5 長跑下 `|E(t) - E(0)| / E(0) < 1.5%`,`IE` 要守到 10 位精度。兩個 bug 都修好後,`dt` 不再塌到 1e-12,可以跑完 5 time units。
+
+---
+
+<a id="p33"></a>
+## P33: cart_ale2 Phase-M KE→IE compensation 违反局域性(全局均分 ΔKE)
+
+**Discovered**: 2026-05-07,Andrassy 2022 scan 重跑后,ale2 256² v_rms 塌陷到 0.009
+(vs vl2 0.15),128/256/512 resolution 呈非单调 pattern。根因追踪发现 compensation 机制本身
+是前一天(commit `214a7d9`)为修 benchmark E_tot 漂移引入的,该 commit 的实现违反数值方法的局域性原则。
+
+**Symptom**:
+1. Andrassy 2022 长时分层对流 benchmark 上,ale2 的 saturation v_rms 被系统性压低。
+   256² 上从预期的 ~0.03 塌到 0.009(比 vl2 Godunov 的 0.15 低 17×)。
+2. E_tot 生长率(dE/dt)比物理 heating rate(IC header L_tot=1.21e-4)高 1-6×:
+   ale2 128 跑出 6.9e-4(5.7× 超),ale2 256 跑出 1.9e-4(1.5× 超),ale2 512 跑出 1.2e-4(1.0×)。
+   vl2 的 dE/dt 全在 0.5-1.0× 之间,符合物理。
+3. t=100 时三 res 的 v_rms 起点一致(0.029,IC linear response 正确),之后:
+   128 爬回 0.035,256 单调塌至 0.009,512 先跌后部分恢复到 0.02-0.03。
+   经典 "数值耗散 resolution-dependent 非单调" pattern,不是物理现象。
+4. Sod / Sedov / Gresho / Yee 5 个 benchmark **全部通过**,E_tot 机器精度守恒 — 掩盖了本 bug。
+
+**Root cause**:
+
+ALE swept-remap 由 Jensen 不等式必然丢 KE:
+```
+remap 前: 相邻 cell (m₁, v₁=+1) 和 (m₂, v₂=−1),KE_pre = ½(m₁ + m₂)
+remap 后: 合并为 cell (m₁+m₂, v_new ≈ 0),KE_post ≈ 0
+          ΔKE = KE_pre − KE_post > 0 丢失
+```
+
+这份 ΔKE 物理上应成为**局域**粘性热(该 cell 的 IE 增加),遵循 Caramana-Shashkov "compatible Lagrangian"
+原则(JCP 2008 eq. 16 附近):每个 subcell swept-edge 丢掉的 KE 在**该两相邻 cell 内部**就地消化。
+
+`214a7d9` 的实现采用全局 mean-field short-cut:
+```cpp
+// cart_ale2_solver.cu, Phase-M 编排:
+KE_before_tot = gpu_reduce_sum(d_KE_node_before, ...);  // 全局 sum
+KE_after_tot  = gpu_reduce_sum(d_KE_node_after,  ...);
+M_tot         = gpu_reduce_sum(d_dm, ...);
+delta_e = (KE_before_tot - KE_after_tot) / M_tot;        // 全局标量
+k_cale2_ke_compensate_uniform<<<>>>(delta_e, d_e_int, ncell);
+// → 每个 cell e_int 加 delta_e(mass-weighted 均匀)
+```
+
+这同时违反双曲守恒律的两条核心性质:
+1. **因果性**:远端 cell 的 e_int 变化包含了整格所有 cell 的 KE 变化信息,信息瞬时全局传播,
+   绕过 CFL / 声速有限传播速度
+2. **局域守恒**:cell 的 IE 变化不等于该 cell 通量平衡 + 局域源项之和,而含一个全局背景项
+
+对 Andrassy 这种**长时 + 分层 + 持续 ΔKE 产生**的场景,实际发生的:
+- 对流层 ∇v 大,每步产生大量 ΔKE(remap swept 边上能量损失)
+- 稳定层 v ≈ 0,不产生 ΔKE
+- 全局均分把对流层的 ΔKE 撒进稳定层 → **稳定层被不该有的加热** → 热膨胀向上挤压对流层 → 对流 amplitude
+  被系统性抑制 → v_rms 被压
+
+同时 IE 总账是平的(compensation 目的),所以 E_tot 守恒成立,但温度场 **空间分布完全失真**。
+
+Sod/Sedov/Gresho/Yee 均未命中该 pathology:
+- Sod/Sedov 测全局量(L1 ρ, r_sh),局域 IE 失真部分 cancel
+- Gresho 稳态,AV 不触发,ΔKE ≈ 0,compensation 无事可做
+- Yee 纯平流,无 shock, ΔKE 小
+
+因此 5 个 benchmark 无一捕捉此 bug,反而 "compensation 修好 E 漂移" 误给以上 benchmark 大幅改善。
+
+**Fix**:
+
+改写为 Caramana-Shashkov compatible 的 **per-subcell local** compensation。关键是把 ΔKE 计算
+从 "global node KE_before/KE_after 做 reduction" 改为 "remap 时每条 swept edge 的 flux 自带一份
+subcell ΔKE,在**两侧 cell 内部**做 IE 增量"。
+
+伪码骨架:
+```cpp
+// Remap east/north kernels 每条 swept edge 算完 flux 后,额外算:
+//   ΔKE_subcell = ½ |donor_flux_m| (v_donor² − v_accept²)    (approximate)
+// 用 atomicAdd 就地加到 **两侧 cell** 的 e_int 增量里:
+//   atomicAdd(&d_e_int_incr[cL], +½ · ΔKE_subcell / dm_new[cL]);
+//   atomicAdd(&d_e_int_incr[cR], +½ · ΔKE_subcell / dm_new[cR]);
+// finalize 时把 d_e_int_incr 加到 d_e_int,不再全局 reduce
+```
+
+具体实施参考:
+- Caramana, Burton, Shashkov, Whalen (1998 JCP 146) "The Construction of Compatible Hydrodynamics
+  Algorithms utilizing Conservation of Total Energy",eq. (24)-(30) 定义 node-centered 的
+  compatible KE→IE 转移
+- Kucharik-Shashkov (2012 JCP 231) 第 5 节,swept-remap 中如何把 edge flux 的 ΔKE 局域化
+
+**Files**(拟改动):
+- `src/gpu/ale/cart_ale2_kernels.cu`:所有 `k_cale2_remap_*_2nd / _ppm_*` kernels 加 subcell ΔKE 累积
+- `src/gpu/ale/cart_ale2_solver.cu`:Phase-M 拆掉全局 KE 诊断 + global `delta_e` + uniform kernel
+- `src/gpu/ale/cart_ale2_solver.cuh`:删 `d_KE_node_{before,after}`,改为 `d_e_int_incr` 标量
+  per-cell buffer
+
+**Test strategy**:
+1. **局域守恒回归测试**:`tests/test_ale2_phase_m_local_compat.cu` — 跑 30 步 Gaussian 密度 perturb
+   (见 testing_plan § 10.2),断言:
+   - `|E_end − E_0| / E_0 < 1e-10`(全局守恒保留)
+   - 对每个稳定层 cell(设置 IC 时 v=0 的 cell)在 30 步内 `|Δe_int| < 1e-6`
+     (局域不被对流层 ΔKE 污染 — 这是 P33 的核心断言)
+   - 对活动对流层 cell,`|Σ_subcell_ΔKE_into_this_cell − Δe_int| < 1e-12`
+     (compatible 条件)
+2. **Andrassy regression**:bc=1 分层 HSE + 底部 heating 跑 100 步,v=0 稳定层 cell 的 `|Δe_int|` 上限
+3. **benchmark 不退化**:Sod/Sedov/Gresho/Yee 5 项 L1 不能比 P33 修前差 >10%
+4. **Andrassy v_rms 恢复**:256² MUSCL-VL 重跑应给出 v_rms ≈ 0.02-0.04,与 128 和 512 协调,
+   不再出现 256² 单调塌至 0.009 的 pathology
+
+**影响范围**:
+- 本 bug 下 Andrassy scan 的 16 run(2026-05-07 第二轮)**全部不可信**,需在 P33 修复后第三次重跑
+- 5 项 benchmark 的 `L1/ρ_peak/r_sh` 数据 formally 也是"错代码下过的",但局域失真对该类 benchmark
+  的主观测影响 <1%,可保留为"benchmark passed with known local-compat caveat"
+- 对未来所有"长时 + 分层"型任务(pre-MS KH、O-shell core ingestion、恒星振荡)cart_ale2 目前**不可用**,
+  直到 P33 修复
 
 ---
 

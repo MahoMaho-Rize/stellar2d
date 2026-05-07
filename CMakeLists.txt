@@ -248,6 +248,9 @@ if(USE_GPU)
     # lowmach-family tests (some are diagnostic-only, no CTest)
     add_gpu_test(lowmach            tests/test_lowmach.cu
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
+    # Regression lock for 2026-05-07 S_E = ρv·g removal (P32)
+    add_gpu_test(lowmach_s_e_regression  tests/test_lowmach_s_e_regression.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
     add_gpu_test(solver_diagnosis   tests/test_solver_diagnosis.cu
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES} NO_CTEST)
     add_gpu_test(precond_quality    tests/test_precond_quality.cu
@@ -278,6 +281,21 @@ if(USE_GPU)
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${FAS_GPU_SOURCES})
     add_gpu_test(fas_diagnose       tests/test_fas_diagnose_hse.cu
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${FAS_GPU_SOURCES} NO_CTEST)
+
+    # Pseudo-spectral (2D incompressible NS) Taylor-Green analytic-decay test.
+    # Links cufft via the stellar2d target's CUDA::cufft; replicate here.
+    add_gpu_test(pseudo_spectral_taylor_green
+                 tests/test_pseudo_spectral_taylor_green.cu
+                 EXTRA_SOURCES src/gpu/spectral/pseudo_spectral_solver.cu
+                               src/gpu/spectral/pseudo_spectral_kernels.cu)
+    target_link_libraries(test_pseudo_spectral_taylor_green PRIVATE
+        CUDA::cufft CUDA::cublas)
+
+    # cart_ale2 periodic uniform-advection regression (P30/P31 lock)
+    add_gpu_test(cart_ale2_uniform_advect
+                 tests/test_cart_ale2_uniform_advect.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu)
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)

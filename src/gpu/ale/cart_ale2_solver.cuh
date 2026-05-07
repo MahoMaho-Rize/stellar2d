@@ -62,11 +62,17 @@ struct CartAle2Solver {
     double *d_py_new = nullptr;
 
     // Node-velocity rebuild order:
-    //   0 = 1st-order mass-weighted average (legacy; stable but KE-diffusive)
+    //   0 = 1st-order mass-weighted average (default; stable but KE-diffusive).
+    //       Chosen as default because the 2nd-order path triggers a
+    //       stratified-atmosphere instability on Andrassy 2022-style setups
+    //       (MUSCL remap + 2nd-order rebuild + reflect wall y + long-time
+    //       convection → checkerboard mode in v_node, v→Ma~0.8 within t=100).
     //   1 = 2nd-order corner MUSCL with Barth-Jespersen multidim limiter
-    //       (default; strictly monotone even on strong supersonic vortices —
-    //       BJ enforces f_corner ∈ [f_min_nb, f_max_nb] isotropically).
-    int rebuild_order = 1;
+    //       (experimental; passes Sod/Sedov/Noh/Gresho/Yee benchmarks when
+    //       set via --rebuild-order 1, improves Gresho KE convergence, but
+    //       NOT safe to default on until the stratified-mode instability
+    //       is understood — see 2026-05-07 Andrassy regression investigation).
+    int rebuild_order = 0;
 
     // 2nd-order node-velocity rebuild scratch. v_cell = px_new/dm_new,
     // then minmod-limited slopes; each node samples 4 corner-extrapolated
@@ -91,20 +97,49 @@ struct CartAle2Solver {
     //     snapshot for both before/after KE). Using a constant mass makes
     //     ΔKE = ½·m_ref·(v²_before − v²_after), purely reflecting the
     //     velocity change from remap + rebuild — no spurious "mass moved
-    //     between cells, KE rebalances" contribution.
-    //   - d_KE_node_{before,after}: per-node scalar, periodic duplicates
-    //     written as 0 so gpu_reduce_sum gives the unique-node KE sum.
-    //   - d_node_reduce_buf: nnode-sized scratch for gpu_reduce_sum.
-    //   - Σ ΔKE distributed to cells mass-weighted (per unit mass, so the
-    //     kernel writes delta_e = ΔKE/M_tot to every e_int).
-    double *d_m_node_ref = nullptr;      // node-size: post-remap m_node, same
-                                         // mass used for both before/after so
-                                         // matches diagnostic KE exactly.
+    // ---- Phase-M KE→IE compensation (Caramana-Shashkov compatible, P33) ----
+    // Local compatible update: rebuild_node_v{_2nd} computes per-node
+    //   ΔKE_node = Σ_{4 corners} ¼ m_c · ½ v_corner²  −  ½ m_node · v_node²
+    // and writes it (equally share among the 4 contributing cells, since
+    // m_corner = ¼ m_cell) into d_e_int_incr[c] via atomicAdd. After rebuild,
+    // k_cale2_apply_ie_incr adds d_e_int_incr into d_e_int and zeros it.
+    //
+    // This is the correct local replacement for the old global mean-field
+    // compensation (pre-P33 bug: global ΔKE/M_tot applied uniformly to every
+    // cell, which heated stable layers in stratified convection benchmarks).
+    //
+    // Diagnostic snapshots (independent of compensation mechanism):
+    //   d_KE_node_snap_pre:  ½·m_ref·|v_pre|²   at Phase-M entry (matches last
+    //                        step's diagnostic KE, no mass-movement bias).
+    //   d_KE_node_snap_post: ½·m_ref·|v|²       after rebuild (same m_ref,
+    //                        consistent-mass-caliper per P33 doc § C).
+    //   d_dKE_node_local:    per-node local ΔKE output by rebuild kernel;
+    //                        Σ over nodes == global Jensen deficit. For logging
+    //                        / debug only — the compensation itself already
+    //                        acted through d_e_int_incr.
+    //   d_node_reduce_buf:   nnode-sized scratch for gpu_reduce_sum on the
+    //                        snapshots (diag only; not in the hot path).
+    double *d_m_node_ref = nullptr;      // node-size: pre-remap m_node snapshot,
+                                         // used for BOTH pre/post KE snapshots
+                                         // (consistent-mass caliper, P33 § C).
     double *d_vX_pre = nullptr;          // node-size: pre-remap v snapshot
     double *d_vY_pre = nullptr;
-    double *d_KE_node_before = nullptr;  // node-size
-    double *d_KE_node_after  = nullptr;  // node-size
-    double *d_node_reduce_buf = nullptr; // node-size
+    double *d_KE_node_snap_pre  = nullptr;   // diagnostic snapshot, NOT driver
+    double *d_KE_node_snap_post = nullptr;
+    double *d_dKE_node_local    = nullptr;   // per-node local ΔKE (diag/debug)
+    double *d_e_int_incr        = nullptr;   // cell-size: local IE accumulator
+    double *d_node_reduce_buf   = nullptr;   // node-size scratch
+
+    // Cumulative mass-movement KE budget. Each step computes the diagnostic
+    // E drift that the LOCAL Jensen-only compensation cannot cancel:
+    //   mass_flow_ke_step = Σ_node ½·(m_post − m_pre)·v_pre²
+    // This term is not a physical energy gain/loss — it arises because
+    // diagnostic KE uses m_post·½v² with current mass, but mass has moved
+    // between nodes during remap. Accumulated here and subtracted from
+    // total_E in compute_diagnostics() so diagnostic E_reported matches
+    // physical E_conserved.
+    // State is NOT modified; this is purely an output correction.
+    double mass_flow_ke_cumulative = 0.0;
 
     // ---- 2nd-order remap (MUSCL-in-remap, Kucharik-Shashkov 2012) ----
     // Per-cell densities on the reference uniform grid.

@@ -126,7 +126,7 @@ stellar2d/src/gpu/
 
 | Solver | Test | 验证 | 现有? | 文件/入口 |
 |---|---|---|---|---|
-| `lowmach` | ⭐ IE drift zero-g | 2026-05-07 S_E 修复 regression | 需加 | 零重力 + 扰动,∫ρe dV 守恒 |
+| `lowmach` | ⭐ IE drift zero-g | 2026-05-07 S_E 修复 regression | ✅ | `tests/test_lowmach_s_e_regression.cu` |
 | `lowmach` | Lane-Emden perturbed | p/g-mode 频率 | ✅ | `--test lane_emden_perturbed` |
 | `lowmach` | Newton 二次收敛 | JFNK 收敛率 | 部分 | `test_newton_tuning.cu` |
 | `lowmach` | Acoustic CFL 突破 | 隐式核心价值 | 需加 | dt=10·dt_CFL_acoustic |
@@ -137,7 +137,7 @@ stellar2d/src/gpu/
 
 | Solver | Test | 验证 | 现有? | 文件/入口 |
 |---|---|---|---|---|
-| `cart_ale2` | ⭐ Uniform advection periodic | P30/P31 回归 | 需加 | mass drift = 0 |
+| `cart_ale2` | ⭐ Uniform advection periodic | P30/P31 回归 | ✅ | `tests/test_cart_ale2_uniform_advect.cu` |
 | `cart_ale2` | Sod 2D | Riemann | ✅ | `--test sod` |
 | `cart_ale2` | Sedov 2D cylindrical | 自相似激波 | ✅ | `init_sedov` |
 | `cart_ale2` | Noh 球形 | 强激波 | ✅ | `init_noh` |
@@ -165,17 +165,17 @@ stellar2d/src/gpu/
 
 ### 3.5 Spectral 族
 
-| Solver | Test | 验证 | 现有? |
-|---|---|---|---|
-| `pseudo_spectral` | ⭐ Taylor-Green | 解析线性衰减 | 需加 |
-| `pseudo_spectral` | KH single-mode growth | Miles 1961 σ | ✅(隐式在 KH test) |
-| `pseudo_spectral` | 2/3 dealias enstrophy | ν=0 守恒 | 需加 |
-| `pseudo_spectral` | Forced turb k⁻⁵/³ | Kolmogorov | ✅ `--test forced_turb` |
-| `sph2d_spectral` | ⭐ Rossby-Haurwitz 4 波 | 球面解析 | 需加 |
-| `sph2d_spectral` | l=1 纯旋转不演化 | DC mode | 需加 |
-| `anelastic_sl` | ⭐ BV 脉动频率 | 声波已滤 | 需加 **(critical)** |
-| `anelastic_sl` | MMS Poisson + advection | 谱收敛率 | 需加 |
-| `anelastic_sl` | Rayleigh-Bénard onset | Ra_c ≈ 1708 | 需加 |
+| Solver | Test | 验证 | 现有? | 文件/入口 |
+|---|---|---|---|---|
+| `pseudo_spectral` | ⭐ Taylor-Green | 解析线性衰减 | ✅ | `tests/test_pseudo_spectral_taylor_green.cu` |
+| `pseudo_spectral` | KH single-mode growth | Miles 1961 σ | ✅ | `--test kh_shear` |
+| `pseudo_spectral` | 2/3 dealias enstrophy | ν=0 守恒 | 需加 | |
+| `pseudo_spectral` | Forced turb k⁻⁵/³ | Kolmogorov | ✅ | `--test forced_turb` |
+| `sph2d_spectral` | ⭐ Rossby-Haurwitz 4 波 | 球面解析 | 需加 | |
+| `sph2d_spectral` | l=1 纯旋转不演化 | DC mode | 需加 | |
+| `anelastic_sl` | ⭐ BV 脉动频率 | 声波已滤 | 需加 **(critical)** | |
+| `anelastic_sl` | MMS Poisson + advection | 谱收敛率 | 需加 | |
+| `anelastic_sl` | Rayleigh-Bénard onset | Ra_c ≈ 1708 | 需加 | |
 
 ---
 
