@@ -53,18 +53,26 @@ static int g_tests = 0;
     }                                                                 \
 } while (0)
 
-// Measure the RMS of δBy = By − <By> — i.e., the oblique-wave
-// amplitude; for a pure linear wave propagating through a periodic
-// domain, this stays constant *up to numerical diffusion*.  Running
-// for a fixed common time and measuring amp(t_end)/amp(0) gives a
-// 2nd-order consistent diagnostic: (1 - ratio) ∝ h² (F4 / F1 analog).
-static double measure_By_rms_active(AthenaMHDSolver& sv) {
+// Measure the RMS of (field − <field>) — the wave amplitude.  For a pure
+// linear wave in a periodic domain the amplitude stays constant up to
+// numerical diffusion; running for a fixed common time and measuring
+// amp(t_end)/amp(0) gives a 2nd-order consistent diagnostic:
+// (1 - ratio) ∝ h² (F4 / F1 analog).
+//
+// Field selection per mode (F1 eigenvectors):
+//   FAST/ALFVEN/SLOW — r_By_k ≠ 0, measure δBy.
+//   ENTROPY          — r_rho = 1, r_By_k = 0, measure δρ.
+// This makes the entropy mode test non-vacuous.
+enum FieldKind { FIELD_BY = 0, FIELD_RHO = 1 };
+
+static double measure_rms_active(AthenaMHDSolver& sv, FieldKind kind) {
     sv.fill_ghost();
     sv.cons_to_prim();
     int sx = sv.stride_x(), sy = sv.stride_y();
     int N = sx * sy;
     std::vector<double> h(N);
-    cudaMemcpy(h.data(), sv.d_By_cc, (size_t)N * sizeof(double),
+    double* d_field = (kind == FIELD_RHO) ? sv.d_rho : sv.d_By_cc;
+    cudaMemcpy(h.data(), d_field, (size_t)N * sizeof(double),
                cudaMemcpyDeviceToHost);
     int ng = sv.ng;
     double mean = 0.0;
@@ -100,7 +108,10 @@ static RunResult run_oblique(AthenaMHDSolver::LinearWaveMode mode,
     sv.xorder = 2; sv.limiter = 0; sv.cfl_limit = 0.5;
     sv.init_linear_wave_oblique(mode, /*kx_int=*/1, /*ky_int=*/2, /*A=*/1e-6);
 
-    double amp0 = measure_By_rms_active(sv);
+    // Entropy mode: r_By_k = 0 (Bx,By,Bz only perturbed at round-off level)
+    // — measure δρ which has r_rho = 1.  Other modes use δBy (r_By_k ≠ 0).
+    FieldKind fk = (mode == AthenaMHDSolver::ENTROPY) ? FIELD_RHO : FIELD_BY;
+    double amp0 = measure_rms_active(sv, fk);
 
     double t = 0.0;
     int nsteps = 0;
@@ -117,10 +128,8 @@ static RunResult run_oblique(AthenaMHDSolver::LinearWaveMode mode,
     }
     divB_max = std::max(divB_max, sv.compute_diagnostics().max_divB);
 
-    double amp_end = measure_By_rms_active(sv);
+    double amp_end = measure_rms_active(sv, fk);
     double decay = 1.0 - amp_end / amp0;
-    // For modes with zero δBy (e.g., entropy mode has r_By_k=0), decay
-    // will be indeterminate — return 0 to signal "no test possible".
     if (amp0 < 1e-14) decay = 0.0;
 
     sv.destroy();
@@ -136,11 +145,11 @@ static double mode_convergence_slope(const char* name,
     RunResult r64  = run_oblique(mode, 64,  t_period);
     RunResult r128 = run_oblique(mode, 128, t_period);
     double s_32_64  = 0.0, s_64_128 = 0.0;
-    // Entropy / others without δBy: decay measurement is vacuous
-    // (r_By_k = 0 at IC → amp0 = 0, runtime floor ~ O(1e-5·A)).
-    // Return 2.0 to pass the slope check trivially; only verify divB.
-    // Threshold 1e-10 triggers for any mode whose amp grows from
-    // round-off floor to O(1e-5) — those are all r_By_k≈0 modes.
+    // Safeguard: if all decays are round-off-tiny (amp ≈ amp0 exactly),
+    // slope is indeterminate.  In practice fast/alfven/slow use δBy and
+    // entropy uses δρ (both r ≠ 0 in eigenvector), so this should not
+    // fire on any of the 4 modes under normal operation.  Kept for
+    // paranoia.
     bool vacuous = (std::fabs(r32.decay) < 1e-10
                     || std::fabs(r64.decay) < 1e-10
                     || std::fabs(r128.decay) < 1e-10

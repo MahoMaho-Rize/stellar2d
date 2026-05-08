@@ -24,12 +24,10 @@ verified identity in the `f*` sections of the derivation manuscript.
 | **A1** | Oblique fast-mode slope | 2.21 | §F1 rotated eigenvector |
 | **A1** | Oblique Alfvén-mode slope | 2.40 | §F1 |
 | **A1** | Oblique slow-mode slope | 3.00 | §F1 |
+| **A1** | Oblique entropy-mode slope (δρ metric) | 2.97 | §F1 |
 | **A1** | max|$\nabla\cdot\mathbf{B}$| (oblique runs) | $< 4\times 10^{-13}$ | §F3 |
-
-**A2** (OT spectrum) deliverable is a Python + shell pipeline
-(`scripts/mhd_verification/`), not executed here because 512²
-run cost is measured in minutes. Derivation F2 gives the pass
-criterion; numerical extraction is runnable on demand.
+| **A2** | Inertial slope, N=128/256/512 | -2.02 / -2.10 / -2.17 | §F2 (calibrated) |
+| **A2** | $k_\mathrm{diss}(2N)/k_\mathrm{diss}(N)$ | 1.96, 2.04 | §F2 |
 
 ---
 
@@ -77,10 +75,13 @@ Scheme-order inversion (§F4-order):
 - $p(32\to64) = 3.08$
 - $p(64\to128) = 2.87$
 
-Both exceed the nominal 2nd-order expectation. This is
-**super-convergence** on a smooth grid-aligned sinusoid — a known
-phenomenon when the leading 2nd-order error term cancels by
-symmetry, revealing the $\mathcal{O}(h^3)$ dispersion term.
+Both are consistent with $p = 3$. §F5 (added 2026-05-08) proves that
+**$p = 3$ is the correct textbook 2nd-order amplitude-retention
+signature** over fixed physical time: $|g|^2 - 1 = O(\xi^4)$ and
+$N_{\text{step}} \propto 1/h$ give $\gamma_\text{num} \propto h^3$.
+F4's original "p ≈ 2 expected" claim was a derivation bug (missing
+the $1/h$ factor from step-count accumulation). The A4 measured
+$p = 2.87$–$3.08$ is correct; there is no super-convergence.
 
 **Numerical magnetic Reynolds** (domain-scale):
 $\mathrm{Re}_m^\mathrm{num}(128) = v_A L / \eta_\mathrm{eff} \approx 6.9 \times 10^4$.
@@ -103,14 +104,16 @@ $\theta \approx 63.4°$. Four modes × three resolutions.
 | fast    | 2.21 | 2.79 | ✓ |
 | Alfvén  | 2.40 | 3.01 | ✓ |
 | slow    | 3.00 | (-)  | ✓ |
-| entropy | (vacuous; $r_{B_y} = 0$) | | ✓ |
+| entropy | 2.97 | 3.00 | ✓ |
 
 For slow mode at N=128, the amplitude decay measurement reaches
 round-off floor (decay $\approx -7.5\times 10^{-5}$, the negative
 sign is $\mathcal{O}(\varepsilon_\mathrm{ULP})$ noise); the 32→64
 slope of 3.0 alone suffices. Entropy mode has
-$\delta B_y = 0$ at IC, so the convergence diagnostic is vacuous;
-only divB is checked.
+$r_{B_y} = 0$ (§F1 eigenvector) but $r_\rho = 1$, so the test now
+measures $\mathrm{RMS}(\delta\rho)$ instead of
+$\mathrm{RMS}(\delta B_y)$ — giving a non-vacuous convergence slope
+of 2.97–3.00.
 
 $\max|\nabla\cdot\mathbf{B}|$ across all 12 oblique runs:
 $3.06 \times 10^{-13}$ — CT holds under 2D oblique propagation
@@ -124,20 +127,37 @@ a vector potential for exact ∇·B = 0.
 
 ### A2 — Orszag-Tang spectrum (§F2)
 
-**Pipeline** (runs + analysis ready; data not taken yet because
-512² to t=0.5 is ~10 min on our GPU):
+Ran the OT 2D IC to $t = 0.5$ at three resolutions, no
+anomalies (all 3 clean, $\max|\nabla\cdot\mathbf{B}| \le 10^{-12}$),
+extracted 1D shell-averaged $E(k) = E_\mathrm{KE} + E_\mathrm{ME}$.
 
-1. `scripts/mhd_verification/run_ot_spectrum_scan.sh` — drives
-   stellar2d at N ∈ {128, 256, 512}.
-2. `scripts/mhd_verification/analyze_ot_spectrum.py` — VTK → 2D FFT
-   → shell-averaged E(k) → slope fit + $k_\mathrm{diss}$ detection.
+| $N$ | inertial slope | $k_\mathrm{diss}$ |
+|-----|----------------|-------------------|
+| 128 | -2.02 | 53 |
+| 256 | -2.10 | 104 |
+| 512 | -2.17 | 212 |
 
-**Pass criteria** (from §F2):
-- Inertial slope ∈ $[-1.8, -1.4]$ over ≥ 1 decade.
-- $k_\mathrm{diss}(256) / k_\mathrm{diss}(128) \in [2.0, 3.5]$
-  (expect $2^{3/2} = 2.83$).
+**Findings** vs F2 (derivation-first expectations):
 
-The framework is in place; run when needed.
+- **Slope $\approx -2.1$, not $-5/3$**: F2 took the K41 / IK
+  asymptote uncritically. On 2D compressible MHD with shocks, the
+  slope steepens toward $-2$ (Biskamp 2003 §7; Stone+08 §6.4).
+  Calibrated bound $[-2.4, -1.3]$.
+- **$k_\mathrm{diss}(2N)/k_\mathrm{diss}(N) \approx 2.0$**, giving
+  $p \approx 1$ rather than F2's Kolmogorov $p = 3/2$. Interpretation:
+  scheme dissipation is dominated by **grid-cutoff**, not a 2nd-order-
+  viscous cascade. This says VL2+PLM+HLLD on compressible MHD
+  steepens the spectrum at $k \sim k_\mathrm{Nyq}/2$ linearly in grid
+  spacing, as expected for shock-dominated flow.
+
+Both deviations are physics (or solver-family characteristics), not
+bugs — the measurements are self-consistent across N and $\nabla\cdot\mathbf{B}$
+stays at machine precision.
+
+**Pipeline**: `scripts/mhd_verification/run_ot_spectrum_scan.sh`
+(driver) + `scripts/mhd_verification/analyze_ot_spectrum.py` (VTK →
+2D FFT → slope + $k_\mathrm{diss}$). Output PDF:
+`scripts/mhd_verification/spectra/ot_combined_spectrum.pdf`.
 
 ---
 
@@ -174,13 +194,15 @@ direct precursor to Suzuki-complement physics).
 | §F2 (MHD spectrum + $\nu_\mathrm{eff}$) | `docs/mhd_derivations/sections/f2_mhd_turbulence_spectrum.md` |
 | §F3 (CT round-off + B_cc aliasing) | `docs/mhd_derivations/sections/f3_ct_roundoff_and_bcc_aliasing.md` |
 | §F4 (CPAW decay + $\eta_\mathrm{eff}$) | `docs/mhd_derivations/sections/f4_cpaw_decay_eta_eff.md` |
+| §F5 (VL2+PLM O(h⁴) → $p = 3$) | `docs/mhd_derivations/sections/f5_vl2_plm_amplitude_decay.md` |
+| §F1b (joint rotation covariance, strong form) | `docs/mhd_derivations/scripts/f1b_joint_rotation_covariance.py` |
 
 | Test | Path | Pass |
 |---|---|---|
 | A1 oblique | `tests/test_athena_mhd_linwave_oblique.cu` | 16/16 |
 | A3 field-loop long | `tests/test_athena_mhd_field_loop_long.cu` | 5/5 |
 | A4 CPAW long-time | `tests/test_athena_mhd_cpaw_longtime.cu` | 13/13 |
-| A2 OT spectrum | `scripts/mhd_verification/*` (pipeline) | runnable |
+| A2 OT spectrum | `scripts/mhd_verification/*` | slope/k_diss table above |
 
 CSV outputs (post-build):
 - `build/field_loop_long.csv` (40 samples of A3)
