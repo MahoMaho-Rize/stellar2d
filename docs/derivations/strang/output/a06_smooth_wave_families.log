@@ -1,0 +1,24 @@
+
+============================================================
+  A6 - Simple-wave families
+============================================================
+  [OK] A6-RI 1-family: J_1^{(1)} = u + 2c/(gamma-1) invariant along R_1 — sympy verified to 0.
+  [OK] A6-RI 1-family: J_1^{(2)} = p/rho^gamma invariant along R_1 — sympy verified to 0.
+  [OK] A6-RI 3-family: J_3^{(1)} = u - 2c/(gamma-1) invariant along R_3 — sympy verified to 0.
+  [OK] A6-RI 3-family: J_3^{(2)} = p/rho^gamma invariant along R_3 — sympy verified to 0.
+  [OK] A6-RI 2-family entropy: u invariant along R_2a — sympy verified to 0.
+  [OK] A6-RI 2-family entropy: p invariant along R_2a — sympy verified to 0.
+  [OK] A6-RI 2-family shear: rho invariant along R_2b — sympy verified to 0.
+  [OK] A6-RI 2-family shear: u invariant along R_2b — sympy verified to 0.
+  [OK] A6-RI 2-family shear: p invariant along R_2b — sympy verified to 0.
+  [OK] A6-gn-1: grad lam_1 . R_1 = -c(gamma+1)/(2 rho)   [nonzero on admissible state] — sympy verified to 0.
+  [OK] A6-gn-3: grad lam_3 . R_3 =  c(gamma+1)/(2 rho)   [nonzero on admissible state] — sympy verified to 0.
+  [OK] A6-ld-2a: grad lam_2 . R_2a = 0 (entropy-wave is linearly degenerate) — sympy verified to 0.
+  [OK] A6-ld-2b: grad lam_2 . R_2b = 0 (shear-wave is linearly degenerate) — sympy verified to 0.
+  [OK-num] A6-RH-mass (1-shock): sigma [rho] = [rho u]  [numerical: Toro 4.38+4.52] — 80 samples, max|residual| = 3.038e-14.
+  [OK-num] A6-RH-mom (1-shock): sigma [rho u] = [rho u^2 + p]  [numerical] — 80 samples, max|residual| = 1.690e-13.
+  [OK-num] A6-RH-energy (1-shock): sigma [E] = [(E+p) u]  [numerical] — 80 samples, max|residual| = 1.108e-12.
+  [OK-num] A6-Prandtl mass flux: rho_L (u_L - sigma) = rho_R (u_R - sigma) [1-shock]  [numerical] — 80 samples, max|residual| = 4.071e-14.
+  wrote output/a06_smooth_wave_families.latex.tex
+
+All A6 strong-form identities verified by sympy.
