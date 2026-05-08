@@ -3,15 +3,15 @@
 > **sympy script:** `scripts/d07_reflection_symmetric_ic.py`
 > **generated LaTeX:** `output/d07_reflection_symmetric_ic.latex.tex`
 > **generated goldens:** `output/d07_reflection_symmetric_ic.goldens.json`
-> **verifies:** 13 strong-form identities — 1 involution ($\mathcal{R}_x^2 = \mathbf{I}$);
-> 4 $\mathbf{F}_x$ reflection identities; 4 $\mathbf{F}_y$ reflection
-> identities; 4 gravity-source invariance identities (all under
-> x-reflection)
+> **verified:**
+> - 1 involution ($\mathcal{R}_x^2 = \mathbf{I}$)
+> - 4 $\mathbf{F}_x$ reflection identities
+> - 4 $\mathbf{F}_y$ reflection identities
+> - 4 gravity-source invariance identities (all under x-reflection)
+>
 > **code checkpoints:**
-> new `init_rt_symmetric()` IC builder in
-> `src/gpu/explicit/strang_solver.cu` (book-anchored: the book
-> says this IC must exist); new test
-> `tests/test_strang_reflection_symmetry.cu`
+> - new `init_rt_symmetric()` IC builder in `src/gpu/explicit/strang_solver.cu` (book-anchored: the book says this IC must exist)
+> - new test `tests/test_strang_reflection_symmetry.cu`
 
 An **x-reflection-symmetric** IC must evolve into an x-reflection-
 symmetric state at all times. The test: start with
@@ -147,7 +147,7 @@ void StrangSolver::init_rt_symmetric(
 Both bubbles use the same $y_0, R_0, \delta s$; only the $x_0$
 differs. The asserted symmetry is $x_0^L + x_0^R = L_x$.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC symmetry.** After `init_rt_symmetric(0.3, 0.7, 0.3, 0.1, 0.5)`,
    $\delta\rho(x, y) - \delta\rho(1-x, y)$ is zero to ULP

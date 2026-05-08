@@ -2,14 +2,15 @@
 
 > **sympy script:** `scripts/e01_entropy_wave_order.py`
 > **generated LaTeX:** `output/e01_entropy_wave_order.latex.tex`
-> **verifies:** 6 strong-form identities — 1 at-least-1st-order
-> (per-step $O(h)$ coefficient = 0); 1 at-least-2nd-order
-> ($O(h^2)$ coefficient = 0); 1 leading $O(h^3)$ coefficient
-> identity ($\nu (2\nu^2 - 3\nu + 1) / 12 \cdot u_{xxx}$); 3
-> "magic CFL" identities (error vanishes at $\nu = 0, 1/2, 1$)
+> **verified:**
+> - 1 at-least-1st-order (per-step $O(h)$ coefficient = 0)
+> - 1 at-least-2nd-order ($O(h^2)$ coefficient = 0)
+> - 1 leading $O(h^3)$ coefficient identity ($\nu (2\nu^2 - 3\nu + 1) / 12 \cdot u_{xxx}$)
+> - 3 "magic CFL" identities (error vanishes at $\nu = 0, 1/2, 1$)
+>
 > **code checkpoints:**
-> entire MUSCL-Hancock + MC + HLLC x-sweep pipeline; measured by
-> `tests/test_strang_convergence.cu` against §D1 goldens
+> - entire MUSCL-Hancock + MC + HLLC x-sweep pipeline
+> - measured by `tests/test_strang_convergence.cu` against §D1 goldens
 
 Modified-equation analysis of the MUSCL-Hancock + MC + HLLC scheme
 applied to the smooth entropy-wave IC of §D1. Strong-form Taylor
@@ -99,7 +100,7 @@ For $n_x \in \{64, 128, 256, 512\}$:
 4. Compute $L^1 = \sum_i |\rho_i(T) - \rho_i(0)| \Delta x$.
 5. Fit $\log L^1$ vs $\log n_x$; slope expected in $[1.8, 2.2]$.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Slope match.** $p \in [1.8, 2.2]$ at the four resolutions.
    Test: `test_strang_convergence.cu` §E1-slope.

@@ -2,17 +2,13 @@
 
 > **sympy script:** `scripts/a06_smooth_wave_families.py`
 > **generated LaTeX:** `output/a06_smooth_wave_families.latex.tex`
-> **verifies:** 13 symbolic strong-form identities (Riemann invariants
-> for all three wave families; genuine nonlinearity of 1- and
-> 3-family; linear degeneracy of 2-family) + 4 numerical-fallback
-> strong-form checks (mass / momentum / energy Rankine-Hugoniot
-> jumps, Prandtl mass-flux equality) at 80 random admissible shock
-> states
+> **verified:**
+> - 13 symbolic strong-form identities (Riemann invariants for all three wave families, genuine nonlinearity of 1- and 3-family, linear degeneracy of 2-family)
+> - 4 numerical-fallback strong-form checks (mass / momentum / energy Rankine-Hugoniot jumps, Prandtl mass-flux equality) at 80 random admissible shock states
+>
 > **code checkpoints:**
-> §A8 (HLLC intermediate states use the 1-shock / 3-shock Hugoniot
-> relations derived here)
-> §D3 (Sod shock-tube reference profile uses the rarefaction
-> integration curves $J_k^{(i)} = \text{const}$)
+> - §A8 (HLLC intermediate states use the 1-shock / 3-shock Hugoniot relations derived here)
+> - §D3 (Sod shock-tube reference profile uses the rarefaction integration curves $J_k^{(i)} = \text{const}$)
 
 The Godunov finite-volume kernel does not resolve individual waves;
 it resolves Riemann problems at every cell face. But every
@@ -161,7 +157,7 @@ This is the identity §A8 uses to define the HLLC intermediate
 states: the two star-region cells share $u^\star$ and $p^\star$
 but carry independent densities and tangential velocities.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not encode §A6 explicitly; the HLLC solver (§A8)
 uses the star-region fact $u^\star_L = u^\star_R$ and

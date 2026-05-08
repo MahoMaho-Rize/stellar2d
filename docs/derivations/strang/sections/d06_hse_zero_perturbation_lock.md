@@ -3,16 +3,14 @@
 > **sympy script:** `scripts/d06_hse_zero_perturbation_lock.py`
 > **generated LaTeX:** `output/d06_hse_zero_perturbation_lock.latex.tex`
 > **generated goldens:** `output/d06_hse_zero_perturbation_lock.goldens.json`
-> **verifies:** 4 strong-form identities — flux-source cancellation
-> on HSE (y-momentum); energy update zero on HSE; density update
-> zero on HSE; x-momentum update zero on HSE
+> **verified:**
+> - flux-source cancellation on HSE (y-momentum)
+> - energy update zero on HSE
+> - density update zero on HSE
+> - x-momentum update zero on HSE
+>
 > **code checkpoints:**
-> whole kernel — this test verifies the **composite** of §B2, §B3,
-> §B4, §B5, §B6, §C1. Any one of these failing breaks the lock.
-> Specifically: init-time HSE build (`StrangSolver::init`), face
-> HSE reconstruction (`k_muscl_hancock_y`), ghost-fill kernels
-> (`k_ghost_x, k_ghost_y`), gravity source application
-> (`k_hllc_update_y`).
+> - whole kernel — this test verifies the **composite** of §B2, §B3, §B4, §B5, §B6, §C1. Any one of these failing breaks the lock. Specifically: init-time HSE build (`StrangSolver::init`), face HSE reconstruction (`k_muscl_hancock_y`), ghost-fill kernels (`k_ghost_x, k_ghost_y`), gravity source application (`k_hllc_update_y`).
 
 The most stringent well-balancing test in the book. With stored
 state $(\delta\rho, m_x, m_y, \delta E) = (0, 0, 0, 0)$ at every
@@ -113,7 +111,7 @@ check).
 5. Download `d_rho, d_mx, d_my, d_E`; compute the infinity norm.
 6. Required: max-norm drift $\le 10^{-10}$.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Initial zero state.** After `init()`, the stored state is
    bitwise-zero. Test: `test_strang_init.cu` §D6-init-zero.

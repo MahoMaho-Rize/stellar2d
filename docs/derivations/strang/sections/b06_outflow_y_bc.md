@@ -2,17 +2,13 @@
 
 > **sympy script:** `scripts/b06_outflow_y_bc.py`
 > **generated LaTeX:** `output/b06_outflow_y_bc.latex.tex`
-> **verifies:** 4 strong-form identities — 4 ghost-uniform
-> identities ($\mathbf{U}_{\mathrm{ghost}}(g_1)[k] = \mathbf{U}_{\mathrm{ghost}}(g_2)[k]$,
-> $k = 0..3$); plus 2 documentation identities (Neumann
-> continuum interpretation; Riemann-invariant extrapolation error
-> leading order)
+> **verified:**
+> - 4 ghost-uniform identities ($\mathbf{U}_{\mathrm{ghost}}(g_1)[k] = \mathbf{U}_{\mathrm{ghost}}(g_2)[k]$, $k = 0..3$)
+> - plus 2 documentation identities (Neumann continuum interpretation; Riemann-invariant extrapolation error leading order)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_y`
-> (line 71, top branch: `jg_ghost = ng+ny+g`, `jg_src = ng+ny-1`
-> — all ghosts copy from the same last physical cell)
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y`
-> (line 618, top branch: outflow face-state copy)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_y` (line 71, top branch: `jg_ghost = ng+ny+g`, `jg_src = ng+ny-1` — all ghosts copy from the same last physical cell)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y` (line 618, top branch: outflow face-state copy)
 
 The top of the Strang domain is an **outflow** boundary implemented
 by zero-gradient copy: every ghost cell is a copy of the last
@@ -148,7 +144,7 @@ $dR_{-}/dy \approx 0$, and (c) tests in §D-series and §E-series do
 not probe the outflow reflection sensitivity. Future work needing
 quiet outflow should add a characteristic BC or sponge layer.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Zero-gradient copy exactness.** All ghost cells are bit-
    identical to the last physical cell. Test:

@@ -3,13 +3,13 @@
 > **sympy script:** `scripts/d05_bubble_init.py`
 > **generated LaTeX:** `output/d05_bubble_init.latex.tex`
 > **generated goldens:** `output/d05_bubble_init.goldens.json`
-> **verifies:** 3 strong-form identities — 1 isentropic-to-$\rho$
-> map ($\rho' = \bar\rho \exp(-\delta s / \gamma)$ at constant $P$);
-> 1 linearised density perturbation; 1 zero $\delta E$ on static
-> bubble IC
+> **verified:**
+> - 1 isentropic-to-$\rho$ map ($\rho' = \bar\rho \exp(-\delta s / \gamma)$ at constant $P$)
+> - 1 linearised density perturbation
+> - 1 zero $\delta E$ on static bubble IC
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::init_bubble`
-> (line 765; kernel `k_strang_init_bubble` at line 708)
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::init_bubble` (line 765; kernel `k_strang_init_bubble` at line 708)
 
 The bubble IC is the canonical convective test for the Strang
 kernel: a warm (positive entropy anomaly) "bubble" embedded in
@@ -121,7 +121,7 @@ Golden JSON dumps:
 | `delta_rho_rel_ref_grid_64x64` | reference 2D array for test comparison |
 | `delta_rho_rel_at_center` | closed-form $\exp(-\delta s/\gamma) - 1$ for sanity check |
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC match.** After `init_bubble()` with canonical params on
    $n_x = n_y = 64$, the stored $\delta\rho / \bar\rho$ 2D array

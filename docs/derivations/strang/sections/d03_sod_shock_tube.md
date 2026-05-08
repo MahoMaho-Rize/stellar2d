@@ -3,12 +3,13 @@
 > **sympy script:** `scripts/d03_sod_shock_tube.py`
 > **generated LaTeX:** `output/d03_sod_shock_tube.latex.tex`
 > **generated goldens:** `output/d03_sod_shock_tube.goldens.json`
-> **verifies:** 2 strong-form sympy identities (rarefaction and
-> shock f-functions vanishing at $p = P_K$); plus closed-form
-> Newton solution for $p^\star$ at 15-digit precision
+> **verified:**
+> - 2 strong-form sympy identities (rarefaction and shock f-functions vanishing at $p = P_K$)
+> - plus closed-form Newton solution for $p^\star$ at 15-digit precision
+>
 > **code checkpoints:**
-> new `init_sod()` IC builder in `src/gpu/explicit/strang_solver.cu`;
-> `tests/test_strang_sod.cu` (new test — wire into CMakeLists)
+> - new `init_sod()` IC builder in `src/gpu/explicit/strang_solver.cu`
+> - `tests/test_strang_sod.cu` (new test — wire into CMakeLists)
 
 Sod's shock-tube (Sod 1978) is the canonical Riemann problem:
 the diaphragm breakup generates a left-going rarefaction, a
@@ -120,7 +121,7 @@ and fit slope; expected $p \approx 1.0$ (1st order through shocks
 and contacts — Godunov limit) with better rate on the rarefaction
 interior.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC consistency.** After `init_sod()`, cells with $x_c < 0$
    have $(\rho, u, v, P) = (1.0, 0, 0, 1.0)$ and cells with

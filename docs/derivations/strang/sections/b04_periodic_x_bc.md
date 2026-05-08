@@ -2,20 +2,15 @@
 
 > **sympy script:** `scripts/b04_periodic_x_bc.py`
 > **generated LaTeX:** `output/b04_periodic_x_bc.latex.tex`
-> **verifies:** 8 strong-form identities — 2 index-offset
-> identities (left and right ghost offsets = $n_x$); 1 physical-
-> distance identity ($x_{\mathrm{src}} - x_{\mathrm{ghost}} = L_x$);
-> 1 periodic-manufactured-solution identity (sin wave with
-> $k L_x = 2\pi m$); 4 flux-commutativity identities
-> ($F_x(U_{\mathrm{ghost}})[i] = F_x(U_{\mathrm{phys}})[i]$,
-> $i = 0..3$)
+> **verified:**
+> - 2 index-offset identities (left and right ghost offsets = $n_x$)
+> - 1 physical- distance identity ($x_{\mathrm{src}} - x_{\mathrm{ghost}} = L_x$)
+> - 1 periodic-manufactured-solution identity (sin wave with $k L_x = 2\pi m$)
+> - 4 flux-commutativity identities ($F_x(U_{\mathrm{ghost}})[i] = F_x(U_{\mathrm{phys}})[i]$, $i = 0..3$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_x`
-> (line 33, cell-data copy: `d_*[k_dst] = d_*[k_src]` where
-> `ig_ghost = g` or `nx + g`)
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_face_x`
-> (line 564, face-state copy: `d_wL[ig=ng-1]` from `d_wL[ig=ng+nx-1]`
-> etc.)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_x` (line 33, cell-data copy: `d_*[k_dst] = d_*[k_src]` where `ig_ghost = g` or `nx + g`)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_face_x` (line 564, face-state copy: `d_wL[ig=ng-1]` from `d_wL[ig=ng+nx-1]` etc.)
 
 Periodic-x is the simpler of the two BCs in the Strang kernel: the
 solution is required to satisfy $\mathbf{U}(x + L_x, y, t) =
@@ -113,7 +108,7 @@ This preserves the MUSCL reconstructions computed on the first
 ghost layer by `k_muscl_hancock_x` (which reads cell data from the
 outer ghost layer, which is already periodic).
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Periodic-copy exactness.** After `k_ghost_x` has run, every
    ghost-cell value is bit-identical to its source. Test:

@@ -2,13 +2,17 @@
 
 > **sympy script:** `scripts/a01_euler_equations.py`
 > **generated LaTeX:** `output/a01_euler_equations.latex.tex`
-> **verifies:** 5 strong-form identities — energy-flux factorisation
-> in $x$ and $y$, momentum material-derivative form in $x$ and $y$,
-> internal-energy material-derivative form
+> **verified:**
+> - energy-flux factorisation $x$: $(E + p)u = \rho(h + \tfrac{1}{2}|\mathbf{v}|^{2})u$
+> - energy-flux factorisation $y$: $(E + p)v = \rho(h + \tfrac{1}{2}|\mathbf{v}|^{2})v$
+> - x-momentum material-derivative form: $\rho D_t u = -\partial_x p$
+> - y-momentum material-derivative form: $\rho D_t v = -\partial_y p$
+> - internal-energy material derivative: $\rho D_t e_{\mathrm{int}} = -p\,\nabla\!\cdot\!\mathbf{v}$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_euler_flux_x`
-> `src/gpu/explicit/strang_device.cuh :: d_euler_flux_y`
-> `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
+> - `src/gpu/explicit/strang_device.cuh::d_euler_flux_x`
+> - `src/gpu/explicit/strang_device.cuh::d_euler_flux_y`
+> - `src/gpu/explicit/strang_device.cuh::d_cons2prim`
 
 ## Starting assumptions
 
@@ -116,7 +120,7 @@ on smooth flow.
 
 ## Compact conservative system
 
-$$\partial_t \mathbf{U} + \partial_x \mathbf{F}_x(\mathbf{U}) + \partial_y \mathbf{F}_y(\mathbf{U}) = \mathbf{0}, \qquad \mathbf{U} = (\rho,\ \rho u,\ \rho v,\ E)^{\!\top}, \quad (\text{A1-compact})$$
+$$\boxed{\partial_t \mathbf{U} + \partial_x \mathbf{F}_x(\mathbf{U}) + \partial_y \mathbf{F}_y(\mathbf{U}) = \mathbf{0}, \qquad \mathbf{U} = (\rho,\ \rho u,\ \rho v,\ E)^{\!\top}.}$$
 
 $$\mathbf{F}_x = \begin{pmatrix}\rho u\\ \rho u^{2} + p\\ \rho u v\\ (E + p)\,u\end{pmatrix}, \qquad
 \mathbf{F}_y = \begin{pmatrix}\rho v\\ \rho u v\\ \rho v^{2} + p\\ (E + p)\,v\end{pmatrix}.$$
@@ -127,7 +131,7 @@ of this book approximates. The kernel-level counterparts live in
 return these four components verbatim, with the $(E + p)$ factoring
 derived from §A1 above.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel is required to satisfy three strong-form invariants
 derivable from §A1, checked by one-cell test cases in

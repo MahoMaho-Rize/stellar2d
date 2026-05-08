@@ -2,14 +2,16 @@
 
 > **sympy script:** `scripts/b01_perturbation_storage.py`
 > **generated LaTeX:** `output/b01_perturbation_storage.latex.tex`
-> **verifies:** 14 strong-form identities — 4 round-trip (forward +
-> reverse) identity identities, 1 pressure-perturbation split, 8
-> zero-perturbation invariant identities (4 forward + 4 reverse), 1
-> Jacobian-determinant positivity identity
+> **verified:**
+> - 4 round-trip (forward + reverse) identity identities
+> - 1 pressure-perturbation split
+> - 8 zero-perturbation invariant identities (4 forward + 4 reverse)
+> - 1 Jacobian-determinant positivity identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
-> `src/gpu/explicit/strang_solver.cu :: k_strang_init_bubble`
-> `src/gpu/explicit/strang_solver.cu :: every site that does `+ d_rho_bar[j_phys]` or `+ d_p_bar[j_phys]/gm1`
+> - `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
+> - `src/gpu/explicit/strang_solver.cu :: k_strang_init_bubble`
+> - every site that does `+ d_rho_bar[j_phys]` or `+ d_p_bar[j_phys]/gm1`
 
 The Strang solver stores the **perturbation** of the four
 conservative variables above the isentropic HSE background
@@ -103,7 +105,7 @@ is the only correct way to compute a full-state quantity from
 stored state. Any kernel that fails to add back $\bar\rho(y)$ or
 $\bar p(y)/(\gamma - 1)$ will compute with negative or wrong values.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Round-trip precision.** Starting from random primitive state
    $(\rho, u, v, P)$ within the HSE admissibility envelope, encode

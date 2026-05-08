@@ -2,14 +2,15 @@
 
 > **sympy script:** `scripts/a13_time_integrator_family.py`
 > **generated LaTeX:** `output/a13_time_integrator_family.latex.tex`
-> **verifies:** 10 strong-form identities on the linearised operator
-> expansion — 2 Lie-splitting leading-commutator identities; 4
-> Strang-splitting $\Delta t^2$ cancellation identities; 1 kernel-
-> chain equivalence (all monomials match identically); 1 VL2
-> leading-$\Delta t^3$ identity; plus the printed report of the
-> 6 non-zero Strang $\Delta t^3$ residual coefficients
+> **verified:**
+> - 10 strong-form identities on the linearised operator expansion — 2 Lie-splitting leading-commutator identities
+> - 4 Strang-splitting $\Delta t^2$ cancellation identities
+> - 1 kernel- chain equivalence (all monomials match identically)
+> - 1 VL2 leading-$\Delta t^3$ identity
+> - plus the printed report of the 6 non-zero Strang $\Delta t^3$ residual coefficients
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::step`
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::step`
 
 This is the **fourth alternative-scheme comparison** of the book.
 Four time-integrator templates are compared by Baker-Campbell-
@@ -183,7 +184,7 @@ at $N = \{64, 128, 256, 512\}$, fit a log-log slope on $L^1$
 error, and confirm the slope falls in $[1.8, 2.2]$ as predicted
 by the modified-equation analysis of §E1.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not expose $\mathcal{X}, \mathcal{Y}$ operators
 directly; the A13 identities are verified at the scheme level

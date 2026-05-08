@@ -2,15 +2,15 @@
 
 > **sympy script:** `scripts/a10_slope_limiter_family.py`
 > **generated LaTeX:** `output/a10_slope_limiter_family.latex.tex`
-> **verifies:** 28 strong-form identities — second-order
-> consistency $\phi(1) = 1$ for all 5 limiters; spot values at
-> $r \in \{-1/2, 3/2, 2, 3, 4\}$; zero-at-extremum property for
-> minmod/VL/MC/superbee; explicit Ospre non-TVD demonstration at
-> $r = -1/2$; 6 numerical-fallback identities (symmetry $\phi(1/r)
-> = \phi(r)/r$ for all 5 limiters + MC kernel/Sweby equivalence) at
-> $\ge 100$ random samples each, all residuals $\le 10^{-15}$
+> **verified:**
+> - second-order consistency $\phi(1) = 1$ for all 5 limiters
+> - spot values at $r \in \{-1/2, 3/2, 2, 3, 4\}$
+> - zero-at-extremum property for minmod/VL/MC/superbee
+> - explicit Ospre non-TVD demonstration at $r = -1/2$
+> - 6 numerical-fallback identities (symmetry $\phi(1/r) = \phi(r)/r$ for all 5 limiters + MC kernel/Sweby equivalence) at $\ge 100$ random samples each, all residuals $\le 10^{-15}$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_mc_limit`
+> - `src/gpu/explicit/strang_device.cuh :: d_mc_limit`
 
 This is the **second alternative-scheme comparison** section of the
 book. The Strang kernel uses the MC limiter exclusively, but a
@@ -115,7 +115,7 @@ max residual $10^{-15}$.
 The opposite-sign branch returns $0$ directly, which matches the
 zero-at-extremum property of $\phi_{\mathrm{MC}}(r)$ at $r < 0$.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel's `d_mc_limit` is a simple two-line function. Tests:
 

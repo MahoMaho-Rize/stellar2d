@@ -2,17 +2,14 @@
 
 > **sympy script:** `scripts/b03_face_hse_reconstruction.py`
 > **generated LaTeX:** `output/b03_face_hse_reconstruction.latex.tex`
-> **verifies:** 13 strong-form identities — 4 face-state equality
-> identities ($\rho_L = \rho_R$, $P_L = P_R$, $u_L = u_R$,
-> $v_L = v_R$ on pure HSE); 4 face-flux equality identities
-> ($F_{y,L}[k] = F_{y,R}[k]$, $k=0..3$); 4 face-flux form
-> identities ($F_{y}$ at HSE = $(0, 0, \bar p, 0)$); 1
-> cell-centred-reconstruction counter-example identity
+> **verified:**
+> - 4 face-state equality identities ($\rho_L = \rho_R$, $P_L = P_R$, $u_L = u_R$, $v_L = v_R$ on pure HSE)
+> - 4 face-flux equality identities ($F_{y,L}[k] = F_{y,R}[k]$, $k=0..3$)
+> - 4 face-flux form identities ($F_{y}$ at HSE = $(0, 0, \bar p, 0)$)
+> - 1 cell-centred-reconstruction counter-example identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y`
-> (line 343-372: `y_bot`, `y_top` at face; `d_hse_rho`, `d_hse_p`
-> evaluated at face y-coord; `rL = rho_bar_bot + rhoP_bot`,
-> `PL = p_bar_bot + PP_bot`)
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y` (line 343-372: `y_bot`, `y_top` at face; `d_hse_rho`, `d_hse_p` evaluated at face y-coord; `rL = rho_bar_bot + rhoP_bot`, `PL = p_bar_bot + PP_bot`)
 
 The y-sweep reconstructs two face-state vectors $\mathbf{U}_L$ and
 $\mathbf{U}_R$ at each face between cells $j$ and $j+1$. The
@@ -125,7 +122,7 @@ $y_{\mathrm{face}}$ because the face index is a single integer —
 there is no "L-side face y" and "R-side face y". This is the
 structural guarantee of WB.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Pure HSE face-state equality.** Start the solver with the HSE
    background, zero perturbations. At every internal face, assert

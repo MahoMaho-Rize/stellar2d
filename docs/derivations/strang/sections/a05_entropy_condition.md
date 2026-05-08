@@ -2,14 +2,14 @@
 
 > **sympy script:** `scripts/a05_entropy_condition.py`
 > **generated LaTeX:** `output/a05_entropy_condition.latex.tex`
-> **verifies:** 3 strong-form identities — $D_t s_{\mathrm{alg}} = 0$,
-> $D_t s_{\mathrm{therm}} = 0$, $\partial_t \eta + \partial_i(u_i\eta) = 0$;
-> 1 numerical-consistency check (Hessian PSD on 80 random admissible
-> states); 1 documented **[WEAK]** inequality (Lax entropy condition
-> across a shock)
+> **verified:**
+> - $D_t s_{\mathrm{alg}} = 0$, $D_t s_{\mathrm{therm}} = 0$, $\partial_t \eta + \partial_i(u_i\eta) = 0$
+> - 1 numerical-consistency check (Hessian PSD on 80 random admissible states)
+> - 1 documented **[WEAK]** inequality (Lax entropy condition across a shock)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: write_vtk` (emits $s_{\mathrm{alg}}$ as diagnostic)
-> §C4 (kernel-level entropy invariance on smooth tests)
+> - `src/gpu/explicit/strang_solver.cu :: write_vtk` (emits $s_{\mathrm{alg}}$ as diagnostic)
+> - §C4 (kernel-level entropy invariance on smooth tests)
 
 The Euler system is not uniquely solvable in the presence of
 discontinuities — a single initial value problem can admit multiple
@@ -117,7 +117,7 @@ jump $[\eta]$ and $[q_n]$ across the solver's reconstructed shock
 are computed and the inequality verified numerically on the
 converged solution.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not enforce §A5 explicitly; the Riemann solver (§A7)
 embeds the entropy condition through its choice of wave speeds

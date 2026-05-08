@@ -2,13 +2,14 @@
 
 > **sympy script:** `scripts/a02_conservative_primitive.py`
 > **generated LaTeX:** `output/a02_conservative_primitive.latex.tex`
-> **verifies:** 27 strong-form identities — the two round-trip
-> compositions $(\mathbf{W}\to\mathbf{U}\to\mathbf{W})$ and
-> $(\mathbf{U}\to\mathbf{W}\to\mathbf{U})$ on all 4 components,
-> both Jacobian determinants, the 16 chain-rule entries, and the
-> positivity envelope
+> **verified:**
+> - round-trip $\mathbf{W}\to\mathbf{U}\to\mathbf{W}$ and $\mathbf{U}\to\mathbf{W}\to\mathbf{U}$ on all 4 components
+> - both Jacobian determinants (forward and reverse)
+> - 16 chain-rule entries of $\partial \mathbf{U}/\partial\mathbf{W}$ times $\partial \mathbf{W}/\partial\mathbf{U}$
+> - positivity envelope: $\rho > 0, P > 0$ in $\mathbf{W}$-space maps to admissible $\mathbf{U}$-space
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
+> - `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
 
 The strang solver stores $\mathbf{U} = (\rho, m_x, m_y, E)^\top$ on
 disk but needs the primitive form
@@ -88,7 +89,7 @@ is to prevent catastrophic cancellation from propagating into
 $\sqrt{\gamma p / \rho}$ (the sound-speed used by the Riemann
 solver). No solution in the admissible region triggers the clamp.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 Three invariants the kernel must satisfy, checked by
 `tests/test_strang_unit.cu`:

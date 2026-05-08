@@ -2,15 +2,11 @@
 
 > **sympy script:** `scripts/e04_strang_split_source_commutator.py`
 > **generated LaTeX:** `output/e04_strang_split_source_commutator.latex.tex`
-> **verifies:** 4 strong-form identities — 4 non-commutative
-> polynomial residual coefficients at $\Delta t^2$ showing the
-> **wrong** (separate-$\mathcal{Z}$) operator-chain fails at
-> $\Delta t^2$ with the commutator structure $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{X}]$ and $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{Y}_{\mathrm{hyd}}]$
+> **verified:**
+> - 4 non-commutative polynomial residual coefficients at $\Delta t^2$ showing the wrong (separate-$\mathcal{Z}$) operator-chain fails at $\Delta t^2$ with the commutator structure $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{X}]$ and $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{Y}_{\mathrm{hyd}}]$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y`
-> (gravity source `S_my, S_E` applied INSIDE the y-sweep kernel,
-> line 513-523). The operator chain is X(Dt/2) * Y_total(Dt) *
-> X(Dt/2), not a separate Z-operator.
+> - `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (gravity source `S_my, S_E` applied INSIDE the y-sweep kernel, line 513-523). The operator chain is X(Dt/2) * Y_total(Dt) * X(Dt/2), not a separate Z-operator.
 
 The Strang kernel absorbs the gravity source **into** the
 y-direction operator: the update `k_hllc_update_y` computes the
@@ -100,7 +96,7 @@ d_E [k0] = d_E [k0] - dtdy * (GT3   - GB3)   + dt * S_E;
 This is the correct `L_correct` structure. No separate gravity
 step is called before or after the Strang chain.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Absence of separate Z operator.** Code inspection:
    `grep -n "g_grav" strang_solver.cu` — all occurrences must be

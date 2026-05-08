@@ -2,15 +2,12 @@
 
 > **sympy script:** `scripts/a09_wave_speed_estimates.py`
 > **generated LaTeX:** `output/a09_wave_speed_estimates.latex.tex`
-> **verifies:** 1 Davis-bracket identity (80 random admissible (L,R)
-> pairs × 8 eigenvalue-bracket inequalities = 640 scalar checks,
-> all residuals $\le 0$); 4 Roe-property identities (80 random
-> admissible (L,R) pairs, max residual $6\times 10^{-14}$ vs
-> tol $10^{-9}$)
+> **verified:**
+> - 1 Davis-bracket identity (80 random admissible (L,R) pairs × 8 eigenvalue-bracket inequalities = 640 scalar checks, all residuals $\le 0$)
+> - 4 Roe-property identities (80 random admissible (L,R) pairs, max residual $6\times 10^{-14}$ vs tol $10^{-9}$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (Davis speeds
-> $S_L = \min(u_L - c_L, u_R - c_R)$, $S_R = \max(u_L + c_L, u_R +
-> c_R)$ hard-coded at the top of the solver)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (Davis speeds $S_L = \min(u_L - c_L, u_R - c_R)$, $S_R = \max(u_L + c_L, u_R + c_R)$ hard-coded at the top of the solver)
 
 The HLLC algebra of §A8 requires **bounding wave speeds** $S_L, S_R$
 that bracket every characteristic of the exact Riemann fan. This
@@ -128,7 +125,7 @@ consequence of Davis's conservative over-estimate — one of the
 reasons the stellar2d kernel uses Davis rather than the tighter
 Einfeldt bounds.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel's Davis wave-speed computation is simple enough that no
 subtle bugs are likely; the checks are smoke tests:

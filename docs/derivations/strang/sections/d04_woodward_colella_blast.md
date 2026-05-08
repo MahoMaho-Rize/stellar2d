@@ -3,14 +3,13 @@
 > **sympy script:** `scripts/d04_woodward_colella_blast.py`
 > **generated LaTeX:** `output/d04_woodward_colella_blast.latex.tex`
 > **generated goldens:** `output/d04_woodward_colella_blast.goldens.json`
-> **verifies:** 2 closed-form Riemann-problem solutions (at
-> $x = 0.1$ and $x = 0.9$, early-time window) via §D3's Newton
-> routine; late-time profile is **[WEAK]** per Rule 4 (no closed
-> form after shock-shock collision)
+> **verified:**
+> - 2 closed-form Riemann-problem solutions (at $x = 0.1$ and $x = 0.9$, early-time window) via §D3's Newton routine
+> - late-time profile is **[WEAK]** per Rule 4 (no closed form after shock-shock collision)
+>
 > **code checkpoints:**
-> new `init_woodward_colella()` IC builder in
-> `src/gpu/explicit/strang_solver.cu`; `tests/test_strang_wc_blast.cu`
-> wired to golden JSON
+> - new `init_woodward_colella()` IC builder in `src/gpu/explicit/strang_solver.cu`
+> - `tests/test_strang_wc_blast.cu` wired to golden JSON
 
 The Woodward & Colella (1984) "two blast waves" test has three
 high-pressure / low-pressure / high-pressure regions separated by
@@ -115,7 +114,7 @@ test anchor.
   order for shocks and a sub-linear rate from wave-interaction
   complexity).
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Early-window star-region match.** At $t = 0.02$, measured
    $p^\star$ at $x = 0.3$ (within the left blast's post-shock

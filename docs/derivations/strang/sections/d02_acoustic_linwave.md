@@ -3,16 +3,17 @@
 > **sympy script:** `scripts/d02_acoustic_linwave.py`
 > **generated LaTeX:** `output/d02_acoustic_linwave.latex.tex`
 > **generated goldens:** `output/d02_acoustic_linwave.goldens.json`
-> **verifies:** 11 strong-form identities — 1 adiabatic relation
-> ($\delta P = c_0^2 \delta\rho$); 3 linearised PDE components
-> (mass, x-momentum, pressure equation); 1 $O(\epsilon)$ non-linear
-> residual vanishing; 1 periodicity at $T = L_x/(u_0+c_0)$; 1
-> phase-speed documentation; 4 right-eigenvector projection
-> identities
+> **verified:**
+> - 1 adiabatic relation ($\delta P = c_0^2 \delta\rho$)
+> - 3 linearised PDE components (mass, x-momentum, pressure equation)
+> - 1 $O(\epsilon)$ non-linear residual vanishing
+> - 1 periodicity at $T = L_x/(u_0+c_0)$
+> - 1 phase-speed documentation
+> - 4 right-eigenvector projection identities
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu` — new `init_linwave()` IC
-> builder; `tests/test_strang_linwave_convergence.cu` must set
-> `use_lm_fix = false` (golden JSON includes the flag)
+> - `src/gpu/explicit/strang_solver.cu` — new `init_linwave()` IC builder
+> - `tests/test_strang_linwave_convergence.cu` must set `use_lm_fix = false` (golden JSON includes the flag)
 
 A right-going acoustic wave from §A3's $(u+c)$ eigenvector,
 linearised around a stationary uniform background. This is the
@@ -138,7 +139,7 @@ For $n_x \in \{64, 128, 256, 512\}$:
 4. Compute $L^1 = \sum_i |\delta\rho_i(T) - \delta\rho_i(0)|$.
 5. Fit slope; expected $p \approx 2.0$ (2nd-order).
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC consistency.** After `init_linwave()`, the face-state
    reconstruction (§A11) yields $(\rho_0 + \delta\rho, u_0 + \delta u, 0,

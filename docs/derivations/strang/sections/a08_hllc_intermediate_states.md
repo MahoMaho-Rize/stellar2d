@@ -2,16 +2,13 @@
 
 > **sympy script:** `scripts/a08_hllc_intermediate_states.py`
 > **generated LaTeX:** `output/a08_hllc_intermediate_states.latex.tex`
-> **verifies:** 17 strong-form pointwise identities — $p^\star_L =
-> p^\star_R$; mass / momentum-x / momentum-y / energy Rankine-
-> Hugoniot across $S_L$ and $S_R$ (8 identities); HLLC flux in the
-> left-star and right-star branches reduces to $F(\mathbf{U}^\star_L)$
-> and $F(\mathbf{U}^\star_R)$ (8 components)
+> **verified:**
+> - 17 strong-form pointwise identities — $p^\star_L = p^\star_R$
+> - mass / momentum-x / momentum-y / energy Rankine- Hugoniot across $S_L$ and $S_R$ (8 identities)
+> - HLLC flux in the left-star and right-star branches reduces to $F(\mathbf{U}^\star_L)$ and $F(\mathbf{U}^\star_R)$ (8 components)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc`
-> (the $S_\star$ formula and $U^\star_L, U^\star_R$ constructions
-> in the kernel are LM-scaled via $f_M$; the LM factor is derived
-> separately in §C3)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (the $S_\star$ formula and $U^\star_L, U^\star_R$ constructions in the kernel are LM-scaled via $f_M$; the LM factor is derived separately in §C3)
 
 The HLLC Riemann solver resolves three waves: the left and right
 acoustics at speeds $S_L, S_R$ bounding the fan, and an interior
@@ -117,7 +114,7 @@ flux evaluated at the star state** in each subsonic branch — a
 structurally stronger result than the general HLL template, and
 the reason HLLC exactly resolves isolated contacts (§A7).
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The §A8 identities are implemented inside `d_lmhllc`. The
 regression tests should check:

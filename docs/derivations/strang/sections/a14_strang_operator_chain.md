@@ -2,15 +2,13 @@
 
 > **sympy script:** `scripts/a14_strang_operator_chain.py`
 > **generated LaTeX:** `output/a14_strang_operator_chain.latex.tex`
-> **verifies:** 33 strong-form identities — 1 half-flow reversal;
-> 31 Strang-chain self-adjoint monomial identities (every monomial
-> of degree $\le 4$ in $\mathcal{X}, \mathcal{Y}$ cancels identically
-> in $L_\mathrm{fwd} L_\mathrm{bwd}$); 2 Lie-splitting non-self-
-> adjoint leading residuals ($\pm\Delta t^2$ on $[\mathcal{X},
-> \mathcal{Y}]$)
+> **verified:**
+> - 1 half-flow reversal
+> - 31 Strang-chain self-adjoint monomial identities (every monomial of degree $\le 4$ in $\mathcal{X}, \mathcal{Y}$ cancels identically in $L_\mathrm{fwd} L_\mathrm{bwd}$)
+> - 2 Lie-splitting non-self- adjoint leading residuals ($\pm\Delta t^2$ on $[\mathcal{X}, \mathcal{Y}]$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::step`
-> (the four-factor symmetric chain is structurally self-adjoint)
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::step` (the four-factor symmetric chain is structurally self-adjoint)
 
 This section proves the **structural reason** the Strang splitting
 of §A13 is 2nd-order: it is **self-adjoint** (time-reversible).
@@ -104,7 +102,7 @@ and §E4 derive why the gravity source in the Strang kernel is
 rather than inserted as a separate $\mathcal{Z}$ operator, so the
 full step chain remains symmetric.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The self-adjointness of the Strang kernel is a structural
 consequence of the code's topology (the order of sweep calls).

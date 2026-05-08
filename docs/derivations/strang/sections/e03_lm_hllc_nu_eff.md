@@ -2,17 +2,15 @@
 
 > **sympy script:** `scripts/e03_lm_hllc_nu_eff.py`
 > **generated LaTeX:** `output/e03_lm_hllc_nu_eff.latex.tex`
-> **verifies:** 5 strong-form identities — 1 $\nu_{\mathrm{eff}}$
-> ratio ($\nu_{\mathrm{LM}}/\nu_{\mathrm{std}} = M$); 1
-> $\mathrm{Re}_{\mathrm{eff}}$ under LM ($= 2 N M_{\mathrm{conv}}/M_{\mathrm{loc}}$);
-> 1 under standard HLLC ($= 2 N M_{\mathrm{conv}}$); 1
-> Re-ratio ($\mathrm{Re}_{\mathrm{LM}}/\mathrm{Re}_{\mathrm{std}} = 1/M_{\mathrm{loc}}$);
-> 1 clamped-regime identity
+> **verified:**
+> - 1 $\nu_{\mathrm{eff}}$ ratio ($\nu_{\mathrm{LM}}/\nu_{\mathrm{std}} = M$)
+> - 1 $\mathrm{Re}_{\mathrm{eff}}$ under LM ($= 2 N M_{\mathrm{conv}}/M_{\mathrm{loc}}$)
+> - 1 under standard HLLC ($= 2 N M_{\mathrm{conv}}$)
+> - 1 Re-ratio ($\mathrm{Re}_{\mathrm{LM}}/\mathrm{Re}_{\mathrm{std}} = 1/M_{\mathrm{loc}}$)
+> - 1 clamped-regime identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ clamp
-> logic, lines 115-122); measurement via a dedicated scheme-
-> characterisation test at Andrassy-style low-Mach convection
-> parameters
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ clamp logic, lines 115-122); measurement via a dedicated scheme- characterisation test at Andrassy-style low-Mach convection parameters
 
 Quantifies the practical advantage of LM-HLLC over standard HLLC
 for low-Mach convective flows — specifically, the **effective
@@ -100,7 +98,7 @@ For tests that probe the **scheme's convergence theory**
 standard HLLC behaviour; this is a configuration choice, not a
 kernel defect.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **$\nu_{\mathrm{eff}}$ measurement under standard HLLC.**
    On a smoothly-driven low-Mach flow ($u_{\mathrm{conv}} = 10^{-2} c$)

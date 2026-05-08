@@ -2,13 +2,15 @@
 
 > **sympy script:** `scripts/a03_flux_jacobian_x.py`
 > **generated LaTeX:** `output/a03_flux_jacobian_x.latex.tex`
-> **verifies:** 50 strong-form identities — characteristic polynomial;
-> $A_x R_k = \lambda_k R_k$ for all 4 eigenpairs × 4 components;
-> left-right orthogonality $L R = I$ (16 entries); characteristic
-> decomposition $R\,\mathrm{diag}(\lambda)\,L = A_x$ (16 entries)
+> **verified:**
+> - characteristic polynomial
+> - $A_x R_k = \lambda_k R_k$ for all 4 eigenpairs × 4 components
+> - left-right orthogonality $L R = I$ (16 entries)
+> - characteristic decomposition $R\,\mathrm{diag}(\lambda)\,L = A_x$ (16 entries)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (uses sound speed + wave speeds)
-> indirectly: every Riemann solver that invokes $S_L, S_R, S_\star$
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (uses sound speed + wave speeds)
+> - indirectly: every Riemann solver that invokes $S_L, S_R, S_\star$
 
 The flux Jacobian $A_x \equiv \partial \mathbf{F}_x / \partial \mathbf{U}$
 governs the linearised propagation of infinitesimal perturbations.
@@ -114,7 +116,7 @@ resulting radical expressions. The diagonalisation confirms $A_x$
 is strictly hyperbolic on the admissible region (real eigenvalues,
 complete eigenvector basis).
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not explicitly assemble $A_x$ — it uses the Riemann
 solver directly. Consequently the §A3 invariants are verified

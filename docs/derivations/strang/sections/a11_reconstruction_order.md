@@ -2,15 +2,13 @@
 
 > **sympy script:** `scripts/a11_reconstruction_order.py`
 > **generated LaTeX:** `output/a11_reconstruction_order.latex.tex`
-> **verifies:** 10 strong-form identities via Taylor expansion of
-> cell averages — donor-cell $h^1$ and $h^2$ coefficients; MUSCL
-> $h^0$ and $h^1$ coefficients vanish (establishing 2nd order);
-> PPM $h^0$, $h^1$, $h^2$, $h^3$ coefficients all vanish
-> (establishing 4th-order face reconstruction)
+> **verified:**
+> - 10 strong-form identities via Taylor expansion of cell averages — donor-cell $h^1$ and $h^2$ coefficients
+> - MUSCL $h^0$ and $h^1$ coefficients vanish (establishing 2nd order)
+> - PPM $h^0$, $h^1$, $h^2$, $h^3$ coefficients all vanish (establishing 4th-order face reconstruction)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x/y` (MUSCL)
-> (PPM is derived here for comparison; the kernel does not implement
-> it.)
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x/y` (MUSCL) (PPM is derived here for comparison; the kernel does not implement it.)
 
 This is the **third alternative-scheme comparison** section. Four
 reconstruction orders are derived in strong form by Taylor
@@ -119,7 +117,7 @@ costing ~40% less per step. Upgrading to PPM is listed as an
 optional scheme-characterisation experiment in §E (not in the
 current kernel scope).
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel implements §A11's MUSCL reconstruction inside
 `k_muscl_hancock_x/y`. Tests:

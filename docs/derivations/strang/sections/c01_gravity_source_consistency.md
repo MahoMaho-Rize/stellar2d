@@ -2,16 +2,13 @@
 
 > **sympy script:** `scripts/c01_gravity_source_consistency.py`
 > **generated LaTeX:** `output/c01_gravity_source_consistency.latex.tex`
-> **verifies:** 3 strong-form identities — 1 kinetic+potential
-> energy conservation law ($\partial_t (E + \rho g y) +
-> \nabla\!\cdot\![(E + P + \rho g y)\mathbf{v}] = 0$); 1 HSE balance
-> reduction identity; 1 work-form identity ($S_E = -m_y g =
-> \rho v \cdot (-g)$)
+> **verified:**
+> - 1 kinetic+potential energy conservation law ($\partial_t (E + \rho g y) + \nabla\!\cdot\![(E + P + \rho g y)\mathbf{v}] = 0$)
+> - 1 HSE balance reduction identity
+> - 1 work-form identity ($S_E = -m_y g = \rho v \cdot (-g)$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y`
-> (line 513-516: `S_my = -rho_total * g_grav`; `S_E = -d_my[k0] * g_grav`;
-> line 522-523: separate `+= dt * S_my` and `+= dt * S_E` applied
-> after the HLLC flux divergence)
+> - `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (line 513-516: `S_my = -rho_total * g_grav`; `S_E = -d_my[k0] * g_grav`; line 522-523: separate `+= dt * S_my` and `+= dt * S_E` applied after the HLLC flux divergence)
 
 The Strang solver's y-sweep applies the gravity source term
 $\mathbf{S}(\mathbf{U}; g) = (0, 0, -\rho g, -m_y g)^{\mathsf T}$
@@ -146,7 +143,7 @@ symmetric under time reversal; the splitting would degrade to
 1st-order. §E4 verifies that the kernel's absorption of gravity
 into $\mathcal{Y}$ preserves 2nd-order Strang order.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Bit-identical source-application.** On a known state with
    known $\rho_{\mathrm{tot}}, m_y$, compute the kernel's

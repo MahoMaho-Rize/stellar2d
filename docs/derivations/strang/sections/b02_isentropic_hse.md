@@ -2,18 +2,19 @@
 
 > **sympy script:** `scripts/b02_isentropic_hse.py`
 > **generated LaTeX:** `output/b02_isentropic_hse.latex.tex`
-> **verifies:** 14 strong-form identities — 1 exponent identity
-> ($\gamma/(\gamma-1) - 1 = 1/(\gamma-1)$); 2 parametric
-> derivative-chain identities ($dh/dy$, $dp/dh$); 2 HSE-ODE
-> identities (parametric and y-world); 2 parametric state
-> identities; 2 bottom-BC identities; 1 isentropic-closure
-> identity ($P/\rho^\gamma = K$); 1 atmosphere-cutoff identity;
-> 3 temperature-lapse identities (parametric, y-world, compact)
+> **verified:**
+> - 1 exponent identity ($\gamma/(\gamma-1) - 1 = 1/(\gamma-1)$)
+> - 2 parametric derivative-chain identities ($dh/dy$, $dp/dh$)
+> - 2 HSE-ODE identities (parametric and y-world)
+> - 2 parametric state identities
+> - 2 bottom-BC identities
+> - 1 isentropic-closure identity ($P/\rho^\gamma = K$)
+> - 1 atmosphere-cutoff identity
+> - 3 temperature-lapse identities (parametric, y-world, compact)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::init`
-> (host-side HSE build loop, line 686-692)
-> `src/gpu/explicit/strang_device.cuh :: d_hse_rho, d_hse_p`
-> (device-side HSE evaluation in §B3 face-state reconstruction)
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::init` (host-side HSE build loop, line 686-692)
+> - `src/gpu/explicit/strang_device.cuh :: d_hse_rho, d_hse_p` (device-side HSE evaluation in §B3 face-state reconstruction)
 
 The Strang solver's background $\bar\rho(y), \bar p(y)$ is the
 closed-form solution of the **isentropic** hydrostatic-equilibrium
@@ -104,7 +105,7 @@ These are evaluated at face-centre y-coordinates during the y-sweep
 MUSCL-Hancock reconstruction (§B3) so that the face pairs see
 **identical** HSE background contribution.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Host-host consistency.** The C++ init loop in `StrangSolver::init`
    at a cell centre $y_j = y_{\mathrm{lo}} + (j + 1/2)\,\Delta y$ must

@@ -3,14 +3,13 @@
 > **sympy script:** `scripts/e05_hse_drift_bound.py`
 > **generated LaTeX:** `output/e05_hse_drift_bound.latex.tex`
 > **generated goldens:** `output/e05_hse_drift_bound.goldens.json`
-> **verifies:** 2 strong-form identities — 1 linear-summation
-> drift bound ($\varepsilon_{\mathrm{mach}} \cdot N_{\mathrm{step}}
-> \cdot \kappa(\mathrm{HSE})$); 1 Kahan-summation drift bound
-> ($\varepsilon_{\mathrm{mach}} \sqrt{N} \kappa$, not used in
-> kernel)
+> **verified:**
+> - 1 linear-summation drift bound ($\varepsilon_{\mathrm{mach}} \cdot N_{\mathrm{step}} \cdot \kappa(\mathrm{HSE})$)
+> - 1 Kahan-summation drift bound ($\varepsilon_{\mathrm{mach}} \sqrt{N} \kappa$, not used in kernel)
+>
 > **code checkpoints:**
-> composite of §B2, §B3, §C1, §D6; measured by
-> `tests/test_strang_step.cu` §D6-long-time
+> - composite of §B2, §B3, §C1, §D6
+> - measured by `tests/test_strang_step.cu` §D6-long-time
 
 Quantifies the maximum drift of the stored state away from zero
 on pure HSE IC over long time evolution. The kernel uses standard
@@ -111,7 +110,7 @@ bound applies only to the floor below which the kernel cannot
 preserve a quiescent HSE state — a diagnostic of the kernel's
 round-off accumulation, not of its physical convergence rate.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **$N = 1000$ drift bound.** Measured
    $\|\boldsymbol{\delta U}\|_\infty$ at $N = 1000$ is in

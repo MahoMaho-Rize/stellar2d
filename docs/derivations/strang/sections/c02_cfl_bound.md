@@ -2,17 +2,12 @@
 
 > **sympy script:** `scripts/c02_cfl_bound.py`
 > **generated LaTeX:** `output/c02_cfl_bound.latex.tex`
-> **verifies:** 1 strong-form + 1 numerical identity — 1 Lax-
-> Friedrichs amplification identity
-> ($|g|^2 = 1 + (\nu^2 - 1)\sin^2(k\Delta x)$, strong-form sympy);
-> 1 max-wave-speed identity
-> ($\max(|u-c|, |u+c|) = |u| + c$; sympy cannot fold absolute-value
-> expressions for symbolic sign, so this is verified at 100
-> random samples with max residual $0$)
+> **verified:**
+> - 1 Lax-Friedrichs amplification identity ($|g|^2 = 1 + (\nu^2 - 1)\sin^2(k\Delta x)$, strong-form sympy)
+> - 1 max-wave-speed identity $\max(|u-c|, |u+c|) = |u| + c$ — sympy cannot fold absolute-value expressions for symbolic sign, so this is verified at 100 random samples with max residual $0$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_strang_cfl`
-> (line 529-556: computes $(|u|+c)/\Delta x + (|v|+c)/\Delta y$ per cell;
-> host reduction gives global max; $\Delta t = \sigma / \max\{\cdot\}$)
+> - `src/gpu/explicit/strang_solver.cu :: k_strang_cfl` (line 529-556: computes $(|u|+c)/\Delta x + (|v|+c)/\Delta y$ per cell; host reduction gives global max; $\Delta t = \sigma / \max\{\cdot\}$)
 
 The kernel's time-step selection implements a **conservative**
 CFL condition based on a 1D von-Neumann analysis of the linear
@@ -127,7 +122,7 @@ This is the restriction that motivates the LM-HLLC blending of
 smears acoustic waves too aggressively, so a Mach-dependent blend
 reduces the dissipation without violating CFL.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Kernel CFL reduction.** After `k_strang_cfl` populates the
    buffer, the host reduction computes $\max\{\text{buf}\}$. The

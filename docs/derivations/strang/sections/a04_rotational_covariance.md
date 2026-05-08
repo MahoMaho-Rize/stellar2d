@@ -2,13 +2,12 @@
 
 > **sympy script:** `scripts/a04_rotational_covariance.py`
 > **generated LaTeX:** `output/a04_rotational_covariance.latex.tex`
-> **verifies:** 37 strong-form identities — involution $R^2 = I$
-> (16 entries), covariance $\mathbf{F}_y = R\,\mathbf{F}_x(R\,\mathbf{U})$
-> (4 components), Jacobian covariance $A_y = R\,A_x(R\,\mathbf{U})\,R$
-> (16 entries), y-direction characteristic polynomial
+> **verified:**
+> - involution $R^2 = I$ (16 entries), covariance $\mathbf{F}_y = R\,\mathbf{F}_x(R\,\mathbf{U})$ (4 components), Jacobian covariance $A_y = R\,A_x(R\,\mathbf{U})\,R$ (16 entries), y-direction characteristic polynomial
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (argument permutation)
-> `src/gpu/explicit/strang_device.cuh :: d_euler_flux_y`
+> - `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (argument permutation)
+> - `src/gpu/explicit/strang_device.cuh :: d_euler_flux_y`
 
 The 2D Euler flux is invariant under relabelling of the two
 coordinate axes. This means the y-sweep Riemann solver does not
@@ -90,7 +89,7 @@ means every y-direction eigensystem result in the rest of the book
 is obtained from the x-direction result of §A3 by the single
 substitution $u \leftrightarrow v$.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel expresses A4 as a permutation of arguments at the call
 site, not as an explicit matrix multiplication. Consequently the

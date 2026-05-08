@@ -2,17 +2,15 @@
 
 > **sympy script:** `scripts/c04_entropy_invariant.py`
 > **generated LaTeX:** `output/c04_entropy_invariant.latex.tex`
-> **verifies:** 5 strong-form identities — 1 chain-rule identity
-> ($D_t s = (1/P) D_t P - (\gamma / \rho) D_t \rho$); 1 entropy
-> invariant ($D_t s = 0$ on smooth Euler); 1 entropy-function
-> chain identity; 1 entropy-function invariant ($D_t(P\rho^{-\gamma})
-> = 0$); 1 entropy-function identity ($\log K = s$, via
-> `expand_log(force=True)`)
+> **verified:**
+> - 1 chain-rule identity ($D_t s = (1/P) D_t P - (\gamma / \rho) D_t \rho$)
+> - 1 entropy invariant ($D_t s = 0$ on smooth Euler)
+> - 1 entropy-function chain identity
+> - 1 entropy-function invariant ($D_t(P\rho^{-\gamma}) = 0$)
+> - 1 entropy-function identity ($\log K = s$, via `expand_log(force=True)`)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: write_vtk`
-> (entropy computed as a post-processing diagnostic; the kernel
-> does not enforce $D_t s = 0$, it emerges from §E1's smooth-
-> convergence measurement)
+> - `src/gpu/explicit/strang_solver.cu :: write_vtk` (entropy computed as a post-processing diagnostic; the kernel does not enforce $D_t s = 0$, it emerges from §E1's smooth- convergence measurement)
 
 On smooth solutions of the Euler equations (no shocks, no
 discontinuities), the specific entropy
@@ -121,7 +119,7 @@ field (line 946-947 of strang_solver.cu after cons2prim). Tests
 in §D and §E series read this field and check the invariance
 property at the numerical level.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Entropy preservation on entropy wave.** At the end of one
    entropy-wave period, the entropy distribution $s(x, y)$ must

@@ -2,15 +2,14 @@
 
 > **sympy script:** `scripts/a12_muscl_hancock_halfstep.py`
 > **generated LaTeX:** `output/a12_muscl_hancock_halfstep.latex.tex`
-> **verifies:** 3 strong-form identities — Hancock linear-advection
-> equivalence ($u_{\mathrm{hancock}}$ equals $u_0 + (\Delta t/2)\,u_t$
-> after substituting the PDE constraint $u_t = -a u_x$); 2nd-order
-> time-truncation identity ($u_{\mathrm{true}} - u_{\mathrm{hancock}}
-> = (\Delta t^2/8)\,a^2 u_{xx} + O(\Delta t^3)$); cell-average
-> conservation of the half-step
+> **verified:**
+> - Hancock linear-advection equivalence ($u_{\mathrm{hancock}}$ equals $u_0 + (\Delta t/2)\,u_t$ after substituting the PDE constraint $u_t = -a u_x$)
+> - 2nd-order time-truncation identity ($u_{\mathrm{true}} - u_{\mathrm{hancock}} = (\Delta t^2/8)\,a^2 u_{xx} + O(\Delta t^3)$)
+> - cell-average conservation of the half-step
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x`
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y`
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x`
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y`
 
 The Hancock predictor is the second pillar of MUSCL: after
 reconstructing face states (§A11), it evolves those states
@@ -88,7 +87,7 @@ about mid-cell-average drift: conservation is built in.
 **Strong-form verification.** sympy directly simplifies the
 averaged expression to the expected FV half-step form.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel implements §A12 inside `k_muscl_hancock_x/y`. Tests:
 

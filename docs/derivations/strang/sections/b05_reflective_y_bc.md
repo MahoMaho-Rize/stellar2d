@@ -2,19 +2,15 @@
 
 > **sympy script:** `scripts/b05_reflective_y_bc.py`
 > **generated LaTeX:** `output/b05_reflective_y_bc.latex.tex`
-> **verifies:** 13 strong-form identities — 1 involution identity
-> ($\mathcal{R}_{\mathrm{ref}}^2 = \mathbf{I}$); 4 flux-reversal
-> identities ($\mathbf{F}_y(\mathcal{R}\mathbf{U}) = \mathcal{R}'
-> \mathbf{F}_y(\mathbf{U})$, 4 components); 4 wall-face flux
-> identities ($\mathbf{F}_y(\rho, u, 0, P) = (0, 0, P, 0)$);
-> 4 HSE-perturbation-zero identities
+> **verified:**
+> - 1 involution identity ($\mathcal{R}_{\mathrm{ref}}^2 = \mathbf{I}$)
+> - 4 flux-reversal identities ($\mathbf{F}_y(\mathcal{R}\mathbf{U}) = \mathcal{R}' \mathbf{F}_y(\mathbf{U})$, 4 components)
+> - 4 wall-face flux identities ($\mathbf{F}_y(\rho, u, 0, P) = (0, 0, P, 0)$)
+> - 4 HSE-perturbation-zero identities
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_y`
-> (line 71, bottom branch: `jg_ghost = ng-1-g`, `jg_src = ng+g`,
-> `d_my[k_dst] = -d_my[k_src]`)
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y`
-> (line 593, bottom branch: `d_wR[kd*4+2] = -d_wL[ks*4+2]`
-> (v component negated))
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_y` (line 71, bottom branch: `jg_ghost = ng-1-g`, `jg_src = ng+g`, `d_my[k_dst] = -d_my[k_src]`)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y` (line 593, bottom branch: `d_wR[kd*4+2] = -d_wL[ks*4+2]` (v-component negated))
 
 The bottom of the Strang domain is a solid wall. The ghost cells
 are the mirror image of the physical cells across the wall plane,
@@ -140,7 +136,7 @@ component $v$). The mapping is from the physical cell's $\mathbf{w}_L$
 (bottom face) to the ghost's $\mathbf{w}_R$ (top face, which lies
 on the wall).
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Pure-HSE preservation.** After arbitrary ghost-fill passes on
    HSE IC, the perturbation state remains bitwise zero at all ghost

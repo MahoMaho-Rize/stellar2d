@@ -2,16 +2,15 @@
 
 > **sympy script:** `scripts/c03_lm_hllc_blending.py`
 > **generated LaTeX:** `output/c03_lm_hllc_blending.latex.tex`
-> **verifies:** 7 strong-form identities — 1 transonic ($M = 1$)
-> reduction to standard HLLC; 1 linearity identity ($\partial
-> S_\star / \partial f_M$); 3 reflective-BC identities
-> ($p_R - p_L = 0$, $f_M$ invariance, wall $S_\star = 0$); 1
-> dispersion-ratio identity ($\sim 1/M$ suppression); 1
-> Mach-cutoff clamp identity
+> **verified:**
+> - 1 transonic ($M = 1$) reduction to standard HLLC
+> - 1 linearity identity ($\partial S_\star / \partial f_M$)
+> - 3 reflective-BC identities ($p_R - p_L = 0$, $f_M$ invariance, wall $S_\star = 0$)
+> - 1 dispersion-ratio identity ($\sim 1/M$ suppression)
+> - 1 Mach-cutoff clamp identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc`
-> (lines 107-122: `fM = fmin(1.0, fmax(M_local, M_cutoff))`;
-> line 127-128: `S_star = (fM * (PR - PL) + ...)/denom`)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (lines 107-122: `fM = fmin(1.0, fmax(M_local, M_cutoff))`; line 127-128: `S_star = (fM * (PR - PL) + ...)/denom`)
 
 Standard HLLC injects a pressure-jump term $p_R - p_L$ into the
 contact-wave speed $S_\star$ (§A8). For low-Mach convective flows
@@ -144,7 +143,7 @@ modification is inactive where full HLLC dissipation is needed.
 This is a design feature: LM-HLLC is a **low-Mach correction**, not
 a shock-capturing modification.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **$f_M = 1$ regime.** On a strong-shock Sod IC (§D3), verify
    LM-HLLC produces bit-identical output to standard HLLC

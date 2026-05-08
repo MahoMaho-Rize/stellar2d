@@ -117,13 +117,17 @@ the offending section is flagged.  No partial manuscript is emitted.
 
 > **sympy script:** `scripts/a01_euler_equations.py`
 > **generated LaTeX:** `output/a01_euler_equations.latex.tex`
-> **verifies:** 5 strong-form identities — energy-flux factorisation
-> in $x$ and $y$, momentum material-derivative form in $x$ and $y$,
-> internal-energy material-derivative form
+> **verified:**
+> - energy-flux factorisation $x$: $(E + p)u = \rho(h + \tfrac{1}{2}|\mathbf{v}|^{2})u$
+> - energy-flux factorisation $y$: $(E + p)v = \rho(h + \tfrac{1}{2}|\mathbf{v}|^{2})v$
+> - x-momentum material-derivative form: $\rho D_t u = -\partial_x p$
+> - y-momentum material-derivative form: $\rho D_t v = -\partial_y p$
+> - internal-energy material derivative: $\rho D_t e_{\mathrm{int}} = -p\,\nabla\!\cdot\!\mathbf{v}$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_euler_flux_x`
-> `src/gpu/explicit/strang_device.cuh :: d_euler_flux_y`
-> `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
+> - `src/gpu/explicit/strang_device.cuh::d_euler_flux_x`
+> - `src/gpu/explicit/strang_device.cuh::d_euler_flux_y`
+> - `src/gpu/explicit/strang_device.cuh::d_cons2prim`
 
 ## Starting assumptions
 
@@ -231,7 +235,7 @@ on smooth flow.
 
 ## Compact conservative system
 
-$$\partial_t \mathbf{U} + \partial_x \mathbf{F}_x(\mathbf{U}) + \partial_y \mathbf{F}_y(\mathbf{U}) = \mathbf{0}, \qquad \mathbf{U} = (\rho,\ \rho u,\ \rho v,\ E)^{\!\top}, \quad (\text{A1-compact})$$
+$$\boxed{\partial_t \mathbf{U} + \partial_x \mathbf{F}_x(\mathbf{U}) + \partial_y \mathbf{F}_y(\mathbf{U}) = \mathbf{0}, \qquad \mathbf{U} = (\rho,\ \rho u,\ \rho v,\ E)^{\!\top}.}$$
 
 $$\mathbf{F}_x = \begin{pmatrix}\rho u\\ \rho u^{2} + p\\ \rho u v\\ (E + p)\,u\end{pmatrix}, \qquad
 \mathbf{F}_y = \begin{pmatrix}\rho v\\ \rho u v\\ \rho v^{2} + p\\ (E + p)\,v\end{pmatrix}.$$
@@ -242,7 +246,7 @@ of this book approximates. The kernel-level counterparts live in
 return these four components verbatim, with the $(E + p)$ factoring
 derived from §A1 above.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel is required to satisfy three strong-form invariants
 derivable from §A1, checked by one-cell test cases in
@@ -271,13 +275,14 @@ upon.
 
 > **sympy script:** `scripts/a02_conservative_primitive.py`
 > **generated LaTeX:** `output/a02_conservative_primitive.latex.tex`
-> **verifies:** 27 strong-form identities — the two round-trip
-> compositions $(\mathbf{W}\to\mathbf{U}\to\mathbf{W})$ and
-> $(\mathbf{U}\to\mathbf{W}\to\mathbf{U})$ on all 4 components,
-> both Jacobian determinants, the 16 chain-rule entries, and the
-> positivity envelope
+> **verified:**
+> - round-trip $\mathbf{W}\to\mathbf{U}\to\mathbf{W}$ and $\mathbf{U}\to\mathbf{W}\to\mathbf{U}$ on all 4 components
+> - both Jacobian determinants (forward and reverse)
+> - 16 chain-rule entries of $\partial \mathbf{U}/\partial\mathbf{W}$ times $\partial \mathbf{W}/\partial\mathbf{U}$
+> - positivity envelope: $\rho > 0, P > 0$ in $\mathbf{W}$-space maps to admissible $\mathbf{U}$-space
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
+> - `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
 
 The strang solver stores $\mathbf{U} = (\rho, m_x, m_y, E)^\top$ on
 disk but needs the primitive form
@@ -357,7 +362,7 @@ is to prevent catastrophic cancellation from propagating into
 $\sqrt{\gamma p / \rho}$ (the sound-speed used by the Riemann
 solver). No solution in the admissible region triggers the clamp.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 Three invariants the kernel must satisfy, checked by
 `tests/test_strang_unit.cu`:
@@ -390,13 +395,15 @@ atmosphere region.
 
 > **sympy script:** `scripts/a03_flux_jacobian_x.py`
 > **generated LaTeX:** `output/a03_flux_jacobian_x.latex.tex`
-> **verifies:** 50 strong-form identities — characteristic polynomial;
-> $A_x R_k = \lambda_k R_k$ for all 4 eigenpairs × 4 components;
-> left-right orthogonality $L R = I$ (16 entries); characteristic
-> decomposition $R\,\mathrm{diag}(\lambda)\,L = A_x$ (16 entries)
+> **verified:**
+> - characteristic polynomial
+> - $A_x R_k = \lambda_k R_k$ for all 4 eigenpairs × 4 components
+> - left-right orthogonality $L R = I$ (16 entries)
+> - characteristic decomposition $R\,\mathrm{diag}(\lambda)\,L = A_x$ (16 entries)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (uses sound speed + wave speeds)
-> indirectly: every Riemann solver that invokes $S_L, S_R, S_\star$
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (uses sound speed + wave speeds)
+> - indirectly: every Riemann solver that invokes $S_L, S_R, S_\star$
 
 The flux Jacobian $A_x \equiv \partial \mathbf{F}_x / \partial \mathbf{U}$
 governs the linearised propagation of infinitesimal perturbations.
@@ -502,7 +509,7 @@ resulting radical expressions. The diagonalisation confirms $A_x$
 is strictly hyperbolic on the admissible region (real eigenvalues,
 complete eigenvector basis).
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not explicitly assemble $A_x$ — it uses the Riemann
 solver directly. Consequently the §A3 invariants are verified
@@ -537,13 +544,12 @@ a positivity-preservation bug, caught earlier in §A2.
 
 > **sympy script:** `scripts/a04_rotational_covariance.py`
 > **generated LaTeX:** `output/a04_rotational_covariance.latex.tex`
-> **verifies:** 37 strong-form identities — involution $R^2 = I$
-> (16 entries), covariance $\mathbf{F}_y = R\,\mathbf{F}_x(R\,\mathbf{U})$
-> (4 components), Jacobian covariance $A_y = R\,A_x(R\,\mathbf{U})\,R$
-> (16 entries), y-direction characteristic polynomial
+> **verified:**
+> - involution $R^2 = I$ (16 entries), covariance $\mathbf{F}_y = R\,\mathbf{F}_x(R\,\mathbf{U})$ (4 components), Jacobian covariance $A_y = R\,A_x(R\,\mathbf{U})\,R$ (16 entries), y-direction characteristic polynomial
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (argument permutation)
-> `src/gpu/explicit/strang_device.cuh :: d_euler_flux_y`
+> - `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (argument permutation)
+> - `src/gpu/explicit/strang_device.cuh :: d_euler_flux_y`
 
 The 2D Euler flux is invariant under relabelling of the two
 coordinate axes. This means the y-sweep Riemann solver does not
@@ -625,7 +631,7 @@ means every y-direction eigensystem result in the rest of the book
 is obtained from the x-direction result of §A3 by the single
 substitution $u \leftrightarrow v$.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel expresses A4 as a permutation of arguments at the call
 site, not as an explicit matrix multiplication. Consequently the
@@ -660,14 +666,14 @@ identification the test relies on.
 
 > **sympy script:** `scripts/a05_entropy_condition.py`
 > **generated LaTeX:** `output/a05_entropy_condition.latex.tex`
-> **verifies:** 3 strong-form identities — $D_t s_{\mathrm{alg}} = 0$,
-> $D_t s_{\mathrm{therm}} = 0$, $\partial_t \eta + \partial_i(u_i\eta) = 0$;
-> 1 numerical-consistency check (Hessian PSD on 80 random admissible
-> states); 1 documented **[WEAK]** inequality (Lax entropy condition
-> across a shock)
+> **verified:**
+> - $D_t s_{\mathrm{alg}} = 0$, $D_t s_{\mathrm{therm}} = 0$, $\partial_t \eta + \partial_i(u_i\eta) = 0$
+> - 1 numerical-consistency check (Hessian PSD on 80 random admissible states)
+> - 1 documented **[WEAK]** inequality (Lax entropy condition across a shock)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: write_vtk` (emits $s_{\mathrm{alg}}$ as diagnostic)
-> §C4 (kernel-level entropy invariance on smooth tests)
+> - `src/gpu/explicit/strang_solver.cu :: write_vtk` (emits $s_{\mathrm{alg}}$ as diagnostic)
+> - §C4 (kernel-level entropy invariance on smooth tests)
 
 The Euler system is not uniquely solvable in the presence of
 discontinuities — a single initial value problem can admit multiple
@@ -775,7 +781,7 @@ jump $[\eta]$ and $[q_n]$ across the solver's reconstructed shock
 are computed and the inequality verified numerically on the
 converged solution.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not enforce §A5 explicitly; the Riemann solver (§A7)
 embeds the entropy condition through its choice of wave speeds
@@ -816,17 +822,13 @@ problem.
 
 > **sympy script:** `scripts/a06_smooth_wave_families.py`
 > **generated LaTeX:** `output/a06_smooth_wave_families.latex.tex`
-> **verifies:** 13 symbolic strong-form identities (Riemann invariants
-> for all three wave families; genuine nonlinearity of 1- and
-> 3-family; linear degeneracy of 2-family) + 4 numerical-fallback
-> strong-form checks (mass / momentum / energy Rankine-Hugoniot
-> jumps, Prandtl mass-flux equality) at 80 random admissible shock
-> states
+> **verified:**
+> - 13 symbolic strong-form identities (Riemann invariants for all three wave families, genuine nonlinearity of 1- and 3-family, linear degeneracy of 2-family)
+> - 4 numerical-fallback strong-form checks (mass / momentum / energy Rankine-Hugoniot jumps, Prandtl mass-flux equality) at 80 random admissible shock states
+>
 > **code checkpoints:**
-> §A8 (HLLC intermediate states use the 1-shock / 3-shock Hugoniot
-> relations derived here)
-> §D3 (Sod shock-tube reference profile uses the rarefaction
-> integration curves $J_k^{(i)} = \text{const}$)
+> - §A8 (HLLC intermediate states use the 1-shock / 3-shock Hugoniot relations derived here)
+> - §D3 (Sod shock-tube reference profile uses the rarefaction integration curves $J_k^{(i)} = \text{const}$)
 
 The Godunov finite-volume kernel does not resolve individual waves;
 it resolves Riemann problems at every cell face. But every
@@ -975,7 +977,7 @@ This is the identity §A8 uses to define the HLLC intermediate
 states: the two star-region cells share $u^\star$ and $p^\star$
 but carry independent densities and tangential velocities.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not encode §A6 explicitly; the HLLC solver (§A8)
 uses the star-region fact $u^\star_L = u^\star_R$ and
@@ -1007,15 +1009,14 @@ slope-limiter interaction with the shear component (§A10).
 
 > **sympy script:** `scripts/a07_riemann_solver_family.py`
 > **generated LaTeX:** `output/a07_riemann_solver_family.latex.tex`
-> **verifies:** 15 strong-form identities — consistency of Rusanov
-> and HLLE on identity states (8 components); mass-flux diffusion
-> signature of Rusanov and HLLE on a stationary contact; HLLC
-> $S_\star = 0$ at a stationary contact; $F_L = F_R$ at a stationary
-> contact (used by Roe)
+> **verified:**
+> - consistency of Rusanov and HLLE on identity states (8 components)
+> - mass-flux diffusion signature of Rusanov and HLLE on a stationary contact
+> - HLLC $S_\star = 0$ at a stationary contact
+> - $F_L = F_R$ at a stationary contact (used by Roe)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (HLLC branch used
-> by the kernel; Rusanov / HLLE / Roe derived here for comparison
-> only)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (HLLC branch used by the kernel; Rusanov / HLLE / Roe derived here for comparison only)
 
 This is the **first alternative-scheme comparison** section of the
 book (rule 4 of the README: book is the numerical reference, not
@@ -1184,7 +1185,7 @@ dominated by density contrasts at near-zero velocity) would be
 crushed by numerical diffusion at every cell face. HLLE and
 Rusanov are derived here only for comparison.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Identity-state flux.** For any admissible state $\mathbf{U}$,
    `d_lmhllc(U, U)` must return $\mathbf{F}_x(\mathbf{U})$ to ULP
@@ -1208,16 +1209,13 @@ before any stratified-convection benchmark is run.
 
 > **sympy script:** `scripts/a08_hllc_intermediate_states.py`
 > **generated LaTeX:** `output/a08_hllc_intermediate_states.latex.tex`
-> **verifies:** 17 strong-form pointwise identities — $p^\star_L =
-> p^\star_R$; mass / momentum-x / momentum-y / energy Rankine-
-> Hugoniot across $S_L$ and $S_R$ (8 identities); HLLC flux in the
-> left-star and right-star branches reduces to $F(\mathbf{U}^\star_L)$
-> and $F(\mathbf{U}^\star_R)$ (8 components)
+> **verified:**
+> - 17 strong-form pointwise identities — $p^\star_L = p^\star_R$
+> - mass / momentum-x / momentum-y / energy Rankine- Hugoniot across $S_L$ and $S_R$ (8 identities)
+> - HLLC flux in the left-star and right-star branches reduces to $F(\mathbf{U}^\star_L)$ and $F(\mathbf{U}^\star_R)$ (8 components)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc`
-> (the $S_\star$ formula and $U^\star_L, U^\star_R$ constructions
-> in the kernel are LM-scaled via $f_M$; the LM factor is derived
-> separately in §C3)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (the $S_\star$ formula and $U^\star_L, U^\star_R$ constructions in the kernel are LM-scaled via $f_M$; the LM factor is derived separately in §C3)
 
 The HLLC Riemann solver resolves three waves: the left and right
 acoustics at speeds $S_L, S_R$ bounding the fan, and an interior
@@ -1323,7 +1321,7 @@ flux evaluated at the star state** in each subsonic branch — a
 structurally stronger result than the general HLL template, and
 the reason HLLC exactly resolves isolated contacts (§A7).
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The §A8 identities are implemented inside `d_lmhllc`. The
 regression tests should check:
@@ -1366,15 +1364,12 @@ can be run.
 
 > **sympy script:** `scripts/a09_wave_speed_estimates.py`
 > **generated LaTeX:** `output/a09_wave_speed_estimates.latex.tex`
-> **verifies:** 1 Davis-bracket identity (80 random admissible (L,R)
-> pairs × 8 eigenvalue-bracket inequalities = 640 scalar checks,
-> all residuals $\le 0$); 4 Roe-property identities (80 random
-> admissible (L,R) pairs, max residual $6\times 10^{-14}$ vs
-> tol $10^{-9}$)
+> **verified:**
+> - 1 Davis-bracket identity (80 random admissible (L,R) pairs × 8 eigenvalue-bracket inequalities = 640 scalar checks, all residuals $\le 0$)
+> - 4 Roe-property identities (80 random admissible (L,R) pairs, max residual $6\times 10^{-14}$ vs tol $10^{-9}$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (Davis speeds
-> $S_L = \min(u_L - c_L, u_R - c_R)$, $S_R = \max(u_L + c_L, u_R +
-> c_R)$ hard-coded at the top of the solver)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (Davis speeds $S_L = \min(u_L - c_L, u_R - c_R)$, $S_R = \max(u_L + c_L, u_R + c_R)$ hard-coded at the top of the solver)
 
 The HLLC algebra of §A8 requires **bounding wave speeds** $S_L, S_R$
 that bracket every characteristic of the exact Riemann fan. This
@@ -1492,7 +1487,7 @@ consequence of Davis's conservative over-estimate — one of the
 reasons the stellar2d kernel uses Davis rather than the tighter
 Einfeldt bounds.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel's Davis wave-speed computation is simple enough that no
 subtle bugs are likely; the checks are smoke tests:
@@ -1525,15 +1520,15 @@ diverges from the §A9 definition — a bug in one of the
 
 > **sympy script:** `scripts/a10_slope_limiter_family.py`
 > **generated LaTeX:** `output/a10_slope_limiter_family.latex.tex`
-> **verifies:** 28 strong-form identities — second-order
-> consistency $\phi(1) = 1$ for all 5 limiters; spot values at
-> $r \in \{-1/2, 3/2, 2, 3, 4\}$; zero-at-extremum property for
-> minmod/VL/MC/superbee; explicit Ospre non-TVD demonstration at
-> $r = -1/2$; 6 numerical-fallback identities (symmetry $\phi(1/r)
-> = \phi(r)/r$ for all 5 limiters + MC kernel/Sweby equivalence) at
-> $\ge 100$ random samples each, all residuals $\le 10^{-15}$
+> **verified:**
+> - second-order consistency $\phi(1) = 1$ for all 5 limiters
+> - spot values at $r \in \{-1/2, 3/2, 2, 3, 4\}$
+> - zero-at-extremum property for minmod/VL/MC/superbee
+> - explicit Ospre non-TVD demonstration at $r = -1/2$
+> - 6 numerical-fallback identities (symmetry $\phi(1/r) = \phi(r)/r$ for all 5 limiters + MC kernel/Sweby equivalence) at $\ge 100$ random samples each, all residuals $\le 10^{-15}$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_mc_limit`
+> - `src/gpu/explicit/strang_device.cuh :: d_mc_limit`
 
 This is the **second alternative-scheme comparison** section of the
 book. The Strang kernel uses the MC limiter exclusively, but a
@@ -1638,7 +1633,7 @@ max residual $10^{-15}$.
 The opposite-sign branch returns $0$ directly, which matches the
 zero-at-extremum property of $\phi_{\mathrm{MC}}(r)$ at $r < 0$.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel's `d_mc_limit` is a simple two-line function. Tests:
 
@@ -1668,15 +1663,13 @@ spurious oscillations in a shock-tube test (§D3).
 
 > **sympy script:** `scripts/a11_reconstruction_order.py`
 > **generated LaTeX:** `output/a11_reconstruction_order.latex.tex`
-> **verifies:** 10 strong-form identities via Taylor expansion of
-> cell averages — donor-cell $h^1$ and $h^2$ coefficients; MUSCL
-> $h^0$ and $h^1$ coefficients vanish (establishing 2nd order);
-> PPM $h^0$, $h^1$, $h^2$, $h^3$ coefficients all vanish
-> (establishing 4th-order face reconstruction)
+> **verified:**
+> - 10 strong-form identities via Taylor expansion of cell averages — donor-cell $h^1$ and $h^2$ coefficients
+> - MUSCL $h^0$ and $h^1$ coefficients vanish (establishing 2nd order)
+> - PPM $h^0$, $h^1$, $h^2$, $h^3$ coefficients all vanish (establishing 4th-order face reconstruction)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x/y` (MUSCL)
-> (PPM is derived here for comparison; the kernel does not implement
-> it.)
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x/y` (MUSCL) (PPM is derived here for comparison; the kernel does not implement it.)
 
 This is the **third alternative-scheme comparison** section. Four
 reconstruction orders are derived in strong form by Taylor
@@ -1785,7 +1778,7 @@ costing ~40% less per step. Upgrading to PPM is listed as an
 optional scheme-characterisation experiment in §E (not in the
 current kernel scope).
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel implements §A11's MUSCL reconstruction inside
 `k_muscl_hancock_x/y`. Tests:
@@ -1813,15 +1806,14 @@ visible only at 1st-order setting.
 
 > **sympy script:** `scripts/a12_muscl_hancock_halfstep.py`
 > **generated LaTeX:** `output/a12_muscl_hancock_halfstep.latex.tex`
-> **verifies:** 3 strong-form identities — Hancock linear-advection
-> equivalence ($u_{\mathrm{hancock}}$ equals $u_0 + (\Delta t/2)\,u_t$
-> after substituting the PDE constraint $u_t = -a u_x$); 2nd-order
-> time-truncation identity ($u_{\mathrm{true}} - u_{\mathrm{hancock}}
-> = (\Delta t^2/8)\,a^2 u_{xx} + O(\Delta t^3)$); cell-average
-> conservation of the half-step
+> **verified:**
+> - Hancock linear-advection equivalence ($u_{\mathrm{hancock}}$ equals $u_0 + (\Delta t/2)\,u_t$ after substituting the PDE constraint $u_t = -a u_x$)
+> - 2nd-order time-truncation identity ($u_{\mathrm{true}} - u_{\mathrm{hancock}} = (\Delta t^2/8)\,a^2 u_{xx} + O(\Delta t^3)$)
+> - cell-average conservation of the half-step
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x`
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y`
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_x`
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y`
 
 The Hancock predictor is the second pillar of MUSCL: after
 reconstructing face states (§A11), it evolves those states
@@ -1899,7 +1891,7 @@ about mid-cell-average drift: conservation is built in.
 **Strong-form verification.** sympy directly simplifies the
 averaged expression to the expected FV half-step form.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel implements §A12 inside `k_muscl_hancock_x/y`. Tests:
 
@@ -1933,14 +1925,15 @@ Hancock half-step formula itself.
 
 > **sympy script:** `scripts/a13_time_integrator_family.py`
 > **generated LaTeX:** `output/a13_time_integrator_family.latex.tex`
-> **verifies:** 10 strong-form identities on the linearised operator
-> expansion — 2 Lie-splitting leading-commutator identities; 4
-> Strang-splitting $\Delta t^2$ cancellation identities; 1 kernel-
-> chain equivalence (all monomials match identically); 1 VL2
-> leading-$\Delta t^3$ identity; plus the printed report of the
-> 6 non-zero Strang $\Delta t^3$ residual coefficients
+> **verified:**
+> - 10 strong-form identities on the linearised operator expansion — 2 Lie-splitting leading-commutator identities
+> - 4 Strang-splitting $\Delta t^2$ cancellation identities
+> - 1 kernel- chain equivalence (all monomials match identically)
+> - 1 VL2 leading-$\Delta t^3$ identity
+> - plus the printed report of the 6 non-zero Strang $\Delta t^3$ residual coefficients
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::step`
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::step`
 
 This is the **fourth alternative-scheme comparison** of the book.
 Four time-integrator templates are compared by Baker-Campbell-
@@ -2114,7 +2107,7 @@ at $N = \{64, 128, 256, 512\}$, fit a log-log slope on $L^1$
 error, and confirm the slope falls in $[1.8, 2.2]$ as predicted
 by the modified-equation analysis of §E1.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The kernel does not expose $\mathcal{X}, \mathcal{Y}$ operators
 directly; the A13 identities are verified at the scheme level
@@ -2136,15 +2129,13 @@ invariants are verified via §E1 (convergence rate).
 
 > **sympy script:** `scripts/a14_strang_operator_chain.py`
 > **generated LaTeX:** `output/a14_strang_operator_chain.latex.tex`
-> **verifies:** 33 strong-form identities — 1 half-flow reversal;
-> 31 Strang-chain self-adjoint monomial identities (every monomial
-> of degree $\le 4$ in $\mathcal{X}, \mathcal{Y}$ cancels identically
-> in $L_\mathrm{fwd} L_\mathrm{bwd}$); 2 Lie-splitting non-self-
-> adjoint leading residuals ($\pm\Delta t^2$ on $[\mathcal{X},
-> \mathcal{Y}]$)
+> **verified:**
+> - 1 half-flow reversal
+> - 31 Strang-chain self-adjoint monomial identities (every monomial of degree $\le 4$ in $\mathcal{X}, \mathcal{Y}$ cancels identically in $L_\mathrm{fwd} L_\mathrm{bwd}$)
+> - 2 Lie-splitting non-self- adjoint leading residuals ($\pm\Delta t^2$ on $[\mathcal{X}, \mathcal{Y}]$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::step`
-> (the four-factor symmetric chain is structurally self-adjoint)
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::step` (the four-factor symmetric chain is structurally self-adjoint)
 
 This section proves the **structural reason** the Strang splitting
 of §A13 is 2nd-order: it is **self-adjoint** (time-reversible).
@@ -2238,7 +2229,7 @@ and §E4 derive why the gravity source in the Strang kernel is
 rather than inserted as a separate $\mathcal{Z}$ operator, so the
 full step chain remains symmetric.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 The self-adjointness of the Strang kernel is a structural
 consequence of the code's topology (the order of sweep calls).
@@ -2270,14 +2261,16 @@ sign conventions).
 
 > **sympy script:** `scripts/b01_perturbation_storage.py`
 > **generated LaTeX:** `output/b01_perturbation_storage.latex.tex`
-> **verifies:** 14 strong-form identities — 4 round-trip (forward +
-> reverse) identity identities, 1 pressure-perturbation split, 8
-> zero-perturbation invariant identities (4 forward + 4 reverse), 1
-> Jacobian-determinant positivity identity
+> **verified:**
+> - 4 round-trip (forward + reverse) identity identities
+> - 1 pressure-perturbation split
+> - 8 zero-perturbation invariant identities (4 forward + 4 reverse)
+> - 1 Jacobian-determinant positivity identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
-> `src/gpu/explicit/strang_solver.cu :: k_strang_init_bubble`
-> `src/gpu/explicit/strang_solver.cu :: every site that does `+ d_rho_bar[j_phys]` or `+ d_p_bar[j_phys]/gm1`
+> - `src/gpu/explicit/strang_device.cuh :: d_cons2prim`
+> - `src/gpu/explicit/strang_solver.cu :: k_strang_init_bubble`
+> - every site that does `+ d_rho_bar[j_phys]` or `+ d_p_bar[j_phys]/gm1`
 
 The Strang solver stores the **perturbation** of the four
 conservative variables above the isentropic HSE background
@@ -2371,7 +2364,7 @@ is the only correct way to compute a full-state quantity from
 stored state. Any kernel that fails to add back $\bar\rho(y)$ or
 $\bar p(y)/(\gamma - 1)$ will compute with negative or wrong values.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Round-trip precision.** Starting from random primitive state
    $(\rho, u, v, P)$ within the HSE admissibility envelope, encode
@@ -2401,18 +2394,19 @@ background (a §B2-level bug, not §B1).
 
 > **sympy script:** `scripts/b02_isentropic_hse.py`
 > **generated LaTeX:** `output/b02_isentropic_hse.latex.tex`
-> **verifies:** 14 strong-form identities — 1 exponent identity
-> ($\gamma/(\gamma-1) - 1 = 1/(\gamma-1)$); 2 parametric
-> derivative-chain identities ($dh/dy$, $dp/dh$); 2 HSE-ODE
-> identities (parametric and y-world); 2 parametric state
-> identities; 2 bottom-BC identities; 1 isentropic-closure
-> identity ($P/\rho^\gamma = K$); 1 atmosphere-cutoff identity;
-> 3 temperature-lapse identities (parametric, y-world, compact)
+> **verified:**
+> - 1 exponent identity ($\gamma/(\gamma-1) - 1 = 1/(\gamma-1)$)
+> - 2 parametric derivative-chain identities ($dh/dy$, $dp/dh$)
+> - 2 HSE-ODE identities (parametric and y-world)
+> - 2 parametric state identities
+> - 2 bottom-BC identities
+> - 1 isentropic-closure identity ($P/\rho^\gamma = K$)
+> - 1 atmosphere-cutoff identity
+> - 3 temperature-lapse identities (parametric, y-world, compact)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::init`
-> (host-side HSE build loop, line 686-692)
-> `src/gpu/explicit/strang_device.cuh :: d_hse_rho, d_hse_p`
-> (device-side HSE evaluation in §B3 face-state reconstruction)
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::init` (host-side HSE build loop, line 686-692)
+> - `src/gpu/explicit/strang_device.cuh :: d_hse_rho, d_hse_p` (device-side HSE evaluation in §B3 face-state reconstruction)
 
 The Strang solver's background $\bar\rho(y), \bar p(y)$ is the
 closed-form solution of the **isentropic** hydrostatic-equilibrium
@@ -2503,7 +2497,7 @@ These are evaluated at face-centre y-coordinates during the y-sweep
 MUSCL-Hancock reconstruction (§B3) so that the face pairs see
 **identical** HSE background contribution.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Host-host consistency.** The C++ init loop in `StrangSolver::init`
    at a cell centre $y_j = y_{\mathrm{lo}} + (j + 1/2)\,\Delta y$ must
@@ -2545,17 +2539,14 @@ at a different $K, \rho_0$ than the kernel is using.
 
 > **sympy script:** `scripts/b03_face_hse_reconstruction.py`
 > **generated LaTeX:** `output/b03_face_hse_reconstruction.latex.tex`
-> **verifies:** 13 strong-form identities — 4 face-state equality
-> identities ($\rho_L = \rho_R$, $P_L = P_R$, $u_L = u_R$,
-> $v_L = v_R$ on pure HSE); 4 face-flux equality identities
-> ($F_{y,L}[k] = F_{y,R}[k]$, $k=0..3$); 4 face-flux form
-> identities ($F_{y}$ at HSE = $(0, 0, \bar p, 0)$); 1
-> cell-centred-reconstruction counter-example identity
+> **verified:**
+> - 4 face-state equality identities ($\rho_L = \rho_R$, $P_L = P_R$, $u_L = u_R$, $v_L = v_R$ on pure HSE)
+> - 4 face-flux equality identities ($F_{y,L}[k] = F_{y,R}[k]$, $k=0..3$)
+> - 4 face-flux form identities ($F_{y}$ at HSE = $(0, 0, \bar p, 0)$)
+> - 1 cell-centred-reconstruction counter-example identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y`
-> (line 343-372: `y_bot`, `y_top` at face; `d_hse_rho`, `d_hse_p`
-> evaluated at face y-coord; `rL = rho_bar_bot + rhoP_bot`,
-> `PL = p_bar_bot + PP_bot`)
+> - `src/gpu/explicit/strang_solver.cu :: k_muscl_hancock_y` (line 343-372: `y_bot`, `y_top` at face; `d_hse_rho`, `d_hse_p` evaluated at face y-coord; `rL = rho_bar_bot + rhoP_bot`, `PL = p_bar_bot + PP_bot`)
 
 The y-sweep reconstructs two face-state vectors $\mathbf{U}_L$ and
 $\mathbf{U}_R$ at each face between cells $j$ and $j+1$. The
@@ -2668,7 +2659,7 @@ $y_{\mathrm{face}}$ because the face index is a single integer —
 there is no "L-side face y" and "R-side face y". This is the
 structural guarantee of WB.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Pure HSE face-state equality.** Start the solver with the HSE
    background, zero perturbations. At every internal face, assert
@@ -2699,20 +2690,15 @@ source balance that must be correct for (3) to hold).
 
 > **sympy script:** `scripts/b04_periodic_x_bc.py`
 > **generated LaTeX:** `output/b04_periodic_x_bc.latex.tex`
-> **verifies:** 8 strong-form identities — 2 index-offset
-> identities (left and right ghost offsets = $n_x$); 1 physical-
-> distance identity ($x_{\mathrm{src}} - x_{\mathrm{ghost}} = L_x$);
-> 1 periodic-manufactured-solution identity (sin wave with
-> $k L_x = 2\pi m$); 4 flux-commutativity identities
-> ($F_x(U_{\mathrm{ghost}})[i] = F_x(U_{\mathrm{phys}})[i]$,
-> $i = 0..3$)
+> **verified:**
+> - 2 index-offset identities (left and right ghost offsets = $n_x$)
+> - 1 physical- distance identity ($x_{\mathrm{src}} - x_{\mathrm{ghost}} = L_x$)
+> - 1 periodic-manufactured-solution identity (sin wave with $k L_x = 2\pi m$)
+> - 4 flux-commutativity identities ($F_x(U_{\mathrm{ghost}})[i] = F_x(U_{\mathrm{phys}})[i]$, $i = 0..3$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_x`
-> (line 33, cell-data copy: `d_*[k_dst] = d_*[k_src]` where
-> `ig_ghost = g` or `nx + g`)
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_face_x`
-> (line 564, face-state copy: `d_wL[ig=ng-1]` from `d_wL[ig=ng+nx-1]`
-> etc.)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_x` (line 33, cell-data copy: `d_*[k_dst] = d_*[k_src]` where `ig_ghost = g` or `nx + g`)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_face_x` (line 564, face-state copy: `d_wL[ig=ng-1]` from `d_wL[ig=ng+nx-1]` etc.)
 
 Periodic-x is the simpler of the two BCs in the Strang kernel: the
 solution is required to satisfy $\mathbf{U}(x + L_x, y, t) =
@@ -2810,7 +2796,7 @@ This preserves the MUSCL reconstructions computed on the first
 ghost layer by `k_muscl_hancock_x` (which reads cell data from the
 outer ghost layer, which is already periodic).
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Periodic-copy exactness.** After `k_ghost_x` has run, every
    ghost-cell value is bit-identical to its source. Test:
@@ -2838,19 +2824,15 @@ source-destination pairing).
 
 > **sympy script:** `scripts/b05_reflective_y_bc.py`
 > **generated LaTeX:** `output/b05_reflective_y_bc.latex.tex`
-> **verifies:** 13 strong-form identities — 1 involution identity
-> ($\mathcal{R}_{\mathrm{ref}}^2 = \mathbf{I}$); 4 flux-reversal
-> identities ($\mathbf{F}_y(\mathcal{R}\mathbf{U}) = \mathcal{R}'
-> \mathbf{F}_y(\mathbf{U})$, 4 components); 4 wall-face flux
-> identities ($\mathbf{F}_y(\rho, u, 0, P) = (0, 0, P, 0)$);
-> 4 HSE-perturbation-zero identities
+> **verified:**
+> - 1 involution identity ($\mathcal{R}_{\mathrm{ref}}^2 = \mathbf{I}$)
+> - 4 flux-reversal identities ($\mathbf{F}_y(\mathcal{R}\mathbf{U}) = \mathcal{R}' \mathbf{F}_y(\mathbf{U})$, 4 components)
+> - 4 wall-face flux identities ($\mathbf{F}_y(\rho, u, 0, P) = (0, 0, P, 0)$)
+> - 4 HSE-perturbation-zero identities
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_y`
-> (line 71, bottom branch: `jg_ghost = ng-1-g`, `jg_src = ng+g`,
-> `d_my[k_dst] = -d_my[k_src]`)
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y`
-> (line 593, bottom branch: `d_wR[kd*4+2] = -d_wL[ks*4+2]`
-> (v component negated))
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_y` (line 71, bottom branch: `jg_ghost = ng-1-g`, `jg_src = ng+g`, `d_my[k_dst] = -d_my[k_src]`)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y` (line 593, bottom branch: `d_wR[kd*4+2] = -d_wL[ks*4+2]` (v-component negated))
 
 The bottom of the Strang domain is a solid wall. The ghost cells
 are the mirror image of the physical cells across the wall plane,
@@ -2976,7 +2958,7 @@ component $v$). The mapping is from the physical cell's $\mathbf{w}_L$
 (bottom face) to the ghost's $\mathbf{w}_R$ (top face, which lies
 on the wall).
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Pure-HSE preservation.** After arbitrary ghost-fill passes on
    HSE IC, the perturbation state remains bitwise zero at all ghost
@@ -3011,17 +2993,13 @@ Failure of (3) is a direct math bug and should be fixed by reading
 
 > **sympy script:** `scripts/b06_outflow_y_bc.py`
 > **generated LaTeX:** `output/b06_outflow_y_bc.latex.tex`
-> **verifies:** 4 strong-form identities — 4 ghost-uniform
-> identities ($\mathbf{U}_{\mathrm{ghost}}(g_1)[k] = \mathbf{U}_{\mathrm{ghost}}(g_2)[k]$,
-> $k = 0..3$); plus 2 documentation identities (Neumann
-> continuum interpretation; Riemann-invariant extrapolation error
-> leading order)
+> **verified:**
+> - 4 ghost-uniform identities ($\mathbf{U}_{\mathrm{ghost}}(g_1)[k] = \mathbf{U}_{\mathrm{ghost}}(g_2)[k]$, $k = 0..3$)
+> - plus 2 documentation identities (Neumann continuum interpretation; Riemann-invariant extrapolation error leading order)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_y`
-> (line 71, top branch: `jg_ghost = ng+ny+g`, `jg_src = ng+ny-1`
-> — all ghosts copy from the same last physical cell)
-> `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y`
-> (line 618, top branch: outflow face-state copy)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_y` (line 71, top branch: `jg_ghost = ng+ny+g`, `jg_src = ng+ny-1` — all ghosts copy from the same last physical cell)
+> - `src/gpu/explicit/strang_solver.cu :: k_ghost_face_y` (line 618, top branch: outflow face-state copy)
 
 The top of the Strang domain is an **outflow** boundary implemented
 by zero-gradient copy: every ghost cell is a copy of the last
@@ -3157,7 +3135,7 @@ $dR_{-}/dy \approx 0$, and (c) tests in §D-series and §E-series do
 not probe the outflow reflection sensitivity. Future work needing
 quiet outflow should add a characteristic BC or sponge layer.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Zero-gradient copy exactness.** All ghost cells are bit-
    identical to the last physical cell. Test:
@@ -3189,16 +3167,13 @@ being filled with full state instead of perturbation). Failures
 
 > **sympy script:** `scripts/c01_gravity_source_consistency.py`
 > **generated LaTeX:** `output/c01_gravity_source_consistency.latex.tex`
-> **verifies:** 3 strong-form identities — 1 kinetic+potential
-> energy conservation law ($\partial_t (E + \rho g y) +
-> \nabla\!\cdot\![(E + P + \rho g y)\mathbf{v}] = 0$); 1 HSE balance
-> reduction identity; 1 work-form identity ($S_E = -m_y g =
-> \rho v \cdot (-g)$)
+> **verified:**
+> - 1 kinetic+potential energy conservation law ($\partial_t (E + \rho g y) + \nabla\!\cdot\![(E + P + \rho g y)\mathbf{v}] = 0$)
+> - 1 HSE balance reduction identity
+> - 1 work-form identity ($S_E = -m_y g = \rho v \cdot (-g)$)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y`
-> (line 513-516: `S_my = -rho_total * g_grav`; `S_E = -d_my[k0] * g_grav`;
-> line 522-523: separate `+= dt * S_my` and `+= dt * S_E` applied
-> after the HLLC flux divergence)
+> - `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (line 513-516: `S_my = -rho_total * g_grav`; `S_E = -d_my[k0] * g_grav`; line 522-523: separate `+= dt * S_my` and `+= dt * S_E` applied after the HLLC flux divergence)
 
 The Strang solver's y-sweep applies the gravity source term
 $\mathbf{S}(\mathbf{U}; g) = (0, 0, -\rho g, -m_y g)^{\mathsf T}$
@@ -3333,7 +3308,7 @@ symmetric under time reversal; the splitting would degrade to
 1st-order. §E4 verifies that the kernel's absorption of gravity
 into $\mathcal{Y}$ preserves 2nd-order Strang order.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Bit-identical source-application.** On a known state with
    known $\rho_{\mathrm{tot}}, m_y$, compute the kernel's
@@ -3373,17 +3348,12 @@ test IC.
 
 > **sympy script:** `scripts/c02_cfl_bound.py`
 > **generated LaTeX:** `output/c02_cfl_bound.latex.tex`
-> **verifies:** 1 strong-form + 1 numerical identity — 1 Lax-
-> Friedrichs amplification identity
-> ($|g|^2 = 1 + (\nu^2 - 1)\sin^2(k\Delta x)$, strong-form sympy);
-> 1 max-wave-speed identity
-> ($\max(|u-c|, |u+c|) = |u| + c$; sympy cannot fold absolute-value
-> expressions for symbolic sign, so this is verified at 100
-> random samples with max residual $0$)
+> **verified:**
+> - 1 Lax-Friedrichs amplification identity ($|g|^2 = 1 + (\nu^2 - 1)\sin^2(k\Delta x)$, strong-form sympy)
+> - 1 max-wave-speed identity $\max(|u-c|, |u+c|) = |u| + c$ — sympy cannot fold absolute-value expressions for symbolic sign, so this is verified at 100 random samples with max residual $0$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_strang_cfl`
-> (line 529-556: computes $(|u|+c)/\Delta x + (|v|+c)/\Delta y$ per cell;
-> host reduction gives global max; $\Delta t = \sigma / \max\{\cdot\}$)
+> - `src/gpu/explicit/strang_solver.cu :: k_strang_cfl` (line 529-556: computes $(|u|+c)/\Delta x + (|v|+c)/\Delta y$ per cell; host reduction gives global max; $\Delta t = \sigma / \max\{\cdot\}$)
 
 The kernel's time-step selection implements a **conservative**
 CFL condition based on a 1D von-Neumann analysis of the linear
@@ -3498,7 +3468,7 @@ This is the restriction that motivates the LM-HLLC blending of
 smears acoustic waves too aggressively, so a Mach-dependent blend
 reduces the dissipation without violating CFL.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Kernel CFL reduction.** After `k_strang_cfl` populates the
    buffer, the host reduction computes $\max\{\text{buf}\}$. The
@@ -3530,16 +3500,15 @@ reference.
 
 > **sympy script:** `scripts/c03_lm_hllc_blending.py`
 > **generated LaTeX:** `output/c03_lm_hllc_blending.latex.tex`
-> **verifies:** 7 strong-form identities — 1 transonic ($M = 1$)
-> reduction to standard HLLC; 1 linearity identity ($\partial
-> S_\star / \partial f_M$); 3 reflective-BC identities
-> ($p_R - p_L = 0$, $f_M$ invariance, wall $S_\star = 0$); 1
-> dispersion-ratio identity ($\sim 1/M$ suppression); 1
-> Mach-cutoff clamp identity
+> **verified:**
+> - 1 transonic ($M = 1$) reduction to standard HLLC
+> - 1 linearity identity ($\partial S_\star / \partial f_M$)
+> - 3 reflective-BC identities ($p_R - p_L = 0$, $f_M$ invariance, wall $S_\star = 0$)
+> - 1 dispersion-ratio identity ($\sim 1/M$ suppression)
+> - 1 Mach-cutoff clamp identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc`
-> (lines 107-122: `fM = fmin(1.0, fmax(M_local, M_cutoff))`;
-> line 127-128: `S_star = (fM * (PR - PL) + ...)/denom`)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (lines 107-122: `fM = fmin(1.0, fmax(M_local, M_cutoff))`; line 127-128: `S_star = (fM * (PR - PL) + ...)/denom`)
 
 Standard HLLC injects a pressure-jump term $p_R - p_L$ into the
 contact-wave speed $S_\star$ (§A8). For low-Mach convective flows
@@ -3672,7 +3641,7 @@ modification is inactive where full HLLC dissipation is needed.
 This is a design feature: LM-HLLC is a **low-Mach correction**, not
 a shock-capturing modification.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **$f_M = 1$ regime.** On a strong-shock Sod IC (§D3), verify
    LM-HLLC produces bit-identical output to standard HLLC
@@ -3707,17 +3676,15 @@ the $f_M$ factor irrelevant.
 
 > **sympy script:** `scripts/c04_entropy_invariant.py`
 > **generated LaTeX:** `output/c04_entropy_invariant.latex.tex`
-> **verifies:** 5 strong-form identities — 1 chain-rule identity
-> ($D_t s = (1/P) D_t P - (\gamma / \rho) D_t \rho$); 1 entropy
-> invariant ($D_t s = 0$ on smooth Euler); 1 entropy-function
-> chain identity; 1 entropy-function invariant ($D_t(P\rho^{-\gamma})
-> = 0$); 1 entropy-function identity ($\log K = s$, via
-> `expand_log(force=True)`)
+> **verified:**
+> - 1 chain-rule identity ($D_t s = (1/P) D_t P - (\gamma / \rho) D_t \rho$)
+> - 1 entropy invariant ($D_t s = 0$ on smooth Euler)
+> - 1 entropy-function chain identity
+> - 1 entropy-function invariant ($D_t(P\rho^{-\gamma}) = 0$)
+> - 1 entropy-function identity ($\log K = s$, via `expand_log(force=True)`)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: write_vtk`
-> (entropy computed as a post-processing diagnostic; the kernel
-> does not enforce $D_t s = 0$, it emerges from §E1's smooth-
-> convergence measurement)
+> - `src/gpu/explicit/strang_solver.cu :: write_vtk` (entropy computed as a post-processing diagnostic; the kernel does not enforce $D_t s = 0$, it emerges from §E1's smooth- convergence measurement)
 
 On smooth solutions of the Euler equations (no shocks, no
 discontinuities), the specific entropy
@@ -3826,7 +3793,7 @@ field (line 946-947 of strang_solver.cu after cons2prim). Tests
 in §D and §E series read this field and check the invariance
 property at the numerical level.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Entropy preservation on entropy wave.** At the end of one
    entropy-wave period, the entropy distribution $s(x, y)$ must
@@ -3863,15 +3830,16 @@ truncation error predicts.
 > **generated LaTeX:** `output/d01_entropy_wave.latex.tex`
 > **generated goldens:** `output/d01_entropy_wave.goldens.json`
 > (per Rule 5, not committed; regenerated by `run_all.sh`)
-> **verifies:** 11 strong-form identities — 4 Euler PDE
-> component-wise (mass, x-mom, y-mom, energy); 1 periodicity at
-> $T = L_x / u_0$; 1 HLLC contact-speed reduction ($S_\star = u_0$);
-> 4 upwind-flux form identities; 1 entropy-advection $D_t s = 0$
+> **verified:**
+> - 4 Euler PDE component-wise (mass, x-mom, y-mom, energy)
+> - 1 periodicity at $T = L_x / u_0$
+> - 1 HLLC contact-speed reduction ($S_\star = u_0$)
+> - 4 upwind-flux form identities
+> - 1 entropy-advection $D_t s = 0$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu` — new IC builder
-> `init_entropy_wave()` to be added per §D1; consumed by
-> `tests/test_strang_convergence.cu` via golden JSON
-> (§E1 quantifies the L1 convergence slope measurement)
+> - `src/gpu/explicit/strang_solver.cu` — new IC builder `init_entropy_wave()` to be added per §D1
+> - `tests/test_strang_convergence.cu` consumes golden JSON (§E1 quantifies the L1 convergence slope measurement)
 
 The entropy wave is the simplest closed-form exact solution of
 the compressible Euler equations: a density perturbation advected
@@ -3974,7 +3942,7 @@ For each grid resolution $n_x \in \{64, 128, 256, 512\}$:
 blend is inactive ($f_M = 1$), so the kernel behaves as standard
 HLLC. This is the convergence test's intent.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC match.** After `init_entropy_wave()`, the solver's stored
    $(\rho, m_x, m_y, \delta E)$ after reconstruction to
@@ -4003,16 +3971,17 @@ degenerate $\Delta P = 0$ case.
 > **sympy script:** `scripts/d02_acoustic_linwave.py`
 > **generated LaTeX:** `output/d02_acoustic_linwave.latex.tex`
 > **generated goldens:** `output/d02_acoustic_linwave.goldens.json`
-> **verifies:** 11 strong-form identities — 1 adiabatic relation
-> ($\delta P = c_0^2 \delta\rho$); 3 linearised PDE components
-> (mass, x-momentum, pressure equation); 1 $O(\epsilon)$ non-linear
-> residual vanishing; 1 periodicity at $T = L_x/(u_0+c_0)$; 1
-> phase-speed documentation; 4 right-eigenvector projection
-> identities
+> **verified:**
+> - 1 adiabatic relation ($\delta P = c_0^2 \delta\rho$)
+> - 3 linearised PDE components (mass, x-momentum, pressure equation)
+> - 1 $O(\epsilon)$ non-linear residual vanishing
+> - 1 periodicity at $T = L_x/(u_0+c_0)$
+> - 1 phase-speed documentation
+> - 4 right-eigenvector projection identities
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu` — new `init_linwave()` IC
-> builder; `tests/test_strang_linwave_convergence.cu` must set
-> `use_lm_fix = false` (golden JSON includes the flag)
+> - `src/gpu/explicit/strang_solver.cu` — new `init_linwave()` IC builder
+> - `tests/test_strang_linwave_convergence.cu` must set `use_lm_fix = false` (golden JSON includes the flag)
 
 A right-going acoustic wave from §A3's $(u+c)$ eigenvector,
 linearised around a stationary uniform background. This is the
@@ -4138,7 +4107,7 @@ For $n_x \in \{64, 128, 256, 512\}$:
 4. Compute $L^1 = \sum_i |\delta\rho_i(T) - \delta\rho_i(0)|$.
 5. Fit slope; expected $p \approx 2.0$ (2nd-order).
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC consistency.** After `init_linwave()`, the face-state
    reconstruction (§A11) yields $(\rho_0 + \delta\rho, u_0 + \delta u, 0,
@@ -4170,12 +4139,13 @@ non-physical.
 > **sympy script:** `scripts/d03_sod_shock_tube.py`
 > **generated LaTeX:** `output/d03_sod_shock_tube.latex.tex`
 > **generated goldens:** `output/d03_sod_shock_tube.goldens.json`
-> **verifies:** 2 strong-form sympy identities (rarefaction and
-> shock f-functions vanishing at $p = P_K$); plus closed-form
-> Newton solution for $p^\star$ at 15-digit precision
+> **verified:**
+> - 2 strong-form sympy identities (rarefaction and shock f-functions vanishing at $p = P_K$)
+> - plus closed-form Newton solution for $p^\star$ at 15-digit precision
+>
 > **code checkpoints:**
-> new `init_sod()` IC builder in `src/gpu/explicit/strang_solver.cu`;
-> `tests/test_strang_sod.cu` (new test — wire into CMakeLists)
+> - new `init_sod()` IC builder in `src/gpu/explicit/strang_solver.cu`
+> - `tests/test_strang_sod.cu` (new test — wire into CMakeLists)
 
 Sod's shock-tube (Sod 1978) is the canonical Riemann problem:
 the diaphragm breakup generates a left-going rarefaction, a
@@ -4287,7 +4257,7 @@ and fit slope; expected $p \approx 1.0$ (1st order through shocks
 and contacts — Godunov limit) with better rate on the rarefaction
 interior.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC consistency.** After `init_sod()`, cells with $x_c < 0$
    have $(\rho, u, v, P) = (1.0, 0, 0, 1.0)$ and cells with
@@ -4324,14 +4294,13 @@ unstable.
 > **sympy script:** `scripts/d04_woodward_colella_blast.py`
 > **generated LaTeX:** `output/d04_woodward_colella_blast.latex.tex`
 > **generated goldens:** `output/d04_woodward_colella_blast.goldens.json`
-> **verifies:** 2 closed-form Riemann-problem solutions (at
-> $x = 0.1$ and $x = 0.9$, early-time window) via §D3's Newton
-> routine; late-time profile is **[WEAK]** per Rule 4 (no closed
-> form after shock-shock collision)
+> **verified:**
+> - 2 closed-form Riemann-problem solutions (at $x = 0.1$ and $x = 0.9$, early-time window) via §D3's Newton routine
+> - late-time profile is **[WEAK]** per Rule 4 (no closed form after shock-shock collision)
+>
 > **code checkpoints:**
-> new `init_woodward_colella()` IC builder in
-> `src/gpu/explicit/strang_solver.cu`; `tests/test_strang_wc_blast.cu`
-> wired to golden JSON
+> - new `init_woodward_colella()` IC builder in `src/gpu/explicit/strang_solver.cu`
+> - `tests/test_strang_wc_blast.cu` wired to golden JSON
 
 The Woodward & Colella (1984) "two blast waves" test has three
 high-pressure / low-pressure / high-pressure regions separated by
@@ -4436,7 +4405,7 @@ test anchor.
   order for shocks and a sub-linear rate from wave-interaction
   complexity).
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Early-window star-region match.** At $t = 0.02$, measured
    $p^\star$ at $x = 0.3$ (within the left blast's post-shock
@@ -4475,13 +4444,13 @@ this more than simpler tests.
 > **sympy script:** `scripts/d05_bubble_init.py`
 > **generated LaTeX:** `output/d05_bubble_init.latex.tex`
 > **generated goldens:** `output/d05_bubble_init.goldens.json`
-> **verifies:** 3 strong-form identities — 1 isentropic-to-$\rho$
-> map ($\rho' = \bar\rho \exp(-\delta s / \gamma)$ at constant $P$);
-> 1 linearised density perturbation; 1 zero $\delta E$ on static
-> bubble IC
+> **verified:**
+> - 1 isentropic-to-$\rho$ map ($\rho' = \bar\rho \exp(-\delta s / \gamma)$ at constant $P$)
+> - 1 linearised density perturbation
+> - 1 zero $\delta E$ on static bubble IC
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: StrangSolver::init_bubble`
-> (line 765; kernel `k_strang_init_bubble` at line 708)
+> - `src/gpu/explicit/strang_solver.cu :: StrangSolver::init_bubble` (line 765; kernel `k_strang_init_bubble` at line 708)
 
 The bubble IC is the canonical convective test for the Strang
 kernel: a warm (positive entropy anomaly) "bubble" embedded in
@@ -4593,7 +4562,7 @@ Golden JSON dumps:
 | `delta_rho_rel_ref_grid_64x64` | reference 2D array for test comparison |
 | `delta_rho_rel_at_center` | closed-form $\exp(-\delta s/\gamma) - 1$ for sanity check |
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC match.** After `init_bubble()` with canonical params on
    $n_x = n_y = 64$, the stored $\delta\rho / \bar\rho$ 2D array
@@ -4630,16 +4599,14 @@ prematurely).
 > **sympy script:** `scripts/d06_hse_zero_perturbation_lock.py`
 > **generated LaTeX:** `output/d06_hse_zero_perturbation_lock.latex.tex`
 > **generated goldens:** `output/d06_hse_zero_perturbation_lock.goldens.json`
-> **verifies:** 4 strong-form identities — flux-source cancellation
-> on HSE (y-momentum); energy update zero on HSE; density update
-> zero on HSE; x-momentum update zero on HSE
+> **verified:**
+> - flux-source cancellation on HSE (y-momentum)
+> - energy update zero on HSE
+> - density update zero on HSE
+> - x-momentum update zero on HSE
+>
 > **code checkpoints:**
-> whole kernel — this test verifies the **composite** of §B2, §B3,
-> §B4, §B5, §B6, §C1. Any one of these failing breaks the lock.
-> Specifically: init-time HSE build (`StrangSolver::init`), face
-> HSE reconstruction (`k_muscl_hancock_y`), ghost-fill kernels
-> (`k_ghost_x, k_ghost_y`), gravity source application
-> (`k_hllc_update_y`).
+> - whole kernel — this test verifies the **composite** of §B2, §B3, §B4, §B5, §B6, §C1. Any one of these failing breaks the lock. Specifically: init-time HSE build (`StrangSolver::init`), face HSE reconstruction (`k_muscl_hancock_y`), ghost-fill kernels (`k_ghost_x, k_ghost_y`), gravity source application (`k_hllc_update_y`).
 
 The most stringent well-balancing test in the book. With stored
 state $(\delta\rho, m_x, m_y, \delta E) = (0, 0, 0, 0)$ at every
@@ -4740,7 +4707,7 @@ check).
 5. Download `d_rho, d_mx, d_my, d_E`; compute the infinity norm.
 6. Required: max-norm drift $\le 10^{-10}$.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Initial zero state.** After `init()`, the stored state is
    bitwise-zero. Test: `test_strang_init.cu` §D6-init-zero.
@@ -4769,15 +4736,15 @@ or the kernel's HSE builder parameters don't match the canonical.
 > **sympy script:** `scripts/d07_reflection_symmetric_ic.py`
 > **generated LaTeX:** `output/d07_reflection_symmetric_ic.latex.tex`
 > **generated goldens:** `output/d07_reflection_symmetric_ic.goldens.json`
-> **verifies:** 13 strong-form identities — 1 involution ($\mathcal{R}_x^2 = \mathbf{I}$);
-> 4 $\mathbf{F}_x$ reflection identities; 4 $\mathbf{F}_y$ reflection
-> identities; 4 gravity-source invariance identities (all under
-> x-reflection)
+> **verified:**
+> - 1 involution ($\mathcal{R}_x^2 = \mathbf{I}$)
+> - 4 $\mathbf{F}_x$ reflection identities
+> - 4 $\mathbf{F}_y$ reflection identities
+> - 4 gravity-source invariance identities (all under x-reflection)
+>
 > **code checkpoints:**
-> new `init_rt_symmetric()` IC builder in
-> `src/gpu/explicit/strang_solver.cu` (book-anchored: the book
-> says this IC must exist); new test
-> `tests/test_strang_reflection_symmetry.cu`
+> - new `init_rt_symmetric()` IC builder in `src/gpu/explicit/strang_solver.cu` (book-anchored: the book says this IC must exist)
+> - new test `tests/test_strang_reflection_symmetry.cu`
 
 An **x-reflection-symmetric** IC must evolve into an x-reflection-
 symmetric state at all times. The test: start with
@@ -4913,7 +4880,7 @@ void StrangSolver::init_rt_symmetric(
 Both bubbles use the same $y_0, R_0, \delta s$; only the $x_0$
 differs. The asserted symmetry is $x_0^L + x_0^R = L_x$.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **IC symmetry.** After `init_rt_symmetric(0.3, 0.7, 0.3, 0.1, 0.5)`,
    $\delta\rho(x, y) - \delta\rho(1-x, y)$ is zero to ULP
@@ -4949,14 +4916,15 @@ but (4) fails, there is a specific angular-mode bug.
 
 > **sympy script:** `scripts/e01_entropy_wave_order.py`
 > **generated LaTeX:** `output/e01_entropy_wave_order.latex.tex`
-> **verifies:** 6 strong-form identities — 1 at-least-1st-order
-> (per-step $O(h)$ coefficient = 0); 1 at-least-2nd-order
-> ($O(h^2)$ coefficient = 0); 1 leading $O(h^3)$ coefficient
-> identity ($\nu (2\nu^2 - 3\nu + 1) / 12 \cdot u_{xxx}$); 3
-> "magic CFL" identities (error vanishes at $\nu = 0, 1/2, 1$)
+> **verified:**
+> - 1 at-least-1st-order (per-step $O(h)$ coefficient = 0)
+> - 1 at-least-2nd-order ($O(h^2)$ coefficient = 0)
+> - 1 leading $O(h^3)$ coefficient identity ($\nu (2\nu^2 - 3\nu + 1) / 12 \cdot u_{xxx}$)
+> - 3 "magic CFL" identities (error vanishes at $\nu = 0, 1/2, 1$)
+>
 > **code checkpoints:**
-> entire MUSCL-Hancock + MC + HLLC x-sweep pipeline; measured by
-> `tests/test_strang_convergence.cu` against §D1 goldens
+> - entire MUSCL-Hancock + MC + HLLC x-sweep pipeline
+> - measured by `tests/test_strang_convergence.cu` against §D1 goldens
 
 Modified-equation analysis of the MUSCL-Hancock + MC + HLLC scheme
 applied to the smooth entropy-wave IC of §D1. Strong-form Taylor
@@ -5046,7 +5014,7 @@ For $n_x \in \{64, 128, 256, 512\}$:
 4. Compute $L^1 = \sum_i |\rho_i(T) - \rho_i(0)| \Delta x$.
 5. Fit $\log L^1$ vs $\log n_x$; slope expected in $[1.8, 2.2]$.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Slope match.** $p \in [1.8, 2.2]$ at the four resolutions.
    Test: `test_strang_convergence.cu` §E1-slope.
@@ -5074,12 +5042,11 @@ active even at $v = 0$.
 
 > **sympy script:** `scripts/e02_linwave_lm_hllc_order.py`
 > **generated LaTeX:** `output/e02_linwave_lm_hllc_order.latex.tex`
-> **verifies:** 1 strong-form identity — log-decay-ratio
-> $\log(\mathcal{A}_{\mathrm{std}}/\mathcal{A}_{\mathrm{LM}}) =
-> -(1 - M_{\mathrm{cut}}) c k^2 \Delta x T / 2$
+> **verified:**
+> - log-decay-ratio $\log(\mathcal{A}_{\mathrm{std}}/\mathcal{A}_{\mathrm{LM}}) = -(1 - M_{\mathrm{cut}}) c k^2 \Delta x T / 2$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ branch
-> versus `f_M = 1` branch); §D2 linwave test; `tests/test_strang_linwave_convergence.cu`
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ branch versus `f_M = 1` branch); §D2 linwave test; `tests/test_strang_linwave_convergence.cu`
 
 Modified-equation dispersion analysis of the MUSCL-HLLC scheme on
 the §D2 acoustic linwave. Predicts the numerical viscosity
@@ -5185,7 +5152,7 @@ The regression test should both (a) measure the slope and check
 it's in $[1.8, 2.2]$ and (b) measure the amplitude retention and
 compare to §E2's prediction.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Standard HLLC slope.** With `use_lm_fix = false`, $p \in
    [1.8, 2.2]$ over four resolutions. Test:
@@ -5217,17 +5184,15 @@ the theoretical prediction.
 
 > **sympy script:** `scripts/e03_lm_hllc_nu_eff.py`
 > **generated LaTeX:** `output/e03_lm_hllc_nu_eff.latex.tex`
-> **verifies:** 5 strong-form identities — 1 $\nu_{\mathrm{eff}}$
-> ratio ($\nu_{\mathrm{LM}}/\nu_{\mathrm{std}} = M$); 1
-> $\mathrm{Re}_{\mathrm{eff}}$ under LM ($= 2 N M_{\mathrm{conv}}/M_{\mathrm{loc}}$);
-> 1 under standard HLLC ($= 2 N M_{\mathrm{conv}}$); 1
-> Re-ratio ($\mathrm{Re}_{\mathrm{LM}}/\mathrm{Re}_{\mathrm{std}} = 1/M_{\mathrm{loc}}$);
-> 1 clamped-regime identity
+> **verified:**
+> - 1 $\nu_{\mathrm{eff}}$ ratio ($\nu_{\mathrm{LM}}/\nu_{\mathrm{std}} = M$)
+> - 1 $\mathrm{Re}_{\mathrm{eff}}$ under LM ($= 2 N M_{\mathrm{conv}}/M_{\mathrm{loc}}$)
+> - 1 under standard HLLC ($= 2 N M_{\mathrm{conv}}$)
+> - 1 Re-ratio ($\mathrm{Re}_{\mathrm{LM}}/\mathrm{Re}_{\mathrm{std}} = 1/M_{\mathrm{loc}}$)
+> - 1 clamped-regime identity
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ clamp
-> logic, lines 115-122); measurement via a dedicated scheme-
-> characterisation test at Andrassy-style low-Mach convection
-> parameters
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ clamp logic, lines 115-122); measurement via a dedicated scheme- characterisation test at Andrassy-style low-Mach convection parameters
 
 Quantifies the practical advantage of LM-HLLC over standard HLLC
 for low-Mach convective flows — specifically, the **effective
@@ -5315,7 +5280,7 @@ For tests that probe the **scheme's convergence theory**
 standard HLLC behaviour; this is a configuration choice, not a
 kernel defect.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **$\nu_{\mathrm{eff}}$ measurement under standard HLLC.**
    On a smoothly-driven low-Mach flow ($u_{\mathrm{conv}} = 10^{-2} c$)
@@ -5348,15 +5313,11 @@ indicates a dispersion-analysis error; revisit §E2. Failure of
 
 > **sympy script:** `scripts/e04_strang_split_source_commutator.py`
 > **generated LaTeX:** `output/e04_strang_split_source_commutator.latex.tex`
-> **verifies:** 4 strong-form identities — 4 non-commutative
-> polynomial residual coefficients at $\Delta t^2$ showing the
-> **wrong** (separate-$\mathcal{Z}$) operator-chain fails at
-> $\Delta t^2$ with the commutator structure $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{X}]$ and $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{Y}_{\mathrm{hyd}}]$
+> **verified:**
+> - 4 non-commutative polynomial residual coefficients at $\Delta t^2$ showing the wrong (separate-$\mathcal{Z}$) operator-chain fails at $\Delta t^2$ with the commutator structure $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{X}]$ and $\pm\tfrac{\Delta t^2}{2}[\mathcal{Z}, \mathcal{Y}_{\mathrm{hyd}}]$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y`
-> (gravity source `S_my, S_E` applied INSIDE the y-sweep kernel,
-> line 513-523). The operator chain is X(Dt/2) * Y_total(Dt) *
-> X(Dt/2), not a separate Z-operator.
+> - `src/gpu/explicit/strang_solver.cu :: k_hllc_update_y` (gravity source `S_my, S_E` applied INSIDE the y-sweep kernel, line 513-523). The operator chain is X(Dt/2) * Y_total(Dt) * X(Dt/2), not a separate Z-operator.
 
 The Strang kernel absorbs the gravity source **into** the
 y-direction operator: the update `k_hllc_update_y` computes the
@@ -5446,7 +5407,7 @@ d_E [k0] = d_E [k0] - dtdy * (GT3   - GB3)   + dt * S_E;
 This is the correct `L_correct` structure. No separate gravity
 step is called before or after the Strang chain.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Absence of separate Z operator.** Code inspection:
    `grep -n "g_grav" strang_solver.cu` — all occurrences must be
@@ -5475,14 +5436,13 @@ might indicate (1), or a deeper §C1 gravity-source bug.
 > **sympy script:** `scripts/e05_hse_drift_bound.py`
 > **generated LaTeX:** `output/e05_hse_drift_bound.latex.tex`
 > **generated goldens:** `output/e05_hse_drift_bound.goldens.json`
-> **verifies:** 2 strong-form identities — 1 linear-summation
-> drift bound ($\varepsilon_{\mathrm{mach}} \cdot N_{\mathrm{step}}
-> \cdot \kappa(\mathrm{HSE})$); 1 Kahan-summation drift bound
-> ($\varepsilon_{\mathrm{mach}} \sqrt{N} \kappa$, not used in
-> kernel)
+> **verified:**
+> - 1 linear-summation drift bound ($\varepsilon_{\mathrm{mach}} \cdot N_{\mathrm{step}} \cdot \kappa(\mathrm{HSE})$)
+> - 1 Kahan-summation drift bound ($\varepsilon_{\mathrm{mach}} \sqrt{N} \kappa$, not used in kernel)
+>
 > **code checkpoints:**
-> composite of §B2, §B3, §C1, §D6; measured by
-> `tests/test_strang_step.cu` §D6-long-time
+> - composite of §B2, §B3, §C1, §D6
+> - measured by `tests/test_strang_step.cu` §D6-long-time
 
 Quantifies the maximum drift of the stored state away from zero
 on pure HSE IC over long time evolution. The kernel uses standard
@@ -5583,7 +5543,7 @@ bound applies only to the floor below which the kernel cannot
 preserve a quiescent HSE state — a diagnostic of the kernel's
 round-off accumulation, not of its physical convergence rate.
 
-## [verified] Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **$N = 1000$ drift bound.** Measured
    $\|\boldsymbol{\delta U}\|_\infty$ at $N = 1000$ is in

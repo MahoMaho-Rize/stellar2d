@@ -2,12 +2,11 @@
 
 > **sympy script:** `scripts/e02_linwave_lm_hllc_order.py`
 > **generated LaTeX:** `output/e02_linwave_lm_hllc_order.latex.tex`
-> **verifies:** 1 strong-form identity — log-decay-ratio
-> $\log(\mathcal{A}_{\mathrm{std}}/\mathcal{A}_{\mathrm{LM}}) =
-> -(1 - M_{\mathrm{cut}}) c k^2 \Delta x T / 2$
+> **verified:**
+> - log-decay-ratio $\log(\mathcal{A}_{\mathrm{std}}/\mathcal{A}_{\mathrm{LM}}) = -(1 - M_{\mathrm{cut}}) c k^2 \Delta x T / 2$
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ branch
-> versus `f_M = 1` branch); §D2 linwave test; `tests/test_strang_linwave_convergence.cu`
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` ($f_M$ branch versus `f_M = 1` branch); §D2 linwave test; `tests/test_strang_linwave_convergence.cu`
 
 Modified-equation dispersion analysis of the MUSCL-HLLC scheme on
 the §D2 acoustic linwave. Predicts the numerical viscosity
@@ -113,7 +112,7 @@ The regression test should both (a) measure the slope and check
 it's in $[1.8, 2.2]$ and (b) measure the amplitude retention and
 compare to §E2's prediction.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Standard HLLC slope.** With `use_lm_fix = false`, $p \in
    [1.8, 2.2]$ over four resolutions. Test:

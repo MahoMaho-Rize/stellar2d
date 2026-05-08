@@ -2,15 +2,14 @@
 
 > **sympy script:** `scripts/a07_riemann_solver_family.py`
 > **generated LaTeX:** `output/a07_riemann_solver_family.latex.tex`
-> **verifies:** 15 strong-form identities — consistency of Rusanov
-> and HLLE on identity states (8 components); mass-flux diffusion
-> signature of Rusanov and HLLE on a stationary contact; HLLC
-> $S_\star = 0$ at a stationary contact; $F_L = F_R$ at a stationary
-> contact (used by Roe)
+> **verified:**
+> - consistency of Rusanov and HLLE on identity states (8 components)
+> - mass-flux diffusion signature of Rusanov and HLLE on a stationary contact
+> - HLLC $S_\star = 0$ at a stationary contact
+> - $F_L = F_R$ at a stationary contact (used by Roe)
+>
 > **code checkpoints:**
-> `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (HLLC branch used
-> by the kernel; Rusanov / HLLE / Roe derived here for comparison
-> only)
+> - `src/gpu/explicit/strang_device.cuh :: d_lmhllc` (HLLC branch used by the kernel; Rusanov / HLLE / Roe derived here for comparison only)
 
 This is the **first alternative-scheme comparison** section of the
 book (rule 4 of the README: book is the numerical reference, not
@@ -179,7 +178,7 @@ dominated by density contrasts at near-zero velocity) would be
 crushed by numerical diffusion at every cell face. HLLE and
 Rusanov are derived here only for comparison.
 
-## ✅ Verification checkpoint (to be wired)
+## Verification checkpoints
 
 1. **Identity-state flux.** For any admissible state $\mathbf{U}$,
    `d_lmhllc(U, U)` must return $\mathbf{F}_x(\mathbf{U})$ to ULP
