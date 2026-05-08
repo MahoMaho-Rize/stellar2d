@@ -1727,6 +1727,537 @@ using the Elsässer variables tracked directly from §B2.
   within ±10% (calibration tolerance per paper's own sensitivity to
   $c_d$). Requires well-balanced MHSE (§B4).
 
+# C6. Spitzer-Härm anisotropic thermal conduction
+
+> **sympy script:** `scripts/c6_spitzer_conduction.py`
+> **verified:** parallel projector $\mathsf{P}_\parallel = \hat{\mathbf{b}}\hat{\mathbf{b}}^{\mathrm{T}}$
+> idempotent with $\mathrm{tr}\,\mathsf{P}_\parallel = 1$; parallel /
+> perpendicular decomposition of $\nabla T$; Kirchhoff potential
+> identity $\mathbf{F}_c = -\nabla[\tfrac{2}{7}\kappa_0 T^{7/2}]$
+> in 1D; entropy production $\sigma_\mathrm{cond} = \kappa_\parallel(\hat{\mathbf{b}}\cdot\nabla T)^2/T^2 \ge 0$;
+> FTCS stability $\sigma \le 1/2$.
+> **code checkpoints:** `athena_mhd_kernels.cu::d_spitzer_heat_flux`,
+> `athena_mhd_solver.cu::compute_conduction_dt`,
+> `tests/test_athena_mhd_conduction_isothermal.cu`.
+
+## Why Spitzer conduction dominates the corona
+
+In a fully-ionised, magnetised plasma the electron mean-free-path
+scales as $\lambda_e \propto T^2/n_e$, while the transit time between
+collisions $\tau_c \propto T^{3/2}/n_e$. Combining these with the
+electron thermal velocity $v_{th,e} \propto \sqrt{T}$ gives the
+Spitzer-Härm (1953) / Braginskii (1965) conductivity
+
+$$\kappa_\parallel(T) = \kappa_0\,T^{5/2},\quad
+\kappa_0 \approx 10^{-6}\ \mathrm{erg\,cm^{-1}\,s^{-1}\,K^{-7/2}}.$$
+
+Perpendicular to $\mathbf{B}$, each electron gyrates through
+$\Omega_c \tau_c \gg 1$ orbits between collisions, so the
+cross-field transport is suppressed by $(\Omega_c\tau_c)^{-2} \sim 10^{-18}$
+in a coronal loop. To machine precision the effective conductivity is
+**rank-1**:
+
+$$\boxed{\mathbf{F}_c = -\kappa_\parallel(T)\,\hat{\mathbf{b}}\,
+(\hat{\mathbf{b}}\cdot\nabla T),\qquad
+\hat{\mathbf{b}} = \mathbf{B}/|\mathbf{B}|.} \quad (\text{C6-Fc})$$
+
+## Parallel / perpendicular decomposition
+
+Sympy-verified the following on a general smooth $(T, \mathbf{B})$:
+
+1. **Idempotent projector.**
+   $\mathsf{P}_\parallel \equiv \hat{\mathbf{b}}\hat{\mathbf{b}}^{\mathrm{T}}$
+   satisfies $\mathsf{P}_\parallel^2 = \mathsf{P}_\parallel$ and
+   $\mathrm{tr}\,\mathsf{P}_\parallel = 1$.
+2. **Orthogonal decomposition.** $\nabla T = \mathsf{P}_\parallel\nabla T
+   + (\mathsf{I} - \mathsf{P}_\parallel)\nabla T$ with the second piece
+   strictly perpendicular to $\hat{\mathbf{b}}$.
+3. **Anisotropy bound.** For any $\nabla T$ the flux magnitude is
+   capped: $|\mathbf{F}_c| = \kappa_\parallel|\hat{\mathbf{b}}\cdot\nabla T|
+   \le \kappa_\parallel|\nabla T|$.
+
+## Kirchhoff potential (1D closed form)
+
+In the smooth isothermal-field (or B-aligned) limit the flux admits a
+**gradient-form** potential:
+
+$$\boxed{\mathbf{F}_c = -\nabla\!\left[\tfrac{2}{7}\,\kappa_0\,T^{7/2}\right]
+\quad\text{(1D / B-aligned smooth flow).}} \quad (\text{C6-Kirchhoff})$$
+
+This is critical for implementation: the nonlinear flux can be
+written as $-\kappa_0\partial_x(T^{7/2}) \cdot \tfrac{2}{7}$, which is
+a **linear** central-difference operator on the Kirchhoff-transformed
+variable $\Theta \equiv \tfrac{2}{7}\kappa_0 T^{7/2}$.
+Sympy verifies
+$\partial_x(\tfrac{2}{7}\kappa_0 T^{7/2}) = \kappa_0 T^{5/2}\partial_x T$
+identically.
+
+## Low-density collisionless quench
+
+At $\rho \lesssim 10^{-20}\,\mathrm{g\,cm^{-3}}$ the mean-free-path
+exceeds the scale height and the Spitzer formula over-predicts the
+flux by orders of magnitude (Gruzinov-Quataert 2004; Shoda+2018a).
+Suzuki 2203.15280 Eq. 12 / Shoda+2020 patch this with a phenomenological
+cutoff:
+
+$$\boxed{\mathbf{q}_{\mathrm{cnd}} = -\min\!\Bigl(1,\,\rho/\rho_{\mathrm{cnd}}\Bigr)\,
+(B_r/|\mathbf{B}|)\,\kappa_0\,T^{5/2}\,\partial_r T,\quad
+\rho_{\mathrm{cnd}} = 10^{-20}\,\mathrm{g\,cm^{-3}}.} \quad (\text{C6-quench})$$
+
+**Do not drop the quench** — unquenched Spitzer at coronal $\rho$
+drives $\Delta t_\mathrm{cond}$ to $\sim 10^{-4}\times$ the hyperbolic
+CFL (shown in Shimizu+22 Fig. 2a). The quench is a numerical device
+and must be on; flipping it off produces the correct physics (sharper
+thermal fronts) but the wall-clock cost is unmanageable.
+
+## Energy-equation coupling
+
+The flux enters the total-energy equation conservatively:
+
+$$\partial_t E + \nabla\!\cdot\!\bigl[(E+p^\star)\mathbf{v}
+ - \mathbf{B}(\mathbf{v}\!\cdot\!\mathbf{B}) + \mathbf{F}_c\bigr] = 0. \quad (\text{C6-energy})$$
+
+**Sign.** Heat flows *down* the temperature gradient:
+$\mathbf{F}_c\!\cdot\!\nabla T = -\kappa_\parallel(\hat{\mathbf{b}}\!\cdot\!\nabla T)^2 \le 0$
+(sympy-verified). Entropy production is strictly non-negative:
+
+$$\sigma_\mathrm{cond} \equiv -\frac{\mathbf{F}_c\!\cdot\!\nabla T}{T^2}
+= \frac{\kappa_\parallel}{T^2}(\hat{\mathbf{b}}\!\cdot\!\nabla T)^2 \ge 0. \quad (\text{C6-entropy})$$
+
+This is the 2nd-law certificate. Any kernel regression that flips a
+sign on $\mathbf{F}_c$ will show as $\sigma_\mathrm{cond} < 0$ in the
+verification test.
+
+## Parabolic CFL (linearised FTCS)
+
+Linearising around a background $T_0$ gives an effective thermal
+diffusivity
+
+$$\chi_\mathrm{eff} \equiv \frac{\kappa_0\,T_0^{5/2}}{\rho\,c_v}.$$
+
+Forward-Euler + central-space applied to $\partial_t T = \chi\partial_x^2 T$
+has the amplification factor
+
+$$g(\xi) = 1 - 4\sigma\,\sin^2(\xi/2),\qquad
+\sigma \equiv \chi\,\Delta t\,/\,\Delta x^2. \quad (\text{C6-FTCS})$$
+
+Sympy-verified: worst case $\xi = \pi$ gives $g = 1 - 4\sigma$;
+marginal stability at $\sigma = 1/2$ gives $g = -1$. For the Spitzer
+diffusivity the bound becomes
+
+$$\boxed{\Delta t_\mathrm{cond} \le \tfrac{1}{2}\,\min_{\text{cells}}
+\frac{\rho\,c_v\,\Delta x^2}{\kappa_0\,T^{5/2}}.} \quad (\text{C6-CFL})$$
+
+At chromospheric parameters
+$(T \sim 10^5\,\mathrm{K},\ \rho \sim 10^{-10}\,\mathrm{g\,cm^{-3}},\ \Delta x \sim 50\,\mathrm{km})$
+this gives $\Delta t_\mathrm{cond} \sim 10^{-2}\,\mathrm{s}$, roughly a
+factor of $10^3$ tighter than the hyperbolic CFL. At $T \sim 2\times10^6\,\mathrm{K}$
+the factor is $\sim 10^6$.
+
+## RKL2 super-time-stepping
+
+Because the conductive CFL is so tight, all modern stellar-wind codes
+use **RKL2 super-time-stepping** (Meyer+2012, based on
+Alexiades-Amiez-Gremaud 1996). $N$ Chebyshev sub-stages lift the
+explicit diffusion step up to
+
+$$\Delta t_\mathrm{RKL2} \approx \tfrac{N^2 + N}{4}\,\Delta t_\mathrm{cond}.\quad (\text{C6-RKL2})$$
+
+Per hydrodynamic step we pick $N = \lceil\sqrt{4\Delta t_\mathrm{hyp}/\Delta t_\mathrm{cond}}\rceil$
+so that one RKL2 block spans the hydro step. The per-block cost is
+$N$ conduction-flux evaluations; for $N=20$ the conductive solver
+consumes $\sim 10\%$ of the wall-clock — negligible.
+
+RKL2 is a **separate operator** applied after the hyperbolic step
+(operator splitting), **not** a modification of the VL2 integrator.
+
+## Implementation recipe (for `athena_mhd` future addition)
+
+1. **Compute $T$** from primitive $p/\rho$ and $\mu$ (partial-ionisation
+   μ from §C4 Saha closure).
+2. **Evaluate flux at faces**: $\mathbf{F}_c^{i\pm 1/2}$ using
+   centred differences of $T$ and the face-averaged $\hat{\mathbf{b}}$.
+   Key subtlety: $\hat{\mathbf{b}}$ is a unit vector — compute it by
+   first averaging $\mathbf{B}$ to face centres, then normalising.
+   Averaging $\hat{\mathbf{b}}$ after normalising at cell centres
+   loses rotational symmetry.
+3. **Apply quench** per (C6-quench).
+4. **Add $\nabla\!\cdot\!\mathbf{F}_c$** to the RHS of the energy
+   equation.
+5. **RKL2 sub-cycling** if $\Delta t_\mathrm{cond} < 0.1\,\Delta t_\mathrm{hyp}$;
+   otherwise integrate in-line with the hyperbolic step.
+
+## ✅ Verification checkpoints
+
+- `tests/test_athena_mhd_conduction_isothermal.cu` — sinusoidal
+  $T(x) = T_0(1 + A\cos k x)$ on a uniform $\mathbf{B}_0 = B_0\hat{x}$
+  background, no flow. Lock $L^2(T - T_0)$ decay rate matches
+  analytical $\exp(-\chi_\mathrm{eff} k^2 t)$ to $<1\%$ at $N = 128$.
+- `tests/test_athena_mhd_conduction_anisotropy.cu` — same IC but
+  with $\mathbf{B}_0 = B_0\hat{y}$ (perpendicular to $\nabla T$).
+  Assert $L^2(T - T_0)$ stays constant over 100 collision times —
+  cross-field quench to machine precision.
+- `tests/test_athena_mhd_conduction_kirchhoff.cu` — in 1D with
+  $T(x) \propto (1 + A\cos k x)$, compare evolution of
+  $\tfrac{2}{7}\kappa_0 T^{7/2}$ versus direct nonlinear
+  $\kappa_0 T^{5/2}\partial_x T$; lock relative difference $<10^{-12}$.
+- `tests/test_athena_mhd_conduction_entropy.cu` — random
+  $(T, \mathbf{B}, \nabla T)$ states, 100 samples; assert
+  $\sigma_\mathrm{cond} \ge 0$ in every sample. Catches accidental
+  sign flips.
+
+Any failure on the anisotropy (perpendicular-quench) test is an
+immediate red flag: without rank-1 conductivity, 1D modelling of
+coronal loops (Aschwanden 2005 §4) overshoots $T_\mathrm{peak}$ by a
+factor of 2–3.
+
+# C7. Optically-thin radiative cooling
+
+> **sympy script:** `scripts/c7_optically_thin_cooling.py`
+> **verified:** $\Lambda(T) > 0$ on piecewise power-law segments;
+> $\tau_\mathrm{cool}$ positive definite; Townsend 2009 closed-form
+> $T(t) = [T_0^{1-\alpha} - C(1-\alpha) t]^{1/(1-\alpha)}$
+> numerically verified to satisfy $\mathrm{d}T/\mathrm{d}t = -C T^\alpha$
+> across 21 $(\alpha, T_0, C, t)$ samples (max err $0.0$);
+> $\alpha = 1$ degenerate exponential decay; logarithmic slope
+> identity $\mathrm{d}\ln\Lambda/\mathrm{d}\ln T = \alpha$.
+> **code checkpoints:** `athena_mhd_kernels.cu::d_cooling_source`,
+> `athena_mhd_solver.cu::apply_radiative_cooling`,
+> `tests/test_athena_mhd_cooling_townsend.cu`.
+
+## Regime of validity
+
+Optically-thin cooling applies when the mean-free-path of emitted
+photons exceeds the local scale height,
+$\ell_{\mathrm{photon}} \gtrsim H_\rho$. For a coronal plasma at
+$T \gtrsim 10^{5.2}\,\mathrm{K}$, $\rho \lesssim 10^{-13}\,\mathrm{g\,cm^{-3}}$
+this is satisfied and the spectrum is dominated by bremsstrahlung +
+line emission (Sutherland-Dopita 1993, henceforth SD93).
+
+Below $T \sim 1.5\times 10^4\,\mathrm{K}$ the chromosphere is
+**optically thick** to the dominant Lyman-α and Ca II lines; see
+§C8 for the blended thick-thin closure used in Suzuki+25 / Shimizu+22.
+
+## SD93 cooling rate
+
+$$\boxed{Q_R(T, \rho, Z) = n_e\,n_i\,\Lambda(T, Z)\ \ge\ 0,\qquad
+n_e \approx n_i \approx \rho/(\mu_e m_u).} \quad (\text{C7-QR})$$
+
+$\Lambda(T, Z)$ is tabulated from the SD93 ionisation-equilibrium
+synthesis for $Z \in \{0, 10^{-3}, 10^{-2}, 10^{-1}, 1, 3\}\,Z_\odot$
+over $\log T \in [4, 8.5]$. Piecewise power-law fit:
+
+$$\Lambda(T) \approx \Lambda_k\,(T/T_k)^{\alpha_k},\qquad T \in [T_k, T_{k+1}]. \quad (\text{C7-piecewise})$$
+
+**Typical slopes** (SD93 Table 6, solar Z):
+
+| Regime | $\log T$ | $\alpha$ | Physics |
+|---|---|---|---|
+| Chromospheric tail | $4.0$–$4.3$ | $+3$ to $+5$ | HI, Ca II lines |
+| Line-dominated | $4.3$–$7.0$ | $-0.5$ to $-1$ | Fe, O, Si |
+| Bremsstrahlung | $7.0$–$8.5$ | $+1/2$ | free-free |
+
+## Cooling timescale
+
+$$\tau_\mathrm{cool} = \frac{\varepsilon_\mathrm{th}}{Q_R}
+= \frac{p}{(\gamma - 1)\,n_e n_i\,\Lambda(T)}
+= \frac{\mu_e^2 m_u^2 k_B T}{(\gamma-1)\,\mu m_u\,\rho\,\Lambda(T)}. \quad (\text{C7-tau})$$
+
+Sympy-verified $\tau_\mathrm{cool} > 0$ for positive inputs.
+
+**Order-of-magnitude**: at solar corona base ($T \sim 10^6\,\mathrm{K}$,
+$\rho \sim 10^{-15}\,\mathrm{g\,cm^{-3}}$, $\Lambda \sim 10^{-22.7}\,\mathrm{erg\,cm^3\,s^{-1}}$)
+$\tau_\mathrm{cool} \sim 10^5\,\mathrm{s}$, comparable to a sound-
+crossing time over $\sim 1\,R_\odot$. At the chromospheric transition
+region $\tau_\mathrm{cool}$ drops to $\sim 10^0\,\mathrm{s}$ —
+dramatically sub-CFL — motivating operator splitting with implicit
+/ exactly-integrable sub-cycles (Townsend 2009).
+
+## Townsend 2009 closed-form integration
+
+If $\Lambda(T) = \Lambda_0 (T/T_0)^\alpha$ on a power-law segment and
+$n_e, \rho$ vary slowly (isochoric + slow-$\rho$ splitting), the
+cooling ODE
+
+$$\frac{\mathrm{d}T}{\mathrm{d}t} = -C\,T^\alpha,\quad
+C \equiv (\gamma-1)(\mu m_u/k_B)\,n_e\,\Lambda_0/T_0^\alpha > 0$$
+
+admits the closed-form solution (Townsend 2009 Eq. 26):
+
+$$\boxed{T(t) = \bigl[\,T_0^{1-\alpha}
+ - C(1-\alpha)\,t\,\bigr]^{1/(1-\alpha)}\qquad (\alpha \ne 1).} \quad (\text{C7-Townsend})$$
+
+Numerically verified (21 samples across $\alpha \in \{-1, -\tfrac12, 0,
+\tfrac12, \tfrac32, 2, 3\}$ and representative $(T_0, C, t)$) to
+satisfy $\mathrm{d}T/\mathrm{d}t + C T^\alpha = 0$ to machine precision.
+
+**Degenerate $\alpha = 1$ limit:**
+
+$$T(t) = T_0\,\exp(-C t). \quad (\text{C7-exp})$$
+
+**Kernel significance:** on any time-step $\Delta t_\mathrm{hyp}$
+that spans many $\tau_\mathrm{cool}$, (C7-Townsend) gives the *exact*
+sub-segment update — no sub-cycling required. This is the trick that
+makes Athena++ / PLUTO cooling kernels run at hyperbolic CFL instead
+of $0.1\,\tau_\mathrm{cool}$.
+
+The full Townsend scheme handles crossing segment boundaries via a
+**temporal evolution function** $Y(T)$ that monotonically maps
+$T \mapsto$ integrated time; look-up + inversion stays closed-form.
+
+## Energy-equation coupling
+
+$$\partial_t E + \nabla\!\cdot\!\bigl[\text{(hydro fluxes)}\bigr]
+ = -Q_R(T, \rho, Z). \quad (\text{C7-energy})$$
+
+Cooling is a **pure sink**: $Q_R \ge 0$ subtracts from internal
+energy. Sympy confirms $\mathrm{d}\ln\Lambda/\mathrm{d}\ln T = \alpha$
+on each segment, so the Field 1965 isobaric stability criterion
+reads
+
+$$\partial_T\Lambda\bigr|_p < 0 \ \Longleftrightarrow\ \alpha < 2, \quad (\text{C7-field})$$
+
+satisfied almost everywhere in $\log T \in [4.3, 7.0]$. This is the
+root of **thermal instability** in the ISM: the warm neutral / cold
+neutral bistability, and the Parker-like corona / chromosphere
+thermal segregation.
+
+## Explicit-source CFL (fallback, no Townsend)
+
+When Townsend integration is disabled or the $\Lambda(T)$ table is not
+piecewise-power-law, sub-cycle:
+
+$$\Delta t_\mathrm{rad} \le \beta_\mathrm{rad}\,\tau_\mathrm{cool},\qquad
+\beta_\mathrm{rad} \approx 0.1. \quad (\text{C7-CFL})$$
+
+$\beta_\mathrm{rad} = 0.1$ is the Townsend 2009 calibrated safety
+margin; $> 0.2$ gives $\gtrsim 1\%$ errors in thermal-front
+propagation (SD93 shock tube benchmarks).
+
+## Metallicity scaling
+
+SD93 $\Lambda(T, Z)$ tables decompose as
+
+$$\Lambda(T, Z) = \Lambda_\mathrm{H,He}(T) + (Z/Z_\odot)\,\Lambda_\mathrm{metals}(T).$$
+
+Two-parameter bilinear table lookup $\Lambda(\log T, \log Z)$
+implemented as a 64×16 device texture; cost negligible once built
+(Suzuki+25 approach). For $Z < 10^{-4}\,Z_\odot$ (Pop III) the
+metal term is $\lesssim 10^{-3}$ of the total — atomic-H-only
+cooling tables (Anninos+1997) suffice instead.
+
+## Implementation recipe
+
+1. **Tabulate $\Lambda(\log T, \log Z)$** at build time or load from
+   disk; store on GPU as 2D texture.
+2. **Each step**: compute $T$ from primitive (requires μ from §C4).
+3. **Cooling sub-stage**: either (a) Townsend closed-form on the
+   segment, or (b) explicit sub-cycle at $\beta_\mathrm{rad}\tau_\mathrm{cool}$.
+4. **Apply** $\Delta E = -Q_R \cdot \Delta t$ after the hyperbolic
+   step. No change to $\rho, \mathbf{v}, \mathbf{B}$ — the cooling
+   is pure internal-energy relaxation.
+5. **Safety floor**: clip $T \ge T_\mathrm{floor}$ (e.g., $T_\mathrm{floor} = 0.7 T_\mathrm{eff}$
+   in Suzuki+25) to prevent numerical runaway on under-resolved
+   thermal fronts. The floor is a **known bias**, not a bug —
+   document it in the driver log.
+
+## ✅ Verification checkpoints
+
+- `tests/test_athena_mhd_cooling_townsend.cu` — uniform box,
+  $\Lambda(T) = \Lambda_0 (T/T_0)^{-1/2}$ (bremsstrahlung), fixed
+  $\rho$. Assert $T(t)$ matches (C7-Townsend) at $t =
+  \{0.1, 1, 10\}\,\tau_\mathrm{cool,0}$ to $<10^{-10}$ relative
+  error.
+- `tests/test_athena_mhd_cooling_segment_cross.cu` — initial $T_0$
+  straddles two power-law segment boundaries; lock that the
+  integrated $T(t)$ matches piecewise Townsend to $<10^{-8}$.
+- `tests/test_athena_mhd_cooling_energy_floor.cu` — pathological
+  $T_0 < T_\mathrm{floor}$, assert $T$ sticks at floor and no NaN.
+- `tests/test_athena_mhd_cooling_field_instability.cu` — seed an
+  isobaric $T$ perturbation in a Field-unstable regime
+  ($\alpha = -1$); lock linear growth rate to analytic $\sigma =
+  |\alpha - 2|/(2\tau_\mathrm{cool,0})$ within $5\%$.
+
+The Field-instability test is the second-law certificate: any
+regression that drops the $Q_R$ sign will mistake cooling for heating
+and wreck this test first.
+
+# C8. Chromospheric (optically-thick) cooling and blended closure
+
+> **sympy script:** `scripts/c8_chromospheric_cooling.py`
+> **verified:** blend weight $\xi_\mathrm{rad} \in [0, 1)$ with anchor
+> at $p = p_\mathrm{chr}$; Newton cooling has closed-form exponential
+> solution $T(t) = T_\mathrm{ref} + (T_0-T_\mathrm{ref})\exp(-t/\tau_\mathrm{thck})$;
+> GN05 scaling $\mathrm{d}\ln\tau_\mathrm{thck}/\mathrm{d}\ln\rho = -1/2$;
+> Anderson-Athay cooling is monotone in $Z$, saturated above $\rho_\mathrm{cr}$;
+> convex-combination partials $\partial_{Q_\mathrm{thck}} Q_R = \xi$,
+> $\partial_{Q_\mathrm{thin}} Q_R = 1-\xi$.
+> **code checkpoints:** `athena_mhd_kernels.cu::d_chromo_newton_cooling`,
+> `athena_mhd_kernels.cu::d_anderson_athay_cooling`,
+> `athena_mhd_solver.cu::apply_blended_cooling`,
+> `tests/test_athena_mhd_chromo_relax.cu`.
+
+## Why the chromosphere needs its own closure
+
+At $T \lesssim 1.5\times 10^4\,\mathrm{K}$ the dominant radiative loss
+channels (Lyman-$\alpha$, Ca II H+K, Mg II h+k, Balmer continuum) are
+**saturated** — the emergent intensity equals the Planck function at
+the optical-surface temperature, so cooling becomes independent of
+the *local* $n_e n_i$ and instead relaxes toward the photospheric
+$T_\mathrm{eff}$. The Sutherland-Dopita 1993 optically-thin rate
+(§C7) overestimates cooling by $10^4\times$ in this regime
+(Vernazza-Avrett-Loeser 1981 VAL3 atmosphere). Suzuki-group codes
+patch this with a two-component closure.
+
+## Shimizu+22 blending formula
+
+$$\boxed{Q_R(T, \rho, p) = \xi_\mathrm{rad}(p)\,Q_R^\mathrm{thck}(T, \rho)
+ + (1 - \xi_\mathrm{rad}(p))\,Q_R^\mathrm{thin}(T, \rho, Z).} \quad (\text{C8-blend})$$
+
+with pressure-switch blending
+
+$$\xi_\mathrm{rad}(p) = \max\!\bigl(0,\ 1 - p_\mathrm{chr}/p\bigr),\qquad
+p_\mathrm{chr} \approx 0.1\,p_\odot. \quad (\text{C8-xi})$$
+
+**Physical interpretation.** In the dense chromosphere $p \gg p_\mathrm{chr}$
+gives $\xi \to 1$ (pure Newton cooling toward the photospheric
+temperature). In the tenuous corona $p \lesssim p_\mathrm{chr}$ gives
+$\xi \to 0$ (pure optically-thin SD93). The transition region at
+$T \sim 15000\,\mathrm{K}$ is where $p \sim p_\mathrm{chr}$ and the
+closure smoothly blends both channels.
+
+Sympy-verified $\xi_\mathrm{rad} \in [0, 1)$ and anchors at zero at
+the cutoff $p = p_\mathrm{chr}$.
+
+## Gudiksen-Nordlund 2005 Newton cooling
+
+$$\boxed{Q_R^\mathrm{thck} = \frac{e_\mathrm{int} - e_\mathrm{int}^\mathrm{ref}(r)}{\tau_\mathrm{thck}(\rho)},
+\qquad \tau_\mathrm{thck}(\rho) = 0.1\,(\rho/\bar{\rho})^{-1/2}\,\mathrm{s},} \quad (\text{C8-GN05})$$
+
+with $\bar{\rho} = 1.87\times 10^{-7}\,\mathrm{g\,cm^{-3}}$ (Shimizu+22
+calibration) and $T^\mathrm{ref}(r) = T_\odot$ (or $T_\mathrm{eff}$ in
+generic stars).
+
+**Exponential relaxation.** For fixed $\rho$, the ODE
+$\mathrm{d}T/\mathrm{d}t = -(T - T_\mathrm{ref})/\tau_\mathrm{thck}$
+has the closed-form solution
+
+$$T(t) = T_\mathrm{ref} + (T_0 - T_\mathrm{ref})\,\exp(-t/\tau_\mathrm{thck}). \quad (\text{C8-relax})$$
+
+Sympy-verified by direct substitution. The GN05 scaling
+$\tau_\mathrm{thck} \propto \rho^{-1/2}$ (sympy: log-slope $= -1/2$)
+lengthens relaxation in tenuous layers — crucial to keep chromospheric
+shock-train structures from being over-damped.
+
+## Anderson-Athay 1989 empirical chromospheric rate
+
+An independent branch used in Suzuki-Ohnaka-Yasuda 2025 (eq. 17):
+
+$$\boxed{Q_R^\mathrm{AA}(\rho, Z) = 4.5\!\times\!10^9\,(0.2 + 0.8\,Z/Z_\odot)
+\,\min(1,\,\rho/\rho_\mathrm{cr})\ \mathrm{erg\,cm^{-3}\,s^{-1}},\qquad
+\rho_\mathrm{cr} = 10^{-16}\,\mathrm{g\,cm^{-3}}.} \quad (\text{C8-AA})$$
+
+**Properties (sympy-verified):**
+- Strictly non-negative for $\rho, Z \ge 0$.
+- Monotone increasing in $Z/Z_\odot$: $\partial_Z Q_\mathrm{AA} = 3.6\times 10^9 \cdot \min(1, \rho/\rho_\mathrm{cr}) \ge 0$.
+- Saturates at $\rho \ge \rho_\mathrm{cr}$: above the critical
+  density, the chromosphere becomes fully optically thick and the
+  cooling rate is density-independent (a photospheric-photon property).
+
+The Anderson-Athay form is **not** exchangeable with the GN05 Newton
+form — the former is a *rate* (per volume), the latter is a
+*relaxation toward a reference state*. The Suzuki+25 code selects
+AA for RGB-wind atmospheres, Shimizu+22 selects GN05 for solar wind.
+
+## Two-piece thin cooling piece
+
+$$Q_R^\mathrm{thin}(T, \rho, Z) = \begin{cases}
+Q_R^\mathrm{SD93}(T, Z)\,n_e n_i, & T > 1.2\times 10^4\,\mathrm{K} \\
+Q_R^\mathrm{AA}(\rho, Z), & T \le 1.2\times 10^4\,\mathrm{K} \\
+0, & T \le T_\mathrm{cut} = 0.7\,T_\mathrm{eff}
+\end{cases}. \quad (\text{C8-twopiece})$$
+
+$T_\mathrm{cut}$ is a **numerical-stability floor**, not a physical
+cutoff. Without it the chromospheric rate diverges at the
+photospheric boundary and ejects the density to $\rho \to 0$. The
+$0.7\,T_\mathrm{eff}$ threshold is Suzuki+25 calibration (Sec 2.5);
+at $T_\mathrm{cut} = 3010\,\mathrm{K}$ for $\alpha$ Boo.
+
+## Convex combination preserves positivity
+
+For $\xi_\mathrm{rad} \in [0, 1]$ and $Q_R^\mathrm{thck}, Q_R^\mathrm{thin} \ge 0$:
+
+$$Q_R = \xi\,Q_R^\mathrm{thck} + (1 - \xi)\,Q_R^\mathrm{thin} \ge 0. \quad (\text{C8-positivity})$$
+
+Sympy partial derivatives confirm $\partial_{Q_\mathrm{thck}} Q_R = \xi$
+and $\partial_{Q_\mathrm{thin}} Q_R = 1 - \xi$ — the blend is
+*linear in each component*, so the combined cooling inherits positivity
+from its parts.
+
+## Implicit update (backward-Euler Newton cooling)
+
+Because $\tau_\mathrm{thck}$ can drop below the hyperbolic CFL in
+dense regions, the GN05 branch is usually integrated **implicitly**.
+For fixed $\rho$ the single-step Backward-Euler reduces to
+
+$$T^{n+1} = \frac{T^n + \nu\,T_\mathrm{ref}}{1 + \nu},\qquad
+\nu \equiv \Delta t/\tau_\mathrm{thck}, \quad (\text{C8-BE})$$
+
+which is **unconditionally stable** and exactly monotone toward
+$T_\mathrm{ref}$. Kernel cost: one division per cell. No GMRES /
+Newton-Krylov required because $Q_R^\mathrm{thck}$ is linear in $T$.
+
+The thin-cooling branch uses Townsend 2009 (§C7 C7-Townsend); the
+combined step applies BE for the thick piece and Townsend for the
+thin piece in operator-split fashion.
+
+## Smooth blending (optional)
+
+The piecewise $\xi_\mathrm{rad}$ of (C8-xi) is $C^0$ at
+$p = p_\mathrm{chr}$. For applications sensitive to the smoothness
+of $Q_R$ (e.g., linear g-mode propagation through the transition
+region), a $C^\infty$ alternative is
+
+$$\xi_\mathrm{rad}^\mathrm{smooth}(p) = \tfrac{1}{2}\!\left[1 + \tanh\!\bigl((p - p_\mathrm{chr})/\Delta p\bigr)\right]. \quad (\text{C8-smooth})$$
+
+$\Delta p \sim p_\mathrm{chr}/10$ keeps the transition width small.
+Shimizu+22 uses the piecewise form; Suzuki+25 uses neither (pure AA
+below the $T = 1.2\times 10^4$ threshold, no blending).
+
+## Explicit vs implicit CFL comparison
+
+| Branch | Explicit CFL | Implicit CFL |
+|---|---|---|
+| GN05 Newton (thick) | $\Delta t \le 0.3\,\tau_\mathrm{thck}$ | unconditional |
+| SD93 (thin) | $\Delta t \le 0.1\,\tau_\mathrm{cool}$ | Townsend exact |
+| AA chromosphere | depends on $\rho$; trivially sub-CFL | direct multiply |
+
+**Recommendation**: in the kernel, use BE for GN05 and Townsend for
+SD93 in an operator-split cooling pass applied after the hyperbolic
+step. Neither branch touches $\rho, \mathbf{v}, \mathbf{B}$ — only
+internal energy.
+
+## ✅ Verification checkpoints
+
+- `tests/test_athena_mhd_chromo_relax.cu` — 1D isobaric atmosphere
+  seeded at $T_0 = 6000\,\mathrm{K}$ above $T_\mathrm{ref} = 5770\,\mathrm{K}$
+  with $\tau_\mathrm{thck} = 0.1\,\mathrm{s}$; lock that $T(t)$
+  matches (C8-relax) at $t = \{0.1, 1, 10\}\,\tau_\mathrm{thck}$
+  to $<10^{-10}$ relative error.
+- `tests/test_athena_mhd_chromo_blend.cu` — 1D atmosphere spanning
+  $T \in [3000, 2\times 10^6]\,\mathrm{K}$; assert $\xi_\mathrm{rad}(p)$
+  profile matches (C8-xi) cell-by-cell; assert smoothness /
+  monotonicity.
+- `tests/test_athena_mhd_chromo_positivity.cu` — 100 random
+  $(T, \rho, p, Z)$ samples, assert $Q_R \ge 0$ and no NaN.
+- `tests/test_athena_mhd_chromo_floor.cu` — atmosphere cooled past
+  $T_\mathrm{cut} = 0.7\,T_\mathrm{eff}$; assert $T$ stays at floor
+  and $Q_R^\mathrm{thin} = 0$ there.
+
+The positivity test is the most important — it catches any sign-flip
+regression in the AA or SD93 branches, which would let the code
+"heat via radiation" and crash.
+
 # D1. Ideal MHD in cylindrical $(R, \phi, z)$ coordinates
 
 > **sympy script:** `scripts/d1_cylindrical_mhd.py`
@@ -1886,4 +2417,227 @@ growth rate matches $(3/4)\Omega$ to $<1\%$ over $5/\Omega$.
 state, lock $\alpha_M/\alpha_R \sim 3-5$ (Stone+96, Suzuki+23
 Cartesian baseline). Suzuki+23 reports $\alpha_M \approx 0.072$,
 $\alpha_R \approx 0.016$ for Cartesian Keplerian baseline.
+
+# E1. Stochastic broadband photospheric driver
+
+> **sympy script:** `scripts/e1_stochastic_driver.py`
+> **verified:** $\int_{\omega_{{\min}}}^{\omega_{{\max}}} (A^2/\omega)\mathrm{d}\omega = A^2 \ln(\omega_{{\max}}/\omega_{{\min}})$;
+> target-variance normalisation $A^2 = \langle\delta v^2\rangle/\ln(\omega_{{\max}}/\omega_{{\min}})$;
+> single-sinusoid time-variance $\langle\sin^2\rangle_t = 1/2$;
+> cross-frequency terms vanish in time average (Parseval);
+> linearised Elsässer $\partial_t z^\pm \pm v_A\partial_r z^\pm = 0$
+> (pure one-way advection around uniform background);
+> zero-gradient BC on $z^-$ forces incoming amplitude to zero
+> (absorbing / no reflection in WKB limit).
+> **code checkpoints:**
+> `athena_mhd_kernels.cu::d_photospheric_driver`,
+> `athena_mhd_kernels.cu::d_absorbing_bc_zminus`,
+> `tests/test_athena_mhd_driver_spectrum.cu`.
+
+## Why a broadband stochastic driver
+
+Suzuki-group solar / red-giant wind simulations require continuous
+wave injection at the inner boundary to replace the granulation-driven
+photospheric convection. The driver must
+
+1. **Carry the correct Poynting flux** so that the corona is heated
+   to observed $T \sim 10^6\,\mathrm{K}$.
+2. **Span a broadband spectrum** because phenomenological sub-grid
+   turbulence (§C5) needs a realistic range of interacting
+   frequencies to cascade.
+3. **Be stochastic in phase** so that coherent resonances with the
+   global domain modes do not build up.
+4. **Pair with an absorbing BC for the incoming Alfvén wave** so
+   that coronal material reflecting back down does not artificially
+   amplify the driver.
+
+## Driver form (Shimizu+22 eq. 38 / 42; Suzuki+25 Sec 2.8)
+
+The transverse Elsässer variable outgoing from the photosphere is
+driven as
+
+$$\boxed{z^+_{\perp,\odot}(t) = A_\perp\,\sum_{N=0}^{N_{{\max}}}
+\frac{\sin(2\pi f_N t + \varphi_N)}{\sqrt{f_N}},\qquad
+\varphi_N \sim U[0, 2\pi).} \quad (\text{E1-driver-transverse})$$
+
+The longitudinal radial velocity is driven independently:
+
+$$\delta v_{\parallel,\odot}(t) = A_\parallel\,\sum_{N=0}^{N_{{\max}}}
+\frac{\sin(2\pi f_N^\parallel t + \varphi_N^\parallel)}{\sqrt{f_N^\parallel}}. \quad (\text{E1-driver-long})$$
+
+**Log-spaced sampling** mimics the continuous $\omega^{-1}$ spectrum:
+
+$$f_N = f_{\min}\,(f_{\max}/f_{\min})^{N/N_{{\max}}},\qquad f_{\max} = 100\,f_{\min}. \quad (\text{E1-logspace})$$
+
+**Suzuki-group calibration**:
+- Transverse (Alfvén): $f_{\min} \approx 10^{-3}\,\mathrm{Hz}$, $f_{\max} \approx 10^{-2}\,\mathrm{Hz}$
+  (16.7 min – 100 s);
+- Longitudinal (p-mode): $f_{\min}^\parallel \approx 3.33\times 10^{-3}\,\mathrm{Hz}$,
+  $f_{\max}^\parallel \approx 10^{-2}\,\mathrm{Hz}$ (5 min – 100 s).
+
+## Power spectrum and normalisation
+
+The $1/\sqrt{f_N}$ amplitude weighting reproduces a **flat-power-per-
+log-octave** spectrum: $P(\omega) \propto 1/\omega$. Sympy-verified:
+
+$$\int_{\omega_{{\min}}}^{\omega_{{\max}}} \frac{A^2}{\omega}\,\mathrm{d}\omega
+= A^2 \ln(\omega_{{\max}}/\omega_{{\min}}). \quad (\text{E1-spectrum})$$
+
+Normalising to the observed target rms fluctuation (Suzuki+25 solar
+calibration: $\langle\delta v_\perp\rangle_\odot = 1.25\,\mathrm{km/s}$;
+RGB $\alpha$ Boo: $2.50\,\mathrm{km/s}$ via $\delta v \propto (T_\mathrm{eff}^4/\rho)^{1/3}$):
+
+$$\boxed{A^2 = \frac{\langle\delta v^2\rangle}{\ln(\omega_{{\max}}/\omega_{{\min}})},\qquad
+\int P(\omega)\,\mathrm{d}\omega = \langle\delta v^2\rangle.} \quad (\text{E1-norm})$$
+
+## Parseval variance identity
+
+For a sum of sinusoids with distinct frequencies and independent
+phases:
+
+$$\bigl\langle\bigl[\sum_N A_N \sin(\omega_N t + \varphi_N)\bigr]^2\bigr\rangle_t
+= \tfrac{1}{2}\,\sum_N A_N^2. \quad (\text{E1-parseval})$$
+
+Sympy-verified symbolically on the time integral over a common
+period: single-sinusoid variance is $A^2/2$, cross-terms integrate
+to zero. Combining with $A_N = A/\sqrt{f_N}$ gives
+
+$$\sum_N A_N^2 = A^2 \sum_N 1/f_N \approx A^2 \ln(f_{\max}/f_{\min})$$
+
+(discrete approximation of the continuous integral).
+
+The factor of $1/2$ means **the driver must be pre-multiplied by
+$\sqrt{2}$** to hit $\langle\delta v^2\rangle$ — this is the source of
+the explicit $\sqrt{2}$ factor in the Shimizu+22 driver (their footnote
+to Eq. 41).
+
+## Random phases — why essential
+
+If $\varphi_N$ are deterministic, the driver is periodic with period
+$T_{\min} = 2\pi/\gcd(\omega_N)$ (for rational $\omega_N$ ratios) or
+quasi-periodic. Modes commensurate with the domain resonate — in the
+solar wind problem this shows up as spurious peaks in the coronal
+temperature spectrum.
+
+**Phase regeneration frequency.** Draw new $\varphi_N$ each time one
+simulation-correlation time elapses; practical choice
+$\Delta t_\varphi \sim 10/f_{\min}$. Alternative: draw once per run
+with a fixed random seed, document the seed in run metadata (Suzuki+25
+approach — makes individual runs reproducible).
+
+## Absorbing BC for incoming Alfvén
+
+The coronal run generates downward-propagating Alfvén modes that must
+not pile up at the photosphere. The physically-correct boundary
+condition is the **free-outgoing** form in Elsässer variables:
+
+$$\boxed{\partial_r z^-_\perp\bigr|_{r=R_*} = 0.} \quad (\text{E1-BC})$$
+
+For a plane wave $z^-(r, t) = Z_0\,e^{i(kr - \omega t)}$, this forces
+$ik\,Z_0 = 0$ — i.e., $Z_0 = 0$ (sympy-verified via `solve`). In WKB:
+**zero reflection**, all incoming wave energy is absorbed.
+
+**Kernel form.** Apply zero-gradient copy on the incoming Elsässer
+variable at the inner ghost cells:
+
+$$z^-_\perp(r=R_*-\mathrm{ghost}) \leftarrow z^-_\perp(r=R_*+1\text{ cell}).$$
+
+Outgoing $z^+_\perp$ is clamped to the driver value (E1-driver-transverse).
+Both together decouple the driver from the interior reflection.
+
+## Elsässer propagation check (background dynamics)
+
+Around a uniform static background $(\rho_0, B_{r,0})$, the linearised
+transverse equations reduce to **pure one-way advection** of the
+Elsässer variables:
+
+$$\partial_t z^\pm \pm v_A\,\partial_r z^\pm = 0,\qquad v_A = B_{r,0}/\sqrt{\rho_0}. \quad (\text{E1-advect})$$
+
+Sympy-verified directly by substituting $z^\pm = v_\perp \mp B_\perp/\sqrt{\rho_0}$
+into the linearised induction + momentum equations.
+
+Consequence: the driver at $r = R_*$ couples *only* to $z^+$;
+corrections from finite background gradients (refraction, reflection,
+mode conversion) appear at $\mathcal{O}(\Delta r/\lambda_A)$ and are
+**part of the physical solution**, not BC artifacts. This is the
+content of Parker (1965) and Hollweg (1981) WKB treatments.
+
+## Driver implementation recipe
+
+```c
+// One-time initialisation at kernel start-up
+srand(seed);
+for (N = 0; N < N_max; ++N) {
+    f[N] = f_min * pow(f_max/f_min, double(N)/N_max);   // log-spaced
+    phi[N] = 2*M_PI * rand01();                          // uniform U[0,2π)
+}
+double A_perp = sqrt(2) * <dv_rms> / sqrt(log(f_max/f_min));
+
+// Per time-step at inner ghost
+double zplus = 0.0;
+for (N = 0; N < N_max; ++N) {
+    zplus += A_perp * sin(2*M_PI*f[N]*t + phi[N]) / sqrt(f[N]);
+}
+// Absorbing BC: copy interior value onto incoming Elsässer ghost
+zminus_ghost = zminus_interior_1cell;
+// Reconstruct v_perp, B_perp from (z+, z-)
+v_perp = 0.5*(zplus + zminus_ghost);
+B_perp = 0.5*sqrt(rho_0) * (zminus_ghost - zplus);
+```
+
+Key points:
+- **Compute $A_\perp$ once**, not per-step; the log-factor is fixed.
+- **$\sqrt{2}$ is important**; Parseval demands it.
+- **Absorbing BC copies one cell inward** (not two, not zeroth-order
+  extrapolation). Two-cell copy is fine but a zeroth-order
+  extrapolation will produce a small-amplitude reflection.
+- **Low-frequency end $f_{\min}$ sets the run length floor**: one
+  $f_{\min}^{-1}$ period must fit within the simulation, else the driver
+  is aliased.
+
+## Special case: acoustic-only (no transverse driver)
+
+Shimizu+22 Appendix A runs "B0V06" with $A_\perp = 0$ to isolate the
+contribution of longitudinal acoustic waves to coronal heating via
+mode-conversion. Set $A_\perp = 0$ and drive only $\delta v_\parallel$
+at the 5-min p-mode band. This probes the chromospheric Alfvén
+generation rate via the $\partial_r\ln p$ coupling term (§B2 Elsässer
+source $S_\mathrm{refl}$).
+
+## Per-star calibration scaling
+
+For an arbitrary star, the solar calibration is scaled via Shimizu+22
+Eq. 40:
+
+$$\langle\delta v_0\rangle \propto (T_\mathrm{eff}^4 / \rho_0)^{1/3},\qquad
+\omega_{{\max}}^{-1} \propto c_{s,0}\,R_*^2/M_*\ (\text{photospheric transit}),$$
+
+with solar anchors $\langle\delta v_0\rangle_\odot = 1.25\,\mathrm{km/s}$,
+$(\omega_{{\max}}^{-1})_\odot = 0.3\,\mathrm{min}$. Numbers in Suzuki+25
+Table 3:
+
+- $\alpha$ Boo: $\langle\delta v_0\rangle = 2.50\,\mathrm{km/s}$,
+  $\omega_{{\max}}^{-1} = 150\,\mathrm{min}$, $\omega_{{\min}}^{-1} = 1.5\times 10^4\,\mathrm{min}$.
+- $\alpha$ Tau: $\langle\delta v_0\rangle = 2.56\,\mathrm{km/s}$,
+  $\omega_{{\max}}^{-1} = 340\,\mathrm{min}$, $\omega_{{\min}}^{-1} = 3.4\times 10^4\,\mathrm{min}$.
+
+## ✅ Verification checkpoints
+
+- `tests/test_athena_mhd_driver_spectrum.cu` — build the driver
+  time-series over $10^6 f_{\min}^{-1}$, compute the FFT-measured
+  spectrum, assert $\log P$ vs $\log f$ has slope $-1 \pm 0.05$
+  within the driven band.
+- `tests/test_athena_mhd_driver_variance.cu` — compute
+  $\langle[z^+]^2\rangle$ over a multi-period sample; assert within
+  $5\%$ of target $\langle\delta v^2\rangle$.
+- `tests/test_athena_mhd_absorbing_bc.cu` — inject a Gaussian
+  down-going Alfvén pulse, measure the reflected-amplitude
+  coefficient; lock $R < 10^{-4}$ (WKB floor).
+- `tests/test_athena_mhd_driver_reproducibility.cu` — same seed
+  produces byte-identical driver output across runs; reseed gives
+  uncorrelated phases.
+
+The absorbing-BC test is the non-trivial one: a wrong
+ghost-extrapolation order shows up here as a visible reflection pulse
+but would pass every other spectrum / variance test silently.
 

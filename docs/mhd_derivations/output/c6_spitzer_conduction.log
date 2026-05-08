@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  C6 — Spitzer-Härm anisotropic thermal conduction
+════════════════════════════════════════════════════════════
+  [OK] parallel projector b̂ b̂^T is rank-1 idempotent.
+  [OK] ∇T = (P_∥ + P_⊥)∇T decomposition.
+  [OK] F_c = -∇(Kirchhoff potential (2/7)κ₀ T^{7/2}) in 1D.
+  [OK] entropy production σ_cond = κ_∥ (b̂·∇T)²/T² ≥ 0.
+  [OK] FTCS diffusion: σ ≤ 1/2 is the stability bound.
+  → wrote output/c6_spitzer_conduction.latex.tex
+
+All C6 identities verified.
