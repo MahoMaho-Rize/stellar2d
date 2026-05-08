@@ -61,6 +61,86 @@ struct CartAle2Solver {
     double *d_px_new = nullptr;      // new cell momentum
     double *d_py_new = nullptr;
 
+    // Node-velocity rebuild order:
+    //   0 = 1st-order mass-weighted average (default; stable but KE-diffusive).
+    //       Chosen as default because the 2nd-order path triggers a
+    //       stratified-atmosphere instability on Andrassy 2022-style setups
+    //       (MUSCL remap + 2nd-order rebuild + reflect wall y + long-time
+    //       convection → checkerboard mode in v_node, v→Ma~0.8 within t=100).
+    //   1 = 2nd-order corner MUSCL with Barth-Jespersen multidim limiter
+    //       (experimental; passes Sod/Sedov/Noh/Gresho/Yee benchmarks when
+    //       set via --rebuild-order 1, improves Gresho KE convergence, but
+    //       NOT safe to default on until the stratified-mode instability
+    //       is understood — see 2026-05-07 Andrassy regression investigation).
+    int rebuild_order = 0;
+
+    // 2nd-order node-velocity rebuild scratch. v_cell = px_new/dm_new,
+    // then minmod-limited slopes; each node samples 4 corner-extrapolated
+    // cell velocities, mass-weighted aggregation.  Momentum-conserving
+    // because the 4 corner offsets of every cell are symmetric around
+    // its centroid so the slope terms cancel in Σ_nodes m_node·v_node.
+    double *d_vxc = nullptr, *d_vyc = nullptr;
+    double *d_vxc_sx = nullptr, *d_vxc_sy = nullptr;
+    double *d_vyc_sx = nullptr, *d_vyc_sy = nullptr;
+
+    // Node-based KE scratch for Phase-M compensation.
+    //
+    // Rationale (why not cell-based):
+    //   The diagnostic KE is node-based, KE_diag = Σ_node ½·m_node·|v_node|²
+    //   (periodic duplicates skipped). A cell-based compensation scalar
+    //   (½·p²/m_cell) differs by a subgrid-variance term that is
+    //   nonconstant across remap, so cell-based ΔKE does NOT equal the
+    //   diagnostic KE loss — E_diag drifts even when cell-ΔKE is balanced.
+    //
+    // Design:
+    //   - d_m_node_ref captured at the START of Phase M (one fixed mass
+    //     snapshot for both before/after KE). Using a constant mass makes
+    //     ΔKE = ½·m_ref·(v²_before − v²_after), purely reflecting the
+    //     velocity change from remap + rebuild — no spurious "mass moved
+    // ---- Phase-M KE→IE compensation (Caramana-Shashkov compatible, P33) ----
+    // Local compatible update: rebuild_node_v{_2nd} computes per-node
+    //   ΔKE_node = Σ_{4 corners} ¼ m_c · ½ v_corner²  −  ½ m_node · v_node²
+    // and writes it (equally share among the 4 contributing cells, since
+    // m_corner = ¼ m_cell) into d_e_int_incr[c] via atomicAdd. After rebuild,
+    // k_cale2_apply_ie_incr adds d_e_int_incr into d_e_int and zeros it.
+    //
+    // This is the correct local replacement for the old global mean-field
+    // compensation (pre-P33 bug: global ΔKE/M_tot applied uniformly to every
+    // cell, which heated stable layers in stratified convection benchmarks).
+    //
+    // Diagnostic snapshots (independent of compensation mechanism):
+    //   d_KE_node_snap_pre:  ½·m_ref·|v_pre|²   at Phase-M entry (matches last
+    //                        step's diagnostic KE, no mass-movement bias).
+    //   d_KE_node_snap_post: ½·m_ref·|v|²       after rebuild (same m_ref,
+    //                        consistent-mass-caliper per P33 doc § C).
+    //   d_dKE_node_local:    per-node local ΔKE output by rebuild kernel;
+    //                        Σ over nodes == global Jensen deficit. For logging
+    //                        / debug only — the compensation itself already
+    //                        acted through d_e_int_incr.
+    //   d_node_reduce_buf:   nnode-sized scratch for gpu_reduce_sum on the
+    //                        snapshots (diag only; not in the hot path).
+    double *d_m_node_ref = nullptr;      // node-size: pre-remap m_node snapshot,
+                                         // used for BOTH pre/post KE snapshots
+                                         // (consistent-mass caliper, P33 § C).
+    double *d_vX_pre = nullptr;          // node-size: pre-remap v snapshot
+    double *d_vY_pre = nullptr;
+    double *d_KE_node_snap_pre  = nullptr;   // diagnostic snapshot, NOT driver
+    double *d_KE_node_snap_post = nullptr;
+    double *d_dKE_node_local    = nullptr;   // per-node local ΔKE (diag/debug)
+    double *d_e_int_incr        = nullptr;   // cell-size: local IE accumulator
+    double *d_node_reduce_buf   = nullptr;   // node-size scratch
+
+    // Cumulative mass-movement KE budget. Each step computes the diagnostic
+    // E drift that the LOCAL Jensen-only compensation cannot cancel:
+    //   mass_flow_ke_step = Σ_node ½·(m_post − m_pre)·v_pre²
+    // This term is not a physical energy gain/loss — it arises because
+    // diagnostic KE uses m_post·½v² with current mass, but mass has moved
+    // between nodes during remap. Accumulated here and subtracted from
+    // total_E in compute_diagnostics() so diagnostic E_reported matches
+    // physical E_conserved.
+    // State is NOT modified; this is purely an output correction.
+    double mass_flow_ke_cumulative = 0.0;
+
     // ---- 2nd-order remap (MUSCL-in-remap, Kucharik-Shashkov 2012) ----
     // Per-cell densities on the reference uniform grid.
     double *d_rho_dens  = nullptr;   // dm/V0
@@ -205,6 +285,11 @@ struct CartAle2Solver {
     int step_count = 0;
     double remap_mass_drift = 0.0;   // |Σ dm_after − Σ dm_before| / Σ dm_before per step
 
+    // ---- Diagnostic tracer hook (cart_ale2_trace.h) ----
+    // Opt-in pointer; when non-null, step() emits per-stage KE/IE snapshots
+    // and optional per-cell high-freq records. Zero numerical impact when null.
+    struct TraceHook* trace = nullptr;
+
     // ---- Lifecycle ----
     void init(int nx, int ny, double Lx, double Ly, double gamma, double cfl);
     void destroy();
@@ -269,6 +354,72 @@ struct CartAle2Solver {
                            int    noise_seed    = -1,
                            double noise_amp     = 0.0);
 
+    // ----- Standard verification tests --------------------------
+    // Sedov-Taylor 2D cylindrical blast. Domain [0,Lx]×[0,Ly] (centred at
+    // (Lx/2, Ly/2)). Explosion energy E0 is concentrated in the cells within
+    // radius r_exp of the centre, uniform rho, gamma=1.4. Ambient pressure
+    // p_amb. Self-similar solution: r_shock(t) = ξ₀(E0/ρ)^{1/4}·t^{1/2}
+    // with ξ₀ ≈ 1.0 in 2D cylindrical (Kamm 2007 LA-UR-07-2849).
+    void init_sedov(double rho0 = 1.0, double p_amb = 1.0e-5,
+                    double E0 = 1.0,   double r_exp  = 0.04);
+
+    // Noh 2D implosion. ρ=1, p=1e-6, v=-r̂ (unit inflow) everywhere.
+    // γ=5/3. Exact post-shock state inside the shock: ρ=16, v=0, p=16/3;
+    // shock speed D=1/3. Domain [-1,1]² with reflect BC; analyze at t=2.
+    void init_noh();
+
+    // Gresho stationary vortex. Centred at (0.5,0.5), ρ=1:
+    //   vφ(r) = 5r         (r < 0.2)
+    //         = 2 - 5r     (0.2 ≤ r < 0.4)
+    //         = 0          (r ≥ 0.4)
+    //   P(r)  = 5 + 12.5 r²                           (r<0.2)
+    //         = 9 + 12.5 r² − 20r + 4 ln(5r)          (0.2≤r<0.4)
+    //         = 3 + 4 ln 2                            (r≥0.4)
+    // Exactly stationary solution of 2D Euler. Drift measures AV false
+    // trigger on pure rotation. γ=1.4, run to t=3.
+    void init_gresho();
+
+    // Yee-Vinokur-Djomehri isentropic vortex on [-5,5]² periodic. Carried
+    // on uniform translation (u∞,v∞)=(1,1); after one period (t=10) the
+    // flow returns to IC exactly. Measures remap + advection diffusion
+    // of a smooth, isolated structure. γ=1.4, vortex strength β=5,
+    // T∞=1, ρ∞=1, p∞=1.
+    void init_yee_vortex(double beta = 5.0, double u_inf = 1.0,
+                         double v_inf = 1.0);
+
+    // T3 linear shear-mode decay (scheme characterization ν_eff probe).
+    // Uniform ρ, P; g=0; periodic BC both directions:
+    //   vx(y,0) = V0 · sin(k · 2π y / Ly),   vy = 0
+    // Nonlinear advection v·∇v vanishes identically (vx depends on y only,
+    // vy=0 → vx·∂vx/∂x=0, vy·∂vx/∂y=0), so a physical Navier-Stokes with
+    // kinematic viscosity ν gives exact analytic decay:
+    //   max|vx|(t) = V0 · exp(-ν k² t),   k² = (k·2π/Ly)²
+    // For schemes without explicit ν, the decay slope of max|vx| yields
+    // ν_eff = −slope / k² (the effective numerical dissipation).
+    void init_shear_mode(double rho, double P, double V0, int k);
+
+    // Linear acoustic wave (Athena++ core convergence test).
+    //   Background: ρ₀, P₀ = ρ₀·c₀²/γ, v = 0, γ supplied via gamma field.
+    //   c₀ = sqrt(γ·P₀/ρ₀) is the sound speed.
+    //   Perturbation along the right-acoustic eigenvector R⁺ = (1, c₀/ρ₀, 0, c₀²):
+    //     δρ = A·sin(k·2π x/Lx)
+    //     δvx = (c₀/ρ₀)·δρ
+    //     δP = c₀²·δρ   (→ δe = δP/((γ-1)ρ) − P·δρ/((γ-1)ρ²) to linear order)
+    //   One period T = Lx/c₀ returns exact solution to IC (periodic BC).
+    //   Requires periodic BC both directions.
+    void init_acoustic_wave(double rho0, double P0, double A, int k);
+
+    // T1 smooth-convergence entropy wave (x-direction uniform advection):
+    //   ρ(x, 0) = ρ0 · (1 + A · sin(k · 2π x / Lx))
+    //   P = P0  (uniform),  v = (u0, 0)
+    // With ΔP = 0 at every face and v·∇v = 0, the wave advects exactly:
+    //   ρ(x, t) = ρ(x - u0 t, 0)
+    // After one period T = Lx / u0 the exact solution returns to IC.
+    // L1 error on ρ at t = T, log-log fit across res → formal order.
+    // Requires periodic BC in both directions.
+    void init_entropy_wave(double rho0, double P0, double u0,
+                           double A, int k);
+
     // Lecoanet (2015) canonical KH — dual tanh shear layers, fully periodic.
     // Matches Athena pgen/kh.cpp iprob=4 when k=1. Default parameters from
     // Athena inputs/hydro/athinput.lecoanet_kh: vflow=1, amp=0.01,
@@ -280,6 +431,66 @@ struct CartAle2Solver {
 
     // One ALE step: Lagrangian → Rezone → Remap
     double step(double t, double t_end);
+
+    // ---- T1 entropy wave post-run error (Athena++ compute_error pattern) ----
+    // After advecting the smooth wave for `periods` periods of length Lx/u0,
+    // the analytic solution is bit-identical to the IC. We compute:
+    //
+    //   ρ̄(x) = ⟨ρ(x, y)⟩_y  (volume-weighted, via download_xslice)
+    //   ρ_exact(x) = rho0 · (1 + A · sin(k · 2π x / Lx))
+    //
+    //   L1(ρ)   = ⟨|ρ̄ − ρ_exact|⟩_x
+    //   Linf(ρ) = max_x |ρ̄ − ρ_exact|
+    //
+    // We also report a phase-aligned L1 that fits the best shift s in
+    // ρ_exact(x − s), which is the "dissipation-only" residual after
+    // subtracting any Lagrangian-rezone bulk timing drift.
+    //
+    // Writes a single appended line to <run_dir>/entropy_wave-errors.dat
+    // with schema:
+    //   # Nx Ny Ncycle t_end A k u0 L1 Linf L1_phase phase_shift
+    void compute_entropy_wave_error(double t_now, int ncycle,
+                                    double rho0, double P0, double u0,
+                                    double A, int k, double periods,
+                                    const std::string& run_dir);
+
+    // ---- Sod shock tube post-run error (Athena++ compute_error pattern) ----
+    // Standard Sod IC: ρL=1, PL=1, ρR=0.125, PR=0.1, γ=1.4, v=0, split at
+    // Lx/2. At time t_now, the analytic solution is a self-similar fan of
+    // left rarefaction + contact + right shock (Toro §4.3). We compute L1
+    // and Linf on ρ between y-averaged simulation and sod_exact::rho_at.
+    // Appends one line to <run_dir>/sod-errors.dat with schema:
+    //   # Nx Ny Ncycle t_end L1 Linf
+    void compute_sod_error(double t_now, int ncycle,
+                           const std::string& run_dir);
+
+    // Gresho stationary vortex post-run error.
+    // Exact solution is the IC itself (flow is stationary). We compute
+    // L1/Linf of |v_sim − v_exact| on cells inside the vortex disk
+    // (r < 0.5 from domain center) where the analytic vφ profile is
+    // non-trivial. Schema:
+    //   # Nx Ny Ncycle t_end L1 Linf v_max_sim
+    void compute_gresho_error(double t_now, int ncycle,
+                              const std::string& run_dir);
+
+    // Linear acoustic wave post-run error (Athena++ linwave pattern).
+    // After N periods, exact solution equals IC. We download y-averaged
+    // ρ and compute L1/Linf vs rho0·(1 + A·sin(k·2π x/Lx)). Schema:
+    //   # Nx Ny Ncycle t_end A k c0 L1 Linf L1_phase phase_shift
+    void compute_acoustic_wave_error(double t_now, int ncycle,
+                                     double rho0, double P0,
+                                     double A, int k, double periods,
+                                     const std::string& run_dir);
+
+    // Yee-Vinokur-Djomehri isentropic vortex round-trip error.
+    // After one period T = Lx/u_inf (default t=10 on [-5,5]²), the
+    // analytic ρ profile returns to the IC. We score L1/Linf of
+    // ρ_sim − ρ_exact on the full domain (periodic BC, no edge
+    // exclusion needed). Schema:
+    //   # Nx Ny Ncycle t_end L1 Linf rho_min rho_max
+    void compute_yee_error(double t_now, int ncycle,
+                           double beta, double u_inf, double v_inf,
+                           const std::string& run_dir);
 
     struct Diagnostics {
         double total_mass;

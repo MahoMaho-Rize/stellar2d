@@ -2,6 +2,7 @@
 
 #ifdef USE_GPU
 #include "cart_ale2_solver.cuh"
+#include "cart_ale2_trace.h"
 #include "sim/helpers.h"
 #include "sim/run_loop.h"
 
@@ -20,15 +21,32 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     bool is_kh_lec = (cfg.test_case == "kh_lecoanet");
     bool is_loc_conv = (cfg.test_case == "local_convection");
     bool is_andrassy = (cfg.test_case == "andrassy2022");
+    bool is_sedov  = (cfg.test_case == "sedov2d");
+    bool is_noh    = (cfg.test_case == "noh");
+    bool is_gresho = (cfg.test_case == "gresho");
+    bool is_yee    = (cfg.test_case == "yee_vortex");
+    bool is_shear  = (cfg.test_case == "shear_mode");
+    bool is_ewave  = (cfg.test_case == "entropy_wave");
+    bool is_awave  = (cfg.test_case == "acoustic_wave");
+    bool is_sod    = (cfg.test_case == "sod");
     double Lx = 1.0;
     // Lecoanet: domain aspect 1:2 so shear layers at y=0.5, y=1.5 match
     // Athena++ iprob=4 geometry (z1=-0.5, z2=0.5 in centred coords).
+    // Standard-test domains: Sedov/Gresho = 1×1, Noh = 1×1 (centred rescale
+    // of the canonical [-1,1]²), Yee vortex = 10×10 (standard [-5,5]²).
     double Ly = is_kh_lec ? 2.0
-              : (is_hse || is_kh) ? 1.0
+              : (is_hse || is_kh || is_sedov || is_noh || is_gresho) ? 1.0
+              : is_yee ? 10.0
+              : is_shear ? 1.0
+              : is_ewave ? 1.0
+              : is_awave ? 1.0
               : 0.2;
+    if (is_yee) Lx = 10.0;
     double gam = is_hse ? cfg.gamma : 1.4;
     // andrassy2022 uses γ=5/3 (paper §2.2).
     if (is_andrassy) gam = 5.0 / 3.0;
+    // Noh problem canonical γ=5/3.
+    if (is_noh) gam = 5.0 / 3.0;
     // local_convection / andrassy2022: read slab header to get real Ly, Lx, γ.
     if (is_loc_conv || is_andrassy) {
         if (cfg.cart_ale2_slab_file.empty()) {
@@ -62,6 +80,7 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     cale.CQ_lin  = cfg.cart_ale_cq_lin;
     cale.CQ_quad = cfg.cart_ale_cq_quad;
     cale.shear_aware_av = cfg.cart_ale_shear_aware ? 1 : 0;
+    cale.rebuild_order  = cfg.cart_ale2_rebuild_order;
     int bcm = 0;
     if (cfg.cart_ale2_bc_x == "periodic") bcm |= 1;
     if (cfg.cart_ale2_bc_y == "periodic") bcm |= 2;
@@ -175,6 +194,55 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
         // No Newton cooling per paper §2.2; heating comes from slab column 6,
         // set inside init_andrassy2022 via configure_heating_profile.
         cale.tau_cool = 0.0;
+    } else if (cfg.test_case == "sedov2d") {
+        // 2D cylindrical Sedov. Standard test: E0=1, rho=1, p_amb=1e-5.
+        // r_exp chosen so a 256² grid has ~4 cells inside the hot spot.
+        double r_exp = 2.5 * (Lx / std::max(cfg.nr, 1));
+        cale.init_sedov(1.0, 1.0e-5, 1.0, r_exp);
+    } else if (cfg.test_case == "noh") {
+        cale.init_noh();
+    } else if (cfg.test_case == "gresho") {
+        cale.init_gresho();
+    } else if (cfg.test_case == "yee_vortex") {
+        cale.init_yee_vortex(5.0, 1.0, 1.0);
+    } else if (is_shear) {
+        if (cale.bc_mode != 3) {
+            std::fprintf(stderr,
+                "  [warn] shear_mode requires --bc-x periodic --bc-y periodic; "
+                "current bc_mode=%d\n", cale.bc_mode);
+        }
+        cale.init_shear_mode(cfg.shear_rho, cfg.shear_P,
+                             cfg.shear_V0, cfg.shear_k);
+    } else if (is_ewave) {
+        if (cale.bc_mode != 3) {
+            std::fprintf(stderr,
+                "  [warn] entropy_wave requires --bc-x periodic --bc-y periodic; "
+                "current bc_mode=%d\n", cale.bc_mode);
+        }
+        cale.init_entropy_wave(cfg.ewave_rho0, cfg.ewave_P0,
+                               cfg.ewave_u0, cfg.ewave_A, cfg.ewave_k);
+        // Set t_end to N periods (period = Lx / u0) unless user overrode tend.
+        if (cfg.t_end == 1.0) {
+            cfg.t_end = cfg.ewave_periods * Lx / cfg.ewave_u0;
+            std::fprintf(stderr,
+                "  entropy_wave: auto t_end = %g (%.3g periods)\n",
+                cfg.t_end, cfg.ewave_periods);
+        }
+    } else if (is_awave) {
+        if (cale.bc_mode != 3) {
+            std::fprintf(stderr,
+                "  [warn] acoustic_wave requires --bc-x periodic --bc-y periodic; "
+                "current bc_mode=%d\n", cale.bc_mode);
+        }
+        cale.init_acoustic_wave(cfg.awave_rho0, cfg.awave_P0,
+                                cfg.awave_A, cfg.awave_k);
+        if (cfg.t_end == 1.0) {
+            double c0 = std::sqrt(cale.gamma * cfg.awave_P0 / cfg.awave_rho0);
+            cfg.t_end = cfg.awave_periods * Lx / c0;
+            std::fprintf(stderr,
+                "  acoustic_wave: auto t_end = %g (%.3g periods)\n",
+                cfg.t_end, cfg.awave_periods);
+        }
     } else {
         cale.init_sod();
     }
@@ -205,6 +273,24 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                      cfg.frame_buffer ? " (VRAM buffered)" : "");
     }
     if (cfg.frame_buffer) cale.alloc_frame_buffer(cfg.frame_headroom_mb);
+
+    // Optional diagnostic tracer hook
+    TraceHook trace;
+    bool trace_enabled = false;
+    {
+        std::vector<int> pick_ic, pick_jc;
+        bool has_picks = !cfg.cart_ale2_trace_cells.empty() &&
+                         parse_trace_cells(cfg.cart_ale2_trace_cells, pick_ic, pick_jc);
+        bool want_trace = has_picks || cfg.cart_ale2_trace_step_cap > 0;
+        if (want_trace) {
+            int cap = cfg.cart_ale2_trace_step_cap > 0
+                      ? cfg.cart_ale2_trace_step_cap : 0;
+            trace.allocate(cale, cap, pick_ic, pick_jc, ctx.run_dir);
+            cale.trace = &trace;
+            trace_enabled = true;
+        }
+    }
+    int trace_frame = 0;
 
     int frame = 0;
     while (t < cfg.t_end && !g_interrupted) {
@@ -251,11 +337,44 @@ int run_cart_ale2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
                 std::snprintf(path, sizeof(path), "%s/output_%04d.vtk", ctx.run_dir.c_str(), frame);
                 cale.write_vtk_2d(path, Lx, Ly);
             }
+            if (trace_enabled) {
+                trace.flush_cum_to_csv(t, trace_frame++);
+            }
         }
     }
     if (cfg.frame_buffer) cale.flush_frames_to_disk(ctx.run_dir, Lx, Ly);
+    if (trace_enabled) {
+        trace.flush_pick_to_csv();
+        cale.trace = nullptr;
+        trace.destroy();
+    }
     std::fclose(csv);
     std::fprintf(stderr, "\n");
+    if (cfg.compute_error && is_ewave) {
+        cale.compute_entropy_wave_error(
+            t, step,
+            cfg.ewave_rho0, cfg.ewave_P0, cfg.ewave_u0,
+            cfg.ewave_A, cfg.ewave_k, cfg.ewave_periods,
+            ctx.run_dir);
+    }
+    if (cfg.compute_error && is_sod) {
+        cale.compute_sod_error(t, step, ctx.run_dir);
+    }
+    if (cfg.compute_error && is_gresho) {
+        cale.compute_gresho_error(t, step, ctx.run_dir);
+    }
+    if (cfg.compute_error && is_yee) {
+        cale.compute_yee_error(t, step, /*beta=*/5.0,
+                                /*u_inf=*/1.0, /*v_inf=*/1.0,
+                                ctx.run_dir);
+    }
+    if (cfg.compute_error && is_awave) {
+        cale.compute_acoustic_wave_error(
+            t, step,
+            cfg.awave_rho0, cfg.awave_P0,
+            cfg.awave_A, cfg.awave_k, cfg.awave_periods,
+            ctx.run_dir);
+    }
     cale.destroy();
     return 0;
 }

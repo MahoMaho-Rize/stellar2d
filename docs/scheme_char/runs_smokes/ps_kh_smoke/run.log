@@ -1,0 +1,14 @@
+  PseudoSpectral init: 64x64 (nh=33, cells=4096, cplx=2112), L=(1,1), ν=0.0001, cfl=0.3, ifrk=1, skew=1
+  PseudoSpectral KH shear: |vx|=0.5, amp=0.01, k=4 (δ=0.125, σ=0.05)
+
+
+
+stellar2d - 2D Axisymmetric Euler + Self-Gravity
+Test case: kh_shear, mesh: log
+Grid: 64 x 64, R_outer = 1.000000
+Output directory: /home/yujian_shi/stellar2d/docs/scheme_char/runs_smokes/ps_kh_smoke/kh_shear_64x64_20260507_214313/
+Starting time integration...
+Step     20  t=1.000000e-01 dt=5.000e-03 KE=6.374134e-02 Ω=2.630575e+00 |v|=4.775e-01 |ω|=4.219e+00 εKE=5.261e-04 εΩ=3.053e-02
+Step     40  t=2.000000e-01 dt=5.000e-03 KE=6.368876e-02 Ω=2.627531e+00 |v|=4.773e-01 |ω|=4.211e+00 εKE=5.255e-04 εΩ=3.036e-02
+Final: step 40  t = 2.000000e-01  M = 6.6666666667e-31  E = 6.6666666667e-31
+Done.

@@ -92,6 +92,7 @@ struct SimConfig {
     // --hllc <standard|lm|lhllc> — explicit form
     int hllc_variant = 0;
     int cart_ale_remap_order = 2; // cart_ale: 1 = donor-cell, 2 = MUSCL (default)
+    int cart_ale2_rebuild_order = 0; // cart_ale2 node v-rebuild: 0=1st-order mass-weighted avg (default, stable on stratified/reflect), 1=2nd-order corner MUSCL w/ Barth-Jespersen (experimental — stable on smooth periodic flow, but 2nd-order remap + 2nd-order rebuild + reflect wall + long-t stratification triggers atmosphere-mode instability as of 2026-05-07)
     std::string cart_ale_limiter = "vanleer"; // minmod / vanleer (default) / mc
     int diag_interval = 0;   // cart_ale: step interval for diagnostics+CSV; 0 = follow output_interval
     int vtk_interval  = 0;   // cart_ale: step interval for VTK dump; 0 = follow output_interval
@@ -108,6 +109,11 @@ struct SimConfig {
     std::string cart_ale2_ppm_space = "prim"; // cart_ale2: PPM recon space (prim | cons)
     bool cart_ale2_ppm_char = true;  // cart_ale2: project to characteristic variables (prim space only)
     int cart_ale2_kh_k = 0;   // cart_ale2: KH mode number (0 = IC default: k=2 shear, k=1 Lecoanet)
+    // Diagnostic tracer (cart_ale2_trace.h): per-cell cumulative KE/IE
+    // accounting + per-step pick-cell time series. Fully VRAM-buffered;
+    // CSV flushed only at VTK boundaries (cum) and at run end (picks).
+    std::string cart_ale2_trace_cells; // "ic,jc;ic,jc;..." (empty = disabled)
+    int cart_ale2_trace_step_cap = 0;  // max step rows per pick cell (0 = disabled)
     std::string cart_ale2_slab_file;   // cart_ale2 --test local_convection: slab stratification
     double cart_ale2_slab_perturb = 0.01;  // entropy seed amplitude at slab bottom
     int cart_ale2_slab_seed_k = 4;     // horizontal mode of entropy seed
@@ -126,6 +132,14 @@ struct SimConfig {
     double cart_ale2_andrassy_amp  = 5.0e-5;  // Eq. 6 δρ/ρ amplitude (paper value)
     int    cart_ale2_andrassy_seed = -1;      // -1 = paper-exact; ≥0 adds noise
     double cart_ale2_andrassy_noise = 0.0;    // ensemble noise amplitude
+    // athena_vl2 scheme knobs (only used when --solver athena_vl2):
+    //   xorder: 1 = donor-cell only (for debugging), 2 = PLM (default, matches
+    //           Athena++ --input xorder=2). Stage-1 of vl2 is ALWAYS order=1
+    //           (that's the vl2 design); xorder=1 forces stage-2 also to DC.
+    //   limiter: 0 = van-Leer harmonic (Athena default at xorder=2),
+    //            1 = minmod (Athena "2m" flag).
+    int athena_vl2_xorder = 2;
+    int athena_vl2_limiter = 0;
     // pseudo-spectral (偽譜法) 專用
     double ps_nu = 1e-4;          // 運動黏度
     double ps_Lx = 1.0;
@@ -171,6 +185,36 @@ struct SimConfig {
     uint64_t sph_forcing_seed = 0x5a5a5a5aULL;
     int    sph_ckpt_every = 0;
     std::string sph_resume;
+    // ---- T3 shear_mode (scheme characterization ν_eff probe) ----
+    // Domain defaults to Lx=Ly=1.0, periodic both dirs, uniform rho=1, P=1.
+    // IC: vx = shear_V0 · sin(shear_k · 2π y / Ly), vy = 0, g = 0.
+    // Applies to --test shear_mode for cart_ale2 and athena_vl2.
+    double shear_V0 = 0.01;
+    int    shear_k  = 1;
+    double shear_rho = 1.0;
+    double shear_P   = 1.0;
+    // ---- T1 entropy_wave (smooth convergence probe) ----
+    // IC: ρ = ewave_rho0·(1 + ewave_A·sin(ewave_k·2π x/Lx)),
+    //     P = ewave_P0, v = (ewave_u0, 0).  Periodic both dirs.
+    //     t_end set to `ewave_periods · Lx / u0` in the driver.
+    double ewave_rho0 = 1.0;
+    double ewave_P0   = 1.0;
+    double ewave_u0   = 1.0;
+    double ewave_A    = 0.01;
+    int    ewave_k    = 1;
+    double ewave_periods = 1.0;
+    // Linear acoustic wave — Athena++ linwave style. Advection speed
+    // is c0 = sqrt(γ·P0/ρ0); driver auto-sets t_end = periods · Lx/c0.
+    double awave_rho0 = 1.0;
+    double awave_P0   = 0.6;   // with γ=5/3 and ρ0=1 → c0 = 1
+    double awave_A    = 1.0e-4;
+    int    awave_k    = 1;
+    double awave_periods = 1.0;
+    // --compute-error: when set, the solver's compute_*_error() is called
+    // at t_end for the active test_case (Athena++ compute_error pattern).
+    // Emits <run-base>/<test_case>-errors.dat; pytest tst/ reads it.
+    bool compute_error = false;
+
     bool radial_only = false;  // enforce v_theta=0, skip theta-direction work (FAS/explicit only)
     double r_inner = -1.0;  // auto-set for mass mesh; override with --r-inner
     double M_core = 0.0;

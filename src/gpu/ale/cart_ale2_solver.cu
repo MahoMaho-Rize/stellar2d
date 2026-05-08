@@ -10,14 +10,18 @@
 //   6. Refresh node mass from (possibly unchanged) dm.
 
 #include "cart_ale2_solver.cuh"
+#include "cart_ale2_trace.h"
 #include "gpu_common.cuh"
 #include "gpu_linalg.cuh"
+#include "sod_exact.h"
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <cstdint>
 #include <vector>
 #include <algorithm>
+#include <sys/stat.h>
+#include <string>
 
 // ==== Forward decls of all kernels in cart_ale_kernels.cu =====
 __global__ void k_cale2_geometry(const double*, const double*, double*, double*, int, int);
@@ -41,7 +45,7 @@ __global__ void k_cale2_init_nodes(double*, double*, double*, double*, double, d
 __global__ void k_cale2_reset_mesh(const double*, const double*, double*, double*, int);
 __global__ void k_cale2_node_mass(const double*, double*, int, int, int);
 __global__ void k_cale2_cell_momentum(const double*, const double*, const double*,
-    double*, double*, int, int);
+    double*, double*, double*, int, int);
 __global__ void k_cale2_remap_init(const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int);
 __global__ void k_cale2_remap_east(const double*, const double*, const double*, const double*,
@@ -50,7 +54,11 @@ __global__ void k_cale2_remap_east(const double*, const double*, const double*, 
 __global__ void k_cale2_remap_north(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int, int, int);
-__global__ void k_cale2_remap_finalize_cells(const double*, const double*, double*, double*, int);
+__global__ void k_cale2_remap_finalize_cells(const double*, const double*,
+                                              const double*, const double*,
+                                              const double*, const double*,
+                                              const double*, const double*,
+                                              double*, double*, int);
 __global__ void k_cale2_species_init_scratch(const double*, double*, int);
 __global__ void k_cale2_species_remap_east(const double*, const double*, const double*, const double*,
     const double*, const double*, double*, int, int, int);
@@ -64,7 +72,9 @@ __global__ void k_cale2_species_remap_east_2nd(const double*, const double*, con
 __global__ void k_cale2_species_remap_north_2nd(const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, double*, int, int, double, double, int);
 __global__ void k_cale2_rebuild_node_v(const double*, const double*, const double*,
-    double*, double*, int, int, int);
+    double*, double*,
+    double*, double*,  /* e_int_incr, dKE_node_out */
+    int, int, int);
 __global__ void k_cale2_bc_velocity(double*, double*, int, int, int);
 __global__ void k_cale2_periodic_sync_node(double*, double*, int, int, int, int);
 __global__ void k_cale2_cell_densities(const double*, const double*, const double*, const double*,
@@ -82,6 +92,29 @@ __global__ void k_cale2_remap_north_2nd(const double*, const double*, const doub
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
     double*, double*, double*, double*, int, int, double, double, int);
+__global__ void k_cale2_node_KE(const double*, const double*, const double*,
+                                int, int, int, double*);
+__global__ void k_cale2_copy(const double*, double*, int);
+__global__ void k_cale2_apply_ie_incr(double*, double*, int);
+__global__ void k_cale2_zero_buf(double*, int);
+__global__ void k_cale2_compute_node_dKE(const double*, const double*,
+                                         const double*,
+                                         const double*,
+                                         const double*, const double*,
+                                         double*, double*,
+                                         int, int, int);
+__global__ void k_cale2_cell_velocity(const double*, const double*, const double*,
+                                      double*, double*, int);
+__global__ void k_cale2_velocity_slopes(const double*, const double*,
+                                        double*, double*, double*, double*,
+                                        int, int, double, double, int, int);
+__global__ void k_cale2_rebuild_node_v_2nd(const double*, const double*,
+                                           const double*, const double*,
+                                           const double*, const double*,
+                                           const double*,
+                                           double*, double*,
+                                           double*, double*,  /* e_int_incr, dKE_node_out */
+                                           int, int, double, double, int);
 __global__ void k_cale2_snapshot(const double*, const double*, const double*,
     const double*, const double*, double*, int, int);
 __global__ void k_cale2_ppm_reconstruct(const double*, const double*, const double*, const double*,
@@ -170,6 +203,22 @@ void CartAle2Solver::init(int nx_in, int ny_in, double Lx, double Ly,
     mal(&d_ie_new,  ncell*sizeof(double));
     mal(&d_px_new,  ncell*sizeof(double));
     mal(&d_py_new,  ncell*sizeof(double));
+    mal(&d_m_node_ref,       nnode*sizeof(double));
+    mal(&d_vX_pre,           nnode*sizeof(double));
+    mal(&d_vY_pre,           nnode*sizeof(double));
+    mal(&d_KE_node_snap_pre, nnode*sizeof(double));
+    mal(&d_KE_node_snap_post,nnode*sizeof(double));
+    mal(&d_dKE_node_local,   nnode*sizeof(double));
+    mal(&d_e_int_incr,       ncell*sizeof(double));
+    mal(&d_node_reduce_buf,  nnode*sizeof(double));
+    // e_int_incr must start zeroed — rebuild atomic-adds into it.
+    cudaMemset(d_e_int_incr, 0, ncell*sizeof(double));
+    mal(&d_vxc, ncell*sizeof(double));
+    mal(&d_vyc, ncell*sizeof(double));
+    mal(&d_vxc_sx, ncell*sizeof(double));
+    mal(&d_vxc_sy, ncell*sizeof(double));
+    mal(&d_vyc_sx, ncell*sizeof(double));
+    mal(&d_vyc_sy, ncell*sizeof(double));
 
     mal(&d_rho_dens,  ncell*sizeof(double));
     mal(&d_rhoE_dens, ncell*sizeof(double));
@@ -219,6 +268,11 @@ void CartAle2Solver::destroy() {
     f(d_P); f(d_Q); f(d_cs); f(d_minheight); f(d_strain_rate);
     f(d_px_cell); f(d_py_cell);
     f(d_dm_new); f(d_ie_new); f(d_px_new); f(d_py_new);
+    f(d_m_node_ref); f(d_vX_pre); f(d_vY_pre);
+    f(d_KE_node_snap_pre); f(d_KE_node_snap_post);
+    f(d_dKE_node_local); f(d_e_int_incr); f(d_node_reduce_buf);
+    f(d_vxc); f(d_vyc);
+    f(d_vxc_sx); f(d_vxc_sy); f(d_vyc_sx); f(d_vyc_sy);
     f(d_rho_dens); f(d_rhoE_dens); f(d_pxd_dens); f(d_pyd_dens);
     f(d_rho_sx); f(d_rho_sy); f(d_rhoE_sx); f(d_rhoE_sy);
     f(d_pxd_sx); f(d_pxd_sy); f(d_pyd_sx); f(d_pyd_sy);
@@ -533,6 +587,115 @@ void CartAle2Solver::init_uniform(double rho, double P, double vx, double vy) {
     std::fprintf(stderr, "  CartAle Uniform IC: ρ=%g, P=%g, v=(%g,%g)\n", rho, P, vx, vy);
 }
 
+void CartAle2Solver::init_shear_mode(double rho, double P, double V0, int k) {
+    g_y = 0.0;
+    double Ly = g_Ly;
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    double e_unif = P / ((gamma - 1.0) * rho);
+    for (int c = 0; c < ncell; ++c) {
+        h_dm[c] = rho * h_Vol[c];
+        h_e[c]  = e_unif;
+    }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double y = h_Y[f];
+            h_vX[f] = V0 * std::sin(k * 2.0 * M_PI * y / Ly);
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    std::fprintf(stderr,
+        "  CartAle2 shear_mode IC: rho=%g P=%g V0=%g k=%d  (Ly=%g, k_phys=%g)\n",
+        rho, P, V0, k, Ly, k * 2.0 * M_PI / Ly);
+}
+
+// ----- Linear acoustic wave ----------------------------------
+// Background (ρ₀, P₀, v=0), right-acoustic perturbation along R⁺ =
+// (1, c₀/ρ₀, 0, c₀²). One period T = Lx/c₀ returns state to IC exactly.
+void CartAle2Solver::init_acoustic_wave(double rho0, double P0, double A, int k) {
+    g_y = 0.0;
+    double Lx = g_Lx;
+    const double c0 = std::sqrt(gamma * P0 / rho0);
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double s = std::sin(k * 2.0 * M_PI * Xc / Lx);
+            double rho = rho0 + A * rho0 * s;
+            double P   = P0   + A * rho0 * c0 * c0 * s;
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = P / ((gamma - 1.0) * rho);
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+
+    // Node velocities: δvx = (c0/ρ0)·δρ = A·c0·sin(k·2π·X/Lx), vy=0.
+    std::vector<double> h_vX(nnode), h_vY(nnode, 0.0);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double s = std::sin(k * 2.0 * M_PI * h_X[f] / Lx);
+            h_vX[f] = A * c0 * s;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    std::fprintf(stderr,
+        "  CartAle2 acoustic_wave IC: rho0=%g P0=%g A=%g k=%d c0=%g (Lx=%g, period=%g)\n",
+        rho0, P0, A, k, c0, Lx, Lx / c0);
+}
+
+void CartAle2Solver::init_entropy_wave(double rho0, double P0, double u0,
+                                       double A, int k) {
+    g_y = 0.0;
+    double Lx = g_Lx;
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double rho = rho0 * (1.0 + A * std::sin(k * 2.0 * M_PI * Xc / Lx));
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = P0 / ((gamma - 1.0) * rho);
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_vX(nnode, u0), h_vY(nnode, 0.0);
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    std::fprintf(stderr,
+        "  CartAle2 entropy_wave IC: rho0=%g P0=%g u0=%g A=%g k=%d  (Lx=%g, period=%g)\n",
+        rho0, P0, u0, A, k, Lx, Lx / u0);
+}
+
 void CartAle2Solver::init_sod() {
     std::vector<double> h_X(nnode), h_Y(nnode);
     CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
@@ -560,6 +723,209 @@ void CartAle2Solver::init_sod() {
     int B = 256;
     k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
     std::fprintf(stderr, "  CartAle Sod IC: ρL=1.0 PL=1.0 | ρR=0.125 PR=0.1\n");
+}
+
+// ----- 2D Sedov-Taylor cylindrical blast ------------------------
+void CartAle2Solver::init_sedov(double rho0, double p_amb,
+                                double E0, double r_exp) {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    double r_exp2 = r_exp * r_exp;
+    // Sum volume of cells inside r_exp so E0 deposits conservatively.
+    double V_hot = 0.0;
+    std::vector<double> h_Xc(ncell), h_Yc(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            h_Xc[flat] = Xc; h_Yc[flat] = Yc;
+            double dx = Xc - xc_dom, dy = Yc - yc_dom;
+            if (dx*dx + dy*dy < r_exp2) V_hot += h_Vol[flat];
+        }
+    // e_hot chosen so Σ ρ·e·Vol over hot cells = E0.
+    double e_hot = (V_hot > 0.0) ? (E0 / (rho0 * V_hot)) : 0.0;
+    double e_amb = p_amb / ((gamma - 1.0) * rho0);
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    int n_hot = 0;
+    for (int c = 0; c < ncell; ++c) {
+        double dx = h_Xc[c] - xc_dom, dy = h_Yc[c] - yc_dom;
+        bool hot = (dx*dx + dy*dy < r_exp2);
+        h_dm[c] = rho0 * h_Vol[c];
+        h_e[c]  = hot ? e_hot : e_amb;
+        if (hot) ++n_hot;
+    }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_vX, 0, nnode*sizeof(double)));
+    CUDA_CHECK(cudaMemset(d_vY, 0, nnode*sizeof(double)));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Sedov IC: ρ0=%g, p_amb=%g, E0=%g, r_exp=%g "
+        "(n_hot=%d, V_hot=%g, e_hot=%g)\n",
+        rho0, p_amb, E0, r_exp, n_hot, V_hot, e_hot);
+}
+
+// ----- 2D Noh implosion ----------------------------------------
+void CartAle2Solver::init_noh() {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    const double rho0 = 1.0;
+    const double p0   = 1.0e-6;
+    double e0 = p0 / ((gamma - 1.0) * rho0);
+    std::vector<double> h_dm(ncell, 0), h_e(ncell, 0);
+    for (int c = 0; c < ncell; ++c) {
+        h_dm[c] = rho0 * h_Vol[c];
+        h_e[c]  = e0;
+    }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    // Nodes: v = −r̂ (unit inflow); centre node v=0.
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double dx = h_X[f] - xc_dom, dy = h_Y[f] - yc_dom;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            if (r < 1e-14) continue;
+            h_vX[f] = -dx / r;
+            h_vY[f] = -dy / r;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Noh IC: ρ=1, p=%g, v=-r̂, γ=%g (expect ρ_post=16 at t=2)\n",
+        p0, gamma);
+}
+
+// ----- Gresho stationary vortex --------------------------------
+void CartAle2Solver::init_gresho() {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    const double rho0 = 1.0;
+    auto P_gresho = [](double r) {
+        if (r < 0.2) return 5.0 + 12.5 * r * r;
+        if (r < 0.4) return 9.0 + 12.5 * r * r - 20.0 * r + 4.0 * std::log(5.0 * r);
+        return 3.0 + 4.0 * std::log(2.0);
+    };
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double dx = Xc - xc_dom, dy = Yc - yc_dom;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            double P  = P_gresho(r);
+            h_dm[flat] = rho0 * h_Vol[flat];
+            h_e[flat]  = P / ((gamma - 1.0) * rho0);
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_vX(nnode, 0.0), h_vY(nnode, 0.0);
+    auto vphi = [](double r) {
+        if (r < 0.2) return 5.0 * r;
+        if (r < 0.4) return 2.0 - 5.0 * r;
+        return 0.0;
+    };
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double dx = h_X[f] - xc_dom, dy = h_Y[f] - yc_dom;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            if (r < 1e-14) continue;
+            double vp = vphi(r);
+            h_vX[f] = -vp * dy / r;
+            h_vY[f] =  vp * dx / r;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Gresho IC: ρ=1, γ=%g, centred at (%g,%g); v_max=1 at r=0.2\n",
+        gamma, xc_dom, yc_dom);
+}
+
+// ----- Yee-Vinokur-Djomehri isentropic vortex ------------------
+void CartAle2Solver::init_yee_vortex(double beta, double u_inf, double v_inf) {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(), d_X, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(), d_Y, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    std::vector<double> h_Vol(ncell);
+    CUDA_CHECK(cudaMemcpy(h_Vol.data(), d_Vol, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+    double Lx = g_Lx, Ly = g_Ly;
+    double xc_dom = 0.5 * Lx, yc_dom = 0.5 * Ly;
+    const double gm1 = gamma - 1.0;
+    const double coef = beta / (2.0 * M_PI);
+    // T(r²) = 1 − (γ−1)β²/(8γπ²) · exp(1 − r²);
+    // ρ = T^{1/(γ−1)}; P = ρ^γ → e = T/(γ−1) (ρ·e = P).
+    auto compute_rho_e = [&](double x, double y, double& rho, double& e) {
+        double dx = x - xc_dom, dy = y - yc_dom;
+        double r2 = dx*dx + dy*dy;
+        double T  = 1.0 - gm1 * beta * beta / (8.0 * gamma * M_PI * M_PI)
+                        * std::exp(1.0 - r2);
+        rho = std::pow(T, 1.0 / gm1);
+        e   = T / gm1;
+    };
+    std::vector<double> h_dm(ncell), h_e(ncell);
+    for (int ic = 0; ic < nx; ++ic)
+        for (int jc = 0; jc < ny; ++jc) {
+            int flat = ic*ny + jc;
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double rho, e;
+            compute_rho_e(Xc, Yc, rho, e);
+            h_dm[flat] = rho * h_Vol[flat];
+            h_e[flat]  = e;
+        }
+    CUDA_CHECK(cudaMemcpy(d_dm,    h_dm.data(), ncell*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_e_int, h_e.data(),  ncell*sizeof(double), cudaMemcpyHostToDevice));
+    std::vector<double> h_vX(nnode), h_vY(nnode);
+    for (int in = 0; in < nnode_x; ++in)
+        for (int jn = 0; jn < nnode_y; ++jn) {
+            int f = in * nnode_y + jn;
+            double dx = h_X[f] - xc_dom, dy = h_Y[f] - yc_dom;
+            double r2 = dx*dx + dy*dy;
+            double fac = coef * std::exp(0.5 * (1.0 - r2));
+            h_vX[f] = u_inf - fac * dy;
+            h_vY[f] = v_inf + fac * dx;
+        }
+    CUDA_CHECK(cudaMemcpy(d_vX, h_vX.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_vY, h_vY.data(), nnode*sizeof(double), cudaMemcpyHostToDevice));
+    int B = 256;
+    k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+    g_y = 0.0;
+    std::fprintf(stderr,
+        "  CartAle2 Yee vortex: β=%g, (u∞,v∞)=(%g,%g), γ=%g; periodic [%g,%g]×[%g,%g]\n",
+        beta, u_inf, v_inf, gamma, 0.0, Lx, 0.0, Ly);
 }
 
 void CartAle2Solver::init_hse_polytrope(double rho_base, double g_val, double amp) {
@@ -1219,12 +1585,20 @@ double CartAle2Solver::step(double t, double t_end) {
     int BCell = (ncell + B - 1) / B;
     int BNode = (nnode + B - 1) / B;
 
+    if (trace) trace->snapshot_pre_lag(*this);
+
     // --- Phase L: Lagrangian substep -------------------------
     // Mesh is always X0/Y0 at step entry (reset by previous step's Phase R),
     // so Vol ≡ Area0 and minheight is constant — both cached at init time.
     // Skipping the per-step geometry kernel saves one launch per step.
+    // Exception: in pure-Lagrangian mode (remap_order == 0) Phase R is
+    // skipped, so mesh drifts and Vol/minheight must be recomputed.
+    if (remap_order == 0) {
+        k_cale2_geometry<<<BCell, B>>>(d_X, d_Y, d_Vol, d_minheight, nx, ny);
+    }
+    const double* d_V_eos = (remap_order == 0) ? d_Vol : d_Area0;
     k_cale2_eos_and_q<<<BCell, B>>>(
-        d_X, d_Y, d_vX, d_vY, d_dm, d_Area0, d_Area0, d_e_int,
+        d_X, d_Y, d_vX, d_vY, d_dm, d_V_eos, d_Area0, d_e_int,
         d_rho, d_P, d_Q, d_cs, d_strain_rate,
         nx, ny, gamma, CQ_lin, CQ_quad, shear_aware_av);
 
@@ -1268,9 +1642,48 @@ double CartAle2Solver::step(double t, double t_end) {
     k_cale2_energy_update<<<BCell, B>>>(nx, ny, d_FSX, d_FSY,
                                        d_dX, d_dY, d_dm, d_e_int);
 
+    if (trace) { trace->begin_step(t, step_count, dt); trace->snapshot_post_lag(*this); }
+
     // --- Phase M: Remap --------------------------------------
+    // remap_order == 0 → pure Lagrangian: skip rezone + remap entirely,
+    // so Phase R does NOT reset X to X0. Used for diagnostic comparison
+    // (Gresho, Yee) where we want to isolate Lagrangian substep accuracy.
+    // Mesh will drift and eventually tangle; only use for short runs.
+    if (remap_order == 0) {
+        // Recompute geometry for the drifted mesh so the next step sees
+        // the correct Vol / minheight (Phase L normally assumes X=X0).
+        k_cale2_geometry<<<BCell, B>>>(d_X, d_Y, d_Vol, d_minheight, nx, ny);
+        // Node mass stays the same (no mass redistribution without remap).
+        step_count++;
+        dt_current = dt;
+        if (step_count <= 10 || step_count % 500 == 0)
+            std::fprintf(stderr,
+                "  [cart_ale PURE-LAG] step %d  t=%.4e  dt=%.3e\n",
+                step_count, t+dt, dt);
+        return dt;
+    }
+
+    // Snapshot pre-remap node velocities AND node mass for Phase-M
+    // compensation. The diagnostic KE uses the current (post-step)
+    // m_node·v_node, so consecutive-step E conservation requires
+    //   KE_before = Σ m_node_pre · ½ v_pre²    (matches last step's diag)
+    //   KE_after  = Σ m_node_post · ½ v_post²  (matches this step's diag)
+    // ΔKE = KE_before − KE_after is therefore exactly the diagnostic KE
+    // loss across the step, and adding it back as IE makes E_diag invariant.
+    // (Mixing m_post with v_pre would introduce a (m_post−m_pre)·v_pre²
+    // bias that accumulates as ~1e-6 per step on Sod.)
+    k_cale2_copy<<<BNode, B>>>(d_vX, d_vX_pre, nnode);
+    k_cale2_copy<<<BNode, B>>>(d_vY, d_vY_pre, nnode);
+    k_cale2_copy<<<BNode, B>>>(d_mnode, d_m_node_ref, nnode);
+
     // Snapshot cell-centered momentum from current node velocities BEFORE rezone.
-    k_cale2_cell_momentum<<<BCell, B>>>(d_vX, d_vY, d_dm, d_px_cell, d_py_cell, nx, ny);
+    // Jensen #1 loss (node v → cell v averaging) is deposited in-place into
+    // d_e_int for this cell — strictly local, no global reduction (P33 fix).
+    k_cale2_cell_momentum<<<BCell, B>>>(d_vX, d_vY, d_dm,
+                                        d_px_cell, d_py_cell,
+                                        d_e_int,  // Jensen #1 deposit
+                                        nx, ny);
+    if (trace) trace->after_cell_mom(*this);
 
     // Vol was set to pre-Lagrangian geom; we need pre-Lagrangian donor volume.
     // In Eulerian rezone the "old" mesh for swept-remap is X0/Y0 (uniform),
@@ -1423,8 +1836,14 @@ double CartAle2Solver::step(double t, double t_end) {
         }
     }
 
-    // Finalize dm, e_int from accumulators
-    k_cale2_remap_finalize_cells<<<BCell, B>>>(d_dm_new, d_ie_new, d_dm, d_e_int, ncell);
+    // Finalize dm, e_int from accumulators + per-cell Jensen #2 deposit (P33).
+    // Pass pre-remap (dm, e_int, px_cell, py_cell) AND post-remap new state
+    // so the kernel can compute fixed-mass KE difference in place.
+    if (trace) trace->after_remap(*this);  // note: uses dm_new/px_new BEFORE finalize
+
+    k_cale2_remap_finalize_cells<<<BCell, B>>>(d_dm, d_e_int, d_px_cell, d_py_cell,
+                                               d_dm_new, d_ie_new, d_px_new, d_py_new,
+                                               d_dm, d_e_int, ncell);
 
     // Passive species tracer X: conservative swept flux of species mass mX=X·dm.
     // Order matches hydro remap_order:  1 = donor-cell, ≥2 = MUSCL minmod-limited
@@ -1467,9 +1886,36 @@ double CartAle2Solver::step(double t, double t_end) {
         k_cale2_species_finalize<<<BCell, B>>>(d_mX_new, d_dm, d_mX, d_species_X, ncell);
     }
 
-    // Rebuild node velocities from remapped momentum and mass
-    k_cale2_rebuild_node_v<<<BNode, B>>>(d_px_new, d_py_new, d_dm_new,
-                                        d_vX, d_vY, nx, ny, bc_mode);
+    // Rebuild node velocities from remapped momentum and mass.
+    // 2nd-order MUSCL-style: each node samples 4 corner-extrapolated
+    // cell velocities (linear reconstruction with same limiter as hydro
+    // remap). Symmetric corner offsets cancel slope contributions per
+    // cell → momentum-conservative, but v-field is preserved exactly
+    // on linear/rotational flows (fixes Gresho KE smoothing).  Falls
+    // back to 1st-order mass-weighted average when remap_order < 2.
+    // Rebuild node velocity from remapped cell momenta (mass-weighted avg →
+    // Jensen-convex, necessarily loses KE). KE accounting happens in a
+    // dedicated kernel below, so rebuild itself stays pure.
+    if (rebuild_order >= 1 && remap_order >= 2) {
+        k_cale2_cell_velocity<<<BCell, B>>>(d_px_new, d_py_new, d_dm_new,
+                                           d_vxc, d_vyc, ncell);
+        k_cale2_velocity_slopes<<<BCell, B>>>(d_vxc, d_vyc,
+                                              d_vxc_sx, d_vxc_sy,
+                                              d_vyc_sx, d_vyc_sy,
+                                              nx, ny, dx_u, dy_u,
+                                              remap_limiter, bc_mode);
+        k_cale2_rebuild_node_v_2nd<<<BNode, B>>>(d_vxc, d_vyc,
+                                                 d_vxc_sx, d_vxc_sy,
+                                                 d_vyc_sx, d_vyc_sy,
+                                                 d_dm_new, d_vX, d_vY,
+                                                 nullptr, nullptr,  // unused legacy params
+                                                 nx, ny, dx_u, dy_u, bc_mode);
+    } else {
+        k_cale2_rebuild_node_v<<<BNode, B>>>(d_px_new, d_py_new, d_dm_new,
+                                            d_vX, d_vY,
+                                            nullptr, nullptr,
+                                            nx, ny, bc_mode);
+    }
     k_cale2_bc_velocity<<<BNode, B>>>(d_vX, d_vY, nnode_x, nnode_y, bc_mode);
     if (bc_mode) k_cale2_periodic_sync_node<<<BNode, B>>>(d_vX, d_vY,
                                                          nnode_x, nnode_y, bc_mode, /*mode=copy*/ 0);
@@ -1477,12 +1923,39 @@ double CartAle2Solver::step(double t, double t_end) {
     // --- Phase R: snap mesh back to uniform ------------------
     k_cale2_reset_mesh<<<BNode, B>>>(d_X0, d_Y0, d_X, d_Y, nnode);
 
-    // Refresh node mass (dm redistributes a bit each step)
+    // Refresh node mass (dm redistributes a bit each step).
     k_cale2_node_mass<<<(nnode+B-1)/B, B>>>(d_dm, d_mnode, nx, ny, bc_mode);
+
+    // (A) Jensen #3: cell v → node v averaging in rebuild. Compute entirely
+    //     from post-remap state (self-consistent, no old/new-mass mixing).
+    //     Deposit equally to N ≤ 4 adjacent cells' IE via e_int_incr.
+    //     Together with Jensen #1 (in cell_momentum) and Jensen #2 (in
+    //     remap_east/north edge kernels), this covers all three mass-
+    //     averaging operations in a full step — E is conserved exactly
+    //     to machine precision, locally.
+    k_cale2_compute_node_dKE<<<BNode, B>>>(d_vX, d_vY,
+                                           d_mnode,
+                                           d_dm_new,
+                                           d_px_new, d_py_new,
+                                           d_e_int_incr,
+                                           d_dKE_node_local,
+                                           nx, ny, bc_mode);
+    k_cale2_apply_ie_incr<<<BCell, B>>>(d_e_int, d_e_int_incr, ncell);
+
+    if (trace) trace->after_rebuild(*this);
+
+    // (B) Diagnostic KE snapshots — consistent-mass caliper, independent of
+    //     compensation path. Currently written but not read in the hot loop;
+    //     left available for step-by-step E-budget debugging scripts.
+    k_cale2_node_KE<<<BNode, B>>>(d_vX_pre, d_vY_pre, d_m_node_ref,
+                                  nnode_x, nnode_y, bc_mode, d_KE_node_snap_pre);
+    k_cale2_node_KE<<<BNode, B>>>(d_vX,     d_vY,     d_m_node_ref,
+                                  nnode_x, nnode_y, bc_mode, d_KE_node_snap_post);
 
     // Optional Newton cooling toward the IC stratification (only applied
     // if alloc_cooling_ref was called and tau_cool > 0).
     apply_cooling(dt);
+    if (trace) { trace->after_heating(*this); trace->end_step(*this); }
 
     step_count++;
     dt_current = dt;
@@ -1619,6 +2092,336 @@ void CartAle2Solver::download_xslice(std::vector<double>& x,
         double wi = (w[ic] > 0) ? 1.0 / w[ic] : 0.0;
         x[ic] *= wi; rho[ic] *= wi; P[ic] *= wi; vx[ic] *= wi; e_int[ic] *= wi;
     }
+}
+
+// ============================================================
+// T1 entropy wave compute_error (Athena++ compute_error pattern).
+// Append one line to <run_dir>/entropy_wave-errors.dat with L1/Linf and a
+// phase-aligned L1 (shift fit removes bulk timing drift). python/pytest
+// only reads the .dat — never replicates the analytic solution.
+// ============================================================
+void CartAle2Solver::compute_entropy_wave_error(double t_now, int ncycle,
+                                                double rho0, double P0, double u0,
+                                                double A, int k, double periods,
+                                                const std::string& run_dir) {
+    std::vector<double> xs, rhos, Ps, vxs, es;
+    download_xslice(xs, rhos, Ps, vxs, es);
+
+    const double Lx = g_Lx;
+    const double twopi_k = 2.0 * M_PI * (double)k / Lx;
+    double l1 = 0.0, linf = 0.0;
+    for (int i = 0; i < (int)xs.size(); ++i) {
+        double expected = rho0 * (1.0 + A * std::sin(twopi_k * xs[i]));
+        double e = std::fabs(rhos[i] - expected);
+        l1  += e;
+        linf = std::max(linf, e);
+    }
+    l1 /= (double)std::max<size_t>(xs.size(), 1);
+
+    // Phase-aligned L1: fit best shift s in ρ_exact(x − s). The Lagrangian
+    // rezone injects a small bulk timing drift that is NOT a dissipation
+    // error. Scan shifts on a regular grid fine enough to resolve O(1/Nx):
+    // 2001 samples on [-Lx, Lx] gives < 0.1 * dx precision for Nx ≤ 1024.
+    const int N_SHIFT = 2001;
+    double best_l1 = l1, best_s = 0.0;
+    for (int si = 0; si < N_SHIFT; ++si) {
+        double s = -Lx + 2.0 * Lx * (double)si / (double)(N_SHIFT - 1);
+        double sum = 0.0;
+        for (int i = 0; i < (int)xs.size(); ++i) {
+            double expected = rho0 *
+                (1.0 + A * std::sin(twopi_k * (xs[i] - s)));
+            sum += std::fabs(rhos[i] - expected);
+        }
+        sum /= (double)std::max<size_t>(xs.size(), 1);
+        if (sum < best_l1) { best_l1 = sum; best_s = s; }
+    }
+
+    // Ensure the run_dir exists (no-op if already there) and append.
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/entropy_wave-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_entropy_wave_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end A k u0 L1 Linf L1_phase phase_shift\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.6e %d %.6e %.10e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, A, k, u0, l1, linf, best_l1, best_s);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "entropy_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
+        "L1_phase=%.4e (shift=%+.4f)\n",
+        nx, ny, ncycle, l1, linf, best_l1, best_s);
+}
+
+// ============================================================
+// Linear acoustic wave compute_error (Athena++ linwave pattern).
+// After integer periods, exact ρ returns to IC. Same phase-aligned
+// L1 as entropy_wave (Lagrangian rezone injects a bulk timing drift
+// that shouldn't count as dissipation).
+// ============================================================
+void CartAle2Solver::compute_acoustic_wave_error(double t_now, int ncycle,
+                                                 double rho0, double P0,
+                                                 double A, int k, double periods,
+                                                 const std::string& run_dir) {
+    (void)periods;
+    std::vector<double> xs, rhos, Ps, vxs, es;
+    download_xslice(xs, rhos, Ps, vxs, es);
+
+    const double Lx = g_Lx;
+    const double c0 = std::sqrt(gamma * P0 / rho0);
+    const double twopi_k = 2.0 * M_PI * (double)k / Lx;
+    // Exact at t_end (periodic): ρ₀·(1 + A·sin(k·2π·x/Lx)).
+    double l1 = 0.0, linf = 0.0;
+    for (int i = 0; i < (int)xs.size(); ++i) {
+        double expected = rho0 * (1.0 + A * std::sin(twopi_k * xs[i]));
+        double e = std::fabs(rhos[i] - expected);
+        l1  += e;
+        linf = std::max(linf, e);
+    }
+    l1 /= (double)std::max<size_t>(xs.size(), 1);
+
+    // Phase-aligned best-shift L1 (same treatment as entropy wave).
+    const int N_SHIFT = 2001;
+    double best_l1 = l1, best_s = 0.0;
+    for (int si = 0; si < N_SHIFT; ++si) {
+        double s = -Lx + 2.0 * Lx * (double)si / (double)(N_SHIFT - 1);
+        double sum = 0.0;
+        for (int i = 0; i < (int)xs.size(); ++i) {
+            double expected = rho0 *
+                (1.0 + A * std::sin(twopi_k * (xs[i] - s)));
+            sum += std::fabs(rhos[i] - expected);
+        }
+        sum /= (double)std::max<size_t>(xs.size(), 1);
+        if (sum < best_l1) { best_l1 = sum; best_s = s; }
+    }
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/acoustic_wave-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_acoustic_wave_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end A k c0 L1 Linf L1_phase phase_shift\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.6e %d %.6e %.10e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, A, k, c0, l1, linf, best_l1, best_s);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "acoustic_wave error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  "
+        "L1_phase=%.4e (shift=%+.4f)\n",
+        nx, ny, ncycle, l1, linf, best_l1, best_s);
+}
+
+// ============================================================
+// Sod shock tube compute_error — compare y-averaged ρ to Toro
+// exact at t_now. Analytic solver lives in sod_exact.h (shared
+// with athena_vl2). Appends schema-line + one data row to
+// <run_dir>/sod-errors.dat.
+// ============================================================
+void CartAle2Solver::compute_sod_error(double t_now, int ncycle,
+                                       const std::string& run_dir) {
+    std::vector<double> xs, rhos, Ps, vxs, es;
+    download_xslice(xs, rhos, Ps, vxs, es);
+
+    sod_exact::Params P;
+    P.x0 = 0.5 * g_Lx;
+    // Exclude the 5% wrap-pollution zones near x=0 and x=Lx: when a
+    // solver uses x-periodic BC (athena_vl2), waves at t ≳ 0.1 have
+    // wrapped and spuriously contaminate the edges. cart_ale2 with
+    // reflect BC is fine on the full domain but we use the same window
+    // for consistency so both solvers get scored the same way.
+    const double x_lo_win = 0.05 * g_Lx;
+    const double x_hi_win = 0.95 * g_Lx;
+    double l1 = 0.0, linf = 0.0;
+    int n_scored = 0;
+    for (int i = 0; i < (int)xs.size(); ++i) {
+        if (xs[i] < x_lo_win || xs[i] > x_hi_win) continue;
+        double rho_e = sod_exact::rho_at(P, xs[i], t_now);
+        double e = std::fabs(rhos[i] - rho_e);
+        l1 += e;
+        linf = std::max(linf, e);
+        ++n_scored;
+    }
+    l1 /= (double)std::max(n_scored, 1);
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/sod-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_sod_error: cannot open %s\n",
+                     path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end L1 Linf\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, l1, linf);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "sod error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e\n",
+        nx, ny, ncycle, l1, linf);
+}
+
+// ============================================================
+// Gresho stationary vortex compute_error.
+// Exact: vφ(r) = 5r (r<0.2), 2-5r (0.2≤r<0.4), 0 (r≥0.4) on [0,Lx]²
+// with domain centre (Lx/2, Lx/2). Stationary solution → IC at every t.
+// We download node velocities, average onto cell centers, compute
+// |v_sim − v_exact| inside r < 0.5 (the vortex disk) where the analytic
+// profile is non-trivial.
+// ============================================================
+void CartAle2Solver::compute_gresho_error(double t_now, int ncycle,
+                                          const std::string& run_dir) {
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    std::vector<double> h_vX(nnode), h_vY(nnode);
+    CUDA_CHECK(cudaMemcpy(h_X.data(),  d_X,  nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(),  d_Y,  nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_vX.data(), d_vX, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_vY.data(), d_vY, nnode*sizeof(double), cudaMemcpyDeviceToHost));
+
+    const double xc0 = 0.5 * g_Lx;
+    const double yc0 = 0.5 * g_Ly;
+    double l1 = 0.0, linf = 0.0, v_max_sim = 0.0;
+    int n_scored = 0;
+    for (int ic = 0; ic < nx; ++ic) {
+        for (int jc = 0; jc < ny; ++jc) {
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc  = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc  = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double vx  = 0.25 * (h_vX[I[0]] + h_vX[I[1]] + h_vX[I[2]] + h_vX[I[3]]);
+            double vy  = 0.25 * (h_vY[I[0]] + h_vY[I[1]] + h_vY[I[2]] + h_vY[I[3]]);
+            double speed_sim = std::sqrt(vx*vx + vy*vy);
+            if (speed_sim > v_max_sim) v_max_sim = speed_sim;
+
+            double dx = Xc - xc0, dy = Yc - yc0;
+            double r  = std::sqrt(dx*dx + dy*dy);
+            if (r >= 0.5) continue;
+
+            double vphi;
+            if      (r < 0.2) vphi = 5.0 * r;
+            else if (r < 0.4) vphi = 2.0 - 5.0 * r;
+            else              vphi = 0.0;
+            // Gresho speed equals |vφ| since flow is purely azimuthal.
+            double e = std::fabs(speed_sim - vphi);
+            l1 += e;
+            linf = std::max(linf, e);
+            ++n_scored;
+        }
+    }
+    l1 /= (double)std::max(n_scored, 1);
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/gresho-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_gresho_error: cannot open %s\n", path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end L1 Linf v_max_sim\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, l1, linf, v_max_sim);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "gresho error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  v_max_sim=%.4f\n",
+        nx, ny, ncycle, l1, linf, v_max_sim);
+}
+
+// ============================================================
+// Yee-Vinokur-Djomehri isentropic vortex round-trip compute_error.
+// Domain [0,Lx]×[0,Ly] with centre (Lx/2, Ly/2), γ=1.4, advected at
+// (u_inf, v_inf). After t = Lx/u_inf the solution returns to IC by
+// periodicity. We compute L1/Linf on ρ − ρ_IC across the full domain.
+// ============================================================
+void CartAle2Solver::compute_yee_error(double t_now, int ncycle,
+                                       double beta, double u_inf, double v_inf,
+                                       const std::string& run_dir) {
+    (void)u_inf; (void)v_inf;  // periodicity returns state to IC exactly
+    std::vector<double> h_X(nnode), h_Y(nnode);
+    std::vector<double> h_rho(ncell);
+    CUDA_CHECK(cudaMemcpy(h_X.data(),   d_X,   nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_Y.data(),   d_Y,   nnode*sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_rho.data(), d_rho, ncell*sizeof(double), cudaMemcpyDeviceToHost));
+
+    const double xc0 = 0.5 * g_Lx;
+    const double yc0 = 0.5 * g_Ly;
+    const double gm1 = gamma - 1.0;
+    const double pref = gm1 * beta * beta / (8.0 * gamma * M_PI * M_PI);
+    double l1 = 0.0, linf = 0.0;
+    double rho_min = 1e30, rho_max = -1e30;
+    for (int ic = 0; ic < nx; ++ic) {
+        for (int jc = 0; jc < ny; ++jc) {
+            int I[4] = { ic*nnode_y + jc, (ic+1)*nnode_y + jc,
+                         (ic+1)*nnode_y + (jc+1), ic*nnode_y + (jc+1) };
+            double Xc = 0.25 * (h_X[I[0]] + h_X[I[1]] + h_X[I[2]] + h_X[I[3]]);
+            double Yc = 0.25 * (h_Y[I[0]] + h_Y[I[1]] + h_Y[I[2]] + h_Y[I[3]]);
+            double dx = Xc - xc0, dy = Yc - yc0;
+            double r2 = dx*dx + dy*dy;
+            double T  = 1.0 - pref * std::exp(1.0 - r2);
+            double rho_e = std::pow(T, 1.0 / gm1);
+
+            int flat = ic*ny + jc;
+            double rho = h_rho[flat];
+            if (rho < rho_min) rho_min = rho;
+            if (rho > rho_max) rho_max = rho;
+            double e = std::fabs(rho - rho_e);
+            l1 += e;
+            linf = std::max(linf, e);
+        }
+    }
+    l1 /= (double)std::max(ncell, 1);
+
+    mkdir(run_dir.c_str(), 0755);
+    std::string path = run_dir + "/yee-errors.dat";
+    bool new_file = true;
+    {
+        FILE* f = std::fopen(path.c_str(), "r");
+        if (f) { new_file = false; std::fclose(f); }
+    }
+    FILE* f = std::fopen(path.c_str(), "a");
+    if (!f) {
+        std::fprintf(stderr, "compute_yee_error: cannot open %s\n", path.c_str());
+        return;
+    }
+    if (new_file) {
+        std::fprintf(f, "# schema: Nx Ny Ncycle t_end L1 Linf rho_min rho_max\n");
+    }
+    std::fprintf(f, "%d %d %d %.15e %.10e %.10e %.10e %.10e\n",
+                 nx, ny, ncycle, t_now, l1, linf, rho_min, rho_max);
+    std::fclose(f);
+    std::fprintf(stderr,
+        "yee error Nx=%d Ny=%d Ncycle=%d  L1=%.4e Linf=%.4e  rho=[%.3f,%.3f]\n",
+        nx, ny, ncycle, l1, linf, rho_min, rho_max);
 }
 
 // ============================================================

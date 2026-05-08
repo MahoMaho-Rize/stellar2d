@@ -91,7 +91,8 @@ __device__ __forceinline__
 void d_lmhllc(double rhoL, double unL, double utL, double PL,
               double rhoR, double unR, double utR, double PR,
               double gamma,
-              double& f_rho, double& f_mn, double& f_mt, double& f_E)
+              double& f_rho, double& f_mn, double& f_mt, double& f_E,
+              bool use_lm_fix = true)
 {
     double gm1 = gamma - 1.0;
 
@@ -104,9 +105,21 @@ void d_lmhllc(double rhoL, double unL, double utL, double PL,
     double SR = fmax(unL + cL, unR + cR);
 
     // Eq. (14.1-14.2): local Mach number + blending factor f(M).
-    double M_cutoff = 1e-3;
-    double M_local  = (fabs(unL) + fabs(unR)) / fmax(cL + cR, 1e-30);
-    double fM       = fmin(1.0, fmax(M_local, M_cutoff));
+    // The LM fix multiplies (PR - PL) by fM so that low-Mach convective
+    // flows don't see spurious pressure dissipation.  It is correct for
+    // Andrassy-style low-Mach stratified convection, but *wrong* for
+    // acoustic waves whose own pressure jump is the physics: setting
+    // use_lm_fix = false disables the fM factor (fM ≡ 1) and recovers
+    // standard HLLC, which is what a linwave / acoustic convergence
+    // test needs.
+    double fM;
+    if (use_lm_fix) {
+        double M_cutoff = 1e-3;
+        double M_local  = (fabs(unL) + fabs(unR)) / fmax(cL + cR, 1e-30);
+        fM              = fmin(1.0, fmax(M_local, M_cutoff));
+    } else {
+        fM = 1.0;
+    }
 
     // Eq. (14.3): contact wave S* with LM-corrected pressure jump.
     double denom = rhoL * (SL - unL) - rhoR * (SR - unR);

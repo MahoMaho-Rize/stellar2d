@@ -1,0 +1,58 @@
+<comment>
+problem   = Andrassy 2022 2D O-shell cross-check (Athena++)
+reference = Andrassy+ 2022 A&A 659 A193
+configure = --prob=andrassy --coord=cartesian --flux=hllc --eos=adiabatic --nscalars=1 -omp
+
+<job>
+problem_id  = andrassy
+maxout      = 2
+
+<output1>
+file_type   = vtk
+variable    = prim
+dt          = 25.0
+
+<output2>
+file_type   = hst
+dt          = 2.0
+
+<time>
+cfl_number  = 0.4
+nlim        = 10000000
+tlim        = 2000.0
+integrator  = vl2
+xorder      = 2
+ncycle_out  = 1000
+
+<mesh>
+nx1         = 256
+x1min       = -1.0
+x1max       = 1.0
+ix1_bc      = periodic
+ox1_bc      = periodic
+
+nx2         = 256
+x2min       = 1.0
+x2max       = 3.0
+ix2_bc      = reflecting
+ox2_bc      = reflecting
+
+nx3         = 1
+x3min       = -0.5
+x3max       = 0.5
+ix3_bc      = periodic
+ox3_bc      = periodic
+
+<meshblock>
+nx1         = 128
+nx2         = 128
+nx3         = 1
+
+<hydro>
+gamma       = 1.6666666666666667
+
+<problem>
+delta_amp   = 5e-5
+noise_amp   = 0.0
+noise_seed  = -1
+n_hse       = 2049

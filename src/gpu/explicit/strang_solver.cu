@@ -430,7 +430,8 @@ void k_hllc_update_x(
     const double* __restrict__ d_wL,
     const double* __restrict__ d_wR,
     double dt, double dx, double gamma,
-    int nx, int ny, int ng, int str)
+    int nx, int ny, int ng, int str,
+    bool use_lm_fix)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid >= nx * ny) return;
@@ -446,14 +447,14 @@ void k_hllc_update_x(
     double FR0, FR1, FR2, FR3;
     d_lmhllc(d_wR[k0*4+0], d_wR[k0*4+1], d_wR[k0*4+2], d_wR[k0*4+3],
              d_wL[kR*4+0], d_wL[kR*4+1], d_wL[kR*4+2], d_wL[kR*4+3],
-             gamma, FR0, FR1, FR2, FR3);
+             gamma, FR0, FR1, FR2, FR3, use_lm_fix);
 
     // Left face i-1/2: left=wR[k0-1], right=wL[k0]
     int kL = jg * str + (ig - 1);
     double FL0, FL1, FL2, FL3;
     d_lmhllc(d_wR[kL*4+0], d_wR[kL*4+1], d_wR[kL*4+2], d_wR[kL*4+3],
              d_wL[k0*4+0], d_wL[k0*4+1], d_wL[k0*4+2], d_wL[k0*4+3],
-             gamma, FL0, FL1, FL2, FL3);
+             gamma, FL0, FL1, FL2, FL3, use_lm_fix);
 
     double dtdx = dt / dx;
     d_rho[k0] -= dtdx * (FR0 - FL0);
@@ -479,7 +480,8 @@ void k_hllc_update_y(
     const double* __restrict__ d_wL,
     const double* __restrict__ d_wR,
     double dt, double dy, double gamma, double g_grav,
-    int nx, int ny, int ng, int str)
+    int nx, int ny, int ng, int str,
+    bool use_lm_fix)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid >= nx * ny) return;
@@ -499,14 +501,14 @@ void k_hllc_update_y(
     double GT0, GT_mn, GT_mt, GT3;
     d_lmhllc(d_wR[k0*4+0], d_wR[k0*4+2], d_wR[k0*4+1], d_wR[k0*4+3],
              d_wL[kT*4+0], d_wL[kT*4+2], d_wL[kT*4+1], d_wL[kT*4+3],
-             gamma, GT0, GT_mn, GT_mt, GT3);
+             gamma, GT0, GT_mn, GT_mt, GT3, use_lm_fix);
 
     // Bottom face j-1/2: left=wR[k0-str], right=wL[k0]
     int kB = (jg - 1) * str + ig;
     double GB0, GB_mn, GB_mt, GB3;
     d_lmhllc(d_wR[kB*4+0], d_wR[kB*4+2], d_wR[kB*4+1], d_wR[kB*4+3],
              d_wL[k0*4+0], d_wL[k0*4+2], d_wL[k0*4+1], d_wL[k0*4+3],
-             gamma, GB0, GB_mn, GB_mt, GB3);
+             gamma, GB0, GB_mn, GB_mt, GB3, use_lm_fix);
 
     // Gravity source — re-enabled with correct sign
     double rho_total = fmax(d_rho[k0] + rho_bg, 1e-20);
@@ -984,7 +986,7 @@ void StrangSolver::sweep_x(double dt)
     // 3. HLLC flux + conservative update
     k_hllc_update_x<<<G, B>>>(d_rho, d_mx, d_my, d_E,
         d_p_bar, d_wL, d_wR,
-        dt, dx, gamma, nx, ny, ng, str);
+        dt, dx, gamma, nx, ny, ng, str, use_lm_fix);
 }
 
 void StrangSolver::sweep_y(double dt)
@@ -1007,7 +1009,7 @@ void StrangSolver::sweep_y(double dt)
     k_hllc_update_y<<<G, B>>>(d_rho, d_mx, d_my, d_E,
         d_rho_bar, d_p_bar, d_wL, d_wR,
         dt, dy, gamma, g_grav,
-        nx, ny, ng, str);
+        nx, ny, ng, str, use_lm_fix);
 }
 
 double StrangSolver::compute_dt()

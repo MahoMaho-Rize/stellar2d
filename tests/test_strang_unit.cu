@@ -119,21 +119,12 @@ int main()
     std::printf("\n[2] MC limiter edge cases\n");
     {
         //               (a,        b)        → expected
+        // case 8: MC(-3,-1) — negative-slope stencil. s=-1, av=|(-3)+(-1)|/2=2,
+        // ta=2·3=6, tb=2·1=2 → -min(2,6,2) = -2.
         double h_a[] = { 0.0,   1.0,  -1.0,   1.0,   2.0,  0.5,   1e-15, 1e10,  -3.0};
         double h_b[] = { 0.0,   1.0,   1.0,  -1.0,   1.0,  0.5,   1e-15, 1e10,  -1.0};
-        double exp[] = { 0.0,   1.0,   0.0,   0.0,   1.5,  0.5,   1e-15, 1e10,  -1.5};
-        // case 0: both zero → 0
-        // case 1: equal → min(1, 2, 2) = 1
-        // case 2: opposite signs → 0
-        // case 3: opposite signs → 0
-        // case 4: MC(2,1) = min(1.5, 4, 2) = 1.5
-        // case 5: equal small → 0.5
-        // case 6: tiny but same sign → 1e-15
-        // case 7: huge but same sign → 1e10
-        // case 8: MC(-3,-1) = -min(2, 6, 2) = -1.5 (wait, -min(|-3-1|/2, 2*3, 2*1) = -min(2, 6, 2) = -2)
-        // Actually MC(-3,-1): s=-1, av=|(-3)+(-1)|/2 = 2, ta=2*3=6, tb=2*1=2 → -min(2,6,2) = -2
-        // Let me fix:
-        int n = 8;  // skip case 8 for now
+        double exp[] = { 0.0,   1.0,   0.0,   0.0,   1.5,  0.5,   1e-15, 1e10,  -2.0};
+        int n = 9;
         double *d_a, *d_b, *d_out;
         cudaMalloc(&d_a, n*sizeof(double));
         cudaMalloc(&d_b, n*sizeof(double));
@@ -141,7 +132,7 @@ int main()
         cudaMemcpy(d_a, h_a, n*sizeof(double), cudaMemcpyHostToDevice);
         cudaMemcpy(d_b, h_b, n*sizeof(double), cudaMemcpyHostToDevice);
         k_test_mc_batch<<<1, n>>>(d_a, d_b, d_out, n);
-        double h_out[8];
+        double h_out[9];
         cudaMemcpy(h_out, d_out, n*sizeof(double), cudaMemcpyDeviceToHost);
 
         bool all_ok = true;
@@ -153,7 +144,7 @@ int main()
                 all_ok = false;
             }
         }
-        CHECK(all_ok, "MC limiter: all 8 edge cases correct");
+        CHECK(all_ok, "MC limiter: all 9 edge cases correct");
         cudaFree(d_a); cudaFree(d_b); cudaFree(d_out);
     }
 

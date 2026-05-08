@@ -50,7 +50,17 @@ void k_cale2_geometry(const double* X, const double* Y,
     // Eq. (15.2): shoelace formula for quadrilateral signed area.
     double A2 = 0.5 * ((X0*Y1 - X1*Y0) + (X1*Y2 - X2*Y1)
                      + (X2*Y3 - X3*Y2) + (X3*Y0 - X0*Y3));
-    Vol[flat] = fabs(A2);
+    // Fail-fast on cell inversion: A2 <= 0 means the Lagrangian sub-step
+    // over-rotated or tangled this cell. Writing minheight=0 drives CFL
+    // dt → 0, which the host loop detects and aborts. (Previously we used
+    // fabs(A2), silently producing positive volume on a flipped cell and
+    // letting forces act with the wrong sign.)
+    if (A2 <= 0.0) {
+        Vol[flat] = 1e-30;
+        minheight[flat] = 0.0;
+        return;
+    }
+    Vol[flat] = A2;
 
     auto perp = [](double Px, double Py, double Ax, double Ay, double Bx, double By) {
         double dx = Bx - Ax, dy = By - Ay;
@@ -86,9 +96,12 @@ void k_cale2_eos_and_q(const double* X, const double* Y,
     int nny = ny + 1;
 
     double V = fmax(Vol[flat], 1e-30);
-    double r_ = dm[flat] / V;
+    // Positivity floors on ρ and e_int match the P floor below — strong
+    // rarefactions (near-vacuum wings of blast waves, mesh-inversion
+    // recovery) otherwise produce NaN cs / Q.
+    double r_ = fmax(dm[flat] / V, 1e-30);
     rho[flat] = r_;
-    double e = e_int[flat];
+    double e = fmax(e_int[flat], 1e-30);
     double p = fmax((gam - 1.0) * r_ * e, 1e-30);   // Eq. (1.2)
     P[flat] = p;
     cs[flat] = sqrt(gam * p / r_);                   // Eq. (1.3)
@@ -434,11 +447,18 @@ void k_cale2_node_mass(const double* dm, double* mnode,
 // 4 corners. Using corner mass = 0.25·dm_cell keeps the sum
 // Σ_cell p_cell = Σ_node m_node · v_node exactly (because corner
 // shares sum back to node mass).
+//
+// P33 (Jensen #1): averaging 4 node velocities into a single cell
+// velocity is Jensen-convex on m·½v², so KE drops by
+//   ΔKE_#1 = Σ_k ¼dm · ½|v_k|²  −  ½dm · |v_cell|²                ≥ 0
+// which must become heat in THIS cell (strict local deposit, no
+// global reduction).
 // ============================================================
 __global__
 void k_cale2_cell_momentum(const double* vX, const double* vY,
                           const double* dm,
                           double* px, double* py,
+                          double* e_int,            // P33: in-place cell IE gets Jensen #1
                           int nx, int ny) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     if (flat >= nx*ny) return;
@@ -448,14 +468,28 @@ void k_cale2_cell_momentum(const double* vX, const double* vY,
                  caln(ic+1, jc,   nny),
                  caln(ic+1, jc+1, nny),
                  caln(ic,   jc+1, nny) };
-    double qm = 0.25 * dm[flat];
+    double m = dm[flat];
+    double qm = 0.25 * m;
     double sx = 0.0, sy = 0.0;
+    double KE_node_sum = 0.0;
     for (int k = 0; k < 4; ++k) {
-        sx += qm * vX[I[k]];
-        sy += qm * vY[I[k]];
+        double vxk = vX[I[k]], vyk = vY[I[k]];
+        sx += qm * vxk;
+        sy += qm * vyk;
+        KE_node_sum += qm * 0.5 * (vxk*vxk + vyk*vyk);
     }
     px[flat] = sx;
     py[flat] = sy;
+    // Cell-centered velocity after averaging; its KE is ½m|v_cell|².
+    if (m > 1e-30) {
+        double vxc = sx / m, vyc = sy / m;
+        double KE_cell = 0.5 * m * (vxc*vxc + vyc*vyc);
+        double dKE_1 = KE_node_sum - KE_cell;    // Jensen ≥ 0
+        // Deposit heat per unit mass so m·Δe = dKE_1.
+        if (dKE_1 > 0.0) {
+            e_int[flat] += dKE_1 / m;
+        }
+    }
 }
 
 // ============================================================
@@ -534,41 +568,35 @@ void k_cale2_remap_east(const double* X0, const double* Y0,
     int cR_idx = ic + 1;
     if (x_per && cR_idx >= nx) cR_idx = 0;
     int cR = calc(cR_idx, jc, ny);
-    int donor = (As > 0.0) ? cL : cR;
+    int donor  = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
     double V_donor = fmax(Vol0[donor], 1e-30);
     double frac = fmin(V_sweep / V_donor, 0.5);   // clamp for safety
-    // Actual volume transferred:
     double V = frac * V_donor;
 
-    // Eq. (16.2): first-order donor-cell upwind flux — transported scalar
-    // equals the donor-cell density times the swept volume.
+    // Eq. (16.2): first-order donor-cell upwind flux.
     double d_dm = (dm[donor] / V_donor) * V;
     double d_ie = (dm[donor] * e_int[donor] / V_donor) * V;
     double d_px = (px[donor] / V_donor) * V;
     double d_py = (py[donor] / V_donor) * V;
 
-    // Eq. (16.5): donor subtracts, acceptor adds the same value.
-    if (As > 0.0) {
-        // donor = L, receiver = R
-        atomicAdd(&dm_new[cL], -d_dm);
-        atomicAdd(&ie_new[cL], -d_ie);
-        atomicAdd(&px_new[cL], -d_px);
-        atomicAdd(&py_new[cL], -d_py);
-        atomicAdd(&dm_new[cR],  d_dm);
-        atomicAdd(&ie_new[cR],  d_ie);
-        atomicAdd(&px_new[cR],  d_px);
-        atomicAdd(&py_new[cR],  d_py);
-    } else {
-        atomicAdd(&dm_new[cR], -d_dm);
-        atomicAdd(&ie_new[cR], -d_ie);
-        atomicAdd(&px_new[cR], -d_px);
-        atomicAdd(&py_new[cR], -d_py);
-        atomicAdd(&dm_new[cL],  d_dm);
-        atomicAdd(&ie_new[cL],  d_ie);
-        atomicAdd(&px_new[cL],  d_px);
-        atomicAdd(&py_new[cL],  d_py);
-    }
+    // Eq. (16.5): donor subtracts, acceptor adds the transported amount.
+    // KE Jensen loss is handled LATER in remap_finalize_cells (P33) where
+    // the full pre-to-post KE difference is computed per cell — avoids the
+    // pairwise-vs-sequential N-streams-merge approximation error from
+    // deposing Jensen edge-by-edge.
+    atomicAdd(&dm_new[donor],  -d_dm);
+    atomicAdd(&ie_new[donor],  -d_ie);
+    atomicAdd(&px_new[donor],  -d_px);
+    atomicAdd(&py_new[donor],  -d_py);
+    atomicAdd(&dm_new[cR],  (As > 0.0) ? d_dm : 0.0);
+    atomicAdd(&ie_new[cR],  (As > 0.0) ? d_ie : 0.0);
+    atomicAdd(&px_new[cR],  (As > 0.0) ? d_px : 0.0);
+    atomicAdd(&py_new[cR],  (As > 0.0) ? d_py : 0.0);
+    atomicAdd(&dm_new[cL],  (As > 0.0) ? 0.0 : d_dm);
+    atomicAdd(&ie_new[cL],  (As > 0.0) ? 0.0 : d_ie);
+    atomicAdd(&px_new[cL],  (As > 0.0) ? 0.0 : d_px);
+    atomicAdd(&py_new[cL],  (As > 0.0) ? 0.0 : d_py);
 }
 
 // North edges: edge between (ic, jc) and (ic, jc+1).
@@ -605,7 +633,7 @@ void k_cale2_remap_north(const double* X0, const double* Y0,
     int cU_idx = jc + 1;
     if (y_per && cU_idx >= ny) cU_idx = 0;
     int cU = calc(ic, cU_idx, ny);     // up (wraps under y-periodic)
-    int donor = (As > 0.0) ? cD : cU;
+    int donor  = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
     double V_donor = fmax(Vol0[donor], 1e-30);
     double frac = fmin(V_sweep / V_donor, 0.5);
@@ -616,25 +644,18 @@ void k_cale2_remap_north(const double* X0, const double* Y0,
     double d_px = (px[donor] / V_donor) * V;
     double d_py = (py[donor] / V_donor) * V;
 
-    if (As > 0.0) {
-        atomicAdd(&dm_new[cD], -d_dm);
-        atomicAdd(&ie_new[cD], -d_ie);
-        atomicAdd(&px_new[cD], -d_px);
-        atomicAdd(&py_new[cD], -d_py);
-        atomicAdd(&dm_new[cU],  d_dm);
-        atomicAdd(&ie_new[cU],  d_ie);
-        atomicAdd(&px_new[cU],  d_px);
-        atomicAdd(&py_new[cU],  d_py);
-    } else {
-        atomicAdd(&dm_new[cU], -d_dm);
-        atomicAdd(&ie_new[cU], -d_ie);
-        atomicAdd(&px_new[cU], -d_px);
-        atomicAdd(&py_new[cU], -d_py);
-        atomicAdd(&dm_new[cD],  d_dm);
-        atomicAdd(&ie_new[cD],  d_ie);
-        atomicAdd(&px_new[cD],  d_px);
-        atomicAdd(&py_new[cD],  d_py);
-    }
+    atomicAdd(&dm_new[donor],  -d_dm);
+    atomicAdd(&ie_new[donor],  -d_ie);
+    atomicAdd(&px_new[donor],  -d_px);
+    atomicAdd(&py_new[donor],  -d_py);
+    atomicAdd(&dm_new[cU],  (As > 0.0) ? d_dm : 0.0);
+    atomicAdd(&ie_new[cU],  (As > 0.0) ? d_ie : 0.0);
+    atomicAdd(&px_new[cU],  (As > 0.0) ? d_px : 0.0);
+    atomicAdd(&py_new[cU],  (As > 0.0) ? d_py : 0.0);
+    atomicAdd(&dm_new[cD],  (As > 0.0) ? 0.0 : d_dm);
+    atomicAdd(&ie_new[cD],  (As > 0.0) ? 0.0 : d_ie);
+    atomicAdd(&px_new[cD],  (As > 0.0) ? 0.0 : d_px);
+    atomicAdd(&py_new[cD],  (As > 0.0) ? 0.0 : d_py);
 }
 
 // Initialize remap accumulators to the Lagrangian-state values
@@ -653,30 +674,236 @@ void k_cale2_remap_init(const double* dm, const double* e_int,
     py_new[c] = py[c];
 }
 
-// Finalize: write dm_new → dm, ie_new/dm_new → e_int, p/m → velocity contribs.
+// Finalize: write dm_new → dm, ie_new/dm_new → e_int.
+// Jensen KE→IE compensation happens via edge-level deposits inside
+// remap_east/north (for flux Jensen) and rebuild_node_v (for node-avg
+// Jensen). This kernel just writes out state.
 __global__
-void k_cale2_remap_finalize_cells(const double* dm_new, const double* ie_new,
-                                 double* dm, double* e_int,
-                                 int ncell) {
+// Per-cell Jensen #2 deposit (P33): KE lost by swept-remap averaging becomes
+// local IE. Each cell uses its OWN pre/post mass as the KE caliper:
+//   ΔKE_2[c] = ½|p_pre|²/m_pre  −  ½|p_new|²/m_new
+// Σ px, Σ py, Σ dm are conserved by linear swept transport; ½|p|²/m is convex
+// in p, so Σ ΔKE_2 = global Jensen #2 loss ≥ 0. Per-cell value can be ±, but
+// the transfer is conservative: each cell's p and e_int jointly hold a fixed
+// total kinetic+internal budget regardless of sign.
+//
+// This is strictly local — no reduction, no mean-field. Replaces the pre-P33
+// global KE-compensate_uniform kernel.
+void k_cale2_remap_finalize_cells(const double* dm_pre, const double* /*e_int_pre*/,
+                                  const double* px_pre, const double* py_pre,
+                                  const double* dm_new, const double* ie_new,
+                                  const double* px_new, const double* py_new,
+                                  double* dm, double* e_int,
+                                  int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    double m_pre = dm_pre[c];
+    double m_new = fmax(dm_new[c], 1e-30);
+    double KE_pre = (m_pre > 1e-30)
+                  ? 0.5 * (px_pre[c]*px_pre[c] + py_pre[c]*py_pre[c]) / m_pre
+                  : 0.0;
+    double KE_new = 0.5 * (px_new[c]*px_new[c] + py_new[c]*py_new[c]) / m_new;
+    double ie_total = ie_new[c] + (KE_pre - KE_new);   // Jensen #2
+    dm[c]    = m_new;
+    e_int[c] = fmax(ie_total / m_new, 1e-30);
+}
+
+// Forward-decl: defined below alongside the hydro slopes_minmod kernel.
+__device__ __forceinline__ double minmod(double a, double b);
+__device__ __forceinline__ double vanleer(double a, double b);
+__device__ __forceinline__ double mc_lim(double a, double b);
+__device__ __forceinline__ double apply_limiter(double a, double b, int id);
+
+// ------ 2nd-order node-velocity rebuild ------------------------
+// Step A: compute cell-centred v from remapped conservative (px, dm).
+__global__
+void k_cale2_cell_velocity(const double* px_new, const double* py_new,
+                           const double* dm_new,
+                           double* vxc, double* vyc, int ncell) {
     int c = blockIdx.x * blockDim.x + threadIdx.x;
     if (c >= ncell) return;
     double m = fmax(dm_new[c], 1e-30);
-    dm[c] = dm_new[c];
-    e_int[c] = ie_new[c] / m;
+    vxc[c] = px_new[c] / m;
+    vyc[c] = py_new[c] / m;
+}
+
+// Step B: Barth-Jespersen multidimensional limiter (JCP 1989 §3.2).
+//
+// Per-axis minmod is the 1-D TVD recipe, but the rebuild_node_v 2D corner
+// reconstruction evaluates  f_corner = f_c + s_x·ex + s_y·ey  at 4 corners
+// simultaneously — axis-independent slopes can have simultaneous contribution
+// that still produces a corner value outside the neighbour-cell range,
+// seeding non-linear instability (Yee 256² supersonic vortex: NaN by t~0.03).
+//
+// Barth-Jespersen enforces the strict monotonicity constraint:
+//   ∀ corner k:  f_c + s_x·ex_k + s_y·ey_k ∈ [f_min_nb, f_max_nb]
+// by first computing the central-difference slope (s_x^*, s_y^*), then
+// scaling ISOTROPICALLY by φ ∈ [0,1] so the constraint holds at every
+// corner.  φ is the min over 4 corners of the Venkatakrishnan-style ratio:
+//   φ_k = { min(1, (f_max_nb − f_c)/Δf_k)  if Δf_k > 0
+//         { min(1, (f_min_nb − f_c)/Δf_k)  if Δf_k < 0
+//         { 1                              if Δf_k = 0
+// where Δf_k = s_x^*·ex_k + s_y^*·ey_k.  Output: (s_x, s_y) = φ·(s_x^*, s_y^*).
+//
+// Neighbour set: 4-point ({N,S,E,W}) suffices on uniform mesh; we include
+// the cell itself in the min/max to handle flat regions cleanly.
+__device__ __forceinline__
+void bj_limit_slope(double fc, double fN, double fS, double fE, double fW,
+                    double sx_star, double sy_star,
+                    double dx_u, double dy_u,
+                    double& sx, double& sy) {
+    double fmax_nb = fmax(fmax(fc, fN), fmax(fmax(fS, fE), fW));
+    double fmin_nb = fmin(fmin(fc, fN), fmin(fmin(fS, fE), fW));
+    double dmax = fmax_nb - fc;
+    double dmin = fmin_nb - fc;
+    double phi = 1.0;
+    // Four corner offsets: (ex, ey) ∈ {(-½dx, -½dy), (+½dx, -½dy),
+    // (+½dx, +½dy), (-½dx, +½dy)}.
+    const double ex[4] = { -0.5*dx_u,  0.5*dx_u,  0.5*dx_u, -0.5*dx_u };
+    const double ey[4] = { -0.5*dy_u, -0.5*dy_u,  0.5*dy_u,  0.5*dy_u };
+    for (int k = 0; k < 4; ++k) {
+        double df = sx_star * ex[k] + sy_star * ey[k];
+        double r;
+        if (df > 1e-30) {
+            r = dmax / df;
+        } else if (df < -1e-30) {
+            r = dmin / df;
+        } else {
+            r = 1.0;
+        }
+        if (r < phi) phi = r;
+    }
+    if (phi < 0.0) phi = 0.0;   // safety
+    if (phi > 1.0) phi = 1.0;
+    sx = phi * sx_star;
+    sy = phi * sy_star;
+}
+
+__global__
+void k_cale2_velocity_slopes(const double* vxc, const double* vyc,
+                             double* vxc_sx, double* vxc_sy,
+                             double* vyc_sx, double* vyc_sy,
+                             int nx, int ny, double dx_u, double dy_u,
+                             int /*limiter_id unused*/, int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    if (flat >= nx*ny) return;
+    int ic = flat / ny, jc = flat % ny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+
+    auto nbx = [&](int ioff) -> int {
+        int i = ic + ioff;
+        if (x_per) { if (i < 0) i += nx; else if (i >= nx) i -= nx; }
+        else       { if (i < 0 || i >= nx) return -1; }
+        return i * ny + jc;
+    };
+    auto nby = [&](int joff) -> int {
+        int j = jc + joff;
+        if (y_per) { if (j < 0) j += ny; else if (j >= ny) j -= ny; }
+        else       { if (j < 0 || j >= ny) return -1; }
+        return ic * ny + j;
+    };
+    int iE = nbx(+1), iW = nbx(-1), iN = nby(+1), iS = nby(-1);
+    // At reflective boundary reuse self — limiter then sees flat neighbour
+    // → slope gets clamped to 0 in that direction, matching donor-cell fallback.
+
+    auto bj = [&](const double* f, double& sx, double& sy) {
+        double fc = f[flat];
+        double fE = (iE >= 0) ? f[iE] : fc;
+        double fW = (iW >= 0) ? f[iW] : fc;
+        double fN = (iN >= 0) ? f[iN] : fc;
+        double fS = (iS >= 0) ? f[iS] : fc;
+        // Central-difference slope (unlimited); at a boundary one side
+        // equals fc → degenerates to one-sided which BJ then caps.
+        double sx_star = (fE - fW) / (2.0 * dx_u);
+        double sy_star = (fN - fS) / (2.0 * dy_u);
+        bj_limit_slope(fc, fN, fS, fE, fW, sx_star, sy_star, dx_u, dy_u, sx, sy);
+    };
+    bj(vxc, vxc_sx[flat], vxc_sy[flat]);
+    bj(vyc, vyc_sx[flat], vyc_sy[flat]);
+}
+
+// Step C: each node samples the 4 adjacent cells' MUSCL-reconstructed
+// velocity at the corner shared with the node; mass-weighted average.
+// For cell (ic,jc) the offset to the node at (in=ic+a, jn=jc+b) with
+// (a,b)∈{(0,0),(1,0),(1,1),(0,1)} is ((a−½)·dx_u, (b−½)·dy_u).
+// Summed over 4 corners of a cell the slope contributions cancel, so
+// per-cell momentum is preserved on a uniform mesh; that makes the
+// global Σ_node m_node·v_node = Σ_cell px_new hold exactly when node
+// mass is ¼Σ_adj dm (the same relation the legacy rebuild used).
+__global__
+// Per-node compatible KE→IE compensation (P33 fix).
+// Rebuild just averages cell momentum into node velocity (Jensen-convex
+// operation → necessarily loses KE). The deposit point of this lost KE
+// must be LOCAL: the 4 cells touching the node that lost it.
+// The actual ΔKE is computed by k_cale2_compute_node_dKE *after* rebuild
+// using the snapshotted v_pre (Phase-M entry node velocity, which equals
+// Lagrangian-phase exit v) and current v_post (rebuild output), with the
+// consistent post-remap mass m_node (set in solver.cu before this kernel
+// is called). This kernel therefore only contains the rebuild itself (no
+// energy accounting) and delegates ΔKE math to a dedicated compute kernel —
+// cleaner separation, and lets 1st/2nd-order rebuild share the same
+// post-rebuild compensation path.
+__global__
+void k_cale2_rebuild_node_v_2nd(const double* vxc, const double* vyc,
+                                const double* vxc_sx, const double* vxc_sy,
+                                const double* vyc_sx, const double* vyc_sy,
+                                const double* dm_new,
+                                double* vX, double* vY,
+                                double* /*e_int_incr*/,    // unused here (see compute_node_dKE)
+                                double* /*dKE_node_out*/,  // unused
+                                int nx, int ny, double dx_u, double dy_u,
+                                int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int nnx = nx + 1, nny = ny + 1;
+    int n = nnx * nny;
+    if (flat >= n) return;
+    int in = flat / nny, jn = flat % nny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    double svx = 0.0, svy = 0.0, sm = 0.0;
+    for (int di = -1; di <= 0; ++di) {
+        for (int dj = -1; dj <= 0; ++dj) {
+            int ic = in + di, jc = jn + dj;
+            if (x_per) {
+                if (ic < 0)  ic = nx - 1;
+                if (ic >= nx) ic = 0;
+            } else {
+                if (ic < 0 || ic >= nx) continue;
+            }
+            if (y_per) {
+                if (jc < 0)  jc = ny - 1;
+                if (jc >= ny) jc = 0;
+            } else {
+                if (jc < 0 || jc >= ny) continue;
+            }
+            int c = ic * ny + jc;
+            double ex = (di == -1 ? +0.5 : -0.5) * dx_u;
+            double ey = (dj == -1 ? +0.5 : -0.5) * dy_u;
+            double vx_corner = vxc[c] + vxc_sx[c]*ex + vxc_sy[c]*ey;
+            double vy_corner = vyc[c] + vyc_sx[c]*ex + vyc_sy[c]*ey;
+            double mq = 0.25 * dm_new[c];
+            svx += mq * vx_corner;
+            svy += mq * vy_corner;
+            sm  += mq;
+        }
+    }
+    if (sm > 1e-30) {
+        vX[flat] = svx / sm;
+        vY[flat] = svy / sm;
+    }
 }
 
 // Rebuild node velocity — mass-weighted average of adjacent cell-centered
-// velocities. For a node with up to 4 adjacent cells:
-//   v_node = Σ(0.25·m_c · v_c) / Σ(0.25·m_c) = Σ p_c/4 / Σ m_c/4
-// Equivalently Σ px_c / Σ m_c (each cell contributes 1/4 of its mass to
-// a node). This is exactly momentum-conservative: the kinetic energy
-// loss from the averaging is proportional to ∇v variance within the
-// stencil, which is physically meaningful (sub-grid diffusion), not
-// the arithmetic-mean artifact of the old rebuild.
+// velocities. 1st-order (donor-cell) rebuild. KE compensation is identical
+// in structure to the 2nd-order version, just with constant per-cell velocity
+// (no slope extrapolation). See rebuild_node_v_2nd for the full rationale.
 __global__
 void k_cale2_rebuild_node_v(const double* px_new, const double* py_new,
                            const double* dm_new,
                            double* vX, double* vY,
+                           double* /*e_int_incr*/,    // unused (see compute_node_dKE)
+                           double* /*dKE_node_out*/,  // unused
                            int nx, int ny, int bc_mode) {
     int flat = blockIdx.x * blockDim.x + threadIdx.x;
     int nnx = nx + 1, nny = ny + 1;
@@ -702,16 +929,84 @@ void k_cale2_rebuild_node_v(const double* px_new, const double* py_new,
                 if (jc < 0 || jc >= ny) continue;
             }
             int c = ic * ny + jc;
-            // each adjacent cell contributes 1/4 of its corner mass+momentum.
             spx += 0.25 * px_new[c];
             spy += 0.25 * py_new[c];
             sm  += 0.25 * dm_new[c];
         }
     }
-    // Eq. (16.6): mass-weighted rebuild — momentum-conservative.
     if (sm > 1e-30) {
         vX[flat] = spx / sm;
         vY[flat] = spy / sm;
+    }
+}
+
+// Per-node Jensen #3 loss: rebuild_node_v does
+//   v_node = (Σ_k ¼m_c v_c) / (Σ_k ¼m_c)
+// which is Jensen-convex averaging of N cell velocities (N=4 interior,
+// fewer at reflective boundaries). Loss:
+//   ΔKE_#3 = Σ_k ¼m_c · ½|v_c|²  −  ½m_node · |v_node|²      ≥ 0
+// computed from POST-REMAP cell state only (dm_new, px_new, py_new),
+// which is self-consistent (no mixing of old/new masses). Deposited
+// equally among the N contributing cells (each m_c·Δe = share_c).
+__global__
+void k_cale2_compute_node_dKE(const double* vX,     const double* vY,
+                              const double* m_node,       // post-remap node mass
+                              const double* dm_new,       // post-remap cell mass
+                              const double* px_new,       // post-remap cell momentum
+                              const double* py_new,
+                              double* e_int_incr,         // cell-local ΔIE accumulator
+                              double* dKE_node_out,       // diagnostic (may be nullptr)
+                              int nx, int ny, int bc_mode) {
+    int flat = blockIdx.x * blockDim.x + threadIdx.x;
+    int nnx = nx + 1, nny = ny + 1;
+    int n = nnx * nny;
+    if (flat >= n) return;
+    int in = flat / nny, jn = flat % nny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    bool is_dup = (x_per && in == nnx - 1) || (y_per && jn == nny - 1);
+    if (is_dup) {
+        if (dKE_node_out) dKE_node_out[flat] = 0.0;
+        return;
+    }
+    // Accumulate each corner's KE contribution (¼ m_c · ½ v_c²).
+    int cc[4]; int n_cells = 0;
+    double KE_corner_sum = 0.0;
+    for (int di = -1; di <= 0; ++di) {
+        for (int dj = -1; dj <= 0; ++dj) {
+            int ic = in + di, jc = jn + dj;
+            if (x_per) {
+                if (ic < 0)  ic = nx - 1;
+                if (ic >= nx) ic = 0;
+            } else {
+                if (ic < 0 || ic >= nx) continue;
+            }
+            if (y_per) {
+                if (jc < 0)  jc = ny - 1;
+                if (jc >= ny) jc = 0;
+            } else {
+                if (jc < 0 || jc >= ny) continue;
+            }
+            int c = ic * ny + jc;
+            double m_c = fmax(dm_new[c], 1e-30);
+            double vx_c = px_new[c] / m_c;
+            double vy_c = py_new[c] / m_c;
+            double qm = 0.25 * dm_new[c];
+            KE_corner_sum += qm * 0.5 * (vx_c*vx_c + vy_c*vy_c);
+            cc[n_cells++] = c;
+        }
+    }
+    if (n_cells == 0) { if (dKE_node_out) dKE_node_out[flat] = 0.0; return; }
+    double mn = m_node[flat];
+    double vxn = vX[flat], vyn = vY[flat];
+    double KE_node = 0.5 * mn * (vxn*vxn + vyn*vyn);
+    double dKE = KE_corner_sum - KE_node;   // Jensen ≥ 0 modulo round-off
+    if (dKE_node_out) dKE_node_out[flat] = dKE;
+    if (dKE <= 0.0) return;                  // no spurious negatives
+    double share = dKE / (double) n_cells;
+    for (int k = 0; k < n_cells; ++k) {
+        double m_c = fmax(dm_new[cc[k]], 1e-30);
+        atomicAdd(&e_int_incr[cc[k]], share / m_c);
     }
 }
 
@@ -910,8 +1205,19 @@ void k_cale2_remap_east_2nd(const double* X0, const double* Y0,
     double V_sweep = fabs(As);
 
     // Swept-region centroid (4-point average — OK for small skinny quads).
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
 
     // Donor cell centroid on the uniform reference mesh.
     int dic = donor / ny, djc = donor % ny;
@@ -928,6 +1234,7 @@ void k_cale2_remap_east_2nd(const double* X0, const double* Y0,
     }
 
     // Eq. (16.4): MUSCL linear reconstruction at swept-region centroid.
+    // KE Jensen loss NOT deposited here — handled in remap_finalize_cells (P33).
     double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
     double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
     double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
@@ -991,8 +1298,19 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
 
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
@@ -1005,6 +1323,7 @@ void k_cale2_remap_north_2nd(const double* X0, const double* Y0,
     }
 
     // Eq. (16.4): MUSCL linear reconstruction at swept-region centroid.
+    // KE Jensen loss NOT deposited here — handled in remap_finalize_cells (P33).
     double d_dm = (rho_d[donor]  + rho_sx[donor]*ex  + rho_sy[donor]*ey)  * V_sweep;
     double d_ie = (rhoE_d[donor] + rhoE_sx[donor]*ex + rhoE_sy[donor]*ey) * V_sweep;
     double d_px = (pxd[donor]    + pxd_sx[donor]*ex  + pxd_sy[donor]*ey)  * V_sweep;
@@ -1509,8 +1828,19 @@ void k_cale2_remap_east_ppm(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -1597,8 +1927,19 @@ void k_cale2_remap_north_ppm(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -1694,8 +2035,19 @@ void k_cale2_remap_east_ppm_prim(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -1790,8 +2142,19 @@ void k_cale2_remap_north_ppm_prim(const double* X0, const double* Y0,
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
 
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -1984,6 +2347,75 @@ void k_cale2_bc_velocity(double* vX, double* vY, int nnx, int nny, int bc_mode) 
 }
 
 // ============================================================
+// Phase-M energy compensation.
+//
+// Per cell KE defined via its 4 corner nodes with equal ¼ mass share:
+//     KE_cell = Σ_{k=0..3} ½·(m_cell/4)·(vX² + vY²)_k
+//             = (m_cell/8) · Σ_{k} (vX² + vY²)_k
+// With node mass m_node = ¼ Σ_{adj cell} m_cell, the sum over all cells
+// gives Σ_node m_node·(v_node)²·½ = diagnostic KE — so adding the
+// (KE_before − KE_after) difference as extra internal energy exactly
+// restores total-energy conservation across the remap + rebuild step.
+// ============================================================
+// Per-node KE at a FIXED (pre-remap) node-mass snapshot, with periodic
+// duplicates written as 0 so gpu_reduce_sum hits unique nodes only.
+//
+//   KE_node = ½·m_ref·(vX² + vY²)     if node is unique-rep
+//           = 0                        if node is a periodic duplicate
+//
+// Using m_ref (same for before/after) means ΔKE = ½·m_ref·(v²_bef − v²_aft)
+// purely reflects velocity change from remap/rebuild — no mass movement
+// artifacts. Matches diagnostic KE exactly (same m_node·½v² formula,
+// same duplicate skip).
+__global__
+void k_cale2_node_KE(const double* vX, const double* vY,
+                     const double* m_ref,
+                     int nnx, int nny, int bc_mode,
+                     double* KE_node) {
+    int f = blockIdx.x * blockDim.x + threadIdx.x;
+    int n = nnx * nny;
+    if (f >= n) return;
+    int in = f / nny, jn = f % nny;
+    bool x_per = (bc_mode & 1) != 0;
+    bool y_per = (bc_mode & 2) != 0;
+    // Zero the periodic-duplicate nodes so the reduce skips them.
+    if ((x_per && in == nnx - 1) || (y_per && jn == nny - 1)) {
+        KE_node[f] = 0.0;
+        return;
+    }
+    double vx = vX[f], vy = vY[f];
+    KE_node[f] = 0.5 * m_ref[f] * (vx*vx + vy*vy);
+}
+
+// Copy m_node → m_ref once per step (at start of Phase M).
+__global__
+void k_cale2_copy(const double* src, double* dst, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) dst[i] = src[i];
+}
+
+// Apply the per-cell local IE increment accumulated during rebuild_node_v.
+// This replaces the old global k_cale2_ke_compensate_uniform (P33).
+// Each cell's Δe was written by 1-4 adjacent nodes during rebuild, strictly
+// drawing from Jensen-KE losses at those nodes — purely local, no global
+// mean-field mixing. After this kernel, clear e_int_incr for next step.
+__global__
+void k_cale2_apply_ie_incr(double* e_int, double* e_int_incr, int ncell) {
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (c >= ncell) return;
+    e_int[c] += e_int_incr[c];
+    if (e_int[c] < 1e-30) e_int[c] = 1e-30;
+    e_int_incr[c] = 0.0;   // zero for next step
+}
+
+// Zero a device scalar buffer (cell- or node-size).
+__global__
+void k_cale2_zero_buf(double* buf, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) buf[i] = 0.0;
+}
+
+// ============================================================
 // Passive species tracer X ∈ [0, 1]
 // Remap conserves species-mass  mX = X·dm  via donor-cell swept flux.
 // Same swept-quad geometry as k_cale2_remap_east/north; we only carry
@@ -2166,8 +2598,19 @@ void k_cale2_species_remap_east_2nd(const double* X0, const double* Y0,
     int cR = calc(cR_idx, jc, ny);
     int donor = (As > 0.0) ? cL : cR;
     double V_sweep = fabs(As);
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;
@@ -2216,8 +2659,19 @@ void k_cale2_species_remap_north_2nd(const double* X0, const double* Y0,
     int cU = calc(ic, cU_idx, ny);
     int donor = (As > 0.0) ? cD : cU;
     double V_sweep = fabs(As);
-    double cx = 0.25 * (Ax + Anx + Bnx + Bx);
-    double cy = 0.25 * (Ay + Any + Bny + By);
+    // Swept-region "centroid" — but for MUSCL/PPM reconstruction the correct
+    // point is the centroid of the overlap *inside the donor cell*, not the
+    // quad (A_old, A_new, B_new, B_old) which sits OUTSIDE the donor.
+    // The overlap is the mirror image of the quad across the shared edge.
+    // Algebraically: c_overlap = 2·c_edge − c_quad, where c_edge is the
+    // old-edge midpoint.  This simplifies to
+    //     c_x = ¾·(Ax+Bx) − ¼·(Anx+Bnx),   c_y = ¾·(Ay+By) − ¼·(Any+Bny)
+    // Using the quad centroid (the old buggy formula) makes the remap
+    // numerically 1st-order even at "2nd-order MUSCL/PPM" settings —
+    // verified by a manufactured-solution test in scripts/andrassy2022/
+    // tracer_order_test.py (drops from slope 1.0 to slope 2.0 after fix).
+    double cx = 0.75 * (Ax + Bx) - 0.25 * (Anx + Bnx);
+    double cy = 0.75 * (Ay + By) - 0.25 * (Any + Bny);
     int dic = donor / ny, djc = donor % ny;
     double xd = (dic + 0.5) * dx_u;
     double yd = (djc + 0.5) * dy_u;

@@ -381,9 +381,14 @@ int main()
             fas.destroy();
         }
 
-        // HSE drift should decrease (or at least not blow up) with resolution
+        // HSE drift should decrease (or at least not blow up) with resolution.
+        // All three resolutions hit machine-precision zero on this
+        // well-balanced RK2 (max_vr ~ 1e-19 after 10 steps); we compare
+        // with a round-off floor so that 0 at 32x16 vs 1e-19 at 128x64
+        // doesn't trigger a spurious "not convergent" failure.
         CHECK(max_vr[0] < 1.0, "32x16: max |vr| < 1.0 (stable)");
-        CHECK(max_vr[2] <= max_vr[0] * 2.0, "128x64 not worse than 32x16 (convergent)");
+        CHECK(max_vr[2] <= std::max(max_vr[0] * 2.0, 1e-15),
+              "128x64 not worse than 32x16 (convergent; machine-precision floor)");
     }
 
     std::printf("\n=== %s: %d passed, %d failed ===\n",

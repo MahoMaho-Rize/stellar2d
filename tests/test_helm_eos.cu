@@ -99,7 +99,7 @@ int main() {
 
     if (tbl.load(nullptr, "third_party/helmholtz/helm_table.bin", s) != 0) {
         std::printf("SKIP: helm_table.bin not present\n");
-        return 0;
+        return 77;  // ctest SKIP convention (see CMakeLists SKIP_RETURN_CODE)
     }
 
     double *d_out, *d_T_rt;

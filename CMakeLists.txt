@@ -38,6 +38,7 @@ set(SOURCES
     src/drivers/cart_ale.cpp
     src/drivers/cart_impl.cpp
     src/drivers/cart_ale2.cpp
+    src/drivers/athena_vl2.cpp
     src/drivers/fas.cpp
     src/drivers/fas2.cpp
     src/drivers/radial1d.cpp
@@ -69,6 +70,8 @@ if(USE_GPU)
         src/gpu/explicit/strang_solver.cu
         src/gpu/explicit/wb2d_solver.cu
         src/gpu/explicit/wb2d_kernels.cu
+        src/gpu/explicit/athena_vl2_solver.cu
+        src/gpu/explicit/athena_vl2_kernels.cu
         # --- common device utilities ----------------------------------------
         src/gpu/common/gmg_gpu.cu
         # --- Lagrangian / ALE family ----------------------------------------
@@ -80,6 +83,7 @@ if(USE_GPU)
         src/gpu/ale/cart_ale_kernels.cu
         src/gpu/ale/cart_ale2_solver.cu
         src/gpu/ale/cart_ale2_kernels.cu
+        src/gpu/ale/cart_ale2_trace.cu
         src/gpu/ale/cart_impl_solver.cu
         src/gpu/ale/cart_impl_residual.cu
         src/gpu/ale/cart_impl_jfnk.cu
@@ -193,6 +197,14 @@ if(PYTEST_EXECUTABLE)
     add_test(NAME pytest_fast
         COMMAND ${PYTEST_EXECUTABLE} -m "not slow" --tb=short -q
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    # End-to-end GPU pytest suite (tst/ framework, Phase 2 onwards).
+    # Needs the built stellar2d binary; STELLAR2D_BIN env points at it.
+    add_test(NAME pytest_gpu_fast
+        COMMAND ${PYTEST_EXECUTABLE} -m fast --tb=short -q
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tst)
+    set_tests_properties(pytest_gpu_fast PROPERTIES
+        LABELS "fast"
+        ENVIRONMENT "STELLAR2D_BIN=${CMAKE_BINARY_DIR}/stellar2d")
 endif()
 
 # Release build by default
@@ -228,6 +240,10 @@ function(add_gpu_test name source)
     target_link_libraries(test_${name} PRIVATE CUDA::cudart)
     if(NOT T_NO_CTEST)
         add_test(NAME ${name} COMMAND test_${name})
+        # Default label `fast` (< 30 s).  Callers can re-label via
+        # set_tests_properties(${name} PROPERTIES LABELS "slow") to mark
+        # longer tests for exclusion from the `ctest -L fast` filter.
+        set_tests_properties(${name} PROPERTIES LABELS "fast")
     endif()
 endfunction()
 
@@ -244,6 +260,9 @@ if(USE_GPU)
 
     # lowmach-family tests (some are diagnostic-only, no CTest)
     add_gpu_test(lowmach            tests/test_lowmach.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
+    # Regression lock for 2026-05-07 S_E = ρv·g removal (P32)
+    add_gpu_test(lowmach_s_e_regression  tests/test_lowmach_s_e_regression.cu
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES})
     add_gpu_test(solver_diagnosis   tests/test_solver_diagnosis.cu
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${LOWMACH_SOURCES} NO_CTEST)
@@ -269,12 +288,97 @@ if(USE_GPU)
                  EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
     add_gpu_test(strang_convergence tests/test_strang_convergence.cu
                  EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
+    # Linear acoustic wave (complements entropy_wave: exercises HLLC's
+    # compressible characteristics + pressure-gradient coupling).
+    add_gpu_test(strang_linwave_convergence
+                 tests/test_strang_linwave_convergence.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
 
     # FAS multigrid tests
     add_gpu_test(fas_verify         tests/test_fas_verify.cu
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${FAS_GPU_SOURCES})
     add_gpu_test(fas_diagnose       tests/test_fas_diagnose_hse.cu
                  EXTRA_SOURCES ${TEST_COMMON_SOURCES} ${FAS_GPU_SOURCES} NO_CTEST)
+
+    # Pseudo-spectral (2D incompressible NS) Taylor-Green analytic-decay test.
+    # Links cufft via the stellar2d target's CUDA::cufft; replicate here.
+    add_gpu_test(pseudo_spectral_taylor_green
+                 tests/test_pseudo_spectral_taylor_green.cu
+                 EXTRA_SOURCES src/gpu/spectral/pseudo_spectral_solver.cu
+                               src/gpu/spectral/pseudo_spectral_kernels.cu)
+    target_link_libraries(test_pseudo_spectral_taylor_green PRIVATE
+        CUDA::cufft CUDA::cublas)
+
+    # Pseudo-spectral inviscid KE+enstrophy conservation on a multi-mode
+    # IC (double-shear layer).  Complements the single-mode TG test by
+    # exercising the nonlinear convection kernel: with ν=0 and skew-
+    # symmetric convection the scheme is bit-exact conservative, so we
+    # lock |ΔKE/KE|<1e-10 and |ΔΩ/Ω|<1e-9 over ~60 steps.  Regressions in
+    # skew-symmetric cancellation, dealias sign, or fused-kernel ordering
+    # break this immediately.
+    add_gpu_test(pseudo_spectral_inviscid_conserv
+                 tests/test_pseudo_spectral_inviscid_conserv.cu
+                 EXTRA_SOURCES src/gpu/spectral/pseudo_spectral_solver.cu
+                               src/gpu/spectral/pseudo_spectral_kernels.cu)
+    target_link_libraries(test_pseudo_spectral_inviscid_conserv PRIVATE
+        CUDA::cufft CUDA::cublas)
+
+    # anelastic_sl g-mode EVP convergence (Boussinesq + constant N²,
+    # analytic dispersion ω² = N² kx²/(kx² + (n_g π/Ly)²)).
+    add_gpu_test(anelastic_sl_gmode_convergence
+                 tests/test_anelastic_sl_gmode_convergence.cu
+                 EXTRA_SOURCES src/gpu/spectral/anelastic_sl_solver.cu
+                               src/gpu/spectral/anelastic_sl_kernels.cu)
+    target_link_libraries(test_anelastic_sl_gmode_convergence PRIVATE
+        CUDA::cufft CUDA::cublas CUDA::cusolver)
+
+    # anelastic_sl time-domain propagator test: 10 periods of a pure
+    # g-mode; locks Hamiltonian conservation + phase accuracy.  This
+    # is the first TD-path regression on anelastic_sl.
+    add_gpu_test(anelastic_sl_td_gmode
+                 tests/test_anelastic_sl_td_gmode.cu
+                 EXTRA_SOURCES src/gpu/spectral/anelastic_sl_solver.cu
+                               src/gpu/spectral/anelastic_sl_kernels.cu)
+    target_link_libraries(test_anelastic_sl_td_gmode PRIVATE
+        CUDA::cufft CUDA::cublas CUDA::cusolver)
+
+    # anelastic_sl nonlinear path regression: at amp → 0 the Strang
+    # split NL integrator should recover the exp propagator.  Locks
+    # the full advection block + Galerkin projection + DC zero path.
+    add_gpu_test(anelastic_sl_td_nonlinear
+                 tests/test_anelastic_sl_td_nonlinear.cu
+                 EXTRA_SOURCES src/gpu/spectral/anelastic_sl_solver.cu
+                               src/gpu/spectral/anelastic_sl_kernels.cu)
+    target_link_libraries(test_anelastic_sl_td_nonlinear PRIVATE
+        CUDA::cufft CUDA::cublas CUDA::cusolver)
+
+    # cart_ale2 periodic uniform-advection regression (P30/P31 lock)
+    add_gpu_test(cart_ale2_uniform_advect
+                 tests/test_cart_ale2_uniform_advect.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
+
+    # Phase 1 (testing_infrastructure_plan) regression locks
+    add_gpu_test(ale2_hse_stratified_reflect
+                 tests/test_ale2_hse_stratified_reflect.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
+    add_gpu_test(ale2_phase_m_compensation
+                 tests/test_ale2_phase_m_compensation.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
+    add_gpu_test(ale2_symmetry
+                 tests/test_ale2_symmetry.cu
+                 EXTRA_SOURCES src/gpu/ale/cart_ale2_solver.cu
+                               src/gpu/ale/cart_ale2_kernels.cu
+                               src/gpu/ale/cart_ale2_trace.cu)
+    add_gpu_test(athena_vl2_sod
+                 tests/test_athena_vl2_sod.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_vl2_solver.cu
+                               src/gpu/explicit/athena_vl2_kernels.cu)
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)
@@ -283,6 +387,11 @@ if(USE_GPU)
     add_gpu_test(kap_table          tests/test_kap_table.cu)
     add_gpu_test(helm_dual          tests/test_helm_dual.cu
                  EXTRA_SOURCES src/physics/helmholtz_eos.cu)
+    # Tests above load third_party tables (helm_table.bin, *.kapbin) that are
+    # not in-tree. When the table is missing they exit 77 → ctest SKIPPED
+    # instead of PASSED, so a missing fixture doesn't masquerade as coverage.
+    set_tests_properties(helm_l2 helm_eos kap_table helm_dual
+                         PROPERTIES SKIP_RETURN_CODE 77)
     add_gpu_test(residual_dual      tests/test_residual_dual.cu
                  EXTRA_SOURCES src/physics/helmholtz_eos.cu)
 
@@ -296,4 +405,16 @@ if(USE_GPU)
     add_executable(test_stellar_profile tests/test_stellar_profile.cpp
         src/gpu/radial1d/stellar_profile.cpp)
     target_include_directories(test_stellar_profile PRIVATE ${GPU_INCLUDE_DIRS})
+
+    # radial1d HSE static-stability regression: Lane-Emden n=3/2 + γ=5/3 is
+    # exact static HSE; locks that the explicit RK2 path preserves it.
+    add_gpu_test(radial1d_hse_static
+                 tests/test_radial1d_hse_static.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES}
+                               src/gpu/radial1d/radial1d_solver.cu
+                               src/gpu/radial1d/radial1d_implicit.cu
+                               src/gpu/radial1d/stellar_profile.cpp
+                               src/physics/helmholtz_eos.cu
+                               src/physics/opacity_table.cu)
+    target_link_libraries(test_radial1d_hse_static PRIVATE CUDA::cusolver)
 endif()

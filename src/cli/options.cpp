@@ -189,6 +189,8 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.cart_ale_cq_quad = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--shear-aware-av") == 0)
             cfg.cart_ale_shear_aware = true;
+        else if (std::strcmp(argv[i], "--rebuild-order") == 0 && i + 1 < argc)
+            cfg.cart_ale2_rebuild_order = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--bc-x") == 0 && i + 1 < argc)
             cfg.cart_ale2_bc_x = argv[++i];
         else if (std::strcmp(argv[i], "--bc-y") == 0 && i + 1 < argc)
@@ -205,6 +207,10 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.cart_ale2_ppm_char = true;
         else if (std::strcmp(argv[i], "--cart-ale2-kh-k") == 0 && i + 1 < argc)
             cfg.cart_ale2_kh_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--trace-cells") == 0 && i + 1 < argc)
+            cfg.cart_ale2_trace_cells = argv[++i];
+        else if (std::strcmp(argv[i], "--trace-step-cap") == 0 && i + 1 < argc)
+            cfg.cart_ale2_trace_step_cap = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ic-slab") == 0 && i + 1 < argc)
             cfg.cart_ale2_slab_file = argv[++i];
         else if (std::strcmp(argv[i], "--slab-perturb") == 0 && i + 1 < argc)
@@ -229,6 +235,14 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.cart_ale2_andrassy_seed = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--andrassy-noise") == 0 && i + 1 < argc)
             cfg.cart_ale2_andrassy_noise = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--athena-xorder") == 0 && i + 1 < argc)
+            cfg.athena_vl2_xorder = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--athena-limiter") == 0 && i + 1 < argc) {
+            std::string v = argv[++i];
+            if      (v == "vanleer" || v == "vl") cfg.athena_vl2_limiter = 0;
+            else if (v == "minmod")               cfg.athena_vl2_limiter = 1;
+            else std::fprintf(stderr, "unknown --athena-limiter %s; using vanleer\n", v.c_str());
+        }
         else if (std::strcmp(argv[i], "--ps-nu") == 0 && i + 1 < argc)
             cfg.ps_nu = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--ps-Lx") == 0 && i + 1 < argc)
@@ -306,6 +320,38 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.sph_forcing_lmax = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-forcing-seed") == 0 && i + 1 < argc)
             cfg.sph_forcing_seed = std::strtoull(argv[++i], nullptr, 0);
+        else if (std::strcmp(argv[i], "--ewave-rho0") == 0 && i + 1 < argc)
+            cfg.ewave_rho0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-P0") == 0 && i + 1 < argc)
+            cfg.ewave_P0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-u0") == 0 && i + 1 < argc)
+            cfg.ewave_u0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-A") == 0 && i + 1 < argc)
+            cfg.ewave_A = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-k") == 0 && i + 1 < argc)
+            cfg.ewave_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--ewave-periods") == 0 && i + 1 < argc)
+            cfg.ewave_periods = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--awave-rho0") == 0 && i + 1 < argc)
+            cfg.awave_rho0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--awave-P0") == 0 && i + 1 < argc)
+            cfg.awave_P0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--awave-A") == 0 && i + 1 < argc)
+            cfg.awave_A = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--awave-k") == 0 && i + 1 < argc)
+            cfg.awave_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--awave-periods") == 0 && i + 1 < argc)
+            cfg.awave_periods = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--compute-error") == 0)
+            cfg.compute_error = true;
+        else if (std::strcmp(argv[i], "--shear-V0") == 0 && i + 1 < argc)
+            cfg.shear_V0 = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-k") == 0 && i + 1 < argc)
+            cfg.shear_k = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-rho") == 0 && i + 1 < argc)
+            cfg.shear_rho = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--shear-P") == 0 && i + 1 < argc)
+            cfg.shear_P = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-ckpt-every") == 0 && i + 1 < argc)
             cfg.sph_ckpt_every = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-resume") == 0 && i + 1 < argc)
