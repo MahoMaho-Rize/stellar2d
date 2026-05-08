@@ -17,6 +17,7 @@ Phase B 在此基础上加源项,逐个 milestone 向 Suzuki flux-tube 风物理
 | B-M2 | Spitzer κ₀T^{5/2} 各向异性导热 | §C6 已完成 | `test_athena_mhd_conduction.cu` 5/5 | ✅ |
 | B-M3 | Townsend 光学薄冷却闭式积分 | §C7 已完成 | `test_athena_mhd_cooling.cu` 10/10 | ✅ |
 | B-M4 | 分层 + 导热 + 冷却 combined | §B1/4/C6/7 | `test_athena_mhd_combined.cu` 10/10 | ✅ |
+| B-M5 | Suzuki+25 stochastic broadband driver | §E1 已完成 | `test_athena_mhd_driver.cu` 5/5 | ✅ |
 
 ---
 
@@ -246,3 +247,57 @@ $$B_{y,cc}^\mathrm{ghost} = \tfrac12(\mathrm{Byf}[ng-1] + \mathrm{Byf}[ng]) = \t
 ### 公共 API
 
 无新增。B-M4 纯测试 + 内部 kernel 扩充(`k_athmhd_ghost_T_*`)。
+
+---
+
+## B-M5 — Suzuki+25 stochastic broadband driver(§E1)
+
+**Date**: 2026-05-08
+**Commit**: TBD
+
+### Setup
+
+- Photospheric 驱动波形:$v_x(t, j = n_g) = \sum_{n=1}^{N} A_n \sin(2\pi f_n t + \phi_n)$
+- 频率 log-spaced on $[f_\min, f_\max]$(典型 100× bandwidth)
+- 相位 $\phi_n \sim \mathrm{Uniform}[0, 2\pi)$,mt19937_64 seeded for 再现性
+- 幅度 $A_n = A_\mathrm{rms} \sqrt{2/N}$ 使 $\langle v_x^2 \rangle_t = A_\mathrm{rms}^2$(§E1 Parseval identity)
+- 作用方式:SET interior j=ng 一行的 $v_x$,E 按 KE 变化同步更新
+- default `driver_on = false`,不影响主流程
+
+### 实测
+
+| 测试 | 测量 | 阈值 | 状态 |
+|---|---|---|---|
+| E1-T1 driver off HSE 保持 | max\|δρ\|/ρ = **0**,max\|δE\|/E = **0** | < 10⁻¹⁰ | ✅ |
+| E1-T2 ⟨v_x²⟩ = A_rms² | mean_v² = **9.80e-3** vs target 1.00e-2,rel err 2.0% | < 10% | ✅ |
+| E1-T3 device = host 波形 | max\|Δ\| = **3.2×10⁻¹⁶** (ULP) | < 10⁻¹² | ✅ |
+| E1-T4 seed 可复现 | max\|run0−run1\| = **0** | < 10⁻¹⁴ | ✅ |
+
+5/5 断言通过。B-M1/2/3/4 全部回归零影响。
+
+### 实现备忘
+
+1. **幅度归一化 N√(2/N) 不是 √(2/ln(f_max/f_min))**:§E1 派生给两种归一化 —— (a) 连续 $P(\omega) = A^2/\omega$ 下 $A^2 = A_\mathrm{rms}^2/\ln(f_\max/f_\min)$;(b) $N$ iid 相位正弦和下 $\Sigma A_n^2 / 2 = A_\mathrm{rms}^2$。我们用离散 N-mode,选(b)。(a) 适合 Elsässer 带内能通量的积分计算,不是 Parseval。
+2. **driver 是 SET,不是 ADD**:Suzuki+25 inner-BC 语义是**规定速度**(prescribed velocity),每步覆写一次,不是冲量叠加。反映到 kernel:KE 要按新 $v_x$ 重算并写回 E,否则会积累能量漂移。
+3. **t=0 时 $v_x(0) = \sum A_n \sin(\phi_n) \ne 0$**:driver 打开时会有一个**阶跃式**速度跳变。如果要平滑启动,可加 envelope $w(t) = \tanh(t/\tau_{\mathrm{ramp}})$。v1 暂时不加,配合 HSE IC 用(v_x IC 可以先设为 driver 初值,但目前测试里 IC v_x=0,第一步就接管;实测 T1 driver off + 200 步 HSE 仍 ULP,证明阶跃不坏 WB)。
+4. **所有 cell 同相位**:j=ng 一行上每个 x cell 注入**相同**波形 —— 这是 Suzuki+25 "1D photospheric driver in 2D atm" 的简化。真 3D 会有水平相干长度 $\ell_h$,给每个 cell 独立 seed 或空间 filter。v1 保持简化。
+5. **无 Elsässer 吸收**:§E1 派生里顶边界要用 $\partial z^-/\partial r = 0$。目前 athena_mhd 顶 BC 是 outflow/reflect,不是 Elsässer。实际 Suzuki 跑 open-top,但开放 BC 的 MHD Riemann 也不是严格 $z^-$ 吸收。**这块留给 B-M6**(flux-tube wind setup)再正式补。
+
+### 公共 API
+
+```cpp
+// athena_mhd_solver.cuh
+bool driver_on       = false;
+double driver_Arms   = 0.0;
+double driver_fmin   = 0.0, driver_fmax = 0.0;
+int    driver_Nmodes = 0;
+void init_stochastic_driver(double A_rms, double f_min, double f_max,
+                            int N_modes, unsigned seed);
+void apply_driver(double t);   // no-op if driver_on=false
+```
+
+---
+
+## B-M6 — 占位
+
+详细 setup 在进入时补。

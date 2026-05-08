@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -109,6 +110,10 @@ __global__ void k_athmhd_cool_townsend(
     const double*, const double*, double*,
     int, int, int, int,
     double, double, double, double, double, double);
+__global__ void k_athmhd_driver_apply(
+    const double*, double*, double*, double*, double*,
+    const double*, const double*, const double*,
+    int, double, int, int, int);
 
 // ============================================================
 // init / destroy
@@ -228,6 +233,7 @@ void AthenaMHDSolver::destroy() {
     F(d_rhs_hse_s2_rho); F(d_rhs_hse_s2_mx); F(d_rhs_hse_s2_my);
     F(d_rhs_hse_s2_mz);  F(d_rhs_hse_s2_E);  F(d_rhs_hse_s2_Bz);
     F(d_T_cc); F(d_Fx_cond); F(d_Gy_cond); F(d_cond_dt_buf);
+    F(d_driver_f); F(d_driver_amp); F(d_driver_phi);
     F(d_cfl_buf);
 }
 
@@ -1969,5 +1975,69 @@ void AthenaMHDSolver::apply_cooling(double dt) {
         nx, ny, ng, sy,
         dt, gamma - 1.0,
         cool_Lambda0, cool_Tref, cool_alpha, cool_Tfloor);
+    CUDA_CHECK(cudaGetLastError());
+}
+
+// ============================================================
+// §E1 stochastic broadband driver.
+//   init_stochastic_driver: pre-computes log-spaced frequencies,
+//     iid-uniform phases, and normalised per-mode amplitudes s.t.
+//     ⟨v_x²⟩_{t → ∞} = A_rms².
+//   apply_driver(t): evaluate waveform and write into the j=ng row.
+// ============================================================
+void AthenaMHDSolver::init_stochastic_driver(double A_rms, double f_min,
+                                             double f_max, int N_modes,
+                                             unsigned seed) {
+    if (N_modes <= 0 || A_rms <= 0.0 || f_min <= 0.0 || f_max <= f_min) {
+        std::fprintf(stderr,
+            "[init_stochastic_driver] invalid params (A_rms=%g, "
+            "f_min=%g, f_max=%g, N=%d)\n", A_rms, f_min, f_max, N_modes);
+        return;
+    }
+    driver_Arms   = A_rms;
+    driver_fmin   = f_min;
+    driver_fmax   = f_max;
+    driver_Nmodes = N_modes;
+
+    // Host-side mode table.
+    std::vector<double> h_f(N_modes), h_amp(N_modes), h_phi(N_modes);
+    double ln_ratio = std::log(f_max / f_min);
+    // Amplitude normalisation: Σ_N (A_N)² / 2 = A_rms²
+    //   with A_N = A_rms · √(2/N) per log-octave bin.  (§E1, Parseval
+    //   identity on N iid-phase sinusoids.)
+    double per_mode_amp = A_rms * std::sqrt(2.0 / (double)N_modes);
+
+    // Deterministic RNG: linear congruential, seed-controlled.
+    std::mt19937_64 rng(seed);
+    std::uniform_real_distribution<double> uniform(0.0, 2.0 * M_PI);
+    for (int n = 0; n < N_modes; ++n) {
+        double log_f = std::log(f_min) + ln_ratio * (n + 0.5) / (double)N_modes;
+        h_f[n]   = std::exp(log_f);
+        h_amp[n] = per_mode_amp;     // flat per-mode; log-spacing gives 1/ω total
+        h_phi[n] = uniform(rng);
+    }
+
+    size_t nb = (size_t)N_modes * sizeof(double);
+    CUDA_CHECK(cudaMalloc(&d_driver_f,   nb));
+    CUDA_CHECK(cudaMalloc(&d_driver_amp, nb));
+    CUDA_CHECK(cudaMalloc(&d_driver_phi, nb));
+    CUDA_CHECK(cudaMemcpy(d_driver_f,   h_f.data(),   nb, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_driver_amp, h_amp.data(), nb, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_driver_phi, h_phi.data(), nb, cudaMemcpyHostToDevice));
+
+    driver_on = true;
+    std::printf("  [init_stochastic_driver] N=%d modes on [%.3g, %.3g] Hz, "
+                "A_rms=%.3g, seed=%u\n",
+                N_modes, f_min, f_max, A_rms, seed);
+}
+
+void AthenaMHDSolver::apply_driver(double t) {
+    if (!driver_on) return;
+    int sy = stride_y();
+    dim3 b(64, 1), g((nx + 63) / 64, 1);
+    k_athmhd_driver_apply<<<g, b>>>(
+        d_rho, d_mx, d_my, d_mz, d_E,
+        d_driver_f, d_driver_amp, d_driver_phi,
+        driver_Nmodes, t, nx, ng, sy);
     CUDA_CHECK(cudaGetLastError());
 }

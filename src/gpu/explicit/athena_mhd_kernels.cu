@@ -1072,3 +1072,40 @@ __global__ void k_athmhd_cool_townsend(
     double dE = rho * cv * (Tnew - T0);
     E[c] += dE;
 }
+
+// ============================================================
+// §E1 stochastic broadband driver.
+//   v_x(t, y = bottom) = Σ_N A_N · sin(2π f_N t + φ_N)
+// where the amplitude normalisation was computed on the host
+// (see init_stochastic_driver).  Only the j = ng interior row is
+// touched.  KE in E is updated consistently with the new v_x.
+// ============================================================
+__global__ void k_athmhd_driver_apply(
+    const double* __restrict__ rho,
+    double* __restrict__ mx,
+    double* __restrict__ my,
+    double* __restrict__ mz,
+    double* __restrict__ E,
+    const double* __restrict__ d_f,
+    const double* __restrict__ d_amp,
+    const double* __restrict__ d_phi,
+    int N_modes, double t_now,
+    int nx, int ng, int sy)
+{
+    int ic = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ic >= nx) return;
+    int c = (ic + ng) * sy + ng;   // j = ng row
+    double two_pi = 6.283185307179586;
+    double vx_new = 0.0;
+    for (int n = 0; n < N_modes; ++n) {
+        vx_new += d_amp[n] * sin(two_pi * d_f[n] * t_now + d_phi[n]);
+    }
+    double r   = fmax(rho[c], 1e-30);
+    double vx_old = mx[c] / r;
+    double vy  = my[c] / r;
+    double vz  = mz[c] / r;
+    double ke_old = 0.5 * r * (vx_old * vx_old + vy * vy + vz * vz);
+    double ke_new = 0.5 * r * (vx_new * vx_new + vy * vy + vz * vz);
+    mx[c] = r * vx_new;
+    E[c] += (ke_new - ke_old);
+}

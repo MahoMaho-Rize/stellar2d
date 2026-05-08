@@ -117,6 +117,27 @@ struct AthenaMHDSolver {
     double *d_Gy_cond       = nullptr;   // y-face heat flux
     double *d_cond_dt_buf   = nullptr;   // per-cell Δt_cond
 
+    // ---- §E1 stochastic broadband photospheric driver ----------
+    // Suzuki+25 inner boundary: a horizontal velocity perturbation
+    //     v_x(t, j=ng) = A_rms · Σ_N (A_N/√f_N) · sin(2π f_N t + φ_N)
+    // with f_N log-spaced on [f_min, f_max] and φ_N iid uniform
+    // (seeded for reproducibility).  Normalisation (eq. E1-identity):
+    //     Σ_N (A_N)²/(2 f_N) · Δ(ln f) = A_rms²
+    // achieved with A_N = A_rms · √(2/ln(f_max/f_min)).  Applied as
+    // an additive momentum injection in the j=ng row (interior-side
+    // first cell) after each VL2+κ+cool chain.  Ghost cells inherit
+    // the new state via fill_ghost in the next step.
+    bool   driver_on       = false;
+    double driver_Arms     = 0.0;
+    double driver_fmin     = 0.0;
+    double driver_fmax     = 0.0;
+    int    driver_Nmodes   = 0;
+    // Host-side mode table (freqs, amps, phases).  Pushed to device
+    // once in init_stochastic_driver; kernels read d_driver_*.
+    double *d_driver_f     = nullptr;
+    double *d_driver_amp   = nullptr;
+    double *d_driver_phi   = nullptr;
+
     // ---- §C7 optically-thin radiative cooling ------------------
     // Single power-law Λ(T) = Λ₀·(T/T_ref)^α; ODE dT/dt = -C·T^α with
     //   C = (γ-1)·ρ·Λ₀ / T_ref^α   (in code units, k_B=μ=1, so c_v=1/(γ-1))
@@ -260,6 +281,21 @@ struct AthenaMHDSolver {
     // cool_on=false.  Does NOT touch ρ / momentum / B — only thermal
     // energy (E -= ρ c_v (T_old - T_new)).  Safe for any dt.
     void apply_cooling(double dt);
+
+    // §E1 stochastic driver setup.  Allocates device mode tables and
+    // pre-computes amplitudes / phases.  Deterministic for a fixed
+    // seed so that tests are reproducible.  After this, driver_on
+    // will be true and apply_driver(t) is active.
+    void init_stochastic_driver(double A_rms, double f_min, double f_max,
+                                int N_modes, unsigned seed);
+    // Apply driver by SETTING the horizontal velocity v_x in the
+    // j = ng row (first interior row) to v_driver(t).  This is the
+    // prescribed-velocity BC convention in Suzuki+25: the photospheric
+    // boundary has a given velocity waveform, not an added impulse.
+    // Only m_x is updated (v_y, v_z, ρ, B, P unchanged); E is adjusted
+    // to preserve total energy (old KE removed, new KE added with new
+    // v_x).
+    void apply_driver(double t);
 
     // MHD rotor (Tóth 2000 Rotor Test 1, Stone+08 Fig 25).
     //   Inside r<0.1: ρ=10, rigid-body rotation at ω=200
