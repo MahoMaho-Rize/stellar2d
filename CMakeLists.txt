@@ -342,6 +342,16 @@ if(USE_GPU)
     target_link_libraries(test_anelastic_sl_td_gmode PRIVATE
         CUDA::cufft CUDA::cublas CUDA::cusolver)
 
+    # anelastic_sl nonlinear path regression: at amp → 0 the Strang
+    # split NL integrator should recover the exp propagator.  Locks
+    # the full advection block + Galerkin projection + DC zero path.
+    add_gpu_test(anelastic_sl_td_nonlinear
+                 tests/test_anelastic_sl_td_nonlinear.cu
+                 EXTRA_SOURCES src/gpu/spectral/anelastic_sl_solver.cu
+                               src/gpu/spectral/anelastic_sl_kernels.cu)
+    target_link_libraries(test_anelastic_sl_td_nonlinear PRIVATE
+        CUDA::cufft CUDA::cublas CUDA::cusolver)
+
     # cart_ale2 periodic uniform-advection regression (P30/P31 lock)
     add_gpu_test(cart_ale2_uniform_advect
                  tests/test_cart_ale2_uniform_advect.cu
