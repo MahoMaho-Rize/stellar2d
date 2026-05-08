@@ -46,7 +46,11 @@ wave that coincides with the upstream state.
 
 **Kernel regularisation:**
 
-$$\boxed{|\text{den}| < \epsilon\sqrt{\rho_K}\,|B_x|\ \Longrightarrow\ B^\star_{yK} \leftarrow B_{yK},\ v^\star_{yK} \leftarrow v_{yK}\ (\text{and same for } z).}$$
+$$\boxed{\begin{aligned}
+&|\text{den}| < \epsilon\sqrt{\rho_K}\,|B_x| \\
+&\quad\Longrightarrow\ B^\star_{yK} \leftarrow B_{yK},\ v^\star_{yK} \leftarrow v_{yK} \\
+&\quad\text{(and same for } z\text{).}
+\end{aligned}}$$
 
 with $\epsilon \sim 10^{-12}$ in double precision. Falling through to
 the upstream state is continuous with the generic formula.

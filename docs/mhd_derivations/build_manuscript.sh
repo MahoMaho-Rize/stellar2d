@@ -40,6 +40,18 @@ if [[ $PDF -eq 1 ]]; then
         exit 1
     }
     echo "  pandoc → PDF (xelatex)"
+    # Header-includes:
+    #   \emergencystretch=3em allows TeX to stretch inter-word glue on
+    #     paragraphs that would otherwise overflow (common with long
+    #     inline math + \boxed at narrow margins).
+    #   \sloppy disables strict underfull complaints globally.
+    HEADER_INC=$(mktemp --suffix=.tex)
+    cat > "$HEADER_INC" <<'LATEX'
+\emergencystretch=3em
+\sloppy
+\hbadness=10000
+\hfuzz=20pt
+LATEX
     if ! pandoc "$OUT_MD" \
             --pdf-engine=xelatex \
             -V geometry:margin=1in \
@@ -47,13 +59,16 @@ if [[ $PDF -eq 1 ]]; then
             -V mainfont="DejaVu Serif" \
             -V monofont="DejaVu Sans Mono" \
             -V linkcolor=blue \
+            -H "$HEADER_INC" \
             --toc --toc-depth=2 \
             --number-sections \
             -o manuscript.pdf 2>&1 | tee /tmp/pandoc_build.log; then
+        rm -f "$HEADER_INC"
         echo "  ERROR: xelatex failed — stale manuscript.pdf NOT overwritten"
         echo "  Check /tmp/pandoc_build.log for the scanning error"
         echo "  Common cause: unbalanced \\boxed{} braces in sections/*.md"
         exit 1
     fi
+    rm -f "$HEADER_INC"
     echo "→ manuscript.pdf"
 fi
