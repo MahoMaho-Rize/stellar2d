@@ -1,0 +1,35 @@
+
+============================================================
+  A10 - Slope-limiter family
+============================================================
+  [OK] A10-second-order: phi_minmod(1) = 1 — sympy verified to 0.
+  [OK] A10-second-order: phi_VL(1) = 1 — sympy verified to 0.
+  [OK] A10-second-order: phi_MC(1) = 1 — sympy verified to 0.
+  [OK] A10-second-order: phi_superbee(1) = 1 — sympy verified to 0.
+  [OK] A10-second-order: phi_Ospre(1) = 1 — sympy verified to 0.
+  [OK] A10-r=2: phi_minmod(2) = 1 — sympy verified to 0.
+  [OK] A10-r=2: phi_VL(2) = 4/3 — sympy verified to 0.
+  [OK] A10-r=2: phi_MC(2) = 3/2 ((1+r)/2 constraint binds) — sympy verified to 0.
+  [OK] A10-r=3: phi_MC(3) = 2 (upper cap binds at r = 3) — sympy verified to 0.
+  [OK] A10-r=4: phi_MC(4) = 2 (upper cap still binds) — sympy verified to 0.
+  [OK] A10-r=2: phi_superbee(2) = 2 — sympy verified to 0.
+  [OK] A10-r=2: phi_Ospre(2) = 9/7 — sympy verified to 0.
+  [OK] A10-zero-at-extremum: phi_minmod(r<0) = 0 — sympy verified to 0.
+  [OK] A10-zero-at-extremum: phi_MC(r<0) = 0 — sympy verified to 0.
+  [OK] A10-zero-at-extremum: phi_superbee(r<0) = 0 — sympy verified to 0.
+  [OK] A10-zero-at-extremum: phi_VL(r<0) = 0 — sympy verified to 0.
+  [OK] A10-Ospre-at-r=-1/2: phi_Ospre(-1/2) = -1/2 (NOT zero; not strictly TVD) — sympy verified to 0.
+  [OK-num] A10-symmetry: phi_minmod(1/r) = phi_minmod(r)/r  (r > 0)  [numerical] — 100 samples, max|residual| = 0.000e+00.
+  [OK-num] A10-symmetry: phi_VL(1/r) = phi_VL(r)/r  (r > 0)  [numerical] — 100 samples, max|residual| = 5.551e-17.
+  [OK-num] A10-symmetry: phi_MC(1/r) = phi_MC(r)/r  (r > 0)  [numerical] — 100 samples, max|residual| = 0.000e+00.
+  [OK-num] A10-symmetry: phi_superbee(1/r) = phi_superbee(r)/r  (r > 0)  [numerical] — 100 samples, max|residual| = 0.000e+00.
+  [OK-num] A10-symmetry: phi_Ospre(1/r) = phi_Ospre(r)/r  (r > 0)  [numerical] — 100 samples, max|residual| = 1.110e-16.
+  [OK-num] A10-MC-kernel-vs-sweby: same-sign case (a,b > 0) kernel-min = phi_MC * a  [numerical] — 100 samples, max|residual| = 1.776e-15.
+  [OK] A10-r=3/2: phi_minmod(3/2) = 1 — sympy verified to 0.
+  [OK] A10-r=3/2: phi_VL(3/2) = 6/5 — sympy verified to 0.
+  [OK] A10-r=3/2: phi_MC(3/2) = 5/4 — sympy verified to 0.
+  [OK] A10-r=3/2: phi_superbee(3/2) = 3/2 — sympy verified to 0.
+  [OK] A10-r=3/2: phi_Ospre(3/2) = 45/38 — sympy verified to 0.
+  wrote output/a10_slope_limiter_family.latex.tex
+
+All A10 identities verified by sympy.
