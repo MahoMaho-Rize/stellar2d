@@ -521,6 +521,17 @@ void PseudoSpectralSolver::init_taylor_green(int k) {
     has_analytic_ic = true;
     analytic_k = k;
 
+    // Sync d_u, d_v from d_omega_hat so compute_diagnostics(0.0) sees a
+    // consistent IC (otherwise KE reads 0 because d_u/d_v are only populated
+    // at the end of step() — same pattern as load_checkpoint).
+    {
+        int B = 256, Gh = (ncplx + B - 1) / B;
+        k_spec_uv<<<Gh, B>>>(d_omega_hat, d_kx, d_ky, d_dealias,
+                             d_tmp_hat, d_rhs_hat, nx, nh);
+        spec_to_phys(plan_c2r, d_tmp_hat, d_u, ncell);
+        spec_to_phys(plan_c2r, d_rhs_hat, d_v, ncell);
+    }
+
     dt_current = 0.0;
     step_count = 0;
     std::fprintf(stderr,
