@@ -54,6 +54,14 @@ struct StrangSolver {
     // ---- bookkeeping -----------------------------------------
     int    step_count;
 
+    // ---- scheme toggles --------------------------------------
+    // Rieper-style low-Mach correction on the HLLC contact-wave S*
+    // pressure jump.  Default true (required by Andrassy-style low-M
+    // stratified convection, which needs pressure-dissipation
+    // suppression at M→0).  Flip to false for acoustic / linwave
+    // tests where the pressure jump IS the physics.
+    bool   use_lm_fix = true;
+
     // ---- public API ------------------------------------------
     void   init(int nx, int ny,
                 double Lx, double Ly,

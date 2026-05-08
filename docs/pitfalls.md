@@ -742,6 +742,59 @@ subcell ΔKE,在**两侧 cell 内部**做 IE 增量"。
 
 ---
 
+## P34: strang LM-HLLC pressure-jump suppression breaks acoustic-wave convergence
+
+**Discovered**: 2026-05-08,给 strang 加 linwave convergence test(`test_strang_linwave_convergence`)
+时发现 `d_lmhllc`(`strang_device.cuh`)的 Rieper-style Low-Mach fix 把 acoustic wave 的 pressure jump
+系统性压制到不可用,解 err 随 N 不降反升。
+
+**Symptom**:
+右行声波 IC,`δρ = A·ρ₀ sin(kx), δvx = A·c₀·sin(kx), δP = A·γ·P₀·sin(kx)`,A=1e-4, k=2π/Lx,一周期后
+理论回到 IC。实测三分辨率 L1(ρ):
+- N=64: 3.96e-5
+- N=128: 4.76e-5
+- N=256: 7.13e-5
+
+**err/A 一直在 40–60 %,N 越大反而越差**。对比 athena_vl2 同一 IC 同参数 p=2.03(N=128 L1 ≈ 1.7e-7)。
+
+**Root cause**:
+`d_lmhllc` 把 Davis 波速估计后的 S*(contact)公式里的 pressure jump 项乘了 `fM = clamp(M_local, 1e-3, 1.0)`:
+```cpp
+double M_local = (|unL| + |unR|) / (cL + cR);
+double fM      = fmin(1.0, fmax(M_local, 1e-3));
+S_star = (fM * (PR - PL) + rhoL * unL * (SL - unL) - rhoR * unR * (SR - unR)) / denom;
+```
+对 Andrassy-style low-M 对流流场,背景 `M ~ 1e-2` 以下,`(PR - PL)` 里主要是几何 / 数值噪声,`fM ≪ 1`
+压掉这种虚假 pressure dissipation 是对的 —— 这是 Rieper 2011 的正确应用。
+
+但 acoustic wave 里,背景 v ≡ 0,perturbation velocity = A·c₀ ≈ 1e-4·c₀,所以 `M_local = A ≈ 1e-4`,
+仍然 ≤ cutoff 1e-3 → `fM = 1e-3`。这把 `(PR - PL)` **缩小 1000×**,而 acoustic wave 的整个物理
+就写在这个 pressure jump 里 —— 等于告诉 HLLC "这是 pure 对流",left- / right-acoustic 特征被砍平,
+结果 scheme 只能把 sinusoid 当 density advection 跑,相位 / 振幅全错。
+
+**Fix**:
+给 `d_lmhllc`、`k_hllc_update_x/y`、`StrangSolver::sweep_x/y`、`StrangSolver` 结构体都加
+`bool use_lm_fix = true`(默认保持现有行为),test 传 `sol.use_lm_fix = false` 走标准 HLLC:
+- strang_convergence(entropy wave, default on)仍过 p=1.92 / 1.99
+- strang_linwave_convergence(use_lm_fix=false)过 p=1.94 / 1.48
+
+**后续**:
+Rieper 2011 原文 fM 应只作用在**耗散项**(velocity jump 的耗散贡献,即 `u*L/R = uL/R + SL/R(SL/R - S*)⁻¹ · …`
+里的 velocity 部分),**不该乘到 S* 公式的 pressure jump 上**。这里的实现把它错配到 S* pressure jump,
+是一处原生 bug。修的方式(follow-up):
+1. 把 `fM * (PR - PL)` 改回 `(PR - PL)`
+2. 在 star-state reconstruction 里按 Rieper 把 velocity jump 乘 fM
+3. 默认改为 `use_lm_fix = true`,linwave test 不再需要手动关 fix
+
+在完成 follow-up 之前 `use_lm_fix` 是一个"要么走 Rieper bug,要么走 standard HLLC"的二选一开关,
+不是真正的 Rieper implementation。Andrassy 路径继续走旧行为(已验证过,不动)。
+
+**Scope**:
+`d_lmhllc` 只被 strang 调用(wb2d 走 `gpu_hllc_dispatch`,独立代码路径)。本 fix 不影响 wb2d /
+athena_vl2 / 其他 solver。
+
+---
+
 ## Summary: Regression Test Priority
 
 ### Tier 1 — Correctness fundamentals (must pass for any commit)

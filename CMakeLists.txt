@@ -288,6 +288,11 @@ if(USE_GPU)
                  EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
     add_gpu_test(strang_convergence tests/test_strang_convergence.cu
                  EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
+    # Linear acoustic wave (complements entropy_wave: exercises HLLC's
+    # compressible characteristics + pressure-gradient coupling).
+    add_gpu_test(strang_linwave_convergence
+                 tests/test_strang_linwave_convergence.cu
+                 EXTRA_SOURCES src/gpu/explicit/strang_solver.cu)
 
     # FAS multigrid tests
     add_gpu_test(fas_verify         tests/test_fas_verify.cu
@@ -302,6 +307,20 @@ if(USE_GPU)
                  EXTRA_SOURCES src/gpu/spectral/pseudo_spectral_solver.cu
                                src/gpu/spectral/pseudo_spectral_kernels.cu)
     target_link_libraries(test_pseudo_spectral_taylor_green PRIVATE
+        CUDA::cufft CUDA::cublas)
+
+    # Pseudo-spectral inviscid KE+enstrophy conservation on a multi-mode
+    # IC (double-shear layer).  Complements the single-mode TG test by
+    # exercising the nonlinear convection kernel: with ν=0 and skew-
+    # symmetric convection the scheme is bit-exact conservative, so we
+    # lock |ΔKE/KE|<1e-10 and |ΔΩ/Ω|<1e-9 over ~60 steps.  Regressions in
+    # skew-symmetric cancellation, dealias sign, or fused-kernel ordering
+    # break this immediately.
+    add_gpu_test(pseudo_spectral_inviscid_conserv
+                 tests/test_pseudo_spectral_inviscid_conserv.cu
+                 EXTRA_SOURCES src/gpu/spectral/pseudo_spectral_solver.cu
+                               src/gpu/spectral/pseudo_spectral_kernels.cu)
+    target_link_libraries(test_pseudo_spectral_inviscid_conserv PRIVATE
         CUDA::cufft CUDA::cublas)
 
     # anelastic_sl g-mode EVP convergence (Boussinesq + constant N²,
