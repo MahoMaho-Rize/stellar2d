@@ -5,9 +5,14 @@
 **Solver**: `src/gpu/explicit/athena_mhd_*` (VL2 + HLLD + CT, see
 §A1–A11 of the MHD derivation manuscript)
 
-**Summary**: all four Phase A benchmarks pass. Derivation-first
-workflow verified: each pass criterion is traced back to a sympy-
-verified identity in the `f*` sections of the derivation manuscript.
+**Summary**: all four Phase A derivation-driven benchmarks pass.
+Derivation-first workflow verified: each pass criterion is traced
+back to a sympy-verified identity in the `f*` sections of the
+derivation manuscript.
+
+> 📊 **完整实测数据表**(包括 A5 standard benchmark gate 的 30/30
+> shock/nonlinear 测试)见 [`phase_A_benchmarks.md`](./phase_A_benchmarks.md)。
+> 本文件只保留派生-驱动的 A1–A4 高层结论。
 
 ---
 
