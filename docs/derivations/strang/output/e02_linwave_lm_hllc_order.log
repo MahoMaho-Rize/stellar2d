@@ -1,0 +1,12 @@
+
+============================================================
+  E2 - Linwave order under LM-HLLC vs standard HLLC
+============================================================
+  [OK] E2-decay-ratio: log(decay_std / decay_LM) = -(1-M_cut) c Dx k^2 T / 2 — sympy verified to 0.
+  log(decay_std / decay_LM) at Dx=1/64, k=2pi, T=1: -0.308
+   => decay_std / decay_LM = exp(-0.308) = 7.348e-01
+  Standard HLLC predicted slope: p = 2.0 (pressure dissipation dominates).
+  LM-HLLC predicted slope: p > 2 (nu_eff suppressed; other trunc dominates).
+  wrote output/e02_linwave_lm_hllc_order.latex.tex
+
+All E2 identities verified by sympy.

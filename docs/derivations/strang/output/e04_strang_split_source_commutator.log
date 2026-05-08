@@ -1,0 +1,17 @@
+
+============================================================
+  E4 - Strang-split gravity source commutator
+============================================================
+    residual[('Z', 'X')] = Dt**2/2
+    residual[('X', 'Z')] = -Dt**2/2
+    residual[('Z', 'Yh')] = Dt**2/2
+    residual[('Yh', 'Z')] = -Dt**2/2
+  [OK] E4-wrong-ZX: Z*X residual = +Dt^2/2 — sympy verified to 0.
+  [OK] E4-wrong-XZ: X*Z residual = -Dt^2/2 — sympy verified to 0.
+  [OK] E4-wrong-ZYh: Z*Yh residual = +Dt^2/2 — sympy verified to 0.
+  [OK] E4-wrong-YhZ: Yh*Z residual = -Dt^2/2 — sympy verified to 0.
+  [OK] E4-correct: L_correct = X(Dt/2) (Y_hydro + Y_grav)(Dt) X(Dt/2)
+        is 2nd-order by §A13's Strang proof (Y_total is a single operator).
+  wrote output/e04_strang_split_source_commutator.latex.tex
+
+All E4 identities verified by sympy.
