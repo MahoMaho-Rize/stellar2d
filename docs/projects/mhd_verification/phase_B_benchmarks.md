@@ -15,7 +15,7 @@ Phase B 在此基础上加源项,逐个 milestone 向 Suzuki flux-tube 风物理
 |---|---|---|---|---|
 | B-M1 | Well-balanced MHSE 源(§B4) | §B4 已完成 | `test_athena_mhd_hse_preserve.cu` 6/6 | ✅ |
 | B-M2 | Spitzer κ₀T^{5/2} 各向异性导热 | §C6 已完成 | `test_athena_mhd_conduction.cu` 5/5 | ✅ |
-| B-M3 | Townsend 光学薄冷却闭式积分 | §C7 已完成 | TBD | ⏳ |
+| B-M3 | Townsend 光学薄冷却闭式积分 | §C7 已完成 | `test_athena_mhd_cooling.cu` 10/10 | ✅ |
 | B-M4 | 分层 + 导热 + 冷却 combined | §B1/4/C6/7 | TBD | ⏳ |
 
 ---
@@ -126,6 +126,71 @@ double compute_conduction_dt();             // returns ½ ρ c_v h² / κ_∥ mi
 
 ---
 
-## B-M3 / B-M4 — 占位
+## B-M3 — Townsend 2009 光学薄冷却(§C7)
+
+**Date**: 2026-05-08
+**Commit**: TBD
+
+### Setup
+- 单段幂律 $\Lambda(T) = \Lambda_0 (T/T_\mathrm{ref})^\alpha$
+- Code units,$k_B = \mu = 1$,$\rho \Lambda_0 = 1$,$\gamma = 5/3$
+- ODE $dT/dt = -C T^\alpha$,$C = (\gamma-1)\rho\Lambda_0 / T_\mathrm{ref}^\alpha$(cell 上常数)
+- 闭式积分(Townsend 2009 lemma):
+  - $\alpha \ne 1$: $T = [T_0^{1-\alpha} - C(1-\alpha)t]^{1/(1-\alpha)}$
+  - $\alpha = 1$ 退化: $T = T_0 e^{-Ct}$
+- **每 cell 一次 kernel launch,无 subcycle** —— exact integration,unconditionally stable
+- 只更新 E 里的 $\rho e_\mathrm{th}$,其它 (ρ, m, B_f, KE, ME) 一概不动
+
+### 实测
+
+| 测试 | 测量 | 阈值 | 状态 |
+|---|---|---|---|
+| C7-T1 $\alpha=0.5$ 闭式匹配 | rel err **0** | < 10⁻¹⁰ | ✅ |
+| C7-T1 $\alpha=1.0$ 指数支 | rel err **0** | < 10⁻¹⁰ | ✅ |
+| C7-T1 $\alpha=2.0$ 闭式匹配 | rel err **0** | < 10⁻¹⁰ | ✅ |
+| C7-T1 $\alpha=3.0$ 闭式匹配 | rel err **0** | < 10⁻¹⁰ | ✅ |
+| C7-T2 ρ / ME / KE / divB 不动 | 四项 **0** | < 10⁻¹⁴–10⁻¹⁰ | ✅ |
+| C7-T3 monotone 50 bins | violations = **0** | 0 | ✅ |
+| C7-T4 ΔE = ρc_v·ΔT budget | rel err **5.4×10⁻¹⁵** | < 10⁻¹⁰ | ✅ |
+
+10/10 断言通过。T1 各 $\alpha$ 分支 rel err = 0 —— 测试里的"analytic"和 kernel 的闭式解是 bit-wise 同一个表达式,正确则必然 exact。T4 才是独立验证能量预算(分别算 E 总和、$\rho c_v \Delta T$,比值对齐到 ULP)。
+
+A5 30/30 + B-M1 6/6 + B-M2 5/5 回归零影响(`cool_on = false` 默认)。
+
+### 为什么 B-M3 比 B-M2 快很多
+
+Spitzer 导热 kernel 是 parabolic PDE,$\Delta t_\mathrm{cond} \sim h^2/\chi$ —— 必须 subcycle。
+Townsend 冷却是 cell-local ODE,闭式解 **exact**,$\Delta t$ 可以任意大;代码路径就是
+`fill_ghost + cons_to_prim + 1 kernel`,没有循环、没有 CFL 计算。
+
+### 实现备忘
+
+1. **Tfloor 必须有**:$\alpha > 1$ 的情况 $T \to 0$ 需要无穷时间,但 $\alpha < 1$ 时
+   $T$ 会在 finite time 里打穿 0(`base = T0^{1-α} - C(1-α)dt ≤ 0`)。kernel
+   检测后 clamp 到 `Tfloor`,避免 NaN 传播。
+2. **`Tnew > T0` 兜底**:浮点误差可能让 $\alpha = 1$ 分支在 $Ct \ll 1$ 时
+   `exp(-Ct) ≈ 1` 产生舍入尘埃,用 `if (Tnew > T0) Tnew = T0` 强制单调。
+3. **ΔE 计算用 $\rho c_v (T_\mathrm{new} - T_0)$**:不是 `(E_new - E_old)`。
+   E 里还有 KE + ME,冷却只改 $\rho e_\mathrm{th}$,用 $T$ 差值直接算避免把
+   KE/ME 也卷进算术误差。
+4. **v1 单段 $\Lambda$**:暂不支持 Sutherland-Dopita 多段表。未来 B-M5
+   (coronal cooling) 会加分段 Townsend 查表(每段闭式,cross-segment 用
+   temporal evolution function $Y(T)$)。
+
+### 公共 API
+
+```cpp
+// athena_mhd_solver.cuh
+bool   cool_on      = false;   // false = off
+double cool_Lambda0 = 0.0;
+double cool_Tref    = 1.0;
+double cool_alpha   = 0.0;
+double cool_Tfloor  = 1e-6;
+void   apply_cooling(double dt);   // no-op if cool_on=false
+```
+
+---
+
+## B-M4 — 占位
 
 详细 setup 在进入时补。

@@ -956,3 +956,50 @@ __global__ void k_athmhd_conduction_cfl(
     double cv = 1.0 / gm1;
     dt_buf[cell] = 0.5 * w_rho[c] * cv * hmin * hmin / kpar;
 }
+
+// ============================================================
+// §C7 Townsend 2009 closed-form optically-thin cooling.
+//   Single-segment power-law Λ(T) = Λ₀ (T/T_ref)^α.
+//   ODE:  ρ c_v dT/dt = -ρ² Λ / (μ_e m_u)²  → in code units
+//         dT/dt = -(γ-1) ρ Λ = -C · T^α  with
+//           C = (γ-1) · ρ · Λ₀ / T_ref^α
+//   Closed form (α ≠ 1): T = [ T₀^{1-α} - C(1-α) dt ]^{1/(1-α)}
+//   α = 1 degenerate:    T = T₀ · exp(-C dt)
+//   Floor T at Tfloor (prevents T → 0 on runaway cooling).
+//   Only the thermal energy is updated:
+//       ΔE = ρ c_v (T_new - T_old)          (T_new ≤ T_old always)
+// ============================================================
+__global__ void k_athmhd_cool_townsend(
+    const double* __restrict__ w_rho,
+    const double* __restrict__ w_P,
+    double* __restrict__ E,
+    int nx, int ny, int ng, int sy,
+    double dt, double gm1,
+    double Lambda0, double Tref, double alpha, double Tfloor)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j >= ng + ny) return;
+    int c = i * sy + j;
+    double rho = fmax(w_rho[c], 1e-30);
+    double T0  = fmax(w_P[c] / rho, Tfloor);
+    // dT/dt = -gm1·ρ·Λ(T) = -C · T^α,  C = gm1·ρ·Λ₀/Tref^α
+    double C = gm1 * rho * Lambda0 * pow(Tref, -alpha);
+    double Tnew;
+    const double one_minus_a = 1.0 - alpha;
+    if (fabs(one_minus_a) < 1e-12) {
+        Tnew = T0 * exp(-C * dt);
+    } else {
+        double base = pow(T0, one_minus_a) - C * one_minus_a * dt;
+        if (base <= 0.0) {
+            Tnew = Tfloor;
+        } else {
+            Tnew = pow(base, 1.0 / one_minus_a);
+        }
+    }
+    if (Tnew < Tfloor) Tnew = Tfloor;
+    if (Tnew > T0)     Tnew = T0;
+    double cv = 1.0 / gm1;
+    double dE = rho * cv * (Tnew - T0);
+    E[c] += dE;
+}

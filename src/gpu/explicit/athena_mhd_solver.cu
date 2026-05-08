@@ -100,6 +100,10 @@ __global__ void k_athmhd_apply_conduction(
 __global__ void k_athmhd_conduction_cfl(
     const double*, const double*, double*,
     int, int, int, int, double, double, double, double);
+__global__ void k_athmhd_cool_townsend(
+    const double*, const double*, double*,
+    int, int, int, int,
+    double, double, double, double, double, double);
 
 // ============================================================
 // init / destroy
@@ -1916,4 +1920,25 @@ void AthenaMHDSolver::apply_conduction(double dt_target) {
             "  [apply_conduction] WARNING: hit max_sub=%d (t_remaining=%g)\n",
             max_sub, t_remaining);
     }
+}
+
+// ============================================================
+// §C7 Townsend closed-form optically-thin cooling.
+//   Exact integration of dT/dt = -C T^α per cell, unconditionally
+//   stable → no subcycle, single kernel launch.
+// ============================================================
+void AthenaMHDSolver::apply_cooling(double dt) {
+    if (!cool_on || dt <= 0.0) return;
+    int sx = stride_x(), sy = stride_y();
+    (void)sx;
+    fill_ghost();
+    cons_to_prim();
+    dim3 bc(16, 16);
+    dim3 gc((nx + bc.x - 1) / bc.x, (ny + bc.y - 1) / bc.y);
+    k_athmhd_cool_townsend<<<gc, bc>>>(
+        d_w_rho, d_w_P, d_E,
+        nx, ny, ng, sy,
+        dt, gamma - 1.0,
+        cool_Lambda0, cool_Tref, cool_alpha, cool_Tfloor);
+    CUDA_CHECK(cudaGetLastError());
 }

@@ -117,6 +117,20 @@ struct AthenaMHDSolver {
     double *d_Gy_cond       = nullptr;   // y-face heat flux
     double *d_cond_dt_buf   = nullptr;   // per-cell Δt_cond
 
+    // ---- §C7 optically-thin radiative cooling ------------------
+    // Single power-law Λ(T) = Λ₀·(T/T_ref)^α; ODE dT/dt = -C·T^α with
+    //   C = (γ-1)·ρ·Λ₀ / T_ref^α   (in code units, k_B=μ=1, so c_v=1/(γ-1))
+    // Townsend 2009 closed-form: α≠1 → T^{1-α} = T₀^{1-α} - C(1-α)dt
+    //                              α=1 → T = T₀ exp(-C dt)
+    // Per-cell, unconditionally stable (exact integration of local power
+    // law). cool_on = false disables. v1 uses single-segment Λ; piecewise
+    // table left for future B-M5 coronal cooling.
+    bool    cool_on         = false;     // false = off
+    double  cool_Lambda0    = 0.0;
+    double  cool_Tref       = 1.0;
+    double  cool_alpha      = 0.0;
+    double  cool_Tfloor     = 1e-6;      // below this, clamp (prevents T→0)
+
     // ---- well-balanced MHSE (§B4) ------------------------------
     // Per-cell precomputed R(U_hse) + gravity(U_hse), stored once at
     // snapshot_hse() time.  Subtracted every step so U_hse is a fixed
@@ -240,6 +254,12 @@ struct AthenaMHDSolver {
     // No-op if kappa0 <= 0.  Uses per-subcycle CFL (C6-CFL).
     void apply_conduction(double dt_target);
     double compute_conduction_dt();    // returns ½·min ρ·c_v·h²/κ_∥
+
+    // §C7 Townsend closed-form optically-thin cooling.  Advances E by
+    // dt (exact integration of dT/dt = -C T^α on each cell).  No-op if
+    // cool_on=false.  Does NOT touch ρ / momentum / B — only thermal
+    // energy (E -= ρ c_v (T_old - T_new)).  Safe for any dt.
+    void apply_cooling(double dt);
 
     // MHD rotor (Tóth 2000 Rotor Test 1, Stone+08 Fig 25).
     //   Inside r<0.1: ρ=10, rigid-body rotation at ω=200
