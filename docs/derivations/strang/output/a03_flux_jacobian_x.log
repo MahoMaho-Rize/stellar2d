@@ -1,0 +1,56 @@
+
+============================================================
+  A3 - x-direction flux Jacobian eigensystem
+============================================================
+  [OK] A3-char-poly: det(A_x - lam I) = (u-lam)^2 ((u-lam)^2 - c^2) — sympy verified to 0.
+  [OK] A3-eigvec A_x R_0 = lam_0 R_0 component 0 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_0 = lam_0 R_0 component 1 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_0 = lam_0 R_0 component 2 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_0 = lam_0 R_0 component 3 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_1 = lam_1 R_1 component 0 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_1 = lam_1 R_1 component 1 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_1 = lam_1 R_1 component 2 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_1 = lam_1 R_1 component 3 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_2 = lam_2 R_2 component 0 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_2 = lam_2 R_2 component 1 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_2 = lam_2 R_2 component 2 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_2 = lam_2 R_2 component 3 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_3 = lam_3 R_3 component 0 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_3 = lam_3 R_3 component 1 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_3 = lam_3 R_3 component 2 — sympy verified to 0.
+  [OK] A3-eigvec A_x R_3 = lam_3 R_3 component 3 — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (0,0) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (0,1) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (0,2) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (0,3) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (1,0) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (1,1) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (1,2) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (1,3) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (2,0) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (2,1) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (2,2) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (2,3) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (3,0) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (3,1) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (3,2) — sympy verified to 0.
+  [OK] A3-LR orthogonality L R = I at (3,3) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (0,0) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (0,1) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (0,2) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (0,3) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (1,0) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (1,1) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (1,2) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (1,3) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (2,0) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (2,1) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (2,2) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (2,3) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (3,0) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (3,1) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (3,2) — sympy verified to 0.
+  [OK] A3-char-decomp R Lam L = A_x at (3,3) — sympy verified to 0.
+  wrote output/a03_flux_jacobian_x.latex.tex
+
+All A3 identities verified by sympy.

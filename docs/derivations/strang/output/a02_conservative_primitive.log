@@ -1,0 +1,34 @@
+
+============================================================
+  A2 - Conservative <-> primitive bijection
+============================================================
+  [OK] A2-roundtrip P->C->P component rho — sympy verified to 0.
+  [OK] A2-roundtrip P->C->P component u — sympy verified to 0.
+  [OK] A2-roundtrip P->C->P component v — sympy verified to 0.
+  [OK] A2-roundtrip P->C->P component p — sympy verified to 0.
+  [OK] A2-roundtrip C->P->C component rho — sympy verified to 0.
+  [OK] A2-roundtrip C->P->C component m_x — sympy verified to 0.
+  [OK] A2-roundtrip C->P->C component m_y — sympy verified to 0.
+  [OK] A2-roundtrip C->P->C component E — sympy verified to 0.
+  [OK] A2-jacobian-forward-det = rho^2/(gamma-1) — sympy verified to 0.
+  [OK] A2-jacobian-inverse-det = (gamma-1)/rho^2 — sympy verified to 0.
+  [OK] A2-jacobian-chain[0,0] = delta_{00} — sympy verified to 0.
+  [OK] A2-jacobian-chain[0,1] = delta_{01} — sympy verified to 0.
+  [OK] A2-jacobian-chain[0,2] = delta_{02} — sympy verified to 0.
+  [OK] A2-jacobian-chain[0,3] = delta_{03} — sympy verified to 0.
+  [OK] A2-jacobian-chain[1,0] = delta_{10} — sympy verified to 0.
+  [OK] A2-jacobian-chain[1,1] = delta_{11} — sympy verified to 0.
+  [OK] A2-jacobian-chain[1,2] = delta_{12} — sympy verified to 0.
+  [OK] A2-jacobian-chain[1,3] = delta_{13} — sympy verified to 0.
+  [OK] A2-jacobian-chain[2,0] = delta_{20} — sympy verified to 0.
+  [OK] A2-jacobian-chain[2,1] = delta_{21} — sympy verified to 0.
+  [OK] A2-jacobian-chain[2,2] = delta_{22} — sympy verified to 0.
+  [OK] A2-jacobian-chain[2,3] = delta_{23} — sympy verified to 0.
+  [OK] A2-jacobian-chain[3,0] = delta_{30} — sympy verified to 0.
+  [OK] A2-jacobian-chain[3,1] = delta_{31} — sympy verified to 0.
+  [OK] A2-jacobian-chain[3,2] = delta_{32} — sympy verified to 0.
+  [OK] A2-jacobian-chain[3,3] = delta_{33} — sympy verified to 0.
+  [OK] A2-positivity-envelope (definitional identity) — sympy verified to 0.
+  wrote output/a02_conservative_primitive.latex.tex
+
+All A2 identities verified by sympy.
