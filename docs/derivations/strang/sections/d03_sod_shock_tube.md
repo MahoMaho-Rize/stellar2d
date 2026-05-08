@@ -111,7 +111,7 @@ The **contact invariant** $p_L^\star = p_R^\star = p^\star$ is a
 2. Evolve for $T = 0.2$.
 3. Download $\rho, m_x, m_y, \delta E$; reconstruct $(\rho, u, P)$.
 4. Compare against golden `rho_profile, u_profile, P_profile` at
-   $x = $ cell centres.
+   $x$ = cell centres.
 5. Compute $L^1$ norm of the error; required: $L^1 < 10^{-2}$ at
    $n_x = 200$ (the scheme's typical Sod accuracy).
 

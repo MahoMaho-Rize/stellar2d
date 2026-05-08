@@ -69,7 +69,7 @@ Moreover, the upwind flux (for $u_0 > 0$) is $\mathbf{F}^\star =
 ## Entropy advection
 
 The specific entropy $s = \log P - \gamma \log \rho$ has
-$\log P_0 = $ constant, so $s(x, t) = \log P_0 - \gamma \log
+$\log P_0$ is constant, so $s(x, t) = \log P_0 - \gamma \log
 \rho(x, t)$. Since $\rho$ is advected by $u_0$, $s$ is advected by
 $u_0$ as well. $D_t s = 0$ (sympy verified directly).
 

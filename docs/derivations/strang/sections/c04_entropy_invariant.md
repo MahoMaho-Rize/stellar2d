@@ -76,7 +76,7 @@ with kinetic energy, with internal energy (and entropy) unchanged.
 
 On pure HSE ($\mathbf{v} = \mathbf{0}$), the material derivative
 $D_t s = (\partial_t + \mathbf{v}\cdot\nabla)s = \partial_t s = 0$
-because $s = \log K = $ constant in $y$ (isentropic stratification,
+because $s = \log K$ is constant in $y$ (isentropic stratification,
 §B2). The entropy invariant is satisfied trivially — there is no
 advection to advect anything, and the Eulerian $\partial_t s$ is
 zero because $s$ is constant.
