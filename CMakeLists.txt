@@ -304,6 +304,15 @@ if(USE_GPU)
     target_link_libraries(test_pseudo_spectral_taylor_green PRIVATE
         CUDA::cufft CUDA::cublas)
 
+    # anelastic_sl g-mode EVP convergence (Boussinesq + constant N²,
+    # analytic dispersion ω² = N² kx²/(kx² + (n_g π/Ly)²)).
+    add_gpu_test(anelastic_sl_gmode_convergence
+                 tests/test_anelastic_sl_gmode_convergence.cu
+                 EXTRA_SOURCES src/gpu/spectral/anelastic_sl_solver.cu
+                               src/gpu/spectral/anelastic_sl_kernels.cu)
+    target_link_libraries(test_anelastic_sl_gmode_convergence PRIVATE
+        CUDA::cufft CUDA::cublas CUDA::cusolver)
+
     # cart_ale2 periodic uniform-advection regression (P30/P31 lock)
     add_gpu_test(cart_ale2_uniform_advect
                  tests/test_cart_ale2_uniform_advect.cu
