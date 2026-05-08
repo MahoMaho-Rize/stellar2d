@@ -1,0 +1,12 @@
+
+============================================================
+  D6 - HSE zero-perturbation lock
+============================================================
+  [OK] D6-HSE-update-cancellation: flux gradient + gravity source = 0 on HSE — sympy verified to 0.
+  [OK] D6-HSE-energy: energy update = 0 on HSE (both flux and source zero) — sympy verified to 0.
+  [OK] D6-HSE-rho: density update = 0 on HSE (v_bar = 0) — sympy verified to 0.
+  [OK] D6-HSE-xmom: x-momentum update = 0 on HSE — sympy verified to 0.
+  wrote output/d06_hse_zero_perturbation_lock.goldens.json
+  wrote output/d06_hse_zero_perturbation_lock.latex.tex
+
+All D6 identities verified by sympy.

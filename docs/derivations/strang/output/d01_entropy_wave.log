@@ -1,0 +1,19 @@
+
+============================================================
+  D1 - Entropy-wave canonical IC
+============================================================
+  [OK] D1-PDE-mass: rho_t + (rho u)_x + (rho v)_y = 0 — sympy verified to 0.
+  [OK] D1-PDE-xmom: m_x eq holds — sympy verified to 0.
+  [OK] D1-PDE-ymom: m_y eq holds — sympy verified to 0.
+  [OK] D1-PDE-energy: E eq holds — sympy verified to 0.
+  [OK] D1-periodicity: rho(x, T) = rho(x, 0) — sympy verified to 0.
+  [OK] D1-HLLC-S-star: on entropy wave, S_star = u_0 — sympy verified to 0.
+  [OK] D1-upwind-flux[0]: F_L[0] = expected — sympy verified to 0.
+  [OK] D1-upwind-flux[1]: F_L[1] = expected — sympy verified to 0.
+  [OK] D1-upwind-flux[2]: F_L[2] = expected — sympy verified to 0.
+  [OK] D1-upwind-flux[3]: F_L[3] = expected — sympy verified to 0.
+  [OK] D1-entropy-invariant: D_t s = 0 on entropy-wave ansatz — sympy verified to 0.
+  wrote output/d01_entropy_wave.goldens.json
+  wrote output/d01_entropy_wave.latex.tex
+
+All D1 identities verified by sympy.

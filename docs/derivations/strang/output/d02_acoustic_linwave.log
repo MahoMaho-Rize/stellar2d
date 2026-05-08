@@ -1,0 +1,19 @@
+
+============================================================
+  D2 - Acoustic linwave canonical IC
+============================================================
+  [OK] D2-adiabatic: delta_P = c_0^2 delta_rho — sympy verified to 0.
+  [OK] D2-lin-mass: linearised mass eq holds — sympy verified to 0.
+  [OK] D2-lin-mom: linearised x-momentum eq holds — sympy verified to 0.
+  [OK] D2-lin-pressure: linearised pressure eq holds — sympy verified to 0.
+  [OK] D2-nonlin-mass-O(eps): O(epsilon) mass residual vanishes — sympy verified to 0.
+  [OK] D2-phase-speed: right-acoustic phase speed = u_0 + c_0.
+  [OK] D2-periodicity: delta_rho(x, T) = delta_rho(x, 0) — sympy verified to 0.
+  [OK] D2-eigenvec[0]: right-acoustic eigenvec matches IC amplitude — sympy verified to 0.
+  [OK] D2-eigenvec[1]: right-acoustic eigenvec matches IC amplitude — sympy verified to 0.
+  [OK] D2-eigenvec[2]: right-acoustic eigenvec matches IC amplitude — sympy verified to 0.
+  [OK] D2-eigenvec[3]: right-acoustic eigenvec matches IC amplitude — sympy verified to 0.
+  wrote output/d02_acoustic_linwave.goldens.json
+  wrote output/d02_acoustic_linwave.latex.tex
+
+All D2 identities verified by sympy.
