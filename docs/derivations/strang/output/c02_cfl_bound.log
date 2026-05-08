@@ -1,0 +1,13 @@
+
+============================================================
+  C2 - CFL bound
+============================================================
+  [OK] C2-LF-amplification: |g|^2 = 1 + (nu^2 - 1) sin^2(theta) — sympy verified to 0.
+  [OK] C2-LF-stability: |g|^2 <= 1 for all theta iff |nu| <= 1 (strong-form).
+  [OK-num] C2-max-speed: max(|u-c|,|u+c|) = |u|+c across 100 samples (max|residual| = 0.000e+00).
+  [INFO] C2-kernel-sigma: the Strang kernel uses cfl_number = 0.4 by default;
+         this is 60% below the split-style 1D bound sigma = 1 and
+         20% below the unsplit-style 2D bound sigma = 0.5.
+  wrote output/c02_cfl_bound.latex.tex
+
+All C2 identities verified by sympy.

@@ -1,0 +1,13 @@
+
+============================================================
+  C4 - Smooth-flow entropy invariant
+============================================================
+  [OK] C4-chain: D_t s = (1/P) D_t P - (gamma/rho) D_t rho — sympy verified to 0.
+  [OK] C4-entropy-invariant: D_t s = 0 on smooth solutions of Euler — sympy verified to 0.
+  [OK] C4-K-chain: D_t (P rho^-gamma) chain-rule form — sympy verified to 0.
+  [OK] C4-K-invariant: D_t (P rho^-gamma) = 0 on smooth Euler — sympy verified to 0.
+  [OK] C4-K-s-relation: log(K) = s (strong-form identity, via expand_log) — sympy verified to 0.
+  [OK] C4-HSE-consistency: on HSE u=v=0, D_t s = 0 trivially (s = log K, constant in time and space).
+  wrote output/c04_entropy_invariant.latex.tex
+
+All C4 identities verified by sympy.
