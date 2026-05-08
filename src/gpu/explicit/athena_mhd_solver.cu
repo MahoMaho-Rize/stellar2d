@@ -86,6 +86,20 @@ __global__ void k_athmhd_cfl(
     double*, int, int, int, int, int, double, double, double);
 __global__ void k_athmhd_divB_cc(
     const double*, const double*, double*, int, int, int, int, double, double);
+__global__ void k_athmhd_compute_T(
+    const double*, const double*, double*, int, int);
+__global__ void k_athmhd_conduction_flux_x(
+    const double*, const double*, const double*, const double*,
+    double*, int, int, int, int, int, double, double, double);
+__global__ void k_athmhd_conduction_flux_y(
+    const double*, const double*, const double*, const double*,
+    double*, int, int, int, int, int, double, double, double);
+__global__ void k_athmhd_apply_conduction(
+    double*, const double*, const double*,
+    int, int, int, int, int, double, double, double);
+__global__ void k_athmhd_conduction_cfl(
+    const double*, const double*, double*,
+    int, int, int, int, double, double, double, double);
 
 // ============================================================
 // init / destroy
@@ -173,6 +187,12 @@ void AthenaMHDSolver::init(int nx_, int ny_, double Lx_, double Ly_,
     alloc_zero(&d_rhs_hse_s2_E,   nb_cell);
     alloc_zero(&d_rhs_hse_s2_Bz,  nb_cell);
     wb_active = false;
+    // §C6 conduction
+    alloc_zero(&d_T_cc,        nb_cell);
+    alloc_zero(&d_Fx_cond,     nb_fx);
+    alloc_zero(&d_Gy_cond,     nb_fy);
+    alloc_zero(&d_cond_dt_buf, (size_t)nx * (size_t)ny * sizeof(double));
+    kappa0 = 0.0;
     // CFL
     alloc_zero(&d_cfl_buf, (size_t)nx * (size_t)ny * sizeof(double));
 
@@ -198,6 +218,7 @@ void AthenaMHDSolver::destroy() {
     F(d_rhs_hse_s1_mz);  F(d_rhs_hse_s1_E);  F(d_rhs_hse_s1_Bz);
     F(d_rhs_hse_s2_rho); F(d_rhs_hse_s2_mx); F(d_rhs_hse_s2_my);
     F(d_rhs_hse_s2_mz);  F(d_rhs_hse_s2_E);  F(d_rhs_hse_s2_Bz);
+    F(d_T_cc); F(d_Fx_cond); F(d_Gy_cond); F(d_cond_dt_buf);
     F(d_cfl_buf);
 }
 
@@ -1807,4 +1828,92 @@ void AthenaMHDSolver::init_hse_atmosphere(double g_val, double H,
         g_val, H, rho0, cs2, B0_y);
 
     snapshot_hse();
+}
+
+// ============================================================
+// §C6 Spitzer conduction — compute_conduction_dt + apply_conduction
+// ============================================================
+double AthenaMHDSolver::compute_conduction_dt() {
+    if (kappa0 <= 0.0) return 1e30;
+    fill_ghost();
+    cons_to_prim();
+    int sx = stride_x(), sy = stride_y();
+    dim3 bT(16, 16);
+    dim3 gT((sx + bT.x - 1) / bT.x, (sy + bT.y - 1) / bT.y);
+    k_athmhd_compute_T<<<gT, bT>>>(d_w_rho, d_w_P, d_T_cc, sx, sy);
+    // CFL buffer: per-cell (nx × ny).
+    dim3 gc((nx + 15) / 16, (ny + 15) / 16);
+    k_athmhd_conduction_cfl<<<gc, dim3(16, 16)>>>(
+        d_w_rho, d_T_cc, d_cond_dt_buf, nx, ny, ng, sy,
+        dx, dy, kappa0, gamma - 1.0);
+    std::vector<double> h_buf((size_t)nx * (size_t)ny);
+    CUDA_CHECK(cudaMemcpy(h_buf.data(), d_cond_dt_buf,
+                          h_buf.size() * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+    double dt_min = 1e300;
+    for (double v : h_buf) if (v > 0.0 && v < dt_min) dt_min = v;
+    return dt_min;
+}
+
+void AthenaMHDSolver::apply_conduction(double dt_target) {
+    if (kappa0 <= 0.0 || dt_target <= 0.0) return;
+    int sx = stride_x(), sy = stride_y();
+    dim3 bT(16, 16);
+    dim3 gT((sx + bT.x - 1) / bT.x, (sy + bT.y - 1) / bT.y);
+    dim3 gfx(((nx + 1) + 15) / 16, (ny + 15) / 16);
+    dim3 gfy((nx + 15) / 16, ((ny + 1) + 15) / 16);
+    dim3 gc((nx + 15) / 16, (ny + 15) / 16);
+
+    double t_remaining = dt_target;
+    int n_sub = 0;
+    const int max_sub = 100000;
+    while (t_remaining > 0.0 && n_sub < max_sub) {
+        fill_ghost();
+        cons_to_prim();
+        k_athmhd_compute_T<<<gT, bT>>>(d_w_rho, d_w_P, d_T_cc, sx, sy);
+
+        // Need T ghost populated too — for now, compute_T covers the
+        // entire padded grid, but it reads P/rho only from cell values.
+        // The fluxes use (i-1) / (i+1) so interior i ∈ [ng, ng+nx-1]
+        // reads from [ng-1, ng+nx].  Our kernel writes T at every (i,j)
+        // in [0, sx)×[0, sy), so cover ghost layer 1.  For transverse
+        // 4-point averages (fluxes use T at j±1 inside cell c), we need
+        // T at j = ng-1 and j = ng+ny — same: covered by writing all sx·sy.
+
+        // CFL for this sub-step
+        k_athmhd_conduction_cfl<<<gc, dim3(16, 16)>>>(
+            d_w_rho, d_T_cc, d_cond_dt_buf, nx, ny, ng, sy,
+            dx, dy, kappa0, gamma - 1.0);
+        std::vector<double> h_buf((size_t)nx * (size_t)ny);
+        CUDA_CHECK(cudaMemcpy(h_buf.data(), d_cond_dt_buf,
+                              h_buf.size() * sizeof(double),
+                              cudaMemcpyDeviceToHost));
+        double dt_cond = 1e300;
+        for (double v : h_buf) if (v > 0.0 && v < dt_cond) dt_cond = v;
+        // Take a fraction of CFL for margin; cap at remaining time.
+        double dt_sub = 0.45 * dt_cond;
+        if (dt_sub > t_remaining) dt_sub = t_remaining;
+        if (dt_sub <= 0.0) break;
+
+        // Face fluxes
+        k_athmhd_conduction_flux_x<<<gfx, dim3(16, 16)>>>(
+            d_T_cc, d_w_Bx, d_w_By, d_w_Bz, d_Fx_cond,
+            nx, ny, ng, sx, sy, dx, dy, kappa0);
+        k_athmhd_conduction_flux_y<<<gfy, dim3(16, 16)>>>(
+            d_T_cc, d_w_Bx, d_w_By, d_w_Bz, d_Gy_cond,
+            nx, ny, ng, sx, sy, dx, dy, kappa0);
+
+        // Apply -∇·F_c · dt_sub to E
+        k_athmhd_apply_conduction<<<gc, dim3(16, 16)>>>(
+            d_E, d_Fx_cond, d_Gy_cond,
+            nx, ny, ng, sx, sy, dx, dy, dt_sub);
+
+        t_remaining -= dt_sub;
+        ++n_sub;
+    }
+    if (n_sub >= max_sub) {
+        std::fprintf(stderr,
+            "  [apply_conduction] WARNING: hit max_sub=%d (t_remaining=%g)\n",
+            max_sub, t_remaining);
+    }
 }

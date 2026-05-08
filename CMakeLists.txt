@@ -424,6 +424,11 @@ if(USE_GPU)
                  tests/test_athena_mhd_hse_preserve.cu
                  EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
                                src/gpu/explicit/athena_mhd_kernels.cu)
+    # Phase B-M2 — Spitzer anisotropic conduction (§C6)
+    add_gpu_test(athena_mhd_conduction
+                 tests/test_athena_mhd_conduction.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)

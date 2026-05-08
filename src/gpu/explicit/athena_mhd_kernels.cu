@@ -808,3 +808,151 @@ __global__ void k_athmhd_divB_cc(
                - Byf[fy_flat(i, j,     syp1)];
     divB_cc[cflat(i, j, sy)] = dBx / dx + dBy / dy;
 }
+
+// ============================================================
+// §C6 Spitzer anisotropic conduction kernels.
+//
+// Step 1 — k_athmhd_compute_T: cell-centred T = P/ρ (code units, μ=1).
+//          Written to d_T_cc buffer; used by flux kernels.
+// Step 2 — k_athmhd_conduction_flux_x / _y: face-centred F_c normal
+//          component  F_n = -κ₀ T^(5/2) (b̂·∇T) b̂_n
+//          with b̂ = B/|B| face-averaged from neighbouring cells, and
+//          ∇T reconstructed by centred difference + transverse 4-point
+//          average of the tangential component.
+// Step 3 — k_athmhd_apply_conduction: E -= dt · ∇·F_c (the divergence
+//          of the face-flux array, same formula as hydro flux update).
+//
+// The CFL bound (§C6-CFL) is computed on the fly:
+//   Δt_cond = ½ · min_cell [ ρ·c_v·min(Δx,Δy)² / κ_∥(T) ]
+// where κ_∥(T) = κ₀ T^{5/2}.
+// ============================================================
+
+__global__ void k_athmhd_compute_T(
+    const double* __restrict__ w_rho,
+    const double* __restrict__ w_P,
+    double* __restrict__ T_cc,
+    int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || j >= sy) return;
+    int c = i * sy + j;
+    double r = fmax(w_rho[c], 1e-30);
+    T_cc[c] = w_P[c] / r;   // code units (μ=1, k_B=1)
+}
+
+// x-face: flux F_n = F·x̂ = -κ∥(T_f) (b̂·∇T)_f · b̂_x
+__global__ void k_athmhd_conduction_flux_x(
+    const double* __restrict__ T_cc,
+    const double* __restrict__ w_Bx,   // B_x_cc (recomputed in cons_to_prim)
+    const double* __restrict__ w_By,
+    const double* __restrict__ w_Bz,
+    double* __restrict__ Fx_cond,
+    int nx, int ny, int ng, int sx, int sy,
+    double dx, double dy, double kappa0)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i > ng + nx || j >= ng + ny) return;   // i+½ faces: i ∈ [ng, ng+nx]
+    int fx = i * sy + j;
+    int cL = (i - 1) * sy + j;
+    int cR = i * sy + j;
+    // Face-averaged B (arithmetic mean of left/right cell-centred B).
+    double Bx_f = 0.5 * (w_Bx[cL] + w_Bx[cR]);
+    double By_f = 0.5 * (w_By[cL] + w_By[cR]);
+    double Bz_f = 0.5 * (w_Bz[cL] + w_Bz[cR]);
+    double Bmag = sqrt(Bx_f*Bx_f + By_f*By_f + Bz_f*Bz_f);
+    if (Bmag < 1e-30) { Fx_cond[fx] = 0.0; return; }
+    double bx = Bx_f / Bmag;
+    double by = By_f / Bmag;
+    // ∂T/∂x at face: centred difference.
+    double dTdx = (T_cc[cR] - T_cc[cL]) / dx;
+    // ∂T/∂y at face: 4-point transverse average (upper/lower, left/right).
+    int cLu = cL + 1, cLd = cL - 1;    // (i-1, j±1)
+    int cRu = cR + 1, cRd = cR - 1;    // (i,   j±1)
+    double dTdy_L = (T_cc[cLu] - T_cc[cLd]) * 0.5 / dy;
+    double dTdy_R = (T_cc[cRu] - T_cc[cRd]) * 0.5 / dy;
+    double dTdy_f = 0.5 * (dTdy_L + dTdy_R);
+    double bdotgradT = bx * dTdx + by * dTdy_f;
+    // Face-centred T: arithmetic avg (for T^{5/2}).
+    double T_f = 0.5 * (T_cc[cL] + T_cc[cR]);
+    double kappa_par = kappa0 * pow(fmax(T_f, 1e-30), 2.5);
+    Fx_cond[fx] = -kappa_par * bdotgradT * bx;
+}
+
+__global__ void k_athmhd_conduction_flux_y(
+    const double* __restrict__ T_cc,
+    const double* __restrict__ w_Bx,
+    const double* __restrict__ w_By,
+    const double* __restrict__ w_Bz,
+    double* __restrict__ Gy_cond,
+    int nx, int ny, int ng, int sx, int sy,
+    double dx, double dy, double kappa0)
+{
+    int syp1 = sy + 1;
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j > ng + ny) return;   // j+½ faces
+    int fy = i * syp1 + j;
+    int cB = i * sy + (j - 1);
+    int cT = i * sy + j;
+    double Bx_f = 0.5 * (w_Bx[cB] + w_Bx[cT]);
+    double By_f = 0.5 * (w_By[cB] + w_By[cT]);
+    double Bz_f = 0.5 * (w_Bz[cB] + w_Bz[cT]);
+    double Bmag = sqrt(Bx_f*Bx_f + By_f*By_f + Bz_f*Bz_f);
+    if (Bmag < 1e-30) { Gy_cond[fy] = 0.0; return; }
+    double bx = Bx_f / Bmag;
+    double by = By_f / Bmag;
+    // ∂T/∂y at face: centred.
+    double dTdy = (T_cc[cT] - T_cc[cB]) / dy;
+    // ∂T/∂x at face: 4-point transverse average.
+    int cBl = cB - sy, cBr = cB + sy;     // (i±1, j-1)
+    int cTl = cT - sy, cTr = cT + sy;     // (i±1, j)
+    double dTdx_B = (T_cc[cBr] - T_cc[cBl]) * 0.5 / dx;
+    double dTdx_T = (T_cc[cTr] - T_cc[cTl]) * 0.5 / dx;
+    double dTdx_f = 0.5 * (dTdx_B + dTdx_T);
+    double bdotgradT = bx * dTdx_f + by * dTdy;
+    double T_f = 0.5 * (T_cc[cB] + T_cc[cT]);
+    double kappa_par = kappa0 * pow(fmax(T_f, 1e-30), 2.5);
+    Gy_cond[fy] = -kappa_par * bdotgradT * by;
+}
+
+// Apply -∇·F_c · dt to E: E[c] -= dt · [(Fx[i+1]-Fx[i])/dx + (Gy[j+1]-Gy[j])/dy]
+__global__ void k_athmhd_apply_conduction(
+    double* __restrict__ E,
+    const double* __restrict__ Fx_cond,
+    const double* __restrict__ Gy_cond,
+    int nx, int ny, int ng, int sx, int sy,
+    double dx, double dy, double dt)
+{
+    int syp1 = sy + 1;
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j >= ng + ny) return;
+    int c = i * sy + j;
+    double dFx = Fx_cond[(i + 1) * sy + j] - Fx_cond[i * sy + j];
+    double dGy = Gy_cond[i * syp1 + (j + 1)] - Gy_cond[i * syp1 + j];
+    E[c] -= dt * (dFx / dx + dGy / dy);
+}
+
+// CFL buffer: per-cell Δt_cond = ½·ρ·c_v·min(Δx,Δy)²/κ_∥(T)
+// with c_v = 1/(γ-1) in code units (k_B=μ=1).
+__global__ void k_athmhd_conduction_cfl(
+    const double* __restrict__ w_rho,
+    const double* __restrict__ T_cc,
+    double* __restrict__ dt_buf,
+    int nx, int ny, int ng, int sy,
+    double dx, double dy, double kappa0, double gm1)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j >= ng + ny) return;
+    int c = i * sy + j;
+    int cell = (i - ng) * ny + (j - ng);
+    double T = fmax(T_cc[c], 1e-30);
+    double kpar = kappa0 * pow(T, 2.5);
+    if (kpar < 1e-30) { dt_buf[cell] = 1e30; return; }
+    double hmin = fmin(dx, dy);
+    double cv = 1.0 / gm1;
+    dt_buf[cell] = 0.5 * w_rho[c] * cv * hmin * hmin / kpar;
+}

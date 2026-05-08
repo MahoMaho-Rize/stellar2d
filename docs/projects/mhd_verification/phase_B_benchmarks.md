@@ -14,7 +14,7 @@ Phase B 在此基础上加源项,逐个 milestone 向 Suzuki flux-tube 风物理
 | M | 内容 | 派生 | 测试 | 状态 |
 |---|---|---|---|---|
 | B-M1 | Well-balanced MHSE 源(§B4) | §B4 已完成 | `test_athena_mhd_hse_preserve.cu` 6/6 | ✅ |
-| B-M2 | Spitzer κ₀T^{5/2} 各向异性导热 | §C6 已完成 | TBD | 🔜 |
+| B-M2 | Spitzer κ₀T^{5/2} 各向异性导热 | §C6 已完成 | `test_athena_mhd_conduction.cu` 5/5 | ✅ |
 | B-M3 | Townsend 光学薄冷却闭式积分 | §C7 已完成 | TBD | ⏳ |
 | B-M4 | 分层 + 导热 + 冷却 combined | §B1/4/C6/7 | TBD | ⏳ |
 
@@ -81,19 +81,48 @@ bool wb_active = false;  // 默认关,A1-A5 所有测试零影响
 
 ## B-M2 — Spitzer 各向异性导热(§C6)
 
-**Setup**: TBD(开始时补)
+**Date**: 2026-05-08
+**Commit**: TBD
 
-派生基础:
-- $\mathbf{q}_\mathrm{Spitzer} = -\kappa_\parallel \hat{\mathbf{b}}\hat{\mathbf{b}}\cdot\nabla T - \kappa_\perp(\nabla T - \hat{\mathbf{b}}\hat{\mathbf{b}}\cdot\nabla T)$
-- $\kappa_\parallel = \kappa_0 T^{5/2}$,$\kappa_\perp \ll \kappa_\parallel$(各向异性比 ~10⁷ 在 corona)
-- 显式抛物 CFL:$\Delta t < h^2 \rho / (2\,\kappa_\parallel (\gamma-1)/k_B)$—— 热扩散 severe,需 STS
+### Setup
+- $\kappa_0 = 1$,$\rho_0 = 1$,$T_0 = 1$(code units,$k_B = \mu = 1$)
+- $N = 64^2$(T4 用 $32^2$),$L_x = L_y = 1$,全周期 BC
+- 温度扰动 $T(x, y) = T_0(1 + A\cos(\mathbf{k}\cdot\mathbf{r}))$,$A = 10^{-2}$
+- 均匀 $|B| = 1$,方向按测试选(C6-T1/T4 沿 $\hat{x}$,T2 沿 $\hat{y}$)
 
-### 验证计划(未开工)
+实现(operator-split,独立于 VL2 step):
+- `kappa0 > 0` 时 `apply_conduction(dt_target)` 被调用
+- subcycle Euler:每步用 CFL $\Delta t_\mathrm{cond} = 0.45 \cdot \min_\mathrm{cell} \tfrac{1}{2}\rho c_v h^2 / \kappa_\parallel$
+- flux 用 cell-centered $\hat{\mathbf{b}}$ 面平均后再归一化(§C6 "先 average B 后 normalize")
+- 默认关(`kappa0 = 0`),A5 30/30 + B1 6/6 零影响
 
-1. **C6-T1**: hot spot沿 B 扩散 — 各向异性比 ≥ 10³(测试取有限 κ⊥ 避免 0/0)
-2. **C6-T2**: $\kappa_\perp \to 0$ 极限退化 1D — 横向温度 frozen
-3. **C6-T3**: Kirchhoff potential $U = \int \kappa_\parallel dT \propto T^{7/2}/\kappa_0$ 守恒
-4. **C6-T4**: 熵产 ≥ 0 单调
+### 实测
+
+| 测试 | 测量 | 阈值 | 状态 |
+|---|---|---|---|
+| C6-T1 parallel decay 匹配 $\exp(-\chi k^2 t)$ | rel err **1.4×10⁻⁵** | < 2×10⁻² | ✅ |
+| C6-T2 perp quench (B⊥∇T) | rel change **0** | < 10⁻⁸ | ✅ |
+| C6-T3 total E 守恒 | ΔE/E = **6.5×10⁻¹⁵** | < 10⁻¹⁰ | ✅ |
+| C6-T3 ∇·B 不动 | **0** | < 10⁻¹⁰ | ✅ |
+| C6-T4 2nd 法单调衰减 | 50/50 bins 无增长 | 0 violations | ✅ |
+
+$\chi_\mathrm{eff} = \kappa_0 T_0^{5/2} / (\rho_0 c_v) = 2/3$, $\gamma_\mathrm{an} = \chi k^2 \approx 26.3$,$t_\mathrm{end} = 0.05/\gamma_\mathrm{an} \approx 1.9×10^{-3}$(5% decay linear regime)。
+实测 ratio = 0.9512 vs analytic 0.9512 — 5 位有效数字对齐。
+
+### 实现备忘
+
+1. **IC 顺序陷阱**: 首版测试在 `sv.init()` 之前设 `sv.kappa0 = 1`,但 `init()` 重置为 0 → conduction 不触发(χ=0, t=inf)。修正:设 kappa0 **必须在 seed/init 之后**。记在这里提醒未来测试。
+2. **T 于 ghost**: `k_athmhd_compute_T` 一次写全 $\mathsf{sx} \times \mathsf{sy}$ 包括 ghost 层,flux kernel 用到 $j\pm 1$ 的横向均值没问题。如果只写 interior 就需要 fill_ghost_T。
+3. **No STS in v1**: Euler subcycling 够用,1000 sub-steps/hydro-step 在 $T \sim 1$ 够快。chromosphere ($T \sim 10^6$) 才需要 Meyer+12 RKL2 $\sqrt{s}$ 加速 — 留给 B-M4 integration.
+
+### 公共 API
+
+```cpp
+// athena_mhd_solver.cuh
+double kappa0 = 0.0;              // set > 0 to enable
+void   apply_conduction(double dt_target);  // no-op if kappa0 ≤ 0
+double compute_conduction_dt();             // returns ½ ρ c_v h² / κ_∥ min
+```
 
 ---
 

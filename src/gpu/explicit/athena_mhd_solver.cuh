@@ -108,6 +108,15 @@ struct AthenaMHDSolver {
     std::vector<double> h_g_row;
     std::vector<double> h_phi_row;
 
+    // ---- §C6 Spitzer anisotropic conduction --------------------
+    // κ₀ > 0 enables conduction; apply_conduction() must be called
+    // after each VL2 step (operator split).  Kernel buffers:
+    double  kappa0          = 0.0;       // 0 = off
+    double *d_T_cc          = nullptr;   // cell-centred T = P/ρ
+    double *d_Fx_cond       = nullptr;   // x-face heat flux
+    double *d_Gy_cond       = nullptr;   // y-face heat flux
+    double *d_cond_dt_buf   = nullptr;   // per-cell Δt_cond
+
     // ---- well-balanced MHSE (§B4) ------------------------------
     // Per-cell precomputed R(U_hse) + gravity(U_hse), stored once at
     // snapshot_hse() time.  Subtracted every step so U_hse is a fixed
@@ -224,6 +233,13 @@ struct AthenaMHDSolver {
     // subtracts R(U_hse) from the residual (§B4-wb).  Idempotent:
     // calling twice yields the same defect.
     void snapshot_hse();
+
+    // §C6 Spitzer anisotropic conduction: advance total energy by
+    // dt_target via subcycled explicit FTCS on the heat flux
+    //   F_c = -κ₀ T^{5/2} (b̂·∇T) b̂.
+    // No-op if kappa0 <= 0.  Uses per-subcycle CFL (C6-CFL).
+    void apply_conduction(double dt_target);
+    double compute_conduction_dt();    // returns ½·min ρ·c_v·h²/κ_∥
 
     // MHD rotor (Tóth 2000 Rotor Test 1, Stone+08 Fig 25).
     //   Inside r<0.1: ρ=10, rigid-body rotation at ω=200
