@@ -63,6 +63,10 @@ struct AthenaVL2Solver {
     // BC in y. Default reflect (Andrassy2022 and other HSE flows). shear_mode
     // / pure-periodic flows set this true via init_shear_mode.
     bool y_periodic = false;
+    // BC in x: 0 = periodic (Andrassy / Kelvin-Helmholtz / entropy_wave / linwave),
+    // 1 = reflecting wall (symmetric with IM1 flip),
+    // 2 = outflow (zero-gradient copy). Set from driver via --bc-x.
+    int x_bc = 0;
 
     // ---- tracer ----------------------------------------------
     bool tracer_enabled = false; // nscalars=1 if true

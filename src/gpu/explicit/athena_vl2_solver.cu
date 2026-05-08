@@ -26,6 +26,12 @@ __global__ void k_athvl2_cons_to_prim(
 __global__ void k_athvl2_fill_ghost_x_periodic(
     double* rho, double* mx, double* my, double* E, double* s,
     int nx, int ng, int sx, int sy);
+__global__ void k_athvl2_fill_ghost_x_reflect(
+    double* rho, double* mx, double* my, double* E, double* s,
+    int nx, int ng, int sx, int sy);
+__global__ void k_athvl2_fill_ghost_x_outflow(
+    double* rho, double* mx, double* my, double* E, double* s,
+    int nx, int ng, int sx, int sy);
 __global__ void k_athvl2_fill_ghost_y_reflect(
     double* rho, double* mx, double* my, double* E, double* s,
     int ny, int ng, int sx, int sy);
@@ -772,8 +778,16 @@ void AthenaVL2Solver::compute_sod_error(double t_now, int ncycle,
 void AthenaVL2Solver::fill_ghost() {
     int sx = stride_x(), sy = stride_y();
     dim3 bx(64, 4), gx((sy + bx.x - 1) / bx.x, (ng + bx.y - 1) / bx.y);
-    k_athvl2_fill_ghost_x_periodic<<<gx, bx>>>(
-        d_rho, d_mx, d_my, d_E, d_s, nx, ng, sx, sy);
+    if (x_bc == 1) {
+        k_athvl2_fill_ghost_x_reflect<<<gx, bx>>>(
+            d_rho, d_mx, d_my, d_E, d_s, nx, ng, sx, sy);
+    } else if (x_bc == 2) {
+        k_athvl2_fill_ghost_x_outflow<<<gx, bx>>>(
+            d_rho, d_mx, d_my, d_E, d_s, nx, ng, sx, sy);
+    } else {
+        k_athvl2_fill_ghost_x_periodic<<<gx, bx>>>(
+            d_rho, d_mx, d_my, d_E, d_s, nx, ng, sx, sy);
+    }
     dim3 by(64, 4), gy((sx + by.x - 1) / by.x, (ng + by.y - 1) / by.y);
     if (y_periodic) {
         k_athvl2_fill_ghost_y_periodic<<<gy, by>>>(

@@ -87,7 +87,7 @@ int main() {
     HelmholtzTable tbl;
     if (tbl.load(nullptr, "third_party/helmholtz/helm_table.bin", 0) != 0) {
         std::printf("SKIP: helm_table.bin not present\n");
-        return 0;
+        return 77;  // ctest SKIP convention
     }
     HelmholtzTableView tv = tbl.view;
     tv.Abar = 1.3;

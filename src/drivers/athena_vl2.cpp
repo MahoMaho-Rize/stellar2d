@@ -69,6 +69,29 @@ int run_athena_vl2(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     av.limiter = cfg.athena_vl2_limiter;
     // Force Athena vl2 2D stability limit (Athena hardcodes this to 0.5).
     av.cfl_limit = 0.5;
+    // x-BC: reuse --bc-x naming from cart_ale2. The user-facing default
+    // of cart_ale2_bc_x is "reflect" (cart_ale2's sensible default); but
+    // most athena_vl2 tests (andrassy / shear / entropy_wave / acoustic_wave)
+    // are periodic-domain flows, so for those we stay periodic unless the
+    // user *explicitly* asks for a wall. Sod is the opposite: periodic
+    // wraps pollute L1, so for Sod we default to outflow.
+    // Per-IC x_bc default: periodic IC's stay periodic unless user opts
+    // out; Sod defaults to outflow (periodic wraps pollute the rarefaction).
+    // cfg.cart_ale2_bc_x defaults to "reflect" but is only honoured here
+    // when the user *explicitly* changes it (we compare against "periodic"
+    // which is the standard opt-out keyword).
+    const bool periodic_ic = is_andrassy || is_shear || is_ewave || is_awave;
+    if (periodic_ic) {
+        if      (cfg.cart_ale2_bc_x == "outflow")  av.x_bc = 2;
+        else if (cfg.cart_ale2_bc_x == "periodic") av.x_bc = 0;
+        else                                        av.x_bc = 0;  // periodic default
+    } else if (is_sod) {
+        if      (cfg.cart_ale2_bc_x == "periodic") av.x_bc = 0;
+        else if (cfg.cart_ale2_bc_x == "reflect")  av.x_bc = 1;
+        else                                        av.x_bc = 2;  // outflow default
+    } else {
+        av.x_bc = 0;
+    }
     if (is_andrassy) {
         av.init_andrassy2022(cfg.cart_ale2_slab_file,
                              cfg.cart_ale2_andrassy_amp,

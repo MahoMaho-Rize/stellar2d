@@ -339,6 +339,11 @@ if(USE_GPU)
     add_gpu_test(kap_table          tests/test_kap_table.cu)
     add_gpu_test(helm_dual          tests/test_helm_dual.cu
                  EXTRA_SOURCES src/physics/helmholtz_eos.cu)
+    # Tests above load third_party tables (helm_table.bin, *.kapbin) that are
+    # not in-tree. When the table is missing they exit 77 → ctest SKIPPED
+    # instead of PASSED, so a missing fixture doesn't masquerade as coverage.
+    set_tests_properties(helm_l2 helm_eos kap_table helm_dual
+                         PROPERTIES SKIP_RETURN_CODE 77)
     add_gpu_test(residual_dual      tests/test_residual_dual.cu
                  EXTRA_SOURCES src/physics/helmholtz_eos.cu)
 

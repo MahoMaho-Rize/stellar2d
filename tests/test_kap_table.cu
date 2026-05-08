@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     int rc = kap.load(path, s);
     if (rc != 0) {
         std::printf("SKIP: cannot load %s (rc=%d)\n", path, rc);
-        return 0;
+        return 77;  // ctest SKIP convention
     }
     std::printf("\n==== KAPv1 loader test ====\n");
     std::printf("loaded: family=%s  Z=%.4g  n_X=%d  n_logT=%d  n_logR=%d\n",

@@ -82,7 +82,7 @@ int main() {
 
     if (tbl.load(nullptr, bin_path, s) != 0) {
         std::printf("SKIP: table not present at %s\n", bin_path);
-        return 0;
+        return 77;  // ctest SKIP convention
     }
 
     const size_t NENT = (size_t)HELM_IMAX * HELM_JMAX;

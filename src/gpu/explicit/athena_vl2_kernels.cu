@@ -185,6 +185,60 @@ __global__ void k_athvl2_fill_ghost_y_periodic(
     if (s != nullptr) { s[cBd] = s[cBs]; s[cTd] = s[cTs]; }
 }
 
+// Reflecting wall in x: symmetric ρ, IM2, E; antisymmetric IM1.
+__global__ void k_athvl2_fill_ghost_x_reflect(
+    double* rho, double* mx, double* my, double* E, double* s,
+    int nx, int ng, int sx, int sy)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (j >= sy || g >= ng) return;
+    int iL_dst = ng - 1 - g;
+    int iL_src = ng + g;
+    int iR_dst = ng + nx + g;
+    int iR_src = ng + nx - 1 - g;
+    int cL_dst = cflat(iL_dst, j, sy);
+    int cL_src = cflat(iL_src, j, sy);
+    int cR_dst = cflat(iR_dst, j, sy);
+    int cR_src = cflat(iR_src, j, sy);
+    rho[cL_dst] =  rho[cL_src];
+    mx [cL_dst] = -mx [cL_src];
+    my [cL_dst] =  my [cL_src];
+    E  [cL_dst] =  E  [cL_src];
+    rho[cR_dst] =  rho[cR_src];
+    mx [cR_dst] = -mx [cR_src];
+    my [cR_dst] =  my [cR_src];
+    E  [cR_dst] =  E  [cR_src];
+    if (s != nullptr) { s[cL_dst] = s[cL_src]; s[cR_dst] = s[cR_src]; }
+}
+
+// Outflow (zero-gradient) in x: all fields copied from last interior cell.
+__global__ void k_athvl2_fill_ghost_x_outflow(
+    double* rho, double* mx, double* my, double* E, double* s,
+    int nx, int ng, int sx, int sy)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (j >= sy || g >= ng) return;
+    int iL_dst = ng - 1 - g;
+    int iL_src = ng;                    // left edge interior
+    int iR_dst = ng + nx + g;
+    int iR_src = ng + nx - 1;           // right edge interior
+    int cL_dst = cflat(iL_dst, j, sy);
+    int cL_src = cflat(iL_src, j, sy);
+    int cR_dst = cflat(iR_dst, j, sy);
+    int cR_src = cflat(iR_src, j, sy);
+    rho[cL_dst] = rho[cL_src];
+    mx [cL_dst] = mx [cL_src];
+    my [cL_dst] = my [cL_src];
+    E  [cL_dst] = E  [cL_src];
+    rho[cR_dst] = rho[cR_src];
+    mx [cR_dst] = mx [cR_src];
+    my [cR_dst] = my [cR_src];
+    E  [cR_dst] = E  [cR_src];
+    if (s != nullptr) { s[cL_dst] = s[cL_src]; s[cR_dst] = s[cR_src]; }
+}
+
 // ============================================================
 // x-direction flux via PLM (primitive) + HLLC
 // order = 1 → donor-cell (pure upwind Toro-style);
