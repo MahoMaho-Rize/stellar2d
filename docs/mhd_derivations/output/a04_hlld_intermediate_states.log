@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  A4 — HLLD Riemann solver intermediate states (Miyoshi-Kusano 2005)
+════════════════════════════════════════════════════════════
+  [OK] Ptot* equality  —  symbolically verified
+
+  Numerical consistency — 20 random L/R states
+    [OK] outer fast-wave RH consistency (L):  max err = 2.33e-15   (20 trials)
+    [OK] outer fast-wave RH consistency (R):  max err = 3.11e-15   (20 trials)
+  → wrote output/a04_hlld_intermediate_states.latex.tex
+
+All A4 identities verified.

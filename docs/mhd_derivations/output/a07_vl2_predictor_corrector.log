@@ -1,0 +1,13 @@
+
+════════════════════════════════════════════════════════════
+  A7 — VL2 predictor–corrector (Stone-Gardiner 2009)
+════════════════════════════════════════════════════════════
+  [OK] VL2 advection: g(0) = 1 — sympy verified to 0.
+  [OK] VL2 advection: first-order term = −iν — sympy verified to 0.
+  [OK] VL2 advection: second-order term = −ν²/2  (Lax-Wendroff) — sympy verified to 0.
+  [OK] A7-I2: |g|² ≤ 1 on ξ∈[0,π], ν∈{0.1..1.0} — stable.
+  [OK] A7-I2: |g|² = 1.2210 > 1 at ν=1.05 — unstable beyond CFL=1 as expected.
+  [OK] A7-I3: VL2 residual leading O(ε³) term = U_xxx*a*(a**2 - 1)/6   (2nd-order consistent)
+  → wrote output/a07_vl2_predictor_corrector.latex.tex
+
+All A7 identities verified by sympy.

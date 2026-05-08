@@ -1,0 +1,9 @@
+
+════════════════════════════════════════════════════════════
+  C1 — Ohmic (resistive) dissipation
+════════════════════════════════════════════════════════════
+  [OK] ∇×(∇×B) = ∇(∇·B) − ∇²B (3 components).
+  [OK] ∇×(η_O J) variable-η expansion (3 components).
+  → wrote output/c1_ohmic_dissipation.latex.tex
+
+All C1 identities verified.

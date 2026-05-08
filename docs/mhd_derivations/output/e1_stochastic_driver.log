@@ -1,0 +1,13 @@
+
+════════════════════════════════════════════════════════════
+  E1 — Stochastic broadband photospheric driver
+════════════════════════════════════════════════════════════
+  [OK] P(ω) ∝ ω^{-1} spectrum integrates to A² ln(ω_max/ω_min).
+  [OK] normalisation reproduces target ⟨δv²⟩ = A_rms².
+  [OK] single sinusoid variance = A²/2.
+  [OK] cross-frequency terms vanish in time average.
+  [OK] Elsässer variables obey pure one-way advection.
+  [OK] zero-gradient BC on z^- forces incoming amplitude = 0.
+  → wrote output/e1_stochastic_driver.latex.tex
+
+All E1 identities verified.

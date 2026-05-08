@@ -1,0 +1,11 @@
+
+════════════════════════════════════════════════════════════
+  F1 — Oblique linear MHD wave rotated eigenvectors
+════════════════════════════════════════════════════════════
+  [20 trials]  max eigenvalue error = 4.88e-15
+  [OK] spectrum depends only on (|B|, B·k̂, ρ, p), confirming rotational invariance about k̂.
+  [OK] rotated eigenvector is solenoidal: k · δB = 0.
+  [OK] c_f² uses rotated-frame c_Ax = (B·k̂)/√ρ.
+  → wrote output/f1_oblique_linwave.latex.tex
+
+All F1 identities verified.

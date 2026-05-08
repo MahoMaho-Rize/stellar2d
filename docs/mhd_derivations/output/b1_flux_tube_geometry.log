@@ -1,0 +1,11 @@
+
+════════════════════════════════════════════════════════════
+  B1 — Super-radial flux-tube reduction (Suzuki-style)
+════════════════════════════════════════════════════════════
+  [OK] A(r) B_r(r) = B_0 R_*² holds identically — sympy verified to 0.
+  [OK] MHSE: ∂_r p + ρ g + B_r² ∂_r(ln A) = 0 — sympy verified to 0.
+  [OK] Kopp-Holzer f(r → ∞) = f_max — sympy verified to 0.
+  [OK] Kopp-Holzer f(R_*) = 1 numerical (0.0e+00).
+  → wrote output/b1_flux_tube_geometry.latex.tex
+
+All B1 identities verified.

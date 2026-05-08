@@ -39,6 +39,7 @@ set(SOURCES
     src/drivers/cart_impl.cpp
     src/drivers/cart_ale2.cpp
     src/drivers/athena_vl2.cpp
+    src/drivers/athena_mhd.cpp
     src/drivers/fas.cpp
     src/drivers/fas2.cpp
     src/drivers/radial1d.cpp
@@ -72,6 +73,8 @@ if(USE_GPU)
         src/gpu/explicit/wb2d_kernels.cu
         src/gpu/explicit/athena_vl2_solver.cu
         src/gpu/explicit/athena_vl2_kernels.cu
+        src/gpu/explicit/athena_mhd_solver.cu
+        src/gpu/explicit/athena_mhd_kernels.cu
         # --- common device utilities ----------------------------------------
         src/gpu/common/gmg_gpu.cu
         # --- Lagrangian / ALE family ----------------------------------------
@@ -379,6 +382,43 @@ if(USE_GPU)
                  tests/test_athena_vl2_sod.cu
                  EXTRA_SOURCES src/gpu/explicit/athena_vl2_solver.cu
                                src/gpu/explicit/athena_vl2_kernels.cu)
+    add_gpu_test(athena_mhd_field_loop
+                 tests/test_athena_mhd_field_loop.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    add_gpu_test(athena_mhd_brio_wu
+                 tests/test_athena_mhd_brio_wu.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    add_gpu_test(athena_mhd_linwave_convergence
+                 tests/test_athena_mhd_linwave_convergence.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    add_gpu_test(athena_mhd_benchmarks
+                 tests/test_athena_mhd_benchmarks.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    # Phase A3 — long-time field-loop CT lock + ME decay diagnostic
+    add_gpu_test(athena_mhd_field_loop_long
+                 tests/test_athena_mhd_field_loop_long.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    set_tests_properties(athena_mhd_field_loop_long
+                         PROPERTIES LABELS "slow")
+    # Phase A4 — CPAW 2D long-time decay + η_eff(N) extraction
+    add_gpu_test(athena_mhd_cpaw_longtime
+                 tests/test_athena_mhd_cpaw_longtime.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    set_tests_properties(athena_mhd_cpaw_longtime
+                         PROPERTIES LABELS "slow")
+    # Phase A1 — oblique linear-wave 2D convergence (4 modes × 3 res)
+    add_gpu_test(athena_mhd_linwave_oblique
+                 tests/test_athena_mhd_linwave_oblique.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    set_tests_properties(athena_mhd_linwave_oblique
+                         PROPERTIES LABELS "slow")
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)

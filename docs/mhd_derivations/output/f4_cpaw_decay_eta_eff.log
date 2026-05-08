@@ -1,0 +1,13 @@
+
+════════════════════════════════════════════════════════════
+  F4 — CPAW 2D decay rate & η_eff extraction
+════════════════════════════════════════════════════════════
+  [OK] ideal limit η → 0 recovers ω = ±v_A k.
+  [OK] weak-η expansion: ω = v_A k − (i/2) η k² + O(η²).
+  [OK] amplitude decay rate γ_phys = η k² / 2.
+  [OK] γ_num ∝ h² (2nd-order modified-equation signature).
+  [OK] two-resolution inversion formula recovers scheme order q.
+  weak-η criterion:  η k / v_A ≪ 1  (= eta*k*sqrt(rho_0)/B_r0)
+  → wrote output/f4_cpaw_decay_eta_eff.latex.tex
+
+All F4 identities verified.

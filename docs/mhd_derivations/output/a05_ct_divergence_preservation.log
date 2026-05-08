@@ -1,0 +1,9 @@
+
+════════════════════════════════════════════════════════════
+  A5 — CT discrete ∇·B = 0 preservation (Evans-Hawley 88, GS05)
+════════════════════════════════════════════════════════════
+  [OK] Discrete ∇·B preservation identity (central CT telescoping) — sympy verified to 0.
+  [OK] GS05 averaging has no O(h) term (2nd-order consistency) — sympy verified to 0.
+  → wrote output/a05_ct_divergence_preservation.latex.tex
+
+All A5 identities verified.

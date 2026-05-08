@@ -1,0 +1,9 @@
+
+════════════════════════════════════════════════════════════
+  C4 — Saha closure for Ohmic and ambipolar diffusivities
+════════════════════════════════════════════════════════════
+  [OK] Saha: x_e → 0 as T → 0 (neutral limit) — sympy verified to 0.
+  [OK] Saha: x_e → 1 as T → ∞ (fully ionised limit) — sympy verified to 0.
+  → wrote output/c4_saha_ionization_closure.latex.tex
+
+All C4 identities verified.

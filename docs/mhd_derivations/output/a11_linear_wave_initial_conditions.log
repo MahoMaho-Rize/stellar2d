@@ -1,0 +1,13 @@
+
+════════════════════════════════════════════════════════════
+  A11 — Linear MHD wave initial conditions (Stone+08 Tab 1)
+════════════════════════════════════════════════════════════
+  [OK] Stone+08 Tab 1: c_f = 2 — sympy verified to 0.
+  [OK] Stone+08 Tab 1: c_Ax = 1 — sympy verified to 0.
+  [OK] Stone+08 Tab 1: c_s = 1/2 — sympy verified to 0.
+  [OK] Stone+08 Tab 1: c_s0 = 1 — sympy verified to 0.
+  [OK] Stone+08 Tab 1: c_f² + c_s² = c_s0² + c_A² — sympy verified to 0.
+  [OK] Stone+08 Tab 1: c_f² c_s² = c_s0² c_Ax² — sympy verified to 0.
+  → wrote output/a11_linear_wave_initial_conditions.latex.tex
+
+All A11 identities verified.

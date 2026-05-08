@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  C7 — Optically-thin radiative cooling (SD93)
+════════════════════════════════════════════════════════════
+  [OK] Λ(T) positive on power-law segments.
+  [OK] τ_cool = ε_th / Q_R positive definite.
+  [OK] power-law T(t) satisfies ODE, 21 num samples, max err = 0.00e+00.
+  [OK] α = 1 gives exponential relaxation (degenerate limit).
+  [OK] d ln Λ / d ln T = α recovered from power-law ansatz.
+  → wrote output/c7_optically_thin_cooling.latex.tex
+
+All C7 identities verified.

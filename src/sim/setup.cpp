@@ -238,7 +238,20 @@ static int setup_ic(const SimConfig& cfg, Grid& grid, State& state) {
                || cfg.test_case == "yee_vortex"
                || cfg.test_case == "shear_mode"
                || cfg.test_case == "entropy_wave"
-               || cfg.test_case == "acoustic_wave") {
+               || cfg.test_case == "acoustic_wave"
+               || cfg.test_case == "brio_wu"
+               || cfg.test_case == "linwave_mhd_f"
+               || cfg.test_case == "linwave_mhd_a"
+               || cfg.test_case == "linwave_mhd_s"
+               || cfg.test_case == "linwave_mhd_e"
+               || cfg.test_case == "field_loop"
+               || cfg.test_case == "orszag_tang"
+               || cfg.test_case == "rj2a"
+               || cfg.test_case == "rj4d"
+               || cfg.test_case == "cpaw_1d"
+               || cfg.test_case == "cpaw_2d"
+               || cfg.test_case == "mhd_blast"
+               || cfg.test_case == "mhd_rotor") {
         // Grid-less test cases — each solver branch initialises its own IC.
     } else {
         std::fprintf(stderr, "Unknown test case: %s\n", cfg.test_case.c_str());

@@ -1,0 +1,9 @@
+
+════════════════════════════════════════════════════════════
+  B3 — Parker critical point (super-radial tube, isothermal)
+════════════════════════════════════════════════════════════
+  [OK] Parker wind equation derivation — sympy verified to 0.
+  [OK] Spherical Parker radius: r_c = G*M_*/(2*c_s**2)
+  → wrote output/b3_parker_critical_point.latex.tex
+
+All B3 identities verified.

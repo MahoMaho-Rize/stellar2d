@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  C2 — Ambipolar diffusion (ion-neutral drift)
+════════════════════════════════════════════════════════════
+  [OK] J_⊥ · B̂ = 0 by decomposition (perpendicularity) — sympy verified to 0.
+  [OK] J_∥ × B = 0  (parallel current feels no Lorentz force).
+  [OK] (J × B̂) × B̂  ≡  −J_⊥  (vector triple product identity).
+  [OK] (J×B)×B / |B|²  ≡  (J×B̂)×B̂  verified.
+  [OK] Q_amb = −E_amb·J = η_A |J_⊥|² ≥ 0 — sympy verified to 0.
+  → wrote output/c2_ambipolar_dissipation.latex.tex
+
+All C2 identities verified.

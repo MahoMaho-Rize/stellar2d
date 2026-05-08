@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  C8 — Chromospheric / thick-thin blended cooling
+════════════════════════════════════════════════════════════
+  [OK] blend weight ξ_rad ∈ [0, 1), anchored at p = p_chr.
+  [OK] Newton cooling exponentially relaxes to T_ref.
+  [OK] thick cooling time τ ∝ ρ^{−1/2} (GN05 scaling).
+  [OK] Anderson-Athay Q_R monotone in Z, saturates at ρ ≥ ρ_cr.
+  [OK] convex-combination partials: ξ and 1−ξ.
+  → wrote output/c8_chromospheric_cooling.latex.tex
+
+All C8 identities verified.
