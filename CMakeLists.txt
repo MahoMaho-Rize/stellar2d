@@ -434,6 +434,11 @@ if(USE_GPU)
                  tests/test_athena_mhd_cooling.cu
                  EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
                                src/gpu/explicit/athena_mhd_kernels.cu)
+    # Phase B-M4 — combined operator integration (WB + κ + cool)
+    add_gpu_test(athena_mhd_combined
+                 tests/test_athena_mhd_combined.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)

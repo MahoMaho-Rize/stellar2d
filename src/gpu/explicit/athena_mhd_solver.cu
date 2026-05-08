@@ -88,6 +88,11 @@ __global__ void k_athmhd_divB_cc(
     const double*, const double*, double*, int, int, int, int, double, double);
 __global__ void k_athmhd_compute_T(
     const double*, const double*, double*, int, int);
+__global__ void k_athmhd_ghost_T_y_reflect(double*, int, int, int, int);
+__global__ void k_athmhd_ghost_T_y_periodic(double*, int, int, int, int);
+__global__ void k_athmhd_ghost_T_y_outflow(double*, int, int, int, int);
+__global__ void k_athmhd_ghost_T_x_periodic(double*, int, int, int, int);
+__global__ void k_athmhd_ghost_T_x_outflow(double*, int, int, int, int);
 __global__ void k_athmhd_conduction_flux_x(
     const double*, const double*, const double*, const double*,
     double*, int, int, int, int, int, double, double, double);
@@ -1837,6 +1842,33 @@ void AthenaMHDSolver::init_hse_atmosphere(double g_val, double H,
 // ============================================================
 // §C6 Spitzer conduction — compute_conduction_dt + apply_conduction
 // ============================================================
+// Scalar T ghost fill — apply after compute_T to overwrite the ghost
+// rows/columns that cons_to_prim computed using (potentially wrong)
+// B_cc at the ghost row.  See comment on k_athmhd_ghost_T_y_reflect.
+static void fill_T_ghost(AthenaMHDSolver* sv) {
+    int sx = sv->stride_x(), sy = sv->stride_y();
+    int ng = sv->ng;
+    dim3 bx_grid((sy + 63) / 64, ng);
+    if (sv->x_bc == 2) {
+        k_athmhd_ghost_T_x_outflow<<<bx_grid, dim3(64, 1)>>>(
+            sv->d_T_cc, sv->nx, ng, sx, sy);
+    } else {
+        k_athmhd_ghost_T_x_periodic<<<bx_grid, dim3(64, 1)>>>(
+            sv->d_T_cc, sv->nx, ng, sx, sy);
+    }
+    dim3 by_grid((sx + 63) / 64, ng);
+    if (sv->y_bc == 0) {
+        k_athmhd_ghost_T_y_periodic<<<by_grid, dim3(64, 1)>>>(
+            sv->d_T_cc, sv->ny, ng, sx, sy);
+    } else if (sv->y_bc == 2) {
+        k_athmhd_ghost_T_y_outflow<<<by_grid, dim3(64, 1)>>>(
+            sv->d_T_cc, sv->ny, ng, sx, sy);
+    } else {
+        k_athmhd_ghost_T_y_reflect<<<by_grid, dim3(64, 1)>>>(
+            sv->d_T_cc, sv->ny, ng, sx, sy);
+    }
+}
+
 double AthenaMHDSolver::compute_conduction_dt() {
     if (kappa0 <= 0.0) return 1e30;
     fill_ghost();
@@ -1845,6 +1877,7 @@ double AthenaMHDSolver::compute_conduction_dt() {
     dim3 bT(16, 16);
     dim3 gT((sx + bT.x - 1) / bT.x, (sy + bT.y - 1) / bT.y);
     k_athmhd_compute_T<<<gT, bT>>>(d_w_rho, d_w_P, d_T_cc, sx, sy);
+    fill_T_ghost(this);
     // CFL buffer: per-cell (nx × ny).
     dim3 gc((nx + 15) / 16, (ny + 15) / 16);
     k_athmhd_conduction_cfl<<<gc, dim3(16, 16)>>>(
@@ -1875,14 +1908,10 @@ void AthenaMHDSolver::apply_conduction(double dt_target) {
         fill_ghost();
         cons_to_prim();
         k_athmhd_compute_T<<<gT, bT>>>(d_w_rho, d_w_P, d_T_cc, sx, sy);
-
-        // Need T ghost populated too — for now, compute_T covers the
-        // entire padded grid, but it reads P/rho only from cell values.
-        // The fluxes use (i-1) / (i+1) so interior i ∈ [ng, ng+nx-1]
-        // reads from [ng-1, ng+nx].  Our kernel writes T at every (i,j)
-        // in [0, sx)×[0, sy), so cover ghost layer 1.  For transverse
-        // 4-point averages (fluxes use T at j±1 inside cell c), we need
-        // T at j = ng-1 and j = ng+ny — same: covered by writing all sx·sy.
+        // T ghost: scalar mirror per BC.  Overwrites the bogus ghost
+        // T that compute_T produced from (ρ_ghost, P_ghost where
+        // P_ghost uses reflected face-B → wrong B_cc → wrong P).
+        fill_T_ghost(this);
 
         // CFL for this sub-step
         k_athmhd_conduction_cfl<<<gc, dim3(16, 16)>>>(

@@ -16,7 +16,7 @@ Phase B 在此基础上加源项,逐个 milestone 向 Suzuki flux-tube 风物理
 | B-M1 | Well-balanced MHSE 源(§B4) | §B4 已完成 | `test_athena_mhd_hse_preserve.cu` 6/6 | ✅ |
 | B-M2 | Spitzer κ₀T^{5/2} 各向异性导热 | §C6 已完成 | `test_athena_mhd_conduction.cu` 5/5 | ✅ |
 | B-M3 | Townsend 光学薄冷却闭式积分 | §C7 已完成 | `test_athena_mhd_cooling.cu` 10/10 | ✅ |
-| B-M4 | 分层 + 导热 + 冷却 combined | §B1/4/C6/7 | TBD | ⏳ |
+| B-M4 | 分层 + 导热 + 冷却 combined | §B1/4/C6/7 | `test_athena_mhd_combined.cu` 10/10 | ✅ |
 
 ---
 
@@ -191,6 +191,58 @@ void   apply_cooling(double dt);   // no-op if cool_on=false
 
 ---
 
-## B-M4 — 占位
+## B-M4 — Combined operator integration(§B4 + §C6 + §C7)
 
-详细 setup 在进入时补。
+**Date**: 2026-05-08
+**Commit**: TBD
+
+### 动机
+
+B-M1~M3 各自证明了 WB MHSE / Spitzer 导热 / Townsend 冷却 operator **在独立场景下正确**。B-M4 验证 operator-split 组合
+$$ U^{n+1} = L_\mathrm{cool}(\Delta t) \cdot L_\mathrm{cond}(\Delta t) \cdot L_\mathrm{vl2}(U^n; \Delta t, \mathrm{WB}) $$
+不会破坏各自已经证明的性质,并抓 operator 之间的"**BC 幽灵**"。
+
+### 发现的数值 gotcha:κ + reflect y-BC 的 ghost-T 错误
+
+**症状**:等温大气 $T = c_s^2$ 严格均匀,应有 $\nabla T = 0$ → $F_c \equiv 0$。但实测单次 `apply_conduction(dt)` 后 $\delta E/E = 4\%$(不是 ULP!),而 $\delta\rho$ / $v$ / $\nabla\cdot B$ 都是 0 —— **只有 E 被 κ 算子错误地修改了**。
+
+**根因**:reflect y-BC 下 B_y face 是反对称镜像(`Byf[ng-1] = -Byf[ng+1]`),因此 ghost cell 的
+$$B_{y,cc}^\mathrm{ghost} = \tfrac12(\mathrm{Byf}[ng-1] + \mathrm{Byf}[ng]) = \tfrac12(-B_{0y} + B_{0y}) = 0$$
+而 interior $B_{y,cc} = B_{0y}$。Ghost cell 的 $P = (\gamma-1)(E - \mathrm{KE} - \mathrm{ME})$ 由于 $\mathrm{ME}^\mathrm{ghost} \ne \mathrm{ME}^\mathrm{interior}$ 多算/少算一个 $\tfrac12(\gamma-1) B_{0y}^2$,导致 $T^\mathrm{ghost} = P^\mathrm{ghost}/\rho^\mathrm{ghost} \ne c_s^2$。$\nabla T$ 在 wall 上**假性**非零 → κ 把能量"泄"到 ghost。
+
+这不是 §C6 派生的错,也不是 `cons_to_prim` 的错:`cons_to_prim` 正确地**按 face-B 的镜像规则**推算 ghost $B_{cc}$,只是 *$B_{cc}^\mathrm{ghost}$ 和 interior $B_{cc}$ 的"镜像"不是 scalar mirror*。而 κ 只看温度 $T$,$T$ 是标量,**它的 ghost 必须是 scalar mirror**,不能从 $(P, \rho)$ 重新算。
+
+**修复**:加 `k_athmhd_ghost_T_{y_reflect,y_periodic,y_outflow,x_periodic,x_outflow}` 一组 kernel,在 `compute_T` 之后,标量镜像填 T_cc 的 ghost 层,覆盖 `cons_to_prim` 推算的"错"ghost T。κ flux kernel 仍然读 T_cc,但现在 ghost T 与 interior T 严格对齐。
+
+### Setup
+
+- D-T1:HSE 大气 + κ₀=1 + cool_on(Λ₀=0 trivial),跑 500 步 VL2 + κ + cool
+- D-T2:periodic 无重力,T 均匀 + $\delta T = 0.2\,e^{-r^2/\sigma^2}$ Gaussian blob,B = 0.5 ŷ,κ=0.05,30 VL2 步
+- D-T3:periodic 均匀 T + 均匀 cool(α=2),验证每 cell 独立更新
+
+### 实测
+
+| 测试 | 测量 | 阈值 | 状态 |
+|---|---|---|---|
+| D-T1 WB 在 κ+cool 下守恒 | max\|δρ\|/ρ = **1.3×10⁻¹⁶**,max\|δE\|/E = **0** | < 10⁻¹⁰ | ✅ |
+| D-T1 v 保持静止 | max\|v\|/c_s = **2.8×10⁻¹⁶** | < 10⁻⁸ | ✅ |
+| D-T1 ∇·B 不动 | **0** | < 10⁻¹⁰ | ✅ |
+| D-T2 blob 衰减 | amp 0.185 → 0.048,ratio = **0.26** | < 0.95 | ✅ |
+| D-T2 far-field δρ/ρ | **1.0×10⁻²** | < 3×10⁻² | ✅ |
+| D-T2 far-field δP/P | **1.6×10⁻²** | < 3×10⁻² | ✅ |
+| D-T2 ∇·B 不动 | **2.7×10⁻¹⁴** | < 10⁻¹⁰ | ✅ |
+| D-T3 uniform cool spread | **0** (ULP) | < 10⁻¹⁴ | ✅ |
+| D-T3 T 匹配 Townsend α=2 | rel err **1.4×10⁻¹⁶** | < 10⁻¹⁰ | ✅ |
+
+10/10 断言通过。B-M1 6/6 + B-M2 5/5 + B-M3 10/10 回归零影响(T ghost kernel 仅在 `apply_conduction` / `compute_conduction_dt` 路径上生效,`cool_on` 路径和 VL2 主步不经过 T 填充)。
+
+### 实现备忘
+
+1. **T ghost 必须独立填,不要靠 cons_to_prim**。cons_to_prim 按 face-B 推算 ghost B_cc,reflect face BC 下 ghost B_cc ≠ interior B_cc,造成 ghost P 偏差,进而 T 偏差。`κ` 只看 T,T 是标量,按标量镜像填。
+2. **D-T2 far-field 容忍 3% 是物理上限,不是算法松**。blob 在 N=32 的 30 步里激发的声波前沿已传到 |x−xc|=0.3 ≈ 4σ 区域;WB 只保证不**额外**漂移,不抑制 blob 自身的物理 acoustic spillover。
+3. **operator 顺序**:`step` → `apply_conduction(dt)` → `apply_cooling(dt)`,这是第一阶 Strang 简化(Godunov split)。二阶 Strang `A·B·A` 对 HSE + 弱源没有明显优势,留给 B-M5 corona 场景(强 cooling ≫ dynamic time)再评估。
+4. **apply_cooling 不需要 T ghost fix**:cooling 是 per-cell ODE,只读 cell 内的 (ρ, P),从不跨 cell 或读 ghost。T ghost 问题只影响空间 flux(κ 导热、未来 viscosity 都要注意)。
+
+### 公共 API
+
+无新增。B-M4 纯测试 + 内部 kernel 扩充(`k_athmhd_ghost_T_*`)。

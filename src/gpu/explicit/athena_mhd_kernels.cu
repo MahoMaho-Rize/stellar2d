@@ -841,6 +841,75 @@ __global__ void k_athmhd_compute_T(
     T_cc[c] = w_P[c] / r;   // code units (μ=1, k_B=1)
 }
 
+// T is a scalar — ghost fill is a straight mirror for any BC (reflect
+// / periodic / outflow).  This kernel OVERWRITES the ghost layer of T
+// after compute_T.  Needed because compute_T uses ghost ρ and B_cc,
+// which under reflect-face-B give a DIFFERENT p = (γ-1)(E - KE - ME)
+// than the interior neighbour (normal-B flips on face reflection,
+// cell-centred B at the ghost row ends up ≠ mirrored interior B_cc).
+// That mismatch spuriously makes T jump at the wall and the Spitzer
+// flux becomes nonzero even on a ∇T=0 isothermal atmosphere.
+__global__ void k_athmhd_ghost_T_y_reflect(
+    double* T_cc, int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || g >= ng) return;
+    int jBd = ng - 1 - g, jBs = ng + g;
+    int jTd = ng + ny + g, jTs = ng + ny - 1 - g;
+    T_cc[cflat(i, jBd, sy)] = T_cc[cflat(i, jBs, sy)];
+    T_cc[cflat(i, jTd, sy)] = T_cc[cflat(i, jTs, sy)];
+}
+
+__global__ void k_athmhd_ghost_T_y_periodic(
+    double* T_cc, int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || g >= ng) return;
+    int jBd = g, jBs = ny + g;
+    int jTd = ng + ny + g, jTs = ng + g;
+    T_cc[cflat(i, jBd, sy)] = T_cc[cflat(i, jBs, sy)];
+    T_cc[cflat(i, jTd, sy)] = T_cc[cflat(i, jTs, sy)];
+}
+
+__global__ void k_athmhd_ghost_T_y_outflow(
+    double* T_cc, int ny, int ng, int sx, int sy)
+{
+    // Zero-gradient extrapolation (same as ρ outflow ghost).
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || g >= ng) return;
+    int jBd = ng - 1 - g, jBs = ng;
+    int jTd = ng + ny + g, jTs = ng + ny - 1;
+    T_cc[cflat(i, jBd, sy)] = T_cc[cflat(i, jBs, sy)];
+    T_cc[cflat(i, jTd, sy)] = T_cc[cflat(i, jTs, sy)];
+}
+
+__global__ void k_athmhd_ghost_T_x_periodic(
+    double* T_cc, int nx, int ng, int sx, int sy)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (j >= sy || g >= ng) return;
+    int iLd = g, iLs = nx + g;
+    int iRd = ng + nx + g, iRs = ng + g;
+    T_cc[cflat(iLd, j, sy)] = T_cc[cflat(iLs, j, sy)];
+    T_cc[cflat(iRd, j, sy)] = T_cc[cflat(iRs, j, sy)];
+}
+
+__global__ void k_athmhd_ghost_T_x_outflow(
+    double* T_cc, int nx, int ng, int sx, int sy)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (j >= sy || g >= ng) return;
+    int iLd = ng - 1 - g, iLs = ng;
+    int iRd = ng + nx + g, iRs = ng + nx - 1;
+    T_cc[cflat(iLd, j, sy)] = T_cc[cflat(iLs, j, sy)];
+    T_cc[cflat(iRd, j, sy)] = T_cc[cflat(iRs, j, sy)];
+}
+
 // x-face: flux F_n = F·x̂ = -κ∥(T_f) (b̂·∇T)_f · b̂_x
 __global__ void k_athmhd_conduction_flux_x(
     const double* __restrict__ T_cc,
