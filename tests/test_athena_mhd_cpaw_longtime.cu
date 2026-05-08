@@ -1,7 +1,7 @@
 // test_athena_mhd_cpaw_longtime.cu
 // ============================================================
 // Phase A4 — long-time CPAW 2D decay + η_eff extraction.
-// Derivation: docs/mhd_derivations/sections/f4_cpaw_decay_eta_eff.md
+// Derivation: docs/derivations/mhd/sections/f4_cpaw_decay_eta_eff.md
 //
 // Setup:  §A11 Stone+08 Table-1 linear wave, ALFVEN mode, A=1e-6.
 //         Background ρ=1, p=1/γ, B₀=(1,√2,½), γ=5/3, c_Ax = 1,

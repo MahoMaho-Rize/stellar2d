@@ -4,7 +4,7 @@
 # writes VTK to runs/ot_N<N>/output_*.vtk, to be analysed by
 # analyze_ot_spectrum.py.
 #
-# Derivation: docs/mhd_derivations/sections/f2_mhd_turbulence_spectrum.md
+# Derivation: docs/derivations/mhd/sections/f2_mhd_turbulence_spectrum.md
 #
 # NOTE: the binary writes to <run_base>/<test>_<N>x<N>_<timestamp>/
 # (auto-timestamped, no --run-dir flag).  We point --run-base at a

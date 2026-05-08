@@ -14,7 +14,7 @@
 
 int run_athena_mhd(SimConfig& cfg, SimContext& ctx, double& t, int& step) {
     // ===== athena_mhd: GPU 2D Eulerian ideal-MHD (vl2 + HLLD + CT) =====
-    // Derivation dossier: docs/mhd_derivations/manuscript.pdf
+    // Derivation dossier: docs/derivations/mhd/manuscript.pdf
     //   §A1-A11, §B4, §C5.
     // Tests available:
     //   brio_wu          — 1D MHD shock tube (Brio-Wu 1988).  γ=2.

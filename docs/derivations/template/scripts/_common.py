@@ -1,5 +1,5 @@
 r"""
-docs/mhd_derivations/scripts/_common.py — shared sympy utilities.
+docs/derivations/mhd/scripts/_common.py — shared sympy utilities.
 
 Every derivation script imports from here. Philosophy:
 - Define symbols once, centrally, so every section uses the same

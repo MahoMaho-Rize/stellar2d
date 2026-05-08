@@ -8,7 +8,7 @@
 // (vl2 integrator + HLLD Riemann + constrained transport for
 // divB=0 preservation).
 //
-// Derivation dossier:  docs/mhd_derivations/manuscript.pdf
+// Derivation dossier:  docs/derivations/mhd/manuscript.pdf
 //   §A1-A5  ideal MHD conservation laws + HLLD + CT
 //   §A6-A8  PLM reconstruction + VL2 predictor-corrector + CFL
 //   §A9     HLLD degeneracy branches (B_x=0, Alfvén locus, HLL fallback)

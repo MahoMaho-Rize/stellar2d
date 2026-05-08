@@ -3,7 +3,7 @@
 # via pandoc + xelatex (mirrors paper/build_paper_pdf.sh).
 #
 # Usage:
-#   cd docs/mhd_derivations
+#   cd docs/derivations/mhd
 #   bash build_manuscript.sh [--pdf]
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"

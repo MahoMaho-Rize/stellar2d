@@ -190,12 +190,12 @@ direct precursor to Suzuki-complement physics).
 
 | Derivation | Path |
 |---|---|
-| §F1 (rotated eigenvector) | `docs/mhd_derivations/sections/f1_oblique_linwave.md` |
-| §F2 (MHD spectrum + $\nu_\mathrm{eff}$) | `docs/mhd_derivations/sections/f2_mhd_turbulence_spectrum.md` |
-| §F3 (CT round-off + B_cc aliasing) | `docs/mhd_derivations/sections/f3_ct_roundoff_and_bcc_aliasing.md` |
-| §F4 (CPAW decay + $\eta_\mathrm{eff}$) | `docs/mhd_derivations/sections/f4_cpaw_decay_eta_eff.md` |
-| §F5 (VL2+PLM O(h⁴) → $p = 3$) | `docs/mhd_derivations/sections/f5_vl2_plm_amplitude_decay.md` |
-| §F1b (joint rotation covariance, strong form) | `docs/mhd_derivations/scripts/f1b_joint_rotation_covariance.py` |
+| §F1 (rotated eigenvector) | `docs/derivations/mhd/sections/f1_oblique_linwave.md` |
+| §F2 (MHD spectrum + $\nu_\mathrm{eff}$) | `docs/derivations/mhd/sections/f2_mhd_turbulence_spectrum.md` |
+| §F3 (CT round-off + B_cc aliasing) | `docs/derivations/mhd/sections/f3_ct_roundoff_and_bcc_aliasing.md` |
+| §F4 (CPAW decay + $\eta_\mathrm{eff}$) | `docs/derivations/mhd/sections/f4_cpaw_decay_eta_eff.md` |
+| §F5 (VL2+PLM O(h⁴) → $p = 3$) | `docs/derivations/mhd/sections/f5_vl2_plm_amplitude_decay.md` |
+| §F1b (joint rotation covariance, strong form) | `docs/derivations/mhd/scripts/f1b_joint_rotation_covariance.py` |
 
 | Test | Path | Pass |
 |---|---|---|

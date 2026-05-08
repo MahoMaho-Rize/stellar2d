@@ -39,7 +39,7 @@ for the MHD extension of stellar2d. It covers four parts:
 
 Every algebraic identity in this document is **mechanically verified by
 sympy**. Each section corresponds to a script in
-`docs/mhd_derivations/scripts/<section>.py` that ends with
+`docs/derivations/mhd/scripts/<section>.py` that ends with
 `assert_zero(LHS − RHS, ...)` calls. If any identity cannot be
 simplified by sympy but is physically correct, we document the
 alternate verification route (e.g., "manually checked with Wolfram,
@@ -66,7 +66,7 @@ the manuscript as a source of truth for the solver implementation.
 ## How to regenerate this manuscript
 
 ```bash
-cd docs/mhd_derivations
+cd docs/derivations/mhd
 bash run_all.sh         # (re-)runs every scripts/*.py, refreshes output/
 bash build_manuscript.sh  # concatenates sections/*.md → manuscript.{md,pdf}
 ```

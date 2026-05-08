@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run every sympy derivation script in docs/mhd_derivations/scripts/.
+# Run every sympy derivation script in docs/derivations/mhd/scripts/.
 # Stops on first failure (any assert_zero violation) and reports the
 # offending script.
 #
 # Usage:
-#   cd docs/mhd_derivations
+#   cd docs/derivations/mhd
 #   bash run_all.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"

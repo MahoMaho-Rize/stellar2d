@@ -9,7 +9,7 @@
 ## 项目结构
 
 ```
-docs/mhd_derivations/
+docs/derivations/mhd/
 ├── README.md                       本文件
 ├── build_manuscript.sh             汇编所有 section → manuscript.md → PDF
 ├── run_all.sh                      跑所有 sympy 脚本,刷新 output/
@@ -76,7 +76,7 @@ D3. α_SS stress 的 exact Maxwell + Reynolds decomposition
 
 ```bash
 # 开发一个 section:
-cd docs/mhd_derivations
+cd docs/derivations/mhd
 vim scripts/a1_ideal_mhd_equations.py
 python3 scripts/a1_ideal_mhd_equations.py > output/a1_ideal_mhd_equations.log
 # 脚本末尾应打印所有关键方程的 LaTeX,检查后拷到 sections/a1_ideal_mhd_equations.md

@@ -1,7 +1,7 @@
 // ============================================================
 // athena_mhd_kernels.cu — CUDA kernels for the AthenaMHDSolver
 //
-// Derivation dossier:  docs/mhd_derivations/manuscript.pdf
+// Derivation dossier:  docs/derivations/mhd/manuscript.pdf
 //   §A1   ideal MHD conservation laws + Lorentz-force identity
 //   §A3   7-wave flux Jacobian eigensystem
 //   §A4   HLLD intermediate states
