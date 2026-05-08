@@ -110,6 +110,13 @@ __global__ void k_athmhd_cool_townsend(
     const double*, const double*, double*,
     int, int, int, int,
     double, double, double, double, double, double);
+__global__ void k_athmhd_cool_chromo(
+    const double*, const double*, double*,
+    int, int, int, int,
+    double, double,
+    double, double, double,
+    double, double, double,
+    double);
 __global__ void k_athmhd_driver_apply(
     const double*, double*, double*, double*, double*,
     const double*, const double*, const double*,
@@ -1975,6 +1982,30 @@ void AthenaMHDSolver::apply_cooling(double dt) {
         nx, ny, ng, sy,
         dt, gamma - 1.0,
         cool_Lambda0, cool_Tref, cool_alpha, cool_Tfloor);
+    CUDA_CHECK(cudaGetLastError());
+}
+
+// ============================================================
+// §C8 chromospheric blended cooling.
+//   Operator-split per cell: thick exponential, then Townsend thin,
+//   each weighted by (ξ, 1-ξ) with ξ = max(0, 1 - p_chr/p).  Per-cell
+//   closed form, unconditionally stable → single kernel launch.
+// ============================================================
+void AthenaMHDSolver::apply_chromo_cooling(double dt) {
+    if (!chromo_on || dt <= 0.0) return;
+    int sx = stride_x(), sy = stride_y();
+    (void)sx;
+    fill_ghost();
+    cons_to_prim();
+    dim3 bc(16, 16);
+    dim3 gc((nx + bc.x - 1) / bc.x, (ny + bc.y - 1) / bc.y);
+    k_athmhd_cool_chromo<<<gc, bc>>>(
+        d_w_rho, d_w_P, d_E,
+        nx, ny, ng, sy,
+        dt, gamma - 1.0,
+        chromo_p_chr, chromo_T_ref_thck, chromo_tau_thck,
+        chromo_Lambda0, chromo_T_ref_thin, chromo_alpha,
+        chromo_Tfloor);
     CUDA_CHECK(cudaGetLastError());
 }
 

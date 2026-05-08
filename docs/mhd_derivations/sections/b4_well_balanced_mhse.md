@@ -87,3 +87,37 @@ hash of the profile arrays.
   WB on) vs $\sim 10^{-2}$ (with WB off). The "off" case is a
   **positive control**: if turning off WB doesn't produce a
   transient, the WB machinery is a no-op and should be audited.
+
+## 数值实现备忘 (not in formal derivation)
+
+以下 3 条是 Phase B-M1 实测 (commit `fdbe383`, `test_athena_mhd_hse_preserve.cu`
+6/6 通过) 发现的离散化陷阱。派生层面 $F_\mathrm{wb}(\mathbf{U}_\mathrm{hse}) \equiv 0$
+是解析恒等式,但在 VL2 + PLM + reflective wall 的实现栈里,以下三点任何一条
+写错,都会把"machine precision"退化成 $\sim 10^{-2}$–$10^{-3}$ 的漂移。
+
+1. **VL2 两阶段必须分开存 defect $R(\mathbf{U}_\mathrm{hse})$。**
+   Predictor 阶段走 donor-cell (order=1),corrector 阶段走 PLM (order=xorder);
+   两者的**离散残差** $R(\mathbf{U}_\mathrm{hse})$ 在有限精度下并不相等
+   (重建顺序不同 → face 值不同 → flux 不同)。只存一份 defect 做两次
+   subtract,实测残留 $\sim 0.8\%$ drift;两份独立 defect (`d_rhs_hse_s1_*`,
+   `d_rhs_hse_s2_*`,在 `apply_flux_divergence_and_ct` 按 stage 路由) 才到 ULP。
+
+2. **必须对全 6 个守恒量 $(\rho, m_x, m_y, m_z, E, B_z)$ 都 subtract。**
+   朴素直觉是只对有重力源的 $(m_x, m_y, m_z, E)$ 减。实测:reflective 壁
+   上 $\rho$ 和 $B_z$ 的 flux 残差虽然是 ULP 级 ($\sim 10^{-16}$),但 1000
+   步累积可以放大到 $\sim 1\%$ 的 $\delta\rho$ 漂移,使 B3 ($\delta\rho$)
+   断言失败。WB 是**代数对消** (identical cancellation),不是"只减主要项",
+   6 个守恒量必须全部参与。
+
+3. **Snapshot 时两阶段共用同一份 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$,
+   不要模拟 stage-2 swap。**
+   实 `step()` 里 stage-2 的 flux 由 $\mathrm{prim}(\mathbf{U}^*)$ 计算,因为
+   stage-1 末尾做了 swap + refill。但在 WB 完美时,$\mathbf{U}^* \equiv
+   \mathbf{U}_\mathrm{hse}$ — stage-2 实际"看到"的就是 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$
+   本身。snapshot 里只需 `cons_to_prim(U_hse)` 一次,两阶段共用;
+   若人为加 swap 去模拟 stage-2 的 $\mathbf{U}^*$,反而 capture 了"未 WB
+   过的 $\mathbf{U}^*$"的假残差,破坏自洽。
+
+共通 takeaway: WB 是**两端离散表达式 bit-wise 相同**才 cancel,不是
+"物理上等价"就行。任何改动重建顺序、变量顺序、或两阶段间 state 语义的
+PR,都必须重跑 B-M1 以验证 ULP 对齐。

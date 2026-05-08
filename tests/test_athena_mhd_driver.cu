@@ -15,6 +15,11 @@
 //          host-computed waveform to machine precision.
 //   E1-T4  driver deterministic with seed: two identical-seed runs
 //          give bit-identical v_x history.
+//   E1-T5  single-mode driver + HSE + uniform B_y → launches an
+//          upgoing Alfvén wave.  Two checks: (a) arrival time at
+//          y* matches the WKB Alfvén transit τ(y*) = ∫ dy/v_A(y)
+//          within 30%; (b) polarisation δB_x ≈ -√ρ·δv_x (z^+
+//          upgoing Alfvén eigenvector) at first large excursion.
 // ============================================================
 
 #include "athena_mhd_solver.cuh"
@@ -225,12 +230,156 @@ static void test_T4_seed_reproducibility() {
              "E1-T4: seed-identical runs agree bit-wise");
 }
 
+// --------------------------------------------------------------------
+// E1-T5: single-mode driver launches an upgoing Alfvén wave —
+//   (a) arrival time at y* matches WKB Alfvén transit;
+//   (b) polarisation δB_x ≈ -√ρ·δv_x at first large excursion.
+//
+// Setup: HSE isothermal atm (g=1, H=1, ρ₀=1, B0_y=0.5) on
+// Lx=1, Ly=2, N=32×64, reflective y-BC.
+//
+//   v_A(y)  = B0_y / √ρ(y)  = B0_y · exp(y/2H)
+//   τ(y*)   = ∫_0^{y*} dy/v_A(y) = (2H/B0_y)·(1 − exp(−y*/2H))
+//
+// With N_modes=1 and f_min < f_max, the single mode sits at the
+// geometric mean √(f_min·f_max).  Pick f_min / f_max clamped
+// around 1.0 so f_drive ≈ 1.  Amplitude per mode = A_rms·√(2/N)
+// = A_rms·√2, so peak v_x at the boundary ≈ A_rms·√2.
+//
+// Driver injects only v_x at j=ng, uniform in x (k_x = 0).  With
+// k_x=0 the only wave branch that carries δv_x in ideal MHD on a
+// stratified atm with uniform B_ŷ is the Alfvén wave propagating
+// along ±ŷ.  Reflective top BC returns the wave after 2·τ(Ly/2);
+// we sample before that.
+// --------------------------------------------------------------------
+static void test_T5_alfven_emission_and_polarization() {
+    std::printf("\n[E1-T5] §E1 driver emits upgoing Alfvén wave\n");
+    const int    Nx = 32,  Ny = 64;
+    const double Lx = 1.0, Ly = 2.0;
+    const double g_val = 1.0, H = 1.0, rho0 = 1.0, B0_y = 0.5;
+    const double f_drive = 1.0;
+    const double A_rms   = 0.05;      // linear: A_rms/c_s = 5%
+    const double y_star  = 1.0;       // mid-height, far from driver & top BC
+    const double cs      = std::sqrt(g_val * H);   // = 1
+
+    AthenaMHDSolver sv;
+    sv.init(Nx, Ny, Lx, Ly, 5.0/3.0, 0.3);
+    sv.xorder = 2; sv.limiter = 0;
+    sv.init_hse_atmosphere(g_val, H, rho0, B0_y);
+
+    // Single mode at geometric mean = √(f_lo·f_hi) ≈ f_drive.
+    const double eps = 1e-6;
+    double f_lo = f_drive * (1.0 - eps);
+    double f_hi = f_drive * (1.0 + eps);
+    sv.init_stochastic_driver(A_rms, f_lo, f_hi, /*N_modes=*/1, /*seed=*/17u);
+
+    int sx = sv.stride_x(), sy = sv.stride_y();
+    int ng = sv.ng, ncell = sx * sy;
+
+    // Pick the cell nearest y_star on the cell-centred grid: yc = (jc+0.5)·dy.
+    int jc_star = (int)(y_star / sv.dy - 0.5 + 0.5);  // round to nearest
+    double y_c  = (jc_star + 0.5) * sv.dy;
+    // Cell-centred density at y_c (unchanging under Alfvén wave: δρ = 0).
+    double rho_c = rho0 * std::exp(-y_c / H);
+
+    // Theoretical arrival time at y_c.
+    double tau_theory =
+        (2.0 * H / B0_y) * (1.0 - std::exp(-y_c / (2.0 * H)));
+    std::printf("    Nx=%d Ny=%d Lx=%.2f Ly=%.2f B0_y=%.2f f=%.2f A_rms=%.3f\n",
+                Nx, Ny, Lx, Ly, B0_y, f_drive, A_rms);
+    std::printf("    y*=%.4f (jc=%d)  ρ(y*)=%.4f  τ_A=%.4f  P_drive=%.4f\n",
+                y_c, jc_star, rho_c, tau_theory, 1.0 / f_drive);
+
+    // Run until a bit past τ + half a period (to capture polarisation after
+    // arrival but well before the reflected wave returns from the top).
+    double t_end = tau_theory + 0.5 / f_drive + 0.1;
+    double t = 0.0;
+    int    step = 0;
+
+    // Threshold for "arrival" — 30% of the boundary peak |v_x|_peak = A_rms·√2.
+    double vx_peak_drive = A_rms * std::sqrt(2.0);
+    double vx_threshold  = 0.30 * vx_peak_drive;
+
+    std::vector<double> h_rho(ncell), h_mx(ncell);
+    std::vector<double> h_wBx(ncell), h_wu(ncell);
+    double t_first = -1.0;
+    double vx_at_polsample = 0.0, dBx_at_polsample = 0.0;
+    double t_pol = tau_theory + 0.5 / f_drive;  // half-period past arrival
+    bool   pol_sampled = false;
+
+    // Main time loop.  step(t, big); apply_driver at t+dt (matches how
+    // the driver acts between VL2 + source operators in the full pipeline).
+    while (t < t_end && step < 4000) {
+        double dt = sv.step(t, t_end);
+        if (!(dt > 0)) break;
+        sv.apply_driver(t + dt);
+        t += dt;
+        ++step;
+
+        // Read v_x and δB_x at (ic=0, jc_star) — row is horizontally uniform.
+        sv.fill_ghost();
+        sv.cons_to_prim();
+        int c = (0 + ng) * sy + (jc_star + ng);
+        cudaMemcpy(&h_rho[c],  sv.d_rho  + c, sizeof(double), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&h_mx[c],   sv.d_mx   + c, sizeof(double), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&h_wBx[c],  sv.d_w_Bx + c, sizeof(double), cudaMemcpyDeviceToHost);
+        double rho_s = std::max(h_rho[c], 1e-30);
+        double vx_s  = h_mx[c] / rho_s;
+        double Bx_s  = h_wBx[c];  // background Bx = 0 → δBx = Bx_s
+        if (t_first < 0.0 && std::fabs(vx_s) > vx_threshold) {
+            t_first = t;
+            std::printf("    arrival: step=%d  t=%.4f  v_x(y*)=%+.4e  "
+                        "(thresh=%.4e)\n",
+                        step, t, vx_s, vx_threshold);
+        }
+        // Polarisation snapshot at t ≈ t_pol (take the first step that
+        // crosses t_pol).
+        if (!pol_sampled && t >= t_pol) {
+            vx_at_polsample  = vx_s;
+            dBx_at_polsample = Bx_s;
+            pol_sampled = true;
+            std::printf("    pol sample: t=%.4f  v_x=%+.4e  δB_x=%+.4e  "
+                        "√ρ=%.4f\n",
+                        t, vx_s, Bx_s, std::sqrt(rho_s));
+        }
+    }
+    std::printf("    terminated at step=%d t=%.4f (t_end=%.4f)\n",
+                step, t, t_end);
+
+    // ---- T5a arrival time ----
+    // If the wave never reaches threshold, flag failure with a giant number.
+    double arrival_err = (t_first > 0.0)
+                       ? std::fabs(t_first - tau_theory) / tau_theory
+                       : 1e9;
+    std::printf("    τ_theory=%.4f  t_first=%.4f  rel err=%.3e\n",
+                tau_theory, t_first, arrival_err);
+    CHECK_LT(arrival_err, 0.30,
+             "E1-T5a: Alfvén arrival time within 30% of WKB τ_A");
+
+    // ---- T5b polarisation ratio  δB_x / (-√ρ·δv_x) ≈ 1 ----
+    double ratio_err = 1e9;
+    if (pol_sampled && std::fabs(vx_at_polsample) > 1e-6) {
+        double expected_dBx = -std::sqrt(rho_c) * vx_at_polsample;
+        double ratio = dBx_at_polsample / expected_dBx;
+        ratio_err = std::fabs(ratio - 1.0);
+        std::printf("    δB_x=%+.4e  expected=-√ρ·δv_x=%+.4e  ratio=%.3f\n",
+                    dBx_at_polsample, expected_dBx, ratio);
+    } else {
+        std::printf("    pol sample missing or v_x too small — failing T5b\n");
+    }
+    CHECK_LT(ratio_err, 0.30,
+             "E1-T5b: δB_x / (-√ρ·δv_x) within 30% of 1 (linear Alfvén)");
+
+    sv.destroy();
+}
+
 int main() {
     std::printf("=== athena_mhd stochastic driver (B-M5, §E1) ===\n");
     test_T1_driver_off_preserves_wb();
     test_T2_power_normalisation();
     test_T3_host_device_match();
     test_T4_seed_reproducibility();
+    test_T5_alfven_emission_and_polarization();
     std::printf("\n=== Summary: %d/%d passed ===\n",
                 g_tests - g_failures, g_tests);
     return g_failures == 0 ? 0 : 1;

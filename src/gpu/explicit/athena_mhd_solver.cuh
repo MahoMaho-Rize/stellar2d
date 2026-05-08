@@ -152,6 +152,22 @@ struct AthenaMHDSolver {
     double  cool_alpha      = 0.0;
     double  cool_Tfloor     = 1e-6;      // below this, clamp (prevents T→0)
 
+    // ---- §C8 chromospheric blended cooling ---------------------
+    // Q_R = ξ Q_thck + (1-ξ) Q_thin,  ξ = max(0, 1 - p_chr/p)
+    //   thick: Newton relaxation ∂e/∂t = -(e - e_ref)/τ_thck
+    //          in T-space: ∂T/∂t = -(T - T_ref_thck)/τ_thck
+    //   thin:  Townsend §C7 power-law Λ(T)=Λ₀·(T/T_ref_thin)^α
+    // Operator split per cell: thick step (exponential), then thin step
+    // (Townsend closed form), each weighted by its blend weight.
+    bool   chromo_on         = false;
+    double chromo_p_chr      = 0.0;   // blend cutoff pressure
+    double chromo_T_ref_thck = 1.0;   // Newton-cooling target temperature
+    double chromo_tau_thck   = 0.1;   // thick relaxation timescale
+    double chromo_Lambda0    = 0.0;   // thin cooling strength
+    double chromo_T_ref_thin = 1.0;   // thin reference temperature
+    double chromo_alpha      = 0.0;   // thin power-law index
+    double chromo_Tfloor     = 1e-6;
+
     // ---- well-balanced MHSE (§B4) ------------------------------
     // Per-cell precomputed R(U_hse) + gravity(U_hse), stored once at
     // snapshot_hse() time.  Subtracted every step so U_hse is a fixed
@@ -281,6 +297,14 @@ struct AthenaMHDSolver {
     // cool_on=false.  Does NOT touch ρ / momentum / B — only thermal
     // energy (E -= ρ c_v (T_old - T_new)).  Safe for any dt.
     void apply_cooling(double dt);
+
+    // §C8 chromospheric blended cooling (Shimizu+22 / Suzuki+25).
+    // Q_R = ξ · Q_thck + (1-ξ) · Q_thin, ξ = max(0, 1 - p_chr/p).
+    // Operator-split per cell: thick exponential relaxation to
+    // T_ref_thck on timescale τ_thck (weight ξ), then Townsend
+    // closed-form thin cooling (weight 1-ξ).  No-op if chromo_on=false.
+    // Touches only E (thermal part), identical passivity to apply_cooling.
+    void apply_chromo_cooling(double dt);
 
     // §E1 stochastic driver setup.  Allocates device mode tables and
     // pre-computes amplitudes / phases.  Deterministic for a fixed

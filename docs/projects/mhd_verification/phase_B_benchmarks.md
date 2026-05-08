@@ -17,7 +17,8 @@ Phase B 在此基础上加源项,逐个 milestone 向 Suzuki flux-tube 风物理
 | B-M2 | Spitzer κ₀T^{5/2} 各向异性导热 | §C6 已完成 | `test_athena_mhd_conduction.cu` 5/5 | ✅ |
 | B-M3 | Townsend 光学薄冷却闭式积分 | §C7 已完成 | `test_athena_mhd_cooling.cu` 10/10 | ✅ |
 | B-M4 | 分层 + 导热 + 冷却 combined | §B1/4/C6/7 | `test_athena_mhd_combined.cu` 10/10 | ✅ |
-| B-M5 | Suzuki+25 stochastic broadband driver | §E1 已完成 | `test_athena_mhd_driver.cu` 5/5 | ✅ |
+| B-M5 | Suzuki+25 stochastic broadband driver | §E1 已完成 | `test_athena_mhd_driver.cu` 7/7(含 Alfvén 发射 T5) | ✅ |
+| B-M5.5 | Shimizu+22 色球 blend thick+thin 冷却 | §C8 已完成 | `test_athena_mhd_chromo.cu` 7/7 | ✅ |
 
 ---
 
@@ -272,8 +273,18 @@ $$B_{y,cc}^\mathrm{ghost} = \tfrac12(\mathrm{Byf}[ng-1] + \mathrm{Byf}[ng]) = \t
 | E1-T2 ⟨v_x²⟩ = A_rms² | mean_v² = **9.80e-3** vs target 1.00e-2,rel err 2.0% | < 10% | ✅ |
 | E1-T3 device = host 波形 | max\|Δ\| = **3.2×10⁻¹⁶** (ULP) | < 10⁻¹² | ✅ |
 | E1-T4 seed 可复现 | max\|run0−run1\| = **0** | < 10⁻¹⁴ | ✅ |
+| E1-T5a Alfvén 到达时间 | τ_theory = **1.593**,measured = **1.517**,rel err 4.8% | < 30% | ✅ |
+| E1-T5b 极化关系 δB_x = −√ρ δv_x | ratio = **1.019**,rel err 1.9% | < 30% | ✅ |
 
-5/5 断言通过。B-M1/2/3/4 全部回归零影响。
+7/7 断言通过。B-M1/2/3/4 全部回归零影响。
+
+### T5 Alfvén 发射物理测试
+
+单模驱动 (f_drive=1.0,A_rms=0.05) 在 HSE 等温大气 (B0_y=0.5,ρ₀=1,H=1) 上,测:
+- **到达时间**:WKB $\tau(y^*) = \int_0^{y^*} dy/v_A(y) = (2H/B_{0y})(1 - e^{-y^*/2H}) = 1.593$ for $y^*=1$;实测第一次 $|v_x(y^*)| > 0.3 A_\mathrm{rms}\sqrt{2}$ 在 $t=1.517$,差 4.8%(VL2+PLM group-velocity 误差 + reflection,<30% 容差)
+- **极化** ($z^+$ 上行 Alfvén 本征矢):在 $t = \tau + 0.5/f$(arrival 后半周期),实测 $\delta v_x = +0.050$,$\delta B_x = -0.031$,$\sqrt\rho(y^*) = 0.602$;期望 $-\sqrt\rho \delta v_x = -0.030$,ratio = 1.019(1.9%)
+
+两个独立物理事实:driver **真的发射** Alfvén 波,MHD 介质**真的用正确波速传**,线性极化**对**。比 T1–T4 的工程验证更严肃。
 
 ### 实现备忘
 
@@ -295,6 +306,70 @@ void init_stochastic_driver(double A_rms, double f_min, double f_max,
                             int N_modes, unsigned seed);
 void apply_driver(double t);   // no-op if driver_on=false
 ```
+
+---
+
+## B-M5.5 — Shimizu+22 / Suzuki+25 色球 blend thick+thin 冷却(§C8)
+
+**Date**: 2026-05-08
+**Commit**: TBD
+
+### Setup
+
+在 §C7 单段 Townsend 基础上,加色球 blend:
+- 混合权重 $\xi = \max(0, 1 - p_\mathrm{chr}/p)$:$p < p_\mathrm{chr}$ 时 $\xi=0$(纯 optically-thin 薄),$p \gg p_\mathrm{chr}$ 时 $\xi \to 1$(纯 Newton relaxation 厚)
+- **Thick**:$\partial T/\partial t = -(T - T_\mathrm{ref,thck})/\tau_\mathrm{thck}$(指数松弛)
+- **Thin**:§C7 Townsend 单段幂律
+- **Operator split**:先按权重 $\xi$ 走 thick 指数支 $T_a = T_\mathrm{ref} + (T_0 - T_\mathrm{ref}) e^{-\xi \Delta t/\tau}$,再在 $T_a$ 基础上按权重 $(1-\xi)$ 走 Townsend 闭式;保持 O($\Delta t^2$) 误差
+- cell-local,无 subcycle,无条件稳定
+
+### 实测
+
+| 测试 | 测量 | 阈值 | 状态 |
+|---|---|---|---|
+| E1-T1 纯 thin 极限 (ξ=0) | T_num = 7.0e-1,rel err **0** | < 10⁻¹⁴ | ✅ |
+| E1-T2 纯 thick 极限 (ξ≈1) | T_num = 0.8033,rel err **1.4×10⁻¹⁶** | < 10⁻¹⁴ | ✅ |
+| E1-T3 blend 中间 (ξ=0.5) | T_num = 0.8611,rel err **0** | < 10⁻¹⁴ | ✅ |
+| E1-T4 ρ/mom/B/divB 不变 | 四项 **0** | < 10⁻¹⁰–10⁻¹⁴ | ✅ |
+
+7/7 断言通过。B-M1~5 全部回归零影响(`chromo_on = false` 默认,独立于 `cool_on`)。
+
+### 实现备忘
+
+1. **operator split 不是严格 exact**:thick + thin 两步拼起来并不等于真正的组合 ODE $\dot T = -\xi/\tau (T-T_\mathrm{ref}) - (1-\xi) C T^\alpha$,O($\Delta t^2$) 误差。但每个极限($\xi=0$ 或 $\xi=1$)都 exact 对上单支派生。实际科学用途(wind 演化)$\Delta t \ll \tau_\mathrm{thck}$,误差可忽略。
+2. **$\xi$ 在 cell 上当 $\Delta t$ 内为常数**:实际 $\xi$ 是 $p$ 的函数,$p$ 会随 $T$ 变化。v1 每 cell 用 step-start 时的 $\xi$,不迭代。如果未来需要 stiff coronal regime,改 RK2 或 Rosenbrock。
+3. **`cool_on` 和 `chromo_on` 独立**:两个都开会顺序生效(先 conduction,再 §C7,再 §C8);用户自己选一个,不要同时。
+4. **`p_chr` 是 code units 的压强阈值**:真物理对应 chromosphere-corona transition 处约 0.1 dyn/cm²,需要根据 IC 无量纲化转换。v1 仅测算子,不测物理参数选择。
+
+### 公共 API
+
+```cpp
+// athena_mhd_solver.cuh
+bool   chromo_on         = false;
+double chromo_p_chr      = 0.0;
+double chromo_T_ref_thck = 1.0;
+double chromo_tau_thck   = 0.1;
+double chromo_Lambda0    = 0.0;
+double chromo_T_ref_thin = 1.0;
+double chromo_alpha      = 0.0;
+double chromo_Tfloor     = 1e-6;
+void   apply_chromo_cooling(double dt);
+```
+
+---
+
+## Phase B 完成状态(2026-05-08)
+
+| Milestone | 物理 | 断言 | 关键发现 |
+|---|---|---|---|
+| B-M1 | §B4 WB MHSE | 6/6 | per-stage defect + 6-var subtract + 单 prim |
+| B-M2 | §C6 Spitzer κ | 5/5 | face-avg B → normalize 顺序 |
+| B-M3 | §C7 Townsend cool | 10/10 | 闭式 exact,per-cell,无 subcycle |
+| B-M4 | WB + κ + cool combined | 10/10 | **T ghost 必须独立 scalar mirror** |
+| B-M5 | §E1 Suzuki 随机 driver | 7/7 | Parseval √(2/N) 归一化 + Alfvén 发射物理验证 |
+| B-M5.5 | §C8 chromo blend cool | 7/7 | operator-split blend 顺序 |
+
+**总计**:45/45 通过。所有派生书 §C6/§B4 的 numerical gotcha 已在 `docs/mhd_derivations/sections/` 对应节补入"数值实现备忘"子章节。
 
 ---
 

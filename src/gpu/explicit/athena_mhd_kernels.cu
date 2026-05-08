@@ -1074,6 +1074,75 @@ __global__ void k_athmhd_cool_townsend(
 }
 
 // ============================================================
+// §C8 chromospheric blended cooling (Shimizu+22 / Suzuki+25).
+//   Q_R = ξ Q_thck + (1-ξ) Q_thin,  ξ = max(0, 1 - p_chr/p)
+//   thick: Newton relaxation ∂T/∂t = -(T - T_ref_thck)/τ_thck
+//   thin:  Townsend §C7 power-law Λ(T) = Λ₀ (T/T_ref_thin)^α
+//   Operator-split per cell: thick exponential step first (weighted
+//   by ξ in the exponent), then Townsend closed-form thin step on
+//   the result (thin rate scaled by (1-ξ) via the C coefficient).
+//   O(dt²) splitting error; matches B-M3 single-segment closed form
+//   in each pure limit.  Only thermal energy touched:
+//     ΔE = ρ c_v (T_new - T_old)         (T_new ≤ T_old always)
+// ============================================================
+__global__ void k_athmhd_cool_chromo(
+    const double* __restrict__ w_rho,
+    const double* __restrict__ w_P,
+    double* __restrict__ E,
+    int nx, int ny, int ng, int sy,
+    double dt, double gm1,
+    double p_chr, double T_ref_thck, double tau_thck,
+    double Lambda0, double T_ref_thin, double alpha,
+    double Tfloor)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j >= ng + ny) return;
+    int c = i * sy + j;
+    double rho = fmax(w_rho[c], 1e-30);
+    double p   = fmax(w_P[c], 0.0);
+    double T0  = fmax(p / rho, Tfloor);
+    // Blend weight.
+    double xi;
+    if (p <= p_chr) {
+        xi = 0.0;
+    } else {
+        xi = 1.0 - p_chr / p;
+    }
+    // Thick step: T_a = T_ref + (T0 - T_ref) · exp(-xi · dt / τ).
+    double T_a;
+    if (tau_thck > 0.0) {
+        T_a = T_ref_thck + (T0 - T_ref_thck) * exp(-xi * dt / tau_thck);
+    } else {
+        T_a = T0;
+    }
+    // Thin step on T_a with weight (1-xi) baked into C.
+    double one_minus_xi = 1.0 - xi;
+    double T_b;
+    if (one_minus_xi > 0.0) {
+        double C = one_minus_xi * gm1 * rho * Lambda0 * pow(T_ref_thin, -alpha);
+        const double one_minus_a = 1.0 - alpha;
+        if (fabs(one_minus_a) < 1e-12) {
+            T_b = T_a * exp(-C * dt);
+        } else {
+            double base = pow(T_a, one_minus_a) - C * one_minus_a * dt;
+            if (base <= 0.0) {
+                T_b = Tfloor;
+            } else {
+                T_b = pow(base, 1.0 / one_minus_a);
+            }
+        }
+    } else {
+        T_b = T_a;
+    }
+    if (T_b < Tfloor) T_b = Tfloor;
+    if (T_b > T0)     T_b = T0;     // cooling only
+    double cv = 1.0 / gm1;
+    double dE = rho * cv * (T_b - T0);
+    E[c] += dE;
+}
+
+// ============================================================
 // §E1 stochastic broadband driver.
 //   v_x(t, y = bottom) = Σ_N A_N · sin(2π f_N t + φ_N)
 // where the amplitude normalisation was computed on the host

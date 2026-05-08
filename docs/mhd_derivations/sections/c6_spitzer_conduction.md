@@ -181,3 +181,58 @@ Any failure on the anisotropy (perpendicular-quench) test is an
 immediate red flag: without rank-1 conductivity, 1D modelling of
 coronal loops (Aschwanden 2005 §4) overshoots $T_\mathrm{peak}$ by a
 factor of 2–3.
+
+## 数值实现备忘 (not in formal derivation)
+
+Phase B-M4 (`test_athena_mhd_combined.cu`, 10/10 通过) 里 combined 栈
+(WB + κ + cooling) 第一次暴露了 κ 算子和 reflective y-BC 的一个 ghost-cell
+相互作用,派生层面 $\mathbf{F}_c = -\kappa_\parallel\hat{\mathbf{b}}
+(\hat{\mathbf{b}}\cdot\nabla T)$ 是连续量恒等式,但到了有限体积 + face-B
+磁场 + cons_to_prim 的离散实现就出问题。
+
+### 症状
+
+等温磁化大气 $T = c_s^2$ 严格均匀,理应 $\nabla T \equiv 0$ → $\mathbf{F}_c
+\equiv 0$。实测单次 `apply_conduction(dt)` 就让 $\delta E/E = 4\%$(远超
+ULP 量级),而 $\delta\rho$、$|\mathbf{v}|$、$|\nabla\!\cdot\!\mathbf{B}|$
+同时保持在机器精度 — **只有 $E$ 被 κ 错误地修改了**。
+
+### 根因:cons_to_prim 推出的 ghost $T$ 不是标量镜像
+
+Reflective y-BC 下 face-B 按反对称镜像:$B_{yf}[n_g - 1] = -B_{yf}[n_g + 1]$,
+因此 ghost cell 的 cell-centered $B_y$ 为
+
+$$B_{y,\mathrm{cc}}^\mathrm{ghost}
+ = \tfrac12\bigl(B_{yf}[n_g-1] + B_{yf}[n_g]\bigr)
+ = \tfrac12(-B_{0y} + B_{0y}) = 0,$$
+
+而 interior $B_{y,\mathrm{cc}} = B_{0y}$。然后 `cons_to_prim` 用
+$p = (\gamma-1)(E - \mathrm{KE} - \mathrm{ME})$ 推 ghost 压强,由于
+$\mathrm{ME}^\mathrm{ghost} \ne \mathrm{ME}^\mathrm{interior}$ 差了
+$\tfrac12 B_{0y}^2$,ghost $p$ 被多算/少算 $\tfrac12(\gamma-1)B_{0y}^2$,
+进而 $T^\mathrm{ghost} = p^\mathrm{ghost}/\rho^\mathrm{ghost} \ne c_s^2$。
+κ flux kernel 读到这个"被污染的 ghost $T$"时,wall 上出现**虚假**非零
+$\nabla T$,$\mathbf{F}_c$ 把能量"泄"到 ghost,违反 $T$ 均匀 → $\mathbf{F}_c
+\equiv 0$ 的物理预期。
+
+这不是 §C6 派生的错,也不是 `cons_to_prim` 的错:`cons_to_prim` 正确地
+按 face-B 镜像规则推算 ghost $B_\mathrm{cc}$。问题在于 $B_\mathrm{cc}$ 的
+"镜像"是**面反对称**而非 scalar mirror,而 $T$ 作为标量场,其 ghost
+本该满足 scalar mirror。通过 $(p, \rho) \to T$ 的链条把 $B$ 的矢量镜像
+语义误带进了标量量。
+
+### 修复:$T$ 独立 ghost-fill,不依赖 cons_to_prim
+
+新增 `k_athmhd_ghost_T_{y_reflect, y_periodic, y_outflow, x_periodic, x_outflow}`
+一组 kernel,在 `compute_T` 之后、κ flux 之前,以**标量镜像规则**直接
+覆写 `T_cc` 的 ghost 层。κ flux kernel 仍然读 `T_cc`,但现在 ghost $T$
+与 interior $T$ 在 reflective wall 上严格相等,$\nabla T|_\mathrm{wall}
+= 0$ 到 ULP。
+
+### 推广的教训
+
+任何**读 cell-centered 标量** (如 $T$, $\mu$, $Y_e$) 的空间离散算子,其
+ghost 填充都必须**独立于 cons_to_prim**。cons_to_prim 背后带着矢量 ($B$,
+$\mathbf{v}$) 的方向性镜像语义,不能无损转译到标量。cooling 之类的
+per-cell ODE 不受影响 (从不跨 cell),但 κ 导热、未来粘性、辐射扩散等
+**空间 flux 型** 源项都需要一次独立的标量 ghost-fill 步骤。
