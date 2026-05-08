@@ -108,6 +108,33 @@ struct AthenaMHDSolver {
     std::vector<double> h_g_row;
     std::vector<double> h_phi_row;
 
+    // ---- well-balanced MHSE (§B4) ------------------------------
+    // Per-cell precomputed R(U_hse) + gravity(U_hse), stored once at
+    // snapshot_hse() time.  Subtracted every step so U_hse is a fixed
+    // point: dU/dt = R(U) - R(U_hse).  Sized = (stride_x)*(stride_y).
+    // VL2 predictor uses order=1 (donor-cell), corrector uses order=xorder
+    // (PLM) — discrete residuals differ, so we store per-stage defects.
+    // Only (m_x, m_y, m_z, E) have gravity source; (ρ, B_z) residuals
+    // captured for flux-divergence truncation completeness.
+    bool   wb_active         = false;
+    // Full conservative residuals per stage (ρ, mx, my, mz, E, Bz_cc)
+    // — ρ has no gravity source but its flux residual at U_hse is not
+    // identically zero in floating point (reconstruction of an
+    // exponential ρ(y) on a staggered grid yields O(ULP) asymmetry
+    // between top and bottom face fluxes).
+    double *d_rhs_hse_s1_rho = nullptr;
+    double *d_rhs_hse_s1_mx  = nullptr;  // stage-1 (order=1)
+    double *d_rhs_hse_s1_my  = nullptr;
+    double *d_rhs_hse_s1_mz  = nullptr;
+    double *d_rhs_hse_s1_E   = nullptr;
+    double *d_rhs_hse_s1_Bz  = nullptr;
+    double *d_rhs_hse_s2_rho = nullptr;
+    double *d_rhs_hse_s2_mx  = nullptr;  // stage-2 (order=xorder)
+    double *d_rhs_hse_s2_my  = nullptr;
+    double *d_rhs_hse_s2_mz  = nullptr;
+    double *d_rhs_hse_s2_E   = nullptr;
+    double *d_rhs_hse_s2_Bz  = nullptr;
+
     // ---- CFL scratch -------------------------------------------
     double *d_cfl_buf = nullptr;
 
@@ -184,6 +211,19 @@ struct AthenaMHDSolver {
     //   B = (1,1,0)/√2 (45° inclined),  v=0.
     //   Domain [-0.5,0.5] × [-0.75,0.75] periodic.  t_f = 0.2.
     void init_blast();
+
+    // Isothermal stratified atmosphere IC (§B4 well-balanced gravity).
+    // ρ(y) = ρ₀ exp(−y/H),  P(y) = ρ(y) · c_s²,  B = B0 · ê_y,  v = 0.
+    // Domain [0, Lx] × [0, Ly] with reflective y-BC.  g along −ê_y.
+    // At end, populates d_g_row and calls snapshot_hse() — the
+    // atmosphere is then well-balanced to machine precision.
+    void init_hse_atmosphere(double g, double H, double rho0,
+                             double B0_y = 0.0);
+
+    // Freeze current state as the MHSE reference.  Subsequent step()
+    // subtracts R(U_hse) from the residual (§B4-wb).  Idempotent:
+    // calling twice yields the same defect.
+    void snapshot_hse();
 
     // MHD rotor (Tóth 2000 Rotor Test 1, Stone+08 Fig 25).
     //   Inside r<0.1: ρ=10, rigid-body rotation at ω=200

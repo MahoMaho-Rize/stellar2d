@@ -75,6 +75,11 @@ __global__ void k_athmhd_copy_face_B(
 __global__ void k_athmhd_source_gravity(
     const double*, const double*, double*, double*, const double*,
     int, int, int, int, int, double);
+__global__ void k_athmhd_source_wb_subtract(
+    double*, double*, double*, double*, double*, double*,
+    const double*, const double*, const double*,
+    const double*, const double*, const double*,
+    int, int, int, int, int, double);
 __global__ void k_athmhd_cfl(
     const double*, const double*, const double*, const double*,
     const double*, const double*, const double*, const double*,
@@ -151,6 +156,23 @@ void AthenaMHDSolver::init(int nx_, int ny_, double Lx_, double Ly_,
     alloc_zero(&d_g_row, (size_t)ny * sizeof(double));
     h_g_row.assign(ny, 0.0);
     h_phi_row.assign(ny, 0.0);
+    // §B4 well-balanced MHSE defect buffers (lazily-populated by snapshot_hse)
+    // Two copies: stage-1 (donor-cell) vs stage-2 (PLM) produce different
+    // discrete residuals; subtracting the matching one keeps U_hse fixed
+    // to machine precision at *both* substages.
+    alloc_zero(&d_rhs_hse_s1_rho, nb_cell);
+    alloc_zero(&d_rhs_hse_s1_mx,  nb_cell);
+    alloc_zero(&d_rhs_hse_s1_my,  nb_cell);
+    alloc_zero(&d_rhs_hse_s1_mz,  nb_cell);
+    alloc_zero(&d_rhs_hse_s1_E,   nb_cell);
+    alloc_zero(&d_rhs_hse_s1_Bz,  nb_cell);
+    alloc_zero(&d_rhs_hse_s2_rho, nb_cell);
+    alloc_zero(&d_rhs_hse_s2_mx,  nb_cell);
+    alloc_zero(&d_rhs_hse_s2_my,  nb_cell);
+    alloc_zero(&d_rhs_hse_s2_mz,  nb_cell);
+    alloc_zero(&d_rhs_hse_s2_E,   nb_cell);
+    alloc_zero(&d_rhs_hse_s2_Bz,  nb_cell);
+    wb_active = false;
     // CFL
     alloc_zero(&d_cfl_buf, (size_t)nx * (size_t)ny * sizeof(double));
 
@@ -172,6 +194,10 @@ void AthenaMHDSolver::destroy() {
     F(d_Gy_rho); F(d_Gy_mx); F(d_Gy_my); F(d_Gy_mz);
     F(d_Gy_Bx); F(d_Gy_Bz); F(d_Gy_E);
     F(d_g_row);
+    F(d_rhs_hse_s1_rho); F(d_rhs_hse_s1_mx); F(d_rhs_hse_s1_my);
+    F(d_rhs_hse_s1_mz);  F(d_rhs_hse_s1_E);  F(d_rhs_hse_s1_Bz);
+    F(d_rhs_hse_s2_rho); F(d_rhs_hse_s2_mx); F(d_rhs_hse_s2_my);
+    F(d_rhs_hse_s2_mz);  F(d_rhs_hse_s2_E);  F(d_rhs_hse_s2_Bz);
     F(d_cfl_buf);
 }
 
@@ -314,6 +340,24 @@ void AthenaMHDSolver::apply_flux_divergence_and_ct(int stage, double dt) {
     if (any_grav) {
         k_athmhd_source_gravity<<<gg, b>>>(
             d_w_rho, d_w_v, d_my1, d_E1, d_g_row,
+            nx, ny, ng, sx, sy, dt_stage);
+    }
+
+    // §B4 well-balanced MHSE: subtract the frozen R(U_hse) residual so
+    // an atmosphere at MHSE stays at MHSE to machine precision.  Only
+    // active after snapshot_hse() has been called.  Per-stage defects
+    // because predictor (order=1) and corrector (order=xorder) give
+    // different discrete residuals.
+    if (wb_active) {
+        double* rhs_rho = (stage == 1) ? d_rhs_hse_s1_rho : d_rhs_hse_s2_rho;
+        double* rhs_mx  = (stage == 1) ? d_rhs_hse_s1_mx  : d_rhs_hse_s2_mx;
+        double* rhs_my  = (stage == 1) ? d_rhs_hse_s1_my  : d_rhs_hse_s2_my;
+        double* rhs_mz  = (stage == 1) ? d_rhs_hse_s1_mz  : d_rhs_hse_s2_mz;
+        double* rhs_E   = (stage == 1) ? d_rhs_hse_s1_E   : d_rhs_hse_s2_E;
+        double* rhs_Bz  = (stage == 1) ? d_rhs_hse_s1_Bz  : d_rhs_hse_s2_Bz;
+        k_athmhd_source_wb_subtract<<<gg, b>>>(
+            d_rho1, d_mx1, d_my1, d_mz1, d_E1, d_Bz1,
+            rhs_rho, rhs_mx, rhs_my, rhs_mz, rhs_E, rhs_Bz,
             nx, ny, ng, sx, sy, dt_stage);
     }
 }
@@ -1605,4 +1649,162 @@ void AthenaMHDSolver::init_rotor() {
     std::fprintf(stderr,
         "  AthenaMHD rotor: γ=1.4, ω=%.0f (peak v=%.1f), Bx0=%.4f\n",
         omega, omega * r0, Bx0);
+}
+
+// ============================================================
+// Well-balanced MHSE: snapshot_hse()
+//   Captures per-cell R(U_hse) + gravity(U_hse) so the step()
+//   residual becomes [R(U) + g(U)] − [R(U_hse) + g(U_hse)].
+//   Assumes the CURRENT state (d_rho, d_mx, d_my, d_mz, d_E, d_B*)
+//   is an MHSE configuration and d_g_row is populated.
+//
+// Algorithm:
+//   1. Make sure wb_active = false so the subtract kernel is a no-op.
+//   2. Zero rhs_hse_* (defensive).
+//   3. Do one order-1 predictor stage with dt_probe = 1 — this writes
+//      d_rho1 = U^n + 1·(R + g).  (dt_stage = 0.5 at stage 1, so we use
+//      dt_probe = 2 to get a full-unit residual, then take the
+//      difference U1 − U^n.)
+//   4. Copy (d_mx1 − d_mx) / dt_effective → d_rhs_hse_mx, etc.
+//   5. Restore solver state (U^n, B_f^n untouched).
+//   6. Set wb_active = true.
+// ============================================================
+__global__ void k_athmhd_wb_extract_defect(
+    const double* rho,  const double* mx,  const double* my,
+    const double* mz,   const double* E,   const double* Bz,
+    const double* rho1, const double* mx1, const double* my1,
+    const double* mz1,  const double* E1,  const double* Bz1,
+    double* rhs_rho, double* rhs_mx, double* rhs_my,
+    double* rhs_mz,  double* rhs_E,  double* rhs_Bz,
+    int nx, int ny, int ng, int sy, double inv_dt)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j >= ng + ny) return;
+    int c = i * sy + j;
+    rhs_rho[c] = (rho1[c] - rho[c]) * inv_dt;
+    rhs_mx [c] = (mx1 [c] - mx [c]) * inv_dt;
+    rhs_my [c] = (my1 [c] - my [c]) * inv_dt;
+    rhs_mz [c] = (mz1 [c] - mz [c]) * inv_dt;
+    rhs_E  [c] = (E1  [c] - E  [c]) * inv_dt;
+    rhs_Bz [c] = (Bz1 [c] - Bz [c]) * inv_dt;
+}
+
+void AthenaMHDSolver::snapshot_hse() {
+    // Ensure clean state: kill any stale defect, disable subtract.
+    wb_active = false;
+    int ncell = total_cells();
+    size_t nb_cell = (size_t)ncell * sizeof(double);
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s1_rho, 0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s1_mx,  0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s1_my,  0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s1_mz,  0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s1_E,   0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s1_Bz,  0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s2_rho, 0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s2_mx,  0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s2_my,  0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s2_mz,  0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s2_E,   0, nb_cell));
+    CUDA_CHECK(cudaMemset(d_rhs_hse_s2_Bz,  0, nb_cell));
+
+    int sy = stride_y();
+    dim3 b(16, 16), gg((nx + 15) / 16, (ny + 15) / 16);
+
+    // Capture residuals at U = U_hse for both reconstruction orders.
+    // At runtime when U^n = U_hse AND stage-1 WB is perfect, U_star
+    // will equal U_hse, so stage-2 will compute L_s2(U_hse) — matching
+    // what we capture here.
+    fill_ghost();
+    cons_to_prim();
+
+    // Stage-1 capture (order=1 predictor). With dt_probe=2 → dt_stage=1.
+    stage_advance(/*stage=*/1, /*dt=*/2.0);
+    k_athmhd_wb_extract_defect<<<gg, b>>>(
+        d_rho,  d_mx,  d_my,  d_mz,  d_E,  d_Bz_cc,
+        d_rho1, d_mx1, d_my1, d_mz1, d_E1, d_Bz1,
+        d_rhs_hse_s1_rho, d_rhs_hse_s1_mx, d_rhs_hse_s1_my,
+        d_rhs_hse_s1_mz,  d_rhs_hse_s1_E,  d_rhs_hse_s1_Bz,
+        nx, ny, ng, sy, /*inv_dt=*/1.0);
+
+    // Stage-2 capture (order=xorder) using SAME prim(U_hse) still in d_w_*.
+    stage_advance(/*stage=*/2, /*dt=*/1.0);
+    k_athmhd_wb_extract_defect<<<gg, b>>>(
+        d_rho,  d_mx,  d_my,  d_mz,  d_E,  d_Bz_cc,
+        d_rho1, d_mx1, d_my1, d_mz1, d_E1, d_Bz1,
+        d_rhs_hse_s2_rho, d_rhs_hse_s2_mx, d_rhs_hse_s2_my,
+        d_rhs_hse_s2_mz,  d_rhs_hse_s2_E,  d_rhs_hse_s2_Bz,
+        nx, ny, ng, sy, /*inv_dt=*/1.0);
+
+    // State U^n, B_f^n intact (stages only wrote _1 scratch).  Turn
+    // on WB subtraction from next step() onward.
+    wb_active = true;
+    std::fprintf(stderr,
+        "  [snapshot_hse] captured R(U_hse) defects (s1+s2) on %dx%d, wb_active=true\n",
+        nx, ny);
+}
+
+// ============================================================
+// Isothermal stratified atmosphere IC (§B4 test bed).
+//   ρ(y) = ρ₀ exp(−y/H),  c_s² = g·H,  P = ρ·c_s²,  v = 0.
+//   Optional uniform B₀ along ê_y (divergence-free by construction).
+// After seeding, populates d_g_row and calls snapshot_hse().
+// ============================================================
+void AthenaMHDSolver::init_hse_atmosphere(double g_val, double H,
+                                          double rho0, double B0_y) {
+    gamma = 5.0 / 3.0;
+    x_bc = 0;   // periodic in x
+    y_bc = 1;   // reflective in y — prevents atmosphere from draining
+    x_lo = 0.0; x_hi = Lx;
+    y_lo = 0.0; y_hi = Ly;
+    dx = Lx / (double)nx;
+    dy = Ly / (double)ny;
+
+    const double cs2 = g_val * H;   // isothermal sound speed²
+
+    int sx = stride_x(), sy = stride_y();
+    int ncell = sx * sy;
+    int nfx = total_fx(), nfy = total_fy();
+    std::vector<double> h_rho(ncell), h_mx(ncell, 0.0),
+                        h_my(ncell, 0.0), h_mz(ncell, 0.0),
+                        h_E(ncell), h_Bz_cc(ncell, 0.0);
+    std::vector<double> h_Bxf(nfx, 0.0);
+    std::vector<double> h_Byf(nfy, B0_y);
+
+    // Cell-centred seeding: ρ, P, E.  Note Bx_cc = 0, By_cc = B0_y.
+    for (int jc = 0; jc < ny; ++jc) {
+        double yc = y_lo + (jc + 0.5) * dy;
+        double rho = rho0 * std::exp(-yc / H);
+        double P   = rho * cs2;
+        for (int ic = 0; ic < nx; ++ic) {
+            int c = (ic + ng) * sy + (jc + ng);
+            set_cell(h_rho, h_mx, h_my, h_mz, h_E, h_Bz_cc,
+                     c, rho, 0.0, 0.0, 0.0,
+                     /*Bx_cc=*/0.0, /*By_cc=*/B0_y, /*Bz_cc=*/0.0,
+                     P, gamma);
+        }
+    }
+
+    size_t nb_cell = (size_t)ncell * sizeof(double);
+    CUDA_CHECK(cudaMemcpy(d_rho,   h_rho.data(),   nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mx,    h_mx.data(),    nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_my,    h_my.data(),    nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mz,    h_mz.data(),    nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_E,     h_E.data(),     nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Bz_cc, h_Bz_cc.data(), nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Bxf, h_Bxf.data(), (size_t)nfx * sizeof(double),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Byf, h_Byf.data(), (size_t)nfy * sizeof(double),
+                          cudaMemcpyHostToDevice));
+
+    // Fill gravity row (constant g along −ê_y, all rows).
+    h_g_row.assign(ny, g_val);
+    CUDA_CHECK(cudaMemcpy(d_g_row, h_g_row.data(), (size_t)ny * sizeof(double),
+                          cudaMemcpyHostToDevice));
+
+    std::fprintf(stderr,
+        "  AthenaMHD HSE atm: g=%.4g, H=%.4g, ρ₀=%.4g, cs²=%.4g, B0y=%.4g\n",
+        g_val, H, rho0, cs2, B0_y);
+
+    snapshot_hse();
 }

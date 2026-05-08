@@ -723,6 +723,36 @@ __global__ void k_athmhd_source_gravity(
 }
 
 // ============================================================
+// Well-balanced MHSE defect subtraction (§B4):
+//   U_dst -= dt_stage · rhs_hse_*
+// where rhs_hse_* = R(U_hse) + gravity(U_hse) was captured once at
+// snapshot_hse().  For an atmosphere at MHSE this makes the total
+// residual exactly zero (machine precision), so an unperturbed HSE
+// state stays put forever regardless of grid spacing.
+// Applied to all 6 cell-centred conservatives so the ρ and Bz flux
+// residuals at reflective walls also cancel.
+// ============================================================
+__global__ void k_athmhd_source_wb_subtract(
+    double* u_rho, double* u_mx, double* u_my, double* u_mz,
+    double* u_E, double* u_Bz,
+    const double* rhs_hse_rho, const double* rhs_hse_mx,
+    const double* rhs_hse_my,  const double* rhs_hse_mz,
+    const double* rhs_hse_E,   const double* rhs_hse_Bz,
+    int nx, int ny, int ng, int sx, int sy, double dt)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j >= ng + ny) return;
+    int c = cflat(i, j, sy);
+    u_rho[c] -= dt * rhs_hse_rho[c];
+    u_mx [c] -= dt * rhs_hse_mx [c];
+    u_my [c] -= dt * rhs_hse_my [c];
+    u_mz [c] -= dt * rhs_hse_mz [c];
+    u_E  [c] -= dt * rhs_hse_E  [c];
+    u_Bz [c] -= dt * rhs_hse_Bz [c];
+}
+
+// ============================================================
 // CFL:  Δt_cell = min( Δx / (|u|+c_f),  Δy / (|v|+c_f) )
 // with c_f the fast-magnetosonic speed in the respective direction.
 // (§A8: unsplit rule; here we use the per-direction max.)
