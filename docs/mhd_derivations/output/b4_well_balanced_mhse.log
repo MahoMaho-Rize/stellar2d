@@ -1,0 +1,11 @@
+
+════════════════════════════════════════════════════════════
+  B4 — Well-balanced MHSE operator
+════════════════════════════════════════════════════════════
+  [OK] Well-balanced residual F_wb(U_hse) = 0 — sympy verified to 0.
+  [OK] B4-I3: F_wb(U_hse) ≡ 0 by construction.
+  [OK] Linear-wave Jacobian: ∂_U F_wb(U_hse) = ∂_U R(U_hse) — sympy verified to 0.
+  [OK] B4: linear-wave Jacobian preserved — perturbation dynamics identical.
+  → wrote output/b4_well_balanced_mhse.latex.tex
+
+All B4 identities verified.

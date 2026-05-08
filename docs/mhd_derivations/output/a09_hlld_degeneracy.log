@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  A9 — HLLD degenerate branches
+════════════════════════════════════════════════════════════
+  [OK] num of B*_y vanishes on Alfvén locus — sympy verified to 0.
+  [OK] den of B*_y on Alfvén locus = ρ_K(S_K−v_xK)(v_xK−S_M) — sympy verified to 0.
+  [OK] A9-D2: on Alfvén locus, num → 0 and den → ρ_K(S_K−v_xK)(v_xK−S_M).
+            regularisation: when both small, use upstream (v_y, B_y) unchanged.
+  [OK] D_SM = 0 when both sides identical (HLL fallback) — sympy verified to 0.
+  → wrote output/a09_hlld_degeneracy.latex.tex
+
+All A9 identities verified.

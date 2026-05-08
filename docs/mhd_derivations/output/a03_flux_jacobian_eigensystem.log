@@ -1,0 +1,14 @@
+
+════════════════════════════════════════════════════════════
+  A3 — 1D MHD flux Jacobian eigensystem (7 waves)
+════════════════════════════════════════════════════════════
+  [OK] hydro projection (B→0) recovers standard hydro primitive Jacobian.
+  [OK] Discriminant identity I1: c_f² + c_s² = c_s0² + c_A² — sympy verified to 0.
+  [OK] Discriminant identity I2: c_f² · c_s² = c_s0² · c_Ax² — sympy verified to 0.
+
+  Step 4 — numerical verification of the eigensystem
+           (20 random physical states × 3 γ values = 60 trials)
+    [OK] 60 trials passed; max |λ_exp − λ_num| = 4.44e-15, max |A·r − λ·r|    = 5.77e-15
+  → wrote output/a03_flux_jacobian_eigensystem.latex.tex
+
+All A3 identities verified by sympy.

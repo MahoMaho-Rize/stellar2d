@@ -1,0 +1,11 @@
+
+════════════════════════════════════════════════════════════
+  D3 — MRI stress decomposition (α_M + α_R) and sign quadrants
+════════════════════════════════════════════════════════════
+  [OK] Maxwell stress antisymmetric under B_R → −B_R — sympy verified to 0.
+  [OK] Maxwell stress invariant under (B_R, B_φ) → (−B_R, −B_φ) — sympy verified to 0.
+  [OK] Reynolds stress antisymmetric under v_R → −v_R — sympy verified to 0.
+  [OK] MRI dispersion vanishes at Balbus-Hawley extremum (k_*²v_A² = 15/16 Ω², γ = 3/4 Ω) — sympy verified to 0.
+  → wrote output/d3_mri_stress_decomposition.latex.tex
+
+All D3 identities verified.

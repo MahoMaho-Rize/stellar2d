@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  A6 — Reconstruction (PLM / PPM) and TVD limiters
+════════════════════════════════════════════════════════════
+  [OK] A6-I1: all three limiters vanish on opposite-sign inputs.
+  [OK] A6-I3/I4: all three limiters lie inside Sweby TVD region for r∈[0,4].
+  [OK] A6-I5: PLM leading error at h² = -W2/8  (coefficient of W'')
+  [OK] A6-I6: PPM interpolant is 4th-order;  h^4 leading coefficient = -W4/30 (∝ W⁽⁴⁾)
+  [OK] PPM parabola conservation ∫W dξ = a_0 — sympy verified to 0.
+  → wrote output/a06_reconstruction_tvd.latex.tex
+
+All A6 identities verified by sympy.

@@ -1,0 +1,10 @@
+
+════════════════════════════════════════════════════════════
+  D2 — Shearing-sheet approximation and shearing-periodic BC
+════════════════════════════════════════════════════════════
+  [OK] Shearing-sheet background is exact steady state (Coriolis balances tidal force on v_φ^bg = −q Ω x) — sympy verified to 0.
+  [OK] Shear wrap-around time t_shear = L_y / (q Ω_0 L_x) — sympy verified to 0.
+  [OK] Effective potential is anti-confining: d²Φ_eff/dx² = −2qΩ² < 0 — sympy verified to 0.
+  → wrote output/d2_shearing_sheet_bc.latex.tex
+
+All D2 identities verified.

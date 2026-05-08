@@ -1,0 +1,9 @@
+
+════════════════════════════════════════════════════════════
+  B2 — WKB wave-action conservation
+════════════════════════════════════════════════════════════
+  [OK] WKB dispersion ω² = v_A² k² — sympy verified to 0.
+  [OK] No reflection: ∂_t z+ + v_A ∂_r z+ = 0 under uniform background — sympy verified to 0.
+  → wrote output/b2_wave_action_wkb.latex.tex
+
+All B2 identities verified.

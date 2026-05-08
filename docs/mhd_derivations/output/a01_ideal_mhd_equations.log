@@ -1,0 +1,18 @@
+
+════════════════════════════════════════════════════════════
+  A1 — Ideal MHD equations (conservative form)
+════════════════════════════════════════════════════════════
+
+[A1.1] Continuity residual as sympy sees it:
+       rho(x, y, z, t)*Derivative(v_x(x, y, z, t), x) + rho(x, y, z, t)*Derivative(v_y(x, y, z, t), y) + rho(x, y, z, t)*Derivative(v_z(x, y, z, t), z) + v_x(x, y, z, t)*Derivative(rho(x, y, z, t), x) + v_y(x, y, z, t)*Derivative(rho(x, y, z, t), y) + v_z(x, y, z, t)*Derivative(rho(x, y, z, t), z) + Derivative(rho(x, y, z, t), t)
+  [OK] Lorentz x: (∇×B)×B  ≡  ∇·(BB)−∇(|B|²/2)−(∇·B)B — sympy verified to 0.
+  [OK] Lorentz y: (∇×B)×B  ≡  ∇·(BB)−∇(|B|²/2)−(∇·B)B — sympy verified to 0.
+  [OK] Lorentz z: (∇×B)×B  ≡  ∇·(BB)−∇(|B|²/2)−(∇·B)B — sympy verified to 0.
+  [OK] Induction: curl form ≡ tensor-div form (component 0) — sympy verified to 0.
+  [OK] Induction: curl form ≡ tensor-div form (component 1) — sympy verified to 0.
+  [OK] Induction: curl form ≡ tensor-div form (component 2) — sympy verified to 0.
+  [OK] Poynting flux identity: ∇·(B×(v×B)) ≡ ∇·[B(B·v) − |B|²v] — sympy verified to 0.
+  [OK] Solenoidal constraint preservation: ∇·(∇×(v×B)) = 0 — sympy verified to 0.
+  → wrote output/a01_ideal_mhd_equations.latex.tex
+
+All A1 identities verified by sympy.

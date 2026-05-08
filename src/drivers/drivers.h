@@ -27,6 +27,7 @@ int run_cart_ale        (SimConfig& cfg, SimContext& ctx, double& t, int& step);
 int run_cart_impl       (SimConfig& cfg, SimContext& ctx, double& t, int& step);
 int run_cart_ale2       (SimConfig& cfg, SimContext& ctx, double& t, int& step);
 int run_athena_vl2      (SimConfig& cfg, SimContext& ctx, double& t, int& step);
+int run_athena_mhd      (SimConfig& cfg, SimContext& ctx, double& t, int& step);
 int run_pseudo_spectral (SimConfig& cfg, SimContext& ctx, double& t, int& step);
 int run_anelastic_sl    (SimConfig& cfg, SimContext& ctx, double& t, int& step);
 int run_sph2d_spectral  (SimConfig& cfg, SimContext& ctx, double& t, int& step);

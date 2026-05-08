@@ -1,0 +1,14 @@
+[FAIL] c_f² with B_⊥=0 equals max(c_s0², c_Ax²): expected 0, got Abs(B_x**2 + gamma*p - 2*rho*Max(B_x**2/rho, gamma*p/rho) + sqrt(-4*B_x**2*gamma*p + (B_x**2 + gamma*p)**2))/(2*rho)
+       raw expr: Abs(B_x**2 + gamma*p - 2*rho*Max(B_x**2/rho, gamma*p/rho) + sqrt(-4*B_x**2*gamma*p + (B_x**2 + gamma*p)**2))/(2*rho)
+
+════════════════════════════════════════════════════════════
+  A8 — MHD CFL time-step constraints
+════════════════════════════════════════════════════════════
+  [OK] Diffusion CFL worst-case at ξ=π — sympy verified to 0.
+  [OK] A8-I2: FTCS diffusion stability  σ = ηΔt/Δx² ≤ 1/2.
+  [OK] A8-I4a: c_f²(B_⊥=0) = max(c_s0², c_Ax²) numerically (max err = 1.13e-14).
+  [OK] c_f² with B_x=0 equals c_s0² + c_A⊥² — sympy verified to 0.
+  [OK] c_f² with B=0 equals c_s0² (hydro limit) — sympy verified to 0.
+  → wrote output/a08_mhd_cfl.latex.tex
+
+All A8 identities verified.

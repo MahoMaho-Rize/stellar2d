@@ -1,0 +1,10 @@
+
+════════════════════════════════════════════════════════════
+  C3 — Non-ideal MHD total-energy conservation
+════════════════════════════════════════════════════════════
+  [OK] Ideal Poynting flux identity verified.
+  [OK] Q_Ohm = η_O |J|² — sympy verified to 0.
+  [OK] Q_amb_heat = η_A (|J|²|B|² − (J·B)²)/|B|²  = η_A |J_⊥|² — sympy verified to 0.
+  → wrote output/c3_resistive_energy.latex.tex
+
+All C3 identities verified.

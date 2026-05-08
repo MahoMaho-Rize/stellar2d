@@ -1,0 +1,8 @@
+
+════════════════════════════════════════════════════════════
+  A10 — Powell 8-wave source vs CT
+════════════════════════════════════════════════════════════
+  [OK] A10-I1: Powell source vanishes when ∇·B = 0 (trivial).
+  → wrote output/a10_powell_vs_ct.latex.tex
+
+All A10 identities verified.

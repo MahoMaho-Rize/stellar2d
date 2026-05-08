@@ -1,0 +1,11 @@
+
+════════════════════════════════════════════════════════════
+  C5 — Suzuki-Inutsuka 2005 turbulent heating closure
+════════════════════════════════════════════════════════════
+  [OK] C5-I1: ε_turb^{SI} > 0 for all admissible arguments.
+  [OK] ε_SY → 0 as |z⁻| → 0 (pure-outward limit) — sympy verified to 0.
+  [OK] C5-I3: pure-outward (|z⁻|=0) gives no cascade ε_turb → 0.
+  [OK] ε_turb · Δt = ½ρδv² gives Δt = λ_cor / (2 c_d δv) — sympy verified to 0.
+  → wrote output/c5_suzuki_turbulent_heating.latex.tex
+
+All C5 identities verified.

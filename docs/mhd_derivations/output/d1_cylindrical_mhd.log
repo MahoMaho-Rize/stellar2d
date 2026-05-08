@@ -1,0 +1,10 @@
+
+════════════════════════════════════════════════════════════
+  D1 — Ideal MHD in cylindrical (R, φ, z) coordinates
+════════════════════════════════════════════════════════════
+  [OK] Cylindrical MHD operators and axisymmetric reductions
+       displayed in manuscript (no nontrivial identities to verify 
+       beyond Part A — this section is a reference for D2 and D3).
+  → wrote output/d1_cylindrical_mhd.latex.tex
+
+All D1 identities verified.
