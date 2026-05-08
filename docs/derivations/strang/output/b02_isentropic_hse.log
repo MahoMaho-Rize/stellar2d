@@ -1,0 +1,21 @@
+
+============================================================
+  B2 - Isentropic HSE
+============================================================
+  [OK] B2-exponent-identity: gamma/(gamma-1) - 1 = 1/(gamma-1) — sympy verified to 0.
+  [OK] B2-dh-dy: dh/dy = -(gamma-1) g / (gamma K) — sympy verified to 0.
+  [OK] B2-dp-dh: dp/dh = (gamma K / gm1) * h^(1/gm1) — sympy verified to 0.
+  [OK] B2-HSE-ODE: dp/dy = -rho * g  (chain rule, h-parameterisation) — sympy verified to 0.
+  [OK] B2-rho-parametric: rho_of_h(arg(y)) = rho_hse(y) — sympy verified to 0.
+  [OK] B2-p-parametric: p_of_h(arg(y)) = p_hse(y) — sympy verified to 0.
+  [OK] B2-HSE-ODE-y: d p_hse / dy + rho_hse g = 0 (y-world, powdenest) — sympy verified to 0.
+  [OK] B2-bottom-BC: rho(0) = rho_0 — sympy verified to 0.
+  [OK] B2-bottom-BC-p: p(0) = K rho_0^gamma — sympy verified to 0.
+  [OK] B2-isentropic-closure: P / rho^gamma = K (parametric, sp.powdenest) — sympy verified to 0.
+  [OK] B2-cutoff: arg(y_star) = 0 — sympy verified to 0.
+  [OK] B2-temperature-lapse-parametric: P/rho = K h (parametric) — sympy verified to 0.
+  [OK] B2-temperature-lapse: P/rho = K rho_0^gm1 - gm1 g y / gamma — sympy verified to 0.
+  [OK] B2-temperature-lapse-compact: P/rho = K rho_0^gm1 (1 - y/y_star) — sympy verified to 0.
+  wrote output/b02_isentropic_hse.latex.tex
+
+All B2 identities verified by sympy.

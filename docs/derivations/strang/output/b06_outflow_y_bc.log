@@ -1,0 +1,13 @@
+
+============================================================
+  B6 - Outflow-y BC (zero-gradient)
+============================================================
+  [OK] B6-ghost-uniform[0]: U_ghost(g1)[0] = U_ghost(g2)[0] — sympy verified to 0.
+  [OK] B6-ghost-uniform[1]: U_ghost(g1)[1] = U_ghost(g2)[1] — sympy verified to 0.
+  [OK] B6-ghost-uniform[2]: U_ghost(g1)[2] = U_ghost(g2)[2] — sympy verified to 0.
+  [OK] B6-ghost-uniform[3]: U_ghost(g1)[3] = U_ghost(g2)[3] — sympy verified to 0.
+  [OK] B6-neumann: zero-gradient copy <=> d U / d y = 0 at y = y_top.
+  [OK] B6-subsonic-error: R_- extrapolation error = (dy/2) dR_-/dy + O(dy^2).
+  wrote output/b06_outflow_y_bc.latex.tex
+
+All B6 identities verified by sympy.
