@@ -88,36 +88,51 @@ hash of the profile arrays.
   **positive control**: if turning off WB doesn't produce a
   transient, the WB machinery is a no-op and should be audited.
 
-## 数值实现备忘 (not in formal derivation)
+## Numerical implementation notes (not in formal derivation)
 
-以下 3 条是 Phase B-M1 实测 (commit `fdbe383`, `test_athena_mhd_hse_preserve.cu`
-6/6 通过) 发现的离散化陷阱。派生层面 $F_\mathrm{wb}(\mathbf{U}_\mathrm{hse}) \equiv 0$
-是解析恒等式,但在 VL2 + PLM + reflective wall 的实现栈里,以下三点任何一条
-写错,都会把"machine precision"退化成 $\sim 10^{-2}$–$10^{-3}$ 的漂移。
+The three items below are discretisation pitfalls surfaced during
+Phase B-M1 (commit `fdbe383`, `test_athena_mhd_hse_preserve.cu` 6/6
+pass).  At the derivation level $F_\mathrm{wb}(\mathbf{U}_\mathrm{hse})
+\equiv 0$ is an analytic identity, but in the VL2 + PLM + reflective
+wall implementation stack any one of these three, if done wrong,
+degrades "machine precision" into drift at the $10^{-2}$–$10^{-3}$
+level.
 
-1. **VL2 两阶段必须分开存 defect $R(\mathbf{U}_\mathrm{hse})$。**
-   Predictor 阶段走 donor-cell (order=1),corrector 阶段走 PLM (order=xorder);
-   两者的**离散残差** $R(\mathbf{U}_\mathrm{hse})$ 在有限精度下并不相等
-   (重建顺序不同 → face 值不同 → flux 不同)。只存一份 defect 做两次
-   subtract,实测残留 $\sim 0.8\%$ drift;两份独立 defect (`d_rhs_hse_s1_*`,
-   `d_rhs_hse_s2_*`,在 `apply_flux_divergence_and_ct` 按 stage 路由) 才到 ULP。
+1. **The two VL2 stages need separately stored defects $R(\mathbf{U}_\mathrm{hse})$.**
+   The predictor uses donor-cell reconstruction (order=1) while the
+   corrector uses PLM (order=xorder).  The discrete residual
+   $R(\mathbf{U}_\mathrm{hse})$ is not the same under the two
+   reconstructions in finite precision (different face values yield
+   different fluxes).  Storing one defect and subtracting it in both
+   stages leaves a residual $\sim 0.8\%$ drift; storing two
+   independent defects (`d_rhs_hse_s1_*`, `d_rhs_hse_s2_*`, routed by
+   stage in `apply_flux_divergence_and_ct`) reaches ULP.
 
-2. **必须对全 6 个守恒量 $(\rho, m_x, m_y, m_z, E, B_z)$ 都 subtract。**
-   朴素直觉是只对有重力源的 $(m_x, m_y, m_z, E)$ 减。实测:reflective 壁
-   上 $\rho$ 和 $B_z$ 的 flux 残差虽然是 ULP 级 ($\sim 10^{-16}$),但 1000
-   步累积可以放大到 $\sim 1\%$ 的 $\delta\rho$ 漂移,使 B3 ($\delta\rho$)
-   断言失败。WB 是**代数对消** (identical cancellation),不是"只减主要项",
-   6 个守恒量必须全部参与。
+2. **Subtract the defect from all six conservatives
+   $(\rho, m_x, m_y, m_z, E, B_z)$, not just the ones with gravity
+   source.**
+   Naive intuition says subtract only
+   $(m_x, m_y, m_z, E)$.  Empirically, the reflective-wall flux
+   residuals on $\rho$ and $B_z$ are ULP-level ($\sim 10^{-16}$) per
+   step, but accumulate over 1000 steps into $\delta\rho/\rho \sim
+   1\%$, failing the B3 assertion.  Well-balancing is an **algebraic
+   identity cancellation**, not "zero out the dominant terms"; all
+   six fields must participate.
 
-3. **Snapshot 时两阶段共用同一份 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$,
-   不要模拟 stage-2 swap。**
-   实 `step()` 里 stage-2 的 flux 由 $\mathrm{prim}(\mathbf{U}^*)$ 计算,因为
-   stage-1 末尾做了 swap + refill。但在 WB 完美时,$\mathbf{U}^* \equiv
-   \mathbf{U}_\mathrm{hse}$ — stage-2 实际"看到"的就是 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$
-   本身。snapshot 里只需 `cons_to_prim(U_hse)` 一次,两阶段共用;
-   若人为加 swap 去模拟 stage-2 的 $\mathbf{U}^*$,反而 capture 了"未 WB
-   过的 $\mathbf{U}^*$"的假残差,破坏自洽。
+3. **The snapshot uses one $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$
+   for both stages — do not simulate the stage-2 swap.**
+   In the real `step()` the stage-2 flux is computed from
+   $\mathrm{prim}(\mathbf{U}^*)$ because stage 1 performs a swap +
+   refill at the end.  When WB is exact, however,
+   $\mathbf{U}^* \equiv \mathbf{U}_\mathrm{hse}$, so stage 2 genuinely
+   sees $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$ itself.  The snapshot
+   only needs `cons_to_prim(U_hse)` once, shared by both stages; if
+   one manually adds a swap to mimic stage 2's $\mathbf{U}^*$, the
+   captured "defect" is actually the residual of a non-WB
+   $\mathbf{U}^*$, breaking self-consistency.
 
-共通 takeaway: WB 是**两端离散表达式 bit-wise 相同**才 cancel,不是
-"物理上等价"就行。任何改动重建顺序、变量顺序、或两阶段间 state 语义的
-PR,都必须重跑 B-M1 以验证 ULP 对齐。
+Common takeaway: well-balancing only cancels if the two discrete
+expressions are **bit-wise identical**, not merely "physically
+equivalent".  Any PR that alters reconstruction order, variable
+ordering, or inter-stage state semantics must re-run B-M1 to verify
+ULP cancellation.

@@ -16,10 +16,19 @@ done
 
 OUT_MD="manuscript.md"
 
+# 0. Lint the sections for the two structural errors no fixer can handle:
+#    unbalanced \boxed{ and $$...$$ with a blank line.
+echo "→ lint sections/"
+if ! python3 scripts/lint_sections.py; then
+    echo "ERROR: lint failed — fix the sections/*.md errors above before building." >&2
+    exit 1
+fi
+
 # 1. Concatenate sections in numeric/alphabetic order.
 #    Section order: 00_preamble, a0_*, a1_..a5_, b0_*, b1_..b3_,
 #                   c0_*, c1_..c4_, d0_*, d1_..d3_, 99_*
-order=$(ls -1 sections/*.md 2>/dev/null | sort)
+#    Template file (_TEMPLATE.md) is skipped.
+order=$(ls -1 sections/*.md 2>/dev/null | grep -v '/_' | sort)
 if [[ -z "$order" ]]; then
     echo "ERROR: no sections/*.md files found" >&2
     exit 1
@@ -31,6 +40,14 @@ for f in $order; do
     echo "" >> "$OUT_MD"
 done
 echo "→ $OUT_MD ($(wc -l < "$OUT_MD") lines)"
+
+# 1.5 Normalize the concatenated manuscript in-place: replace emoji with
+#     text tags, wrap any multi-line \boxed{...} body in \begin{aligned}
+#     so xelatex can break the paragraph without killing the \boxed
+#     scan, strip stray trailing whitespace.  Saves a backup at
+#     manuscript.md.pre_norm for one build.
+echo "→ normalize manuscript for pandoc/xelatex"
+python3 scripts/normalize_manuscript.py "$OUT_MD"
 
 # 2. Optional PDF via pandoc + xelatex.
 #    Uses the system pandoc (pixi adds pandoc 3.9).

@@ -68,7 +68,7 @@ the manuscript as a source of truth for the solver implementation.
 ```bash
 cd docs/mhd_derivations
 bash run_all.sh         # (re-)runs every scripts/*.py, refreshes output/
-bash build_manuscript.sh  # concatenates sections/*.md → manuscript.{md,pdf}
+bash build_manuscript.sh  # concatenates sections/*.md -> manuscript.{md,pdf}
 ```
 
 If a sympy assertion fails during `run_all.sh`, the build halts and the
@@ -87,7 +87,7 @@ offending section is flagged. No partial manuscript is emitted.
 | Label | Assumption |
 |---|---|
 | **A1a** | Compressible neutral gas with magnetic field $\mathbf{B}$; no viscosity, no Ohmic, no ambipolar, no Hall. |
-| **A1b** | Infinite conductivity → frozen-in flux, $\mathbf{E} = -\mathbf{v}\times\mathbf{B}$. |
+| **A1b** | Infinite conductivity -> frozen-in flux, $\mathbf{E} = -\mathbf{v}\times\mathbf{B}$. |
 | **A1c** | Non-relativistic: displacement current $\partial_t\mathbf{E}/c$ dropped. |
 | **A1d** | Ideal EOS: $p = (\gamma - 1)\rho e$. |
 
@@ -125,12 +125,12 @@ $$P^{\star} \equiv p + \tfrac{1}{2}|\mathbf{B}|^{2}.$$
 
 Then (A1-lorentz) lets us write momentum conservation in divergence form:
 
-$$\boxed{
+$$\boxed{\begin{aligned}
 \partial_t(\rho\mathbf{v})
 + \nabla\!\cdot\!\left[\rho\mathbf{v}\otimes\mathbf{v}
  - \mathbf{B}\otimes\mathbf{B}
  + P^{\star}\mathbf{I}\right] = \mathbf{0}.
-} \quad (\text{A1-mom})$$
+\end{aligned}} \quad (\text{A1-mom})$$
 
 **Implementation note.** $\mathbf{B}\otimes\mathbf{B}$ is *not* symmetric
 in its indices when read as a flux tensor $F_{ij}$ (it is actually
@@ -169,10 +169,10 @@ $$E \equiv \rho e + \tfrac{1}{2}\rho|\mathbf{v}|^{2}
 
 the conservative form is
 
-$$\boxed{
+$$\boxed{\begin{aligned}
 \partial_t E + \nabla\!\cdot\!\left[(E + P^{\star})\mathbf{v}
  - \mathbf{B}(\mathbf{B}\cdot\mathbf{v})\right] = 0.
-}$$
+\end{aligned}}$$
 
 The magnetic-Poynting-flux piece $-\mathbf{B}(\mathbf{B}\cdot\mathbf{v})$
 and the enthalpy-like piece $P^\star\mathbf{v}$ together make the flux
@@ -204,17 +204,17 @@ for arbitrary smooth $\mathbf{v}$, $\mathbf{B}$.
 
 Collecting all fluxes, we write the 8-variable conservative MHD system:
 
-$$\boxed{
+$$\boxed{\begin{aligned}
 \partial_t\mathbf{U} + \partial_i\mathbf{F}_i(\mathbf{U}) = \mathbf{0},
 \quad
 \mathbf{U} = (\rho,\ \rho\mathbf{v},\ \mathbf{B},\ E)^{\mathrm{T}}.
-}$$
+\end{aligned}}$$
 
 The explicit form of $\mathbf{F}_i$ follows by assembling the four fluxes
 above. We defer the component-by-component flux Jacobian and its
 eigensystem to §A3.
 
-## ✅ Verification checkpoint (to be wired)
+## [verified] Verification checkpoint (to be wired)
 
 Implementation invariants the kernel must satisfy (enforced through
 `tests/test_athena_mhd_*.cu` in a future PR):
@@ -263,11 +263,11 @@ $$E = \frac{p}{\gamma-1} + \tfrac{1}{2}\rho|\mathbf{v}|^{2} + \tfrac{1}{2}|\math
 Inverting (A2-E) for $p$ gives the pressure-extraction formula the
 `d_prim_from_cons` kernel must use:
 
-$$\boxed{
+$$\boxed{\begin{aligned}
 p = (\gamma - 1)\!\left(E - \frac{|\mathbf{m}|^{2}}{2\rho}
  - \tfrac{1}{2}|\mathbf{B}|^{2}\right),
 \quad \mathbf{m} \equiv \rho\mathbf{v}.
-}$$
+\end{aligned}}$$
 
 **Implementation gotcha.** For low-β, high-Mach flows (MHD blast,
 Orszag-Tang late time), the hydro term $|\mathbf{m}|^2/(2\rho)$ and the
@@ -324,7 +324,7 @@ $$\frac{\partial\mathbf{W}}{\partial\mathbf{U}}
 All 64 entries of the residual matrix are `sympy.simplify`-reduced to
 $0$ and pass `assert_zero`.
 
-## ✅ Verification checkpoint (to be wired)
+## [verified] Verification checkpoint (to be wired)
 
 When the MHD kernel is written, the test
 
@@ -408,11 +408,11 @@ $$c_{f,s}^{2} = \tfrac{1}{2}\!\left[(c_{s_0}^{2} + c_{A}^{2}) \pm
 (A3-cfs) loses ULPs when $c_{A\perp} \to 0$ or $c_{s_0} \to 0$. The
 HLLD kernel uses the two equivalent identities
 
-$$\boxed{
+$$\boxed{\begin{aligned}
 c_f^{2} + c_s^{2} = c_{s_0}^{2} + c_{A}^{2},
 \qquad
 c_f^{2}\cdot c_s^{2} = c_{s_0}^{2}\cdot c_{Ax}^{2},
-} \quad (\text{A3-discriminant})$$
+\end{aligned}} \quad (\text{A3-discriminant})$$
 
 which sympy verifies symbolically (both reduce to $0$ under `simplify`).
 With these two identities, $c_f$ and $c_s$ can be recovered from
@@ -421,11 +421,11 @@ root-of-difference $c_A^2 - c_{s_0}^2$.
 
 ## The seven wave speeds
 
-$$\boxed{
+$$\boxed{\begin{aligned}
 \{\lambda_k\}_{k=1}^{7} =
 \{\,v_x - c_f,\ v_x - c_{Ax},\ v_x - c_s,\ v_x,\
 v_x + c_s,\ v_x + c_{Ax},\ v_x + c_f\,\}.
-} \quad (\text{A3-wave-speeds})$$
+\end{aligned}} \quad (\text{A3-wave-speeds})$$
 
 Here $c_{Ax} \equiv B_x/\sqrt{\rho}$ carries the sign of $B_x$ — this
 convention lets us write the Alfvén speed once without the $s=\mathrm{sign}(B_x)$
@@ -535,7 +535,7 @@ Eq. (B17)-(B20) gives replacement eigenvectors for this case. We do
 not verify these here — they are documented in the Athena++ source
 and must be implemented as branch-conditionals in the kernel.
 
-## ✅ Verification checkpoint (to be wired)
+## [verified] Verification checkpoint (to be wired)
 
 The future
 
@@ -576,9 +576,9 @@ outer fast, Alfvén, contact, Alfvén, outer fast.
 
 ## Contact speed (MK Eq.\ 38)
 
-$$\boxed{S_M = \frac{(S_R - v_{xR})\rho_R v_{xR} - (S_L - v_{xL})\rho_L v_{xL}
+$$\boxed{\begin{aligned}S_M = \frac{(S_R - v_{xR})\rho_R v_{xR} - (S_L - v_{xL})\rho_L v_{xL}
  - p^{\star}_{\text{tot,R}} + p^{\star}_{\text{tot,L}}}
- {(S_R - v_{xR})\rho_R - (S_L - v_{xL})\rho_L}.}$$
+ {(S_R - v_{xR})\rho_R - (S_L - v_{xL})\rho_L}.\end{aligned}}$$
 
 ## Star-region state
 
@@ -599,7 +599,7 @@ $p^\star_{\text{tot}}$ from (A4-Ptot-star). Numerical verification
 confirms: RH residuals are $\mathcal{O}(1)$ with EOS inversion,
 $\mathcal{O}(10^{-15})$ with direct MK formula.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_athena_mhd_hlld.cu` — Brio-Wu shock tube match Stone+08
 Fig 28 to $L^1 < 2\%$ at $N=512$.
@@ -641,7 +641,7 @@ $$E_z^{i+1/2, j+1/2} = \tfrac{1}{4}(E_z^{x,i+1/2,j} + E_z^{x,i+1/2,j+1} + E_z^{y
 $\tfrac{h^2}{8}(\partial_x^2 E_z + \partial_y^2 E_z) + \mathcal{O}(h^4)$,
 no $\mathcal{O}(h)$ term — matches 2nd-order Godunov accuracy.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_athena_mhd_field_loop.cu` — GS05 field-loop, 10
 crossings, lock $\max|\nabla\cdot\mathbf{B}| < 10\varepsilon_{\mathrm{mach}}$
@@ -712,8 +712,8 @@ Sympy-verified: no $h^0$ or $h^1$ terms in the residual expansion.
 
 ## PPM (Colella-Woodward 1984) 4-point interpolant
 
-$$\boxed{W_{i+1/2} = \tfrac{7}{12}(W_i + W_{i+1})
-  - \tfrac{1}{12}(W_{i-1} + W_{i+2}),}$$
+$$\boxed{\begin{aligned}W_{i+1/2} = \tfrac{7}{12}(W_i + W_{i+1})
+  - \tfrac{1}{12}(W_{i-1} + W_{i+2}),\end{aligned}}$$
 
 applied to the **cell-averaged** values. Sympy-verified: no
 $\mathcal{O}(h^0..h^3)$ term in the expansion against the smooth
@@ -740,7 +740,7 @@ conservation of cell averages is built in.
    MC produces staircase artefacts (rare but documented in Stone+08
    Fig 28).
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_linear_wave_convergence.cu` — 3-resolution
   linear fast-wave advection; L¹ convergence slope in $[1.9, 2.1]$.
@@ -759,8 +759,8 @@ conservation of cell averages is built in.
 
 ## The scheme
 
-$$\boxed{\mathbf{U}^{\star} = \mathbf{U}^{n} + \tfrac{\Delta t}{2}\mathcal{L}[\mathbf{U}^{n}],\qquad
-\mathbf{U}^{n+1} = \mathbf{U}^{n} + \Delta t\,\mathcal{L}[\mathbf{U}^{\star}].}$$
+$$\boxed{\begin{aligned}\mathbf{U}^{\star} = \mathbf{U}^{n} + \tfrac{\Delta t}{2}\mathcal{L}[\mathbf{U}^{n}],\qquad
+\mathbf{U}^{n+1} = \mathbf{U}^{n} + \Delta t\,\mathcal{L}[\mathbf{U}^{\star}].\end{aligned}}$$
 
 This is **midpoint-RK2** in time, paired with any semi-discrete
 operator $\mathcal{L}$ (here: PLM reconstruction + HLLD flux from §A4,
@@ -822,7 +822,7 @@ See §A8 for multidimensional generalisation and parabolic terms.
 - For CT, compute **face-centred** $E_z$ at both predictor and
   corrector; average at the corners using Gardiner-Stone 2005 (§A5).
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_linear_wave_convergence.cu` — three
   resolutions, fast wave, expect L¹ convergence slope in $[1.9,2.1]$.
@@ -844,8 +844,8 @@ See §A8 for multidimensional generalisation and parabolic terms.
 Combining §A3 (7-wave eigensystem) with §A7 ($|\nu|\le 1$), the
 unsplit multidimensional bound is
 
-$$\boxed{\Delta t_{\mathrm{hyp}} \leq
-C_{\mathrm{CFL}}\ \Bigg/ \sum_{d=1}^{D}\max_{\text{cells}}\!\left(\frac{|v_d| + c_{f,d}}{\Delta x_d}\right),\quad C_{\mathrm{CFL}} \leq 1,}$$
+$$\boxed{\begin{aligned}\Delta t_{\mathrm{hyp}} \leq
+C_{\mathrm{CFL}}\ \Bigg/ \sum_{d=1}^{D}\max_{\text{cells}}\!\left(\frac{|v_d| + c_{f,d}}{\Delta x_d}\right),\quad C_{\mathrm{CFL}} \leq 1,\end{aligned}}$$
 
 where the fast-magnetosonic speed $c_{f,d}$ in direction $d$ is the
 positive root of the §A3 discriminant.
@@ -899,7 +899,7 @@ relaxation. Not included in the initial `athena_mhd` implementation;
 reserved for §C5 future extension when Suzuki turbulent heating is
 active.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_cfl_advection.cu` — advection of smooth
   wave at $C_\text{CFL} = 0.95$; no growth. At $C_\text{CFL} = 1.05$
@@ -996,7 +996,7 @@ at $t \sim 0.05$ when a rarefaction fan grazes the Alfvén locus.
 Documented in Miyoshi-Kusano 2005 Sec. 3.4 and in Athena++
 `src/hydro/rsolvers/mhd/hlld.cpp::HLLDTransport` branch logic.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_brio_wu.cu` — Brio-Wu, 512 cells, match
   Stone+08 Fig 28 to $L^1 < 2\%$.
@@ -1074,7 +1074,7 @@ The kernel must:
    If this check ever fails, the bug is in Step 1 or in the CT
    kernel; not a reason to add a Powell source.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_field_loop.cu` — Gardiner-Stone 2005 field
   loop, 10 diagonal advections. Track $\max|\nabla\cdot\mathbf{B}|$
@@ -1161,7 +1161,7 @@ $[1.9, 2.1]$ for all 7 modes.
 2. Fit slope: $\log\varepsilon \propto p \log\Delta x$.
 3. Accept if $|p - 2| < 0.1$.
 
-## ✅ Verification checkpoint
+## [verified] Verification checkpoint
 
 `tests/test_athena_mhd_linear_wave_convergence.cu` — single test that
 cycles through 7 modes × 3 resolutions × 1 period; outputs a
@@ -1213,7 +1213,7 @@ $\sim 10^{-2}$ transient and corrupts $\dot M$ measurements.
 $\delta v_\perp \propto (\rho v_A A)^{-1/2}$ (Poynting) or
 $(\rho v_A A)^{-1/4}$ (per-mode amplitude convention).
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_wind_hse_stationary.cu` — HSE atmosphere, 100
 acoustic crossings, lock $\max|v_r|/c_s < 10^{-4}$.
@@ -1276,7 +1276,7 @@ wind codes use **the Poynting-flux convention** at the photospheric
 driver (amplitude $\langle\delta v_\perp\rangle\approx 1.25$ km/s in
 Shimizu+22) — make sure the kernel matches.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_wind_amplitude_scaling.cu` — linearised Alfvén wave
 from a fixed BC driver. Measure $\delta v_\perp^{\mathrm{rms}}(r)$ at
@@ -1295,8 +1295,8 @@ at $< 5\%$.
 Steady isothermal flow on a super-radial tube $(A(r) = r^2 f(r))$ with
 $p = c_s^2 \rho$ yields, after eliminating $\rho$ via mass conservation:
 
-$$\boxed{\left(v - \frac{c_s^2}{v}\right)\frac{dv}{dr}
-= c_s^2\,\frac{d\ln A}{dr} - \frac{GM_*}{r^2}.} \quad (\text{B3-Parker})$$
+$$\boxed{\begin{aligned}\left(v - \frac{c_s^2}{v}\right)\frac{dv}{dr}
+= c_s^2\,\frac{d\ln A}{dr} - \frac{GM_*}{r^2}.\end{aligned}} \quad (\text{B3-Parker})$$
 
 **Sympy derived** from mass + momentum + EOS.
 
@@ -1314,7 +1314,7 @@ Parker radius). Sympy verifies this by solving (B3-critical) analytically.
 Far from $r_c$ (spherical limit), $v(r) \sim c_s\sqrt{4\ln(r/r_c) + \text{const}}$
 — logarithmic growth, characteristic of the Parker isothermal wind.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_parker_wind.cu` — isothermal, no magnetic driver, set
 $T = 2\times10^6$ K, $M_* = 1 M_\odot$, measure Mach number crossing
@@ -1385,7 +1385,7 @@ tube must include the area-divergence term.
    for stationary background.)
 3. **Evolve** $\partial_t\mathbf{U} = R(\mathbf{U}) - R(\mathbf{U}_\mathrm{hse})$.
 4. **Initial condition**: seed $\mathbf{U}^0 = \mathbf{U}_\mathrm{hse}$.
-   Initial RHS identically zero → no transient.
+   Initial RHS identically zero -> no transient.
 
 ## Failure modes observed elsewhere
 
@@ -1402,7 +1402,7 @@ If $(\rho_\mathrm{hse}, B_r, A)$ profiles change (e.g., user-driven
 parameter sweep), re-snapshot. The kernel can detect staleness via a
 hash of the profile arrays.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_wind_hse_stationary.cu` — MHSE atmosphere,
   $10^4$ acoustic crossings, assert $\max|v_r|/c_s < 10^{-8}$ (with
@@ -1410,39 +1410,54 @@ hash of the profile arrays.
   **positive control**: if turning off WB doesn't produce a
   transient, the WB machinery is a no-op and should be audited.
 
-## 数值实现备忘 (not in formal derivation)
+## Numerical implementation notes (not in formal derivation)
 
-以下 3 条是 Phase B-M1 实测 (commit `fdbe383`, `test_athena_mhd_hse_preserve.cu`
-6/6 通过) 发现的离散化陷阱。派生层面 $F_\mathrm{wb}(\mathbf{U}_\mathrm{hse}) \equiv 0$
-是解析恒等式,但在 VL2 + PLM + reflective wall 的实现栈里,以下三点任何一条
-写错,都会把"machine precision"退化成 $\sim 10^{-2}$–$10^{-3}$ 的漂移。
+The three items below are discretisation pitfalls surfaced during
+Phase B-M1 (commit `fdbe383`, `test_athena_mhd_hse_preserve.cu` 6/6
+pass).  At the derivation level $F_\mathrm{wb}(\mathbf{U}_\mathrm{hse})
+\equiv 0$ is an analytic identity, but in the VL2 + PLM + reflective
+wall implementation stack any one of these three, if done wrong,
+degrades "machine precision" into drift at the $10^{-2}$–$10^{-3}$
+level.
 
-1. **VL2 两阶段必须分开存 defect $R(\mathbf{U}_\mathrm{hse})$。**
-   Predictor 阶段走 donor-cell (order=1),corrector 阶段走 PLM (order=xorder);
-   两者的**离散残差** $R(\mathbf{U}_\mathrm{hse})$ 在有限精度下并不相等
-   (重建顺序不同 → face 值不同 → flux 不同)。只存一份 defect 做两次
-   subtract,实测残留 $\sim 0.8\%$ drift;两份独立 defect (`d_rhs_hse_s1_*`,
-   `d_rhs_hse_s2_*`,在 `apply_flux_divergence_and_ct` 按 stage 路由) 才到 ULP。
+1. **The two VL2 stages need separately stored defects $R(\mathbf{U}_\mathrm{hse})$.**
+   The predictor uses donor-cell reconstruction (order=1) while the
+   corrector uses PLM (order=xorder).  The discrete residual
+   $R(\mathbf{U}_\mathrm{hse})$ is not the same under the two
+   reconstructions in finite precision (different face values yield
+   different fluxes).  Storing one defect and subtracting it in both
+   stages leaves a residual $\sim 0.8\%$ drift; storing two
+   independent defects (`d_rhs_hse_s1_*`, `d_rhs_hse_s2_*`, routed by
+   stage in `apply_flux_divergence_and_ct`) reaches ULP.
 
-2. **必须对全 6 个守恒量 $(\rho, m_x, m_y, m_z, E, B_z)$ 都 subtract。**
-   朴素直觉是只对有重力源的 $(m_x, m_y, m_z, E)$ 减。实测:reflective 壁
-   上 $\rho$ 和 $B_z$ 的 flux 残差虽然是 ULP 级 ($\sim 10^{-16}$),但 1000
-   步累积可以放大到 $\sim 1\%$ 的 $\delta\rho$ 漂移,使 B3 ($\delta\rho$)
-   断言失败。WB 是**代数对消** (identical cancellation),不是"只减主要项",
-   6 个守恒量必须全部参与。
+2. **Subtract the defect from all six conservatives
+   $(\rho, m_x, m_y, m_z, E, B_z)$, not just the ones with gravity
+   source.**
+   Naive intuition says subtract only
+   $(m_x, m_y, m_z, E)$.  Empirically, the reflective-wall flux
+   residuals on $\rho$ and $B_z$ are ULP-level ($\sim 10^{-16}$) per
+   step, but accumulate over 1000 steps into $\delta\rho/\rho \sim
+   1\%$, failing the B3 assertion.  Well-balancing is an **algebraic
+   identity cancellation**, not "zero out the dominant terms"; all
+   six fields must participate.
 
-3. **Snapshot 时两阶段共用同一份 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$,
-   不要模拟 stage-2 swap。**
-   实 `step()` 里 stage-2 的 flux 由 $\mathrm{prim}(\mathbf{U}^*)$ 计算,因为
-   stage-1 末尾做了 swap + refill。但在 WB 完美时,$\mathbf{U}^* \equiv
-   \mathbf{U}_\mathrm{hse}$ — stage-2 实际"看到"的就是 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$
-   本身。snapshot 里只需 `cons_to_prim(U_hse)` 一次,两阶段共用;
-   若人为加 swap 去模拟 stage-2 的 $\mathbf{U}^*$,反而 capture 了"未 WB
-   过的 $\mathbf{U}^*$"的假残差,破坏自洽。
+3. **The snapshot uses one $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$
+   for both stages — do not simulate the stage-2 swap.**
+   In the real `step()` the stage-2 flux is computed from
+   $\mathrm{prim}(\mathbf{U}^*)$ because stage 1 performs a swap +
+   refill at the end.  When WB is exact, however,
+   $\mathbf{U}^* \equiv \mathbf{U}_\mathrm{hse}$, so stage 2 genuinely
+   sees $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$ itself.  The snapshot
+   only needs `cons_to_prim(U_hse)` once, shared by both stages; if
+   one manually adds a swap to mimic stage 2's $\mathbf{U}^*$, the
+   captured "defect" is actually the residual of a non-WB
+   $\mathbf{U}^*$, breaking self-consistency.
 
-共通 takeaway: WB 是**两端离散表达式 bit-wise 相同**才 cancel,不是
-"物理上等价"就行。任何改动重建顺序、变量顺序、或两阶段间 state 语义的
-PR,都必须重跑 B-M1 以验证 ULP 对齐。
+Common takeaway: well-balancing only cancels if the two discrete
+expressions are **bit-wise identical**, not merely "physically
+equivalent".  Any PR that alters reconstruction order, variable
+ordering, or inter-stage state semantics must re-run B-M1 to verify
+ULP cancellation.
 
 # C1. Ohmic (resistive) dissipation
 
@@ -1487,7 +1502,7 @@ and $\Delta x \sim 1$ km, so $\Delta t_{\mathrm{Ohm}} \sim 10^{-4}$ s
 time-stepping** (Alexiades-Amiez-Gremaud 1996) to accelerate the
 explicit Ohmic update.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_ohmic_diffusion.cu` — sinusoidal $B_y$ perturbation,
 $\eta_O = $ const. Lock $L^2(B_y)$ exponential decay rate matches
@@ -1551,7 +1566,7 @@ $$\Delta t \le \frac{(\Delta x)^2}{2\eta_A |\mathbf{B}|^2/\rho}\ \mathrm{(per di
 
 Scales with $|\mathbf{B}|^2$ — tight CFL in strong-field regions.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_ambipolar_bmin.cu` — $B_x$ uniform, sinusoidal $B_y$
 with $\eta_A = $ const. Lock decay rate against analytical; also
@@ -1606,7 +1621,7 @@ give $Q > 0$.
   Poynting term. Explicit computation of $Q$ only needed for
   diagnostics.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_ohmic_energy_conservation.cu` — uniform $\mathbf{B}_0$
 with sinusoidal $B_y$ perturbation + $\eta_O = $ const. Measure total
@@ -1669,7 +1684,7 @@ on a 3D table to avoid evaluating the Saha equation every timestep.
 Suzuki+25 uses a 128×128×64 log-spaced table; cost is negligible
 once built.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_saha_table.cu` — verify tabulated $(\eta_O, \eta_A)$
 match Draine 1983 Table 2 to $<1\%$ at five reference $(T, \rho)$
@@ -1701,7 +1716,7 @@ temperature.
 
 $$\boxed{\varepsilon_{\mathrm{turb}}^\mathrm{SI} = c_d\,\rho\,\frac{|\delta v_\perp|^3}{\lambda_{\mathrm{cor}}},\quad c_d \approx 0.1,\quad \lambda_\mathrm{cor}\sim 10^7\,\mathrm{cm}.}$$
 
-Dimensions: $[\rho][\delta v]^3/[\lambda] = \mathrm{erg/cm^3/s}$ ✓.
+Dimensions: $[\rho][\delta v]^3/[\lambda] = \mathrm{erg/cm^3/s}$ [ok].
 
 ## Shoda-Yokoyama 2016 (Elsässer) form
 
@@ -1755,7 +1770,7 @@ $$|\delta v_\perp|^2 = |z^+|^2 + |z^-|^2 - 2\mathbf{z}^+\!\cdot\!\mathbf{z}^-$$
 
 using the Elsässer variables tracked directly from §B2.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_turbulent_heating_positivity.cu` — random
   initial $(\rho, \delta v, \lambda)$ states, assert
@@ -1919,7 +1934,7 @@ RKL2 is a **separate operator** applied after the hyperbolic step
 5. **RKL2 sub-cycling** if $\Delta t_\mathrm{cond} < 0.1\,\Delta t_\mathrm{hyp}$;
    otherwise integrate in-line with the hyperbolic step.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_conduction_isothermal.cu` — sinusoidal
   $T(x) = T_0(1 + A\cos k x)$ on a uniform $\mathbf{B}_0 = B_0\hat{x}$
@@ -1943,60 +1958,73 @@ immediate red flag: without rank-1 conductivity, 1D modelling of
 coronal loops (Aschwanden 2005 §4) overshoots $T_\mathrm{peak}$ by a
 factor of 2–3.
 
-## 数值实现备忘 (not in formal derivation)
+## Numerical implementation notes (not in formal derivation)
 
-Phase B-M4 (`test_athena_mhd_combined.cu`, 10/10 通过) 里 combined 栈
-(WB + κ + cooling) 第一次暴露了 κ 算子和 reflective y-BC 的一个 ghost-cell
-相互作用,派生层面 $\mathbf{F}_c = -\kappa_\parallel\hat{\mathbf{b}}
-(\hat{\mathbf{b}}\cdot\nabla T)$ 是连续量恒等式,但到了有限体积 + face-B
-磁场 + cons_to_prim 的离散实现就出问题。
+Phase B-M4 (`test_athena_mhd_combined.cu`, 10/10 pass) exposed, for
+the first time in the combined stack (WB + κ + cooling), a
+ghost-cell interaction between the κ operator and the reflective
+y-BC.  At the derivation level
+$\mathbf{F}_c = -\kappa_\parallel \hat{\mathbf{b}}(\hat{\mathbf{b}}\cdot\nabla T)$
+is a continuum identity, but the finite-volume + face-B + cons_to_prim
+implementation violates it at reflective walls.
 
-### 症状
+### Symptom
 
-等温磁化大气 $T = c_s^2$ 严格均匀,理应 $\nabla T \equiv 0$ → $\mathbf{F}_c
-\equiv 0$。实测单次 `apply_conduction(dt)` 就让 $\delta E/E = 4\%$(远超
-ULP 量级),而 $\delta\rho$、$|\mathbf{v}|$、$|\nabla\!\cdot\!\mathbf{B}|$
-同时保持在机器精度 — **只有 $E$ 被 κ 错误地修改了**。
+An isothermal magnetised atmosphere has $T = c_s^2$ uniformly, hence
+$\nabla T \equiv 0$ and therefore $\mathbf{F}_c \equiv 0$ is expected.
+In practice a single call to `apply_conduction(dt)` shifts
+$\delta E / E$ to $\sim 4\%$ (well above ULP), while $\delta\rho$,
+$|\mathbf{v}|$, and $|\nabla\!\cdot\!\mathbf{B}|$ all stay at machine
+precision — **only $E$ is incorrectly modified by κ**.
 
-### 根因:cons_to_prim 推出的 ghost $T$ 不是标量镜像
+### Root cause: the ghost $T$ from cons_to_prim is not a scalar mirror
 
-Reflective y-BC 下 face-B 按反对称镜像:$B_{yf}[n_g - 1] = -B_{yf}[n_g + 1]$,
-因此 ghost cell 的 cell-centered $B_y$ 为
+Under reflective y-BC the face-B mirrors antisymmetrically:
+$B_{yf}[n_g - 1] = -B_{yf}[n_g + 1]$.  The ghost-cell cell-centered
+$B_y$ is therefore
 
-$$B_{y,\mathrm{cc}}^\mathrm{ghost}
- = \tfrac12\bigl(B_{yf}[n_g-1] + B_{yf}[n_g]\bigr)
- = \tfrac12(-B_{0y} + B_{0y}) = 0,$$
+$$B_{y,\mathrm{cc}}^\mathrm{ghost} = \tfrac12(B_{yf}[n_g-1] + B_{yf}[n_g]) = \tfrac12(-B_{0y} + B_{0y}) = 0,$$
 
-而 interior $B_{y,\mathrm{cc}} = B_{0y}$。然后 `cons_to_prim` 用
-$p = (\gamma-1)(E - \mathrm{KE} - \mathrm{ME})$ 推 ghost 压强,由于
-$\mathrm{ME}^\mathrm{ghost} \ne \mathrm{ME}^\mathrm{interior}$ 差了
-$\tfrac12 B_{0y}^2$,ghost $p$ 被多算/少算 $\tfrac12(\gamma-1)B_{0y}^2$,
-进而 $T^\mathrm{ghost} = p^\mathrm{ghost}/\rho^\mathrm{ghost} \ne c_s^2$。
-κ flux kernel 读到这个"被污染的 ghost $T$"时,wall 上出现**虚假**非零
-$\nabla T$,$\mathbf{F}_c$ 把能量"泄"到 ghost,违反 $T$ 均匀 → $\mathbf{F}_c
-\equiv 0$ 的物理预期。
+while the interior cell-centered value is $B_{y,\mathrm{cc}} = B_{0y}$.
+The routine `cons_to_prim` then uses
+$p = (\gamma-1)(E - \mathrm{KE} - \mathrm{ME})$ to recover pressure,
+and because $\mathrm{ME}^\mathrm{ghost} \ne \mathrm{ME}^\mathrm{interior}$
+the ghost $p$ is off by $\tfrac12(\gamma-1) B_{0y}^2$.  Consequently
+$T^\mathrm{ghost} = p^\mathrm{ghost}/\rho^\mathrm{ghost} \ne c_s^2$.
+When the κ flux kernel reads this contaminated ghost $T$, a spurious
+nonzero $\nabla T$ appears at the wall, $\mathbf{F}_c$ drains energy
+into the ghost layer, and the uniform-$T$ $\Rightarrow$ zero-flux
+expectation is violated.
 
-这不是 §C6 派生的错,也不是 `cons_to_prim` 的错:`cons_to_prim` 正确地
-按 face-B 镜像规则推算 ghost $B_\mathrm{cc}$。问题在于 $B_\mathrm{cc}$ 的
-"镜像"是**面反对称**而非 scalar mirror,而 $T$ 作为标量场,其 ghost
-本该满足 scalar mirror。通过 $(p, \rho) \to T$ 的链条把 $B$ 的矢量镜像
-语义误带进了标量量。
+This is not an error in the §C6 derivation, nor in `cons_to_prim`:
+the latter faithfully applies the face-B mirror rule to obtain ghost
+$B_\mathrm{cc}$.  The issue is that the "mirror" of $B_\mathrm{cc}$
+carries the **antisymmetric** semantics of a vector component normal
+to the wall, whereas $T$ is a scalar whose ghost ought to satisfy a
+**symmetric** mirror.  Recovering $T$ via the $(p, \rho) \to T$ chain
+inadvertently imports the vector mirror semantics of $B$ into a
+scalar field.
 
-### 修复:$T$ 独立 ghost-fill,不依赖 cons_to_prim
+### Fix: fill $T$ ghost cells independently of cons_to_prim
 
-新增 `k_athmhd_ghost_T_{y_reflect, y_periodic, y_outflow, x_periodic, x_outflow}`
-一组 kernel,在 `compute_T` 之后、κ flux 之前,以**标量镜像规则**直接
-覆写 `T_cc` 的 ghost 层。κ flux kernel 仍然读 `T_cc`,但现在 ghost $T$
-与 interior $T$ 在 reflective wall 上严格相等,$\nabla T|_\mathrm{wall}
-= 0$ 到 ULP。
+A family of kernels
+`k_athmhd_ghost_T_{y_reflect, y_periodic, y_outflow, x_periodic, x_outflow}`
+is introduced.  After `compute_T` and before the κ flux kernel runs,
+these overwrite the ghost layer of `T_cc` using the scalar mirror
+rule appropriate to each BC.  The κ flux kernel still reads `T_cc`,
+but now the ghost $T$ agrees with the interior $T$ at reflective
+walls up to ULP, giving $\nabla T|_\mathrm{wall} = 0$ exactly.
 
-### 推广的教训
+### Generalised lesson
 
-任何**读 cell-centered 标量** (如 $T$, $\mu$, $Y_e$) 的空间离散算子,其
-ghost 填充都必须**独立于 cons_to_prim**。cons_to_prim 背后带着矢量 ($B$,
-$\mathbf{v}$) 的方向性镜像语义,不能无损转译到标量。cooling 之类的
-per-cell ODE 不受影响 (从不跨 cell),但 κ 导热、未来粘性、辐射扩散等
-**空间 flux 型** 源项都需要一次独立的标量 ghost-fill 步骤。
+Any spatial-flux operator that **reads a cell-centered scalar** (for
+example $T$, $\mu$, $Y_e$) must **fill its own ghost layer**
+independently of `cons_to_prim`.  The latter carries the
+directional-mirror semantics of vector fields ($B$, $\mathbf{v}$) that
+cannot be translated losslessly onto a scalar.  Per-cell ODE
+operators such as cooling are unaffected (they never cross cells),
+but spatial-flux operators — κ conduction, future viscosity,
+radiative diffusion — each need an explicit scalar ghost-fill pass.
 
 # C7. Optically-thin radiative cooling
 
@@ -2027,8 +2055,8 @@ Below $T \sim 1.5\times 10^4\,\mathrm{K}$ the chromosphere is
 
 ## SD93 cooling rate
 
-$$\boxed{Q_R(T, \rho, Z) = n_e\,n_i\,\Lambda(T, Z)\ \ge\ 0,\qquad
-n_e \approx n_i \approx \rho/(\mu_e m_u).} \quad (\text{C7-QR})$$
+$$\boxed{\begin{aligned}Q_R(T, \rho, Z) = n_e\,n_i\,\Lambda(T, Z)\ \ge\ 0,\qquad
+n_e \approx n_i \approx \rho/(\mu_e m_u).\end{aligned}} \quad (\text{C7-QR})$$
 
 $\Lambda(T, Z)$ is tabulated from the SD93 ionisation-equilibrium
 synthesis for $Z \in \{0, 10^{-3}, 10^{-2}, 10^{-1}, 1, 3\}\,Z_\odot$
@@ -2071,8 +2099,8 @@ C \equiv (\gamma-1)(\mu m_u/k_B)\,n_e\,\Lambda_0/T_0^\alpha > 0$$
 
 admits the closed-form solution (Townsend 2009 Eq. 26):
 
-$$\boxed{T(t) = \bigl[\,T_0^{1-\alpha}
- - C(1-\alpha)\,t\,\bigr]^{1/(1-\alpha)}\qquad (\alpha \ne 1).} \quad (\text{C7-Townsend})$$
+$$\boxed{\begin{aligned}T(t) = \bigl[\,T_0^{1-\alpha}
+ - C(1-\alpha)\,t\,\bigr]^{1/(1-\alpha)}\qquad (\alpha \ne 1).\end{aligned}} \quad (\text{C7-Townsend})$$
 
 Numerically verified (21 samples across $\alpha \in \{-1, -\tfrac12, 0,
 \tfrac12, \tfrac32, 2, 3\}$ and representative $(T_0, C, t)$) to
@@ -2148,7 +2176,7 @@ cooling tables (Anninos+1997) suffice instead.
    thermal fronts. The floor is a **known bias**, not a bug —
    document it in the driver log.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_cooling_townsend.cu` — uniform box,
   $\Lambda(T) = \Lambda_0 (T/T_0)^{-1/2}$ (bremsstrahlung), fixed
@@ -2198,8 +2226,8 @@ patch this with a two-component closure.
 
 ## Shimizu+22 blending formula
 
-$$\boxed{Q_R(T, \rho, p) = \xi_\mathrm{rad}(p)\,Q_R^\mathrm{thck}(T, \rho)
- + (1 - \xi_\mathrm{rad}(p))\,Q_R^\mathrm{thin}(T, \rho, Z).} \quad (\text{C8-blend})$$
+$$\boxed{\begin{aligned}Q_R(T, \rho, p) = \xi_\mathrm{rad}(p)\,Q_R^\mathrm{thck}(T, \rho)
+ + (1 - \xi_\mathrm{rad}(p))\,Q_R^\mathrm{thin}(T, \rho, Z).\end{aligned}} \quad (\text{C8-blend})$$
 
 with pressure-switch blending
 
@@ -2218,8 +2246,8 @@ the cutoff $p = p_\mathrm{chr}$.
 
 ## Gudiksen-Nordlund 2005 Newton cooling
 
-$$\boxed{Q_R^\mathrm{thck} = \frac{e_\mathrm{int} - e_\mathrm{int}^\mathrm{ref}(r)}{\tau_\mathrm{thck}(\rho)},
-\qquad \tau_\mathrm{thck}(\rho) = 0.1\,(\rho/\bar{\rho})^{-1/2}\,\mathrm{s},} \quad (\text{C8-GN05})$$
+$$\boxed{\begin{aligned}Q_R^\mathrm{thck} = \frac{e_\mathrm{int} - e_\mathrm{int}^\mathrm{ref}(r)}{\tau_\mathrm{thck}(\rho)},
+\qquad \tau_\mathrm{thck}(\rho) = 0.1\,(\rho/\bar{\rho})^{-1/2}\,\mathrm{s},\end{aligned}} \quad (\text{C8-GN05})$$
 
 with $\bar{\rho} = 1.87\times 10^{-7}\,\mathrm{g\,cm^{-3}}$ (Shimizu+22
 calibration) and $T^\mathrm{ref}(r) = T_\odot$ (or $T_\mathrm{eff}$ in
@@ -2240,9 +2268,9 @@ shock-train structures from being over-damped.
 
 An independent branch used in Suzuki-Ohnaka-Yasuda 2025 (eq. 17):
 
-$$\boxed{Q_R^\mathrm{AA}(\rho, Z) = 4.5\!\times\!10^9\,(0.2 + 0.8\,Z/Z_\odot)
+$$\boxed{\begin{aligned}Q_R^\mathrm{AA}(\rho, Z) = 4.5\!\times\!10^9\,(0.2 + 0.8\,Z/Z_\odot)
 \,\min(1,\,\rho/\rho_\mathrm{cr})\ \mathrm{erg\,cm^{-3}\,s^{-1}},\qquad
-\rho_\mathrm{cr} = 10^{-16}\,\mathrm{g\,cm^{-3}}.} \quad (\text{C8-AA})$$
+\rho_\mathrm{cr} = 10^{-16}\,\mathrm{g\,cm^{-3}}.\end{aligned}} \quad (\text{C8-AA})$$
 
 **Properties (sympy-verified):**
 - Strictly non-negative for $\rho, Z \ge 0$.
@@ -2324,7 +2352,7 @@ SD93 in an operator-split cooling pass applied after the hyperbolic
 step. Neither branch touches $\rho, \mathbf{v}, \mathbf{B}$ — only
 internal energy.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_chromo_relax.cu` — 1D isobaric atmosphere
   seeded at $T_0 = 6000\,\mathrm{K}$ above $T_\mathrm{ref} = 5770\,\mathrm{K}$
@@ -2378,7 +2406,7 @@ forces $\nabla\cdot\mathbf{B} = (1/R)\partial_R(R B_R) = 0$, so
 $R\cdot B_R(R) = \text{const}$ — the cylindrical analog of the
 spherical $r^2 B_r$ conservation.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_cyl_centrifugal.cu` — rotating equilibrium disk
 with $v_\phi = \sqrt{GM/R}$. Lock $\max|v_R|/c_s < 10^{-4}$ over
@@ -2436,7 +2464,7 @@ what stabilises the shearing sheet**. Sympy-verified; documented to
 flag that dropping the Coriolis kernel would immediately disperse
 the disk.
 
-## ✅ Verification
+## [verified] Verification
 
 `tests/test_mhd_shearingbox_static.cu` — initial condition
 $\mathbf{u} = (0, -q\Omega_0 x, 0)$, purely hydro, no perturbation.
@@ -2494,7 +2522,7 @@ $$\frac{1}{V}\int B_R(\mathbf{x}) B_\phi(\mathbf{x})\,d^3x = \sum_{\mathbf{k}} \
 
 Allows FFT-based computation of $\alpha_M$ at arbitrary resolution.
 
-## ✅ Verification
+## [verified] Verification
 
 **`tests/test_mhd_mri_growth_rate.cu`** — seed a linear $B_y$
 perturbation at $k_*$ with amplitude $10^{-6}B_0$; lock measured
@@ -2543,9 +2571,9 @@ photospheric convection. The driver must
 The transverse Elsässer variable outgoing from the photosphere is
 driven as
 
-$$\boxed{z^+_{\perp,\odot}(t) = A_\perp\,\sum_{N=0}^{N_{{\max}}}
+$$\boxed{\begin{aligned}z^+_{\perp,\odot}(t) = A_\perp\,\sum_{N=0}^{N_{{\max}}}
 \frac{\sin(2\pi f_N t + \varphi_N)}{\sqrt{f_N}},\qquad
-\varphi_N \sim U[0, 2\pi).} \quad (\text{E1-driver-transverse})$$
+\varphi_N \sim U[0, 2\pi).\end{aligned}} \quad (\text{E1-driver-transverse})$$
 
 The longitudinal radial velocity is driven independently:
 
@@ -2574,8 +2602,8 @@ Normalising to the observed target rms fluctuation (Suzuki+25 solar
 calibration: $\langle\delta v_\perp\rangle_\odot = 1.25\,\mathrm{km/s}$;
 RGB $\alpha$ Boo: $2.50\,\mathrm{km/s}$ via $\delta v \propto (T_\mathrm{eff}^4/\rho)^{1/3}$):
 
-$$\boxed{A^2 = \frac{\langle\delta v^2\rangle}{\ln(\omega_{{\max}}/\omega_{{\min}})},\qquad
-\int P(\omega)\,\mathrm{d}\omega = \langle\delta v^2\rangle.} \quad (\text{E1-norm})$$
+$$\boxed{\begin{aligned}A^2 = \frac{\langle\delta v^2\rangle}{\ln(\omega_{{\max}}/\omega_{{\min}})},\qquad
+\int P(\omega)\,\mathrm{d}\omega = \langle\delta v^2\rangle.\end{aligned}} \quad (\text{E1-norm})$$
 
 ## Parseval variance identity
 
@@ -2708,7 +2736,7 @@ Table 3:
 - $\alpha$ Tau: $\langle\delta v_0\rangle = 2.56\,\mathrm{km/s}$,
   $\omega_{{\max}}^{-1} = 340\,\mathrm{min}$, $\omega_{{\min}}^{-1} = 3.4\times 10^4\,\mathrm{min}$.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_driver_spectrum.cu` — build the driver
   time-series over $10^6 f_{\min}^{-1}$, compute the FFT-measured
@@ -2857,7 +2885,7 @@ show up here if:
 - **PLM slope limiter** has different logic in x vs y — the oblique
   wave tests both slopes simultaneously, while §A11 tests only one.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_linwave_oblique.cu` — Phase A1 test,
   4 modes × 3 resolutions, locks the three pass criteria above.
@@ -2894,8 +2922,8 @@ interpret the spectrum cutoff or claim a quantitative $\nu_\mathrm{eff}$.
 
 Two competing predictions for the 2D MHD inertial-range spectrum:
 
-$$\boxed{E_K(k) = C_K\,\epsilon^{2/3}\,k^{-5/3},\qquad
-E_{IK}(k) = C_{IK}\,(\epsilon\,v_A)^{1/2}\,k^{-3/2}.} \quad (\text{F2-K41},\text{F2-IK})$$
+$$\boxed{\begin{aligned}E_K(k) = C_K\,\epsilon^{2/3}\,k^{-5/3},\qquad
+E_{IK}(k) = C_{IK}\,(\epsilon\,v_A)^{1/2}\,k^{-3/2}.\end{aligned}} \quad (\text{F2-K41},\text{F2-IK})$$
 
 The slopes differ:
 - **K41**: hydrodynamic Kolmogorov-Obukhov cascade, applies when
@@ -2956,8 +2984,8 @@ $k_\mathrm{diss}(256) / k_\mathrm{diss}(128) \in [2.0, 3.5]$.
 6. Compute $\nu_\mathrm{eff}$ via (F2-nu-inv) using measured
    $\epsilon$ (energy flux from $-\mathrm{d}E_\mathrm{tot}/\mathrm{d}t$
    at $t = 0.5$) and $k_\mathrm{diss}$.
-7. Verify scheme-order scaling (F2-scaling) between N=128→256 and
-   N=256→512.
+7. Verify scheme-order scaling (F2-scaling) between N=128->256 and
+   N=256->512.
 
 ## Pass criteria (A2 test)
 
@@ -2990,7 +3018,7 @@ inertial regime.
 
 This is the single most important quantitative output of Phase A.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `scripts/analyze_orszag_tang_spectrum.py` implements the protocol
   above and writes to `phase_A_results.md`.
@@ -3159,7 +3187,7 @@ van Leer is not a bug — it is the reason Stone+08 §6.3 switches to
 minmod for shock-containing problems and notes that field-loop tests
 specifically require a more dissipative limiter.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 Exactly what the A3 test `tests/test_athena_mhd_field_loop_long.cu`
 locks:
@@ -3217,8 +3245,8 @@ Plane-wave ansatz $(v_\perp, B_\perp) = (V, B)\,e^{i(kr - \omega t)}$ gives
 the $2\times 2$ dispersion matrix. Setting its determinant to zero
 yields
 
-$$\boxed{\omega^2 + i\,\eta\,k^2\,\omega - v_A^2 k^2 = 0,\qquad
-v_A \equiv B_{r,0}/\sqrt{\rho_0}.} \quad (\text{F4-disp})$$
+$$\boxed{\begin{aligned}\omega^2 + i\,\eta\,k^2\,\omega - v_A^2 k^2 = 0,\qquad
+v_A \equiv B_{r,0}/\sqrt{\rho_0}.\end{aligned}} \quad (\text{F4-disp})$$
 
 Sympy-verified: the ideal limit $\eta \to 0$ recovers the Alfvén
 dispersion $\omega = \pm v_A k$.
@@ -3228,8 +3256,8 @@ dispersion $\omega = \pm v_A k$.
 Solving (F4-disp) and expanding around the outgoing branch
 $\omega_0 = v_A k$ to first order in $\eta$:
 
-$$\boxed{\omega = v_A k - \tfrac{i}{2}\,\eta\,k^2 + \mathcal{O}(\eta^2),
-\qquad \varepsilon_\mathrm{weak} \equiv \eta k / v_A \ll 1.} \quad (\text{F4-weak})$$
+$$\boxed{\begin{aligned}\omega = v_A k - \tfrac{i}{2}\,\eta\,k^2 + \mathcal{O}(\eta^2),
+\qquad \varepsilon_\mathrm{weak} \equiv \eta k / v_A \ll 1.\end{aligned}} \quad (\text{F4-weak})$$
 
 Sympy-verified via `sp.series`.
 
@@ -3243,7 +3271,7 @@ waves.
 
 **Factor of 1/2.** Different conventions absorb or drop the 1/2;
 here we keep it explicit because the A4 test measures amplitudes
-(not energies) and converts measured $\gamma$ → $\eta$ via the
+(not energies) and converts measured $\gamma$ -> $\eta$ via the
 inverse $\eta = 2\gamma/k^2$.
 
 ## Q3: Numerical resistivity from modified-equation analysis
@@ -3252,8 +3280,8 @@ For a 2nd-order Godunov scheme (PLM + HLLD + VL2, see §A6–A8) on
 the linear Alfvén equation, standard modified-equation analysis
 (LeVeque 2002 §18) gives
 
-$$\boxed{\eta_\mathrm{eff}(h) = C_\mathrm{num}\,h^2\,v_A,\qquad
-\gamma_\mathrm{num}(N) = \tfrac{1}{2}\,C_\mathrm{num}\,h^2\,v_A\,k^2 \propto N^{-2}.} \quad (\text{F4-eta-eff})$$
+$$\boxed{\begin{aligned}\eta_\mathrm{eff}(h) = C_\mathrm{num}\,h^2\,v_A,\qquad
+\gamma_\mathrm{num}(N) = \tfrac{1}{2}\,C_\mathrm{num}\,h^2\,v_A\,k^2 \propto N^{-2}.\end{aligned}} \quad (\text{F4-eta-eff})$$
 
 $C_\mathrm{num}$ is a scheme-dependent $\mathcal{O}(1)$ constant that
 depends on limiter choice, HLLD branch, and CT corner-EMF weights.
@@ -3316,7 +3344,7 @@ solver at $N \ge 256$ is viable.
 F4 gives us the quantitative version of that statement, per
 resolution.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `tests/test_athena_mhd_cpaw_longtime.cu` — will implement the A4
   test following this derivation.
@@ -3530,7 +3558,7 @@ inside the 2nd-order expectation. But the variation between modes is
 now understood as a real feature of the $c_4(\nu)$ prefactor, not
 solver behaviour.
 
-## ✅ Verification checkpoints
+## [verified] Verification checkpoints
 
 - `scripts/f5_vl2_plm_amplitude_decay.py` — 6 sympy assertions
   verifying the modified-equation analysis up to $O(\xi^4)$ and the

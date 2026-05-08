@@ -176,57 +176,70 @@ immediate red flag: without rank-1 conductivity, 1D modelling of
 coronal loops (Aschwanden 2005 §4) overshoots $T_\mathrm{peak}$ by a
 factor of 2–3.
 
-## 数值实现备忘 (not in formal derivation)
+## Numerical implementation notes (not in formal derivation)
 
-Phase B-M4 (`test_athena_mhd_combined.cu`, 10/10 通过) 里 combined 栈
-(WB + κ + cooling) 第一次暴露了 κ 算子和 reflective y-BC 的一个 ghost-cell
-相互作用,派生层面 $\mathbf{F}_c = -\kappa_\parallel\hat{\mathbf{b}}
-(\hat{\mathbf{b}}\cdot\nabla T)$ 是连续量恒等式,但到了有限体积 + face-B
-磁场 + cons_to_prim 的离散实现就出问题。
+Phase B-M4 (`test_athena_mhd_combined.cu`, 10/10 pass) exposed, for
+the first time in the combined stack (WB + κ + cooling), a
+ghost-cell interaction between the κ operator and the reflective
+y-BC.  At the derivation level
+$\mathbf{F}_c = -\kappa_\parallel \hat{\mathbf{b}}(\hat{\mathbf{b}}\cdot\nabla T)$
+is a continuum identity, but the finite-volume + face-B + cons_to_prim
+implementation violates it at reflective walls.
 
-### 症状
+### Symptom
 
-等温磁化大气 $T = c_s^2$ 严格均匀,理应 $\nabla T \equiv 0$ → $\mathbf{F}_c
-\equiv 0$。实测单次 `apply_conduction(dt)` 就让 $\delta E/E = 4\%$(远超
-ULP 量级),而 $\delta\rho$、$|\mathbf{v}|$、$|\nabla\!\cdot\!\mathbf{B}|$
-同时保持在机器精度 — **只有 $E$ 被 κ 错误地修改了**。
+An isothermal magnetised atmosphere has $T = c_s^2$ uniformly, hence
+$\nabla T \equiv 0$ and therefore $\mathbf{F}_c \equiv 0$ is expected.
+In practice a single call to `apply_conduction(dt)` shifts
+$\delta E / E$ to $\sim 4\%$ (well above ULP), while $\delta\rho$,
+$|\mathbf{v}|$, and $|\nabla\!\cdot\!\mathbf{B}|$ all stay at machine
+precision — **only $E$ is incorrectly modified by κ**.
 
-### 根因:cons_to_prim 推出的 ghost $T$ 不是标量镜像
+### Root cause: the ghost $T$ from cons_to_prim is not a scalar mirror
 
-Reflective y-BC 下 face-B 按反对称镜像:$B_{yf}[n_g - 1] = -B_{yf}[n_g + 1]$,
-因此 ghost cell 的 cell-centered $B_y$ 为
+Under reflective y-BC the face-B mirrors antisymmetrically:
+$B_{yf}[n_g - 1] = -B_{yf}[n_g + 1]$.  The ghost-cell cell-centered
+$B_y$ is therefore
 
-$$B_{y,\mathrm{cc}}^\mathrm{ghost}
- = \tfrac12\bigl(B_{yf}[n_g-1] + B_{yf}[n_g]\bigr)
- = \tfrac12(-B_{0y} + B_{0y}) = 0,$$
+$$B_{y,\mathrm{cc}}^\mathrm{ghost} = \tfrac12(B_{yf}[n_g-1] + B_{yf}[n_g]) = \tfrac12(-B_{0y} + B_{0y}) = 0,$$
 
-而 interior $B_{y,\mathrm{cc}} = B_{0y}$。然后 `cons_to_prim` 用
-$p = (\gamma-1)(E - \mathrm{KE} - \mathrm{ME})$ 推 ghost 压强,由于
-$\mathrm{ME}^\mathrm{ghost} \ne \mathrm{ME}^\mathrm{interior}$ 差了
-$\tfrac12 B_{0y}^2$,ghost $p$ 被多算/少算 $\tfrac12(\gamma-1)B_{0y}^2$,
-进而 $T^\mathrm{ghost} = p^\mathrm{ghost}/\rho^\mathrm{ghost} \ne c_s^2$。
-κ flux kernel 读到这个"被污染的 ghost $T$"时,wall 上出现**虚假**非零
-$\nabla T$,$\mathbf{F}_c$ 把能量"泄"到 ghost,违反 $T$ 均匀 → $\mathbf{F}_c
-\equiv 0$ 的物理预期。
+while the interior cell-centered value is $B_{y,\mathrm{cc}} = B_{0y}$.
+The routine `cons_to_prim` then uses
+$p = (\gamma-1)(E - \mathrm{KE} - \mathrm{ME})$ to recover pressure,
+and because $\mathrm{ME}^\mathrm{ghost} \ne \mathrm{ME}^\mathrm{interior}$
+the ghost $p$ is off by $\tfrac12(\gamma-1) B_{0y}^2$.  Consequently
+$T^\mathrm{ghost} = p^\mathrm{ghost}/\rho^\mathrm{ghost} \ne c_s^2$.
+When the κ flux kernel reads this contaminated ghost $T$, a spurious
+nonzero $\nabla T$ appears at the wall, $\mathbf{F}_c$ drains energy
+into the ghost layer, and the uniform-$T$ $\Rightarrow$ zero-flux
+expectation is violated.
 
-这不是 §C6 派生的错,也不是 `cons_to_prim` 的错:`cons_to_prim` 正确地
-按 face-B 镜像规则推算 ghost $B_\mathrm{cc}$。问题在于 $B_\mathrm{cc}$ 的
-"镜像"是**面反对称**而非 scalar mirror,而 $T$ 作为标量场,其 ghost
-本该满足 scalar mirror。通过 $(p, \rho) \to T$ 的链条把 $B$ 的矢量镜像
-语义误带进了标量量。
+This is not an error in the §C6 derivation, nor in `cons_to_prim`:
+the latter faithfully applies the face-B mirror rule to obtain ghost
+$B_\mathrm{cc}$.  The issue is that the "mirror" of $B_\mathrm{cc}$
+carries the **antisymmetric** semantics of a vector component normal
+to the wall, whereas $T$ is a scalar whose ghost ought to satisfy a
+**symmetric** mirror.  Recovering $T$ via the $(p, \rho) \to T$ chain
+inadvertently imports the vector mirror semantics of $B$ into a
+scalar field.
 
-### 修复:$T$ 独立 ghost-fill,不依赖 cons_to_prim
+### Fix: fill $T$ ghost cells independently of cons_to_prim
 
-新增 `k_athmhd_ghost_T_{y_reflect, y_periodic, y_outflow, x_periodic, x_outflow}`
-一组 kernel,在 `compute_T` 之后、κ flux 之前,以**标量镜像规则**直接
-覆写 `T_cc` 的 ghost 层。κ flux kernel 仍然读 `T_cc`,但现在 ghost $T$
-与 interior $T$ 在 reflective wall 上严格相等,$\nabla T|_\mathrm{wall}
-= 0$ 到 ULP。
+A family of kernels
+`k_athmhd_ghost_T_{y_reflect, y_periodic, y_outflow, x_periodic, x_outflow}`
+is introduced.  After `compute_T` and before the κ flux kernel runs,
+these overwrite the ghost layer of `T_cc` using the scalar mirror
+rule appropriate to each BC.  The κ flux kernel still reads `T_cc`,
+but now the ghost $T$ agrees with the interior $T$ at reflective
+walls up to ULP, giving $\nabla T|_\mathrm{wall} = 0$ exactly.
 
-### 推广的教训
+### Generalised lesson
 
-任何**读 cell-centered 标量** (如 $T$, $\mu$, $Y_e$) 的空间离散算子,其
-ghost 填充都必须**独立于 cons_to_prim**。cons_to_prim 背后带着矢量 ($B$,
-$\mathbf{v}$) 的方向性镜像语义,不能无损转译到标量。cooling 之类的
-per-cell ODE 不受影响 (从不跨 cell),但 κ 导热、未来粘性、辐射扩散等
-**空间 flux 型** 源项都需要一次独立的标量 ghost-fill 步骤。
+Any spatial-flux operator that **reads a cell-centered scalar** (for
+example $T$, $\mu$, $Y_e$) must **fill its own ghost layer**
+independently of `cons_to_prim`.  The latter carries the
+directional-mirror semantics of vector fields ($B$, $\mathbf{v}$) that
+cannot be translated losslessly onto a scalar.  Per-cell ODE
+operators such as cooling are unaffected (they never cross cells),
+but spatial-flux operators — κ conduction, future viscosity,
+radiative diffusion — each need an explicit scalar ghost-fill pass.
