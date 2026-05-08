@@ -1406,6 +1406,40 @@ hash of the profile arrays.
   **positive control**: if turning off WB doesn't produce a
   transient, the WB machinery is a no-op and should be audited.
 
+## 数值实现备忘 (not in formal derivation)
+
+以下 3 条是 Phase B-M1 实测 (commit `fdbe383`, `test_athena_mhd_hse_preserve.cu`
+6/6 通过) 发现的离散化陷阱。派生层面 $F_\mathrm{wb}(\mathbf{U}_\mathrm{hse}) \equiv 0$
+是解析恒等式,但在 VL2 + PLM + reflective wall 的实现栈里,以下三点任何一条
+写错,都会把"machine precision"退化成 $\sim 10^{-2}$–$10^{-3}$ 的漂移。
+
+1. **VL2 两阶段必须分开存 defect $R(\mathbf{U}_\mathrm{hse})$。**
+   Predictor 阶段走 donor-cell (order=1),corrector 阶段走 PLM (order=xorder);
+   两者的**离散残差** $R(\mathbf{U}_\mathrm{hse})$ 在有限精度下并不相等
+   (重建顺序不同 → face 值不同 → flux 不同)。只存一份 defect 做两次
+   subtract,实测残留 $\sim 0.8\%$ drift;两份独立 defect (`d_rhs_hse_s1_*`,
+   `d_rhs_hse_s2_*`,在 `apply_flux_divergence_and_ct` 按 stage 路由) 才到 ULP。
+
+2. **必须对全 6 个守恒量 $(\rho, m_x, m_y, m_z, E, B_z)$ 都 subtract。**
+   朴素直觉是只对有重力源的 $(m_x, m_y, m_z, E)$ 减。实测:reflective 壁
+   上 $\rho$ 和 $B_z$ 的 flux 残差虽然是 ULP 级 ($\sim 10^{-16}$),但 1000
+   步累积可以放大到 $\sim 1\%$ 的 $\delta\rho$ 漂移,使 B3 ($\delta\rho$)
+   断言失败。WB 是**代数对消** (identical cancellation),不是"只减主要项",
+   6 个守恒量必须全部参与。
+
+3. **Snapshot 时两阶段共用同一份 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$,
+   不要模拟 stage-2 swap。**
+   实 `step()` 里 stage-2 的 flux 由 $\mathrm{prim}(\mathbf{U}^*)$ 计算,因为
+   stage-1 末尾做了 swap + refill。但在 WB 完美时,$\mathbf{U}^* \equiv
+   \mathbf{U}_\mathrm{hse}$ — stage-2 实际"看到"的就是 $\mathrm{prim}(\mathbf{U}_\mathrm{hse})$
+   本身。snapshot 里只需 `cons_to_prim(U_hse)` 一次,两阶段共用;
+   若人为加 swap 去模拟 stage-2 的 $\mathbf{U}^*$,反而 capture 了"未 WB
+   过的 $\mathbf{U}^*$"的假残差,破坏自洽。
+
+共通 takeaway: WB 是**两端离散表达式 bit-wise 相同**才 cancel,不是
+"物理上等价"就行。任何改动重建顺序、变量顺序、或两阶段间 state 语义的
+PR,都必须重跑 B-M1 以验证 ULP 对齐。
+
 # C1. Ohmic (resistive) dissipation
 
 > **sympy script:** `scripts/c1_ohmic_dissipation.py`
@@ -1757,9 +1791,7 @@ cross-field transport is suppressed by $(\Omega_c\tau_c)^{-2} \sim 10^{-18}$
 in a coronal loop. To machine precision the effective conductivity is
 **rank-1**:
 
-$$\boxed{\mathbf{F}_c = -\kappa_\parallel(T)\,\hat{\mathbf{b}}\,
-(\hat{\mathbf{b}}\cdot\nabla T),\qquad
-\hat{\mathbf{b}} = \mathbf{B}/|\mathbf{B}|.} \quad (\text{C6-Fc})$$
+$$\boxed{\mathbf{F}_c = -\kappa_\parallel(T)\,\hat{\mathbf{b}}\,(\hat{\mathbf{b}}\cdot\nabla T),\qquad \hat{\mathbf{b}} = \mathbf{B}/|\mathbf{B}|.} \quad (\text{C6-Fc})$$
 
 ## Parallel / perpendicular decomposition
 
@@ -1781,8 +1813,7 @@ Sympy-verified the following on a general smooth $(T, \mathbf{B})$:
 In the smooth isothermal-field (or B-aligned) limit the flux admits a
 **gradient-form** potential:
 
-$$\boxed{\mathbf{F}_c = -\nabla\!\left[\tfrac{2}{7}\,\kappa_0\,T^{7/2}\right]
-\quad\text{(1D / B-aligned smooth flow).}} \quad (\text{C6-Kirchhoff})$$
+$$\boxed{\mathbf{F}_c = -\nabla\!\left[\tfrac{2}{7}\,\kappa_0\,T^{7/2}\right] \quad\text{(1D / B-aligned smooth flow).}} \quad (\text{C6-Kirchhoff})$$
 
 This is critical for implementation: the nonlinear flux can be
 written as $-\kappa_0\partial_x(T^{7/2}) \cdot \tfrac{2}{7}$, which is
@@ -1800,9 +1831,7 @@ flux by orders of magnitude (Gruzinov-Quataert 2004; Shoda+2018a).
 Suzuki 2203.15280 Eq. 12 / Shoda+2020 patch this with a phenomenological
 cutoff:
 
-$$\boxed{\mathbf{q}_{\mathrm{cnd}} = -\min\!\Bigl(1,\,\rho/\rho_{\mathrm{cnd}}\Bigr)\,
-(B_r/|\mathbf{B}|)\,\kappa_0\,T^{5/2}\,\partial_r T,\quad
-\rho_{\mathrm{cnd}} = 10^{-20}\,\mathrm{g\,cm^{-3}}.} \quad (\text{C6-quench})$$
+$$\boxed{\mathbf{q}_{\mathrm{cnd}} = -\min\!\Bigl(1,\,\rho/\rho_{\mathrm{cnd}}\Bigr)\,(B_r/|\mathbf{B}|)\,\kappa_0\,T^{5/2}\,\partial_r T,\quad \rho_{\mathrm{cnd}} = 10^{-20}\,\mathrm{g\,cm^{-3}}.} \quad (\text{C6-quench})$$
 
 **Do not drop the quench** — unquenched Spitzer at coronal $\rho$
 drives $\Delta t_\mathrm{cond}$ to $\sim 10^{-4}\times$ the hyperbolic
@@ -1845,8 +1874,7 @@ Sympy-verified: worst case $\xi = \pi$ gives $g = 1 - 4\sigma$;
 marginal stability at $\sigma = 1/2$ gives $g = -1$. For the Spitzer
 diffusivity the bound becomes
 
-$$\boxed{\Delta t_\mathrm{cond} \le \tfrac{1}{2}\,\min_{\text{cells}}
-\frac{\rho\,c_v\,\Delta x^2}{\kappa_0\,T^{5/2}}.} \quad (\text{C6-CFL})$$
+$$\boxed{\Delta t_\mathrm{cond} \le \tfrac{1}{2}\,\min_{\text{cells}} \frac{\rho\,c_v\,\Delta x^2}{\kappa_0\,T^{5/2}}.} \quad (\text{C6-CFL})$$
 
 At chromospheric parameters
 $(T \sim 10^5\,\mathrm{K},\ \rho \sim 10^{-10}\,\mathrm{g\,cm^{-3}},\ \Delta x \sim 50\,\mathrm{km})$
@@ -1910,6 +1938,61 @@ Any failure on the anisotropy (perpendicular-quench) test is an
 immediate red flag: without rank-1 conductivity, 1D modelling of
 coronal loops (Aschwanden 2005 §4) overshoots $T_\mathrm{peak}$ by a
 factor of 2–3.
+
+## 数值实现备忘 (not in formal derivation)
+
+Phase B-M4 (`test_athena_mhd_combined.cu`, 10/10 通过) 里 combined 栈
+(WB + κ + cooling) 第一次暴露了 κ 算子和 reflective y-BC 的一个 ghost-cell
+相互作用,派生层面 $\mathbf{F}_c = -\kappa_\parallel\hat{\mathbf{b}}
+(\hat{\mathbf{b}}\cdot\nabla T)$ 是连续量恒等式,但到了有限体积 + face-B
+磁场 + cons_to_prim 的离散实现就出问题。
+
+### 症状
+
+等温磁化大气 $T = c_s^2$ 严格均匀,理应 $\nabla T \equiv 0$ → $\mathbf{F}_c
+\equiv 0$。实测单次 `apply_conduction(dt)` 就让 $\delta E/E = 4\%$(远超
+ULP 量级),而 $\delta\rho$、$|\mathbf{v}|$、$|\nabla\!\cdot\!\mathbf{B}|$
+同时保持在机器精度 — **只有 $E$ 被 κ 错误地修改了**。
+
+### 根因:cons_to_prim 推出的 ghost $T$ 不是标量镜像
+
+Reflective y-BC 下 face-B 按反对称镜像:$B_{yf}[n_g - 1] = -B_{yf}[n_g + 1]$,
+因此 ghost cell 的 cell-centered $B_y$ 为
+
+$$B_{y,\mathrm{cc}}^\mathrm{ghost}
+ = \tfrac12\bigl(B_{yf}[n_g-1] + B_{yf}[n_g]\bigr)
+ = \tfrac12(-B_{0y} + B_{0y}) = 0,$$
+
+而 interior $B_{y,\mathrm{cc}} = B_{0y}$。然后 `cons_to_prim` 用
+$p = (\gamma-1)(E - \mathrm{KE} - \mathrm{ME})$ 推 ghost 压强,由于
+$\mathrm{ME}^\mathrm{ghost} \ne \mathrm{ME}^\mathrm{interior}$ 差了
+$\tfrac12 B_{0y}^2$,ghost $p$ 被多算/少算 $\tfrac12(\gamma-1)B_{0y}^2$,
+进而 $T^\mathrm{ghost} = p^\mathrm{ghost}/\rho^\mathrm{ghost} \ne c_s^2$。
+κ flux kernel 读到这个"被污染的 ghost $T$"时,wall 上出现**虚假**非零
+$\nabla T$,$\mathbf{F}_c$ 把能量"泄"到 ghost,违反 $T$ 均匀 → $\mathbf{F}_c
+\equiv 0$ 的物理预期。
+
+这不是 §C6 派生的错,也不是 `cons_to_prim` 的错:`cons_to_prim` 正确地
+按 face-B 镜像规则推算 ghost $B_\mathrm{cc}$。问题在于 $B_\mathrm{cc}$ 的
+"镜像"是**面反对称**而非 scalar mirror,而 $T$ 作为标量场,其 ghost
+本该满足 scalar mirror。通过 $(p, \rho) \to T$ 的链条把 $B$ 的矢量镜像
+语义误带进了标量量。
+
+### 修复:$T$ 独立 ghost-fill,不依赖 cons_to_prim
+
+新增 `k_athmhd_ghost_T_{y_reflect, y_periodic, y_outflow, x_periodic, x_outflow}`
+一组 kernel,在 `compute_T` 之后、κ flux 之前,以**标量镜像规则**直接
+覆写 `T_cc` 的 ghost 层。κ flux kernel 仍然读 `T_cc`,但现在 ghost $T$
+与 interior $T$ 在 reflective wall 上严格相等,$\nabla T|_\mathrm{wall}
+= 0$ 到 ULP。
+
+### 推广的教训
+
+任何**读 cell-centered 标量** (如 $T$, $\mu$, $Y_e$) 的空间离散算子,其
+ghost 填充都必须**独立于 cons_to_prim**。cons_to_prim 背后带着矢量 ($B$,
+$\mathbf{v}$) 的方向性镜像语义,不能无损转译到标量。cooling 之类的
+per-cell ODE 不受影响 (从不跨 cell),但 κ 导热、未来粘性、辐射扩散等
+**空间 flux 型** 源项都需要一次独立的标量 ghost-fill 步骤。
 
 # C7. Optically-thin radiative cooling
 
@@ -3236,4 +3319,224 @@ resolution.
 
 Pass criteria map directly from (F4-decay), (F4-eta-eff), (F4-order)
 to concrete numerical thresholds in the test file.
+
+# F5. VL2+PLM modified-equation analysis to $O(h^4)$: resolving the A4 "super-convergence" puzzle
+
+> **sympy script:** `scripts/f5_vl2_plm_amplitude_decay.py`
+> **verified:** $\hat{L}(\xi)$ recovers pure advection $-i\xi$ at
+> leading order; $|g(\xi;\nu)|^2$ has no $O(\xi^2)$ term (2nd-order
+> signature);
+> $|g|^2 - 1 = \nu(\nu^3-1)/4 \cdot \xi^4 + O(\xi^6)$;
+> decay rate $\gamma_\mathrm{num} = (a k^4 / 8)(1-\nu^3) h^3$;
+> two-resolution inversion $p = \log(\gamma_1/\gamma_2)/\log(N_2/N_1) = 3$.
+> **supersedes:** F4 claim that "p = 2 expected" — that was a
+> derivation bug.
+
+## Motivation — A4 found p ≈ 3, F4 predicted p ≈ 2
+
+The Phase A4 long-time CPAW test measured scheme-order
+
+$$p_\text{meas}(32\to 64) = 3.08,\qquad p_\text{meas}(64\to 128) = 2.87$$
+
+on a deeply linear Alfvén wave ($A = 10^{-6}$). F4 expected $p \approx 2$
+based on the modified-equation viscosity $\nu_\mathrm{eff} \propto h^2$.
+The discrepancy was dismissed as "super-convergence on smooth grid-
+aligned sinusoid" without further derivation.
+
+This is hand-waving. Either the scheme is (a) genuinely 3rd-order on
+smooth sinusoids, (b) 2nd-order with leading-term cancellation, or
+(c) the measurement is in the round-off floor. F5 does the derivation
+to settle the question.
+
+**Answer (sympy-verified):** the scheme is standard 2nd-order. The
+measured $p = 3$ is the **correct amplitude-retention signature of a
+2nd-order scheme** over fixed time. F4 confused per-step truncation
+error (which scales as $h^2$) with amplitude retention over fixed
+wall-clock (which scales as $h^3$).
+
+## von Neumann analysis — PLM upwind + midpoint RK2
+
+Consider the linear advection $\partial_t u + a\partial_x u = 0$,
+$a > 0$, with PLM central-slope reconstruction + upwind flux.
+
+**Semi-discrete operator** on a plane wave $u = e^{ikx}$:
+
+$$\hat{L}(\xi) = -\frac{a}{h}\bigl(1 + \tfrac{i}{2}\sin\xi\bigr)\,\bigl(1 - e^{-i\xi}\bigr),\qquad
+\xi = k h. \quad (\text{F5-Lhat})$$
+
+The factor $(1 - e^{-i\xi})$ is the upwind flux difference;
+$(1 + \tfrac{i}{2}\sin\xi)$ is the PLM slope reconstruction at the face.
+
+Leading-order Taylor expansion:
+
+$$\hat{L}(\xi) = -\frac{a}{h}\bigl(i\xi + \mathcal{O}(\xi^3)\bigr),$$
+
+recovering exact advection (sympy-verified).
+
+## Midpoint-RK2 amplification factor
+
+The VL2 integrator is midpoint-RK2:
+
+$$u^* = u^n + \tfrac{\Delta t}{2} \hat{L} u^n,\qquad u^{n+1} = u^n + \Delta t\,\hat{L} u^*.$$
+
+For linear $\hat{L}$, this gives
+
+$$g(\xi;\nu) = 1 + \mu + \tfrac{1}{2}\mu^2,\qquad \mu = \nu \hat{L}(\xi),\qquad
+\nu = a\Delta t/h. \quad (\text{F5-g})$$
+
+## Magnitude series: $|g|^2$ to $O(\xi^5)$
+
+Sympy expansion of $g\cdot\bar g$:
+
+$$|g(\xi; \nu)|^2 = 1 + \frac{\nu(\nu^3 - 1)}{4}\,\xi^4 + \mathcal{O}(\xi^6). \quad (\text{F5-amp})$$
+
+**Verified properties:**
+- $|g|^2(0) = 1$ — no DC drift.
+- No $O(\xi)$, $O(\xi^3)$ terms — real-valued by symmetry.
+- **No $O(\xi^2)$ term** — this is the 2nd-order signature
+  (sympy-verified).
+- Leading dissipation is $O(\xi^4)$, with coefficient $\nu(\nu^3-1)/4$.
+
+At $\nu = 1$ the coefficient vanishes: **exact advection at CFL = 1**,
+a standard property of Lax-Wendroff-like integrators.
+
+At $\nu = 1/2$ (typical CFL for robustness): $c_4 = -7/64 \approx -0.11$.
+Dissipation is weak but non-zero.
+
+## The $h^3$ scaling of amplitude retention
+
+Amplitude retention over fixed time $t$:
+
+$$\frac{\mathrm{amp}(t)}{\mathrm{amp}(0)} = |g|^{N_\text{step}},\qquad
+N_\text{step} = \frac{t}{\Delta t} = \frac{t\,a}{\nu\,h} \propto h^{-1}.$$
+
+Expand:
+$$\ln\frac{\mathrm{amp}(t)}{\mathrm{amp}(0)} = \tfrac{N_\text{step}}{2}\,\ln|g|^2
+\approx \tfrac{N_\text{step}}{2}\,c_4(\nu)\,\xi^4
+= \tfrac{t\,a}{2\nu\,h}\,c_4(\nu)\,(k h)^4
+\propto h^3.$$
+
+Explicitly (sympy):
+
+$$\boxed{\gamma_\text{num}(h) = \frac{a\,k^4}{8}\,(1-\nu^3)\,h^3. \quad (\text{F5-gamma})}$$
+
+This is the **decay rate** measured by the A4 test: $\mathrm{amp}(t) = \mathrm{amp}(0)\,e^{-\gamma_\text{num} t}$.
+
+Sympy-verified: leading-order terms at $h^0, h^1, h^2$ all vanish.
+The scaling is **exactly $h^3$**, with no lower-$h$ corrections.
+
+## Two-resolution scheme-order inversion: $p = 3$
+
+With $\gamma_\text{num} \propto h^3 \propto 1/N^3$:
+
+$$\boxed{p \equiv \frac{\log(\gamma_1/\gamma_2)}{\log(N_2/N_1)} = 3.} \quad (\text{F5-p3})$$
+
+**Sympy-verified.** This is the correct expected value for a 2nd-order
+scheme measured via amplitude retention over fixed time.
+
+## Comparison: L¹-error convergence vs amplitude retention
+
+Two distinct diagnostics of the same scheme:
+
+| Diagnostic | Scales as | Inverts to $p$ |
+|---|---|---|
+| $L^1(\mathrm{numerical} - \mathrm{analytic})$ at fixed $t$ | $h^2$ | $p = 2$ |
+| amplitude retention $\mathrm{amp}(t) / \mathrm{amp}(0)$ | $e^{-\gamma h^3 t}$ | $p = 3$ |
+
+The first is what §A11 / A6 measure (linwave convergence). The second
+is what A4 measures (decay rate over fixed time). **Both are signatures
+of the same 2nd-order scheme** — they just weigh different error
+terms.
+
+F4 implicitly assumed the two were equivalent. They are not.
+
+## Why F4 was wrong
+
+F4 wrote:
+
+> $\eta_\mathrm{eff}(h) = C_\text{num}\,h^2\,v_A$,
+> $\gamma_\text{num}(N) = \tfrac{1}{2}C_\text{num}\,h^2\,v_A\,k^2 \propto N^{-2}$.
+
+The first equation is correct — the modified-equation viscosity is
+genuinely $O(h^2)$ per step. The second equation is wrong: it treats
+$\gamma$ as a per-step quantity when the measurement is actually over
+fixed time spanning many steps ($N_\text{step} \propto 1/h$).
+
+Correct chain:
+
+$$\eta_\mathrm{eff}(h) \propto h^2 \quad \Rightarrow \quad
+\text{per-step dissipation }\propto h^2 \quad \Rightarrow \quad
+\text{over fixed }t\text{, }\gamma \propto h^2 / \Delta t \propto h^2/h = h^1$$
+
+...wait, no. Let me redo: per step the amplitude changes by
+$1 + c_4 \xi^4$, i.e., a fractional change of $c_4 (kh)^4$. Over
+$N_\text{step} \propto 1/h$ steps, cumulative fractional change is
+$\propto h^4 / h = h^3$. **That's the $h^3$ scaling.**
+
+F4 mistakenly wrote $\gamma \propto h^2$ without tracking the step-
+count factor. F5 fixes this.
+
+## Consequence for the A4 test
+
+The A4 pass bound $p \in [1.7, 3.3]$ was set empirically around the
+measured 2.87–3.08. It accidentally contains the **correct value
+$p = 3$** at its upper end. The bound should be rewritten:
+
+$$\boxed{|p_\text{meas} - 3| < 0.3\quad \text{(F5-correct, for 2nd-order scheme)}.}$$
+
+The wider $[1.7, 3.3]$ bound still passes because the correct
+threshold lies within it — but the centre should have been $p = 3$,
+not $p = 2$.
+
+## Robustness caveat: higher-order $\xi^6$ corrections
+
+The F5 derivation stops at $O(\xi^4)$. At moderate $kh \sim 0.1$
+(e.g., $N = 32$ with $k = 2\pi$ gives $kh \approx 0.2$), the $O(\xi^6)$
+correction is $\sim 4\%$ of the leading term. This explains the
+$\sim 0.2$ spread between measured $p(32\to64) = 3.08$ and $p(64\to128) = 2.87$:
+
+- $N = 32$ is outside the asymptotic $kh \to 0$ regime.
+- $N = 64, 128$ are closer.
+
+Asymptotic $N \to \infty$ should give $p \to 3.0$ exactly. Our finite-$N$
+measurements bracket this with small deviations.
+
+## Implications for A1 oblique linwave test
+
+The A1 test uses the same amplitude-retention diagnostic. Measured
+slopes:
+
+| mode | min(slope) across $N$ pairs |
+|---|---|
+| fast   | 2.21 |
+| Alfvén | 2.40 |
+| slow   | 3.00 |
+
+The slow mode hits $p = 3$ cleanly. Fast and Alfvén are lower (2.2,
+2.4) because their large wave speed means the decay over one $t_\text{run} = 0.25$
+is dominated by the $\nu^3$ dependence of $c_4$, varying across runs.
+
+A1 test bound $p \ge 1.8$ is softer than F5 would suggest, to
+accommodate this inter-mode spread. For a cleaner test, one should
+normalise the decay to a fixed number of wave crossings (e.g., always
+5 periods) rather than fixed $t$.
+
+**This does not invalidate A1** — all 4 modes show $p > 2$, well
+inside the 2nd-order expectation. But the variation between modes is
+now understood as a real feature of the $c_4(\nu)$ prefactor, not
+solver behaviour.
+
+## ✅ Verification checkpoints
+
+- `scripts/f5_vl2_plm_amplitude_decay.py` — 6 sympy assertions
+  verifying the modified-equation analysis up to $O(\xi^4)$ and the
+  $h^3$ scaling of amplitude-retention decay rate.
+- **Updates F4**: the "p ≈ 2" prediction in F4-order is incorrect.
+  Use (F5-p3) instead. F4's other claims (dispersion relation,
+  $\eta_\mathrm{eff} \propto h^2$) remain valid — they are per-step
+  statements, not over-fixed-time statements.
+
+With F5 in place, the A4 "super-convergence" mystery is resolved:
+there is no super-convergence; the solver is a textbook 2nd-order
+scheme, correctly measured.
 

@@ -28,9 +28,7 @@ cross-field transport is suppressed by $(\Omega_c\tau_c)^{-2} \sim 10^{-18}$
 in a coronal loop. To machine precision the effective conductivity is
 **rank-1**:
 
-$$\boxed{\mathbf{F}_c = -\kappa_\parallel(T)\,\hat{\mathbf{b}}\,
-(\hat{\mathbf{b}}\cdot\nabla T),\qquad
-\hat{\mathbf{b}} = \mathbf{B}/|\mathbf{B}|.} \quad (\text{C6-Fc})$$
+$$\boxed{\mathbf{F}_c = -\kappa_\parallel(T)\,\hat{\mathbf{b}}\,(\hat{\mathbf{b}}\cdot\nabla T),\qquad \hat{\mathbf{b}} = \mathbf{B}/|\mathbf{B}|.} \quad (\text{C6-Fc})$$
 
 ## Parallel / perpendicular decomposition
 
@@ -52,8 +50,7 @@ Sympy-verified the following on a general smooth $(T, \mathbf{B})$:
 In the smooth isothermal-field (or B-aligned) limit the flux admits a
 **gradient-form** potential:
 
-$$\boxed{\mathbf{F}_c = -\nabla\!\left[\tfrac{2}{7}\,\kappa_0\,T^{7/2}\right]
-\quad\text{(1D / B-aligned smooth flow).}} \quad (\text{C6-Kirchhoff})$$
+$$\boxed{\mathbf{F}_c = -\nabla\!\left[\tfrac{2}{7}\,\kappa_0\,T^{7/2}\right] \quad\text{(1D / B-aligned smooth flow).}} \quad (\text{C6-Kirchhoff})$$
 
 This is critical for implementation: the nonlinear flux can be
 written as $-\kappa_0\partial_x(T^{7/2}) \cdot \tfrac{2}{7}$, which is
@@ -71,9 +68,7 @@ flux by orders of magnitude (Gruzinov-Quataert 2004; Shoda+2018a).
 Suzuki 2203.15280 Eq. 12 / Shoda+2020 patch this with a phenomenological
 cutoff:
 
-$$\boxed{\mathbf{q}_{\mathrm{cnd}} = -\min\!\Bigl(1,\,\rho/\rho_{\mathrm{cnd}}\Bigr)\,
-(B_r/|\mathbf{B}|)\,\kappa_0\,T^{5/2}\,\partial_r T,\quad
-\rho_{\mathrm{cnd}} = 10^{-20}\,\mathrm{g\,cm^{-3}}.} \quad (\text{C6-quench})$$
+$$\boxed{\mathbf{q}_{\mathrm{cnd}} = -\min\!\Bigl(1,\,\rho/\rho_{\mathrm{cnd}}\Bigr)\,(B_r/|\mathbf{B}|)\,\kappa_0\,T^{5/2}\,\partial_r T,\quad \rho_{\mathrm{cnd}} = 10^{-20}\,\mathrm{g\,cm^{-3}}.} \quad (\text{C6-quench})$$
 
 **Do not drop the quench** — unquenched Spitzer at coronal $\rho$
 drives $\Delta t_\mathrm{cond}$ to $\sim 10^{-4}\times$ the hyperbolic
@@ -116,8 +111,7 @@ Sympy-verified: worst case $\xi = \pi$ gives $g = 1 - 4\sigma$;
 marginal stability at $\sigma = 1/2$ gives $g = -1$. For the Spitzer
 diffusivity the bound becomes
 
-$$\boxed{\Delta t_\mathrm{cond} \le \tfrac{1}{2}\,\min_{\text{cells}}
-\frac{\rho\,c_v\,\Delta x^2}{\kappa_0\,T^{5/2}}.} \quad (\text{C6-CFL})$$
+$$\boxed{\Delta t_\mathrm{cond} \le \tfrac{1}{2}\,\min_{\text{cells}} \frac{\rho\,c_v\,\Delta x^2}{\kappa_0\,T^{5/2}}.} \quad (\text{C6-CFL})$$
 
 At chromospheric parameters
 $(T \sim 10^5\,\mathrm{K},\ \rho \sim 10^{-10}\,\mathrm{g\,cm^{-3}},\ \Delta x \sim 50\,\mathrm{km})$

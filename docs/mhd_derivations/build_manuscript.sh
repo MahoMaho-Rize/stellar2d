@@ -40,18 +40,20 @@ if [[ $PDF -eq 1 ]]; then
         exit 1
     }
     echo "  pandoc → PDF (xelatex)"
-    pandoc "$OUT_MD" \
-        --pdf-engine=xelatex \
-        -V geometry:margin=1in \
-        -V fontsize=10pt \
-        -V mainfont="DejaVu Serif" \
-        -V monofont="DejaVu Sans Mono" \
-        -V linkcolor=blue \
-        --toc --toc-depth=2 \
-        --number-sections \
-        -o manuscript.pdf 2>/dev/null || {
-        echo "  xelatex failed — manuscript.md is still valid; PDF skipped"
-        echo "  (install texlive-xetex texlive-fonts-recommended to enable PDF)"
-    }
-    [[ -f manuscript.pdf ]] && echo "→ manuscript.pdf"
+    if ! pandoc "$OUT_MD" \
+            --pdf-engine=xelatex \
+            -V geometry:margin=1in \
+            -V fontsize=10pt \
+            -V mainfont="DejaVu Serif" \
+            -V monofont="DejaVu Sans Mono" \
+            -V linkcolor=blue \
+            --toc --toc-depth=2 \
+            --number-sections \
+            -o manuscript.pdf 2>&1 | tee /tmp/pandoc_build.log; then
+        echo "  ERROR: xelatex failed — stale manuscript.pdf NOT overwritten"
+        echo "  Check /tmp/pandoc_build.log for the scanning error"
+        echo "  Common cause: unbalanced \\boxed{} braces in sections/*.md"
+        exit 1
+    fi
+    echo "→ manuscript.pdf"
 fi

@@ -107,7 +107,7 @@ The scaling is **exactly $h^3$**, with no lower-$h$ corrections.
 
 With $\gamma_\text{num} \propto h^3 \propto 1/N^3$:
 
-$$\boxed{p \equiv \frac{\log(\gamma_1/\gamma_2)}{\log(N_2/N_1)} = 3. \quad (\text{F5-p3})$$
+$$\boxed{p \equiv \frac{\log(\gamma_1/\gamma_2)}{\log(N_2/N_1)} = 3.} \quad (\text{F5-p3})$$
 
 **Sympy-verified.** This is the correct expected value for a 2nd-order
 scheme measured via amplitude retention over fixed time.
