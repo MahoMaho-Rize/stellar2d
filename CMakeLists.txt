@@ -405,4 +405,16 @@ if(USE_GPU)
     add_executable(test_stellar_profile tests/test_stellar_profile.cpp
         src/gpu/radial1d/stellar_profile.cpp)
     target_include_directories(test_stellar_profile PRIVATE ${GPU_INCLUDE_DIRS})
+
+    # radial1d HSE static-stability regression: Lane-Emden n=3/2 + γ=5/3 is
+    # exact static HSE; locks that the explicit RK2 path preserves it.
+    add_gpu_test(radial1d_hse_static
+                 tests/test_radial1d_hse_static.cu
+                 EXTRA_SOURCES ${TEST_COMMON_SOURCES}
+                               src/gpu/radial1d/radial1d_solver.cu
+                               src/gpu/radial1d/radial1d_implicit.cu
+                               src/gpu/radial1d/stellar_profile.cpp
+                               src/physics/helmholtz_eos.cu
+                               src/physics/opacity_table.cu)
+    target_link_libraries(test_radial1d_hse_static PRIVATE CUDA::cusolver)
 endif()
