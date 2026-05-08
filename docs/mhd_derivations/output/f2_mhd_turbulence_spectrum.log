@@ -1,0 +1,14 @@
+
+════════════════════════════════════════════════════════════
+  F2 — 2D MHD turbulence spectrum predictions
+════════════════════════════════════════════════════════════
+  [OK] K41 spectrum log-log slope = −5/3.
+  [OK] IK65 MHD spectrum log-log slope = −3/2.
+  [OK] k_diss ∝ N^{3/2} for 2nd-order scheme with ν_eff ∝ h².
+  [OK] ν_eff ↔ k_diss inversion round-trip.
+  estimated k_diss(128) ≈ 562.3
+  estimated k_diss(512) ≈ 17782.8
+  inertial range at N=128: k ∈ [4, 140.6]
+  → wrote output/f2_mhd_turbulence_spectrum.latex.tex
+
+All F2 identities verified.

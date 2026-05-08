@@ -779,6 +779,220 @@ void AthenaMHDSolver::init_linear_wave(LinearWaveMode mode, int k, double A) {
         "    cf=2, cA=1, cs=0.5, γ=5/3\n", (int)mode, k, A);
 }
 
+// ============================================================
+// Oblique linear wave (§F1, Stone+08 §6.2)
+// Rotated eigenvector on 2D periodic box with k = 2π(kx_int/Lx, ky_int/Ly).
+// Derivation: docs/mhd_derivations/sections/f1_oblique_linwave.md
+// ============================================================
+void AthenaMHDSolver::init_linear_wave_oblique(LinearWaveMode mode,
+                                               int kx_int, int ky_int,
+                                               double A) {
+    // §A11 Stone+08 Table 1 background (shared with init_linear_wave)
+    gamma = 5.0 / 3.0;
+    x_bc = 0; y_bc = 0;
+    x_lo = 0.0; x_hi = Lx;
+    y_lo = 0.0; y_hi = Ly;
+    dx = Lx / (double)nx;
+    dy = Ly / (double)ny;
+
+    double rho0 = 1.0;
+    double p0   = 1.0 / gamma;
+    double Bx0_ref  = 1.0;
+    double By0_ref  = std::sqrt(2.0);
+    double Bz0  = 0.5;
+    double v0x  = (mode == ENTROPY) ? 1.0 : 0.0;
+
+    // Wave vector components (physical)
+    const double two_pi = 2.0 * M_PI;
+    const double kx = two_pi * (double)kx_int / Lx;
+    const double ky = two_pi * (double)ky_int / Ly;
+    const double kmag = std::sqrt(kx*kx + ky*ky);
+    const double cosT = kx / kmag;
+    const double sinT = ky / kmag;
+
+    // Compute §A3 eigenvector in the unrotated (x̂-aligned) frame,
+    // replacing c_Ax → c_{A,k̂} = (B·k̂)/√ρ (F1-cAk).
+    //   Rotated-frame Bx' = Bx cosT + By sinT (along k̂)
+    //   Rotated-frame By' = -Bx sinT + By cosT (transverse)
+    const double Bx_k = Bx0_ref * cosT + By0_ref * sinT;
+    const double By_k = -Bx0_ref * sinT + By0_ref * cosT;
+    // Reference background in k̂-frame
+    double Bz0_k = Bz0;  // (invariant)
+    double Bx0_frame = Bx_k;
+    double By0_frame = By_k;
+
+    // §A3 wave speeds in k̂-frame
+    double cAksq = Bx0_frame * Bx0_frame / rho0;   // (B·k̂)²/ρ
+    double cAsq  = (Bx0_frame*Bx0_frame + By0_frame*By0_frame + Bz0_k*Bz0_k) / rho0;
+    double cs0sq = gamma * p0 / rho0;
+    double disc  = std::sqrt((cs0sq + cAsq) * (cs0sq + cAsq)
+                             - 4.0 * cs0sq * cAksq);
+    double cfsq  = 0.5 * ((cs0sq + cAsq) + disc);
+    double cssq  = 0.5 * ((cs0sq + cAsq) - disc);
+    double cf    = std::sqrt(cfsq);
+    double cs    = std::sqrt(cssq);
+    double cAx   = std::sqrt(cAksq);
+    double cs0   = std::sqrt(cs0sq);
+    double B_perp_mag = std::sqrt(By0_frame*By0_frame + Bz0_k*Bz0_k);
+    double beta_y = (B_perp_mag > 1e-30) ? By0_frame / B_perp_mag : 1.0;
+    double beta_z = (B_perp_mag > 1e-30) ? Bz0_k     / B_perp_mag : 0.0;
+    double alpha_f_sq = (cs0sq - cssq) / (cfsq - cssq);
+    double alpha_s_sq = (cfsq - cs0sq) / (cfsq - cssq);
+    double alpha_f = std::sqrt(std::max(alpha_f_sq, 0.0));
+    double alpha_s = std::sqrt(std::max(alpha_s_sq, 0.0));
+
+    // Eigenvector in the k̂-frame (ρ, v_para, v_perp_y, v_perp_z, B_perp_y, B_perp_z, p)
+    double lam = 0.0;
+    double r_rho, r_vpara, r_vperp_y, r_vperp_z, r_By_k, r_Bz_k, r_P;
+    if (mode == FAST_M) {
+        lam = v0x + cf;
+        r_rho = rho0 * alpha_f;
+        r_vpara  = +alpha_f * cf;
+        r_vperp_y  = -alpha_s * cs * beta_y;
+        r_vperp_z  = -alpha_s * cs * beta_z;
+        r_By_k  = alpha_s * cs0 * std::sqrt(rho0) * beta_y;
+        r_Bz_k  = alpha_s * cs0 * std::sqrt(rho0) * beta_z;
+        r_P   = alpha_f * gamma * p0;
+    } else if (mode == ALFVEN) {
+        lam = v0x + cAx;
+        r_rho = 0.0;
+        r_vpara  = 0.0;
+        r_vperp_y  = -beta_z;
+        r_vperp_z  = +beta_y;
+        r_By_k  = -beta_z * std::sqrt(rho0);
+        r_Bz_k  = +beta_y * std::sqrt(rho0);
+        r_P   = 0.0;
+    } else if (mode == SLOW) {
+        lam = v0x + cs;
+        r_rho = rho0 * alpha_s;
+        r_vpara  = +alpha_s * cs;
+        r_vperp_y  = +alpha_f * cf * beta_y;
+        r_vperp_z  = +alpha_f * cf * beta_z;
+        r_By_k  = -alpha_f * cs0 * std::sqrt(rho0) * beta_y;
+        r_Bz_k  = -alpha_f * cs0 * std::sqrt(rho0) * beta_z;
+        r_P   = alpha_s * gamma * p0;
+    } else { // ENTROPY
+        lam = v0x;
+        r_rho = 1.0;
+        r_vpara = 0.0;
+        r_vperp_y = 0.0; r_vperp_z = 0.0;
+        r_By_k = 0.0; r_Bz_k = 0.0; r_P = 0.0;
+    }
+    (void)lam;
+
+    // Normalise
+    double norm = std::sqrt(r_rho*r_rho + r_vpara*r_vpara
+                          + r_vperp_y*r_vperp_y + r_vperp_z*r_vperp_z
+                          + r_By_k*r_By_k + r_Bz_k*r_Bz_k + r_P*r_P);
+    if (norm > 0) {
+        r_rho /= norm; r_vpara /= norm;
+        r_vperp_y /= norm; r_vperp_z /= norm;
+        r_By_k /= norm; r_Bz_k /= norm; r_P /= norm;
+    }
+
+    // Rotate the k̂-frame vector components back to Cartesian (F1-rotation).
+    // Velocity: (v_para, v_perp_y, v_perp_z) → (vx, vy, vz) where
+    //   (vx, vy) = R(θ)(v_para, v_perp_y),  vz = v_perp_z.
+    // B perturbation: in k̂-frame δB has components (0, δB_perp_y, δB_perp_z)
+    // (no δB along k̂; 1D wave has δB·k̂ = 0 automatically).  So
+    //   (δBx, δBy) = R(θ)(0, δB_perp_y) = (-sinT·δB_perp_y, cosT·δB_perp_y)
+    //   δBz = δB_perp_z.
+
+    auto rotate_v = [&](double vpar, double vperp_y,
+                        double& vx_out, double& vy_out) {
+        vx_out =  cosT * vpar  - sinT * vperp_y;
+        vy_out =  sinT * vpar  + cosT * vperp_y;
+    };
+
+    int sx = stride_x(), sy = stride_y();
+    int ncell = sx * sy;
+    int nfx = total_fx(), nfy = total_fy();
+    std::vector<double> h_rho(ncell, 0.0), h_mx(ncell, 0.0),
+                        h_my(ncell, 0.0), h_mz(ncell, 0.0),
+                        h_E(ncell, 0.0), h_Bz_cc(ncell, 0.0);
+    std::vector<double> h_Bxf(nfx, 0.0);
+    std::vector<double> h_Byf(nfy, 0.0);
+
+    // B field: use vector potential A_z to enforce solenoidal seeding.
+    //   uniform B₀ = (Bx0_ref, By0_ref, Bz0)
+    //   δB in k̂-frame is (0, r_By_k, r_Bz_k) · A cos(k·x); rotate δB_perp_y
+    //   to Cartesian: (δBx, δBy) = R(θ)(0, r_By_k·A cos) with the same r_By_k.
+    // Build A_z such that Bx = ∂_y A_z, By = -∂_x A_z.
+    //   Bx_pert = (cos(k·x) coefficient) = -sinT · r_By_k
+    //     ⇒ A_z = (A · r_By_k) · sin(k·x) · (something); verify via:
+    //        A_z(x, y) = A_z0 sin(kx x + ky y)
+    //        ∂_y A_z = A_z0 ky cos(...); so A_z0 ky = A · (-sinT · r_By_k)
+    //        ∂_x A_z = A_z0 kx cos(...); By_pert = -A_z0 kx cos(...)
+    //                = -A_z0 kx cos = A · cosT · r_By_k
+    //     consistency: -A_z0 kx = A cosT r_By_k  AND  A_z0 ky = -A sinT r_By_k
+    //     both give A_z0 = -A · r_By_k / kmag (using kx = kmag cosT, ky = kmag sinT).
+    const double Az0 = -A * r_By_k / kmag;
+    auto Az = [&](double x, double y) -> double {
+        return Az0 * std::sin(kx * x + ky * y);
+    };
+
+    // Bxf at (i+½, j-cell): Bx_pert = ∂_y A_z on the face
+    for (int i_face = 0; i_face < nx + 1 + 2 * ng; ++i_face) {
+        double xf = x_lo + ((i_face - ng) + 0.0) * dx;
+        for (int jc = 0; jc < ny + 2 * ng; ++jc) {
+            double y_top = y_lo + ((jc - ng) + 1.0) * dy;
+            double y_bot = y_lo + ((jc - ng) + 0.0) * dy;
+            double Bx_pert = (Az(xf, y_top) - Az(xf, y_bot)) / dy;
+            h_Bxf[i_face * sy + jc] = Bx0_ref + Bx_pert;
+        }
+    }
+    // Byf at (i-cell, j+½): By_pert = -∂_x A_z on the face
+    for (int ic = 0; ic < nx + 2 * ng; ++ic) {
+        double x_ip = x_lo + ((ic - ng) + 1.0) * dx;
+        double x_im = x_lo + ((ic - ng) + 0.0) * dx;
+        for (int j_face = 0; j_face < ny + 1 + 2 * ng; ++j_face) {
+            double yf = y_lo + ((j_face - ng) + 0.0) * dy;
+            double By_pert = -(Az(x_ip, yf) - Az(x_im, yf)) / dx;
+            h_Byf[ic * (sy + 1) + j_face] = By0_ref + By_pert;
+        }
+    }
+    // Cell-centred fields: reconstruct Bx_cc, By_cc from faces; velocity
+    // and pressure direct from rotated eigenvector.
+    for (int ic = 0; ic < nx; ++ic) {
+        for (int jc = 0; jc < ny; ++jc) {
+            double xc = x_lo + (ic + 0.5) * dx;
+            double yc = y_lo + (jc + 0.5) * dy;
+            double phase = kx * xc + ky * yc;
+            double dW = A * std::cos(phase);
+            double r = rho0 + dW * r_rho;
+            double vx_cart, vy_cart;
+            rotate_v(dW * r_vpara, dW * r_vperp_y, vx_cart, vy_cart);
+            double ux = v0x + vx_cart;
+            double uy =       vy_cart;
+            double uz =       dW * r_vperp_z;
+            double Bz_val = Bz0 + dW * r_Bz_k;
+            double P = p0 + dW * r_P;
+            // Bx_cc, By_cc from face averages (consistent with runtime)
+            double Bxc = 0.5 * (h_Bxf[(ic + ng)     * sy + (jc + ng)]
+                              + h_Bxf[(ic + ng + 1) * sy + (jc + ng)]);
+            double Byc = 0.5 * (h_Byf[(ic + ng) * (sy + 1) + (jc + ng)]
+                              + h_Byf[(ic + ng) * (sy + 1) + (jc + ng + 1)]);
+            int c = (ic + ng) * sy + (jc + ng);
+            set_cell(h_rho, h_mx, h_my, h_mz, h_E, h_Bz_cc,
+                     c, r, ux, uy, uz, Bxc, Byc, Bz_val, P, gamma);
+        }
+    }
+    size_t nb_cell = (size_t)ncell * sizeof(double);
+    CUDA_CHECK(cudaMemcpy(d_rho, h_rho.data(), nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mx,  h_mx.data(),  nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_my,  h_my.data(),  nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_mz,  h_mz.data(),  nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_E,   h_E.data(),   nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Bz_cc, h_Bz_cc.data(), nb_cell, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Bxf, h_Bxf.data(),
+                          (size_t)nfx * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_Byf, h_Byf.data(),
+                          (size_t)nfy * sizeof(double), cudaMemcpyHostToDevice));
+    std::fprintf(stderr,
+        "  AthenaMHD linwave oblique IC: mode=%d, k=(%d,%d), θ=%.3f, A=%.3e\n",
+        (int)mode, kx_int, ky_int, std::atan2(ky, kx), A);
+}
+
 void AthenaMHDSolver::init_field_loop(double v_adv_x, double v_adv_y,
                                       double R, double A0) {
     // Gardiner-Stone 2005 Fig 3.  Uniform background + cylindrical B

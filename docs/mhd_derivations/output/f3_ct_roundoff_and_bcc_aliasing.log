@@ -1,0 +1,12 @@
+
+════════════════════════════════════════════════════════════
+  F3 — CT round-off + cell-centred B_cc aliasing
+════════════════════════════════════════════════════════════
+  [OK] round-off bound: random-walk = worst-case / √n_step.
+  numeric: worst-case = 1.14e-09, random-walk = 1.14e-11
+           (A3 measured divB = 1.8e-15 → below both bounds by ≥ 4 orders of magnitude)
+  [OK] midpoint reconstruction: ME_cc − ME_true = O(h²) for smooth B.
+  [OK] B_cc aliasing at r=R kink: ΔME_cc = O(A₀² h/R), non-monotonic in t.
+  → wrote output/f3_ct_roundoff_and_bcc_aliasing.latex.tex
+
+All F3 identities verified.

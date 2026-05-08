@@ -134,6 +134,14 @@ struct AthenaMHDSolver {
     enum LinearWaveMode { FAST_M=0, ALFVEN=1, SLOW=2, ENTROPY=3 };
     void init_linear_wave(LinearWaveMode mode, int k, double A = 1e-6);
 
+    // Oblique linear wave (§F1 rotated-eigenvector IC, Stone+08 §6.2).
+    // Wave vector k = 2π(kx_int/Lx, ky_int/Ly); vector components of
+    // the eigenvector rotated by θ = atan2(ky/Ly, kx/Lx).
+    // Background same as init_linear_wave.  Amplitude A = 1e-6 default.
+    void init_linear_wave_oblique(LinearWaveMode mode,
+                                  int kx_int, int ky_int,
+                                  double A = 1e-6);
+
     // Field-loop (Gardiner-Stone 2005 Fig 3): circular B_z-polarised
     // flux tube of radius R=0.3 advected diagonally with v=(1, 0.5).
     // Locks div·B = 0 across 10 crossings.

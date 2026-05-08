@@ -398,6 +398,27 @@ if(USE_GPU)
                  tests/test_athena_mhd_benchmarks.cu
                  EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
                                src/gpu/explicit/athena_mhd_kernels.cu)
+    # Phase A3 — long-time field-loop CT lock + ME decay diagnostic
+    add_gpu_test(athena_mhd_field_loop_long
+                 tests/test_athena_mhd_field_loop_long.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    set_tests_properties(athena_mhd_field_loop_long
+                         PROPERTIES LABELS "slow")
+    # Phase A4 — CPAW 2D long-time decay + η_eff(N) extraction
+    add_gpu_test(athena_mhd_cpaw_longtime
+                 tests/test_athena_mhd_cpaw_longtime.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    set_tests_properties(athena_mhd_cpaw_longtime
+                         PROPERTIES LABELS "slow")
+    # Phase A1 — oblique linear-wave 2D convergence (4 modes × 3 res)
+    add_gpu_test(athena_mhd_linwave_oblique
+                 tests/test_athena_mhd_linwave_oblique.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
+    set_tests_properties(athena_mhd_linwave_oblique
+                         PROPERTIES LABELS "slow")
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)
