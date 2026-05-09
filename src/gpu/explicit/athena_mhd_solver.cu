@@ -121,12 +121,12 @@ __global__ void k_athmhd_ghost_y_characteristic_cc(
     double*, double*, double*, double*, double*,
     double*, double*, double*,
     const double*, const double*, const double*,
-    int, double, int, int, int, int, int);
+    int, double, int, int, int, int, int, double);
 __global__ void k_athmhd_ghost_y_characteristic_face(
     double*, double*,
     const double*, const double*, const double*,
     const double*, const double*, const double*,
-    int, double, int, int, int, int);
+    int, double, int, int, int, int, double);
 __global__ void k_athmhd_ghost_y_top_outflow_cc(
     double*, double*, double*, double*, double*,
     double*, double*, double*,
@@ -312,12 +312,13 @@ void AthenaMHDSolver::fill_ghost() {
         //   z̃⁺ = −2 v_x^drv(t), z̃⁻ = absorbing (extrapolated).
         // Top is written as reflect by this kernel; if top_outgoing,
         // we overwrite the top below.
+        double dy_over_H = (hse_H > 0.0) ? (dy / hse_H) : 0.0;
         k_athmhd_ghost_y_characteristic_cc<<<by_grid, dim3(64, 1)>>>(
             d_rho, d_mx, d_my, d_mz, d_E,
             d_Bx_cc, d_By_cc, d_Bz_cc,
             d_driver_f, d_driver_amp, d_driver_phi,
             driver_Nmodes, driver_t_now,
-            nx, ny, ng, sx, sy);
+            nx, ny, ng, sx, sy, dy_over_H);
     } else {
         k_athmhd_ghost_y_reflect_cc<<<by_grid, dim3(64, 1)>>>(
             d_rho, d_mx, d_my, d_mz, d_E, d_Bz_cc, ny, ng, sx, sy);
@@ -422,11 +423,12 @@ void AthenaMHDSolver::fill_ghost() {
         // §E2: bottom Bxf ghost = √ρ_0(−v_drv + ½ z̃⁻), Byf antisym mirror,
         // top reflective (same kernel handles both in a single pass for
         // simplicity of dispatch).
+        double dy_over_H_f = (hse_H > 0.0) ? (dy / hse_H) : 0.0;
         k_athmhd_ghost_y_characteristic_face<<<bf_grid_y, dim3(64, 1)>>>(
             d_Bxf, d_Byf, d_rho, d_mx, d_Bx_cc,
             d_driver_f, d_driver_amp, d_driver_phi,
             driver_Nmodes, driver_t_now,
-            nx, ny, ng, sy);
+            nx, ny, ng, sy, dy_over_H_f);
     } else {
         k_athmhd_ghost_y_reflect_face<<<bf_grid_y, dim3(64, 1)>>>(
             d_Bxf, d_Byf, nx, ny, ng, sy);
@@ -2016,6 +2018,7 @@ void AthenaMHDSolver::init_hse_atmosphere(double g_val, double H,
     y_lo = 0.0; y_hi = Ly;
     dx = Lx / (double)nx;
     dy = Ly / (double)ny;
+    hse_H = H;      // needed by §E2-v3 WKB envelope in ghost fill
 
     const double cs2 = g_val * H;   // isothermal sound speed²
 

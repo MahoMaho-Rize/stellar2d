@@ -1192,7 +1192,8 @@ __global__ void k_athmhd_ghost_y_characteristic_cc(
     const double* __restrict__ d_amp,
     const double* __restrict__ d_phi,
     int N_modes, double t_now,
-    int nx, int ny, int ng, int sx, int sy)
+    int nx, int ny, int ng, int sx, int sy,
+    double dy_over_H)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y * blockDim.y + threadIdx.y;
@@ -1237,30 +1238,24 @@ __global__ void k_athmhd_ghost_y_characteristic_cc(
     double zm_int   = vx_int + Bx_int / sqrt_r_int;   // x-channel
     double zmz_int  = vz_int + Bz_int / sqrt_r_int;   // z-channel (no driver)
 
-    // Ghost density — HSE mirror (the v1 recipe already did this, so
-    // ρ_gh matches exactly what the reflect_cc kernel would have
-    // written).  ρ_d = ρ at the anchor row (y_d).
-    double r_gh    = rho[cBs];
+    // Ghost ρ: keep the reflect-mirror value for HSE channels.  For the
+    // Alfvén inversion B_x_gh = √ρ_gh · ½(z⁺+z⁻) we also use this same
+    // √ρ_gh — consistent with a linearised Alfvén invariant evaluated
+    // at the ghost row as viewed by the Riemann solver (which sees
+    // whatever ρ we write).
+    double r_gh      = rho[cBs];
     double sqrt_r_gh = sqrt(fmax(r_gh, 1e-30));
 
-    // WKB envelope factors (identity 9).  ρ_int here is ρ at y_d (the
-    // anchor row), and ρ_gh is the ghost density just read from the HSE
-    // mirror array.
-    // Empirical envelope factor — *not* the pure WKB amplitude rescale.
-    // Three variants tested on T7 (Ny=256):
-    //   S = 1                                       → error −8.11%
-    //   S = (ρ_gh_mirror/ρ_int)^{1/4}  (phys dir)   → error −8.40%
-    //   S = (ρ_int/ρ_gh_mirror)^{1/4}  (inverse)    → error −3.67%
-    // The "inverse" direction (S > 1 for g ≥ 1) is the one that works.
-    // It cannot be a pure WKB transport factor because a downgoing Alfvén
-    // wave entering a DENSER medium should de-amplify (S < 1).  The
-    // empirical improvement is therefore an O(Δy/H) compensator for the
-    // combined O(kΔy) phase-slip in the reflect-mirror reference row
-    // (interior  j = ng) and the finite-Δy in the PLM slope seen by the
-    // HLLD Riemann solver at the j = ng-½ face.  We keep the inverse
-    // form because it passes T7 at 3.67%, but flag it as heuristic until
-    // a proper face-centred discrete-WKB derivation replaces it.
-    double S_drv = sqrt(sqrt(r_int / fmax(r_gh, 1e-30)));
+    // §E2-v3 physical WKB envelope.  Anchor y_d is j=ng row centre;
+    // ghost g at y_gh = y_d − (g+1)Δy.  HSE ρ_phys(y_gh) = ρ_d ·
+    // exp((g+1)·Δy/H).  WKB transport of z^± from y_d to y_gh gives
+    //   S_phys(g) = (ρ_d / ρ_phys_gh)^{1/4} = exp(−(g+1)·Δy/(4H)) < 1.
+    // Both z⁺ (upgoing driver) and z⁻ (downgoing mirror) pick up the
+    // same S factor because both are transported between the same
+    // y_d ↔ y_gh endpoints along the same Alfvén characteristic.
+    // When dy_over_H = 0 (caller doesn't set hse_H) S ≡ 1 → v1 kernel.
+    double exponent = -0.25 * dy_over_H * (double)(g + 1);
+    double S_drv = (dy_over_H > 0.0) ? exp(exponent) : 1.0;
     double S_mir = S_drv;
 
     // §E2-v2 ghost Elsässer invariants:
@@ -1280,8 +1275,7 @@ __global__ void k_athmhd_ghost_y_characteristic_cc(
     double vz_gh_ch = 0.5 * (zmz_gh - zpz_gh);
     double Bz_gh_ch = 0.5 * sqrt_r_gh * (zpz_gh + zmz_gh);
 
-    // Non-Alfvén fields: reflect mirror from the symmetric interior cell
-    //   j = ng + g  (standard reflective-y recipe).
+    // Non-Alfvén fields: reflect mirror (ρ, v_y antisym, tangential B).
     double my_gh = -my[cBs];                 // antisymmetric v_y
     double By_gh =  By_cc[cBs];              // tangential B-y, symmetric
 
@@ -1303,6 +1297,8 @@ __global__ void k_athmhd_ghost_y_characteristic_cc(
     //   E_gh = (γ-1)·P_mirror/(γ-1) + KE_gh + ME_gh
     //        = (E[cBs] - KE_mirror - ME_mirror) + KE_gh + ME_gh
     // (the (γ-1) cancels).  This keeps P_ghost = P_mirror = HSE pressure.
+    // Extract P_mirror from E[cBs] with reflect-thermodynamics
+    // (symmetric mirror row P = HSE pressure ρ_mirror·cs²).
     double r_mirror  = rho[cBs];
     double vx_mirror = mx[cBs] / fmax(r_mirror, 1e-30);
     double vy_mirror = -my[cBs] / fmax(r_mirror, 1e-30);   // antisym
@@ -1372,7 +1368,8 @@ __global__ void k_athmhd_ghost_y_characteristic_face(
     const double* __restrict__ d_amp,
     const double* __restrict__ d_phi,
     int N_modes, double t_now,
-    int nx, int ny, int ng, int sy)
+    int nx, int ny, int ng, int sy,
+    double dy_over_H)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int g = blockIdx.y * blockDim.y + threadIdx.y;
@@ -1412,15 +1409,19 @@ __global__ void k_athmhd_ghost_y_characteristic_face(
         int ic_ref = i;
         if (ic_ref >= nx + 2 * ng) ic_ref = nx + 2 * ng - 1;
         int cAnc = cflat(ic_ref, ng, sy);    // anchor row y_d
-        int cMir = cflat(ic_ref, jBs, sy);   // HSE mirror for ρ_gh
+        int cMir = cflat(ic_ref, jBs, sy);   // reflect-mirror row for ρ_gh
         double r_int   = fmax(rho[cAnc], 1e-30);
         double sqrt_r_int = sqrt(r_int);
+        double zm_int  = mx[cAnc] / r_int + Bx_cc[cAnc] / sqrt_r_int;
+        // §E2-v3: use SAME ρ for face-B inversion that the cc kernel uses
+        // (reflect-mirror value) so that v_x_gh, B_x_gh, ρ_gh are mutually
+        // consistent with a pure +v_A Alfvén wave at the ghost row.
         double r_gh    = fmax(rho[cMir], 1e-30);
         double sqrt_r_gh = sqrt(r_gh);
-        double zm_int  = mx[cAnc] / r_int + Bx_cc[cAnc] / sqrt_r_int;
-        double S_env   = sqrt(sqrt(r_int / r_gh));    // (ρ_d/ρ_gh)^(1/4)
-        double zp_gh_v = -2.0 * vx_drv * S_env;
-        double zm_gh_v =  zm_int       * S_env;
+        double expo    = -0.25 * dy_over_H * (double)(g + 1);
+        double S_drv   = (dy_over_H > 0.0) ? exp(expo) : 1.0;
+        double zp_gh_v = -2.0 * vx_drv * S_drv;
+        double zm_gh_v =  zm_int       * S_drv;
         double Bx_gh   = 0.5 * sqrt_r_gh * (zp_gh_v + zm_gh_v);
         Bxf[fx_flat(i, jBd, syfx)] = Bx_gh;
     }

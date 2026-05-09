@@ -202,12 +202,20 @@ static void test_T3_host_device_match() {
     sv.fill_ghost();                 // §E2: dispatch ghost-fill kernel
     std::vector<double> vx_dev;
     read_vx_row(sv, vx_dev);
+    // Ghost v_x in §E2-v3 is v_drv · S with S = exp(-dy/(4H)) for g=0:
+    //   (physical WKB envelope, ghost at y = y_d - dy sits in denser
+    //    gas, so the upgoing wave there has smaller amplitude than at y_d.)
+    // For HSE H, dy = Ly/Ny.  Compute expected ghost amp and compare.
+    double dy = 1.0 / 32.0;   // Ly=1, Ny=32 from this test's init
+    double H_scale = 1.0;     // from init_hse_atmosphere(g=1, H=1, ...)
+    double S_ghost = std::exp(-0.25 * dy / H_scale * 1.0);   // g+1=1
+    double vx_host_scaled = vx_host * S_ghost;
     double max_err = 0.0;
     for (double v : vx_dev)
-        max_err = std::max(max_err, std::fabs(v - vx_host));
-    std::printf("    t=%.6f  v_x host=%.6e  max |dev−host| = %.3e\n",
-                t_test, vx_host, max_err);
-    CHECK_LT(max_err, 1e-12, "E1-T3: device waveform matches host to ULP");
+        max_err = std::max(max_err, std::fabs(v - vx_host_scaled));
+    std::printf("    t=%.6f  v_x host=%.6e  S_ghost=%.6f  max |dev−host·S| = %.3e\n",
+                t_test, vx_host, S_ghost, max_err);
+    CHECK_LT(max_err, 1e-12, "E1-T3: device waveform matches host·S_WKB to ULP");
     sv.destroy();
 }
 
@@ -585,13 +593,13 @@ static void test_T7_wkb_amplitude_growth() {
     std::printf("\n[E1-T7] §E1+§E2 driver WKB: v_⊥ ∝ ρ^{-1/4} growth\n");
     const int    Nx = 16, Ny = 256;      // Ly=2, dy=1/128
     const double Lx = 0.5, Ly = 2.0;
-    const double g_val = 1.0, H = 1.0, rho0 = 1.0, B0_y = 0.5;
+    const double g_val = 1.0, H = 1.0, rho0 = 1.0, B0_y = 0.5;  // T7 canonical
     const double f_drive = 2.0;           // well inside WKB regime
     const double A_rms   = 0.001;         // 0.1% — tightly linear
 
     AthenaMHDSolver sv;
     sv.init(Nx, Ny, Lx, Ly, 5.0/3.0, 0.3);
-    sv.xorder = 2; sv.limiter = 0;
+    sv.xorder = 2; sv.limiter = 0;   // canonical T7 config
     sv.init_hse_atmosphere(g_val, H, rho0, B0_y);
     // §E3 continuum outgoing BC + §E4 PML sponge at the top.  The PML
     // region tapers the Alfvén amplitude to zero over the top 25% of
@@ -640,9 +648,9 @@ static void test_T7_wkb_amplitude_growth() {
         jcs.push_back(jc);
         yc_list.push_back((jc + 0.5) * sv.dy);
     }
-    // For the pass/fail metric we use y1=0.25, y2=1.25 (both outside PML).
-    int jc1 = jcs[0], jc2 = jcs[4];
-    double yc1 = yc_list[0], yc2 = yc_list[4];
+    int k_y1 = 0, k_y2 = 4;
+    int jc1 = jcs[k_y1], jc2 = jcs[k_y2];
+    double yc1 = yc_list[k_y1], yc2 = yc_list[k_y2];
 
     // WKB Alfvén transit to y2:
     //   τ(y2) = (2H/B0_y)(1 − exp(−y2/2H))
@@ -754,8 +762,8 @@ static void test_T7_wkb_amplitude_growth() {
     // 30 digits; matches leading WKB = exp((y2−y1)/(4H)) = 1.28403 to
     // better than 0.01%, so either value works as the benchmark.
     const double R_exact_hankel = 1.283955;
-    double rms1 = rms[0];
-    double rms2 = rms[4];
+    double rms1 = rms[k_y1];
+    double rms2 = rms[k_y2];
     (void)R_exact_hankel;  // also printed below
     double measured = rms2 / std::max(rms1, 1e-30);
     double err      = std::fabs(measured / R_exact_hankel - 1.0);

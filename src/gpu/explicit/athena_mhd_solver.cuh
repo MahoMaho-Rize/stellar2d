@@ -132,6 +132,9 @@ struct AthenaMHDSolver {
     double driver_fmin     = 0.0;
     double driver_fmax     = 0.0;
     int    driver_Nmodes   = 0;
+    // HSE scale height (from init_hse_atmosphere); used by §E2-v3 WKB
+    // envelope factor in characteristic ghost fill.  0 disables scaling.
+    double hse_H           = 0.0;
     // Current driver evaluation time (stashed by apply_driver, read by the
     // characteristic ghost-fill kernels during fill_ghost).  Decoupling
     // the waveform evaluation from ghost filling is the §E2 shift from
