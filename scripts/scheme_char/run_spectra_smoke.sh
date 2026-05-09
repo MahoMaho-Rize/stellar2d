@@ -23,7 +23,7 @@ if [[ ! -x "$BIN" ]]; then
 fi
 
 echo "=== pseudo_spectral forced_turb 256² ==="
-"$BIN" --solver pseudo_spectral --test forced_turb \
+"$BIN" run --solver pseudo_spectral --test forced_turb \
     --nr 256 --ntheta 256 --cfl 0.3 \
     --ps-Lx 1.0 --ps-Ly 1.0 --ps-nu 5e-5 \
     --ps-forcing-eps 0.1 --ps-forcing-kf 32 --ps-forcing-dk 1 \

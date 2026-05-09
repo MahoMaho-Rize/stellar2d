@@ -40,7 +40,7 @@ run_one() {
     fi
     echo "=== ${tag}  res=${nx}  V0=${V0} ==="
     (cd "$dir" && \
-     "$BIN" --solver "$solver" --nr "$nx" --ntheta "$nx" \
+     "$BIN" run --solver "$solver" --nr "$nx" --ntheta "$nx" \
             --tend "$TEND" --diag-interval "$DIAG" \
             --run-base "$dir" --output-interval 10000 \
             $extra >run.log 2>&1)

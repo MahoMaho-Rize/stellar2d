@@ -27,7 +27,7 @@ for amp in $AMPS; do
     ANSL_TD_KIND=strang_nonlinear \
     ANSL_COORD_MAP=tanh ANSL_COORD_BETA=2 \
     ANSL_DNS_PERIODS="$PERIODS" ANSL_DNS_SPP="$SPP" ANSL_RHO_CUT="$RHO_CUT" \
-    ./build/stellar2d --solver anelastic_sl --test dns_triad \
+    ./build/stellar2d run --solver anelastic_sl --test dns_triad \
         --ntheta "$NTHETA" --nr "$NR" --ps-Lx 1 --ps-Ly 1 \
         --ps-k 1 --perturb "$amp" \
         --tend 1.0 --cfl 1.0 --ps-nu 0 2>&1 \

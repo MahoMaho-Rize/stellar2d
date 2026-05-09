@@ -22,6 +22,10 @@ static const std::vector<std::string>& known_flags() {
     static const std::vector<std::string> k = {
         // Tier A new meta flags
         "--help", "--version",
+        // Tier B-1: --config FILE (TOML loader).  parse_cli only consumes
+        // the token; the actual load happens in main() before parse_cli so
+        // that later CLI flags can override TOML values.
+        "--config",
         // Core
         "--test", "--nr", "--ntheta", "--tend", "--cfl",
         "--output-interval", "--mesh", "--solver", "--precond", "--perturb",
@@ -123,6 +127,11 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--test") == 0 && i + 1 < argc)
             cfg.test_case = argv[++i];
+        // --config FILE is consumed here as a no-op; the actual TOML load
+        // already happened in main() (pre-CLI phase) so that CLI flags
+        // that come after --config can still override its values.
+        else if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc)
+            ++i;
         else if (std::strcmp(argv[i], "--nr") == 0 && i + 1 < argc)
             cfg.nr = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--ntheta") == 0 && i + 1 < argc)

@@ -2,7 +2,7 @@
 """Run Exp K Python solver on the SAME CGL grid and profile that CUDA uses.
 
 Usage:
-    ./build/stellar2d --solver anelastic_sl --test gmode_exp_k --nr N ...
+    ./build/stellar2d run --solver anelastic_sl --test gmode_exp_k --nr N ...
        → writes /tmp/ansl_expk/.../gmode_exp_k.csv
 
 Then run this script:

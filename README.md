@@ -178,21 +178,22 @@ All dispatch flags; some are solver-specific (ignored when not applicable).
 | `--rebuild-order <0\|1>` | cart_ale2 | Node-velocity rebuild order (see cart_ale2 notes) |
 | `--shear-aware-av` | cart_ale2 | Reduce Q in shear-dominated cells (needed for Gresho) |
 
-Run `./build/stellar2d --help` equivalent: there is none. Read
-`src/main.cpp` lines 160–250 for the full argument parser.
+Run `./build/stellar2d --help` for the grouped flag reference.
+Tier A (commit 7cd09fe) also hard-errors unknown flags with a Levenshtein
+did-you-mean suggestion; see `docs/design/cli_unification_plan_2026-05-09.md`.
 
 ## Quick-start recipes
 
 ### HSE regression (cart_ale2)
 ```bash
-./build/stellar2d --solver cart_ale2 --test hse \
+./build/stellar2d run --solver cart_ale2 --test hse \
                   --nr 64 --ntheta 64 --remap-order 2 --ppm --tend 0.5
 ```
 Expect `E` conserved to ~10 digits.
 
 ### Canonical KH (Lecoanet / Athena iprob=4)
 ```bash
-./build/stellar2d --solver cart_ale2 --test kh_lecoanet \
+./build/stellar2d run --solver cart_ale2 --test kh_lecoanet \
                   --nr 256 --ntheta 512 --cfl 0.3 \
                   --bc-x periodic --bc-y periodic \
                   --remap-order 2 --ppm \
@@ -203,13 +204,13 @@ python scripts/pseudo_spectral/spectrum_kh.py runs/kh_lecoanet_256x512_*
 
 ### Stellar oscillation (low-Mach JFNK)
 ```bash
-./build/stellar2d --solver lowmach --test lane_emden_perturbed \
+./build/stellar2d run --solver lowmach --test lane_emden_perturbed \
                   --nr 64 --ntheta 32 --tend 5.0
 ```
 
 ### Buoyant bubble (FAS multigrid)
 ```bash
-./build/stellar2d --solver fas --test bubble --nr 128 --ntheta 64 --tend 0.5
+./build/stellar2d run --solver fas --test bubble --nr 128 --ntheta 64 --tend 0.5
 ```
 
 ## Visualization scripts
@@ -234,7 +235,7 @@ Three-layer test organisation (2026-05-07 refactor, see
 1. **`tests/test_*.cu`** — in-process CUDA unit / regression locks
    (Strang, FAS, lowmach, cart_ale2 Phase 1 regression guards).
 2. **`tst/test_*/test_*_gpu.py`** — end-to-end pytest suite. Each test
-   launches `build/stellar2d --compute-error`, which writes a schema-
+   launches `build/stellar2d run --compute-error`, which writes a schema-
    documented `<testname>-errors.dat`; pytest reads it and asserts L1 /
    convergence-ratio thresholds. **No analytic solvers in Python.**
 3. **`tests/test_*.py`** — legacy Python tests (CPU polar hydro).

@@ -168,11 +168,11 @@ IE 守恒到 10 位,总 E drift 1.2%。跑速 6500 steps/s on 256×512 (RTX 4070
 
 ```bash
 # HSE 回归(机器精度守恒)
-./stellar2d --solver cart_ale2 --test hse --nr 64 --ntheta 64 \
+./stellar2d run --solver cart_ale2 --test hse --nr 64 --ntheta 64 \
             --remap-order 2 --ppm --tend 0.5
 
 # Lecoanet canonical KH(canonical benchmark)
-./stellar2d --solver cart_ale2 --test kh_lecoanet \
+./stellar2d run --solver cart_ale2 --test kh_lecoanet \
             --nr 256 --ntheta 512 --cfl 0.3 \
             --bc-x periodic --bc-y periodic \
             --remap-order 2 --ppm --ppm-space prim --ppm-char \

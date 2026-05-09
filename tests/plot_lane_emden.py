@@ -172,7 +172,7 @@ else:
 
 # ── Provenance ───────────────────────────────────────────────────────
 tend = times[-1] if times else 0.05
-run_cmd = f'./stellar2d --test lane_emden --nr {nr} --ntheta {nt} --tend {tend}'
+run_cmd = f'./stellar2d run --test lane_emden --nr {nr} --ntheta {nt} --tend {tend}'
 add_provenance_footer(fig, __file__, run_cmd=run_cmd)
 
 plt.tight_layout(rect=[0, 0.03, 1, 1])

@@ -29,7 +29,7 @@
 
 **Command**:
 ```bash
-./stellar2d --solver cart_ale2 --test sod \
+./stellar2d run --solver cart_ale2 --test sod \
     --nr 256 --ntheta 256 --tend 0.2 \
     --cfl 0.3 --remap-order 2 --bc-x reflect --bc-y reflect \
     --vtk-dt 0.2 --run-dir runs/sod_256
@@ -60,7 +60,7 @@ L1 比 Godunov (Athena vl2) 高约 2×,因为 remap 上的 donor-cell
 
 **Command**:
 ```bash
-./stellar2d --solver cart_ale2 --test sedov2d \
+./stellar2d run --solver cart_ale2 --test sedov2d \
     --nr 256 --ntheta 256 --tend 0.05 \
     --cfl 0.3 --remap-order 2 --bc-x reflect --bc-y reflect \
     --vtk-dt 0.05 --run-dir runs/sedov_256
@@ -91,7 +91,7 @@ exact 后果:`ρ_post = 16`, `p_post = 16/3`, shock 速度 1/3。
 
 **Command**:
 ```bash
-./stellar2d --solver cart_ale2 --test noh \
+./stellar2d run --solver cart_ale2 --test noh \
     --nr 256 --ntheta 256 --tend 2.0 \
     --cfl 0.2 --remap-order 2 --bc-x reflect --bc-y reflect \
     --vtk-dt 2.0 --run-dir runs/noh_256
@@ -130,7 +130,7 @@ clamp 为 0,**掐断 IC 能量来源**,导致 ρ_post 根本无法达到 16。
 
 **Command**:
 ```bash
-./stellar2d --solver cart_ale2 --test gresho \
+./stellar2d run --solver cart_ale2 --test gresho \
     --nr 128 --ntheta 128 --tend 3.0 \
     --cfl 0.3 --remap-order 2 --bc-x reflect --bc-y reflect \
     --vtk-dt 3.0 --run-dir runs/gresho_128
@@ -157,7 +157,7 @@ via `CartAle2Solver::compute_gresho_error` (inside r<0.5 disk).
 
 **Command**:
 ```bash
-./stellar2d --solver cart_ale2 --test yee_vortex \
+./stellar2d run --solver cart_ale2 --test yee_vortex \
     --nr 256 --ntheta 256 --tend 10.0 \
     --cfl 0.3 --remap-order 2 --bc-x periodic --bc-y periodic \
     --vtk-dt 10.0 --run-dir runs/yee_256
@@ -192,7 +192,7 @@ STELLAR2D_BIN=../build/stellar2d pytest test_ale2 -m fast -v
 
 ```bash
 for t in sedov2d noh; do
-    ./stellar2d --solver cart_ale2 --test $t --nr 512 --ntheta 512 ...
+    ./stellar2d run --solver cart_ale2 --test $t --nr 512 --ntheta 512 ...
     python3 scripts/tests_ale2/${t}_compare.py --run-dir runs/${t}_512
 done
 ```

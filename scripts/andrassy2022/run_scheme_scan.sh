@@ -36,7 +36,7 @@ run_ale2 () {
     local res=$1 tag=$2 limflag=$3 ppmflag=$4 outdir=$5
     echo "[$(timestamp)] ==== ale2 $res $tag ===="
     mkdir -p "$outdir"
-    $BIN --solver cart_ale2 --test andrassy2022 \
+    $BIN run --solver cart_ale2 --test andrassy2022 \
         --nr "$res" --ntheta "$res" --cfl 0.4 \
         --ic-slab "data/andrassy2022/pilot_ic_n${res}.txt" \
         --bc-x periodic --bc-y reflect \
@@ -52,7 +52,7 @@ run_vl2 () {
     local res=$1 limtag=$2 limflag=$3 outdir=$4
     echo "[$(timestamp)] ==== vl2 $res $limtag ===="
     mkdir -p "$outdir"
-    $BIN --solver athena_vl2 --test andrassy2022 \
+    $BIN run --solver athena_vl2 --test andrassy2022 \
         --nr "$res" --ntheta "$res" --cfl 0.4 \
         --ic-slab "data/andrassy2022/pilot_ic_n${res}.txt" \
         --bc-x periodic --bc-y reflect \

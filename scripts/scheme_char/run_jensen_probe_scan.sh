@@ -33,7 +33,7 @@ run_one() {
     mkdir -p "$dir"
     echo "=== ${tag}  k=${kk} ==="
     (cd "$dir" && \
-     "$BIN" --solver "$solver" --nr $N --ntheta $N --cfl 0.3 \
+     "$BIN" run --solver "$solver" --nr $N --ntheta $N --cfl 0.3 \
             --tend $TEND --diag-interval $DIAG \
             --shear-V0 $V0 --shear-k "$kk" --shear-rho 1.0 --shear-P 1.0 \
             --run-base "$dir" --output-interval 10000 \

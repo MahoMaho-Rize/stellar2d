@@ -105,7 +105,7 @@ run_smoke() {
     rm -rf "$dir"; mkdir -p "$dir"
     echo "=== $tag ($solver / $testcase) ==="
     local rc=0
-    "$BIN" --solver "$solver" --test "$testcase" \
+    "$BIN" run --solver "$solver" --test "$testcase" \
         --run-base "$dir" $extra >"$dir/run.log" 2>&1 || rc=$?
     check_smoke "$tag" "$tag" "$rc" "$dir"
 }

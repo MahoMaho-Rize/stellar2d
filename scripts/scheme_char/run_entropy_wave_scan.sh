@@ -31,7 +31,7 @@ run_one() {
     mkdir -p "$dir"
     echo "=== ${tag}  res=${nx} ==="
     (cd "$dir" && \
-     "$BIN" --solver "$solver" --nr "$nx" --ntheta "$nx" --cfl 0.3 \
+     "$BIN" run --solver "$solver" --nr "$nx" --ntheta "$nx" --cfl 0.3 \
             --ewave-rho0 1.0 --ewave-P0 1.0 --ewave-u0 "$U0" \
             --ewave-A "$A" --ewave-k "$K" --ewave-periods "$PERIODS" \
             --diag-interval 10000 --vtk-dt 999 \

@@ -350,14 +350,14 @@ for each cell (i, j):
 
 ### Test 1: HSE stability (unperturbed Lane-Emden)
 ```
-./stellar2d --solver wb2d --test lane_emden --nr 128 --ntheta 128 --tend 10 --mesh mass
+./stellar2d run --solver wb2d --test lane_emden --nr 128 --ntheta 128 --tend 10 --mesh mass
 ```
 Expect: max|v| < 1e-6, ΔM/M < 1e-12, ΔE/|E₀| < 1e-6
 
 ### Test 2: Radial perturbation vs radial1d
 ```
-./stellar2d --solver wb2d --test lane_emden_perturbed --nr 256 --ntheta 64 --tend 10 --mesh mass
-./stellar2d --solver radial1d --test lane_emden_perturbed --nr 256 --tend 10
+./stellar2d run --solver wb2d --test lane_emden_perturbed --nr 256 --ntheta 64 --tend 10 --mesh mass
+./stellar2d run --solver radial1d --test lane_emden_perturbed --nr 256 --tend 10
 ```
 Expect: mass conservation comparable (flux-form ~1e-10, not exact 0); energy drift within 2× of radial1d; Mach and |v| profiles qualitatively matching at similar t.
 
@@ -366,7 +366,7 @@ Any symmetric IC should maintain max|θ-stddev(ρ)|/mean(ρ) < 1e-12 for all t.
 
 ### Test 4: Bubble (non-symmetric)
 ```
-./stellar2d --solver wb2d --test bubble --nr 128 --ntheta 128 --tend 1 --mesh mass
+./stellar2d run --solver wb2d --test bubble --nr 128 --ntheta 128 --tend 1 --mesh mass
 ```
 Expect: stable evolution, no runaway; qualitative bubble rise pattern.
 

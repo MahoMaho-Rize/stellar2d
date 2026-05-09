@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Plot the MESA-driven ignition trajectory.
 
-Runs ./build/stellar2d over each profile1..8 (or loads cached values)
+Runs ./build/stellar2d run over each profile1..8 (or loads cached values)
 and plots T_c(t), ρ_c(t), L_nuc(t). Each point is radial1d's diagnostic
 after one integration step from that MESA IC; the trajectory MESA took
 to reach that state is summarised by the x-axis (star_age).
@@ -22,7 +22,7 @@ def run_one(prof_path, nz=128):
          prof_path, ic], check=True, stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL)
     res = subprocess.run([
-        "./build/stellar2d", "--solver", "radial1d", "--test", "lane_emden",
+        "./build/stellar2d", "run", "--solver", "radial1d", "--test", "lane_emden",
         "--nr", str(nz), "--eos", "helmholtz",
         "--ic-mesa", ic, "--ic-mesa-seed-T",
         "--G", "6.674e-8", "--tend", "2", "--output-interval", "1",

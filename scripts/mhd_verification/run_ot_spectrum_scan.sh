@@ -33,6 +33,7 @@ for N in 128 256 512; do
     mkdir -p "$BASE"
     echo "  [N=$N] running OT to t=0.5 ..."
     "$BIN" \
+        run \
         --solver athena_mhd \
         --test orszag_tang \
         --nr $N --ntheta $N \

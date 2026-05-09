@@ -457,7 +457,7 @@ pixi run build-gpu
 
 **跑目前最好看的 KH 算例 (Re=2×10⁵, k=7, IFRK+skew)**:
 ```bash
-./build/stellar2d --solver pseudo_spectral --test kh_shear \
+./buil./stellar2d run --solver pseudo_spectral --test kh_shear \
   --nr 1024 --ntheta 1024 --tend 40 \
   --ps-nu 5e-6 --ps-vshear 0.5 --ps-k 7 --perturb 0.1 \
   --output-interval 2000 --vtk-dt 0.02 \
@@ -467,7 +467,7 @@ pixi run build-gpu
 
 **跑 forced turbulence (1024² condensate regime, -4 enstrophy cascade)**:
 ```bash
-./build/stellar2d --solver pseudo_spectral --test forced_turb \
+./buil./stellar2d run --solver pseudo_spectral --test forced_turb \
   --nr 1024 --ntheta 1024 --tend 30 \
   --ps-nu 5e-5 --ps-forcing-eps 0.1 --ps-forcing-kf 8 --ps-forcing-dk 1 \
   --output-interval 2000 --vtk-dt 0.1 \

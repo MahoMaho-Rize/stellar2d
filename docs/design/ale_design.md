@@ -247,13 +247,13 @@ struct Ale2DSolver {
 
 ### Test 1: HSE (unperturbed)
 ```
-./stellar2d --solver ale2d --test lane_emden --nr 128 --ntheta 32 --tend 100
+./stellar2d run --solver ale2d --test lane_emden --nr 128 --ntheta 32 --tend 100
 ```
 Expect: nodes stationary to relative 1e-10; ΔM = 0 exactly; ΔE/\|E\| < 1e-6.
 
 ### Test 2: Radial perturbation (vs radial1d)
 ```
-./stellar2d --solver ale2d --test lane_emden_perturbed --nr 256 --ntheta 32 --tend 10
+./stellar2d run --solver ale2d --test lane_emden_perturbed --nr 256 --ntheta 32 --tend 10
 ```
 Expect:
 - ΔM = 0 (exact by construction)

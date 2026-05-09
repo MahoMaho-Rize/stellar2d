@@ -238,7 +238,7 @@ for (int k = 0; k < 4; ++k) {
 ### 5.1 HSE static test(首要)
 
 ```
-./stellar2d --solver ale2d --test lane_emden --nr 128 --ntheta 32 --tend 100
+./stellar2d run --solver ale2d --test lane_emden --nr 128 --ntheta 32 --tend 100
 ```
 
 **期望**:
@@ -257,7 +257,7 @@ for (int k = 0; k < 4; ++k) {
 ### 5.3 径向扰动 vs radial1d
 
 ```
-./stellar2d --solver ale2d --test lane_emden_perturbed --nr 256 --ntheta 32 --tend 10
+./stellar2d run --solver ale2d --test lane_emden_perturbed --nr 256 --ntheta 32 --tend 10
 ```
 
 **期望**:

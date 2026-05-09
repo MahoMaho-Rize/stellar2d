@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ./build/stellar2d \
+    run \
     --solver pseudo_spectral \
     --test quad_vortex_merger \
     --nr 2048 --ntheta 2048 \

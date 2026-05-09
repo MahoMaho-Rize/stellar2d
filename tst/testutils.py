@@ -54,7 +54,9 @@ def run_stellar2d(args: list[str], run_base: Path,
         raise RuntimeError(
             f"stellar2d binary not found at {bin_path}. "
             f"Build first (cmake + make) or set STELLAR2D_BIN.")
-    full_args = [str(bin_path)] + args + ["--run-base", str(run_base)]
+    # Tier B-1: stellar2d now requires a "run" subcommand before flags.
+    # See docs/design/cli_unification_plan_2026-05-09.md.
+    full_args = [str(bin_path), "run"] + args + ["--run-base", str(run_base)]
     cp = subprocess.run(
         full_args,
         cwd=run_base,

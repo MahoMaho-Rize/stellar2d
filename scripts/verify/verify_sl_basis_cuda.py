@@ -6,7 +6,7 @@ reference from scripts/reduced_pressure_chebyshev.py.
 Compares eigenvalues mu_n and the |W̃|_max signature on a common ny grid.
 
 Usage:
-  ./build/stellar2d --solver anelastic_sl --test sl_basis_check \
+  ./build/stellar2d run --solver anelastic_sl --test sl_basis_check \
       --nr N --ntheta 256 --ps-Lx L --ps-Ly L --run-base /tmp/ansl_test
 
   python scripts/verify_sl_basis_cuda.py /tmp/ansl_test/sl_basis_check_*/sl_basis.csv

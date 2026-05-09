@@ -27,7 +27,7 @@ run_ale2 () {
     local tag=$1 limflag=$2 ppmflag=$3 outdir=$4
     echo "[$(timestamp)] ==== ale2 ${RES} $tag ===="
     mkdir -p "$outdir"
-    $BIN --solver cart_ale2 --test andrassy2022 \
+    $BIN run --solver cart_ale2 --test andrassy2022 \
         --nr "$RES" --ntheta "$RES" --cfl 0.4 \
         --ic-slab "data/andrassy2022/pilot_ic_n${RES}.txt" \
         --bc-x periodic --bc-y reflect \

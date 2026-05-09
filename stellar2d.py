@@ -107,7 +107,7 @@ def cmd_run(args):
         print("Error: stellar2d binary not found. Run `./stellar2d.py build` first.")
         sys.exit(1)
 
-    cmd = [str(binary)]
+    cmd = [str(binary), "run"]
     cmd += ["--test", args.test]
     cmd += ["--nr", str(args.nr)]
     cmd += ["--ntheta", str(args.ntheta)]

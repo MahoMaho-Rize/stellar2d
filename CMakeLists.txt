@@ -29,6 +29,7 @@ set(SOURCES
     src/cli/suggest.cpp
     src/cli/help.cpp
     src/cli/config_dump.cpp
+    src/cli/config_loader.cpp
     src/sim/helpers.cpp
     src/sim/setup.cpp
     src/sim/run_loop.cpp
@@ -169,6 +170,11 @@ set(GPU_INCLUDE_DIRS
     src/gpu/radial1d
 )
 target_include_directories(stellar2d PRIVATE ${GPU_INCLUDE_DIRS})
+
+# toml++ v3.4.0 single-header drop-in — see third_party/tomlplusplus/README.md.
+# Used by src/cli/config_loader.cpp to parse `stellar2d run --config FILE`
+# and the `run_dir/config.toml` paper trail (cli_unification_plan_2026-05-09.md §6).
+target_include_directories(stellar2d PRIVATE third_party/tomlplusplus)
 
 set(AMGX_DIR "" CACHE PATH "Path to AmgX installation")
 
