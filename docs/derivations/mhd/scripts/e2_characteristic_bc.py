@@ -279,8 +279,10 @@ def main():
           "cell-centred formula.")
 
     # ─────────────────────────────────────────────────────────────────
-    # Identity 9 (E2-v2) — WKB-envelope extension of Riemann invariants in
-    # an isothermal exponentially-stratified atmosphere.
+    # Identity 9 (E2-v2 empirical) — heuristic amplitude scaling of the
+    # ghost Elsässer invariants that EMPIRICALLY improves T7 from -7.5%
+    # to -3.7% at Ny=256.  NOT pure WKB — see A/B/C note at the end of
+    # this block.
     #
     # Background: ρ_0(y) = ρ_d · exp(-(y - y_d)/H) with scale height H.
     # v_A(y) = B_{y0}/√ρ_0(y) ∝ exp(+(y - y_d)/(2H)).  In the WKB limit
@@ -406,15 +408,53 @@ def main():
     # z^- extrapolation — still future §E2-v3 work.)
     eps_mismatch = (rho_int/rho_gh)**sp.Rational(1, 4) - 1
     ld.add(
-        "E2-v2 WKB-envelope mismatch factor (v1 residual)",
-        r"\varepsilon_{\text{WKB}} = "
-        r"\left(\frac{\rho_{\text{int}}}{\rho_{\text{gh}}}\right)^{1/4} - 1"
-        r" \;\approx\; \frac{\Delta y}{4H}\; "
-        r"\text{(for a single ghost layer, leading order in } \Delta y/H\text{)}",
-        label="eq:E2v2_epsilon",
+        "E2-v2 empirical scaling factor (heuristic, not physical WKB)",
+        r"S_{\text{emp}} = "
+        r"\left(\frac{\rho_{\text{int}}}{\rho_{\text{gh,mirror}}}\right)^{1/4},\quad"
+        r"\rho_{\text{gh,mirror}} = \rho_{\text{int}}\,e^{-(g+1)\Delta y/H}"
+        r" \;\Rightarrow\; S_{\text{emp}} = e^{+(g+1)\Delta y/(4H)}",
+        label="eq:E2v2_S_empirical",
     )
-    print("  [OK] E2-v2 reflection = 0 for arbitrary ρ(y); v1 residual is "
-          "O(Δy/(4H)) per ghost layer.")
+    print("  [OK] E2-v2 reflection = 0 for arbitrary ρ(y) (linear identity).")
+
+    # ─────────────────────────────────────────────────────────────────
+    # Identity 12 (honest numerical memo) — the empirically-best S in
+    # the kernel is NOT the physical WKB transport factor.
+    #
+    # Physical WKB:  downgoing Alfvén z^- at y_gh (below y_d, denser gas)
+    #   satisfies  |z^-|_phys_gh = |z^-|_int · (ρ_int / ρ_phys_gh)^{1/4}
+    #   with ρ_phys_gh = ρ_int · exp(+(g+1)Δy/H) (HSE below y_d).
+    #   Therefore S_phys = exp(-(g+1)Δy/(4H)) < 1.
+    #
+    # The kernel reads ρ_gh from the REFLECT-MIRROR row (ng+g, above y_d),
+    # which is HSE-correct for a mirrored atmosphere but has ρ_gh_mirror =
+    #   ρ_int · exp(-(g+1)Δy/H) < ρ_int.  So
+    #   S_mirror = (ρ_int / ρ_gh_mirror)^{1/4} = exp(+(g+1)Δy/(4H)) > 1.
+    # S_mirror is the INVERSE of S_phys.
+    #
+    # T7 @ Ny=256 A/B/C scan:
+    #   S ≡ 1                 ⇒  error = -8.11%
+    #   S = S_phys (<1)       ⇒  error = -8.40%     ← "correct" direction
+    #   S = S_mirror (>1)     ⇒  error = -3.67%     ← inverse, wins
+    # The winning variant CANNOT be pure WKB transport.  It is likely
+    # compensating a COMBINED discretisation error:
+    #   • O(kΔy) phase slip between j=ng mirror row and the true
+    #     outgoing-wave phase at the ghost cell centre.
+    #   • PLM-slope finite-Δy in the HLLD Riemann solver at j=ng-½.
+    # Both scale ∝ Δy.  A true WKB closure would need ρ_phys_gh, but
+    # the mirror-ρ form provides a tight numerical match regardless.
+    # ─────────────────────────────────────────────────────────────────
+    ld.add(
+        "E2-v2 A/B/C scan (Ny=256 T7 error vs exact Hankel)",
+        r"S \equiv 1 \Rightarrow -8.11\%,\quad "
+        r"S = S_{\text{phys}} \Rightarrow -8.40\%,\quad "
+        r"S = S_{\text{mirror}} \Rightarrow \mathbf{-3.67\%}\;"
+        r"\text{(inverse direction, not pure WKB — empirical compensator)}",
+        label="eq:E2v2_AB_scan",
+    )
+    print("  [MEMO] E2-v2 empirical S is inverse of physical WKB;")
+    print("         T7 error -8.1% → -3.7% is numerical cancellation,")
+    print("         not a clean WKB amplitude rescaling.")
 
     # ─────────────────────────────────────────────────────────────────
     # LaTeX dump
