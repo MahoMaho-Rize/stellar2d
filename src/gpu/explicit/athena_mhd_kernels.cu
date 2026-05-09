@@ -1143,38 +1143,795 @@ __global__ void k_athmhd_cool_chromo(
 }
 
 // ============================================================
-// §E1 stochastic broadband driver.
-//   v_x(t, y = bottom) = Σ_N A_N · sin(2π f_N t + φ_N)
-// where the amplitude normalisation was computed on the host
-// (see init_stochastic_driver).  Only the j = ng interior row is
-// touched.  KE in E is updated consistently with the new v_x.
+// §E2 Characteristic inner BC for 2D MHD (replaces interior-SET driver).
+//
+// Ghost-fill formulas (derived sympy-verified in §E2):
+//   Let  v_x^drv(t) = Σ_N A_N · sin(2π f_N t + φ_N)      (§E1 waveform)
+//   Alfvén Riemann invariants (B_0 = B_y0 ŷ):
+//       z̃⁺ = -v_x + B_x/√ρ_0  propagates at +v_A (incoming into domain)
+//       z̃⁻ = +v_x + B_x/√ρ_0  propagates at −v_A (outgoing to bottom)
+//   BC:  z̃⁺|ghost = −2 v_x^drv(t)  (prescribed incoming)
+//        z̃⁻|ghost = z̃⁻|interior    (absorbing outgoing)
+//   Invert:
+//       v_x|ghost = v_x^drv + ½(v_x^int + B_x^int/√ρ_0)
+//       B_x|ghost = √ρ_0 · [−v_x^drv + ½(v_x^int + B_x^int/√ρ_0)]
+//
+// Applied only at bottom (j < ng) in a y-reflect run.  Top boundary
+// stays reflective (handled by k_athmhd_ghost_y_reflect_*).  Other
+// fields (ρ, v_y, v_z, B_z, P for E) mirror the reflective recipe so
+// HSE is preserved.  E is reconstructed from the new (v_x, B_x, v_y,
+// v_z, B_z, ρ, P) on the ghost.
+//
+// Interior side of the Alfvén invariant uses the **first interior row**
+// (j = ng), which is the closest neighbour to the ghost for Riemann
+// solving — same location the old interior-SET kernel used to overwrite.
+//
+// z-polarised Alfvén channel: same formula with v_z^drv = 0.
 // ============================================================
-__global__ void k_athmhd_driver_apply(
-    const double* __restrict__ rho,
+__global__ void k_athmhd_ghost_y_characteristic_cc(
+    double* __restrict__ rho,
     double* __restrict__ mx,
     double* __restrict__ my,
     double* __restrict__ mz,
     double* __restrict__ E,
+    double* __restrict__ Bx_cc,
+    double* __restrict__ By_cc,
+    double* __restrict__ Bz_cc,
     const double* __restrict__ d_f,
     const double* __restrict__ d_amp,
     const double* __restrict__ d_phi,
     int N_modes, double t_now,
-    int nx, int ng, int sy)
+    int nx, int ny, int ng, int sx, int sy)
 {
-    int ic = blockIdx.x * blockDim.x + threadIdx.x;
-    if (ic >= nx) return;
-    int c = (ic + ng) * sy + ng;   // j = ng row
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || g >= ng) return;
+
+    // Driver waveform v_x^drv (shared across all x, as per §E1 simplification
+    // "1D-photospheric-driver-in-2D").  Re-evaluated per thread; fine since
+    // N_modes is small (≤ 256 in practice).
     double two_pi = 6.283185307179586;
-    double vx_new = 0.0;
+    double vx_drv = 0.0;
     for (int n = 0; n < N_modes; ++n) {
-        vx_new += d_amp[n] * sin(two_pi * d_f[n] * t_now + d_phi[n]);
+        vx_drv += d_amp[n] * sin(two_pi * d_f[n] * t_now + d_phi[n]);
     }
-    double r   = fmax(rho[c], 1e-30);
-    double vx_old = mx[c] / r;
-    double vy  = my[c] / r;
-    double vz  = mz[c] / r;
-    double ke_old = 0.5 * r * (vx_old * vx_old + vy * vy + vz * vz);
-    double ke_new = 0.5 * r * (vx_new * vx_new + vy * vy + vz * vz);
-    mx[c] = r * vx_new;
-    E[c] += (ke_new - ke_old);
+
+    // ---- Bottom ghost row g ∈ [0, ng), jBd = ng - 1 - g ----
+    // Mirror-interior row for BOTH the Alfvén invariant and the
+    // non-Alfvén reflective fields: jBs = ng + g.  Using j=ng for all
+    // ghost layers flattened the PLM slope in the y-reconstruction and
+    // produced an O(A_rms²) spurious mass flux at the j=ng-½ face.
+    int jBd = ng - 1 - g;
+    int jBs = ng + g;                       // mirror interior row
+    int cBd = cflat(i, jBd, sy);
+    int cBint = cflat(i, jBs, sy);          // interior reference follows g
+
+    // Read interior primitives needed for z̃⁻ and polarisation.
+    double r_int   = fmax(rho[cBint], 1e-30);
+    double vx_int  = mx[cBint] / r_int;
+    double Bx_int  = Bx_cc[cBint];
+
+    // Characteristic ghost v_x and B_x.  Uses local ρ_int as √ρ_0 reference —
+    // consistent with the linearisation used in §E2 (locally constant ρ_0).
+    double sqrt_r0 = sqrt(r_int);
+    double half_zm = 0.5 * (vx_int + Bx_int / sqrt_r0);
+    double vx_gh   = vx_drv + half_zm;
+    double Bx_gh   = sqrt_r0 * (-vx_drv + half_zm);
+
+    // Non-Alfvén fields: reflect mirror from the symmetric interior cell
+    //   j = ng + g  (standard reflective-y recipe for ρ, tangential mom,
+    //   tangential B; v_y antisymmetric).  jBs already computed above.
+    int cBs = cflat(i, jBs, sy);
+    double r_gh  = rho[cBs];                 // symmetric ρ (HSE)
+    double my_gh = -my[cBs];                 // antisymmetric v_y
+    double mz_gh =  mz[cBs];                 // symmetric v_z (z-Alfvén does
+                                             //   not currently have a driver,
+                                             //   but a pure-absorber fill is
+                                             //   needed for correctness; see
+                                             //   block below)
+    double Bz_gh =  Bz_cc[cBs];              // tangential B, symmetric
+    double By_gh =  By_cc[cBs];              // not used for Riemann but keep
+                                             //   cc consistent with face
+
+    // Apply the characteristic formula to the z-polarised Alfvén channel
+    //   as a pure absorber (v_z^drv = 0):
+    //   v_z|ghost = ½(v_z^int + B_z^int/√ρ_0)
+    //   B_z|ghost = √ρ_0 · ½(v_z^int + B_z^int/√ρ_0)
+    // Only do this if the z-channel is non-trivial (|v_z|, |B_z| > tiny),
+    // otherwise the reflect-mirror path already gives 0.  This branchless
+    // version always computes both and blends is OK since the absorber
+    // formula reduces to 0 in the quiescent z limit anyway.  To keep the
+    // implementation simple we always apply it.
+    // z-polarised Alfvén: same linear-extrapolation fix.  v_z^drv = 0.
+    double vz_i0   = mz[cBint0] / r_int0;
+    double Bz_i0   = Bz_cc[cBint0];
+    double vz_i1   = mz[cBint1] / r_int1;
+    double Bz_i1   = Bz_cc[cBint1];
+    double zmz_i0  = vz_i0 + Bz_i0 / sqrt_r0;
+    double zmz_i1  = vz_i1 + Bz_i1 / sqrt_r0;
+    double zmz_extrap = (double)(g + 2) * zmz_i0
+                      - (double)(g + 1) * zmz_i1;
+    double half_zmz = 0.5 * zmz_extrap;
+    double vz_gh_ch = half_zmz;
+    double Bz_gh_ch = sqrt_r0 * half_zmz;
+
+    // Write ghost primitives back as conservatives.  E ghost is
+    // reconstructed from (ρ, v, B_cc, P) with P taken as the symmetric
+    // mirror's P (HSE pressure), per reflective-y thermodynamics.
+    //
+    // Extract P_mirror from E[cBs] with the MIRROR v and B (same as what
+    // reflect_cc would have produced before our override).  This is
+    // bit-identical to reading E[cBs] and rewriting KE/ME with the new
+    // ghost fields.
+    //
+    // E = P/(γ-1) + ½ρ|v|² + ½|B|²   (gas + KE + ME)
+    // Compute P_mirror = P at the symmetric interior cell from its E.
+    // We don't have γ in the kernel signature; extract via a secondary
+    // expression: P_mirror = E[cBs] - KE_mirror - ME_mirror, multiplied
+    // by (γ-1).  Actually P_mirror = (γ-1)*(E - KE - ME), so we can
+    // write back:
+    //   E_gh = (γ-1)·P_mirror/(γ-1) + KE_gh + ME_gh
+    //        = (E[cBs] - KE_mirror - ME_mirror) + KE_gh + ME_gh
+    // (the (γ-1) cancels).  This keeps P_ghost = P_mirror = HSE pressure.
+    double r_mirror  = rho[cBs];
+    double vx_mirror = mx[cBs] / fmax(r_mirror, 1e-30);
+    double vy_mirror = -my[cBs] / fmax(r_mirror, 1e-30);   // antisym
+    double vz_mirror = mz[cBs] / fmax(r_mirror, 1e-30);
+    double KE_mirror = 0.5 * r_mirror * (vx_mirror*vx_mirror
+                                        + vy_mirror*vy_mirror
+                                        + vz_mirror*vz_mirror);
+    double Bx_mirror = Bx_cc[cBs];
+    double By_mirror = By_cc[cBs];
+    double Bz_mirror = Bz_cc[cBs];
+    double ME_mirror = 0.5 * (Bx_mirror*Bx_mirror
+                             + By_mirror*By_mirror
+                             + Bz_mirror*Bz_mirror);
+    double P_over_gm1 = E[cBs] - KE_mirror - ME_mirror;   // = P/(γ-1)
+
+    // Ghost KE + ME with characteristic (v_x, B_x) and pure-absorber (v_z, B_z).
+    double vy_gh_val = my_gh / fmax(r_gh, 1e-30);
+    double KE_gh = 0.5 * r_gh * (vx_gh*vx_gh
+                                + vy_gh_val*vy_gh_val
+                                + vz_gh_ch*vz_gh_ch);
+    double ME_gh = 0.5 * (Bx_gh*Bx_gh
+                         + By_gh*By_gh
+                         + Bz_gh_ch*Bz_gh_ch);
+
+    rho [cBd] = r_gh;
+    mx  [cBd] = r_gh * vx_gh;
+    my  [cBd] = my_gh;
+    mz  [cBd] = r_gh * vz_gh_ch;
+    E   [cBd] = P_over_gm1 + KE_gh + ME_gh;
+    Bx_cc[cBd] = Bx_gh;
+    By_cc[cBd] = By_gh;                     // unchanged from mirror
+    Bz_cc[cBd] = Bz_gh_ch;
+    (void)mz_gh; (void)Bz_gh;               // absorber values override mirror
+
+    // ---- Top ghost row: still reflective (unchanged) ----
+    // Handled separately by k_athmhd_ghost_y_reflect_cc on top, but
+    // since that kernel also fills the bottom, we must NOT double-fill.
+    // Plan: fill_ghost host dispatch calls reflect_cc for the TOP only
+    // when driver_on (by re-using reflect_cc but on a top-only path),
+    // OR calls a split "top-reflect" kernel.  For simplicity we'll do
+    // the full top-reflect here as well:
+    int jTd = ng + ny + g;
+    int jTs = ng + ny - 1 - g;
+    int cTd = cflat(i, jTd, sy);
+    int cTs = cflat(i, jTs, sy);
+    rho[cTd] =  rho[cTs]; mx[cTd] =  mx[cTs]; my[cTd] = -my[cTs];
+    mz [cTd] =  mz [cTs]; E [cTd] =  E [cTs];
+    Bz_cc[cTd] = Bz_cc[cTs];
+    Bx_cc[cTd] = Bx_cc[cTs];
+    By_cc[cTd] = By_cc[cTs];
+}
+
+// Face-B characteristic fill for the bottom ghost row(s).  Top ghost
+// is done by the reflect_face kernel (the caller invokes both).
+//
+// Key identity (§E2):  B_x^face,i±½,j_g = B_x^cc,ghost  gives
+//   ½(B_x^face,i-½ + B_x^face,i+½) = B_x^cc,ghost  (exact).
+// B_y face at j = ng (the wall) is kept by the reflect rule; the
+// ghost B_y face at j = ng - 1 - g mirrors antisymmetrically from
+// j = ng + 1 + g — same as k_athmhd_ghost_y_reflect_face.
+__global__ void k_athmhd_ghost_y_characteristic_face(
+    double* __restrict__ Bxf,
+    double* __restrict__ Byf,
+    const double* __restrict__ rho,
+    const double* __restrict__ mx,
+    const double* __restrict__ Bx_cc,
+    const double* __restrict__ d_f,
+    const double* __restrict__ d_amp,
+    const double* __restrict__ d_phi,
+    int N_modes, double t_now,
+    int nx, int ny, int ng, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    int syp1 = sy + 1;
+    int syfx = sy;
+    if (g >= ng) return;
+
+    // Driver waveform (same as cc kernel).
+    double two_pi = 6.283185307179586;
+    double vx_drv = 0.0;
+    for (int n = 0; n < N_modes; ++n) {
+        vx_drv += d_amp[n] * sin(two_pi * d_f[n] * t_now + d_phi[n]);
+    }
+
+    // --- Byf antisymmetric mirror (bottom + top), same as reflect_face ---
+    if (i < nx + 2 * ng) {
+        int jBd = ng - 1 - g;
+        int jBs = ng + 1 + g;
+        int jTd = ng + ny + 1 + g;
+        int jTs = ng + ny - 1 - g;
+        Byf[fy_flat(i, jBd, syp1)] = -Byf[fy_flat(i, jBs, syp1)];
+        Byf[fy_flat(i, jTd, syp1)] = -Byf[fy_flat(i, jTs, syp1)];
+    }
+
+    // --- Bxf characteristic bottom, symmetric top ---
+    if (i < nx + 1 + 2 * ng) {
+        int jBd = ng - 1 - g;
+        int jBs = ng + g;
+        int jTd = ng + ny + g;
+        int jTs = ng + ny - 1 - g;
+        // Top: symmetric mirror (unchanged)
+        Bxf[fx_flat(i, jTd, syfx)] = Bxf[fx_flat(i, jTs, syfx)];
+        // Bottom: characteristic.  The interior-side reference row is
+        // the mirror row j = ng + g, matching the cell-centred kernel.
+        // (A previous version used j=ng for all ghost layers, which
+        // flattened the y-slope seen by PLM reconstruction and produced
+        // an O(A_rms²) spurious mass flux at j = ng - ½.)
+        int ic_ref = i;
+        if (ic_ref >= nx + 2 * ng) ic_ref = nx + 2 * ng - 1;
+        // §E2-v2: linear extrapolation of z^- from the two lowest
+        // interior rows (j=ng, j=ng+1) for the same reason as the cc
+        // kernel — avoids the O(kΔy) phase-slip reflection that the
+        // nearest-mirror gave (empirically ~22% evanescent excess at
+        // the bottom cell, documented in e1_t7_analytic_on_mesh_decomposition.md).
+        int cRef0 = cflat(ic_ref, ng,     sy);
+        int cRef1 = cflat(ic_ref, ng + 1, sy);
+        double r_int0 = fmax(rho[cRef0], 1e-30);
+        double sqrt_r0 = sqrt(r_int0);
+        double zm_i0  = mx[cRef0] / r_int0 + Bx_cc[cRef0] / sqrt_r0;
+        double r_int1 = fmax(rho[cRef1], 1e-30);
+        double zm_i1  = mx[cRef1] / r_int1 + Bx_cc[cRef1] / sqrt_r0;
+        double zm_extrap = (double)(g + 2) * zm_i0
+                         - (double)(g + 1) * zm_i1;
+        double half_zm = 0.5 * zm_extrap;
+        double Bx_gh   = sqrt_r0 * (-vx_drv + half_zm);
+        Bxf[fx_flat(i, jBd, syfx)] = Bx_gh;
+        (void)jBs;
+    }
+}
+
+// ============================================================
+// Top-only outflow — used in combination with §E2 bottom driver +
+// §E4 PML sponge.  Writes zero-gradient extrapolation on the top ghost
+// rows only; bottom ghost is left untouched (filled by §E2).
+// ============================================================
+__global__ void k_athmhd_ghost_y_top_outflow_cc(
+    double* rho, double* mx, double* my, double* mz, double* E,
+    double* Bx_cc, double* By_cc, double* Bz_cc,
+    int nx, int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || g >= ng) return;
+    int jTd = ng + ny + g;
+    int jTs = ng + ny - 1;
+    int cTd = cflat(i, jTd, sy), cTs = cflat(i, jTs, sy);
+    rho  [cTd] = rho  [cTs];
+    mx   [cTd] = mx   [cTs];
+    my   [cTd] = my   [cTs];
+    mz   [cTd] = mz   [cTs];
+    E    [cTd] = E    [cTs];
+    Bx_cc[cTd] = Bx_cc[cTs];
+    By_cc[cTd] = By_cc[cTs];
+    Bz_cc[cTd] = Bz_cc[cTs];
+}
+
+__global__ void k_athmhd_ghost_y_top_outflow_face(
+    double* Bxf, double* Byf,
+    int nx, int ny, int ng, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    int syp1 = sy + 1;
+    int syfx = sy;
+    if (g >= ng) return;
+    // Byf top: zero-gradient from the last interior face j = ng + ny.
+    if (i < nx + 2 * ng) {
+        int jTd = ng + ny + 1 + g;
+        int jTs = ng + ny;
+        Byf[fy_flat(i, jTd, syp1)] = Byf[fy_flat(i, jTs, syp1)];
+    }
+    // Bxf top: zero-gradient from the last interior row.
+    if (i < nx + 1 + 2 * ng) {
+        int jTd = ng + ny + g;
+        int jTs = ng + ny - 1;
+        Bxf[fx_flat(i, jTd, syfx)] = Bxf[fx_flat(i, jTs, syfx)];
+    }
+}
+
+// ============================================================
+// §E3 — Top outgoing characteristic BC (cell-centred).
+//
+// Bottom is handled by `k_athmhd_ghost_y_characteristic_cc` (§E2).  This
+// kernel overrides ONLY the top ghost rows so the full ghost-fill
+// pipeline is: bottom via §E2 characteristic OR reflect_cc (depending
+// on driver_on), then top via §E3 outgoing OR reflect (depending on
+// top_outgoing).  Called from fill_ghost when top_outgoing == true.
+//
+// Algebra (see docs/derivations/mhd/sections/e3_top_outgoing_bc.md):
+//   Interior reference row (mirror-index convention) jTs = ng + ny - 1 - g.
+//   z^+|_{int}   = -v_x^{int} + B_x^{int}/√ρ0       (outgoing)
+//   z^-|_{ghost} = 0                                 (no incoming)
+//   ⇒  v_x|_{top_ghost} = -(z^+_{int})/2 = ½(v_x^{int} - B_x^{int}/√ρ0)
+//      B_x|_{top_ghost} = √ρ0 (z^+_{int})/2 = ½(-√ρ0 v_x^{int} + B_x^{int})
+// The z-polarised Alfvén channel is absorbed identically by symmetry.
+// Non-Alfvén fields (rho, m_y, E) use outflow / mirror rules — pressure
+// and density take the interior mirror (HSE), v_y antisymmetric.
+// ============================================================
+__global__ void k_athmhd_ghost_y_top_outgoing_cc(
+    double* __restrict__ rho,
+    double* __restrict__ mx,
+    double* __restrict__ my,
+    double* __restrict__ mz,
+    double* __restrict__ E,
+    double* __restrict__ Bx_cc,
+    double* __restrict__ By_cc,
+    double* __restrict__ Bz_cc,
+    int nx, int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= sx || g >= ng) return;
+
+    int jTd = ng + ny + g;              // top ghost row (destination)
+    int jTs = ng + ny - 1 - g;          // interior mirror reference
+    int cTd = cflat(i, jTd, sy);
+    int cTs = cflat(i, jTs, sy);
+
+    double r_int = fmax(rho[cTs], 1e-30);
+    double sqrt_r0 = sqrt(r_int);
+    double vx_int = mx[cTs] / r_int;
+    double vz_int = mz[cTs] / r_int;
+    double Bx_int = Bx_cc[cTs];
+    double Bz_int = Bz_cc[cTs];
+
+    // §E3 ghost-fill closure — Alfvén-x channel
+    double vx_gh = 0.5 * (vx_int - Bx_int / sqrt_r0);
+    double Bx_gh = 0.5 * (-sqrt_r0 * vx_int + Bx_int);
+    // z-polarised Alfvén (pure absorber, same formula)
+    double vz_gh = 0.5 * (vz_int - Bz_int / sqrt_r0);
+    double Bz_gh = 0.5 * (-sqrt_r0 * vz_int + Bz_int);
+
+    // Non-Alfvén fields:
+    //   ρ, By_cc       -- mirror (HSE, symmetric)
+    //   v_y (my)       -- antisymmetric mirror (wall-normal)
+    //   p (via E)      -- mirror P, recompute E = P/(γ-1) + KE_gh + ME_gh
+    double r_gh  = rho[cTs];
+    double By_gh = By_cc[cTs];
+    double my_gh = -my[cTs];
+
+    // Extract P_mirror via bit-identical trick (same pattern as §E2):
+    //   E = P/(γ-1) + KE + ME.  Write E_gh = (E_mirror - KE_mirror - ME_mirror)
+    //                                        + KE_gh + ME_gh.
+    double r_mirror  = rho[cTs];
+    double vx_mirror = mx[cTs] / fmax(r_mirror, 1e-30);
+    double vy_mirror = -my[cTs] / fmax(r_mirror, 1e-30);
+    double vz_mirror = mz[cTs] / fmax(r_mirror, 1e-30);
+    double Bx_mirror = Bx_cc[cTs];
+    double By_mirror = By_cc[cTs];
+    double Bz_mirror = Bz_cc[cTs];
+    double KE_mirror = 0.5 * r_mirror * (vx_mirror*vx_mirror
+                                        + vy_mirror*vy_mirror
+                                        + vz_mirror*vz_mirror);
+    double ME_mirror = 0.5 * (Bx_mirror*Bx_mirror
+                             + By_mirror*By_mirror
+                             + Bz_mirror*Bz_mirror);
+    double P_over_gm1 = E[cTs] - KE_mirror - ME_mirror;
+
+    double vy_gh = my_gh / fmax(r_gh, 1e-30);
+    double KE_gh = 0.5 * r_gh * (vx_gh*vx_gh + vy_gh*vy_gh + vz_gh*vz_gh);
+    double ME_gh = 0.5 * (Bx_gh*Bx_gh + By_gh*By_gh + Bz_gh*Bz_gh);
+
+    rho  [cTd] = r_gh;
+    mx   [cTd] = r_gh * vx_gh;
+    my   [cTd] = my_gh;
+    mz   [cTd] = r_gh * vz_gh;
+    E    [cTd] = P_over_gm1 + KE_gh + ME_gh;
+    Bx_cc[cTd] = Bx_gh;
+    By_cc[cTd] = By_gh;
+    Bz_cc[cTd] = Bz_gh;
+}
+
+// ============================================================
+// §E3.5 — Stone-1999 radiation BC (cell-centred) for top outgoing
+// characteristic wave.  Applies the recursion
+//   z^+|_{ghost,g+1} = 2 cos(kΔy) z^+|_{ghost,g} - z^+|_{ghost,g-1}
+// seeded by the top two interior cells' z^+ values, then inverts to
+// primitives via
+//   v_x = -z^+/2,   B_x = (√ρ_0/2) z^+
+// z^- is held identically zero (no incoming), and the z-polarised
+// Alfvén channel is treated analogously.  Non-Alfvén fields use
+// symmetric mirror (same as outflow).
+//
+// Seed: g = -1  →  interior row y_{top-1}:  jTs2 = ng + ny - 2
+//       g =  0  →  interior row y_{top}:    jTs1 = ng + ny - 1
+// Destination: g = 0 → jTd = ng + ny;   g = 1 → jTd = ng + ny + 1; …
+// ============================================================
+__global__ void k_athmhd_ghost_y_top_radiation_cc(
+    double* __restrict__ rho,
+    double* __restrict__ mx,
+    double* __restrict__ my,
+    double* __restrict__ mz,
+    double* __restrict__ E,
+    double* __restrict__ Bx_cc,
+    double* __restrict__ By_cc,
+    double* __restrict__ Bz_cc,
+    double cos_kdy,        // 2cos(kΔy) = 2·cos(2π f Δy / v_A(y_top))
+    int nx, int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= sx) return;
+
+    // Seed positions — top two interior cells.
+    int jSeed1 = ng + ny - 1;       // top interior
+    int jSeed2 = ng + ny - 2;       // one below
+    int cS1 = cflat(i, jSeed1, sy);
+    int cS2 = cflat(i, jSeed2, sy);
+
+    double r_top = fmax(rho[cS1], 1e-30);
+    double sqrt_r0 = sqrt(r_top);    // use ρ at the top interior cell
+
+    // z^+ = -v_x + B_x/√ρ_0  from each seed cell.
+    double vx_s1 = mx[cS1] / r_top;
+    double Bx_s1 = Bx_cc[cS1];
+    double zp_s1 = -vx_s1 + Bx_s1 / sqrt_r0;
+    double vz_s1 = mz[cS1] / r_top;
+    double Bz_s1 = Bz_cc[cS1];
+    double zpZ_s1 = -vz_s1 + Bz_s1 / sqrt_r0;
+
+    double r2 = fmax(rho[cS2], 1e-30);
+    double vx_s2 = mx[cS2] / r2;
+    double Bx_s2 = Bx_cc[cS2];
+    double zp_s2 = -vx_s2 + Bx_s2 / sqrt(r2);
+    double vz_s2 = mz[cS2] / r2;
+    double Bz_s2 = Bz_cc[cS2];
+    double zpZ_s2 = -vz_s2 + Bz_s2 / sqrt(r2);
+
+    // Iterate recursion  z+_{g+1} = 2cos(kΔy) z+_g - z+_{g-1}  for
+    // g = 0..ng-1.  Initial state:
+    //   "prev" = z+_{n-1} = zp_s2
+    //   "curr" = z+_n     = zp_s1
+    // After one step we get z+_{n+1} (ghost layer 0 at jTd=ng+ny).
+    double zp_prev  = zp_s2;
+    double zp_curr  = zp_s1;
+    double zpZ_prev = zpZ_s2;
+    double zpZ_curr = zpZ_s1;
+
+    // HSE mirror source for non-Alfvén fields: symmetric about wall, so
+    // ghost layer g uses interior row jMirror = ng + ny - 1 - g.
+    // P, ρ, By, v_y take the mirror value (v_y antisymmetric).
+    for (int g = 0; g < ng; ++g) {
+        double zp_next  = cos_kdy * zp_curr  - zp_prev;
+        double zpZ_next = cos_kdy * zpZ_curr - zpZ_prev;
+
+        int jTd = ng + ny + g;
+        int jMirror = ng + ny - 1 - g;        // symmetric HSE mirror
+        int cDst = cflat(i, jTd, sy);
+        int cMir = cflat(i, jMirror, sy);
+
+        // Alfvén fields: primitive closure  v_x = -z^+/2, B_x = (√ρ/2) z^+
+        double vx_gh = -0.5 * zp_next;
+        double Bx_gh =  0.5 * sqrt_r0 * zp_next;
+        double vz_gh = -0.5 * zpZ_next;
+        double Bz_gh =  0.5 * sqrt_r0 * zpZ_next;
+
+        // Non-Alfvén:
+        double r_mir  = rho[cMir];
+        double By_gh  = By_cc[cMir];
+        double my_gh  = -my[cMir];                 // antisymmetric v_y
+
+        // Recompute E with ghost fields and mirror P.  E = P/(γ-1) + KE + ME.
+        double r_mirror  = r_mir;
+        double vx_mirror = mx[cMir] / fmax(r_mirror, 1e-30);
+        double vy_mirror = -my[cMir] / fmax(r_mirror, 1e-30);
+        double vz_mirror = mz[cMir] / fmax(r_mirror, 1e-30);
+        double Bx_mirror = Bx_cc[cMir];
+        double By_mirror = By_cc[cMir];
+        double Bz_mirror = Bz_cc[cMir];
+        double KE_mirror = 0.5 * r_mirror * (vx_mirror*vx_mirror
+                                            + vy_mirror*vy_mirror
+                                            + vz_mirror*vz_mirror);
+        double ME_mirror = 0.5 * (Bx_mirror*Bx_mirror
+                                 + By_mirror*By_mirror
+                                 + Bz_mirror*Bz_mirror);
+        double P_over_gm1 = E[cMir] - KE_mirror - ME_mirror;
+
+        double vy_gh = my_gh / fmax(r_mir, 1e-30);
+        double KE_gh = 0.5 * r_mir * (vx_gh*vx_gh + vy_gh*vy_gh + vz_gh*vz_gh);
+        double ME_gh = 0.5 * (Bx_gh*Bx_gh + By_gh*By_gh + Bz_gh*Bz_gh);
+
+        rho  [cDst] = r_mir;
+        mx   [cDst] = r_mir * vx_gh;
+        my   [cDst] = my_gh;
+        mz   [cDst] = r_mir * vz_gh;
+        E    [cDst] = P_over_gm1 + KE_gh + ME_gh;
+        Bx_cc[cDst] = Bx_gh;
+        By_cc[cDst] = By_gh;
+        Bz_cc[cDst] = Bz_gh;
+
+        // Advance recursion state
+        zp_prev  = zp_curr;  zp_curr  = zp_next;
+        zpZ_prev = zpZ_curr; zpZ_curr = zpZ_next;
+    }
+}
+
+// ============================================================
+// §E3.5 face-B: Bxf top ghost built from the same cc values.
+// Byf top uses symmetric mirror (HSE).
+// ============================================================
+__global__ void k_athmhd_ghost_y_top_radiation_face(
+    double* __restrict__ Bxf,
+    double* __restrict__ Byf,
+    const double* __restrict__ rho,
+    const double* __restrict__ mx,
+    const double* __restrict__ Bx_cc,
+    double cos_kdy,
+    int nx, int ny, int ng, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= nx + 1 + 2 * ng) return;
+    int syp1 = sy + 1;
+    int syfx = sy;
+
+    // Byf top: symmetric mirror (matches outflow / §E3).
+    if (i < nx + 2 * ng) {
+        for (int g = 0; g < ng; ++g) {
+            int jTd = ng + ny + 1 + g;
+            int jTs = ng + ny - g;
+            Byf[fy_flat(i, jTd, syp1)] = Byf[fy_flat(i, jTs, syp1)];
+        }
+    }
+
+    // Bxf top: apply radiation recursion to z^+ at x-faces, seeded from
+    // the top two interior face values reconstructed from cc.
+    int ic_ref = i;
+    if (ic_ref >= nx + 2 * ng) ic_ref = nx + 2 * ng - 1;
+    int jSeed1 = ng + ny - 1;
+    int jSeed2 = ng + ny - 2;
+    int cS1 = cflat(ic_ref, jSeed1, sy);
+    int cS2 = cflat(ic_ref, jSeed2, sy);
+
+    double r1 = fmax(rho[cS1], 1e-30);
+    double r2 = fmax(rho[cS2], 1e-30);
+    double sqrt_r0 = sqrt(r1);
+    double vx1 = mx[cS1] / r1;
+    double vx2 = mx[cS2] / r2;
+    double Bx1 = Bx_cc[cS1];
+    double Bx2 = Bx_cc[cS2];
+    // Face B_x is x-face; for the top ghost row we use the §E3 identity
+    // B_x^face,i±½ = B_x^cc,ghost.  So we just broadcast the radiation-BC
+    // cc value to both faces of the ghost cell.
+    double zp_s1 = -vx1 + Bx1 / sqrt_r0;
+    double zp_s2 = -vx2 + Bx2 / sqrt(r2);
+
+    double zp_prev = zp_s2;
+    double zp_curr = zp_s1;
+    for (int g = 0; g < ng; ++g) {
+        double zp_next = cos_kdy * zp_curr - zp_prev;
+        int jTd = ng + ny + g;
+        double Bx_gh = 0.5 * sqrt_r0 * zp_next;
+        Bxf[fx_flat(i, jTd, syfx)] = Bx_gh;
+        zp_prev = zp_curr;
+        zp_curr = zp_next;
+    }
+}
+
+// ============================================================
+// §E3 — Top outgoing characteristic BC (face-B).
+//
+// Byf on the top normal face uses the standard symmetric mirror (same
+// as outflow-face and reflect-face for tangential → symmetric, but the
+// normal wall face itself is not touched since it sits at j = ng + ny
+// and is interior-adjacent; we only fill ghost faces beyond that).
+// To stay consistent with the cc kernel we mirror Byf symmetrically.
+//
+// Bxf on the top gets §E3 characteristic cell-centred value, with both
+// x-faces of the top ghost cell equal to the cc ghost value
+// (average == cc, see §E3 Identity 6).
+// ============================================================
+__global__ void k_athmhd_ghost_y_top_outgoing_face(
+    double* __restrict__ Bxf,
+    double* __restrict__ Byf,
+    const double* __restrict__ rho,
+    const double* __restrict__ mx,
+    const double* __restrict__ Bx_cc,
+    int nx, int ny, int ng, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int g = blockIdx.y * blockDim.y + threadIdx.y;
+    int syp1 = sy + 1;
+    int syfx = sy;
+    if (g >= ng) return;
+
+    // Byf top: symmetric mirror (matches outflow, preserves ∇·B under
+    // our zero-gradient assumption on the non-Alfvén channel).
+    if (i < nx + 2 * ng) {
+        int jTd = ng + ny + 1 + g;
+        int jTs = ng + ny - g;          // symmetric interior face
+        Byf[fy_flat(i, jTd, syp1)] = Byf[fy_flat(i, jTs, syp1)];
+    }
+
+    // Bxf top: characteristic (match cc rule).
+    if (i < nx + 1 + 2 * ng) {
+        int jTd = ng + ny + g;
+        int jTs = ng + ny - 1 - g;      // interior reference row
+        int ic_ref = i;
+        if (ic_ref >= nx + 2 * ng) ic_ref = nx + 2 * ng - 1;
+        int cRef = cflat(ic_ref, jTs, sy);
+        double r_int = fmax(rho[cRef], 1e-30);
+        double vx_int = mx[cRef] / r_int;
+        double Bx_int = Bx_cc[cRef];
+        double sqrt_r0 = sqrt(r_int);
+        // B_x|_{top_ghost} = ½(-√ρ0 v_x^{int} + B_x^{int})
+        double Bx_gh = 0.5 * (-sqrt_r0 * vx_int + Bx_int);
+        Bxf[fx_flat(i, jTd, syfx)] = Bx_gh;
+    }
+}
+
+// ============================================================
+// §E4 PML absorbing sponge (cell-centred part).  Damps v_x, v_z, and
+// Bz_cc via implicit-Euler on the Alfvén characteristic.  Bx_cc is
+// NOT touched here — it's regenerated from Bxf by cons_to_prim each
+// step, so damping Bx_cc directly would be overwritten.  The face
+// Bxf damping is done by a separate face-side kernel (below).
+//
+// Closed-form implicit-Euler inverse (from sympy §E4 Identity 5):
+//    Let τ = dt·σ, √ρ = sqrt(ρ_local).  Apply
+//       v_x^new  = [(τ+2) v_x  +  (τ/√ρ) B_x_cc ] / (2(τ+1))
+//       v_z^new  = [(τ+2) v_z  +  (τ/√ρ) B_z_cc ] / (2(τ+1))
+// Bx_cc is taken as the READ value for the RHS but is not written
+// back; only v_x and momentum/energy are modified here.  Bz_cc
+// is damped because it's a pure cc storage (no face version in 2D).
+// Energy is recomputed to match the new (v, B).
+// ============================================================
+__global__ void k_athmhd_apply_pml(
+    double* __restrict__ rho,
+    double* __restrict__ mx,
+    double* __restrict__ my,
+    double* __restrict__ mz,
+    double* __restrict__ E,
+    double* __restrict__ Bxf,
+    double* __restrict__ Bx_cc,
+    double* __restrict__ By_cc,
+    double* __restrict__ Bz_cc,
+    double dt,
+    double y_start,    // lo-edge of PML
+    double y_end,      // hi-edge (top of domain)
+    double sigma0,     // peak damping rate at y_end
+    double y_lo,       // domain y_lo
+    double dy,
+    int nx, int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x + ng;
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i >= ng + nx || j >= ng + ny) return;
+
+    double yc = y_lo + ((j - ng) + 0.5) * dy;
+    if (yc < y_start) return;   // outside absorber
+
+    // Quadratic profile: σ(y) = σ_0 · ((y - y_start)/Δ)²
+    double Delta = y_end - y_start;
+    double s = (yc - y_start) / fmax(Delta, 1e-30);
+    double sigma = sigma0 * s * s;
+    double tau = dt * sigma;
+    if (!(tau > 0.0)) return;
+
+    int c = cflat(i, j, sy);
+    double r = fmax(rho[c], 1e-30);
+    double sqrt_r = sqrt(r);
+
+    // Read current primitives + energy split.
+    double vx = mx[c] / r;
+    double vy = my[c] / r;
+    double vz = mz[c] / r;
+    double Bx = Bx_cc[c];
+    double By = By_cc[c];
+    double Bz = Bz_cc[c];
+
+    double KE_old = 0.5 * r * (vx*vx + vy*vy + vz*vz);
+    double ME_old = 0.5 * (Bx*Bx + By*By + Bz*Bz);
+    double P_over_gm1 = E[c] - KE_old - ME_old;
+
+    // Implicit-Euler PML — closed form (§E4 Identity 5 + 7).  Write NEW
+    // B_x_cc with the SAME closed form the face kernel uses on B_xf.
+    // For an x-uniform Alfvén wave the face average equals the cc
+    // value exactly, so cons_to_prim's reconstruction B_x_cc =
+    // ½(B_xf^L + B_xf^R) gives the same NEW value we write here.
+    // Writing it explicitly is what lets the total-energy update below
+    // use the NEW ME self-consistently — otherwise the damped magnetic
+    // energy leaks into thermal pressure (Identity 7) and CFL dt
+    // collapses.
+    //
+    // This kernel assumes the face kernel has ALREADY run (ordering
+    // invariance, Identity 8) so Bxf is not needed here as input, only
+    // as a consistency reference: the face kernel reads the OLD mx
+    // (which is still OLD because this cc kernel has NOT yet written
+    // to mx), and we read OLD Bx_cc (still intact because the face
+    // kernel did not touch Bx_cc).  Both passes therefore see the OLD
+    // state of the OTHER variable.
+    double inv = 1.0 / (2.0 * (tau + 1.0));
+    double vx_new = ((tau + 2.0) * vx + (tau / sqrt_r) * Bx) * inv;
+    double vz_new = ((tau + 2.0) * vz + (tau / sqrt_r) * Bz) * inv;
+    double Bx_new = ((tau * sqrt_r) * vx + (tau + 2.0) * Bx) * inv;
+    double Bz_new = ((tau * sqrt_r) * vz + (tau + 2.0) * Bz) * inv;
+
+    double KE_new = 0.5 * r * (vx_new*vx_new + vy*vy + vz_new*vz_new);
+    double ME_new = 0.5 * (Bx_new*Bx_new + By*By + Bz_new*Bz_new);
+
+    mx   [c] = r * vx_new;
+    mz   [c] = r * vz_new;
+    Bx_cc[c] = Bx_new;     // self-consistent with face-averaged Bxf update
+    Bz_cc[c] = Bz_new;
+    E    [c] = P_over_gm1 + KE_new + ME_new;
+}
+
+// ============================================================
+// §E4 PML face-B damping (x-uniform wave assumption).
+//
+// On the face at (i+½, j) inside the PML region, apply the full
+// implicit-Euler §E4 formula using the v_x of the LEFT cell (i, j)
+// as the coupling reference (Alfvén waves in this setup are x-uniform
+// so left and right cells have identical primitives).  Per face,
+// Bxf^new = [(τ/√ρ) v_x + (τ+2) Bxf] / (2(τ+1)).
+//
+// This is NOT a pure scaling — it explicitly mixes v_x into Bxf,
+// matching the characteristic invariant z^+ = -v_x + Bx/√ρ damping.
+// Each face is touched by exactly one thread (no race).
+// ============================================================
+__global__ void k_athmhd_apply_pml_face(
+    double* __restrict__ Bxf,
+    const double* __restrict__ rho,
+    const double* __restrict__ mx,
+    double dt,
+    double y_start,
+    double y_end,
+    double sigma0,
+    double y_lo,
+    double dy,
+    int nx, int ny, int ng, int sx, int sy)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;     // x-face index (0..nx+2ng)
+    int j = blockIdx.y * blockDim.y + threadIdx.y + ng;
+    if (i > nx + 2 * ng || j >= ng + ny) return;
+
+    double yc = y_lo + ((j - ng) + 0.5) * dy;
+    if (yc < y_start) return;
+
+    double Delta = y_end - y_start;
+    double s = (yc - y_start) / fmax(Delta, 1e-30);
+    double sigma = sigma0 * s * s;
+    double tau = dt * sigma;
+    if (!(tau > 0.0)) return;
+
+    // Use the LEFT cell (i-1, j) for rho, v_x reference.  At i=0 there's
+    // no left cell — clamp to i=ng (interior) which is the rightmost
+    // "real" cell in the ghost region.  We actually want a cell whose
+    // primitives match the face; since the physical grid is x-uniform
+    // the choice of i_ref doesn't matter.  Use the cell on the right
+    // (i, j) if i < nx + 2ng, else (i-1, j).
+    int i_ref = (i < nx + 2 * ng) ? i : (nx + 2 * ng - 1);
+    int c = cflat(i_ref, j, sy);
+    double r = fmax(rho[c], 1e-30);
+    double sqrt_r = sqrt(r);
+    double vx = mx[c] / r;
+
+    int f = fx_flat(i, j, sy);
+    double Bxf_old = Bxf[f];
+    double inv = 1.0 / (2.0 * (tau + 1.0));
+    double Bxf_new = ((tau * sqrt_r) * vx + (tau + 2.0) * Bxf_old) * inv;
+    Bxf[f] = Bxf_new;
 }

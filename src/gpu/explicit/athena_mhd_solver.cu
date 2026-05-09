@@ -117,10 +117,48 @@ __global__ void k_athmhd_cool_chromo(
     double, double, double,
     double, double, double,
     double);
-__global__ void k_athmhd_driver_apply(
-    const double*, double*, double*, double*, double*,
+__global__ void k_athmhd_ghost_y_characteristic_cc(
+    double*, double*, double*, double*, double*,
+    double*, double*, double*,
     const double*, const double*, const double*,
-    int, double, int, int, int);
+    int, double, int, int, int, int, int);
+__global__ void k_athmhd_ghost_y_characteristic_face(
+    double*, double*,
+    const double*, const double*, const double*,
+    const double*, const double*, const double*,
+    int, double, int, int, int, int);
+__global__ void k_athmhd_ghost_y_top_outflow_cc(
+    double*, double*, double*, double*, double*,
+    double*, double*, double*,
+    int, int, int, int, int);
+__global__ void k_athmhd_ghost_y_top_outflow_face(
+    double*, double*,
+    int, int, int, int);
+__global__ void k_athmhd_ghost_y_top_outgoing_cc(
+    double*, double*, double*, double*, double*,
+    double*, double*, double*,
+    int, int, int, int, int);
+__global__ void k_athmhd_ghost_y_top_outgoing_face(
+    double*, double*,
+    const double*, const double*, const double*,
+    int, int, int, int);
+__global__ void k_athmhd_ghost_y_top_radiation_cc(
+    double*, double*, double*, double*, double*,
+    double*, double*, double*,
+    double, int, int, int, int, int);
+__global__ void k_athmhd_ghost_y_top_radiation_face(
+    double*, double*,
+    const double*, const double*, const double*,
+    double, int, int, int, int);
+__global__ void k_athmhd_apply_pml(
+    double*, double*, double*, double*, double*,
+    double*, double*, double*, double*,
+    double, double, double, double, double, double,
+    int, int, int, int, int);
+__global__ void k_athmhd_apply_pml_face(
+    double*, const double*, const double*,
+    double, double, double, double, double, double,
+    int, int, int, int, int);
 
 // ============================================================
 // init / destroy
@@ -269,9 +307,99 @@ void AthenaMHDSolver::fill_ghost() {
     } else if (y_bc == 2) {
         k_athmhd_ghost_y_outflow_cc<<<by_grid, dim3(64, 1)>>>(
             d_rho, d_mx, d_my, d_mz, d_E, d_Bz_cc, ny, ng, sx, sy);
+    } else if (driver_on && driver_Nmodes > 0) {
+        // §E2 characteristic inner BC: bottom ghost gets
+        //   z̃⁺ = −2 v_x^drv(t), z̃⁻ = absorbing (extrapolated).
+        // Top is written as reflect by this kernel; if top_outgoing,
+        // we overwrite the top below.
+        k_athmhd_ghost_y_characteristic_cc<<<by_grid, dim3(64, 1)>>>(
+            d_rho, d_mx, d_my, d_mz, d_E,
+            d_Bx_cc, d_By_cc, d_Bz_cc,
+            d_driver_f, d_driver_amp, d_driver_phi,
+            driver_Nmodes, driver_t_now,
+            nx, ny, ng, sx, sy);
     } else {
         k_athmhd_ghost_y_reflect_cc<<<by_grid, dim3(64, 1)>>>(
             d_rho, d_mx, d_my, d_mz, d_E, d_Bz_cc, ny, ng, sx, sy);
+    }
+    // §E3 / §E3.5 top characteristic BC — overwrite top ghost rows.
+    // §E3.5 (radiation) takes precedence over §E3 (outgoing) when both
+    // flags are set.  For §E3.5 we precompute 2·cos(kΔy) on host using
+    // the HSE density at the top interior cell centre.
+    if (top_radiation && top_radiation_feff > 0.0) {
+        // ρ at top interior cell (cell-centred, HSE): ρ₀·e^{-y_top/H}.
+        // We read it from the host gravity table  h_g_row[j]  is g(y),
+        // not ρ(y); instead recover ρ from the initialised value at the
+        // top interior via GPU → host readback of d_rho once.  Cheaper:
+        // infer ρ from the snapshot taken at init_hse_atmosphere — we
+        // always have P(y) = ρ·cs² so ρ is monotonic in y under HSE.
+        // For simplicity and correctness we do a one-cell device→host
+        // readback of ρ at the top interior cell (j = ng + ny − 1,
+        // i = ng, all x-columns share the same HSE ρ to ULP).
+        double rho_top_host = 1.0;
+        {
+            int j_top_int = ng + ny - 1;
+            int i_col     = ng;
+            int c_top = i_col * sy + j_top_int;
+            cudaMemcpy(&rho_top_host, d_rho + c_top, sizeof(double),
+                       cudaMemcpyDeviceToHost);
+            if (!(rho_top_host > 1e-30)) rho_top_host = 1.0;
+        }
+        // v_A at y_top = |B_{y0}| / √ρ(y_top).  We need the background
+        // B_{y0}; recover it from Byf at the top interior face (face
+        // values are constant along x in the HSE IC).  Read one face.
+        double By0_host = 0.0;
+        {
+            int j_face = ng + ny;   // y-normal face at top interior edge
+            int i_col  = ng;
+            int syp1   = sy + 1;
+            int f      = i_col * syp1 + j_face;
+            cudaMemcpy(&By0_host, d_Byf + f, sizeof(double),
+                       cudaMemcpyDeviceToHost);
+        }
+        double vA_top = std::fabs(By0_host) / std::sqrt(rho_top_host);
+        double k_top = 2.0 * M_PI * top_radiation_feff / std::max(vA_top, 1e-30);
+        double kdy   = k_top * dy;
+        // Nyquist safety — if kdy > π/2, emit a single warning and fall
+        // back to the §E3 mirror form (top_outgoing path).
+        if (kdy > 0.5 * M_PI) {
+            static bool warned = false;
+            if (!warned) {
+                std::fprintf(stderr,
+                    "  [§E3.5 warning] kΔy = %.3f > π/2; falling back to "
+                    "continuum §E3 mirror.  (Increase Ny or decrease "
+                    "f_eff to satisfy the Nyquist margin.)\n", kdy);
+                warned = true;
+            }
+            k_athmhd_ghost_y_top_outgoing_cc<<<by_grid, dim3(64, 1)>>>(
+                d_rho, d_mx, d_my, d_mz, d_E,
+                d_Bx_cc, d_By_cc, d_Bz_cc,
+                nx, ny, ng, sx, sy);
+        } else {
+            double two_cos_kdy = 2.0 * std::cos(kdy);
+            static bool logged = false;
+            if (!logged) {
+                std::fprintf(stderr,
+                    "  [§E3.5 active] cc: ρ_top=%.4g B_{y0}=%.4g "
+                    "v_A=%.4g kΔy=%.4f 2cos(kΔy)=%.6f\n",
+                    rho_top_host, By0_host, vA_top, kdy, two_cos_kdy);
+                logged = true;
+            }
+            k_athmhd_ghost_y_top_radiation_cc<<<by_grid, dim3(64, 1)>>>(
+                d_rho, d_mx, d_my, d_mz, d_E,
+                d_Bx_cc, d_By_cc, d_Bz_cc,
+                two_cos_kdy, nx, ny, ng, sx, sy);
+        }
+    } else if (top_outgoing) {
+        k_athmhd_ghost_y_top_outgoing_cc<<<by_grid, dim3(64, 1)>>>(
+            d_rho, d_mx, d_my, d_mz, d_E,
+            d_Bx_cc, d_By_cc, d_Bz_cc,
+            nx, ny, ng, sx, sy);
+    } else if (top_outflow) {
+        k_athmhd_ghost_y_top_outflow_cc<<<by_grid, dim3(64, 1)>>>(
+            d_rho, d_mx, d_my, d_mz, d_E,
+            d_Bx_cc, d_By_cc, d_Bz_cc,
+            nx, ny, ng, sx, sy);
     }
 
     // Face B — use max(nx+1+2ng, ny+1+2ng) × ng grid
@@ -290,8 +418,56 @@ void AthenaMHDSolver::fill_ghost() {
     } else if (y_bc == 2) {
         k_athmhd_ghost_y_outflow_face<<<bf_grid_y, dim3(64, 1)>>>(
             d_Bxf, d_Byf, nx, ny, ng, sy);
+    } else if (driver_on && driver_Nmodes > 0) {
+        // §E2: bottom Bxf ghost = √ρ_0(−v_drv + ½ z̃⁻), Byf antisym mirror,
+        // top reflective (same kernel handles both in a single pass for
+        // simplicity of dispatch).
+        k_athmhd_ghost_y_characteristic_face<<<bf_grid_y, dim3(64, 1)>>>(
+            d_Bxf, d_Byf, d_rho, d_mx, d_Bx_cc,
+            d_driver_f, d_driver_amp, d_driver_phi,
+            driver_Nmodes, driver_t_now,
+            nx, ny, ng, sy);
     } else {
         k_athmhd_ghost_y_reflect_face<<<bf_grid_y, dim3(64, 1)>>>(
+            d_Bxf, d_Byf, nx, ny, ng, sy);
+    }
+    // §E3 / §E3.5 top face fill — overwrite top ghost faces.
+    if (top_radiation && top_radiation_feff > 0.0) {
+        // Reuse the same cos_kdy logic as the cc branch; simple to
+        // recompute since it's two scalar device→host reads.
+        double rho_top_host = 1.0;
+        {
+            int c_top = ng * sy + (ng + ny - 1);
+            cudaMemcpy(&rho_top_host, d_rho + c_top, sizeof(double),
+                       cudaMemcpyDeviceToHost);
+            if (!(rho_top_host > 1e-30)) rho_top_host = 1.0;
+        }
+        double By0_host = 0.0;
+        {
+            int syp1 = sy + 1;
+            int f = ng * syp1 + (ng + ny);
+            cudaMemcpy(&By0_host, d_Byf + f, sizeof(double),
+                       cudaMemcpyDeviceToHost);
+        }
+        double vA_top = std::fabs(By0_host) / std::sqrt(rho_top_host);
+        double k_top  = 2.0 * M_PI * top_radiation_feff / std::max(vA_top, 1e-30);
+        double kdy    = k_top * dy;
+        if (kdy <= 0.5 * M_PI) {
+            double two_cos_kdy = 2.0 * std::cos(kdy);
+            k_athmhd_ghost_y_top_radiation_face<<<bf_grid_y, dim3(64, 1)>>>(
+                d_Bxf, d_Byf, d_rho, d_mx, d_Bx_cc,
+                two_cos_kdy, nx, ny, ng, sy);
+        } else {
+            k_athmhd_ghost_y_top_outgoing_face<<<bf_grid_y, dim3(64, 1)>>>(
+                d_Bxf, d_Byf, d_rho, d_mx, d_Bx_cc,
+                nx, ny, ng, sy);
+        }
+    } else if (top_outgoing) {
+        k_athmhd_ghost_y_top_outgoing_face<<<bf_grid_y, dim3(64, 1)>>>(
+            d_Bxf, d_Byf, d_rho, d_mx, d_Bx_cc,
+            nx, ny, ng, sy);
+    } else if (top_outflow) {
+        k_athmhd_ghost_y_top_outflow_face<<<bf_grid_y, dim3(64, 1)>>>(
             d_Bxf, d_Byf, nx, ny, ng, sy);
     }
     (void)bcc; (void)gcc;   // unused
@@ -491,9 +667,47 @@ double AthenaMHDSolver::compute_dt() {
                           h_buf.size() * sizeof(double),
                           cudaMemcpyDeviceToHost));
     double dt_min = 1e300;
-    for (double v : h_buf) if (v > 0.0 && v < dt_min) dt_min = v;
+    int jmin = -1;
+    for (int k = 0; k < (int)h_buf.size(); ++k) {
+        double v = h_buf[k];
+        if (v > 0.0 && v < dt_min) { dt_min = v; jmin = k; }
+    }
     double use_cfl = std::min(cfl, cfl_limit);
-    return use_cfl * dt_min;
+    double dt_out = use_cfl * dt_min;
+    if (dt_collapse_diag && dt_out < 1e-3) {
+        int imin = jmin / ny, jmin_idx = jmin % ny;
+        std::vector<double> wr(sx*sy), wP(sx*sy), wu(sx*sy),
+                            wv(sx*sy), wBx(sx*sy), wBy(sx*sy);
+        size_t nb = (size_t)sx*sy*sizeof(double);
+        CUDA_CHECK(cudaMemcpy(wr.data(),  d_w_rho, nb, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(wP.data(),  d_w_P,   nb, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(wu.data(),  d_w_u,   nb, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(wv.data(),  d_w_v,   nb, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(wBx.data(), d_w_Bx,  nb, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(wBy.data(), d_w_By,  nb, cudaMemcpyDeviceToHost));
+        int c = (imin + ng)*sy + (jmin_idx + ng);
+        std::fprintf(stderr,
+            "  [dt_collapse_diag] dt=%.3e at (i=%d,j=%d) "
+            "rho=%.3e P=%.3e vy=%.3e Bx=%.3e By=%.3e\n",
+            dt_out, imin, jmin_idx,
+            wr[c], wP[c], wv[c], wBx[c], wBy[c]);
+        // Scan for neg/tiny rho or P across grid:
+        double rmin = 1e300, pmin = 1e300, rmax = -1, pmax = -1;
+        int i_rm=-1,j_rm=-1, i_pm=-1,j_pm=-1;
+        for (int i = ng; i < ng + nx; ++i) {
+            for (int j = ng; j < ng + ny; ++j) {
+                int k = i*sy + j;
+                if (wr[k] < rmin) { rmin = wr[k]; i_rm=i-ng; j_rm=j-ng; }
+                if (wP[k] < pmin) { pmin = wP[k]; i_pm=i-ng; j_pm=j-ng; }
+                if (wr[k] > rmax) rmax = wr[k];
+                if (wP[k] > pmax) pmax = wP[k];
+            }
+        }
+        std::fprintf(stderr,
+            "     rho range [%.3e @(%d,%d), %.3e]  P range [%.3e @(%d,%d), %.3e]\n",
+            rmin, i_rm, j_rm, rmax, pmin, i_pm, j_pm, pmax);
+    }
+    return dt_out;
 }
 
 // ============================================================
@@ -2064,11 +2278,46 @@ void AthenaMHDSolver::init_stochastic_driver(double A_rms, double f_min,
 
 void AthenaMHDSolver::apply_driver(double t) {
     if (!driver_on) return;
-    int sy = stride_y();
-    dim3 b(64, 1), g((nx + 63) / 64, 1);
-    k_athmhd_driver_apply<<<g, b>>>(
+    // §E2: no longer SET interior.  Just record time; the characteristic
+    // ghost-fill kernels (dispatched from fill_ghost) read driver_t_now
+    // and apply the BC z̃⁺|ghost = −2 v_x^drv(t) + absorbing z̃⁻.
+    driver_t_now = t;
+}
+
+// ============================================================
+// §E4 PML absorbing sponge — implicit-Euler damping on the Alfvén
+// primitive pair (v_x, B_x) and (v_z, B_z) in cells with yc >= y_start.
+// Derivation: docs/derivations/mhd/sections/e4_pml_sponge.md.
+// ============================================================
+void AthenaMHDSolver::apply_pml(double dt) {
+    if (!pml_on || !(pml_sigma0 > 0.0) || !(dt > 0.0)) return;
+    {
+        static bool logged = false;
+        if (!logged) {
+            std::fprintf(stderr,
+                "  [§E4 PML active] y_start=%.3f L_y=%.3f σ₀=%.3f dt=%.3e\n",
+                pml_y_start, y_hi, pml_sigma0, dt);
+            logged = true;
+        }
+    }
+    int sx = stride_x(), sy = stride_y();
+    dim3 b(16, 16);
+    // Face pass FIRST (reads OLD mx, OLD rho; §E4 Identity 8 — ordering
+    // invariance requires face to see OLD v_x before cc overwrites mx).
+    dim3 gf((nx + 1 + 2 * ng + 15) / 16, (ny + 15) / 16);
+    k_athmhd_apply_pml_face<<<gf, b>>>(
+        d_Bxf, d_rho, d_mx,
+        dt, pml_y_start, y_hi, pml_sigma0,
+        y_lo, dy,
+        nx, ny, ng, sx, sy);
+    // Cell-centered pass SECOND (reads OLD Bx_cc; writes NEW mx, NEW
+    // Bx_cc, NEW Bz_cc, NEW E).  Identity 7 requires the NEW B_x in
+    // the E update to avoid δp leakage.
+    dim3 g((nx + 15) / 16, (ny + 15) / 16);
+    k_athmhd_apply_pml<<<g, b>>>(
         d_rho, d_mx, d_my, d_mz, d_E,
-        d_driver_f, d_driver_amp, d_driver_phi,
-        driver_Nmodes, t, nx, ng, sy);
-    CUDA_CHECK(cudaGetLastError());
+        d_Bxf, d_Bx_cc, d_By_cc, d_Bz_cc,
+        dt, pml_y_start, y_hi, pml_sigma0,
+        y_lo, dy,
+        nx, ny, ng, sx, sy);
 }

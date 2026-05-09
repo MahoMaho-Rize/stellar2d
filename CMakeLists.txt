@@ -449,6 +449,11 @@ if(USE_GPU)
                  tests/test_athena_mhd_driver.cu
                  EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
                                src/gpu/explicit/athena_mhd_kernels.cu)
+    # Phase B-M5.75 — all-operators combined smoke (WB+κ+cool+chromo+driver)
+    add_gpu_test(athena_mhd_all_ops
+                 tests/test_athena_mhd_all_ops.cu
+                 EXTRA_SOURCES src/gpu/explicit/athena_mhd_solver.cu
+                               src/gpu/explicit/athena_mhd_kernels.cu)
 
     # Standalone CUDA unit tests (no extra solver sources)
     add_gpu_test(helm_l2            tests/test_helm_l2.cu)

@@ -132,11 +132,49 @@ struct AthenaMHDSolver {
     double driver_fmin     = 0.0;
     double driver_fmax     = 0.0;
     int    driver_Nmodes   = 0;
+    // Current driver evaluation time (stashed by apply_driver, read by the
+    // characteristic ghost-fill kernels during fill_ghost).  Decoupling
+    // the waveform evaluation from ghost filling is the §E2 shift from
+    // the interior-SET B-M5 implementation: driver values enter the
+    // Riemann solver only through the bottom ghost row.
+    double driver_t_now    = 0.0;
     // Host-side mode table (freqs, amps, phases).  Pushed to device
     // once in init_stochastic_driver; kernels read d_driver_*.
     double *d_driver_f     = nullptr;
     double *d_driver_amp   = nullptr;
     double *d_driver_phi   = nullptr;
+
+    // §E3 top outgoing characteristic BC (default OFF).  When true, the
+    // top ghost row uses the non-reflecting Elsässer-invariant fill
+    //     z^-|top_ghost = 0,  z^+|top_ghost = z^+|int
+    // instead of the reflective mirror.  Required for steady-state
+    // Alfvén-driven wind runs (B-M5 T7, future B-M6); must stay OFF on
+    // reflective / eigenmode tests.  Derivation: sections/e3_top_outgoing_bc.md.
+    bool top_outgoing = false;
+
+    // Top-outflow override (default OFF).  When true, the TOP ghost row
+    // uses zero-gradient outflow regardless of y_bc (which still controls
+    // the BOTTOM wall — useful for driver runs where bottom is §E2
+    // characteristic and top should just let waves leave).  Combined
+    // with §E4 PML sponge this gives a non-reflecting top without the
+    // instability of the §E3 continuum mirror in long-time runs.
+    bool top_outflow = false;
+
+    // §E3.5 Stone-1999 radiation BC (default OFF, legacy / uniform-
+    // background only).  Unstable in stratified atmospheres — use the
+    // §E4 PML sponge instead for wind-column runs.  Kept for reference.
+    bool   top_radiation      = false;
+    double top_radiation_feff = 0.0;
+
+    // §E4 PML absorbing sponge (default OFF).  Characteristic-variable
+    // drag on the outgoing Alfvén invariant z^+ over y ∈ [pml_y_start,
+    // L_y], using a quadratic profile σ(y) = σ_0·((y-y_start)/Δ)².
+    // Implicit-Euler time integration (L-stable for any dt).  Runs
+    // after the hyperbolic chain as a separate source operator.
+    // Derivation: sections/e4_pml_sponge.md.
+    bool   pml_on       = false;
+    double pml_y_start  = 0.0;    // absolute y where absorber starts
+    double pml_sigma0   = 0.0;    // peak damping rate at y = L_y
 
     // ---- §C7 optically-thin radiative cooling ------------------
     // Single power-law Λ(T) = Λ₀·(T/T_ref)^α; ODE dT/dt = -C·T^α with
@@ -201,6 +239,9 @@ struct AthenaMHDSolver {
     // ---- bookkeeping -------------------------------------------
     int step_count = 0;
     double dt_current = 0.0;
+    // Diagnostic: when true, compute_dt() prints rho/P/v state whenever
+    // dt drops below 1e-6.  Used to trace dt-collapse root cause.
+    bool   dt_collapse_diag = false;
 
     // =================== public API ============================
     void init(int nx, int ny, double Lx, double Ly,
@@ -312,14 +353,21 @@ struct AthenaMHDSolver {
     // will be true and apply_driver(t) is active.
     void init_stochastic_driver(double A_rms, double f_min, double f_max,
                                 int N_modes, unsigned seed);
-    // Apply driver by SETTING the horizontal velocity v_x in the
-    // j = ng row (first interior row) to v_driver(t).  This is the
-    // prescribed-velocity BC convention in Suzuki+25: the photospheric
-    // boundary has a given velocity waveform, not an added impulse.
-    // Only m_x is updated (v_y, v_z, ρ, B, P unchanged); E is adjusted
-    // to preserve total energy (old KE removed, new KE added with new
-    // v_x).
+    // Apply driver: stash t into driver_t_now so that the next
+    // fill_ghost(), called by the VL2 predictor/corrector, evaluates
+    // the characteristic ghost-fill (§E2) with the driver waveform
+    // v_x^drv(t).  The driver no longer overwrites interior cells;
+    // influence enters the Riemann solver via the bottom ghost row
+    // only (reflection-free, mass-conservative).  B-M5/B-M5.75 note:
+    // this call used to SET the interior j=n_g row's v_x; that
+    // non-conservative shortcut is removed.
     void apply_driver(double t);
+
+    // §E4 PML absorbing sponge step.  No-op if pml_on == false.
+    // Uses implicit-Euler update on the Alfvén primitive pair
+    // (v_x, B_x) in cells with yc >= pml_y_start; z-polarised channel
+    // handled identically.  Unconditionally L-stable.
+    void apply_pml(double dt);
 
     // MHD rotor (Tóth 2000 Rotor Test 1, Stone+08 Fig 25).
     //   Inside r<0.1: ρ=10, rigid-body rotation at ω=200
