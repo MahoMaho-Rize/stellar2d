@@ -1,0 +1,33 @@
+# sod_cart_ale2 — Sod shock tube on the Cartesian ALE 2D solver
+#
+# 1D Sod shock tube embedded in a thin (ny=8) 2D strip so cart_ale2 can
+# run it.  Canonical L1-convergence benchmark — use with pytest tst/test_ale2/
+# or stand-alone via `--compute-error`.
+#
+# Reference: Sod, J. Comput. Phys. 27 (1978) 1.
+#
+# Run:   stellar2d run --profile sod_cart_ale2
+
+solver = "cart_ale2"
+test   = "sod"
+
+nr     = 256         # x-direction (shock travel)
+ntheta = 8           # thin y strip
+cfl    = 0.3
+t_end  = 0.2
+
+# Walls both directions — waves reflect at y boundaries harmlessly here.
+cart_ale2_bc_x = "reflect"
+cart_ale2_bc_y = "reflect"
+
+# Tight remap+PPM combo = best shock resolution.
+cart_ale_remap_order     = 2
+cart_ale_limiter         = "vanleer"
+cart_ale2_ppm            = true
+cart_ale2_ppm_limiter    = "cs"
+
+# Emit sod-errors.dat at t_end for pytest.
+compute_error = true
+
+# No VTK frame buffer needed for a ~1 s run.
+output_interval = 100

@@ -1,0 +1,24 @@
+# lane_emden_n15 — Lane-Emden n=1.5 polytropic static atmosphere
+#
+# Canonical Lane-Emden n=1.5 polytrope on the FAS multigrid low-Mach solver.
+# A standard sanity check for gravity + EOS + hydrostatic equilibrium.
+#
+# Reference: Chandrasekhar, "An Introduction to the Study of Stellar Structure".
+#
+# Run:   stellar2d run --profile lane_emden_n15
+
+solver = "fas"
+test   = "lane_emden"
+
+# A 128×64 polar grid is enough for qualitative structure; crank up for
+# convergence studies.
+nr     = 128
+ntheta = 64
+cfl    = 0.4
+t_end  = 5.0
+
+# Log-spaced radial mesh (SimConfig default) captures the steep surface.
+mesh   = "log"
+
+# Diagnostic dump every 100 steps (SimConfig default).
+output_interval = 100

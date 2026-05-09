@@ -26,6 +26,10 @@ static const std::vector<std::string>& known_flags() {
         // the token; the actual load happens in main() before parse_cli so
         // that later CLI flags can override TOML values.
         "--config",
+        // Tier B-2: --profile NAME — shortcut for `--config config/profiles/NAME.toml`.
+        // Also resolved in main() before parse_cli so that CLI overrides it,
+        // and so that --profile overlays on top of --config (§3f priority).
+        "--profile",
         // Core
         "--test", "--nr", "--ntheta", "--tend", "--cfl",
         "--output-interval", "--mesh", "--solver", "--precond", "--perturb",
@@ -131,6 +135,9 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
         // already happened in main() (pre-CLI phase) so that CLI flags
         // that come after --config can still override its values.
         else if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc)
+            ++i;
+        // --profile NAME: same treatment (resolved by main → TOML load).
+        else if (std::strcmp(argv[i], "--profile") == 0 && i + 1 < argc)
             ++i;
         else if (std::strcmp(argv[i], "--nr") == 0 && i + 1 < argc)
             cfg.nr = std::atoi(argv[++i]);

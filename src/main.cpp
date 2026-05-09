@@ -60,6 +60,16 @@ int run_simulation(int argc, char** argv) {
         }
     }
 
+    // Pre-scan --profile NAME after --config so profiles overlay on top
+    // of raw configs (§3f: CLI > --profile > --config > defaults).
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--profile") == 0 && i + 1 < argc) {
+            if (int rc = load_profile_into_cfg(argv[i + 1], cfg); rc != 0)
+                return rc;
+            ++i;
+        }
+    }
+
     if (int rc = parse_cli(argc, argv, cfg); rc != 0)
         return (rc == 2) ? 0 : rc;
 

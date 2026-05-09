@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -404,4 +405,75 @@ int load_toml_into_cfg(const std::string& path, SimConfig& cfg) {
 
     std::printf("[config] loaded %s\n", path.c_str());
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+//  Tier B-2: --profile NAME sugar.  Resolves NAME to
+//  config/profiles/<NAME>.toml (relative to the current working directory)
+//  and delegates to load_toml_into_cfg.  If NAME contains a slash or ends
+//  in ".toml", it is treated as a path and used verbatim so that
+//  `--profile /path/to/foo.toml` also works.
+// ---------------------------------------------------------------------------
+namespace {
+
+std::vector<std::string> available_profile_names() {
+    std::vector<std::string> out;
+    const std::filesystem::path dir = "config/profiles";
+    std::error_code ec;
+    if (!std::filesystem::exists(dir, ec) ||
+        !std::filesystem::is_directory(dir, ec)) {
+        return out;
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() == ".toml") {
+            out.push_back(entry.path().stem().string());
+        }
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+} // namespace
+
+int load_profile_into_cfg(const std::string& name_or_path, SimConfig& cfg) {
+    // Raw-path short-circuit so `--profile ./mine.toml` or absolute paths
+    // behave identically to `--config`.
+    bool is_path = (name_or_path.find('/') != std::string::npos) ||
+                   (name_or_path.size() >= 5 &&
+                    name_or_path.substr(name_or_path.size() - 5) == ".toml");
+
+    std::string path;
+    if (is_path) {
+        path = name_or_path;
+    } else {
+        path = "config/profiles/" + name_or_path + ".toml";
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) {
+        std::fprintf(stderr,
+                     "[profile] ERROR: profile \"%s\" not found (looked for %s).\n",
+                     name_or_path.c_str(), path.c_str());
+
+        const auto avail = available_profile_names();
+        if (avail.empty()) {
+            std::fprintf(stderr,
+                         "  No profiles found under config/profiles/.\n"
+                         "  Are you running from the repo root?  Pass an explicit\n"
+                         "  path with --config <path> to point at a TOML elsewhere.\n");
+        } else {
+            std::string s = suggest_closest(name_or_path, avail, 3);
+            if (!s.empty()) {
+                std::fprintf(stderr, "  Did you mean --profile %s?\n", s.c_str());
+            }
+            std::fprintf(stderr, "  Available profiles:\n");
+            for (const auto& n : avail) {
+                std::fprintf(stderr, "    %s\n", n.c_str());
+            }
+        }
+        return 1;
+    }
+
+    return load_toml_into_cfg(path, cfg);
 }

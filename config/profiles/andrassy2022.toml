@@ -1,0 +1,42 @@
+# andrassy2022 — Andrassy et al. 2022 idealised O-shell convection
+#
+# Reproduces A&A 659 A193 §3.1 idealised O-shell stratification + Eq. 6
+# density perturbation.  Requires the 6-column slab IC written by
+# `scripts/mesa/build_ic.py` at `data/andrassy_slab.txt`:
+#    y [cm]   rho [g/cc]   P [dyn/cm^2]   T [K]   g(y)   q_dot(y)
+#
+# Reference: Andrassy et al., A&A 659 A193 (2022); their fig. 5 panels.
+#
+# Run:   stellar2d run --profile andrassy2022
+#        (make sure data/andrassy_slab.txt exists; run build_ic.py first)
+
+solver = "cart_ale2"
+test   = "andrassy2022"
+
+nr     = 256
+ntheta = 256
+cfl    = 0.3
+t_end  = 100.0      # ~50 convective turnovers at default stratification
+
+# Horizontal periodic + vertical reflect walls (paper Eq. 2 BCs).
+cart_ale2_bc_x = "periodic"
+cart_ale2_bc_y = "reflect"
+
+cart_ale_remap_order  = 2
+cart_ale_limiter      = "vanleer"
+cart_ale2_ppm         = true
+cart_ale2_ppm_limiter = "cs"
+
+# IC file (user generates via scripts/mesa/build_ic.py).
+cart_ale2_slab_file = "data/andrassy_slab.txt"
+
+# Paper-exact Eq. 6 seed (amp 5e-5, no ensemble noise).
+cart_ale2_andrassy_amp   = 5.0e-5
+cart_ale2_andrassy_seed  = -1
+cart_ale2_andrassy_noise = 0.0
+
+# Dump one frame per second for the animation.
+vtk_dt            = 1.0
+frame_buffer      = true
+frame_headroom_mb = 2048
+output_interval   = 500

@@ -1,0 +1,32 @@
+# linwave_vl2 — Entropy wave convergence on the Athena++-vl2 port
+#
+# Single-mode sinusoidal entropy wave advected across a periodic box.
+# Serves as the vl2+PLM convergence probe: L1 error should scale as
+# N^{-2.03} on this problem (see pytest tst/test_vl2/test_vl2_entropy_wave_gpu.py).
+#
+# Reference: Stone & Gardiner 2008, Appendix A (linear-wave methodology).
+#
+# Run:   stellar2d run --profile linwave_vl2
+
+solver = "athena_vl2"
+test   = "entropy_wave"
+
+nr     = 128
+ntheta = 128
+cfl    = 0.3
+
+# Wave parameters: ρ0=1, P0=1, u0=1, δρ/ρ = 0.01 sin(k·2π x), one period.
+ewave_rho0    = 1.0
+ewave_P0      = 1.0
+ewave_u0      = 1.0
+ewave_A       = 0.01
+ewave_k       = 1
+ewave_periods = 1.0
+
+# Default PLM (vanleer), xorder=2.  Set xorder=1 to probe donor-cell.
+athena_vl2_xorder  = 2
+athena_vl2_limiter = 0
+
+# Emit entropy_wave-errors.dat for pytest.
+compute_error   = true
+output_interval = 100

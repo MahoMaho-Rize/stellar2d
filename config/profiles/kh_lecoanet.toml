@@ -1,0 +1,41 @@
+# kh_lecoanet — Kelvin-Helmholtz, Lecoanet 2015 canonical IC
+#
+# The KH canonical "athena++ iprob=4" layer setup: two counter-flowing
+# density-matched shear layers, exact periodic boundaries, k=1 seed.
+# Meant for convection / turbulence code intercomparison; see also
+# scripts/pseudo_spectral/spectrum_kh.py for the post-run KE spectrum.
+#
+# Reference: Lecoanet et al., MNRAS 455 (2016) 4274, §2.2.
+#
+# Run:   stellar2d run --profile kh_lecoanet
+
+solver = "cart_ale2"
+test   = "kh_lecoanet"
+
+# Default resolution matches the Lecoanet paper; drop to 128x256 for a
+# quick smoke.
+nr     = 256
+ntheta = 512
+cfl    = 0.3
+t_end  = 5.0
+
+# Fully periodic — required by the test's reference solution.
+cart_ale2_bc_x = "periodic"
+cart_ale2_bc_y = "periodic"
+
+# PPM-in-remap for best interface sharpness.
+cart_ale_remap_order     = 2
+cart_ale_limiter         = "vanleer"
+cart_ale2_ppm            = true
+cart_ale2_ppm_limiter    = "cs"
+cart_ale2_ppm_space      = "prim"
+cart_ale2_ppm_char       = true
+
+# Lecoanet's k = 1 single-mode seed.
+cart_ale2_kh_k = 1
+
+# VRAM frame buffer: 56 frames @ 256x512 fits easily in 1 GB headroom.
+vtk_dt            = 0.025
+frame_buffer      = true
+frame_headroom_mb = 1024
+output_interval   = 200

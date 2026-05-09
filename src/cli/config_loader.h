@@ -14,15 +14,21 @@
 //     CLI flags > --profile NAME > --config FILE > built-in defaults
 //
 // This means main() calls load_toml_into_cfg BEFORE parse_cli, letting
-// subsequent CLI flags override any TOML-loaded values.  Tier B-2 will add
-// the --profile layer.
+// subsequent CLI flags override any TOML-loaded values.
+//
+// `load_profile_into_cfg(name, cfg)` is Tier B-2 sugar for "load
+// config/profiles/<name>.toml".  If the name contains a "/" or ends
+// ".toml", it is treated as a raw path instead; this lets users point
+// --profile at a non-repo TOML without switching to --config.  If the
+// profile is not found, the error message lists available profiles found
+// under config/profiles/ (with Levenshtein did-you-mean suggestions).
 //
 // Returns 0 on success, 1 on any error (parse error, unknown key,
-// type mismatch).  In the error path, a human-readable diagnostic is
-// written to stderr.
+// type mismatch, profile-not-found).  Diagnostics go to stderr.
 
 #include <string>
 
 struct SimConfig;
 
 int load_toml_into_cfg(const std::string& path, SimConfig& cfg);
+int load_profile_into_cfg(const std::string& name_or_path, SimConfig& cfg);

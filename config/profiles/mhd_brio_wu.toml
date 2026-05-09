@@ -1,0 +1,25 @@
+# mhd_brio_wu — Brio-Wu 1D MHD shock tube in a 2D strip
+#
+# Canonical compressible-MHD benchmark: L/R states differ in density,
+# pressure, and B_y; B_x is uniform across the interface.  Produces a
+# compound (fast shock + slow rarefaction + ...) 7-wave structure.
+#
+# Reference: Brio & Wu, J. Comput. Phys. 75 (1988) 400.  Our implementation
+# lives in src/gpu/explicit/athena_mhd_*; see also
+# tests/test_athena_mhd_brio_wu.cu for the in-process regression.
+#
+# Run:   stellar2d run --profile mhd_brio_wu
+
+solver = "athena_mhd"
+test   = "brio_wu"
+
+# Long x strip, thin y dimension (physically 1D).
+nr     = 512
+ntheta = 8
+cfl    = 0.3
+t_end  = 0.1
+
+# gamma = 2 is the Brio-Wu canonical value; override per paper.
+gamma = 2.0
+
+output_interval = 100
