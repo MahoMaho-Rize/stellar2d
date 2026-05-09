@@ -23,241 +23,284 @@ const char* limiter_name(Limiter l) {
     return "?";
 }
 
-const char* yn(bool b) { return b ? "true" : "false"; }
+const char* bool_str(bool b) { return b ? "true" : "false"; }
+
+// Escape a string for safe embedding in a TOML basic-string literal.
+// We only need the characters that actually appear in stellar2d field
+// values (paths, names, trace-cell specs): backslash, double quote, and
+// the usual control chars.
+std::string toml_escape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 2);
+    for (char c : s) {
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '"':  out += "\\\""; break;
+            case '\b': out += "\\b";  break;
+            case '\f': out += "\\f";  break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[8];
+                    std::snprintf(buf, sizeof(buf), "\\u%04x",
+                                  static_cast<unsigned>(c));
+                    out += buf;
+                } else {
+                    out += c;
+                }
+        }
+    }
+    return out;
+}
 
 } // namespace
 
 void dump_resolved_cli(const SimConfig& cfg, const std::string& run_dir) {
-    const std::string path = run_dir + "/config.dump.txt";
+    const std::string path = run_dir + "/config.toml";
     FILE* fp = std::fopen(path.c_str(), "w");
     if (!fp) {
         std::fprintf(stderr,
-                     "[config_dump] WARNING: cannot open %s for writing — "
+                     "[config_dump] WARNING: cannot open %s for writing - "
                      "reproducibility dump skipped.\n", path.c_str());
         return;
     }
 
+    // File-scoped writer helpers.
+    auto put_str = [&](const char* key, const std::string& v) {
+        std::fprintf(fp, "%-24s = \"%s\"\n", key, toml_escape(v).c_str());
+    };
+    auto put_bool = [&](const char* key, bool v) {
+        std::fprintf(fp, "%-24s = %s\n", key, bool_str(v));
+    };
+    auto put_int = [&](const char* key, int v) {
+        std::fprintf(fp, "%-24s = %d\n", key, v);
+    };
+    auto put_u64 = [&](const char* key, unsigned long long v) {
+        std::fprintf(fp, "%-24s = %llu\n", key, v);
+    };
+    auto put_double = [&](const char* key, double v) {
+        std::fprintf(fp, "%-24s = %.17g\n", key, v);
+    };
+
     // ---- Header --------------------------------------------------------
     std::fprintf(fp,
-        "# stellar2d resolved CLI configuration\n"
-        "# Produced by Tier A config_dump (plain key=value form).\n"
-        "# Tier B will upgrade this to a TOML round-tripable form at\n"
-        "# <run>/config.toml, reloadable with `stellar2d --config <path>`.\n"
-        "# See docs/design/cli_unification_plan_2026-05-09.md.\n"
+        "# stellar2d resolved CLI configuration (TOML).\n"
+        "# Reload via:  stellar2d run --config %s\n"
+        "# See docs/design/cli_unification_plan_2026-05-09.md §2d, §6.\n"
         "#\n"
         "# stellar2d version: %s\n"
         "# build date:        %s\n"
         "\n",
-        STELLAR2D_GIT_HASH, STELLAR2D_BUILD_DATE);
+        path.c_str(), STELLAR2D_GIT_HASH, STELLAR2D_BUILD_DATE);
 
     // ---- Core ----------------------------------------------------------
     std::fprintf(fp, "# --- core ---\n");
-    std::fprintf(fp, "solver                   = %s\n",    cfg.solver_type.c_str());
-    std::fprintf(fp, "test                     = %s\n",    cfg.test_case.c_str());
-    std::fprintf(fp, "nr                       = %d\n",    cfg.nr);
-    std::fprintf(fp, "ntheta                   = %d\n",    cfg.ntheta);
-    std::fprintf(fp, "R_outer                  = %.17g\n", cfg.R_outer);
-    std::fprintf(fp, "gamma                    = %.17g\n", cfg.gamma);
-    std::fprintf(fp, "cfl                      = %.17g\n", cfg.cfl);
-    std::fprintf(fp, "t_end                    = %.17g\n", cfg.t_end);
-    std::fprintf(fp, "G                        = %.17g\n", cfg.G);
-    std::fprintf(fp, "mesh                     = %s\n",    cfg.mesh_type.c_str());
-    std::fprintf(fp, "limiter                  = %s\n",    limiter_name(cfg.limiter));
-    std::fprintf(fp, "perturb                  = %.17g\n", cfg.perturb_amplitude);
-    std::fprintf(fp, "run_base                 = %s\n",    cfg.run_base.c_str());
+    put_str  ("solver",       cfg.solver_type);
+    put_str  ("test",         cfg.test_case);
+    put_int  ("nr",           cfg.nr);
+    put_int  ("ntheta",       cfg.ntheta);
+    put_double("R_outer",     cfg.R_outer);
+    put_double("gamma",       cfg.gamma);
+    put_double("cfl",         cfg.cfl);
+    put_double("t_end",       cfg.t_end);
+    put_double("G",           cfg.G);
+    put_str  ("mesh",         cfg.mesh_type);
+    put_str  ("limiter",      limiter_name(cfg.limiter));
+    put_double("perturb",     cfg.perturb_amplitude);
+    put_str  ("run_base",     cfg.run_base);
 
     // ---- IO ------------------------------------------------------------
     std::fprintf(fp, "\n# --- io ---\n");
-    std::fprintf(fp, "output_interval          = %d\n",    cfg.output_interval);
-    std::fprintf(fp, "vtk_interval             = %d\n",    cfg.vtk_interval);
-    std::fprintf(fp, "vtk_dt                   = %.17g\n", cfg.vtk_dt);
-    std::fprintf(fp, "diag_interval            = %d\n",    cfg.diag_interval);
-    std::fprintf(fp, "frame_buffer             = %s\n",    yn(cfg.frame_buffer));
-    std::fprintf(fp, "frame_headroom_mb        = %d\n",    cfg.frame_headroom_mb);
-    std::fprintf(fp, "compute_error            = %s\n",    yn(cfg.compute_error));
+    put_int  ("output_interval",    cfg.output_interval);
+    put_int  ("vtk_interval",       cfg.vtk_interval);
+    put_double("vtk_dt",            cfg.vtk_dt);
+    put_int  ("diag_interval",      cfg.diag_interval);
+    put_bool ("frame_buffer",       cfg.frame_buffer);
+    put_int  ("frame_headroom_mb",  cfg.frame_headroom_mb);
+    put_bool ("compute_error",      cfg.compute_error);
 
     // ---- EOS / physics -------------------------------------------------
     std::fprintf(fp, "\n# --- eos / physics ---\n");
-    std::fprintf(fp, "eos                      = %s\n",    cfg.eos_type.c_str());
-    std::fprintf(fp, "eos_mu                   = %.17g\n", cfg.eos_mu);
-    std::fprintf(fp, "eos_rad_a                = %.17g\n", cfg.eos_rad_a);
-    std::fprintf(fp, "helm_table               = %s\n",    cfg.helm_table_path.c_str());
-    std::fprintf(fp, "helm_Abar                = %.17g\n", cfg.helm_Abar);
-    std::fprintf(fp, "helm_Zbar                = %.17g\n", cfg.helm_Zbar);
-    std::fprintf(fp, "radiation                = %s\n",    yn(cfg.radiation_enabled));
-    std::fprintf(fp, "rad_c_light              = %.17g\n", cfg.rad_c_light);
-    std::fprintf(fp, "rad_T_phot_floor         = %.17g\n", cfg.rad_T_phot_floor);
-    std::fprintf(fp, "nuclear                  = %s\n",    yn(cfg.nuclear_enabled));
-    std::fprintf(fp, "nuc_X                    = %.17g\n", cfg.nuc_X);
-    std::fprintf(fp, "nuc_Y                    = %.17g\n", cfg.nuc_Y);
-    std::fprintf(fp, "nuc_epsilon_scale        = %.17g\n", cfg.nuc_epsilon_scale);
-    std::fprintf(fp, "nuc_q_burn               = %.17g\n", cfg.nuc_q_burn);
-    std::fprintf(fp, "nuc_T_floor              = %.17g\n", cfg.nuc_T_floor);
-    std::fprintf(fp, "nuc_T_scale              = %.17g\n", cfg.nuc_T_scale);
-    std::fprintf(fp, "nuc_compress_frac        = %.17g\n", cfg.nuc_compress_frac);
-    std::fprintf(fp, "species                  = %s\n",    yn(cfg.species_enabled));
-    std::fprintf(fp, "mlt                      = %s\n",    yn(cfg.mlt_enabled));
-    std::fprintf(fp, "mlt_alpha                = %.17g\n", cfg.mlt_alpha);
-    std::fprintf(fp, "kap_use_table            = %s\n",    yn(cfg.kap_use_table));
-    std::fprintf(fp, "kap_highT_family         = %s\n",    cfg.kap_highT_family.c_str());
-    std::fprintf(fp, "kap_lowT_family          = %s\n",    cfg.kap_lowT_family.c_str());
-    std::fprintf(fp, "kap_table_Z              = %.17g\n", cfg.kap_table_Z);
-    std::fprintf(fp, "kap_data_dir             = %s\n",    cfg.kap_data_dir.c_str());
-    std::fprintf(fp, "kap_logT_lo_end          = %.17g\n", cfg.kap_logT_lo_end);
-    std::fprintf(fp, "kap_logT_hi_start        = %.17g\n", cfg.kap_logT_hi_start);
+    put_str  ("eos",                cfg.eos_type);
+    put_double("eos_mu",            cfg.eos_mu);
+    put_double("eos_rad_a",         cfg.eos_rad_a);
+    put_str  ("helm_table",         cfg.helm_table_path);
+    put_double("helm_Abar",         cfg.helm_Abar);
+    put_double("helm_Zbar",         cfg.helm_Zbar);
+    put_bool ("radiation",          cfg.radiation_enabled);
+    put_double("rad_c_light",       cfg.rad_c_light);
+    put_double("rad_T_phot_floor",  cfg.rad_T_phot_floor);
+    put_bool ("nuclear",            cfg.nuclear_enabled);
+    put_double("nuc_X",             cfg.nuc_X);
+    put_double("nuc_Y",             cfg.nuc_Y);
+    put_double("nuc_epsilon_scale", cfg.nuc_epsilon_scale);
+    put_double("nuc_q_burn",        cfg.nuc_q_burn);
+    put_double("nuc_T_floor",       cfg.nuc_T_floor);
+    put_double("nuc_T_scale",       cfg.nuc_T_scale);
+    put_double("nuc_compress_frac", cfg.nuc_compress_frac);
+    put_bool ("species",            cfg.species_enabled);
+    put_bool ("mlt",                cfg.mlt_enabled);
+    put_double("mlt_alpha",         cfg.mlt_alpha);
+    put_bool ("kap_use_table",      cfg.kap_use_table);
+    put_str  ("kap_highT_family",   cfg.kap_highT_family);
+    put_str  ("kap_lowT_family",    cfg.kap_lowT_family);
+    put_double("kap_table_Z",       cfg.kap_table_Z);
+    put_str  ("kap_data_dir",       cfg.kap_data_dir);
+    put_double("kap_logT_lo_end",   cfg.kap_logT_lo_end);
+    put_double("kap_logT_hi_start", cfg.kap_logT_hi_start);
 
     // ---- IC ------------------------------------------------------------
     std::fprintf(fp, "\n# --- initial conditions ---\n");
-    std::fprintf(fp, "ic_solar                 = %s\n",    yn(cfg.ic_solar));
-    std::fprintf(fp, "ic_rho_c                 = %.17g\n", cfg.ic_rho_c);
-    std::fprintf(fp, "ic_R_star                = %.17g\n", cfg.ic_R_star);
-    std::fprintf(fp, "ic_n_poly                = %.17g\n", cfg.ic_n_poly);
-    std::fprintf(fp, "ic_mesa_path             = %s\n",    cfg.ic_mesa_path.c_str());
-    std::fprintf(fp, "ic_mesa_seed_T           = %s\n",    yn(cfg.ic_mesa_seed_T));
-    std::fprintf(fp, "ic_mesa_atm_zones        = %d\n",    cfg.ic_mesa_atm_zones);
-    std::fprintf(fp, "atm_split                = %d\n",    cfg.atm_split);
-    std::fprintf(fp, "rich_profile             = %s\n",    yn(cfg.rich_profile));
+    put_bool ("ic_solar",           cfg.ic_solar);
+    put_double("ic_rho_c",          cfg.ic_rho_c);
+    put_double("ic_R_star",         cfg.ic_R_star);
+    put_double("ic_n_poly",         cfg.ic_n_poly);
+    put_str  ("ic_mesa_path",       cfg.ic_mesa_path);
+    put_bool ("ic_mesa_seed_T",     cfg.ic_mesa_seed_T);
+    put_int  ("ic_mesa_atm_zones",  cfg.ic_mesa_atm_zones);
+    put_int  ("atm_split",          cfg.atm_split);
+    put_bool ("rich_profile",       cfg.rich_profile);
 
-    // ---- bubble IC (shared by hse_bubble / cart_ale / cart_ale2) -------
+    // ---- bubble IC (single-bubble; multi-bubble array Tier C) ----------
     std::fprintf(fp, "\n# --- bubble IC ---\n");
-    std::fprintf(fp, "bubble_mode              = %s\n",    cfg.bubble_mode.c_str());
-    std::fprintf(fp, "bubble_xc                = %.17g\n", cfg.bubble_xc);
-    std::fprintf(fp, "bubble_yc                = %.17g\n", cfg.bubble_yc);
-    std::fprintf(fp, "bubble_rb                = %.17g\n", cfg.bubble_rb);
-    std::fprintf(fp, "bubble_alpha             = %.17g\n", cfg.bubble_alpha);
-    std::fprintf(fp, "bubble_beta              = %.17g\n", cfg.bubble_beta);
-    for (size_t bi = 0; bi < cfg.bubbles.size(); ++bi) {
-        const auto& b = cfg.bubbles[bi];
+    put_str  ("bubble_mode",        cfg.bubble_mode);
+    put_double("bubble_xc",         cfg.bubble_xc);
+    put_double("bubble_yc",         cfg.bubble_yc);
+    put_double("bubble_rb",         cfg.bubble_rb);
+    put_double("bubble_alpha",      cfg.bubble_alpha);
+    put_double("bubble_beta",       cfg.bubble_beta);
+    if (!cfg.bubbles.empty()) {
         std::fprintf(fp,
-            "bubble_multi[%zu]          = %.17g, %.17g, %.17g, %.17g, %.17g\n",
-            bi, b[0], b[1], b[2], b[3], b[4]);
+            "# NOTE: %zu bubble(s) from --bubble are not dumped in Tier B-3 TOML.\n"
+            "# Tier C will add [[bubble_multi]] array-of-tables support.\n",
+            cfg.bubbles.size());
     }
 
     // ---- BC ------------------------------------------------------------
     std::fprintf(fp, "\n# --- bc ---\n");
-    std::fprintf(fp, "no_sponge                = %s\n",    yn(cfg.no_sponge));
-    std::fprintf(fp, "radial_only              = %s\n",    yn(cfg.radial_only));
-    std::fprintf(fp, "r_inner                  = %.17g\n", cfg.r_inner);
-    std::fprintf(fp, "M_core                   = %.17g\n", cfg.M_core);
+    put_bool ("no_sponge",          cfg.no_sponge);
+    put_bool ("radial_only",        cfg.radial_only);
+    put_double("r_inner",           cfg.r_inner);
+    put_double("M_core",            cfg.M_core);
 
     // ---- solver.radial1d ----------------------------------------------
     std::fprintf(fp, "\n# --- solver.radial1d ---\n");
-    std::fprintf(fp, "implicit                 = %s\n",    yn(cfg.implicit_mode));
-    std::fprintf(fp, "dt_implicit              = %.17g\n", cfg.dt_implicit);
-    std::fprintf(fp, "dt_implicit_scale        = %.17g\n", cfg.dt_implicit_scale);
-    std::fprintf(fp, "no_viallet               = %s\n",    yn(cfg.no_viallet));
-    std::fprintf(fp, "precond_tridiag          = %s\n",    yn(cfg.precond_tridiag));
-    std::fprintf(fp, "jfnk_autodiff            = %s\n",    yn(cfg.jfnk_autodiff));
-    std::fprintf(fp, "no_rhse_subtract         = %s\n",    yn(cfg.no_rhse_subtract));
-    std::fprintf(fp, "newton_tol               = %.17g\n", cfg.newton_tol_override);
-    std::fprintf(fp, "hse_resnap               = %d\n",    cfg.hse_resnap_interval);
-    std::fprintf(fp, "dt_thermal_frac          = %.17g\n", cfg.dt_thermal_frac);
-    std::fprintf(fp, "dt_mach_cap              = %.17g\n", cfg.dt_mach_cap);
+    put_bool ("implicit",           cfg.implicit_mode);
+    put_double("dt_implicit",       cfg.dt_implicit);
+    put_double("dt_implicit_scale", cfg.dt_implicit_scale);
+    put_bool ("no_viallet",         cfg.no_viallet);
+    put_bool ("precond_tridiag",    cfg.precond_tridiag);
+    put_bool ("jfnk_autodiff",      cfg.jfnk_autodiff);
+    put_bool ("no_rhse_subtract",   cfg.no_rhse_subtract);
+    put_double("newton_tol",        cfg.newton_tol_override);
+    put_int  ("hse_resnap",         cfg.hse_resnap_interval);
+    put_double("dt_thermal_frac",   cfg.dt_thermal_frac);
+    put_double("dt_mach_cap",       cfg.dt_mach_cap);
 
     // ---- solver.lowmach ------------------------------------------------
     std::fprintf(fp, "\n# --- solver.lowmach ---\n");
-    std::fprintf(fp, "precond                  = %s\n",    cfg.precond.c_str());
-    std::fprintf(fp, "hllc_variant             = %d\n",    cfg.hllc_variant);
+    put_str  ("precond",            cfg.precond);
+    put_int  ("hllc_variant",       cfg.hllc_variant);
 
     // ---- solver.cart_ale / cart_ale2 -----------------------------------
     std::fprintf(fp, "\n# --- solver.cart_ale / cart_ale2 ---\n");
-    std::fprintf(fp, "cart_ale_remap_order     = %d\n",    cfg.cart_ale_remap_order);
-    std::fprintf(fp, "cart_ale_limiter         = %s\n",    cfg.cart_ale_limiter.c_str());
-    std::fprintf(fp, "cart_ale_cq_lin          = %.17g\n", cfg.cart_ale_cq_lin);
-    std::fprintf(fp, "cart_ale_cq_quad         = %.17g\n", cfg.cart_ale_cq_quad);
-    std::fprintf(fp, "cart_ale_shear_aware     = %s\n",    yn(cfg.cart_ale_shear_aware));
-    std::fprintf(fp, "cart_ale2_rebuild_order  = %d\n",    cfg.cart_ale2_rebuild_order);
-    std::fprintf(fp, "cart_ale2_bc_x           = %s\n",    cfg.cart_ale2_bc_x.c_str());
-    std::fprintf(fp, "cart_ale2_bc_y           = %s\n",    cfg.cart_ale2_bc_y.c_str());
-    std::fprintf(fp, "cart_ale2_ppm            = %s\n",    yn(cfg.cart_ale2_ppm));
-    std::fprintf(fp, "cart_ale2_ppm_limiter    = %s\n",    cfg.cart_ale2_ppm_limiter.c_str());
-    std::fprintf(fp, "cart_ale2_ppm_space      = %s\n",    cfg.cart_ale2_ppm_space.c_str());
-    std::fprintf(fp, "cart_ale2_ppm_char       = %s\n",    yn(cfg.cart_ale2_ppm_char));
-    std::fprintf(fp, "cart_ale2_kh_k           = %d\n",    cfg.cart_ale2_kh_k);
-    std::fprintf(fp, "cart_ale2_trace_cells    = %s\n",    cfg.cart_ale2_trace_cells.c_str());
-    std::fprintf(fp, "cart_ale2_trace_step_cap = %d\n",    cfg.cart_ale2_trace_step_cap);
-    std::fprintf(fp, "cart_ale2_slab_file      = %s\n",    cfg.cart_ale2_slab_file.c_str());
-    std::fprintf(fp, "cart_ale2_slab_perturb   = %.17g\n", cfg.cart_ale2_slab_perturb);
-    std::fprintf(fp, "cart_ale2_slab_seed_k    = %d\n",    cfg.cart_ale2_slab_seed_k);
-    std::fprintf(fp, "cart_ale2_cool_tau       = %.17g\n", cfg.cart_ale2_cool_tau);
-    std::fprintf(fp, "cart_ale2_heat_flux      = %.17g\n", cfg.cart_ale2_heat_flux);
-    std::fprintf(fp, "cart_ale2_heat_lsun      = %.17g\n", cfg.cart_ale2_heat_lsun);
-    std::fprintf(fp, "cart_ale2_heat_bot_R     = %.17g\n", cfg.cart_ale2_heat_bot_R);
-    std::fprintf(fp, "cart_ale2_heat_bot_frac  = %.17g\n", cfg.cart_ale2_heat_bot_frac);
-    std::fprintf(fp, "cart_ale2_cool_top_frac  = %.17g\n", cfg.cart_ale2_cool_top_frac);
-    std::fprintf(fp, "cart_ale2_andrassy_amp   = %.17g\n", cfg.cart_ale2_andrassy_amp);
-    std::fprintf(fp, "cart_ale2_andrassy_seed  = %d\n",    cfg.cart_ale2_andrassy_seed);
-    std::fprintf(fp, "cart_ale2_andrassy_noise = %.17g\n", cfg.cart_ale2_andrassy_noise);
+    put_int  ("cart_ale_remap_order",    cfg.cart_ale_remap_order);
+    put_str  ("cart_ale_limiter",        cfg.cart_ale_limiter);
+    put_double("cart_ale_cq_lin",        cfg.cart_ale_cq_lin);
+    put_double("cart_ale_cq_quad",       cfg.cart_ale_cq_quad);
+    put_bool ("cart_ale_shear_aware",    cfg.cart_ale_shear_aware);
+    put_int  ("cart_ale2_rebuild_order", cfg.cart_ale2_rebuild_order);
+    put_str  ("cart_ale2_bc_x",          cfg.cart_ale2_bc_x);
+    put_str  ("cart_ale2_bc_y",          cfg.cart_ale2_bc_y);
+    put_bool ("cart_ale2_ppm",           cfg.cart_ale2_ppm);
+    put_str  ("cart_ale2_ppm_limiter",   cfg.cart_ale2_ppm_limiter);
+    put_str  ("cart_ale2_ppm_space",     cfg.cart_ale2_ppm_space);
+    put_bool ("cart_ale2_ppm_char",      cfg.cart_ale2_ppm_char);
+    put_int  ("cart_ale2_kh_k",          cfg.cart_ale2_kh_k);
+    put_str  ("cart_ale2_trace_cells",   cfg.cart_ale2_trace_cells);
+    put_int  ("cart_ale2_trace_step_cap",cfg.cart_ale2_trace_step_cap);
+    put_str  ("cart_ale2_slab_file",     cfg.cart_ale2_slab_file);
+    put_double("cart_ale2_slab_perturb", cfg.cart_ale2_slab_perturb);
+    put_int  ("cart_ale2_slab_seed_k",   cfg.cart_ale2_slab_seed_k);
+    put_double("cart_ale2_cool_tau",     cfg.cart_ale2_cool_tau);
+    put_double("cart_ale2_heat_flux",    cfg.cart_ale2_heat_flux);
+    put_double("cart_ale2_heat_lsun",    cfg.cart_ale2_heat_lsun);
+    put_double("cart_ale2_heat_bot_R",   cfg.cart_ale2_heat_bot_R);
+    put_double("cart_ale2_heat_bot_frac",cfg.cart_ale2_heat_bot_frac);
+    put_double("cart_ale2_cool_top_frac",cfg.cart_ale2_cool_top_frac);
+    put_double("cart_ale2_andrassy_amp", cfg.cart_ale2_andrassy_amp);
+    put_int  ("cart_ale2_andrassy_seed", cfg.cart_ale2_andrassy_seed);
+    put_double("cart_ale2_andrassy_noise",cfg.cart_ale2_andrassy_noise);
 
     // ---- solver.athena_vl2 --------------------------------------------
     std::fprintf(fp, "\n# --- solver.athena_vl2 ---\n");
-    std::fprintf(fp, "athena_vl2_xorder        = %d\n",    cfg.athena_vl2_xorder);
-    std::fprintf(fp, "athena_vl2_limiter       = %d\n",    cfg.athena_vl2_limiter);
+    put_int  ("athena_vl2_xorder",  cfg.athena_vl2_xorder);
+    put_int  ("athena_vl2_limiter", cfg.athena_vl2_limiter);
 
     // ---- solver.pseudo_spectral ---------------------------------------
     std::fprintf(fp, "\n# --- solver.pseudo_spectral ---\n");
-    std::fprintf(fp, "ps_nu                    = %.17g\n", cfg.ps_nu);
-    std::fprintf(fp, "ps_Lx                    = %.17g\n", cfg.ps_Lx);
-    std::fprintf(fp, "ps_Ly                    = %.17g\n", cfg.ps_Ly);
-    std::fprintf(fp, "ps_vshear                = %.17g\n", cfg.ps_vshear);
-    std::fprintf(fp, "ps_k                     = %d\n",    cfg.ps_k);
-    std::fprintf(fp, "ps_explicit              = %s\n",    yn(cfg.ps_explicit));
-    std::fprintf(fp, "ps_adv_only              = %s\n",    yn(cfg.ps_adv_only));
-    std::fprintf(fp, "ps_forcing_eps           = %.17g\n", cfg.ps_forcing_eps);
-    std::fprintf(fp, "ps_forcing_kf            = %d\n",    cfg.ps_forcing_kf);
-    std::fprintf(fp, "ps_forcing_dk            = %d\n",    cfg.ps_forcing_dk);
-    std::fprintf(fp, "ps_forcing_seed          = %llu\n",
-                 static_cast<unsigned long long>(cfg.ps_forcing_seed));
-    std::fprintf(fp, "ps_forcing_host_rng      = %s\n",    yn(cfg.ps_forcing_host_rng));
-    std::fprintf(fp, "ps_drag_alpha            = %.17g\n", cfg.ps_drag_alpha);
-    std::fprintf(fp, "ps_hyper_p               = %d\n",    cfg.ps_hyper_p);
-    std::fprintf(fp, "ps_conservative          = %s\n",    yn(cfg.ps_conservative));
-    std::fprintf(fp, "ps_batched_fft           = %s\n",    yn(cfg.ps_batched_fft));
-    std::fprintf(fp, "ps_pi_dt                 = %s\n",    yn(cfg.ps_pi_dt));
-    std::fprintf(fp, "ps_tg_k                  = %d\n",    cfg.ps_tg_k);
-    std::fprintf(fp, "ps_vm_gamma              = %.17g\n", cfg.ps_vm_gamma);
-    std::fprintf(fp, "ps_vm_sigma              = %.17g\n", cfg.ps_vm_sigma);
-    std::fprintf(fp, "ps_vm_dist               = %.17g\n", cfg.ps_vm_dist);
-    std::fprintf(fp, "ps_ckpt_every            = %d\n",    cfg.ps_ckpt_every);
-    std::fprintf(fp, "ps_resume                = %s\n",    cfg.ps_resume.c_str());
+    put_double("ps_nu",              cfg.ps_nu);
+    put_double("ps_Lx",              cfg.ps_Lx);
+    put_double("ps_Ly",              cfg.ps_Ly);
+    put_double("ps_vshear",          cfg.ps_vshear);
+    put_int  ("ps_k",                cfg.ps_k);
+    put_bool ("ps_explicit",         cfg.ps_explicit);
+    put_bool ("ps_adv_only",         cfg.ps_adv_only);
+    put_double("ps_forcing_eps",     cfg.ps_forcing_eps);
+    put_int  ("ps_forcing_kf",       cfg.ps_forcing_kf);
+    put_int  ("ps_forcing_dk",       cfg.ps_forcing_dk);
+    put_u64  ("ps_forcing_seed",     static_cast<unsigned long long>(cfg.ps_forcing_seed));
+    put_bool ("ps_forcing_host_rng", cfg.ps_forcing_host_rng);
+    put_double("ps_drag_alpha",      cfg.ps_drag_alpha);
+    put_int  ("ps_hyper_p",          cfg.ps_hyper_p);
+    put_bool ("ps_conservative",     cfg.ps_conservative);
+    put_bool ("ps_batched_fft",      cfg.ps_batched_fft);
+    put_bool ("ps_pi_dt",            cfg.ps_pi_dt);
+    put_int  ("ps_tg_k",             cfg.ps_tg_k);
+    put_double("ps_vm_gamma",        cfg.ps_vm_gamma);
+    put_double("ps_vm_sigma",        cfg.ps_vm_sigma);
+    put_double("ps_vm_dist",         cfg.ps_vm_dist);
+    put_int  ("ps_ckpt_every",       cfg.ps_ckpt_every);
+    put_str  ("ps_resume",           cfg.ps_resume);
 
     // ---- solver.sph2d_spectral ----------------------------------------
     std::fprintf(fp, "\n# --- solver.sph2d_spectral ---\n");
-    std::fprintf(fp, "sph_R                    = %.17g\n", cfg.sph_R);
-    std::fprintf(fp, "sph_Omega                = %.17g\n", cfg.sph_Omega);
-    std::fprintf(fp, "sph_nu                   = %.17g\n", cfg.sph_nu);
-    std::fprintf(fp, "sph_Lmax                 = %d\n",    cfg.sph_Lmax);
-    std::fprintf(fp, "sph_drag                 = %.17g\n", cfg.sph_drag);
-    std::fprintf(fp, "sph_hyper                = %d\n",    cfg.sph_hyper);
-    std::fprintf(fp, "sph_pi_dt                = %s\n",    yn(cfg.sph_pi_dt));
-    std::fprintf(fp, "sph_rossby_l             = %d\n",    cfg.sph_rossby_l);
-    std::fprintf(fp, "sph_rossby_m             = %d\n",    cfg.sph_rossby_m);
-    std::fprintf(fp, "sph_rossby_amp           = %.17g\n", cfg.sph_rossby_amp);
-    std::fprintf(fp, "sph_forcing_eps          = %.17g\n", cfg.sph_forcing_eps);
-    std::fprintf(fp, "sph_forcing_lmin         = %d\n",    cfg.sph_forcing_lmin);
-    std::fprintf(fp, "sph_forcing_lmax         = %d\n",    cfg.sph_forcing_lmax);
-    std::fprintf(fp, "sph_forcing_seed         = %llu\n",
-                 static_cast<unsigned long long>(cfg.sph_forcing_seed));
-    std::fprintf(fp, "sph_ckpt_every           = %d\n",    cfg.sph_ckpt_every);
-    std::fprintf(fp, "sph_resume               = %s\n",    cfg.sph_resume.c_str());
+    put_double("sph_R",              cfg.sph_R);
+    put_double("sph_Omega",          cfg.sph_Omega);
+    put_double("sph_nu",             cfg.sph_nu);
+    put_int  ("sph_Lmax",            cfg.sph_Lmax);
+    put_double("sph_drag",           cfg.sph_drag);
+    put_int  ("sph_hyper",           cfg.sph_hyper);
+    put_bool ("sph_pi_dt",           cfg.sph_pi_dt);
+    put_int  ("sph_rossby_l",        cfg.sph_rossby_l);
+    put_int  ("sph_rossby_m",        cfg.sph_rossby_m);
+    put_double("sph_rossby_amp",     cfg.sph_rossby_amp);
+    put_double("sph_forcing_eps",    cfg.sph_forcing_eps);
+    put_int  ("sph_forcing_lmin",    cfg.sph_forcing_lmin);
+    put_int  ("sph_forcing_lmax",    cfg.sph_forcing_lmax);
+    put_u64  ("sph_forcing_seed",    static_cast<unsigned long long>(cfg.sph_forcing_seed));
+    put_int  ("sph_ckpt_every",      cfg.sph_ckpt_every);
+    put_str  ("sph_resume",          cfg.sph_resume);
 
     // ---- Test-case IC params ------------------------------------------
     std::fprintf(fp, "\n# --- test IC params ---\n");
-    std::fprintf(fp, "shear_V0                 = %.17g\n", cfg.shear_V0);
-    std::fprintf(fp, "shear_k                  = %d\n",    cfg.shear_k);
-    std::fprintf(fp, "shear_rho                = %.17g\n", cfg.shear_rho);
-    std::fprintf(fp, "shear_P                  = %.17g\n", cfg.shear_P);
-    std::fprintf(fp, "ewave_rho0               = %.17g\n", cfg.ewave_rho0);
-    std::fprintf(fp, "ewave_P0                 = %.17g\n", cfg.ewave_P0);
-    std::fprintf(fp, "ewave_u0                 = %.17g\n", cfg.ewave_u0);
-    std::fprintf(fp, "ewave_A                  = %.17g\n", cfg.ewave_A);
-    std::fprintf(fp, "ewave_k                  = %d\n",    cfg.ewave_k);
-    std::fprintf(fp, "ewave_periods            = %.17g\n", cfg.ewave_periods);
-    std::fprintf(fp, "awave_rho0               = %.17g\n", cfg.awave_rho0);
-    std::fprintf(fp, "awave_P0                 = %.17g\n", cfg.awave_P0);
-    std::fprintf(fp, "awave_A                  = %.17g\n", cfg.awave_A);
-    std::fprintf(fp, "awave_k                  = %d\n",    cfg.awave_k);
-    std::fprintf(fp, "awave_periods            = %.17g\n", cfg.awave_periods);
+    put_double("shear_V0",           cfg.shear_V0);
+    put_int  ("shear_k",             cfg.shear_k);
+    put_double("shear_rho",          cfg.shear_rho);
+    put_double("shear_P",            cfg.shear_P);
+    put_double("ewave_rho0",         cfg.ewave_rho0);
+    put_double("ewave_P0",           cfg.ewave_P0);
+    put_double("ewave_u0",           cfg.ewave_u0);
+    put_double("ewave_A",            cfg.ewave_A);
+    put_int  ("ewave_k",             cfg.ewave_k);
+    put_double("ewave_periods",      cfg.ewave_periods);
+    put_double("awave_rho0",         cfg.awave_rho0);
+    put_double("awave_P0",           cfg.awave_P0);
+    put_double("awave_A",            cfg.awave_A);
+    put_int  ("awave_k",             cfg.awave_k);
+    put_double("awave_periods",      cfg.awave_periods);
 
     std::fclose(fp);
     std::printf("[config_dump] wrote %s\n", path.c_str());

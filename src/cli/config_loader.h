@@ -27,8 +27,22 @@
 // type mismatch, profile-not-found).  Diagnostics go to stderr.
 
 #include <string>
+#include <vector>
 
 struct SimConfig;
 
 int load_toml_into_cfg(const std::string& path, SimConfig& cfg);
 int load_profile_into_cfg(const std::string& name_or_path, SimConfig& cfg);
+
+// Tier B-3 subcommand support — list / validate helpers.
+//
+// available_profile_names(): scan config/profiles/ (relative to CWD)
+// and return the stem names of every *.toml file, sorted.  Empty vector
+// if the directory is missing.
+//
+// validate_toml_file(path): parse the TOML and attempt to assign every
+// recognised key to a throwaway SimConfig, surfacing any unknown key /
+// type-mismatch / syntax error.  Returns 0 on success, 1 on failure.
+// This is the back-end for `stellar2d validate <path>`.
+std::vector<std::string> available_profile_names();
+int validate_toml_file(const std::string& path);

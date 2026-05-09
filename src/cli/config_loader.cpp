@@ -414,7 +414,6 @@ int load_toml_into_cfg(const std::string& path, SimConfig& cfg) {
 //  in ".toml", it is treated as a path and used verbatim so that
 //  `--profile /path/to/foo.toml` also works.
 // ---------------------------------------------------------------------------
-namespace {
 
 std::vector<std::string> available_profile_names() {
     std::vector<std::string> out;
@@ -433,8 +432,6 @@ std::vector<std::string> available_profile_names() {
     std::sort(out.begin(), out.end());
     return out;
 }
-
-} // namespace
 
 int load_profile_into_cfg(const std::string& name_or_path, SimConfig& cfg) {
     // Raw-path short-circuit so `--profile ./mine.toml` or absolute paths
@@ -476,4 +473,26 @@ int load_profile_into_cfg(const std::string& name_or_path, SimConfig& cfg) {
     }
 
     return load_toml_into_cfg(path, cfg);
+}
+
+// ---------------------------------------------------------------------------
+//  Tier B-3: `stellar2d validate <path>` back-end.  Load the TOML into a
+//  throwaway SimConfig — exercises the same code path as --config so any
+//  unknown key / type mismatch / syntax error is surfaced.  Returns 0 on
+//  success (valid), 1 on failure.
+// ---------------------------------------------------------------------------
+int validate_toml_file(const std::string& path) {
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) {
+        std::fprintf(stderr, "[validate] ERROR: file not found: %s\n",
+                     path.c_str());
+        return 1;
+    }
+    SimConfig scratch;
+    int rc = load_toml_into_cfg(path, scratch);
+    if (rc == 0) {
+        std::printf("[validate] OK: %s is a valid stellar2d TOML config.\n",
+                    path.c_str());
+    }
+    return rc;
 }

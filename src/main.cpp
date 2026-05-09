@@ -37,7 +37,12 @@
 #include <csignal>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <string>
+#include <utility>
+#include <vector>
 
 // g_interrupted is defined in sim/run_loop.cpp (GPU) or drivers/cpu.cpp (CPU).
 static void handle_sigint(int) { g_interrupted = 1; }
@@ -136,10 +141,15 @@ void print_missing_subcommand_error() {
     std::fprintf(stderr,
         "ERROR: stellar2d requires a subcommand.\n"
         "  Usage:\n"
-        "    stellar2d run [FLAGS]            Run a simulation\n"
-        "    stellar2d run --config FILE      Load TOML preset, optionally override\n"
-        "    stellar2d --help                 Full flag reference\n"
-        "    stellar2d --version              Print version\n"
+        "    stellar2d run [FLAGS]                Run a simulation\n"
+        "    stellar2d run --config FILE          Load TOML preset, optionally override\n"
+        "    stellar2d run --profile NAME         Run a named preset from config/profiles/\n"
+        "    stellar2d list profiles              List available profiles\n"
+        "    stellar2d list solvers               List available solvers\n"
+        "    stellar2d describe profile NAME      Print a profile's TOML to stdout\n"
+        "    stellar2d validate PATH              Parse a TOML without executing\n"
+        "    stellar2d --help                     Full flag reference\n"
+        "    stellar2d --version                  Print version\n"
         "\n"
         "  The bare `stellar2d --flag ...` form is no longer accepted\n"
         "  (CLI unification Tier B — see docs/design/cli_unification_plan_2026-05-09.md).\n");
@@ -153,9 +163,153 @@ void print_unknown_subcommand_error(const char* cmd) {
             "  Retry as:   stellar2d run %s ...\n", cmd);
     } else {
         std::fprintf(stderr,
-            "  Available subcommands: run  (list/describe/validate/doctor planned for Tier B-3).\n");
+            "  Available subcommands: run | list | describe | validate\n"
+            "  (doctor / help planned for later milestones).\n");
     }
     std::fprintf(stderr, "  Run 'stellar2d --help' for the flag reference.\n");
+}
+
+// ---------------------------------------------------------------------------
+//  Tier B-3 subcommands: list / describe / validate.
+//
+//  These are plain CPP functions that live next to the run_simulation()
+//  dispatch.  They intentionally don't go through parse_cli because they
+//  don't need a SimConfig / SimContext — they only need filesystem access
+//  and a few string comparisons.
+// ---------------------------------------------------------------------------
+
+// Keep in sync with the solver_type dispatch block in run_simulation().
+// Tier C will replace this with a SolverSpec-registry autogeneration.
+const std::vector<std::pair<const char*, const char*>>& known_solvers() {
+    static const std::vector<std::pair<const char*, const char*>> v = {
+        {"compressible",     "AmgX-based compressible Euler (requires USE_AMGX)"},
+        {"strang",           "2D explicit Strang split HLLC+MUSCL (baseline)"},
+        {"wb2d",             "Well-balanced 2D Euler (perturbed t~2 unstable)"},
+        {"lowmach",          "JFNK low-Mach with HLLC variants"},
+        {"fas",              "FAS multigrid low-Mach"},
+        {"fas2",             "FAS2 multigrid variant"},
+        {"simple",           "SIMPLE-family incompressible"},
+        {"projection",       "Chorin projection low-Mach"},
+        {"cart_lag",         "Cartesian Lagrangian Caramana"},
+        {"cart_ale",         "Cartesian ALE (Caramana Lag + Eulerian rezone)"},
+        {"cart_impl",        "Cartesian implicit ALE (JFNK)"},
+        {"cart_ale2",        "Cart ALE + periodic BC + PPM (convection workhorse)"},
+        {"athena_vl2",       "Athena++ vl2 port (PLM + HLLC)"},
+        {"athena_mhd",       "Athena++ MHD port (§A-§F derivations)"},
+        {"radial1d",         "1D Lagrangian JFNK hydro testbed"},
+        {"pseudo_spectral",  "2D incompressible NS (cuFFT + IFRK3)"},
+        {"anelastic_sl",     "2D Boussinesq / anelastic spectral"},
+        {"sph2d_spectral",   "2D thin-shell spectral"},
+        {"ale2d",            "Axisymmetric ALE (hoop-stress bug — see design doc)"},
+    };
+    return v;
+}
+
+int run_list(int argc, char** argv) {
+    // argv[0] == "list", argv[1] == category
+    if (argc < 2) {
+        std::fprintf(stderr,
+            "ERROR: `stellar2d list` requires a category.\n"
+            "  Usage:\n"
+            "    stellar2d list profiles\n"
+            "    stellar2d list solvers\n");
+        return 1;
+    }
+    const std::string cat = argv[1];
+    if (cat == "profiles") {
+        auto names = available_profile_names();
+        if (names.empty()) {
+            std::printf("(no profiles found under config/profiles/; "
+                        "are you running from repo root?)\n");
+            return 0;
+        }
+        std::printf("Profiles (config/profiles/):\n");
+        for (const auto& n : names) {
+            std::printf("  %s\n", n.c_str());
+        }
+        std::printf("\nLoad with:  stellar2d run --profile <name>\n");
+        return 0;
+    }
+    if (cat == "solvers") {
+        std::printf("Solvers (see docs/design/*_design.md and CLAUDE.md §immutable assets):\n");
+        for (const auto& p : known_solvers()) {
+            std::printf("  %-18s %s\n", p.first, p.second);
+        }
+        return 0;
+    }
+    if (cat == "tests") {
+        std::fprintf(stderr,
+            "ERROR: `stellar2d list tests` is planned for Tier C "
+            "(needs per-solver SolverSpec registry).\n");
+        return 1;
+    }
+    std::fprintf(stderr,
+        "ERROR: unknown list category \"%s\".\n"
+        "  Available: profiles | solvers  (tests planned for Tier C).\n",
+        cat.c_str());
+    return 1;
+}
+
+int run_describe(int argc, char** argv) {
+    // argv[0] == "describe", argv[1] == "profile" | "solver" | <name>
+    if (argc < 2) {
+        std::fprintf(stderr,
+            "ERROR: `stellar2d describe` requires a target.\n"
+            "  Usage:\n"
+            "    stellar2d describe profile <name>\n"
+            "    (`stellar2d describe <solver>` planned for Tier C)\n");
+        return 1;
+    }
+    const std::string what = argv[1];
+    if (what == "profile") {
+        if (argc < 3) {
+            std::fprintf(stderr,
+                "ERROR: `describe profile` needs a profile name.\n"
+                "  Usage:  stellar2d describe profile <name>\n");
+            return 1;
+        }
+        const std::string name = argv[2];
+        const std::string path = "config/profiles/" + name + ".toml";
+        std::error_code ec;
+        if (!std::filesystem::exists(path, ec)) {
+            std::fprintf(stderr,
+                "ERROR: profile \"%s\" not found (looked for %s).\n",
+                name.c_str(), path.c_str());
+            auto avail = available_profile_names();
+            if (!avail.empty()) {
+                std::fprintf(stderr, "  Available profiles:\n");
+                for (const auto& n : avail) {
+                    std::fprintf(stderr, "    %s\n", n.c_str());
+                }
+            }
+            return 1;
+        }
+        // Cat the file to stdout verbatim; keeps comments intact so users
+        // can see the profile's own provenance header.
+        std::ifstream in(path);
+        if (!in) {
+            std::fprintf(stderr, "ERROR: cannot open %s for reading.\n", path.c_str());
+            return 1;
+        }
+        std::cout << in.rdbuf();
+        return 0;
+    }
+    std::fprintf(stderr,
+        "ERROR: `describe %s` not implemented.  Supported: `describe profile <name>`.\n"
+        "  Tier C will add `describe <solver>` from the SolverSpec registry.\n",
+        what.c_str());
+    return 1;
+}
+
+int run_validate(int argc, char** argv) {
+    // argv[0] == "validate", argv[1] == path
+    if (argc < 2) {
+        std::fprintf(stderr,
+            "ERROR: `stellar2d validate` requires a TOML path.\n"
+            "  Usage:  stellar2d validate <path-to-config.toml>\n");
+        return 1;
+    }
+    return validate_toml_file(argv[1]);
 }
 
 } // namespace
@@ -182,13 +336,15 @@ int main(int argc, char** argv) {
         return run_simulation(argc - 1, argv + 1);
     }
 
-    // Tier B-1 does not yet implement list / describe / validate / doctor;
-    // placeholder message points users at the right Tier.
-    if (cmd == "list" || cmd == "describe" ||
-        cmd == "validate" || cmd == "doctor" || cmd == "help") {
+    if (cmd == "list")     return run_list    (argc - 1, argv + 1);
+    if (cmd == "describe") return run_describe(argc - 1, argv + 1);
+    if (cmd == "validate") return run_validate(argc - 1, argv + 1);
+
+    // Tier C will flesh out these stubs.
+    if (cmd == "doctor" || cmd == "help") {
         std::fprintf(stderr,
-            "ERROR: subcommand \"%s\" is planned for Tier B-3 / Tier C and\n"
-            "       not yet implemented.  See docs/design/cli_unification_plan_2026-05-09.md.\n",
+            "ERROR: subcommand \"%s\" is planned for Tier C and not yet "
+            "implemented.  See docs/design/cli_unification_plan_2026-05-09.md.\n",
             cmd.c_str());
         return 1;
     }
