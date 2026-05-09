@@ -201,6 +201,84 @@ Table 3:
 - $\alpha$ Tau: $\langle\delta v_0\rangle = 2.56\,\mathrm{km/s}$,
   $\omega_{{\max}}^{-1} = 340\,\mathrm{min}$, $\omega_{{\min}}^{-1} = 3.4\times 10^4\,\mathrm{min}$.
 
+## Numerical implementation notes (not in formal derivation)
+
+The following six points record empirical gotchas uncovered during
+B-M5 and the B-M5.75 all-operators combined smoke; none of them
+contradict the formal derivation above, they are consequences of
+finite-volume + inner-BC interactions that a symbolic derivation
+does not surface on its own.
+
+1. **Discrete-mode amplitude normalisation** is $A_n = A_\mathrm{rms}\sqrt{2/N}$, not $A_\mathrm{rms} \cdot [2/\ln(f_{{\max}}/f_{{\min}})]^{1/2}$.  The two normalisations answer different questions.  The continuous
+   $P(\omega)=A^2/\omega$ normalisation fixes the **band-integrated**
+   power and is what one uses when computing the Elsässer inner-band
+   energy flux.  The discrete $N$-mode iid-phase sum needs only
+   $\sum A_n^2/2 = A_\mathrm{rms}^2$ (Parseval for iid-phase sinusoids)
+   to give the correct sample variance.
+2. **The driver is written into the BOTTOM GHOST ROW as a
+   characteristic inner BC** (see `§E2 Characteristic inner boundary`
+   for the full derivation).  The v1 prototype used an interior-SET
+   shortcut (overwrite `j = n_g` row with $v_x(t)$); that was replaced
+   in the B-M5.75 cleanup with the §E2 Elsässer-invariant ghost fill
+   $\tilde z^+|_\text{ghost} = -2 v_\text{drv}(t)$ and absorbing
+   $\tilde z^-$.  This construction is what Shoda+18 (ApJ 853 190,
+   Eq. 32 `B_⊥,0 = -√(4πρ₀)v_⊥,0`) and Sakaue+Shibata+21 (arXiv
+   2106.12752, `z_out = 2 v_φ` / `z_in = 0`) adopt for 1D Alfvén-driver
+   winds.  `apply_driver(t)` now only records $t$; `fill_ghost()`
+   consumes it via the §E2 kernels, so the driver is not directly
+   visible as a KE write-back on interior cells.
+3. **At $t=0$ the driver starts at $v_x(0) = \sum A_n\sin(\phi_n) \ne 0$.**
+   That is a step discontinuity in $v_x$ at the inner BC the instant
+   `driver_on = true` is set on a previously-quiescent IC.  The
+   B-M5 `E1-T1` test confirmed that a 200-step HSE remains ULP-bound
+   under the step jump, so we do not envelope-smooth by default; a
+   ramp $w(t)=\tanh(t/\tau_\mathrm{ramp})$ may be wrapped around the
+   waveform if a smoother start is ever needed.
+4. **All $x$-cells in the $j=n_g$ row receive the same waveform.**
+   This is the Suzuki+25 1D-photospheric-driver-in-2D simplification:
+   the horizontal coherence length of the real photospheric granulation
+   is elided so every cell shares one phase realisation.  3D work
+   should replace this with per-cell independent phases or a
+   finite-$\ell_h$ spatial filter.
+5. **Top BC is not an Elsässer absorber in v1.**  The derivation
+   (`Absorbing BC for incoming Alfvén`) calls for
+   $\partial z^-/\partial r = 0$ on outgoing waves; what the solver
+   currently does is outflow/reflect on the top of the domain.  This
+   is acceptable for B-M5 (Alfvén-emission test at finite $y^*$) and
+   for the B-M5.75 smoke (300 steps, sub-crossing), but **must** be
+   patched before running a full flux-tube wind to steady state.
+6. **Residual mass drift in B-M5.75 F-T3 is NOT a BC non-conservation**.
+   An earlier version of this memo claimed the prescribed-velocity BC
+   was a Dirichlet constraint that leaks mass — that was wrong.  Post
+   §E2 characteristic BC the driver is a ghost-row closure; linearised
+   mass flux at the $j = n_g - \tfrac12$ face vanishes exactly to
+   $O(A^2)$, and B-M5.75 F-T4 amplitude-scan confirms strict
+   $A_\mathrm{rms}^2$ scaling (`s2/s1 = s3/s2 = 0.25`, linear-regime
+   ULP at $A = 10^{-6}$).  Two independent 1D implementations
+   (Shoda+18, Sakaue+Shibata+21) arrive at exactly the §E2 formula
+   and report mass-conservative winds on much longer integration
+   times.  The F-T3 drift of $\approx 3\times 10^{-6}$ comes from
+   two distinct sources:
+
+   - **2D PLM+HLLD truncation floor at the tangential Alfvén
+     discontinuity** — $O(A^2)$, not cancelled by any 1D-derivation
+     argument.  No existing Alfvén-wave-driven wind paper is 2D, so
+     this floor is not discussed in the 1D literature; it is a
+     numerical artifact of the 2D reconstruction step (PLM slope
+     limiter sees a jump in $v_x$ between the driven ghost row and
+     the tangential-uniform interior) and should scale down with
+     higher-order (PPM) reconstruction or thinner ghost gradient.
+
+   - **Cool / chromo $\Lambda > 0$ degrading HSE over time** — the
+     F-T4 variant (g) with $A_\mathrm{rms} = 0$ + full cool + chromo
+     chain gives $3.15\times 10^{-6}$ drift, essentially all of F-T3's
+     drift.  This is operator-level HSE residual, independent of the
+     driver.
+
+   F-T3 threshold is therefore set at $10^{-5}$, tight enough to
+   catch any real BC regression but loose enough to ride the known
+   $\Lambda t$ floor.
+
 ## ✅ Verification checkpoints
 
 - `tests/test_athena_mhd_driver_spectrum.cu` — build the driver

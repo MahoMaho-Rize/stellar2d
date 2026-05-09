@@ -17,8 +17,9 @@ Phase B 在此基础上加源项,逐个 milestone 向 Suzuki flux-tube 风物理
 | B-M2 | Spitzer κ₀T^{5/2} 各向异性导热 | §C6 已完成 | `test_athena_mhd_conduction.cu` 5/5 | ✅ |
 | B-M3 | Townsend 光学薄冷却闭式积分 | §C7 已完成 | `test_athena_mhd_cooling.cu` 10/10 | ✅ |
 | B-M4 | 分层 + 导热 + 冷却 combined | §B1/4/C6/7 | `test_athena_mhd_combined.cu` 10/10 | ✅ |
-| B-M5 | Suzuki+25 stochastic broadband driver | §E1 已完成 | `test_athena_mhd_driver.cu` 7/7(含 Alfvén 发射 T5) | ✅ |
+| B-M5 | Suzuki+25 stochastic broadband driver | §E1+§E2 已完成 | `test_athena_mhd_driver.cu` 9/9(T5 Alfvén 发射 + T6 §E2 吸收 + T7 Leroy80/Cranmer07 WKB v⊥∝ρ^{-1/4}) | ✅ |
 | B-M5.5 | Shimizu+22 色球 blend thick+thin 冷却 | §C8 已完成 | `test_athena_mhd_chromo.cu` 7/7 | ✅ |
+| B-M5.75 | 全算子集成 smoke(WB+κ+cool+chromo+driver) | §B4/C6/C7/C8/E1 | `test_athena_mhd_all_ops.cu` 14/14 | ✅ |
 
 ---
 
@@ -358,7 +359,56 @@ void   apply_chromo_cooling(double dt);
 
 ---
 
-## Phase B 完成状态(2026-05-08)
+## B-M5.75 — 全算子集成 smoke(WB+κ+cool+chromo+driver)
+
+**Date**: 2026-05-09
+**Commit**: TBD
+
+### Setup
+
+B-M4 只测了 WB + κ + cool 三件套,B-M5 / B-M5.5 进来后没一次把 driver + chromo 也加入同一条 step 链。B-M5.75 闭合这个缺口,作为进 B-M6 前的回归哨兵。
+
+每步操作链(operator split 顺序):
+```
+U^{n+1} = L_driver(t+dt) ∘ L_chromo(dt) ∘ L_cool(dt) ∘ L_cond(dt) ∘ L_vl2(U^n; dt, WB)
+```
+
+### 实测
+
+| 测试 | 测量 | 阈值 | 状态 |
+|---|---|---|---|
+| F-T1 所有 toggle 关 | δρ/ρ=**0**,δE/E=**0**,divB=**0** | < 10⁻¹⁰ | ✅ |
+| F-T2 所有 toggle 开、参数置零(κ=1,Λ=0) | δρ/ρ=**1.3e-16**,δE/E=**0** | < 10⁻⁸ | ✅ |
+| F-T3 live params 300 步 smoke | 无 NaN,ρ_min=0.374,divB=**0**,v_rms=**6.7e-4**(target 1e-3),mass drift **3.1e-6** | 工程哨兵 | ✅ |
+
+**14/14 通过**,B-M1~5.5 全部回归零影响。
+
+### 关键发现(2026-05-09 修订)
+
+**先前版本误判**:最初把 F-T3 的 O(10⁻⁶) 质量漂移归因于 "prescribed-velocity Dirichlet BC 非守恒",这是错的。B-M5.75 cleanup 把 driver 从 interior-SET 改成 **§E2 characteristic 内 BC**(Elsässer 不变量 ghost fill),和 Shoda+18 (ApJ 853 190)、Sakaue+Shibata+21 (arXiv 2106.12752) 的 1D Alfvén-wave-driven 风求解独立收敛到同一公式:$\tilde z^+|_\text{ghost} = -2 v_\text{drv}(t)$ + 吸收 $\tilde z^-$。
+
+**F-T4 振幅扫描**(A∈{1e-3, 5e-4, 2.5e-4, 1.25e-4}): 严格 $A^2$ 缩放(s2/s1 = s3/s2 = 0.25,A=1e-6 ULP 噪声),证明 §E2 线性阶质量通量**恰好为零**,和派生一致。
+
+**F-T3 的 3.1e-6 漂移实际来自两个独立源**:
+
+1. **2D PLM+HLLD 在切向 Alfvén 间断处的 $O(A^2)$ 截断 floor** —— 1D 文献里不讨论这个(Shoda18/Sakaue21 都是 1D),是 2D 重构的数值伪影,PPM 或更薄 ghost 梯度应可压下去。
+2. **cool + chromo $\Lambda > 0$ 对 HSE 的累积退化** —— F-T4 variant (g) 关驱动 (A=0) 跑完整 cool+chromo 链得 **3.15e-6**,几乎就是 F-T3 的全部漂移。这是算子本身的 HSE 残差,和驱动无关。
+
+F-T1/F-T2 已锁定 driver 关时 5 算子 ULP 守恒;F-T3 阈值定在 **1e-5**,既捕得住任何真实 BC 回归,又能骑过已知的 $\Lambda t$ floor。
+
+操作链顺序的**物理**根据:
+1. VL2 先走(hyperbolic core,其他都是源项)
+2. conduction 紧随(它也是要在最 fresh 的 T 上算热流)
+3. cool → chromo(cool 是单段 Townsend,chromo 是 blend;顺序颠倒仅 O(Δt²) 差异)
+4. driver 放最后(inner BC 覆写,避免上面任一算子再扰动 v_x)
+
+### 公共 API
+
+无新 API。沿用 B-M5 的 `apply_driver` + B-M5.5 的 `apply_chromo_cooling`,操作链顺序记录在 `test_athena_mhd_all_ops.cu` 顶部注释。
+
+---
+
+## Phase B 完成状态(2026-05-09)
 
 | Milestone | 物理 | 断言 | 关键发现 |
 |---|---|---|---|
@@ -366,10 +416,11 @@ void   apply_chromo_cooling(double dt);
 | B-M2 | §C6 Spitzer κ | 5/5 | face-avg B → normalize 顺序 |
 | B-M3 | §C7 Townsend cool | 10/10 | 闭式 exact,per-cell,无 subcycle |
 | B-M4 | WB + κ + cool combined | 10/10 | **T ghost 必须独立 scalar mirror** |
-| B-M5 | §E1 Suzuki 随机 driver | 7/7 | Parseval √(2/N) 归一化 + Alfvén 发射物理验证 |
+| B-M5 | §E1+§E2 Suzuki driver + characteristic BC | 9/9 | Parseval √(2/N) + Alfvén 发射(T5a 10%/T5b 5%)+ §E2 吸收 vs reflect-wall(T6 R<0.35)+ **Leroy80/Cranmer07 WKB v⊥∝ρ^{-1/4} 外部对照(T7 5.6%,阈值 10%)** |
 | B-M5.5 | §C8 chromo blend cool | 7/7 | operator-split blend 顺序 |
+| B-M5.75 | 全 6 算子集成 smoke | 16/16 | driver 改 §E2 characteristic BC(Shoda18/Sakaue21 独立吻合);F-T3 残余 O(1e-6) 漂移来自 2D PLM+HLLD 截断 floor + cool/chromo Λt 残差,不是 BC 非守恒 |
 
-**总计**:45/45 通过。所有派生书 §C6/§B4 的 numerical gotcha 已在 `docs/derivations/mhd/sections/` 对应节补入"数值实现备忘"子章节。
+**总计**:63/63 通过(B-M5 +1 for T6 §E2 absorber, +1 for T7 Leroy80/Cranmer07 WKB external benchmark; B-M5.75 +2 for F-T4 decomposition)。所有派生书 §B4/§C6/§C7/§E1/§E2 的 numerical gotcha 已在 `docs/derivations/mhd/sections/` 对应节补入"数值实现备忘"子章节。
 
 ---
 
