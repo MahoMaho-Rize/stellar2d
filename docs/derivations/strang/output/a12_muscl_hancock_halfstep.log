@@ -1,0 +1,10 @@
+
+============================================================
+  A12 - MUSCL-Hancock half-step predictor
+============================================================
+  [OK] A12-Hancock-time-order: u_true - u_hancock = (Dt^2/8) a^2 u_xx + O(Dt^3) — sympy verified to 0.
+  [OK] A12-Hancock-linear-advect: u_hancock == u_0 + (Dt/2) u_t  after u_t = -a u_x — sympy verified to 0.
+  [OK] A12-Hancock-cell-avg: cell-avg(u^{n+1/2}) == cell-avg(u^n) - (Dt/2h)(F_R - F_L) — sympy verified to 0.
+  wrote output/a12_muscl_hancock_halfstep.latex.tex
+
+All A12 identities verified by sympy.

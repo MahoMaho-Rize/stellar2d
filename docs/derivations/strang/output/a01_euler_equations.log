@@ -1,0 +1,15 @@
+
+============================================================
+  A1 - Compressible Euler equations (strong form)
+============================================================
+
+[A1.1] Mass residual (sympy symbolic object):
+        rho(x, y, t)*Derivative(u(x, y, t), x) + rho(x, y, t)*Derivative(v(x, y, t), y) + u(x, y, t)*Derivative(rho(x, y, t), x) + v(x, y, t)*Derivative(rho(x, y, t), y) + Derivative(rho(x, y, t), t)
+  [OK] A1-energy-flux-factorisation-x: (E+p) u  ==  rho (h + |v|^2/2) u — sympy verified to 0.
+  [OK] A1-energy-flux-factorisation-y: (E+p) v  ==  rho (h + |v|^2/2) v — sympy verified to 0.
+  [OK] A1-material-x: conservative momentum - u * continuity  ==  rho D_t u + p_x — sympy verified to 0.
+  [OK] A1-material-y: conservative momentum - v * continuity  ==  rho D_t v + p_y — sympy verified to 0.
+  [OK] A1-material-energy: total-energy - u Xmom - v Ymom + KE * mass  ==  rho D_t e_int + p div(v) — sympy verified to 0.
+  wrote output/a01_euler_equations.latex.tex
+
+All A1 identities verified by sympy.

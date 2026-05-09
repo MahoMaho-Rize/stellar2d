@@ -1,0 +1,12 @@
+
+============================================================
+  A9 - Wave-speed estimates
+============================================================
+  [OK-num] A9-Davis brackets every eigenvalue on 80 random admissible (L,R) pairs (max over = 0.000e+00, max under = 0.000e+00).
+  [OK-num] A9-Roe-property component 0: A_Roe (U_R - U_L) = F_R - F_L  [numerical] — 80 samples, max|residual| = 0.000e+00.
+  [OK-num] A9-Roe-property component 1: A_Roe (U_R - U_L) = F_R - F_L  [numerical] — 80 samples, max|residual| = 6.217e-15.
+  [OK-num] A9-Roe-property component 2: A_Roe (U_R - U_L) = F_R - F_L  [numerical] — 80 samples, max|residual| = 5.000e-15.
+  [OK-num] A9-Roe-property component 3: A_Roe (U_R - U_L) = F_R - F_L  [numerical] — 80 samples, max|residual| = 5.684e-14.
+  wrote output/a09_wave_speed_estimates.latex.tex
+
+All A9 identities verified.

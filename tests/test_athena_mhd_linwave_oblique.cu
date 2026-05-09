@@ -1,7 +1,7 @@
 // test_athena_mhd_linwave_oblique.cu
 // ============================================================
 // Phase A1 — Oblique linear MHD wave 2D convergence test.
-// Derivation: docs/mhd_derivations/sections/f1_oblique_linwave.md
+// Derivation: docs/derivations/mhd/sections/f1_oblique_linwave.md
 //
 // Setup: §A11 Stone+08 Table-1 linwave background, 4 modes
 // (fast / Alfvén / slow / entropy), wave vector k = 2π(1,2)/L with

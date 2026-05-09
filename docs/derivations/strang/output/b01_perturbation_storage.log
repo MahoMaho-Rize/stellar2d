@@ -1,0 +1,21 @@
+
+============================================================
+  B1 - Perturbation storage bijection
+============================================================
+  [OK] B1-roundtrip-rho: delta_rho + rho_bar = rho — sympy verified to 0.
+  [OK] B1-roundtrip-u: m_x / rho = u — sympy verified to 0.
+  [OK] B1-roundtrip-v: m_y / rho = v — sympy verified to 0.
+  [OK] B1-roundtrip-P: gm1 (E_tot - KE) = P — sympy verified to 0.
+  [OK] B1-pressure-perturbation: delta_P = gm1 [delta_E - KE] — sympy verified to 0.
+  [OK] B1-zero-pert-forward-delta_rho: at HSE state, delta_rho = 0 — sympy verified to 0.
+  [OK] B1-zero-pert-forward-m_x: at HSE state, m_x = 0 — sympy verified to 0.
+  [OK] B1-zero-pert-forward-m_y: at HSE state, m_y = 0 — sympy verified to 0.
+  [OK] B1-zero-pert-forward-delta_E: at HSE state, delta_E = 0 — sympy verified to 0.
+  [OK] B1-zero-pert-reverse-rho: rho = rho_bar — sympy verified to 0.
+  [OK] B1-zero-pert-reverse-u: u = 0 — sympy verified to 0.
+  [OK] B1-zero-pert-reverse-v: v = 0 — sympy verified to 0.
+  [OK] B1-zero-pert-reverse-P: P = p_bar — sympy verified to 0.
+  [OK] B1-jacobian-det: det d phi / d W = rho^2 / (gamma-1) — sympy verified to 0.
+  wrote output/b01_perturbation_storage.latex.tex
+
+All B1 identities verified by sympy.

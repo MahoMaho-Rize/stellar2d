@@ -1,0 +1,16 @@
+
+============================================================
+  B4 - Periodic-x BC
+============================================================
+  [OK] B4-left-ghost-offset: ig_src - ig_ghost = nx (left side) — sympy verified to 0.
+  [OK] B4-right-ghost-offset: ig_ghost - ig_src = nx (right side) — sympy verified to 0.
+  [OK] B4-phys-distance: x_src - x_ghost = L_x — sympy verified to 0.
+  [OK] B4-periodic-manufactured: U(x_ghost) = U(x_src) for k = 2 pi m / L_x — sympy verified to 0.
+  [OK] B4-flux-commute[0]: F_x(U_ghost) = F_x(U_phys) (identity) — sympy verified to 0.
+  [OK] B4-flux-commute[1]: F_x(U_ghost) = F_x(U_phys) (identity) — sympy verified to 0.
+  [OK] B4-flux-commute[2]: F_x(U_ghost) = F_x(U_phys) (identity) — sympy verified to 0.
+  [OK] B4-flux-commute[3]: F_x(U_ghost) = F_x(U_phys) (identity) — sympy verified to 0.
+  [OK] B4-min-ng: n_g_min = 2 (MUSCL stencil + face-state ghost)
+  wrote output/b04_periodic_x_bc.latex.tex
+
+All B4 identities verified by sympy.

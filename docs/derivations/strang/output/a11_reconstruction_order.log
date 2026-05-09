@@ -1,0 +1,17 @@
+
+============================================================
+  A11 - Reconstruction order
+============================================================
+  [OK] A11-donor-cell h^1 coefficient: -(1/2) u'(x_j) — sympy verified to 0.
+  [OK] A11-donor-cell h^2 coefficient: -(1/12) u''(x_j) — sympy verified to 0.
+  [OK] A11-MUSCL-unlimited h^0 coefficient = 0 (2nd-order) — sympy verified to 0.
+  [OK] A11-MUSCL-unlimited h^1 coefficient = 0 (2nd-order) — sympy verified to 0.
+  [info] MUSCL h^2 coefficient (leading 2nd-order error): -Derivative(u(x_j), (x_j, 2))/12
+  [OK] A11-PPM-CW-order: coefficient of h^0 in reconstruction error = 0 — sympy verified to 0.
+  [OK] A11-PPM-CW-order: coefficient of h^1 in reconstruction error = 0 — sympy verified to 0.
+  [OK] A11-PPM-CW-order: coefficient of h^2 in reconstruction error = 0 — sympy verified to 0.
+  [OK] A11-PPM-CW-order: coefficient of h^3 in reconstruction error = 0 — sympy verified to 0.
+  [info] PPM h^4 coefficient (leading 4th-order error): -Derivative(u(x_j), (x_j, 4))/30
+  wrote output/a11_reconstruction_order.latex.tex
+
+All A11 identities verified by sympy.

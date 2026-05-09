@@ -1,6 +1,6 @@
 # Derivation-driven development workflow (athena_mhd & 类似物理扩展)
 
-> **适用范围**:凡是在派生书(`docs/mhd_derivations/`)有节号的物理,落地到 solver 时都走这个流程。
+> **适用范围**:凡是在派生书(`docs/derivations/mhd/`)有节号的物理,落地到 solver 时都走这个流程。
 > 不适用于纯工程改动(性能优化、IO、CLI、log 格式等)。
 > 编写于 2026-05-08,源自 B-M1~M5.5 迭代经验。
 
@@ -10,7 +10,7 @@
 
 派生书是 **spec**,solver 是 **实现**。两者角色不可混淆:
 
-- 派生书(`docs/mhd_derivations/sections/*.md` + `scripts/*.py`)是**硬件无关、实现无关**的真相来源,内容是 sympy 验证过的方程和 identity。
+- 派生书(`docs/derivations/mhd/sections/*.md` + `scripts/*.py`)是**硬件无关、实现无关**的真相来源,内容是 sympy 验证过的方程和 identity。
 - solver(`src/gpu/...`)是把 spec 在特定离散化 / GPU kernel / BC 下落地,并在测试中引用派生 identity 作为**阈值**。
 
 **派生书里有但 solver 没做 = 待开发,不是 "bug";solver 做了但派生书里没写 = 工程层面的 implementation note,要补进派生书以免下次重踩。**
@@ -23,13 +23,13 @@
 
 ### Step 1 — 派生书先行
 
-打开 `docs/mhd_derivations/sections/<x>.md` + `scripts/<x>.py`。
+打开 `docs/derivations/mhd/sections/<x>.md` + `scripts/<x>.py`。
 
 - 如果这节已经存在且 identity 够用 → 跳到 Step 2。
 - 如果需要新 identity(比如新的闭式解、新的 ghost BC 行为、某个退化极限):**先在 sympy 里写出来、跑通 `assert_zero`**,再写 solver。写 kernel 之前不做任何 sympy 工作 = **最容易踩的坑**。
 - 如果是**数值实现 gotcha**(不在 formal derivation 里但实测踩到的,比如 B-M4 的 ghost-T scalar mirror):落到 **"## 数值实现备忘 (not in formal derivation)"** 小节,不混入 formal 部分。
 
-**输出产物**:更新后的 `*.md` + `*.py`,`python3 docs/mhd_derivations/scripts/<x>.py` 退出 0。
+**输出产物**:更新后的 `*.md` + `*.py`,`python3 docs/derivations/mhd/scripts/<x>.py` 退出 0。
 
 ### Step 2 — Solver API 草案
 

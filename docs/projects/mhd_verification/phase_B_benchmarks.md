@@ -369,7 +369,7 @@ void   apply_chromo_cooling(double dt);
 | B-M5 | §E1 Suzuki 随机 driver | 7/7 | Parseval √(2/N) 归一化 + Alfvén 发射物理验证 |
 | B-M5.5 | §C8 chromo blend cool | 7/7 | operator-split blend 顺序 |
 
-**总计**:45/45 通过。所有派生书 §C6/§B4 的 numerical gotcha 已在 `docs/mhd_derivations/sections/` 对应节补入"数值实现备忘"子章节。
+**总计**:45/45 通过。所有派生书 §C6/§B4 的 numerical gotcha 已在 `docs/derivations/mhd/sections/` 对应节补入"数值实现备忘"子章节。
 
 ---
 

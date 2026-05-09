@@ -2,7 +2,7 @@
 // athena_mhd_solver.cu — host-side driver for AthenaMHDSolver
 // Kernels live in athena_mhd_kernels.cu.
 //
-// Derivation dossier:  docs/mhd_derivations/manuscript.pdf (§A1-A11).
+// Derivation dossier:  docs/derivations/mhd/manuscript.pdf (§A1-A11).
 // ============================================================
 
 #include "athena_mhd_solver.cuh"
@@ -869,7 +869,7 @@ void AthenaMHDSolver::init_linear_wave(LinearWaveMode mode, int k, double A) {
 // ============================================================
 // Oblique linear wave (§F1, Stone+08 §6.2)
 // Rotated eigenvector on 2D periodic box with k = 2π(kx_int/Lx, ky_int/Ly).
-// Derivation: docs/mhd_derivations/sections/f1_oblique_linwave.md
+// Derivation: docs/derivations/mhd/sections/f1_oblique_linwave.md
 // ============================================================
 void AthenaMHDSolver::init_linear_wave_oblique(LinearWaveMode mode,
                                                int kx_int, int ky_int,

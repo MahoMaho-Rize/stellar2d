@@ -1,0 +1,13 @@
+
+============================================================
+  E5 - HSE drift bound
+============================================================
+  [OK] E5-linear-bound: ||delta U||_oo <= eps_mach * kappa * N_step — sympy verified to 0.
+  [OK] E5-kahan-bound: with Kahan summation, drift ~ eps * kappa * sqrt(N) — sympy verified to 0.
+  Canonical kappa(HSE) = rho_bot / rho_top = 2.319
+  Expected linear drift at N=1000: 5.148e-13
+  Expected Kahan drift at N=1000: 1.628e-14
+  wrote output/e05_hse_drift_bound.goldens.json
+  wrote output/e05_hse_drift_bound.latex.tex
+
+All E5 identities verified by sympy.

@@ -1,8 +1,8 @@
 # stellar2d derivation books — project-level SOP
 
 **状态**:2026-05-08 提出;首个示范实例是
-`docs/mhd_derivations/`(MHD solver 开发前置手册,15 节 sympy 全验证,
-23 页 PDF)。本文件把 **mhd_derivations 的方法论泛化**为项目级范式,
+`docs/derivations/mhd/`(MHD solver 开发前置手册,15 节 sympy 全验证,
+23 页 PDF)。本文件把 **MHD derivation book 的方法论泛化**为项目级范式,
 适用于所有 stellar2d 求解器的开发 / 扩建 / 回填。
 
 ---
@@ -36,7 +36,7 @@
 ### 规则 1. 所有代数恒等式必须由 sympy 脚本生成
 
 - 脚本末尾必须有 `assert sp.simplify(LHS − RHS) == 0`(通过 `assert_zero`
-  helper,见 `docs/mhd_derivations/scripts/_common.py`)。
+  helper,见 `docs/derivations/mhd/scripts/_common.py`)。
 - **不允许**在 markdown 里写"通过代数可以得到..."这类跳步。
 - 如果 sympy 不能符号化验证(嵌套根号、超越方程等),用**数值随机采样**
   (N ≥ 50 random states,atol ≤ 1e-10),并在 markdown 里**明确标注**
@@ -79,7 +79,7 @@ docs/derivations/
 │   ├── scripts/_common.py          (符号 + LatexDump + assert_zero)
 │   ├── run_all.sh                  (批跑 + pass/fail 报告)
 │   └── build_manuscript.sh         (pandoc → PDF)
-├── mhd/                            → symlink 到 ../mhd_derivations/
+├── mhd/                            (首个完整示范,15+ sections,PDF ~23 页)
 ├── strang/                         (待补)
 ├── cart_ale2/                      (待补)
 ├── anelastic_sl/                   (待补)
@@ -87,7 +87,7 @@ docs/derivations/
 └── radial1d/                       (待补)
 ```
 
-每个子目录结构与 `mhd_derivations/` 一致:
+每个子目录结构与 `derivations/mhd/` 一致:
 
 ```
 <solver>/
@@ -200,7 +200,7 @@ docs/derivations/
 
 ## 参考实现
 
-`docs/mhd_derivations/` 是第一个完整示范:
+`docs/derivations/mhd/` 是第一个完整示范:
 
 - **15 sympy 脚本**,全部 `bash run_all.sh` 绿
 - **14 markdown 章节**,每节有 "Verification checkpoint"
@@ -222,7 +222,7 @@ docs/derivations/
 ## 从现在开始
 
 **立即适用的约束**:
-- 动 `athena_mhd`(MHD solver 实现阶段)必须在 `docs/mhd_derivations/`
+- 动 `athena_mhd`(MHD solver 实现阶段)必须在 `docs/derivations/mhd/`
   里引用对应 sympy identity。
 - 任何新 solver 先建 derivation book 再写 kernel(**不是反过来**)。
 - PR reviewer 权威要求作者引用 derivation 章节,没有则打回。

@@ -1,0 +1,15 @@
+
+============================================================
+  D4 - Woodward-Colella two-blast-wave interaction
+============================================================
+  Left Riemann (x=0.1):  p* = 4.608938e+02, u* = 1.959745e+01
+                         rho*_L = 5.750623e-01, rho*_R = 5.999241e+00
+  Right Riemann (x=0.9): p* = 4.609504e+01, u* = -6.196328e+00
+                         rho*_L = 5.992417e+00, rho*_R = 5.751128e-01
+  Inward-moving shock speeds: S_R_left = 23.5175, S_L_right = -7.4375
+  Estimated t_collision = 0.0258
+  Independent-blasts window: t < t_collision = 0.0258
+  wrote output/d04_woodward_colella_blast.goldens.json
+  wrote output/d04_woodward_colella_blast.latex.tex
+
+All D4 identities verified (early-window closed-form + [WEAK] late-window).

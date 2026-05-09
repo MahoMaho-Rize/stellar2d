@@ -1,0 +1,12 @@
+
+============================================================
+  D5 - Bubble (entropy-boost) IC
+============================================================
+  [OK] D5-isentropic-rho: rho' / rho_bg = exp(-delta_s/gamma) at const P — sympy verified to 0.
+  [OK] D5-linear: delta_rho / rho_bg ≈ -delta_s/gamma (linear order) — sympy verified to 0.
+  [OK] D5-delta-E-zero: on static bubble IC with P = p_bar, delta_E = 0 — sympy verified to 0.
+  Bubble centre delta_rho / rho_bg = -0.300327 (expected -0.357 linear-order)
+  wrote output/d05_bubble_init.goldens.json
+  wrote output/d05_bubble_init.latex.tex
+
+All D5 identities verified by sympy.

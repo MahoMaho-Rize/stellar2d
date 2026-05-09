@@ -1,0 +1,22 @@
+
+============================================================
+  B3 - Face-centred HSE reconstruction (WB necessary condition)
+============================================================
+  [OK] B3-HSE-face-equal-rho: on pure HSE, L-side rho == R-side rho — sympy verified to 0.
+  [OK] B3-HSE-face-equal-P: on pure HSE, L-side P == R-side P — sympy verified to 0.
+  [OK] B3-HSE-face-equal-u: on pure HSE, L-side u == R-side u — sympy verified to 0.
+  [OK] B3-HSE-face-equal-v: on pure HSE, L-side v == R-side v — sympy verified to 0.
+  [OK] B3-HSE-face-flux-equal[0]: F_L[0] == F_R[0] on pure HSE — sympy verified to 0.
+  [OK] B3-HSE-face-flux-equal[1]: F_L[1] == F_R[1] on pure HSE — sympy verified to 0.
+  [OK] B3-HSE-face-flux-equal[2]: F_L[2] == F_R[2] on pure HSE — sympy verified to 0.
+  [OK] B3-HSE-face-flux-equal[3]: F_L[3] == F_R[3] on pure HSE — sympy verified to 0.
+  [OK] B3-HSE-face-flux-form[0]: F_y at HSE face = (0, 0, p_bar, 0)[0] — sympy verified to 0.
+  [OK] B3-HSE-face-flux-form[1]: F_y at HSE face = (0, 0, p_bar, 0)[1] — sympy verified to 0.
+  [OK] B3-HSE-face-flux-form[2]: F_y at HSE face = (0, 0, p_bar, 0)[2] — sympy verified to 0.
+  [OK] B3-HSE-face-flux-form[3]: F_y at HSE face = (0, 0, p_bar, 0)[3] — sympy verified to 0.
+  [OK] B3-HLLC-on-HSE: HLLC(U_L=U_R=U_HSE) = F_y(U_HSE) = (0, 0, p_bar, 0)
+        (algebraic consequence of §A8 strong-form identities).
+  [OK] B3-wrong-cell-centred: rho_L_wrong - rho_R_wrong = -dy * drho_bar/dy (non-zero!) — sympy verified to 0.
+  wrote output/b03_face_hse_reconstruction.latex.tex
+
+All B3 identities verified by sympy.

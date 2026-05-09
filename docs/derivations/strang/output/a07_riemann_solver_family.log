@@ -1,0 +1,22 @@
+
+============================================================
+  A7 - Riemann solver family
+============================================================
+  [OK] A7-Rusanov consistency component 0 — sympy verified to 0.
+  [OK] A7-Rusanov consistency component 1 — sympy verified to 0.
+  [OK] A7-Rusanov consistency component 2 — sympy verified to 0.
+  [OK] A7-Rusanov consistency component 3 — sympy verified to 0.
+  [OK] A7-HLLE consistency component 0 — sympy verified to 0.
+  [OK] A7-HLLE consistency component 1 — sympy verified to 0.
+  [OK] A7-HLLE consistency component 2 — sympy verified to 0.
+  [OK] A7-HLLE consistency component 3 — sympy verified to 0.
+  [OK] A7-Rusanov contact-wave diffusion in mass: F_Rus - F_exact = -alpha (rho_R-rho_L)/2 — sympy verified to 0.
+  [OK] A7-HLLE contact-wave diffusion: F_HLLE - F_exact = S_L S_R (rho_R-rho_L)/(S_R-S_L) — sympy verified to 0.
+  [OK] A7-HLLC S_star = 0 at stationary contact (p_L=p_R, u_L=u_R=0) — sympy verified to 0.
+  [OK] A7-Roe F_L = F_R at stationary contact component 0 — sympy verified to 0.
+  [OK] A7-Roe F_L = F_R at stationary contact component 1 — sympy verified to 0.
+  [OK] A7-Roe F_L = F_R at stationary contact component 2 — sympy verified to 0.
+  [OK] A7-Roe F_L = F_R at stationary contact component 3 — sympy verified to 0.
+  wrote output/a07_riemann_solver_family.latex.tex
+
+All A7 identities verified by sympy.

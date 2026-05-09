@@ -2,7 +2,7 @@
 """
 Phase A2 — Orszag-Tang vortex energy spectrum + ν_eff extraction.
 
-Derivation: docs/mhd_derivations/sections/f2_mhd_turbulence_spectrum.md
+Derivation: docs/derivations/mhd/sections/f2_mhd_turbulence_spectrum.md
 
 Input:  VTK files produced by `run_ot_spectrum_scan.sh`:
           scripts/mhd_verification/runs/ot_N{128,256,512}/final/output_*.vtk

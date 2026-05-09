@@ -1,0 +1,13 @@
+
+============================================================
+  C1 - Gravity source consistency
+============================================================
+  [OK] C1-KE+PE-conservation: d/dt(E + PE) = -div[(E+P+gy*rho) v] — sympy verified to 0.
+  [OK] C1-HSE-y-mom: on HSE, y-mom eq reduces to dp_bar/dy + rho_bar g = 0 — sympy verified to 0.
+  [OK] C1-work-form: S_E = -m_y g = rho v * (-g) (force * velocity) — sympy verified to 0.
+  [OK] C1-no-double-count: Strang kernel applies gravity ONLY
+        in k_hllc_update_y S_my = -rho_tot g, S_E = -m_y g.
+        No secondary gravity term inside F_y — no double-counting.
+  wrote output/c01_gravity_source_consistency.latex.tex
+
+All C1 identities verified by sympy.

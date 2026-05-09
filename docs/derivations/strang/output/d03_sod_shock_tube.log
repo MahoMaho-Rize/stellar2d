@@ -1,0 +1,19 @@
+
+============================================================
+  D3 - Sod shock tube
+============================================================
+  [OK] D3-f-rar-zero: f_rarefaction(P_K) = 0 — sympy verified to 0.
+  [OK] D3-f-shock-zero: f_shock(P_K) = 0 — sympy verified to 0.
+  [OK] D3-contact: p*_L = p*_R = p_star by §A8 strong-form identities.
+  p_star converged to 0.303130178050647 with residual |f| = 1.110e-16
+  u_star = 0.927452620048950
+  rho_*L = 0.426319428178495
+  rho_*R = 0.265573711705307
+  rarefaction head S_HL = -1.183215956619923
+  rarefaction tail S_TL = -0.070272812561183
+  contact speed    S_C  = 0.927452620048950
+  shock speed      S_R  = 1.752155732030178
+  wrote output/d03_sod_shock_tube.goldens.json
+  wrote output/d03_sod_shock_tube.latex.tex
+
+All D3 identities verified (symbolic + closed-form Newton).

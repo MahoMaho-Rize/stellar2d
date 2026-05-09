@@ -1,0 +1,45 @@
+
+============================================================
+  A14 - Strang chain self-adjointness
+============================================================
+  [OK] A14-half-flow-reversal: e^{(Dt/2) X} e^{-(Dt/2) X} at monomial () — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial () — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X',) — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y',) — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'X', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'X', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'Y', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'Y', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'X', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'X', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'Y', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'Y', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'X', 'X', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'X', 'X', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'X', 'Y', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'X', 'Y', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'Y', 'X', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'Y', 'X', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'Y', 'Y', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('X', 'Y', 'Y', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'X', 'X', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'X', 'X', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'X', 'Y', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'X', 'Y', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'Y', 'X', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'Y', 'X', 'Y') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'Y', 'Y', 'X') — sympy verified to 0.
+  [OK] A14-Strang-self-adjoint at monomial ('Y', 'Y', 'Y', 'Y') — sympy verified to 0.
+  [OK] 31 Strang-chain self-adjoint monomial identities verified.
+  Lie-splitting time-reversal composition minus identity (non-zero => not self-adjoint):
+    ('X', 'Y'): -Dt**2
+    ('Y', 'X'): Dt**2
+  [OK] A14-Lie-not-self-adjoint XY: coefficient = -Dt^2 — sympy verified to 0.
+  [OK] A14-Lie-not-self-adjoint YX: coefficient = +Dt^2 — sympy verified to 0.
+  wrote output/a14_strang_operator_chain.latex.tex
+
+All A14 identities verified by sympy.

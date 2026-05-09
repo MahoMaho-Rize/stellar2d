@@ -1,0 +1,16 @@
+
+============================================================
+  E3 - LM-HLLC effective numerical viscosity
+============================================================
+  [OK] E3-ratio: nu_eff_LM / nu_eff_standard = M (at M > M_cut) — sympy verified to 0.
+  [OK] E3-Re-eff-LM: Re_eff = 2 N (M_conv / M_loc) under LM-HLLC — sympy verified to 0.
+  [OK] E3-Re-eff-std: Re_eff = 2 N M_conv under standard HLLC — sympy verified to 0.
+  [OK] E3-Re-ratio: Re_eff_LM / Re_eff_std = 1 / M_local — sympy verified to 0.
+  [OK] E3-Re-clamped: Re_eff = 2 N M_conv / M_cut in clamped regime — sympy verified to 0.
+  Example (N=512, M_conv = M_loc = 1e-2):
+    Re_eff_std = 10.24
+    Re_eff_LM  = 1024.00
+    Ratio      = 100.0x improvement
+  wrote output/e03_lm_hllc_nu_eff.latex.tex
+
+All E3 identities verified by sympy.

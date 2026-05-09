@@ -1,0 +1,28 @@
+
+════════════════════════════════════════════════════════════
+  F5 — VL2+PLM modified-equation to O(h⁴)
+════════════════════════════════════════════════════════════
+  L̂(ξ) expansion (drop a/h):
+    = -xi**4/8 - I*xi**3/12 - I*xi
+  [OK] L̂ recovers pure advection -iξ at leading order.
+
+  |g|²(ξ; ν) = 1 + ... (series to O(ξ⁵)):
+    ξ^4: nu*(nu**3 - 1)/4
+    ξ^0: 1
+  [OK] |g|²(0) = 1.
+  [OK] odd powers of ξ in |g|² vanish (as required).
+  [OK] |g|² − 1 = O(ξ⁴)  →  this IS a 2nd-order scheme.
+
+  O(ξ⁴) coefficient of |g|² − 1:
+    nu*(nu**3 - 1)/4
+  at ν=1:  0
+  at ν=0.5:  -7/64
+
+  γ_num from O(ξ⁴) amplification factor:
+    γ_num = a*h**3*k**4*(1 - nu**3)/8
+  h³ coefficient of γ_num:  a*k**4*(1 - nu**3)/8
+  [OK] γ_num leading scale is exactly h³ (no lower-h terms).
+  [OK] p = 3 is the exact 2nd-order amplitude-retention signature.
+  → wrote output/f5_vl2_plm_amplitude_decay.latex.tex
+
+All F5 identities verified.

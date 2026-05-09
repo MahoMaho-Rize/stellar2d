@@ -1,0 +1,21 @@
+
+============================================================
+  D7 - Reflection-symmetric IC (bit-reproducibility test)
+============================================================
+  [OK] D7-involution-x: R_x^2 = I — sympy verified to 0.
+  [OK] D7-flux-reflection-x[0]: F_x(R_x U)[0] = R_x' F_x(U)[0] — sympy verified to 0.
+  [OK] D7-flux-reflection-x[1]: F_x(R_x U)[1] = R_x' F_x(U)[1] — sympy verified to 0.
+  [OK] D7-flux-reflection-x[2]: F_x(R_x U)[2] = R_x' F_x(U)[2] — sympy verified to 0.
+  [OK] D7-flux-reflection-x[3]: F_x(R_x U)[3] = R_x' F_x(U)[3] — sympy verified to 0.
+  [OK] D7-flux-y-x-symmetry[0]: F_y(R_x U)[0] = R_x F_y(U)[0] — sympy verified to 0.
+  [OK] D7-flux-y-x-symmetry[1]: F_y(R_x U)[1] = R_x F_y(U)[1] — sympy verified to 0.
+  [OK] D7-flux-y-x-symmetry[2]: F_y(R_x U)[2] = R_x F_y(U)[2] — sympy verified to 0.
+  [OK] D7-flux-y-x-symmetry[3]: F_y(R_x U)[3] = R_x F_y(U)[3] — sympy verified to 0.
+  [OK] D7-source-x-symmetry[0]: R_x S = S (under x-reflection) — sympy verified to 0.
+  [OK] D7-source-x-symmetry[1]: R_x S = S (under x-reflection) — sympy verified to 0.
+  [OK] D7-source-x-symmetry[2]: R_x S = S (under x-reflection) — sympy verified to 0.
+  [OK] D7-source-x-symmetry[3]: R_x S = S (under x-reflection) — sympy verified to 0.
+  wrote output/d07_reflection_symmetric_ic.goldens.json
+  wrote output/d07_reflection_symmetric_ic.latex.tex
+
+All D7 identities verified by sympy.

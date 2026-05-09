@@ -1,0 +1,11 @@
+
+============================================================
+  A5 - Entropy condition
+============================================================
+  [OK] A5-smooth-Dt-s-alg: D_t(p/rho^gamma) = 0 on smooth flow — sympy verified to 0.
+  [OK] A5-smooth-Dt-s-therm: D_t[ln(p/rho^gamma)/(gamma-1)] = 0 — sympy verified to 0.
+  [OK] A5-eta-smooth: partial_t eta + div(u eta) = 0 on smooth flow — sympy verified to 0.
+  [OK-num] A5-convexity Hessian PSD on 80 random states (numerical check, Rule-4 [WEAK] fallback).
+  wrote output/a05_entropy_condition.latex.tex
+
+All A5 smooth-flow identities verified by sympy; convexity verified by 80-sample numerical check.

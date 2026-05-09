@@ -1,0 +1,14 @@
+
+════════════════════════════════════════════════════════════
+  F1b — Joint rotation covariance (strong form)
+════════════════════════════════════════════════════════════
+  10 trials × random θ: max spectral error = 3.55e-15
+  [OK] Joint rotation (B_perp, k̂) → (B_perp', k̂') preserves 7-wave spectrum.
+  [OK] (R⁻¹ B) · k̂(θ) = B · x̂ (covariance of B·k̂).
+  [OK] c_{A,k̂}² is covariant (equals c_Ax² of x̂-frame).
+  [OK] c_A² is rotation-invariant.
+  [OK] c_{s0}² is trivially invariant (no B dependence).
+  [OK] c_f², c_s² invariance follows from cs0², cA², cAk² invariance.
+  → wrote output/f1b_joint_rotation_covariance.latex.tex
+
+All F1b identities verified.

@@ -1,0 +1,24 @@
+
+============================================================
+  A8 - HLLC intermediate states
+============================================================
+  [OK] A8-pstar-consistency: p_star_L = p_star_R via S_star formula — sympy verified to 0.
+  [OK] A8-mass-RH-across-S_L: S_L [rho] = [rho u_n] — sympy verified to 0.
+  [OK] A8-mass-RH-across-S_R: S_R [rho] = [rho u_n] — sympy verified to 0.
+  [OK] A8-mom_x-RH-across-S_L: S_L [rho u] = [rho u^2 + p] — sympy verified to 0.
+  [OK] A8-mom_y-RH-across-S_L: S_L [rho v] = [rho u v] — sympy verified to 0.
+  [OK] A8-mom_x-RH-across-S_R: S_R [rho u] = [rho u^2 + p] — sympy verified to 0.
+  [OK] A8-mom_y-RH-across-S_R: S_R [rho v] = [rho u v] — sympy verified to 0.
+  [OK] A8-energy-RH-across-S_L: S_L [E] = [(E+p) u_n] — sympy verified to 0.
+  [OK] A8-energy-RH-across-S_R: S_R [E] = [(E+p) u_n] — sympy verified to 0.
+  [OK] A8-HLLC flux left-star branch = F(U*_L) component 0 — sympy verified to 0.
+  [OK] A8-HLLC flux left-star branch = F(U*_L) component 1 — sympy verified to 0.
+  [OK] A8-HLLC flux left-star branch = F(U*_L) component 2 — sympy verified to 0.
+  [OK] A8-HLLC flux left-star branch = F(U*_L) component 3 — sympy verified to 0.
+  [OK] A8-HLLC flux right-star branch = F(U*_R) component 0 — sympy verified to 0.
+  [OK] A8-HLLC flux right-star branch = F(U*_R) component 1 — sympy verified to 0.
+  [OK] A8-HLLC flux right-star branch = F(U*_R) component 2 — sympy verified to 0.
+  [OK] A8-HLLC flux right-star branch = F(U*_R) component 3 — sympy verified to 0.
+  wrote output/a08_hllc_intermediate_states.latex.tex
+
+All A8 identities verified by sympy.

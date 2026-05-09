@@ -1,0 +1,19 @@
+
+============================================================
+  E1 - Entropy-wave convergence order prediction
+============================================================
+  O(h) coeff: 0
+  O(h^2) coeff: 0
+  O(h^3) coeff: nu*u_xxx*(2*nu**2 - 3*nu + 1)/12
+  [OK] E1-at-least-1st-order: O(h) per-step truncation = 0 — sympy verified to 0.
+  [OK] E1-at-least-2nd-order: O(h^2) per-step truncation = 0 — sympy verified to 0.
+  [OK] E1-lead-order: O(h^3) per-step coefficient = nu(2nu^2 - 3nu + 1)/12 * u_xxx — sympy verified to 0.
+  [OK] E1-magic-nu[0]: per-step error vanishes at nu = 0 — sympy verified to 0.
+  [OK] E1-magic-nu[1/2]: per-step error vanishes at nu = 1/2 — sympy verified to 0.
+  [OK] E1-magic-nu[1]: per-step error vanishes at nu = 1 — sympy verified to 0.
+  Leading per-step truncation: nu*u_xxx*(2*nu**2 - 3*nu + 1)/12 h^3
+  Global L^1 error: O(h^2)  (per-step O(h^3) * 1/h steps).
+  Global convergence slope: p = 2 (2nd order in h).
+  wrote output/e01_entropy_wave_order.latex.tex
+
+All E1 identities verified by sympy.

@@ -18,4 +18,5 @@ results/
 pixi.lock
 .claude/
 videos/
-docs/mhd_derivations/manuscript.md.pre_norm
+docs/derivations/mhd/manuscript.md.pre_norm
+docs/derivations/strang/manuscript.md.pre_norm

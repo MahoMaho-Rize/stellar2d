@@ -26,4 +26,4 @@ bash run_all.sh && bash build_manuscript.sh --pdf
 5. **Derivation ↔ code 的链接** —— 对应 `src/gpu/.../<file>.cu` 注释里
    引用本 book 的章节锚点
 
-参考完整示范:`docs/mhd_derivations/`。
+参考完整示范:`docs/derivations/mhd/`。

@@ -4,7 +4,7 @@
 //
 // Based on Miyoshi & Kusano, J. Comput. Phys. 208, 315 (2005) —
 // Eqs. (38)-(67) — with the three degeneracy branches documented
-// in docs/mhd_derivations/sections/a09_hlld_degeneracy.md:
+// in docs/derivations/mhd/sections/a09_hlld_degeneracy.md:
 //
 //   D1 (B_x ≈ 0)  → collapse to HLLC-MHD (Li 2005), 3-wave fan.
 //   D2 (ρ(S-v)(S-S_M) ≈ B_x²) → regularise star-state B_y*, v_y*

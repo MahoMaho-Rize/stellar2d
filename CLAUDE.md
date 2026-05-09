@@ -101,7 +101,7 @@ hydro code 跑 KH。不要以为"再修一个小 bug 就过"了,**物理-数值�
 
 ## Derivation-driven workflow(物理扩展必遵)
 
-凡是在派生书 `docs/mhd_derivations/` 有节号的物理(§A-§F 所有章节),落地到 solver 必须走 **derivation-first** 流程:sympy identity 先行 → solver API → kernel → 测试(阈值必须 trace 回 identity)→ 全量回归 → benchmark log + 派生备忘。详细 7 步流程和硬约束见:
+凡是在派生书 `docs/derivations/mhd/` 有节号的物理(§A-§F 所有章节),落地到 solver 必须走 **derivation-first** 流程:sympy identity 先行 → solver API → kernel → 测试(阈值必须 trace 回 identity)→ 全量回归 → benchmark log + 派生备忘。详细 7 步流程和硬约束见:
 
 - **`docs/design/derivation_driven_workflow.md`**
 

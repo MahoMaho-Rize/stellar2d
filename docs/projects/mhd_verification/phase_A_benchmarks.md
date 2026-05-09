@@ -8,7 +8,7 @@
 **Build**: `cmake --build build --target <test>`
 
 本文档是**代码快照 × 硬件 × 日期**三元组下的实测数据。
-派生书 `docs/mhd_derivations/` 负责推导(硬件无关、纯数学);本文档
+派生书 `docs/derivations/mhd/` 负责推导(硬件无关、纯数学);本文档
 负责"在上面这些具体条件下跑得怎么样"。两者通过 pass criterion 的
 § 编号相互链接:测试文件 / 结果表里每一个阈值都能追溯到派生书
 §A/§B/§C/§F 里的一条 sympy-verified identity。
@@ -288,12 +288,12 @@ Suzuki 风物理栈需要的 robustness 基础全部到位。下一步(Phase B/C
 
 | 派生 | 路径 |
 |---|---|
-| §F1 (rotated eigenvector) | `docs/mhd_derivations/sections/f1_oblique_linwave.md` |
-| §F1b (joint rotation covariance, strong form) | `docs/mhd_derivations/scripts/f1b_joint_rotation_covariance.py` |
-| §F2 (MHD spectrum) | `docs/mhd_derivations/sections/f2_mhd_turbulence_spectrum.md` |
-| §F3 (CT round-off + B_cc aliasing) | `docs/mhd_derivations/sections/f3_ct_roundoff_and_bcc_aliasing.md` |
-| §F4 (CPAW decay) | `docs/mhd_derivations/sections/f4_cpaw_decay_eta_eff.md` |
-| §F5 (VL2+PLM O(h⁴) → p = 3) | `docs/mhd_derivations/sections/f5_vl2_plm_amplitude_decay.md` |
+| §F1 (rotated eigenvector) | `docs/derivations/mhd/sections/f1_oblique_linwave.md` |
+| §F1b (joint rotation covariance, strong form) | `docs/derivations/mhd/scripts/f1b_joint_rotation_covariance.py` |
+| §F2 (MHD spectrum) | `docs/derivations/mhd/sections/f2_mhd_turbulence_spectrum.md` |
+| §F3 (CT round-off + B_cc aliasing) | `docs/derivations/mhd/sections/f3_ct_roundoff_and_bcc_aliasing.md` |
+| §F4 (CPAW decay) | `docs/derivations/mhd/sections/f4_cpaw_decay_eta_eff.md` |
+| §F5 (VL2+PLM O(h⁴) → p = 3) | `docs/derivations/mhd/sections/f5_vl2_plm_amplitude_decay.md` |
 
 | CSV 输出 | 内容 |
 |---|---|

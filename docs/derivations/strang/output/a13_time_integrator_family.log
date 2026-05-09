@@ -1,0 +1,22 @@
+
+============================================================
+  A13 - Time integrator family
+============================================================
+  [OK] A13-Lie-residual-XY: coefficient of XY in (e^Y e^X - e^{X+Y}) = -Dt^2/2 — sympy verified to 0.
+  [OK] A13-Lie-residual-YX: coefficient of YX in (e^Y e^X - e^{X+Y}) = +Dt^2/2 — sympy verified to 0.
+  [OK] A13-Strang-order2-('X', 'X'): coefficient of ('X', 'X') in (e^(X/2) e^Y e^(X/2) - e^{X+Y}) = 0 — sympy verified to 0.
+  [OK] A13-Strang-order2-('X', 'Y'): coefficient of ('X', 'Y') in (e^(X/2) e^Y e^(X/2) - e^{X+Y}) = 0 — sympy verified to 0.
+  [OK] A13-Strang-order2-('Y', 'X'): coefficient of ('Y', 'X') in (e^(X/2) e^Y e^(X/2) - e^{X+Y}) = 0 — sympy verified to 0.
+  [OK] A13-Strang-order2-('Y', 'Y'): coefficient of ('Y', 'Y') in (e^(X/2) e^Y e^(X/2) - e^{X+Y}) = 0 — sympy verified to 0.
+  Strang order-3 residual coefficients:
+    ('X', 'X', 'Y'): -Dt**3/24
+    ('X', 'Y', 'X'): Dt**3/12
+    ('X', 'Y', 'Y'): Dt**3/12
+    ('Y', 'X', 'X'): -Dt**3/24
+    ('Y', 'X', 'Y'): -Dt**3/6
+    ('Y', 'Y', 'X'): Dt**3/12
+  [OK] A13-kernel-chain-equiv: X(Dt/2) Y(Dt/2) Y(Dt/2) X(Dt/2)  ==  X(Dt/2) Y(Dt) X(Dt/2) (identically, all monomials zero).
+  [OK] A13-VL2-order: leading error at Dt^3 is -(Dt^3/6) L^3 — sympy verified to 0.
+  wrote output/a13_time_integrator_family.latex.tex
+
+All A13 LINEAR-operator identities verified by sympy.

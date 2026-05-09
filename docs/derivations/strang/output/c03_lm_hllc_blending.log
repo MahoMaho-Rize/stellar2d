@@ -1,0 +1,14 @@
+
+============================================================
+  C3 - LM-HLLC blending
+============================================================
+  [OK] C3-M=1: LM-HLLC at fM=1 reduces to standard HLLC S_star — sympy verified to 0.
+  [OK] C3-linearity: d S_star / d f_M = (p_R - p_L) / denom — sympy verified to 0.
+  [OK] C3-reflective-pressure-jump: under R_ref, p_R - p_L = 0 — sympy verified to 0.
+  [OK] C3-reflective-invariance: f_M factor irrelevant on reflective L/R pair — sympy verified to 0.
+  [OK] C3-wall-symmetry: S_star = 0 on reflective pair with symmetric S_L, S_R — sympy verified to 0.
+  [OK] C3-dispersion: LM-HLLC pressure-dissipation suppression factor = 1/M — sympy verified to 0.
+  [OK] C3-cutoff: f_M = M_cutoff = 1e-3 at the lower clamp — sympy verified to 0.
+  wrote output/c03_lm_hllc_blending.latex.tex
+
+All C3 identities verified by sympy.
