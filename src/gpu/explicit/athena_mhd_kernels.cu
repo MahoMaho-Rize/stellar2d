@@ -1143,30 +1143,41 @@ __global__ void k_athmhd_cool_chromo(
 }
 
 // ============================================================
-// §E2 Characteristic inner BC for 2D MHD (replaces interior-SET driver).
+// §E2-v2 Characteristic inner BC for 2D MHD with WKB envelope.
 //
-// Ghost-fill formulas (derived sympy-verified in §E2):
-//   Let  v_x^drv(t) = Σ_N A_N · sin(2π f_N t + φ_N)      (§E1 waveform)
-//   Alfvén Riemann invariants (B_0 = B_y0 ŷ):
-//       z̃⁺ = -v_x + B_x/√ρ_0  propagates at +v_A (incoming into domain)
-//       z̃⁻ = +v_x + B_x/√ρ_0  propagates at −v_A (outgoing to bottom)
-//   BC:  z̃⁺|ghost = −2 v_x^drv(t)  (prescribed incoming)
-//        z̃⁻|ghost = z̃⁻|interior    (absorbing outgoing)
-//   Invert:
-//       v_x|ghost = v_x^drv + ½(v_x^int + B_x^int/√ρ_0)
-//       B_x|ghost = √ρ_0 · [−v_x^drv + ½(v_x^int + B_x^int/√ρ_0)]
+// Ghost-fill formulas (sympy-verified in docs/derivations/mhd/scripts/
+// e2_characteristic_bc.py identities 1-11):
 //
-// Applied only at bottom (j < ng) in a y-reflect run.  Top boundary
-// stays reflective (handled by k_athmhd_ghost_y_reflect_*).  Other
-// fields (ρ, v_y, v_z, B_z, P for E) mirror the reflective recipe so
-// HSE is preserved.  E is reconstructed from the new (v_x, B_x, v_y,
-// v_z, B_z, ρ, P) on the ghost.
+//   Let v_x^drv(t) = Σ_N A_N · sin(2π f_N t + φ_N).  Driver acts at the
+//   first interior row y_d (cell centre of j = ng).  In an isothermal
+//   exponentially-stratified atmosphere ρ(y) = ρ_d exp(−(y−y_d)/H) the
+//   Alfvén WKB solution has v_x ∝ ρ^(-1/4) along a characteristic, so the
+//   LOCAL Riemann invariants
+//       z̃⁺ = −v_x + B_x/√ρ_loc    (into the domain, speed +v_A)
+//       z̃⁻ = +v_x + B_x/√ρ_loc    (out of the domain, speed −v_A)
+//   carry an amplitude envelope  |z̃^±|(y) ∝ ρ(y)^{-1/4}  when transported
+//   from y_int → y_gh.  The v1 closure (§E2) used LOCALLY-CONSTANT ρ at
+//   the interior mirror row; v2 corrects by the envelope ratio.  The
+//   ghost-fill is therefore
+//       z̃⁺|_gh = −2 v_x^drv · (ρ_d / ρ_gh)^{1/4}   (incoming, WKB-scaled)
+//       z̃⁻|_gh = z̃⁻|_int · (ρ_int / ρ_gh)^{1/4}   (outgoing, WKB-scaled)
+//   Inverting at y_gh (local √ρ_gh) gives
+//       v_x|_gh = ½(z̃⁻_gh − z̃⁺_gh)
+//       B_x|_gh = √ρ_gh · ½(z̃⁺_gh + z̃⁻_gh)
+//   In the limit ρ_d = ρ_int = ρ_gh the v2 formulas reduce to v1
+//   (identity 9).  For a pure incident Alfvén pulse at v_drv = 0 the v2
+//   closure gives R = 0 exactly for arbitrary ρ(y) (identity 11);
+//   the v1 residual is ε_WKB = (ρ_int/ρ_gh)^{1/4} − 1 ≈ Δy/(4H)
+//   per ghost layer.
 //
-// Interior side of the Alfvén invariant uses the **first interior row**
-// (j = ng), which is the closest neighbour to the ghost for Riemann
-// solving — same location the old interior-SET kernel used to overwrite.
+// Ghost density ρ_gh is set from the HSE mirror (reflective recipe);
+// the v1 kernel already did this.  ρ_int is the first interior row
+// (j = ng) for both ghost layers (single reference), which gives cleaner
+// PLM slopes than the "follow-mirror" choice.
 //
-// z-polarised Alfvén channel: same formula with v_z^drv = 0.
+// Other fields (v_y, v_z, B_z, P for E) keep the reflective-mirror
+// recipe so HSE is preserved.  z-polarised Alfvén channel (v_z, B_z) is
+// a pure absorber (v_z^drv = 0) — same WKB envelope applies.
 // ============================================================
 __global__ void k_athmhd_ghost_y_characteristic_cc(
     double* __restrict__ rho,
@@ -1197,63 +1208,68 @@ __global__ void k_athmhd_ghost_y_characteristic_cc(
     }
 
     // ---- Bottom ghost row g ∈ [0, ng), jBd = ng - 1 - g ----
-    // Mirror-interior row for BOTH the Alfvén invariant and the
-    // non-Alfvén reflective fields: jBs = ng + g.  Using j=ng for all
-    // ghost layers flattened the PLM slope in the y-reconstruction and
-    // produced an O(A_rms²) spurious mass flux at the j=ng-½ face.
+    // Mirror-interior row for the non-Alfvén (HSE) fields.
+    //   jBs = ng + g   (reflective-y recipe for ρ, tangential mom and B;
+    //                  v_y antisymmetric).
+    // Alfvén z̃⁻ reference row: ALWAYS the first interior row j = ng
+    // (driver height y_d).  Using the first-interior row for all ghost
+    // layers keeps a single WKB-anchor point and avoids having PLM see
+    // a noisy slope reconstructed from different interior rows.
     int jBd = ng - 1 - g;
-    int jBs = ng + g;                       // mirror interior row
-    int cBd = cflat(i, jBd, sy);
-    int cBint = cflat(i, jBs, sy);          // interior reference follows g
+    int jBs = ng + g;                       // mirror row for HSE fields
+    int jBa = ng;                           // Alfvén-invariant anchor (y_d)
+    int cBd  = cflat(i, jBd, sy);
+    int cBs  = cflat(i, jBs, sy);
+    int cBa  = cflat(i, jBa, sy);
 
-    // Read interior primitives needed for z̃⁻ and polarisation.
-    double r_int   = fmax(rho[cBint], 1e-30);
-    double vx_int  = mx[cBint] / r_int;
-    double Bx_int  = Bx_cc[cBint];
+    // Read interior primitives at the Alfvén anchor row (y_d) for z̃⁻
+    // and polarisation.  √ρ used here must be √ρ(y_d), so z̃⁻ is defined
+    // consistently with the WKB envelope anchor.
+    double r_int   = fmax(rho[cBa], 1e-30);
+    double vx_int  = mx[cBa] / r_int;
+    double Bx_int  = Bx_cc[cBa];
+    double vz_int  = mz[cBa] / r_int;
+    double Bz_int  = Bz_cc[cBa];
+    double sqrt_r_int = sqrt(r_int);
 
-    // Characteristic ghost v_x and B_x.  Uses local ρ_int as √ρ_0 reference —
-    // consistent with the linearisation used in §E2 (locally constant ρ_0).
-    double sqrt_r0 = sqrt(r_int);
-    double half_zm = 0.5 * (vx_int + Bx_int / sqrt_r0);
-    double vx_gh   = vx_drv + half_zm;
-    double Bx_gh   = sqrt_r0 * (-vx_drv + half_zm);
+    // Local z̃⁻ at the anchor row (y_d).  This is the outgoing Riemann
+    // invariant evaluated using √ρ(y_d), as in identity 11.
+    double zm_int   = vx_int + Bx_int / sqrt_r_int;   // x-channel
+    double zmz_int  = vz_int + Bz_int / sqrt_r_int;   // z-channel (no driver)
+
+    // Ghost density — HSE mirror (the v1 recipe already did this, so
+    // ρ_gh matches exactly what the reflect_cc kernel would have
+    // written).  ρ_d = ρ at the anchor row (y_d).
+    double r_gh    = rho[cBs];
+    double sqrt_r_gh = sqrt(fmax(r_gh, 1e-30));
+
+    // WKB envelope factors (identity 9).  ρ_int here is ρ at y_d (the
+    // anchor row), and ρ_gh is the ghost density just read from the HSE
+    // mirror array.
+    double S_drv = sqrt(sqrt(r_int / fmax(r_gh, 1e-30)));   // (ρ_d/ρ_gh)^(1/4)
+    double S_mir = S_drv;                                    // ρ_int ≡ ρ_d here
+
+    // §E2-v2 ghost Elsässer invariants:
+    //   z̃⁺|_gh = −2 v_x^drv · S_drv
+    //   z̃⁻|_gh = z̃⁻|_int   · S_mir
+    // and analogously for the z-channel (v_z^drv = 0 ⇒ z̃⁺_z|_gh = 0).
+    double zp_gh   = -2.0 * vx_drv * S_drv;
+    double zm_gh   =  zm_int  * S_mir;
+    double zpz_gh  =  0.0;                     // no z-driver
+    double zmz_gh  =  zmz_int * S_mir;
+
+    // Invert the Elsässer pair at the ghost using local √ρ_gh:
+    //   v_x|_gh = ½(z̃⁻_gh − z̃⁺_gh)
+    //   B_x|_gh = √ρ_gh · ½(z̃⁺_gh + z̃⁻_gh)
+    double vx_gh    = 0.5 * (zm_gh  - zp_gh );
+    double Bx_gh    = 0.5 * sqrt_r_gh * (zp_gh  + zm_gh );
+    double vz_gh_ch = 0.5 * (zmz_gh - zpz_gh);
+    double Bz_gh_ch = 0.5 * sqrt_r_gh * (zpz_gh + zmz_gh);
 
     // Non-Alfvén fields: reflect mirror from the symmetric interior cell
-    //   j = ng + g  (standard reflective-y recipe for ρ, tangential mom,
-    //   tangential B; v_y antisymmetric).  jBs already computed above.
-    int cBs = cflat(i, jBs, sy);
-    double r_gh  = rho[cBs];                 // symmetric ρ (HSE)
+    //   j = ng + g  (standard reflective-y recipe).
     double my_gh = -my[cBs];                 // antisymmetric v_y
-    double mz_gh =  mz[cBs];                 // symmetric v_z (z-Alfvén does
-                                             //   not currently have a driver,
-                                             //   but a pure-absorber fill is
-                                             //   needed for correctness; see
-                                             //   block below)
-    double Bz_gh =  Bz_cc[cBs];              // tangential B, symmetric
-    double By_gh =  By_cc[cBs];              // not used for Riemann but keep
-                                             //   cc consistent with face
-
-    // Apply the characteristic formula to the z-polarised Alfvén channel
-    //   as a pure absorber (v_z^drv = 0):
-    //   v_z|ghost = ½(v_z^int + B_z^int/√ρ_0)
-    //   B_z|ghost = √ρ_0 · ½(v_z^int + B_z^int/√ρ_0)
-    // Only do this if the z-channel is non-trivial (|v_z|, |B_z| > tiny),
-    // otherwise the reflect-mirror path already gives 0.  This branchless
-    // version always computes both and blends is OK since the absorber
-    // formula reduces to 0 in the quiescent z limit anyway.  To keep the
-    // implementation simple we always apply it.
-    // z-polarised Alfvén: same linear-extrapolation fix.  v_z^drv = 0.
-    double vz_i0   = mz[cBint0] / r_int0;
-    double Bz_i0   = Bz_cc[cBint0];
-    double vz_i1   = mz[cBint1] / r_int1;
-    double Bz_i1   = Bz_cc[cBint1];
-    double zmz_i0  = vz_i0 + Bz_i0 / sqrt_r0;
-    double zmz_i1  = vz_i1 + Bz_i1 / sqrt_r0;
-    double zmz_extrap = (double)(g + 2) * zmz_i0
-                      - (double)(g + 1) * zmz_i1;
-    double half_zmz = 0.5 * zmz_extrap;
-    double vz_gh_ch = half_zmz;
-    double Bz_gh_ch = sqrt_r0 * half_zmz;
+    double By_gh =  By_cc[cBs];              // tangential B-y, symmetric
 
     // Write ghost primitives back as conservatives.  E ghost is
     // reconstructed from (ρ, v, B_cc, P) with P taken as the symmetric
@@ -1305,7 +1321,6 @@ __global__ void k_athmhd_ghost_y_characteristic_cc(
     Bx_cc[cBd] = Bx_gh;
     By_cc[cBd] = By_gh;                     // unchanged from mirror
     Bz_cc[cBd] = Bz_gh_ch;
-    (void)mz_gh; (void)Bz_gh;               // absorber values override mirror
 
     // ---- Top ghost row: still reflective (unchanged) ----
     // Handled separately by k_athmhd_ghost_y_reflect_cc on top, but
@@ -1368,39 +1383,32 @@ __global__ void k_athmhd_ghost_y_characteristic_face(
         Byf[fy_flat(i, jTd, syp1)] = -Byf[fy_flat(i, jTs, syp1)];
     }
 
-    // --- Bxf characteristic bottom, symmetric top ---
+    // --- Bxf characteristic bottom (§E2-v2 WKB), symmetric top ---
     if (i < nx + 1 + 2 * ng) {
         int jBd = ng - 1 - g;
-        int jBs = ng + g;
+        int jBs = ng + g;                   // mirror row for HSE ρ_gh anchor
         int jTd = ng + ny + g;
         int jTs = ng + ny - 1 - g;
         // Top: symmetric mirror (unchanged)
         Bxf[fx_flat(i, jTd, syfx)] = Bxf[fx_flat(i, jTs, syfx)];
-        // Bottom: characteristic.  The interior-side reference row is
-        // the mirror row j = ng + g, matching the cell-centred kernel.
-        // (A previous version used j=ng for all ghost layers, which
-        // flattened the y-slope seen by PLM reconstruction and produced
-        // an O(A_rms²) spurious mass flux at j = ng - ½.)
+        // Bottom: §E2-v2.  Use first-interior-row (j = ng) as the Alfvén
+        // z̃⁻ anchor (matches cc kernel identity 9); mirror row jBs sets
+        // ρ_gh (HSE).  Cell-centred x in the face kernel is ambiguous
+        // (face is at i, cc straddles i and i-1); use ic = max(min(i, nx+2g-1),0).
         int ic_ref = i;
         if (ic_ref >= nx + 2 * ng) ic_ref = nx + 2 * ng - 1;
-        // §E2-v2: linear extrapolation of z^- from the two lowest
-        // interior rows (j=ng, j=ng+1) for the same reason as the cc
-        // kernel — avoids the O(kΔy) phase-slip reflection that the
-        // nearest-mirror gave (empirically ~22% evanescent excess at
-        // the bottom cell, documented in e1_t7_analytic_on_mesh_decomposition.md).
-        int cRef0 = cflat(ic_ref, ng,     sy);
-        int cRef1 = cflat(ic_ref, ng + 1, sy);
-        double r_int0 = fmax(rho[cRef0], 1e-30);
-        double sqrt_r0 = sqrt(r_int0);
-        double zm_i0  = mx[cRef0] / r_int0 + Bx_cc[cRef0] / sqrt_r0;
-        double r_int1 = fmax(rho[cRef1], 1e-30);
-        double zm_i1  = mx[cRef1] / r_int1 + Bx_cc[cRef1] / sqrt_r0;
-        double zm_extrap = (double)(g + 2) * zm_i0
-                         - (double)(g + 1) * zm_i1;
-        double half_zm = 0.5 * zm_extrap;
-        double Bx_gh   = sqrt_r0 * (-vx_drv + half_zm);
+        int cAnc = cflat(ic_ref, ng, sy);    // anchor row y_d
+        int cMir = cflat(ic_ref, jBs, sy);   // HSE mirror for ρ_gh
+        double r_int   = fmax(rho[cAnc], 1e-30);
+        double sqrt_r_int = sqrt(r_int);
+        double r_gh    = fmax(rho[cMir], 1e-30);
+        double sqrt_r_gh = sqrt(r_gh);
+        double zm_int  = mx[cAnc] / r_int + Bx_cc[cAnc] / sqrt_r_int;
+        double S_env   = sqrt(sqrt(r_int / r_gh));    // (ρ_d/ρ_gh)^(1/4)
+        double zp_gh_v = -2.0 * vx_drv * S_env;
+        double zm_gh_v =  zm_int       * S_env;
+        double Bx_gh   = 0.5 * sqrt_r_gh * (zp_gh_v + zm_gh_v);
         Bxf[fx_flat(i, jBd, syfx)] = Bx_gh;
-        (void)jBs;
     }
 }
 

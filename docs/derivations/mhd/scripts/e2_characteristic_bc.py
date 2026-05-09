@@ -279,6 +279,144 @@ def main():
           "cell-centred formula.")
 
     # ─────────────────────────────────────────────────────────────────
+    # Identity 9 (E2-v2) — WKB-envelope extension of Riemann invariants in
+    # an isothermal exponentially-stratified atmosphere.
+    #
+    # Background: ρ_0(y) = ρ_d · exp(-(y - y_d)/H) with scale height H.
+    # v_A(y) = B_{y0}/√ρ_0(y) ∝ exp(+(y - y_d)/(2H)).  In the WKB limit
+    # (k·H ≫ 1 — holds for T7: f=2, H=1, B=0.5 ⇒ k H ≈ 25 ≫ 1) the
+    # Alfvén wave solutions are
+    #   v_x^± = A^± · ρ_0^{-1/4} · exp(±i ω τ(y)), τ(y) = ∫ dy'/v_A(y'),
+    # so the LOCAL Riemann invariant \tilde z^\pm = \mp v_x + B_x/√ρ_0
+    # carries an amplitude envelope
+    #       |\tilde z^\pm|(y) = |\tilde z^\pm|(y_d) · (ρ_d/ρ_0(y))^{1/4}
+    # when carried from the driver height y_d to any other y along the
+    # characteristic.  (See Leroy 1980, Cranmer+2007.)  Therefore:
+    #   • Incoming (+v_A) driver:  \tilde z^+|_{ghost at y_gh} =
+    #         -2 v_x^drv · (ρ_d / ρ_0(y_gh))^{1/4}
+    #     Reason: the driver prescribes v_x^drv AT the interior wall (y =
+    #     y_d, which is the first interior cell centre).  The ghost sits
+    #     BELOW y_d at higher ρ; a pure upgoing Alfvén at that ghost with
+    #     the amplitude needed to produce v_x^drv at y_d must have the
+    #     LARGER amplitude (ρ_d/ρ_gh)^{1/4} (wave de-amplifies as it moves
+    #     up).  Missing this factor means the ghost z^+ is too small ⇒
+    #     impedance mismatch at y_d ⇒ spurious downgoing reflection.
+    #
+    #   • Outgoing (-v_A) mirror:  \tilde z^-|_{ghost at y_gh} =
+    #         \tilde z^-|_{int at y_int} · (ρ(y_int) / ρ_0(y_gh))^{1/4}
+    #     Reason: z^- carries amplitude ∝ ρ^{-1/4}; the interior row sampled
+    #     at y_int has a DIFFERENT ρ_0 than the ghost row at y_gh.  The
+    #     "mirror" recipe implicitly assumed ρ_int = ρ_gh (locally
+    #     constant), but that is off by (Δy/(4H)) per ghost layer.
+    # ─────────────────────────────────────────────────────────────────
+    rho_d   = sp.Symbol("rho_d",   positive=True)   # ρ at driver row y_d
+    rho_int = sp.Symbol("rho_int", positive=True)   # ρ at interior mirror row
+    rho_gh  = sp.Symbol("rho_gh",  positive=True)   # ρ at ghost row
+    # WKB amplitude-scaling factors:
+    S_drv = (rho_d   / rho_gh) ** sp.Rational(1, 4)
+    S_mir = (rho_int / rho_gh) ** sp.Rational(1, 4)
+
+    # Generalised ghost Riemann closure:
+    zp_ghost_v2 = -2 * v_drv * S_drv
+    # For z^- the "interior" Elsässer is built from (v_x^{int}, B_x^{int})
+    # but EVALUATED with √ρ_int, not √ρ_gh (the z^- invariant is a
+    # locally-defined quantity at y_int, which we then WKB-transport to y_gh).
+    # Let zm_int_local = v_x^{int} + B_x^{int}/√ρ_int.
+    zm_int_local = vx_int + Bx_int / sp.sqrt(rho_int)
+    zm_ghost_v2 = zm_int_local * S_mir
+
+    # Inverting the Elsässer pair at the ghost uses ρ_gh (the local bg
+    # density where the ghost sits):
+    vx_ghost_v2 = (zm_ghost_v2 - zp_ghost_v2) / 2
+    Bx_over_sqrtrho_gh_v2 = (zp_ghost_v2 + zm_ghost_v2) / 2
+    Bx_ghost_v2 = sp.sqrt(rho_gh) * Bx_over_sqrtrho_gh_v2
+
+    # Sanity — in the locally-constant limit ρ_d = ρ_int = ρ_gh the new
+    # formulas must reduce to the old ones.
+    locally_const = {rho_d: rho0, rho_int: rho0, rho_gh: rho0}
+    vx_ghost_v2_local = sp.simplify(vx_ghost_v2.subs(locally_const))
+    Bx_ghost_v2_local = sp.simplify(Bx_ghost_v2.subs(locally_const))
+    assert_zero(sp.simplify(vx_ghost_v2_local - expected_vx_ghost),
+                "E2-v2 reduces to E2 when ρ_d = ρ_int = ρ_gh (v_x check)",
+                verbose=False)
+    assert_zero(sp.simplify(Bx_ghost_v2_local - expected_Bx_ghost),
+                "E2-v2 reduces to E2 when ρ_d = ρ_int = ρ_gh (B_x check)",
+                verbose=False)
+    print("  [OK] E2-v2 WKB-envelope ghost-fill reduces to E2 at ρ=const.")
+
+    # ─────────────────────────────────────────────────────────────────
+    # Identity 10 — E2-v2 driver amplitude at y_d reproduces v_x^drv
+    # exactly for quiescent interior.  Build the upgoing-wave solution
+    # v_x^+(y) = A · ρ_0(y)^{-1/4} ·sin(ω t − k_A y + φ) and verify that
+    # the amplitude we INJECT via z^+_{ghost} lands at y_d as v_x^drv.
+    # ─────────────────────────────────────────────────────────────────
+    #   At y_gh (ghost), quiescent interior means v_x^int = B_x^int = 0:
+    quiet_v2_subs = {vx_int: 0, Bx_int: 0}
+    vx_gh_drv_only = sp.simplify(vx_ghost_v2.subs(quiet_v2_subs))
+    # vx_gh_drv_only = + v_drv · (ρ_d/ρ_gh)^{1/4}  (from -(−2 v_drv S_drv)/2)
+    # This IS a pure upgoing Alfvén with the right WKB amplitude — when it
+    # travels from y_gh to y_d it ρ-envelope-decays by (ρ_gh/ρ_d)^{1/4},
+    # giving v_x at y_d = v_drv · (ρ_d/ρ_gh)^{1/4} · (ρ_gh/ρ_d)^{1/4} =
+    # v_drv.  Verify symbolically:
+    vx_at_yd_from_gh = vx_gh_drv_only * (rho_gh / rho_d) ** sp.Rational(1, 4)
+    assert_zero(sp.simplify(vx_at_yd_from_gh - v_drv),
+                "E2-v2 driver: upgoing wave from ghost lands at y_d "
+                "with amplitude v_x^drv (WKB transport verified)",
+                verbose=False)
+    print("  [OK] E2-v2 driver amplitude at y_d = v_x^drv exactly.")
+
+    # ─────────────────────────────────────────────────────────────────
+    # Identity 11 — E2-v2 reflection coefficient for a pure incident
+    # Alfvén pulse with v_drv = 0.
+    # An incident pulse at the interior mirror row carries z^-_int = Z_0.
+    # The v1 (mirror) BC then produces z^+_ghost = 0 only if ρ_d = ρ_int =
+    # ρ_gh; otherwise there's a phase-matched reflection.  The v2 (WKB)
+    # BC corrects this by scaling z^- by (ρ_int/ρ_gh)^{1/4}, so the ghost
+    # z^+ is IDENTICALLY zero (the v_drv = 0 branch) REGARDLESS of density
+    # profile.  Verify.
+    # ─────────────────────────────────────────────────────────────────
+    inc_v2 = {v_drv: 0, vx_int: Z0/2, Bx_int: sp.sqrt(rho_int)*Z0/2}
+    vx_gh_inc = vx_ghost_v2.subs(inc_v2)
+    Bx_gh_inc = Bx_ghost_v2.subs(inc_v2)
+    zp_gh_inc = sp.simplify(-vx_gh_inc + Bx_gh_inc / sp.sqrt(rho_gh))
+    assert_zero(zp_gh_inc,
+                "E2-v2: pure incident Alfvén pulse gives z^+|_{ghost} = 0 "
+                "for ARBITRARY (ρ_d, ρ_int, ρ_gh)  ⇒  R = 0 exactly",
+                verbose=False)
+    # By contrast, the v1 closure at the same incident pulse produces a
+    # nonzero z^+|_{ghost} when ρ_int ≠ ρ_gh — THIS is the impedance
+    # mismatch the user pointed out.  Quantify it (linear order in Δy/H):
+    #   v1 puts "√ρ_0" = √ρ_int (the nearest-interior reference) into BOTH
+    #   the z^- reconstruction and the ghost inversion, so the z^- it
+    #   carries has amplitude |Z_0| at y_int but LANDS at y_gh WITHOUT the
+    #   ρ^{1/4} envelope step.  The v1 ghost z^+ for this incident pulse
+    #   equals 0 (it never bleeds into z^+) but the v1 z^- at the ghost is
+    #   Z_0 (not Z_0·(ρ_int/ρ_gh)^{1/4}), so the effective mirrored pulse
+    #   AT THE WALL has the wrong amplitude by a factor
+    #       ε = (ρ_int/ρ_gh)^{1/4} − 1.
+    #   For g=1 ghost layer with Δy = Ly/Ny = 2/256 and H = 1:
+    #       ε ≈ (e^{Δy/H})^{1/4} − 1 = Δy/(4H) ≈ 1.95e-3.
+    # The T7 y-fit has a 22% bottom excess localised within ~1/k_A ≈
+    # 0.07H of the bottom — ≈ 9 grid cells.  Cumulative ε over 9 cells
+    # ≈ 1.75% per-amplitude mismatch, giving an energy-reflection
+    # coefficient R_E ∼ (ε_cum)² ~ 3e-4 — which is O(1e-3), NOT O(0.1).
+    # So WKB-envelope restoration is a clean O(Δy/H) correction but does
+    # NOT explain the full 11% bottom evanescent excess on its own.
+    # (The dominant mechanism is the mirror row choice not being a true
+    # z^- extrapolation — still future §E2-v3 work.)
+    eps_mismatch = (rho_int/rho_gh)**sp.Rational(1, 4) - 1
+    ld.add(
+        "E2-v2 WKB-envelope mismatch factor (v1 residual)",
+        r"\varepsilon_{\text{WKB}} = "
+        r"\left(\frac{\rho_{\text{int}}}{\rho_{\text{gh}}}\right)^{1/4} - 1"
+        r" \;\approx\; \frac{\Delta y}{4H}\; "
+        r"\text{(for a single ghost layer, leading order in } \Delta y/H\text{)}",
+        label="eq:E2v2_epsilon",
+    )
+    print("  [OK] E2-v2 reflection = 0 for arbitrary ρ(y); v1 residual is "
+          "O(Δy/(4H)) per ghost layer.")
+
+    # ─────────────────────────────────────────────────────────────────
     # LaTeX dump
     # ─────────────────────────────────────────────────────────────────
     ld.add(
@@ -338,6 +476,15 @@ def main():
         r"\quad v_y\bigr|_{\mathrm{ghost}} = -v_y\bigr|_{\mathrm{int}},"
         r"\quad p\bigr|_{\mathrm{ghost}} = p_{\mathrm{HSE}}(y_{\mathrm{ghost}})",
         label="eq:E2_acoustic",
+    )
+    ld.add(
+        "E2-v2 WKB-envelope ghost-fill closure (isothermal stratified)",
+        r"\tilde z^+\bigr|_{\mathrm{ghost}} = -2\,v_x^{\mathrm{drv}}(t)"
+        r"\,\bigl(\rho_d/\rho_{\mathrm{gh}}\bigr)^{1/4},\qquad "
+        r"\tilde z^-\bigr|_{\mathrm{ghost}} = "
+        r"\bigl[v_x^{\mathrm{int}} + B_x^{\mathrm{int}}/\sqrt{\rho_{\mathrm{int}}}\bigr]\,"
+        r"\bigl(\rho_{\mathrm{int}}/\rho_{\mathrm{gh}}\bigr)^{1/4}",
+        label="eq:E2v2_BC",
     )
 
     ld.write()
