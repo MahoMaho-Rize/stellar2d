@@ -18,6 +18,7 @@
 #include "io/output.h"
 
 #include "cli/options.h"
+#include "cli/config_dump.h"
 #include "sim/helpers.h"
 #include "sim/setup.h"
 #include "sim/run_loop.h"
@@ -35,10 +36,18 @@ int main(int argc, char** argv) {
     std::signal(SIGTERM, handle_sigint);
 
     SimConfig cfg;
-    if (int rc = parse_cli(argc, argv, cfg); rc != 0) return rc;
+    // parse_cli returns 2 when --help / --version were handled and the
+    // binary should exit cleanly (see cli/options.cpp Tier A hardening).
+    if (int rc = parse_cli(argc, argv, cfg); rc != 0)
+        return (rc == 2) ? 0 : rc;
 
     SimContext ctx;
     if (int rc = setup_simulation(cfg, ctx); rc != 0) return rc;
+
+    // Tier A reproducibility: write runs/<name>/config.dump.txt now that
+    // run_dir is known.  Tier B will replace this with a TOML form that
+    // round-trips with ``stellar2d --config``.
+    dump_resolved_cli(cfg, ctx.run_dir);
 
     double t = 0.0;
     int step = 0;

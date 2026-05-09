@@ -26,6 +26,9 @@ set(SOURCES
     src/init/jeans.cpp
     src/init/evrard.cpp
     src/cli/options.cpp
+    src/cli/suggest.cpp
+    src/cli/help.cpp
+    src/cli/config_dump.cpp
     src/sim/helpers.cpp
     src/sim/setup.cpp
     src/sim/run_loop.cpp
@@ -119,6 +122,39 @@ if(USE_GPU)
 endif()
 
 add_executable(stellar2d ${SOURCES})
+
+# Tier A CLI hardening: bake git hash + build date into the binary so
+# ``stellar2d --version`` and runs/<name>/config.dump.txt have a paper
+# trail.  See docs/design/cli_unification_plan_2026-05-09.md §2d / §6.
+#
+# These run at CMake configure time — rerun ``cmake`` (not just ``make``)
+# to refresh them.  Tier C can upgrade to build-time via add_custom_command
+# if regeneration per build becomes important.
+execute_process(
+    COMMAND git rev-parse --short=8 HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE STELLAR2D_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT STELLAR2D_GIT_HASH)
+    set(STELLAR2D_GIT_HASH "unknown")
+endif()
+execute_process(
+    COMMAND git status --porcelain
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE STELLAR2D_GIT_DIRTY
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(STELLAR2D_GIT_DIRTY)
+    set(STELLAR2D_GIT_HASH "${STELLAR2D_GIT_HASH}-dirty")
+endif()
+string(TIMESTAMP STELLAR2D_BUILD_DATE "%Y-%m-%dT%H:%M:%SZ" UTC)
+target_compile_definitions(stellar2d PRIVATE
+    "STELLAR2D_GIT_HASH=\"${STELLAR2D_GIT_HASH}\""
+    "STELLAR2D_BUILD_DATE=\"${STELLAR2D_BUILD_DATE}\""
+)
 
 # Make every gpu/ subdirectory available on the include path, so cross-directory
 # #include "gpu_common.cuh" / "gmg_gpu.cuh" / "sph_transforms.cuh" etc. keep

@@ -1,12 +1,125 @@
 #include "cli/options.h"
 
+#include "cli/help.h"
+#include "cli/suggest.h"
+
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
+
+// -----------------------------------------------------------------------------
+//  Tier A (docs/design/cli_unification_plan_2026-05-09.md §6) — known-flag
+//  whitelist used for unknown-flag detection + did-you-mean suggestions.
+//
+//  This list is manually synchronised with the strcmp chain below.  It must
+//  contain every flag accepted by the chain; Tier C will replace both with a
+//  SolverSpec registry.  If you add a flag to the chain, add it here too.
+// -----------------------------------------------------------------------------
+static const std::vector<std::string>& known_flags() {
+    static const std::vector<std::string> k = {
+        // Tier A new meta flags
+        "--help", "--version",
+        // Core
+        "--test", "--nr", "--ntheta", "--tend", "--cfl",
+        "--output-interval", "--mesh", "--solver", "--precond", "--perturb",
+        "--limiter", "--G", "--run-base", "--compute-error",
+        // EOS / physics
+        "--eos", "--eos-mu", "--eos-rad-a",
+        "--helm-table", "--helm-abar", "--helm-zbar",
+        "--kap", "--kap-highT", "--kap-lowT", "--kap-Z", "--kap-dir",
+        "--kap-logT-lo-end", "--kap-logT-hi-start",
+        "--radiation", "--rad-c", "--rad-T-phot-floor",
+        "--nuclear", "--nuc-x", "--nuc-y", "--nuc-scale",
+        "--nuc-t-floor", "--nuc-q", "--nuc-t-scale", "--nuc-compress",
+        "--species",
+        "--mlt", "--mlt-alpha",
+        // IC
+        "--ic-solar", "--ic-rho-c", "--ic-rstar", "--ic-n-poly",
+        "--ic-mesa", "--ic-mesa-seed-T", "--ic-mesa-atm-zones", "--atm-split",
+        "--rich-profile",
+        // bubble IC
+        "--bubble", "--bubble-xc", "--bubble-yc", "--bubble-rb",
+        "--bubble-alpha", "--bubble-beta", "--bubble-mode",
+        // BC / radial
+        "--no-sponge", "--radial-only", "--r-inner",
+        // IO / diagnostic
+        "--diag-interval", "--vtk-interval", "--vtk-dt",
+        "--frame-buffer", "--frame-headroom-mb",
+        // radial1d implicit
+        "--implicit", "--dt-implicit", "--dt-implicit-scale",
+        "--no-viallet", "--precond-tridiag", "--jfnk-autodiff",
+        "--no-rhse", "--newton-tol", "--hse-resnap",
+        "--dt-thermal-frac", "--dt-mach-cap",
+        // HLLC variants (lowmach)
+        "--lm-hllc", "--lhllc", "--hllc",
+        // cart_ale / cart_ale2
+        "--remap-order", "--remap-limiter",
+        "--cq-lin", "--cq-quad", "--shear-aware-av", "--rebuild-order",
+        "--bc-x", "--bc-y",
+        "--ppm", "--ppm-limiter", "--ppm-space", "--no-ppm-char", "--ppm-char",
+        "--cart-ale2-kh-k", "--trace-cells", "--trace-step-cap",
+        "--ic-slab", "--slab-perturb", "--slab-seed-k",
+        "--cool-tau", "--cool-top-frac",
+        "--heat-flux", "--heat-lsun", "--heat-bot-R", "--heat-bot-frac",
+        "--andrassy-amp", "--andrassy-seed", "--andrassy-noise",
+        // athena_vl2
+        "--athena-xorder", "--athena-limiter",
+        // pseudo_spectral
+        "--ps-nu", "--ps-Lx", "--ps-Ly", "--ps-vshear", "--ps-k",
+        "--ps-explicit", "--ps-adv-only",
+        "--ps-forcing-eps", "--ps-forcing-kf", "--ps-forcing-dk",
+        "--ps-forcing-seed", "--ps-forcing-host-rng",
+        "--ps-drag", "--ps-hyper", "--ps-conservative", "--ps-batched-fft",
+        "--ps-pi", "--ps-tg-k",
+        "--ps-vm-gamma", "--ps-vm-sigma", "--ps-vm-dist",
+        "--ps-ckpt-every", "--ps-resume",
+        // sph2d_spectral
+        "--sph-R", "--sph-Omega", "--sph-nu", "--sph-Lmax",
+        "--sph-drag", "--sph-hyper", "--sph-pi",
+        "--sph-rossby-l", "--sph-rossby-m", "--sph-rossby-amp",
+        "--sph-forcing-eps", "--sph-forcing-lmin", "--sph-forcing-lmax",
+        "--sph-forcing-seed",
+        "--sph-ckpt-every", "--sph-resume",
+        // test IC params
+        "--ewave-rho0", "--ewave-P0", "--ewave-u0",
+        "--ewave-A", "--ewave-k", "--ewave-periods",
+        "--awave-rho0", "--awave-P0", "--awave-A", "--awave-k", "--awave-periods",
+        "--shear-V0", "--shear-k", "--shear-rho", "--shear-P",
+    };
+    return k;
+}
+
+static void report_unknown_flag(const char* arg) {
+    std::fprintf(stderr, "ERROR: unknown flag \"%s\"\n", arg);
+    const std::string suggestion =
+        suggest_closest(std::string(arg), known_flags(), /*max_distance=*/3);
+    if (!suggestion.empty()) {
+        std::fprintf(stderr, "  Did you mean %s?\n", suggestion.c_str());
+    }
+    std::fprintf(stderr,
+                 "  Run 'stellar2d --help' for the grouped flag list, or see\n"
+                 "  docs/design/cli_unification_plan_2026-05-09.md for the\n"
+                 "  CLI-unification roadmap.\n");
+}
 
 int parse_cli(int argc, char** argv, SimConfig& cfg) {
+    // Tier A: --help / --version are handled up-front and cause a normal
+    // exit (rc == 2).  main.cpp translates rc == 2 to return 0.
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--help") == 0 ||
+            std::strcmp(argv[i], "-h")     == 0) {
+            print_help();
+            return 2;
+        }
+        if (std::strcmp(argv[i], "--version") == 0) {
+            print_version();
+            return 2;
+        }
+    }
+
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--test") == 0 && i + 1 < argc)
             cfg.test_case = argv[++i];
@@ -356,6 +469,13 @@ int parse_cli(int argc, char** argv, SimConfig& cfg) {
             cfg.sph_ckpt_every = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--sph-resume") == 0 && i + 1 < argc)
             cfg.sph_resume = argv[++i];
+        // Tier A: unknown flag (or a known flag missing its required value,
+        // which falls through the `&& i+1 < argc` guard above) is a HARD
+        // error.  See docs/design/cli_unification_plan_2026-05-09.md §2c.
+        else {
+            report_unknown_flag(argv[i]);
+            return 1;
+        }
     }
     return 0;
 }
